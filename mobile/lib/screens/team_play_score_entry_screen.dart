@@ -10,18 +10,31 @@
 /// full-screen stepper, then per-row steppers — were both a fourth idiom for
 /// no gain.
 ///
-/// Two formats, and only the middle of the card differs:
+/// Six formats, **two cards**, and only the middle differs:
 ///
-///   * **Scramble** — four men make ONE number, so there is one row: TEAM.
-///     Its picker is always open, because there is nothing to choose between.
-///   * **Shamble** — four balls, so four rows. Tap one to aim the picker; the
-///     counting scores tint and the rest grey as they land.
+///   * **One ball** — scramble, alternate shot, Scotch, Chapman. The team
+///     makes ONE number, so there is one row: TEAM. Its picker is always open,
+///     because there is nothing to choose between.
+///   * **Own ball** — shamble (four balls) and best ball (two). One row a man;
+///     tap one to aim the picker, and the counting scores tint while the rest
+///     grey as they land.
 ///
 /// **The drive is its own question**, so it gets its own control above the
-/// rows rather than being smuggled onto a golfer: a chip per man, the pips on
-/// the chip, and the consequence stated beside it. It never blocks the tap —
-/// the team may knowingly take the shortfall, and by default a shortfall costs
-/// nothing.
+/// rows rather than being smuggled onto a golfer. What that control DOES
+/// differs by format (docs/design-review/handoff-team-pairs/SPEC.md §5), and
+/// this screen is where getting it right matters:
+///
+///   * **A record** — scramble. Chips with pips, compliance against a quota.
+///   * **An instruction** — Scotch. The pick says who hits NEXT, so the card
+///     answers with a sentence: *Maiolini plays the second shot, then
+///     alternate.* The tap is required every hole even with no quota.
+///   * **A rota** — alternate shot. No choice; the card NAMES the tee, on
+///     every hole without exception, because a pair that loses track plays a
+///     hole out of order and the round is gone.
+///   * **Absent** — best ball and Chapman. Both men drive every hole.
+///
+/// It never blocks the tap — the team may knowingly take the shortfall, and by
+/// default a shortfall costs nothing.
 library;
 
 import 'package:flutter/material.dart';
@@ -98,9 +111,9 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
     await _load();
   }
 
-  /// A shamble keeps per-golfer scores — four balls, best N net count — so
-  /// these are ordinary HoleScores through the ordinary endpoint. Only the
-  /// reading of them is Foursome Play's.
+  /// An own-ball format keeps per-golfer scores — four balls best N in a
+  /// shamble, two balls best 1 in best ball — so these are ordinary HoleScores
+  /// through the ordinary endpoint. Only the reading of them is Team Play's.
   Future<void> _setGolferScore(int playerId, int? gross) async {
     await context.read<AuthProvider>().client.submitScores(
       foursomeId: widget.foursomeId,
@@ -108,6 +121,26 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
       scores    : [{'player_id': playerId, 'gross_score': gross}],
     );
     await _load();
+  }
+
+  /// The rota, set on the 1st tee and then fixed for eighteen.
+  ///
+  /// This closes the one thing the fours build left open: the endpoint was
+  /// written and tested and nothing called it, so a team on the alternating
+  /// rule fell back to roster order. It matters more in pairs — an alternate
+  /// shot played out of order is a lost round, not an untidy record.
+  Future<void> _setRota(List<List<int>> pairs) async {
+    setState(() => _busy = true);
+    try {
+      await context.read<AuthProvider>().client
+          .postTeamPlayPairs(widget.foursomeId, pairs);
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _setDrive(int? playerId) async {
@@ -147,22 +180,41 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
   /// This is not the same as blocking the drive TAP, which never happens: the
   /// team may knowingly take a shortfall, it just has to say so by picking
   /// somebody.
+  /// True when the rota rule is on and nobody has set it yet.
+  bool _needsRota(TeamPlayCard card) =>
+      (card.driveControl == 'rota' || card.drive.isAlternating) &&
+      !card.drive.pairsSet &&
+      card.driveOptions.length >= 2;
+
   String? _outstanding(TeamPlayCard card) {
-    final needsScore = card.isScramble
+    final rows = card.shamble?.rows.length ?? 0;
+    final needsScore = card.isOneBall
         ? card.teamScore == null
         : !(card.shamble?.complete ?? false);
 
-    // Only a quota needs a pick. An alternating rota already names the pair,
-    // and "no requirement" has nothing to record.
-    final needsDrive = card.drive.isQuota &&
-        !card.drive.windows.any(
-            (w) => w.golfers.any((g) => g.holes.contains(_hole)));
+    // A quota needs a pick — and so does **Scotch with no quota**, because
+    // there the tap is not a record at all: it says who plays the second shot,
+    // and a Scotch hole with no drive picked has not been played. A rota
+    // already names the tee, and "no requirement" elsewhere has nothing to
+    // record.
+    final needsDrive = card.requiresDrivePick &&
+        card.showsDriveChips &&
+        card.pickedDriver == null;
 
+    if (_needsRota(card)) {
+      return card.isPairs ? 'Set who tees the odd holes' : 'Set the rota';
+    }
     if (needsScore && needsDrive) return 'Score and drive needed';
     if (needsScore) {
-      return card.isScramble ? 'Enter the score' : 'Enter all four scores';
+      return card.isOneBall
+          ? 'Enter the score'
+          : 'Enter all $rows scores';
     }
-    if (needsDrive) return 'Pick whose drive';
+    if (needsDrive) {
+      return card.driveControl == 'instruction'
+          ? 'Pick the drive — it says who plays next'
+          : 'Pick whose drive';
+    }
     return null;
   }
 
@@ -215,10 +267,28 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
   /// what it is doing right now. Neither the allowance nor the ball count
   /// belongs on a row, and neither should be hidden either.
   (String, String) _context(TeamPlayCard card) {
-    if (card.isScramble) {
-      // No "plays off N" here — the team row's `gets N` chip says it, in the
-      // place every other card says it.
-      return ('Scramble', 'All four hit, you play the best ball.');
+    // No "plays off N" in any of these — the team row's `gets N` chip says it,
+    // in the place every other card in the app says it.
+    switch (card.format) {
+      case 'scramble':
+        return (card.formatName, card.isPairs
+            ? 'Both hit, you play the better ball, repeat.'
+            : 'All four hit, you play the best ball.');
+      case 'alternate_shot':
+        return (card.formatName,
+            "One ball, hit in turn. Both mistakes are the pair's, which is why "
+            'it is the most generous allowance of the five.');
+      case 'scotch':
+        return (card.formatName,
+            'Both drive, take the better one, then alternate from there. The '
+            'partner whose drive was not taken plays the second shot.');
+      case 'chapman':
+        return (card.formatName,
+            'Both drive, swap for the second, then one ball in turn.');
+      case 'best_ball':
+        return (card.formatName,
+            'Both play their own ball. The better NET counts — a higher gross '
+            'can be the counting ball once strokes are in.');
     }
     final n = card.shamble?.count ?? 2;
     return (
@@ -238,7 +308,21 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
         _HoleHeader(card: card, hole: _hole!),
         const SizedBox(height: 12),
 
-        if (!card.drive.isOff) ...[
+        // The rota is set once, before the first score, and then fixed. Until
+        // it is, this is the only thing on the card that matters — an
+        // alternate shot with no agreed tee order is not a round.
+        if (_needsRota(card)) ...[
+          _RotaSetup(card: card, busy: _busy, onSet: _setRota),
+          const SizedBox(height: 12),
+        ],
+
+        // Drawn whenever the format has something to say about the tee — a
+        // rota states who is up even with no quota, and Scotch needs the tap
+        // whether or not a quota was set.
+        if (!_needsRota(card) &&
+            (card.showsDriveChips ||
+             card.driveControl == 'rota' ||
+             card.teeNote.isNotEmpty)) ...[
           _DriveStrip(card: card, hole: _hole!, onPick: _setDrive),
           const SizedBox(height: 12),
         ],
@@ -258,7 +342,7 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
           // Nothing is tappable while a save is in flight — two taps on one
           // hole would race each other's reload.
           ignoring: _busy,
-          child: card.isScramble
+          child: card.isOneBall
               ? _TeamScoreRow(
                   card    : card,
                   teamName: widget.teamName,
@@ -282,7 +366,7 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
           card    : card,
           hole    : _hole!,
           onGo    : _goto,
-          golferId: card.isScramble ? null : _activeGolfer(card),
+          golferId: card.isOneBall ? null : _activeGolfer(card),
         ),
 
         const SizedBox(height: 16),
@@ -351,7 +435,11 @@ class _HoleHeader extends StatelessWidget {
       // Stated on EVERY hole, per the packet — it is the one piece of the
       // shamble's rule that is operative rather than reference, so it stays up
       // here even though the rule itself moved to the bottom.
-      if (card.shamble != null) '${card.shamble!.count} of 4 count',
+      // Stated on every hole. Under an escalating shamble count it changes at
+      // 7 and again at 13, which is exactly why it is stated — and best ball's
+      // `1 of 2 counts` settles the same question at the green.
+      if (card.shamble != null)
+        '${card.shamble!.count} of ${card.shamble!.rows.length} count',
     ];
     return Container(
       width: double.infinity,
@@ -378,6 +466,11 @@ class _HoleHeader extends StatelessWidget {
 /// A chip per golfer, the pips on the chip, and the consequence stated beside
 /// it. Its own control because it is its own question — the score belongs to
 /// the team, and hanging it off a man's row would say otherwise.
+///
+/// **The same control does three different jobs.** A scramble records
+/// compliance; Scotch issues an instruction and answers with a sentence; an
+/// alternate shot has nothing to choose and states who is up. Best ball and
+/// Chapman never reach here.
 class _DriveStrip extends StatelessWidget {
   final TeamPlayCard card;
   final int hole;
@@ -405,18 +498,22 @@ class _DriveStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // A schedule needs one line on the tee, not a tracker.
-    if (card.drive.isAlternating) {
+    // A schedule needs one line on the tee, not a tracker. It is NEVER
+    // conditional: a pair that loses track of an alternate-shot rota plays a
+    // hole out of order and the round is gone.
+    if (card.driveControl == 'rota' || card.drive.isAlternating) {
       final rota = card.drive.rotaFor(hole);
+      final line = card.teeNote.isNotEmpty
+          ? card.teeNote
+          : (rota == null || rota.upLabel.isEmpty
+              ? 'The team sets the rota on the 1st tee.'
+              : rota.upLabel);
       return _Panel(
-        label: 'WHOSE TEE SHOT',
+        label: card.isPairs ? 'WHO TEES' : 'WHOSE TEE SHOT',
         child: Text(
-          rota == null || rota.upLabel.isEmpty
-              ? 'The team sets the pairs on the 1st tee.'
-              : rota.upLabel +
-                  (rota.phantomCoverName.isEmpty
-                      ? ''
-                      : '  ·  ${rota.phantomCoverName} → phantom'),
+          line + (rota?.phantomCoverName.isEmpty ?? true
+              ? ''
+              : '  ·  ${rota!.phantomCoverName} → phantom'),
           style: theme.textTheme.bodyMedium
               ?.copyWith(fontWeight: FontWeight.w600),
         ),
@@ -424,8 +521,49 @@ class _DriveStrip extends StatelessWidget {
     }
 
     final w = _window;
-    if (w == null) return const SizedBox.shrink();
-    final driver = _driver;
+    final driver = _driver ?? card.pickedDriver;
+
+    // **Scotch with no quota.** The tap is still required, because it is not a
+    // record at all — it tells the pair who plays the second shot. There are
+    // no windows to read pips from, so the chips come off the card's roster
+    // and the panel answers with the sentence instead of a slack figure.
+    if (w == null) {
+      if (!card.showsDriveChips) return const SizedBox.shrink();
+      return _Panel(
+        label: card.driveControl == 'instruction'
+            ? 'WHOSE DRIVE' : 'WHOSE DRIVE',
+        trailing: Text(
+          card.driveControl == 'instruction' ? 'both hit' : '',
+          style: theme.textTheme.labelSmall),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final o in card.driveOptions)
+                  _DriveOptionChip(
+                    option  : o,
+                    selected: o.playerId == driver,
+                    onTap   : () => onPick(
+                        o.playerId == driver ? null : o.playerId),
+                  ),
+              ],
+            ),
+            if (card.teeNote.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              // *Maiolini plays the second shot, then alternate.* A sentence,
+              // not a tick — because that is what the pick MEANS here.
+              Text(card.teeNote,
+                   style: theme.textTheme.bodySmall?.copyWith(
+                       fontWeight: FontWeight.w600,
+                       color: theme.colorScheme.primary)),
+            ],
+          ],
+        ),
+      );
+    }
 
     return _Panel(
       label   : 'WHOSE DRIVE',
@@ -459,6 +597,16 @@ class _DriveStrip extends StatelessWidget {
                 ),
             ],
           ),
+          // Scotch with a quota on top: the instruction still has to be said,
+          // because the tap did two jobs.
+          if (card.driveControl == 'instruction' &&
+              card.teeNote.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(card.teeNote,
+                 style: theme.textTheme.bodySmall?.copyWith(
+                     fontWeight: FontWeight.w600,
+                     color: theme.colorScheme.primary)),
+          ],
           if (w.owed > 0 && (w.tight || w.impossible)) ...[
             const SizedBox(height: 8),
             // The consequence in a sentence, on the tee — the moment a quota
@@ -475,6 +623,132 @@ class _DriveStrip extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Setting the rota, on the 1st tee, once
+/// (docs/design-review/handoff-team-pairs/SPEC.md §5.2).
+///
+/// **The app does not derive it from handicap.** The men decide in ten
+/// seconds, it is the only part of the rule anyone enjoys, and a computed
+/// order would be overridden on the spot. Then it is fixed for eighteen — a
+/// rota that can be re-cut mid-round is not a rota, and the server refuses a
+/// second POST for exactly that reason.
+///
+/// Two men → who tees the odd holes, two ways.
+/// Four men → the two driving pairs, three ways to split four into two and two.
+class _RotaSetup extends StatelessWidget {
+  final TeamPlayCard card;
+  final bool busy;
+  final Future<void> Function(List<List<int>>) onSet;
+
+  const _RotaSetup({
+    required this.card, required this.busy, required this.onSet,
+  });
+
+  /// Every legal split, as `(label, pairs)`.
+  List<(String, List<List<int>>)> get _choices {
+    final o = card.driveOptions;
+    if (o.length == 2) {
+      return [
+        ('${o[0].short} odds / ${o[1].short} evens',
+         [[o[0].playerId], [o[1].playerId]]),
+        ('${o[1].short} odds / ${o[0].short} evens',
+         [[o[1].playerId], [o[0].playerId]]),
+      ];
+    }
+    if (o.length == 4) {
+      const splits = [(0, 1, 2, 3), (0, 2, 1, 3), (0, 3, 1, 2)];
+      return [
+        for (final (a, b, c, d) in splits)
+          ('${o[a].short} & ${o[b].short}  /  ${o[c].short} & ${o[d].short}',
+           [[o[a].playerId, o[b].playerId], [o[c].playerId, o[d].playerId]]),
+      ];
+    }
+    // Three men run AB / BC / AC — two drivers every hole, each sitting out
+    // every third, which is as even as three into two goes.
+    if (o.length == 3) {
+      return [
+        ('${o[0].short} & ${o[1].short}, then ${o[1].short} & ${o[2].short}, '
+         'then ${o[0].short} & ${o[2].short}',
+         [[o[0].playerId, o[1].playerId],
+          [o[1].playerId, o[2].playerId],
+          [o[0].playerId, o[2].playerId]]),
+      ];
+    }
+    return const [];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final pairs = card.driveOptions.length == 2;
+    return _Panel(
+      label: pairs ? 'SET THE TEE ROTA' : 'SET THE DRIVING PAIRS',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            pairs
+                ? 'Who tees on the odd holes. Fixed for eighteen once set — '
+                  'the card names the tee on every hole from here.'
+                : 'Two golfers drive each hole, the other two the next. Fixed '
+                  'for eighteen once set.',
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 10),
+          for (final (label, choice) in _choices) ...[
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: busy ? null : () => onSet(choice),
+                child: Text(label, textAlign: TextAlign.center),
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// The chip for a format with no quota behind it — Scotch off a plain roster.
+/// No pips, because there is nothing being counted.
+class _DriveOptionChip extends StatelessWidget {
+  final TeamPlayDriveOption option;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _DriveOptionChip({
+    required this.option, required this.selected, required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? theme.colorScheme.primary : null,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected
+                ? theme.colorScheme.primary
+                : theme.colorScheme.outlineVariant,
+            width: 1.5,
+          ),
+        ),
+        child: Text(option.short,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: selected ? Colors.white : null,
+            )),
       ),
     );
   }

@@ -5,6 +5,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart' show Color;
 
+import '../utils/team_allowance.dart' show kTeamFormatNames, playsOneBall;
+
 // ---------------------------------------------------------------------------
 // Shared formatting helpers
 // ---------------------------------------------------------------------------
@@ -1066,10 +1068,12 @@ class Round {
   /// four with a live count for a shamble — so the hub dispatches on this
   /// rather than on the universal score-entry screen.
   final bool isTeamPlayRound;
-  /// Foursome Play only: `scramble` or `shamble`, and — for a shamble — how
-  /// many of the four scores count on each hole. The standard score-entry
-  /// screen reads the counts to tint the ones that count.
+  /// Team Play only: the format, the team size, and — for an own-ball format
+  /// — how many scores count on each hole. The standard score-entry screen
+  /// reads the counts to tint the ones that count.
   final String? teamPlayFormat;
+  /// Four or two. Pairs are the same shape with the size set to two.
+  final int?    teamPlaySize;
   final Map<int, int> teamPlayBallCounts;
   /// Parent tournament id, or null for a standalone casual round.  Used by the
   /// round hub to fetch the cup standings (live tally).
@@ -1113,6 +1117,7 @@ class Round {
     this.isCupRound    = false,
     this.isTeamPlayRound = false,
     this.teamPlayFormat,
+    this.teamPlaySize,
     this.teamPlayBallCounts = const {},
     this.tournamentId,
     this.irBallsConfig = const [],
@@ -1140,6 +1145,7 @@ class Round {
         isCupRound:   j['is_cup_round']  as bool?   ?? false,
         isTeamPlayRound: j['is_team_play_round'] as bool? ?? false,
         teamPlayFormat: (j['team_play'] as Map?)?['format'] as String?,
+        teamPlaySize  : (j['team_play'] as Map?)?['team_size'] as int?,
         teamPlayBallCounts: {
           for (final e in Map<String, dynamic>.from(
                   ((j['team_play'] as Map?)?['ball_counts'] ?? {}) as Map)
@@ -5264,12 +5270,16 @@ class TeamPlayDriveWindow {
   }
 }
 
-/// One hole of the alternating-pairs rota — the schedule, not a quota. What it
-/// needs on the tee is one line: *Gunst and Yau are up.*
+/// One hole of the rota — the schedule, not a quota. What it needs on the tee
+/// is one line: *Gunst and Yau are up* for a foursome's driving pairs,
+/// *Maiolini tees* for a pair's alternate-shot tee order.
 class TeamPlayRotaHole {
   final int       hole;
   final List<int> pair;
   final List<String> pairNames;
+  /// The line as the server writes it, in surnames — the form it is read in on
+  /// the tee. Falls back to [upLabel] for a payload that predates it.
+  final String    line;
   /// Three-man team only: the man not driving, who plays the phantom's ball —
   /// its 1st and 4th shots.
   final int?      phantomCover;
@@ -5277,7 +5287,7 @@ class TeamPlayRotaHole {
 
   const TeamPlayRotaHole({
     required this.hole, required this.pair, required this.pairNames,
-    this.phantomCover, this.phantomCoverName = '',
+    this.line = '', this.phantomCover, this.phantomCoverName = '',
   });
 
   factory TeamPlayRotaHole.fromJson(Map<String, dynamic> j) => TeamPlayRotaHole(
@@ -5285,14 +5295,18 @@ class TeamPlayRotaHole {
         pair        : ((j['pair'] as List?) ?? const []).map((e) => e as int).toList(),
         pairNames   : ((j['pair_names'] as List?) ?? const [])
             .map((e) => '$e').toList(),
+        line        : (j['line'] ?? '') as String,
         phantomCover: j['phantom_cover'] as int?,
         phantomCoverName: (j['phantom_cover_name'] ?? '') as String,
       );
 
-  /// *Gunst and Yau are up* — the one line a schedule needs on the tee.
+  /// *Gunst and Yau are up* / *Maiolini tees* — the one line a schedule needs
+  /// on the tee.
   String get upLabel {
+    if (line.isNotEmpty) return line;
     final names = pairNames.where((n) => n.isNotEmpty).toList();
-    if (names.length < 2) return '';
+    if (names.isEmpty) return '';
+    if (names.length == 1) return '${names.first} tees';
     return '${names.first} and ${names.last} are up';
   }
 }
@@ -5367,10 +5381,14 @@ class TeamPlayTeam {
   /// without reading.
   final String colour;
   final int    realPlayerCount;
+  /// Four or two. The size changes the format list and the allowance table,
+  /// and nothing else in the flow.
+  final int    teamSize;
   final bool   hasPhantom;
   final int    seatsOpen;
   final List<TeamPlayMember> members;
-  /// Null until the team is full — allowance shows once there are four.
+  /// Null until the team is full at ITS size — two for a pair. A team still
+  /// being built has no figure, because moving one man changes it.
   final int?    teamHandicap;
   final String  teamHandicapRaw;
   final TeamPlayAllowance allowance;
@@ -5405,6 +5423,7 @@ class TeamPlayTeam {
   const TeamPlayTeam({
     required this.foursomeId, required this.groupNumber, required this.name,
     required this.colour, required this.realPlayerCount,
+    this.teamSize = 4,
     required this.hasPhantom, required this.seatsOpen, required this.members,
     required this.teamHandicap, required this.teamHandicapRaw,
     required this.allowance, required this.drive, required this.thru,
@@ -5422,6 +5441,7 @@ class TeamPlayTeam {
         name           : (j['name'] ?? '') as String,
         colour         : (j['colour'] ?? '') as String,
         realPlayerCount: (j['real_player_count'] ?? 0) as int,
+        teamSize       : (j['team_size'] ?? 4) as int,
         hasPhantom     : j['has_phantom'] == true,
         seatsOpen      : (j['seats_open'] ?? 0) as int,
         members        : ((j['members'] as List?) ?? const [])
@@ -5465,13 +5485,37 @@ class TeamPlayTeam {
   String get memberLine => members
       .map((m) => m.isPhantom ? 'phantom 4th' : m.name)
       .join(' · ');
+
+  /// A pair is short until it has two men, a foursome until it has four
+  /// (phantom included).
+  bool get isFull => seatsOpen == 0;
 }
 
 /// The whole Team Play read model — one call, because the build-teams screen
 /// shows all six teams' figures against each other.
 class TeamPlaySummary {
   final bool   configured;
-  final String format;               // scramble | shamble
+  final String format;               // scramble | shamble | best_ball | …
+  /// Four or two. Pairs are Foursome Play with the size set to two — the same
+  /// wizard, board, pool and settlement; only the format list and the
+  /// allowance table change.
+  final int    teamSize;
+  /// Server-owned: the formats this SIZE may play, and the drive rules this
+  /// FORMAT may use. Held server-side so the wizard cannot offer a combination
+  /// the scoring has no card for.
+  final List<String> formats;
+  final List<String> driveRules;
+  /// What the tee-shot control on the card actually does — `record`,
+  /// `instruction`, `rota` or `none`. The same control does three different
+  /// jobs across the six formats.
+  final String driveControl;
+  /// True when a hole is incomplete until the drive is picked — every quota,
+  /// and Scotch even with no quota, because there the tap IS the instruction.
+  final bool   requiresDrivePick;
+  /// What stands between the TD and a playable field. Empty for a foursome
+  /// event; a pairs field that will not pair names the golfer who is standing
+  /// there without a partner.
+  final List<TeamPlayBlock> blocking;
   final bool   locked;
   final String handicapMode;
   final Map<int, int> ballCounts;
@@ -5488,6 +5532,9 @@ class TeamPlaySummary {
 
   const TeamPlaySummary({
     required this.configured, required this.format, required this.locked,
+    this.teamSize = 4, this.formats = const [], this.driveRules = const [],
+    this.driveControl = 'record', this.requiresDrivePick = false,
+    this.blocking = const [],
     required this.handicapMode, required this.ballCounts, this.ballCount,
     required this.driveRule, required this.drivePenalty,
     required this.entryFee, required this.placesPaid, required this.splitPcts,
@@ -5501,6 +5548,17 @@ class TeamPlaySummary {
     return TeamPlaySummary(
       configured  : j['configured'] == true,
       format      : (j['format'] ?? 'scramble') as String,
+      teamSize    : (j['team_size'] ?? 4) as int,
+      formats     : ((j['formats'] as List?) ?? const [])
+          .map((e) => e as String).toList(),
+      driveRules  : ((j['drive_rules'] as List?) ?? const [])
+          .map((e) => e as String).toList(),
+      driveControl: (j['drive_control'] ?? 'record') as String,
+      requiresDrivePick: j['requires_drive_pick'] == true,
+      blocking    : ((j['blocking'] as List?) ?? const [])
+          .map((e) => TeamPlayBlock.fromJson(
+              Map<String, dynamic>.from(e as Map)))
+          .toList(),
       locked      : j['locked'] == true,
       handicapMode: (j['handicap_mode'] ?? 'net') as String,
       ballCounts  : {
@@ -5527,6 +5585,17 @@ class TeamPlaySummary {
 
   bool get isScramble => format == 'scramble';
   bool get isShamble  => format == 'shamble';
+  bool get isPairs    => teamSize == 2;
+  /// Best ball is the only pairs format entering two scores — a shamble whose
+  /// count is fixed at 1 of 2 by the format rather than set by the TD.
+  bool get isBestBall => format == 'best_ball';
+  /// Scramble, alternate shot, Scotch, Chapman — one number for the ball the
+  /// team played in.
+  bool get isOneBall  => playsOneBall(format);
+
+  /// `Pairs · Scotch` / `Foursome Play · Shamble` — what the step subtitles
+  /// and the review row read.
+  String get formatName => kTeamFormatNames[format] ?? format;
 
   /// The build-teams strip: the spread of allowance figures across the field.
   /// A wide spread means the pot was decided at that screen.
@@ -5541,6 +5610,81 @@ class TeamPlaySummary {
         ? '${figures.first}'
         : '${figures.first} – ${figures.last}';
   }
+}
+
+/// One tappable drive chip on the card, and whether it is the one on.
+///
+/// The quota windows carry this for a quota rule, but **Scotch has the tap
+/// with no quota** — the pick is an instruction, not a record — so the roster
+/// comes down on the card either way.
+class TeamPlayDriveOption {
+  final int    playerId;
+  final String name;
+  final bool   picked;
+
+  const TeamPlayDriveOption({
+    required this.playerId, required this.name, required this.picked,
+  });
+
+  factory TeamPlayDriveOption.fromJson(Map<String, dynamic> j) =>
+      TeamPlayDriveOption(
+        playerId: (j['player_id'] ?? 0) as int,
+        name    : (j['name'] ?? '') as String,
+        picked  : j['picked'] == true,
+      );
+
+  /// Surname only — full names do not fit a phone, and the group knows who
+  /// Maiolini is.
+  String get short => name.split(' ').last;
+}
+
+/// What stands between the TD and a playable field
+/// (docs/design-review/handoff-team-pairs/SPEC.md §3.1).
+///
+/// **Pairs need an even field**, and there is no phantom partner to paper over
+/// an odd one — in fours the phantom is a handicap device for a team that
+/// still hits four balls, and in pairs it would be an imaginary man taking
+/// half the shots in an alternate shot.
+///
+/// So the block is plain, and it NAMES the golfer rather than reporting a
+/// count: the fix is about one man and the TD needs to know which one is
+/// standing there.
+class TeamPlayBlock {
+  /// `unpaired` — a team of one. `three_ball` — a team of three outside best
+  /// ball.
+  final String kind;
+  final int    foursomeId;
+  /// *Dave Kwan has no partner.*
+  final String detail;
+  final String golferName;
+  final int?   golferId;
+  /// Whether "let one team play three" is one of the ways out. **Best ball
+  /// only**: a third ball is another option to count, alternate shot and
+  /// Chapman cannot honour it at all, and in a scramble it is a straight
+  /// advantage. Offering a choice four of the five formats reject is worse
+  /// than not offering it.
+  final bool   threeBallAvailable;
+
+  const TeamPlayBlock({
+    required this.kind, required this.foursomeId, required this.detail,
+    this.golferName = '', this.golferId, this.threeBallAvailable = false,
+  });
+
+  factory TeamPlayBlock.fromJson(Map<String, dynamic> j) {
+    final golfer = j['golfer'] == null
+        ? const <String, dynamic>{}
+        : Map<String, dynamic>.from(j['golfer'] as Map);
+    return TeamPlayBlock(
+      kind      : (j['kind'] ?? '') as String,
+      foursomeId: (j['foursome_id'] ?? 0) as int,
+      detail    : (j['detail'] ?? '') as String,
+      golferName: (golfer['name'] ?? '') as String,
+      golferId  : golfer['player_id'] as int?,
+      threeBallAvailable: j['three_ball_available'] == true,
+    );
+  }
+
+  bool get isUnpaired => kind == 'unpaired';
 }
 
 /// `36 counted of 72 played` — the number that describes the round.
@@ -5700,10 +5844,28 @@ class TeamPlayRound {
       );
 }
 
-/// One hole of the card — a scramble's single number, or a shamble's four.
+/// One hole of the card — one number for the ball a team played in, or one
+/// number per golfer with the best N counting.
 class TeamPlayCard {
   final String format;
+  final int    teamSize;
   final int    hole;
+  /// What the tee-shot control here actually DOES — `record` (a scramble's
+  /// compliance against a quota), `instruction` (Scotch: the pick says who
+  /// hits next), `rota` (alternate shot: odd/even, set on the 1st tee) or
+  /// `none` (best ball and Chapman, where both men drive every hole with no
+  /// choice to record).
+  final String driveControl;
+  /// The sentence the card says on this hole. *Maiolini plays the second shot,
+  /// then alternate.* / *Maiolini tees.* Computed on the server so the client
+  /// never re-derives a rule, and never conditional on an alternate shot — a
+  /// pair that loses track plays a hole out of order and the round is gone.
+  final String teeNote;
+  /// True when the hole is incomplete until the drive is picked.
+  final bool   requiresDrivePick;
+  /// The chips the drive control draws, and which one is on. Empty when the
+  /// control is a rota or absent.
+  final List<TeamPlayDriveOption> driveOptions;
   /// The holes this group plays, IN PLAY ORDER — a shotgun group starting on 9
   /// runs 9…18, 1…8. Computed server-side from services.hole_plan so the card
   /// never re-derives the wrap.
@@ -5743,6 +5905,8 @@ class TeamPlayCard {
   const TeamPlayCard({
     required this.format, required this.hole, required this.playOrder,
     required this.round, required this.drive,
+    this.teamSize = 4, this.driveControl = 'record', this.teeNote = '',
+    this.requiresDrivePick = false, this.driveOptions = const [],
     this.par, this.strokeIndex, this.yards, this.teamStrokes = 0,
     this.pars = const {}, this.strokeIndexes = const {},
     this.strokesByHole = const {},
@@ -5752,6 +5916,14 @@ class TeamPlayCard {
 
   factory TeamPlayCard.fromJson(Map<String, dynamic> j) => TeamPlayCard(
         format   : (j['format'] ?? 'scramble') as String,
+        teamSize : (j['team_size'] ?? 4) as int,
+        driveControl: (j['drive_control'] ?? 'record') as String,
+        teeNote  : (j['tee_note'] ?? '') as String,
+        requiresDrivePick: j['requires_drive_pick'] == true,
+        driveOptions: ((j['drive_options'] as List?) ?? const [])
+            .map((e) => TeamPlayDriveOption.fromJson(
+                Map<String, dynamic>.from(e as Map)))
+            .toList(),
         hole     : (j['hole'] ?? 1) as int,
         playOrder: ((j['play_order'] as List?) ?? const [])
             .map((e) => e as int).toList(),
@@ -5799,6 +5971,19 @@ class TeamPlayCard {
       );
 
   bool get isScramble => format == 'scramble';
+  /// Scramble, alternate shot, Scotch, Chapman — one number for the ball the
+  /// team played in.
+  bool get isOneBall  => playsOneBall(format);
+  bool get isPairs    => teamSize == 2;
+  String get formatName => kTeamFormatNames[format] ?? format;
+  /// The control is drawn at all only when there is something to tap. A rota
+  /// states who is up; best ball and Chapman have nothing to say.
+  bool get showsDriveChips => (driveControl == 'record' ||
+                               driveControl == 'instruction') &&
+                              driveOptions.isNotEmpty;
+  /// The man whose drive was taken on this hole, or null.
+  int? get pickedDriver => driveOptions
+      .where((o) => o.picked).map((o) => o.playerId).firstOrNull;
 
   int _indexOf(int h) => playOrder.indexOf(h);
 

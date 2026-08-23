@@ -921,16 +921,56 @@ class TeamPlayConfig(models.Model):
     The TD's settings for a Team Play tournament — one row, set across wizard
     steps 3–7 and read by every surface afterwards.
 
-    Two formats, two scorecards.  They share exactly one thing — the tee shot
-    is chosen — which is why the drive requirement applies to both.
+    **Team size is a control, not a shape.**  Fours and pairs run the same
+    wizard, the same leaderboard, the same pool and the same settlement; the
+    size changes the format list and the allowance table, and nothing else in
+    the flow knows about it
+    (docs/design-review/handoff-team-pairs/SPEC.md §1).
+
+    Six formats, but only TWO scorecards.  Four of the five pair formats end in
+    one ball and take the scramble's card; best ball is a shamble whose count
+    is 1.  Every format that chooses a tee shot carries the drive control —
+    which is why the requirement applies across both sizes.
     """
 
-    FORMAT_SCRAMBLE = 'scramble'
-    FORMAT_SHAMBLE  = 'shamble'
-    FORMAT_CHOICES  = [
-        (FORMAT_SCRAMBLE, 'Scramble'),
-        (FORMAT_SHAMBLE,  'Shamble'),
+    SIZE_FOURS = 4
+    SIZE_PAIRS = 2
+    SIZE_CHOICES = [
+        (SIZE_FOURS, 'Fours'),
+        (SIZE_PAIRS, 'Pairs'),
     ]
+
+    FORMAT_SCRAMBLE       = 'scramble'
+    FORMAT_SHAMBLE        = 'shamble'
+    FORMAT_BEST_BALL      = 'best_ball'
+    FORMAT_ALTERNATE_SHOT = 'alternate_shot'
+    FORMAT_SCOTCH         = 'scotch'
+    FORMAT_CHAPMAN        = 'chapman'
+    FORMAT_CHOICES  = [
+        (FORMAT_SCRAMBLE,       'Scramble'),
+        (FORMAT_SHAMBLE,        'Shamble'),
+        (FORMAT_BEST_BALL,      'Best ball'),
+        (FORMAT_ALTERNATE_SHOT, 'Alternate shot'),
+        (FORMAT_SCOTCH,         'Scotch'),
+        (FORMAT_CHAPMAN,        'Chapman'),
+    ]
+
+    # Which formats each size may play.  `scramble` is the only one both sizes
+    # run, and its ALLOWANCE is not shared — 25/20/15/10 on four men, 35/15 on
+    # two.  Every table lookup is therefore keyed on (size, format), never on
+    # the format alone.
+    FORMATS_BY_SIZE = {
+        SIZE_FOURS: (FORMAT_SCRAMBLE, FORMAT_SHAMBLE),
+        SIZE_PAIRS: (FORMAT_SCRAMBLE, FORMAT_BEST_BALL, FORMAT_ALTERNATE_SHOT,
+                     FORMAT_SCOTCH, FORMAT_CHAPMAN),
+    }
+
+    # The two card shapes.  Everything downstream branches on these rather than
+    # on a format name: a card is either one number for the ball the team
+    # played, or one number per golfer with the best N counting.
+    ONE_BALL_FORMATS = (FORMAT_SCRAMBLE, FORMAT_ALTERNATE_SHOT,
+                        FORMAT_SCOTCH, FORMAT_CHAPMAN)
+    OWN_BALL_FORMATS = (FORMAT_SHAMBLE, FORMAT_BEST_BALL)
 
     # Shamble only.  The counts live UNDER the format radio, expanded in place
     # — house rule from the Irish Rumble work: no game gets a second rules
@@ -971,13 +1011,26 @@ class TeamPlayConfig(models.Model):
         Tournament, on_delete=models.CASCADE, related_name='team_play_config'
     )
 
+    # ── Step 1 — the team size ───────────────────────────────────────────
+    team_size = models.PositiveSmallIntegerField(
+        default=SIZE_FOURS, choices=SIZE_CHOICES,
+        help_text=(
+            "Four or two.  It changes the format list on step 4 and the "
+            "allowance table on step 6, and NOTHING else in the flow — same "
+            "leaderboard, same payout, same settlement, same receipt.  "
+            "Defaults to four, so every Foursome Play row reads unchanged."
+        ),
+    )
+
     # ── Step 3 — how a team makes a score ────────────────────────────────
     team_format = models.CharField(
-        max_length=10, choices=FORMAT_CHOICES, default=FORMAT_SCRAMBLE,
+        max_length=16, choices=FORMAT_CHOICES, default=FORMAT_SCRAMBLE,
         help_text=(
-            "Scramble — all four hit, the best ball is played, ONE score per "
-            "hole.  Shamble — best drive, then each man plays his own ball in, "
-            "FOUR scores per hole."
+            "Fours: scramble (all four hit, best ball played, ONE score a "
+            "hole) or shamble (best drive, then each man plays his own ball "
+            "in, FOUR scores a hole).  Pairs: scramble, best ball, alternate "
+            "shot, Scotch or Chapman — four of the five end in one ball, and "
+            "best ball is the only one entering two scores."
         ),
     )
     ball_count_mode = models.CharField(
@@ -1088,6 +1141,46 @@ class TeamPlayConfig(models.Model):
         return self.team_format == self.FORMAT_SHAMBLE
 
     @property
+    def is_pairs(self) -> bool:
+        return self.team_size == self.SIZE_PAIRS
+
+    @property
+    def plays_one_ball(self) -> bool:
+        """
+        One number for the ball the team played — scramble, alternate shot,
+        Scotch and Chapman.
+
+        Scoring branches on THIS rather than on `is_scramble`: four of the five
+        pair formats take the scramble's card, and a check for the format name
+        would have needed widening in eleven places every time one was added.
+        """
+        return self.team_format in self.ONE_BALL_FORMATS
+
+    @property
+    def plays_own_ball(self) -> bool:
+        """
+        One number per golfer with the best N counting — shamble and best ball.
+
+        **Best ball is a shamble whose count is 1.**  Two men, one score
+        counting, and every consumer of the ball-count dict works untouched:
+        best-1 on a par 4 is a par of 4, which is right.
+        """
+        return self.team_format in self.OWN_BALL_FORMATS
+
+    @property
+    def counts_every_ball(self) -> bool:
+        """True when the ball count is fixed by the format rather than set by
+        the TD. Best ball is always best-1-of-2; only the shamble has a dial."""
+        return self.team_format == self.FORMAT_BEST_BALL
+
+    @property
+    def format_allowed(self) -> bool:
+        """Is this format legal at this team size? Enforced by the setup
+        endpoint — a two-man shamble and a four-man Chapman are both nonsense
+        and neither should be reachable by an API caller."""
+        return self.team_format in self.FORMATS_BY_SIZE.get(self.team_size, ())
+
+    @property
     def is_locked(self) -> bool:
         """True once a score has landed. The format may no longer change."""
         return self.format_locked_at is not None
@@ -1100,6 +1193,49 @@ class TeamPlayConfig(models.Model):
         schedule: no slack, no counting, nothing to fall short of.
         """
         return self.drive_rule in (self.DRIVE_PER_NINE, self.DRIVE_PER_18)
+
+    @property
+    def drive_rules_allowed(self) -> tuple:
+        """
+        The tee-shot control does three different jobs, and the format decides
+        which (docs/design-review/handoff-team-pairs/SPEC.md §5).
+
+        * **A record** — scramble, either size.  Compliance against a quota.
+        * **An instruction** — Scotch.  Picking the drive says who hits next,
+          so the tap happens on every hole; a quota is available ON TOP because
+          the tap is already there, and it is off by default.
+        * **A rota** — alternate shot.  Odd/even, set on the 1st tee, fixed for
+          eighteen.  Not a quota: nothing to fall short of, so no warning and
+          no penalty setting.
+        * **Absent** — best ball and Chapman.  Both men drive every hole with
+          no choice to record.
+
+        Alternating pairs stays a fours rule: two men have no pairs to
+        alternate, and their alternate-shot rota is the odd/even tee order,
+        which is the `alternate_shot` format's own schedule.
+        """
+        if self.team_format in (self.FORMAT_BEST_BALL, self.FORMAT_CHAPMAN):
+            return (self.DRIVE_NONE,)
+        if self.team_format == self.FORMAT_ALTERNATE_SHOT:
+            return (self.DRIVE_ALTERNATING,)
+        if self.is_pairs:
+            return (self.DRIVE_NONE, self.DRIVE_PER_NINE, self.DRIVE_PER_18)
+        return (self.DRIVE_NONE, self.DRIVE_PER_NINE, self.DRIVE_PER_18,
+                self.DRIVE_ALTERNATING)
+
+    @property
+    def requires_drive_pick(self) -> bool:
+        """
+        Whether a hole is incomplete until the drive is picked.
+
+        True for every quota — the card's gate — and **true for Scotch even
+        with no quota**, because there the tap is not a record at all: it says
+        who plays the second shot.  A Scotch hole with no drive picked has not
+        been played.
+        """
+        if self.team_format == self.FORMAT_SCOTCH:
+            return True
+        return self.drive_rule_is_quota
 
     def __str__(self):
         return f"Team Play — {self.tournament.name} — {self.get_team_format_display()}"
@@ -1122,6 +1258,22 @@ class TeamPlayTeamState(models.Model):
     colour = models.CharField(
         max_length=20, blank=True,
         help_text="Pine, Clay, Slate, Dune, Fern, Rust — the default team name and the row's identity.",
+    )
+
+    # True until the TD types a name over it.
+    #
+    # **A pair defaults to its two surnames** — `Maiolini & Yau`. That is not
+    # the app inventing a name the way a colour would be: it is the only thing
+    # anybody calls a pair, and two surnames fit on a leaderboard row where
+    # four do not.  So the default is WRITTEN to ``Foursome.name``, and this
+    # flag is what lets it follow a roster change until somebody overrides it.
+    # A foursome keeps `Group N` and never writes anything here.
+    name_is_default = models.BooleanField(
+        default=True,
+        help_text=(
+            "False once the TD names the team himself, after which the roster "
+            "may change without the name following it."
+        ),
     )
 
     # The team figure and the number that explains it.  Rounded ONCE, on the

@@ -19,6 +19,16 @@ class TeamRadioCard extends StatelessWidget {
   final String body;
   final bool   selected;
   final bool   enabled;
+  /// A figure printed at the right of the row, with a caption under it —
+  /// `4` / `STROKES`, `85%` / `EACH`.
+  ///
+  /// **The pair's own figure shows on every option before it is chosen**
+  /// (docs/design-review/handoff-team-pairs/SPEC.md §4). The same two men play
+  /// off 4 in a scramble and 12 in an alternate shot, so a TD picking Chapman
+  /// because it sounds fun should see that it more than doubles his field's
+  /// strokes.
+  final String? trailing;
+  final String? trailingCaption;
   final VoidCallback onTap;
 
   const TeamRadioCard({
@@ -28,6 +38,8 @@ class TeamRadioCard extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.enabled = true,
+    this.trailing,
+    this.trailingCaption,
   });
 
   @override
@@ -62,6 +74,21 @@ class TeamRadioCard extends StatelessWidget {
                 ],
               ),
             ),
+            if (trailing != null) ...[
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(trailing!,
+                       style: Halved.sectionHead().copyWith(
+                           fontSize: 24,
+                           color: selected ? Halved.pine : Halved.deepPine)),
+                  if (trailingCaption != null)
+                    Text(trailingCaption!.toUpperCase(),
+                         style: Halved.label()),
+                ],
+              ),
+            ],
           ],
         ),
       ),

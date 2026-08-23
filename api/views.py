@@ -4234,13 +4234,30 @@ class RoundCompleteView(APIView):
         foursomes = list(round_obj.foursomes.prefetch_related('memberships'))
         if not foursomes:
             return False
+
+        # A one-ball team format posts no per-golfer HoleScore at all — the
+        # hole is one TeamHoleScore row for the ball the team played in. Reading
+        # coverage off HoleScore left a scramble, an alternate shot, a Scotch
+        # and a Chapman permanently unfinishable, whatever the teams entered.
+        config = getattr(
+            getattr(round_obj, 'tournament', None), 'team_play_config', None)
+        one_ball = config is not None and config.plays_one_ball
+
         for fs in foursomes:
             expected = RoundCompleteView._expected_holes(fs)
-            holes = set(
-                HoleScore.objects
-                .filter(foursome=fs, gross_score__isnull=False)
-                .values_list('hole_number', flat=True)
-            )
+            if one_ball:
+                from games.models import TeamHoleScore
+                holes = set(
+                    TeamHoleScore.objects
+                    .filter(foursome=fs, team=None, gross_score__isnull=False)
+                    .values_list('hole_number', flat=True)
+                )
+            else:
+                holes = set(
+                    HoleScore.objects
+                    .filter(foursome=fs, gross_score__isnull=False)
+                    .values_list('hole_number', flat=True)
+                )
             if expected - holes:
                 return False
         return True
@@ -9194,7 +9211,8 @@ class TeamPlaySetupView(APIView):
         'entry_fee', 'places_paid', 'split_pcts', 'drive_penalty',
     }
     LOCKED_FIELDS = {
-        'team_format', 'ball_count_mode', 'ball_count_fixed', 'ball_counts',
+        'team_size', 'team_format', 'ball_count_mode', 'ball_count_fixed',
+        'ball_counts',
     }
 
     def get(self, request, pk):
@@ -9208,7 +9226,15 @@ class TeamPlaySetupView(APIView):
             configured = True
         return Response({
             'configured'            : configured,
+            'team_size'             : cfg.team_size,
             'team_format'           : cfg.team_format,
+            # Server-owned lists: the size decides which formats are legal and
+            # the FORMAT decides which drive rules are, so the wizard cannot
+            # offer a combination the scoring cannot honour.
+            'formats'               : list(
+                cfg.FORMATS_BY_SIZE.get(cfg.team_size, ())),
+            'drive_rules'           : list(cfg.drive_rules_allowed),
+            'requires_drive_pick'   : cfg.requires_drive_pick,
             'ball_count_mode'       : cfg.ball_count_mode,
             'ball_count_fixed'      : cfg.ball_count_fixed,
             'ball_counts'           : cfg.ball_counts or {},
@@ -9257,7 +9283,26 @@ class TeamPlaySetupView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        defaults = {}
+        # The team size decides which formats are legal, and a mismatch is
+        # nonsense rather than a preference: there is no two-man shamble and no
+        # four-man Chapman. Refused here so an API caller cannot post a shape
+        # the scoring has no card for.
+        size = int(d.get('team_size', getattr(existing, 'team_size', 4)) or 4)
+        if size not in TeamPlayConfig.FORMATS_BY_SIZE:
+            return Response(
+                {'detail': 'team_size must be 4 (fours) or 2 (pairs).'},
+                status=status.HTTP_400_BAD_REQUEST)
+        allowed = TeamPlayConfig.FORMATS_BY_SIZE[size]
+        fmt = d.get('team_format', getattr(existing, 'team_format', None))
+        if fmt is not None and fmt not in allowed:
+            label = 'pairs' if size == 2 else 'fours'
+            return Response(
+                {'detail': f'{fmt} is not a {label} format. '
+                           f'{label.capitalize()} play '
+                           f'{", ".join(allowed)}.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        defaults = {'team_size': size}
         for field in ('team_format', 'ball_count_mode', 'drive_rule',
                       'drive_penalty', 'handicap_mode'):
             if field in d:
@@ -9265,6 +9310,25 @@ class TeamPlaySetupView(APIView):
         for field in ('ball_count_fixed', 'drives_required', 'places_paid'):
             if field in d:
                 defaults[field] = int(d[field])
+
+        # The tee-shot control does three different jobs and the FORMAT picks
+        # which. Best ball and Chapman have both men driving every hole with no
+        # choice to record, so there is nothing a quota could count; alternate
+        # shot has a rota, which is a schedule and not a quota at all. Coerced
+        # rather than refused — a TD switching format should not have to go
+        # back and un-set a rule that no longer exists.
+        probe = TeamPlayConfig(
+            team_size   = size,
+            team_format = defaults.get(
+                'team_format', getattr(existing, 'team_format', None)
+                or TeamPlayConfig.FORMAT_SCRAMBLE),
+        )
+        rules = probe.drive_rules_allowed
+        current_rule = defaults.get(
+            'drive_rule', getattr(existing, 'drive_rule', None)
+            or TeamPlayConfig.DRIVE_NONE)
+        if current_rule not in rules:
+            defaults['drive_rule'] = rules[0]
         if 'ball_counts' in d:
             defaults['ball_counts'] = d['ball_counts'] or {}
         if 'split_pcts' in d:
@@ -9316,17 +9380,40 @@ class TeamPlayTeamView(APIView):
     Colour is assigned regardless and is NOT settable here: it does real work
     on the leaderboard and the scorecard, and a TD renaming his team should not
     be able to leave two teams sharing a block.
+
+    **Blank resets to the default** — `Group N` for a foursome, the two
+    surnames for a pair. Not the colour: `team_dict` is explicit that an
+    unnamed team is `Group N` and the colour identifies the row rather than
+    naming it, and clearing a name should give back the thing the wizard
+    showed.
     """
     def post(self, request, pk):
-        from services.team_play_state import ensure_team_state
+        from services.team_play_state import (
+            apply_default_name, ensure_team_state, team_name,
+        )
         foursome = foursome_for_scorer(request.user, pk)
         name = (request.data.get('name') or '').strip()[:16]   # same cap as the ball game
         state = ensure_team_state(foursome)
-        foursome.name = name or state.colour
+        config = getattr(foursome.round.tournament, 'team_play_config', None)
+
+        foursome.name = name
         foursome.save(update_fields=['name'])
-        return Response({'foursome_id': foursome.id,
-                         'name': foursome.name,
-                         'colour': state.colour})
+        # A pair's surname default follows the roster until somebody types over
+        # it; after that a swapped golfer must not drag the name with him.
+        if state.name_is_default != (not name):
+            state.name_is_default = not name
+            state.save(update_fields=['name_is_default'])
+        if config is not None:
+            apply_default_name(foursome, config, state)
+            foursome.refresh_from_db(fields=['name'])
+
+        return Response({
+            'foursome_id': foursome.id,
+            'name'   : (foursome.name or
+                        (team_name(foursome, config) if config is not None
+                         else f'Group {foursome.group_number}')),
+            'colour' : state.colour,
+        })
 
 
 class TeamPlayDriveView(APIView):
@@ -9428,10 +9515,11 @@ class TeamPlayScoreView(APIView):
         if config is None:
             return Response({'detail': 'This round is not a Foursome Play event.'},
                             status=status.HTTP_400_BAD_REQUEST)
-        if not config.is_scramble:
+        if not config.plays_one_ball:
             return Response(
-                {'detail': 'A shamble records four scores a hole — post them '
-                           'through the normal score endpoint.'},
+                {'detail': f'{config.get_team_format_display()} records a score '
+                           f'per golfer — post them through the normal score '
+                           f'endpoint.'},
                 status=status.HTTP_400_BAD_REQUEST)
 
         hole = int(request.data.get('hole_number') or 0)
@@ -9452,7 +9540,9 @@ class TeamPlayCardView(APIView):
     his 5 was not used, or the total looks wrong and someone re-enters it.
     """
     def get(self, request, pk):
-        from services.team_play_state import drive_state, resolved_counts
+        from services.team_play_state import (
+            drive_control_kind, drive_state, resolved_counts, tee_note,
+        )
         from services.team_play_scoring import (
             golfers_by_hole, net_to_par_by_hole, shamble_hole,
             team_hole_scores, team_round,
@@ -9493,7 +9583,7 @@ class TeamPlayCardView(APIView):
         # see on the tee that this is one of the holes it gets a stroke.
         from scoring.handicap import _strokes_on_hole
         team_strokes = 0
-        if config.is_scramble and rnd.get('allowance') and info.get('stroke_index'):
+        if config.plays_one_ball and rnd.get('allowance') and info.get('stroke_index'):
             team_strokes = _strokes_on_hole(
                 rnd['allowance'], info['stroke_index'])
 
@@ -9529,8 +9619,27 @@ class TeamPlayCardView(APIView):
             'golfers_by_hole': golfers_by_hole(foursome, config),
             'round'     : rnd,
             'drive'     : drive_state(foursome, config),
+            # What the tee-shot control on this card actually DOES — a record,
+            # an instruction, a rota, or nothing at all. The same control does
+            # three different jobs across the six formats, and the client must
+            # not have to work out which from the format name.
+            'drive_control': drive_control_kind(config),
+            # …and the sentence it answers with. Scotch: "Maiolini plays the
+            # second shot, then alternate." Alternate shot, on EVERY tee:
+            # "Maiolini tees." A pair that loses track plays a hole out of
+            # order and the round is gone, so the note is never conditional.
+            'tee_note'     : tee_note(foursome, config, hole),
+            # A Scotch hole is not complete until the drive is picked even
+            # with no quota, because there the tap is the instruction.
+            'requires_drive_pick': config.requires_drive_pick,
+            'team_size'    : config.team_size,
+            # Who the card may tap, and who is tapped. The quota windows carry
+            # this for a quota rule, but Scotch has the tap with NO quota — the
+            # pick is an instruction, not a record — so the roster has to come
+            # down either way or the chips have nobody to draw.
+            'drive_options': _team_drive_options(foursome, config, hole),
         }
-        if config.is_scramble:
+        if config.plays_one_ball:
             body['team_score'] = team_hole_scores(foursome).get(hole)
         else:
             body['shamble'] = shamble_hole(
@@ -9538,13 +9647,40 @@ class TeamPlayCardView(APIView):
         return Response(body)
 
 
+def _team_drive_options(foursome, config, hole):
+    """`[{player_id, name, picked}]` — the chips the card draws, and which one
+    is on.
+
+    Empty only when the control is absent — best ball and Chapman have both men
+    driving every hole, so there is nobody to tap.
+
+    A ROTA sends the roster too, with nothing picked. Nothing is chosen on the
+    hole, but the card that sets the rota on the 1st tee needs the names, and
+    that card is the one thing the fours build left open — the endpoint was
+    written and nothing called it.
+    """
+    from services.team_play_state import (
+        _real_memberships, drive_control_kind, drive_picks,
+    )
+
+    if drive_control_kind(config) not in ('record', 'instruction', 'rota'):
+        return []
+    picked = drive_picks(foursome).get(hole)
+    return [
+        {'player_id': m.player_id, 'name': m.player.name,
+         'picked': m.player_id == picked}
+        for m in _real_memberships(foursome)
+    ]
+
+
 def _team_strokes_by_hole(foursome, config, rnd):
-    """`{hole: strokes}` for the TEAM — scramble only, where one figure covers
-    the side. Empty on a shamble, whose strokes belong to golfers."""
+    """`{hole: strokes}` for the TEAM — one-ball formats only, where a single
+    figure covers the side. Empty on an own-ball format, whose strokes belong
+    to golfers."""
     from scoring.handicap import _strokes_on_hole
     from services.team_play_state import hole_data
 
-    if not config.is_scramble or not rnd.get('allowance'):
+    if not config.plays_one_ball or not rnd.get('allowance'):
         return {}
     return {
         str(h['number']): _strokes_on_hole(
@@ -9554,14 +9690,15 @@ def _team_strokes_by_hole(foursome, config, rnd):
 
 
 def _golfer_strokes_by_hole(foursome, config):
-    """`{player_id: {hole: strokes}}` for a shamble, off each golfer's own
-    playing handicap. Empty on a scramble, which has no per-golfer ball."""
+    """`{player_id: {hole: strokes}}` for an own-ball format, off each golfer's
+    own playing handicap. Empty on a one-ball format, which has no per-golfer
+    ball."""
     from scoring.handicap import _strokes_on_hole
     from services.team_play_state import hole_data
 
-    if config.is_scramble:
+    if config.plays_one_ball:
         return {}
-    from services.team_handicap import player_shamble_handicap
+    from services.team_handicap import player_own_ball_handicap
     from services.team_play_state import allowance_label
 
     holes = hole_data(foursome)
@@ -9570,7 +9707,7 @@ def _golfer_strokes_by_hole(foursome, config):
 
     out = {}
     for m in foursome.memberships.select_related('player'):
-        hcp = 0 if gross_only else player_shamble_handicap(
+        hcp = 0 if gross_only else player_own_ball_handicap(
             m.course_handicap, pct)
         out[str(m.player_id)] = {
             str(h['number']): _strokes_on_hole(
@@ -9589,14 +9726,14 @@ def _is_team_play_round(round_obj) -> bool:
 def _first_unplayed_team_hole(foursome, config, order):
     """The first hole in play order this team has not finished.
 
-    A scramble hole is finished when its one number is in; a shamble hole when
+    A one-ball hole is finished when its number is in; an own-ball hole when
     every ball on it is. Falls back to the group's starting hole once the round
     is complete, so a finished card opens where it began rather than nowhere.
     """
     from services.team_play_state import resolved_counts
     from services.team_play_scoring import shamble_hole, team_hole_scores
 
-    if config.is_scramble:
+    if config.plays_one_ball:
         scored = team_hole_scores(foursome)
         for h in order:
             if scored.get(h) is None:

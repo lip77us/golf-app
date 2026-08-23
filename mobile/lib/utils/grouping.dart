@@ -42,6 +42,24 @@ List<int> groupSizes(int n) {
   return [...List.filled(fours, 4), ...List.filled(trailing, 3)];
 }
 
+/// Group sizes for a **pairs** field: twos all the way down, and a trailing
+/// ONE when the field is odd (docs/design-review/handoff-team-pairs/SPEC.md
+/// §3.1).
+///
+/// The odd man is left visible as a group of one on purpose. There is no
+/// phantom partner to hide him behind — in fours the phantom is a handicap
+/// device for a team that still hits four balls, and in pairs it would be an
+/// imaginary man taking half the shots in an alternate shot. So the field is
+/// blocked and the block NAMES him: the fix is about one man, and the TD needs
+/// to know which one is standing there.
+///
+///  n=12 → [2, 2, 2, 2, 2, 2]
+///  n=13 → [2, 2, 2, 2, 2, 2, 1]
+List<int> pairSizes(int n) {
+  if (n <= 0) return [];
+  return [...List.filled(n ~/ 2, 2), if (n.isOdd) 1];
+}
+
 /// Returns the 1-based group number for the player at position [idx]
 /// given a precomputed [sizes] list (from [groupSizes]).
 int groupOf(int idx, List<int> sizes) {

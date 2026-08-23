@@ -2339,6 +2339,10 @@ class ApiClient {
   /// cannot post a table the screen would have blocked.
   Future<Map<String, dynamic>> postTeamPlaySetup(
     int tournamentId, {
+    /// Four or two. The size decides which formats are legal, and the server
+    /// refuses a mismatch — there is no two-man shamble and no four-man
+    /// Chapman.
+    int?    teamSize,
     String? teamFormat,
     String? ballCountMode,
     int?    ballCountFixed,
@@ -2354,6 +2358,7 @@ class ApiClient {
     List<int>? splitPcts,
   }) async {
     final body = <String, dynamic>{
+      if (teamSize       != null) 'team_size'       : teamSize,
       if (teamFormat     != null) 'team_format'     : teamFormat,
       if (ballCountMode  != null) 'ball_count_mode' : ballCountMode,
       if (ballCountFixed != null) 'ball_count_fixed': ballCountFixed,

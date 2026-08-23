@@ -17,9 +17,21 @@ schedule has no slack at all — what it needs is one line on the tee.
 from decimal import Decimal, ROUND_HALF_UP
 
 
-BALLS_PER_HOLE = 4          # a team hits four balls, phantom included
+BALLS_PER_HOLE = 4          # a four-man team hits four balls, phantom included
 FRONT = (1, 9)
 BACK  = (10, 18)
+
+
+def balls_per_hole(config) -> int:
+    """
+    How many balls the team puts in the air — its size, phantom included.
+
+    Four for a foursome, two for a pair.  Everything a quota measures scales
+    off this: a pairs quota of one each per nine is **two of nine**, seven
+    free, which is why "one each per nine" is the usual pairs rule — two men
+    and eighteen holes is a lot of slack.
+    """
+    return int(getattr(config, 'team_size', BALLS_PER_HOLE) or BALLS_PER_HOLE)
 
 
 # ---------------------------------------------------------------------------
@@ -131,17 +143,25 @@ def window_requirement(config, real_player_count: int) -> dict:
     """
     What one window asks of a team, and how much room that leaves.
 
-    **A short team owes four men's worth, not three.**  It fields a phantom, so
-    the quota is four men's worth and the phantom's share FLOATS — any of the
-    three real men can cover it.  Three men at two each would be six drives,
-    but a three-man team is not really three.
+    **A short FOUR-man team owes four men's worth, not three.**  It fields a
+    phantom, so the quota is four men's worth and the phantom's share FLOATS —
+    any of the three real men can cover it.  Three men at two each would be six
+    drives, but a three-man foursome is not really three.
+
+    **A pair has no phantom**, so nothing floats: a two-man team owes two men's
+    worth and a three-man best-ball pair owes three.  ``real_player_count``
+    above the team size therefore raises the quota rather than lowering it, and
+    the ``floating`` term falls out at zero on its own.
 
     ``free`` is the figure a captain actually uses: twelve required of eighteen
     means six free, and that is what tells him whether he can let his long
     hitter drive the par 5.
     """
     per_golfer = int(config.drives_required)
-    total      = BALLS_PER_HOLE * per_golfer           # always four men's worth
+    size       = balls_per_hole(config)
+    # A team owes its SIZE's worth, or its roster's worth when the roster is
+    # bigger — a three-man best-ball pair owes three, not two.
+    total      = max(size, real_player_count) * per_golfer
     holes      = 9 if len(drive_windows(config)) == 2 else 18
     return {
         'per_golfer'     : per_golfer,
@@ -149,8 +169,8 @@ def window_requirement(config, real_player_count: int) -> dict:
         'holes'          : holes,
         'free'           : max(0, holes - total),
         # The phantom's share, satisfiable by ANY of the real men rather than
-        # owed by a particular one.
-        'floating'       : max(0, BALLS_PER_HOLE - real_player_count) * per_golfer,
+        # owed by a particular one.  Zero in pairs, which have no phantom.
+        'floating'       : max(0, size - real_player_count) * per_golfer,
     }
 
 
@@ -255,20 +275,27 @@ def drive_penalty_strokes(config, picks: dict, real_player_ids) -> int:
 
 def build_rota(player_ids) -> list:
     """
-    The repeating cycle of driving pairs.
+    The repeating cycle of whoever is up on the tee.
 
-    Four men → the two pairs the team set, alternating.
+    Four men → the two driving pairs the team set, alternating.
     Three men → **AB, BC, AC, repeat.**  Two drivers every hole and each man
     sits out every third, which is as even as three into two goes.  The man
     sitting out plays the phantom's ball — the 1st and 4th shots.
+    **Two men → A, B, repeat** — the alternate-shot tee rota, odd holes to the
+    first man and even to the second.  Same mechanic, one name per entry
+    instead of two.
 
-    The pairs are the TEAM's, set on the 1st tee and then fixed for eighteen
-    holes.  The app does not derive them from handicap: four men decide who is
-    with whom in ten seconds, it is the only part of the rule anyone enjoys,
-    and a computed pairing would be overridden on the spot.  A rota that can be
-    re-cut mid-round is not a rota.
+    The rota is the TEAM's, set on the 1st tee and then fixed for eighteen
+    holes.  The app does not derive it from handicap: the men decide in ten
+    seconds, it is the only part of the rule anyone enjoys, and a computed
+    order would be overridden on the spot.  A rota that can be re-cut mid-round
+    is not a rota — and in an alternate shot a pair that loses track plays a
+    hole out of order and the round is gone.
     """
     ids = list(player_ids)
+    if len(ids) == 2:
+        a, b = ids
+        return [(a,), (b,)]
     if len(ids) == 3:
         a, b, c = ids
         return [(a, b), (b, c), (a, c)]

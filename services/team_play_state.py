@@ -28,7 +28,8 @@ from decimal import Decimal
 from django.db import transaction
 
 from services.team_handicap import (
-    phantom_course_handicap, player_shamble_handicap, scramble_allowance,
+    BEST_BALL_PCT, allowance_table, best_ball_allowance,
+    phantom_course_handicap, player_own_ball_handicap, positional_allowance,
     shamble_allowance, shamble_allowance_pct,
 )
 from services.team_play import (
@@ -71,21 +72,41 @@ def _phantom_membership(foursome):
 
 
 @transaction.atomic
-def ensure_phantom_fourth(foursome):
+def ensure_phantom_fourth(foursome, config=None):
     """
-    Give a three-man team its phantom 4th, handicapped at the average of the
-    three real men — and take it away again if a fourth golfer lands.
+    Give a three-man FOURSOME its phantom 4th, handicapped at the average of
+    the three real men — and take it away again if a fourth golfer lands.
 
     Nobody is ever borrowed.  A golfer from another team would be hitting shots
     for a team he is competing against, and every good one costs his own team
     the pot; there is no version of that a TD can defend at the scoring table.
 
+    **A pair never gets one.**  In fours the phantom is a handicap device for a
+    team that still hits four balls; in pairs it would be an imaginary man
+    taking half the shots in an alternate shot.  An odd field is blocked
+    instead, naming the golfer who has no partner — a ten-second fix that does
+    not deserve a special case
+    (docs/design-review/handoff-team-pairs/SPEC.md §3.1).
+
     Returns the phantom membership, or None for a team that does not need one.
     """
     from services.round_setup import _get_or_create_phantom
 
+    if config is None:
+        config = getattr(foursome.round.tournament, 'team_play_config', None)
+
     real = _real_memberships(foursome)
     existing = _phantom_membership(foursome)
+
+    if config is not None and config.is_pairs:
+        # Pairs have no phantom at any roster size. Clear a stale one so a
+        # tournament switched from fours to pairs mid-setup does not keep it.
+        if existing:
+            existing.delete()
+        if foursome.has_phantom:
+            foursome.has_phantom = False
+            foursome.save(update_fields=['has_phantom'])
+        return None
 
     if len(real) != 3:
         # Four men (or a team still being built) — no phantom, and remove a
@@ -156,8 +177,10 @@ def sync_teams(tournament):
     config = getattr(tournament, 'team_play_config', None)
     teams  = []
     for foursome in round_obj.foursomes.order_by('group_number'):
-        ensure_phantom_fourth(foursome)
+        ensure_phantom_fourth(foursome, config)
         state = ensure_team_state(foursome, index=foursome.group_number)
+        if config is not None:
+            apply_default_name(foursome, config, state)
         if config is not None:
             allowance = compute_allowance(foursome, config)
             if (state.team_handicap != allowance.strokes
@@ -180,10 +203,20 @@ def hole_data(foursome):
 
 
 def resolved_counts(foursome, config):
-    """``{hole: balls}`` for this team's card. Scramble plays one ball, so the
-    count is meaningless and the dict is empty."""
-    if config.is_scramble:
+    """
+    ``{hole: balls}`` for this team's card.
+
+    A one-ball format plays one ball, so the count is meaningless and the dict
+    is empty.  **Best ball is best-1-of-2 on all eighteen** — a shamble whose
+    count the TD does not set — so it resolves to a flat 1 and every consumer
+    of this dict works untouched: the card's `1 of 2 counts`, the counting-net
+    subset, and par multiplied by the count, which for best-1 is the hole's own
+    par.
+    """
+    if config.plays_one_ball:
         return {}
+    if config.counts_every_ball:
+        return {h['number']: 1 for h in hole_data(foursome)}
     return resolve_ball_counts(config, hole_data(foursome))
 
 
@@ -211,12 +244,23 @@ def compute_allowance(foursome, config):
         phantom_index = len(handicaps)
         handicaps.append(phantom.course_handicap)
 
-    if config.is_scramble:
-        return scramble_allowance(
-            handicaps,
+    table = allowance_table(config.team_size, config.team_format)
+    if table is not None:
+        # Every format that ends in one ball: a positional table, lowest first,
+        # summed, rounded ONCE on the total.  25/20/15/10 for a foursome
+        # scramble; 35/15, 50/50, 60/40 and 60/40 for the four pairs formats.
+        return positional_allowance(
+            handicaps, table,
             override_pct  = config.allowance_override_pct,
             phantom_index = phantom_index,
         )
+
+    if config.counts_every_ball:
+        # Best ball — 85% of each man's own, and the better net counts. Not a
+        # team figure at all; the sum is the balance strip's number.
+        return best_ball_allowance(
+            handicaps, override_pct=config.allowance_override_pct)
+
     return shamble_allowance(
         handicaps,
         avg_ball_count = average_ball_count(foursome, config),
@@ -238,13 +282,40 @@ def allowance_label(foursome, config) -> dict:
             'pct'  : config.allowance_override_pct,
             'label': f'{config.allowance_override_pct}% flat — your own percentage',
         }
-    if config.is_scramble:
+
+    if config.counts_every_ball:
+        # Best ball is the ONE pairs format whose allowance is per golfer: each
+        # man plays his own strokes and the better net counts. The card reads
+        # `3 / 16`, not one figure.
         return {
-            'kind' : 'scramble_table',
-            'pct'  : None,
-            'table': [25, 20, 15, 10],
-            'label': '25 / 20 / 15 / 10 of course handicap, lowest first',
+            'kind' : 'own_ball_pct',
+            'pct'  : BEST_BALL_PCT,
+            'label': f"{BEST_BALL_PCT}% of each golfer's own course handicap",
         }
+
+    table = allowance_table(config.team_size, config.team_format)
+    if table is not None:
+        pcts = [int(p * 100) for p in table]
+        if config.is_pairs:
+            low, high = pcts
+            if low == high:
+                # Alternate shot: 50% low + 50% high IS 50% of the combined,
+                # and combined is how a pair says it out loud. The most
+                # generous table by a distance, and correctly so — one ball
+                # means both mistakes count.
+                label = f'{low}% of the combined course handicap'
+            else:
+                label = f'{low}% low + {high}% high'
+        else:
+            label = ' / '.join(str(p) for p in pcts) + \
+                    ' of course handicap, lowest first'
+        return {
+            'kind' : 'pairs_table' if config.is_pairs else 'scramble_table',
+            'pct'  : None,
+            'table': pcts,
+            'label': label,
+        }
+
     pct = shamble_allowance_pct(average_ball_count(foursome, config))
     return {
         'kind' : 'shamble_pct',
@@ -296,26 +367,37 @@ def drive_state(foursome, config) -> dict:
         state = getattr(foursome, 'team_play_state', None)
         pairs = (state.drive_pairs if state else []) or []
         rota  = [tuple(p) for p in pairs] if pairs else build_rota(ids)
+        short = {m.player_id: short_label(m.player) for m in real}
+
+        def _rota_row(h):
+            up = list(pair_on_hole(rota, h) or ())
+            # "Gunst and Yau are up" for a foursome; "Maiolini tees" for a
+            # pair. Named on EVERY hole either way — a pair that loses track
+            # of an alternate-shot rota plays a hole out of order and the
+            # round is gone.
+            #
+            # The LINE takes short labels because it is read on the tee, one
+            # hole at a time; `pair_names` keeps the full names for the roster
+            # view beside it.
+            up_names = [names.get(pid, '') for pid in up]
+            up_short = [short.get(pid, '') for pid in up]
+            line = (f'{up_short[0]} tees' if len(up_short) == 1
+                    else ' and '.join(up_short) + ' are up') if up_short else ''
+            return {
+                'hole'          : h,
+                'pair'          : up,
+                'pair_names'    : up_names,
+                'line'          : line,
+                'phantom_cover' : phantom_cover_on_hole(rota, ids, h),
+                'phantom_cover_name': names.get(
+                    phantom_cover_on_hole(rota, ids, h), ''),
+            }
+
         return {
             'rule'            : config.drive_rule,
             'windows'         : [],
             'pairs_set'       : bool(pairs),
-            'rota'            : [
-                {
-                    'hole'          : h,
-                    'pair'          : list(pair_on_hole(rota, h) or ()),
-                    # "Gunst and Yau are up" — the one line a schedule needs
-                    # on the tee.
-                    'pair_names'    : [
-                        names.get(pid, '')
-                        for pid in (pair_on_hole(rota, h) or ())
-                    ],
-                    'phantom_cover' : phantom_cover_on_hole(rota, ids, h),
-                    'phantom_cover_name': names.get(
-                        phantom_cover_on_hole(rota, ids, h), ''),
-                }
-                for h in range(1, 19)
-            ],
+            'rota'            : [_rota_row(h) for h in range(1, 19)],
             # A schedule has nothing to fall short of, so the penalty setting
             # does not apply to it.
             'shortfall'       : 0,
@@ -349,9 +431,170 @@ def drive_state(foursome, config) -> dict:
     }
 
 
+def short_label(player) -> str:
+    """
+    What a golfer is called in one word on a card — his surname.
+
+    The two tee sentences sit on the card, where a full name pushes the line
+    onto two rows and reads nothing like the way a pair talks: *Maiolini tees*,
+    *Yau plays the second shot*.  Everywhere with room for it — the drive
+    tracker, the team roster, settlement — keeps the full name.
+
+    Not ``Player.short_name``: that is the scorecard's five-character column
+    label and comes out as initials (`AM`), which is a grid header rather than
+    something you say to a man on a tee.
+    """
+    full = (player.name or '').strip()
+    return full.split()[-1] if full else ''
+
+
+def drive_control_kind(config) -> str:
+    """
+    What the tee-shot control on the card actually DOES
+    (docs/design-review/handoff-team-pairs/SPEC.md §5).
+
+    Every format that chooses a tee shot draws the same control, and this is
+    the part to get right in code:
+
+    ``record``       Scramble.  Compliance against a quota — a tick.
+    ``instruction``  Scotch.  Picking the drive says who hits NEXT, so the card
+                     answers with a sentence rather than a tick.  A quota is
+                     available on top, off by default, because the tap is
+                     already there.
+    ``rota``         Alternate shot.  Odd/even, set on the 1st tee, fixed for
+                     eighteen.  Nothing is chosen on the hole; the card states
+                     who is up.
+    ``none``         Best ball and Chapman.  Both men drive every hole with no
+                     choice to record.
+    """
+    from tournament.models import TeamPlayConfig
+
+    if config.team_format == TeamPlayConfig.FORMAT_SCOTCH:
+        return 'instruction'
+    if config.team_format == TeamPlayConfig.FORMAT_ALTERNATE_SHOT:
+        return 'rota'
+    if config.team_format in (TeamPlayConfig.FORMAT_BEST_BALL,
+                              TeamPlayConfig.FORMAT_CHAPMAN):
+        return 'none'
+    return 'record'
+
+
+def tee_note(foursome, config, hole_number: int) -> str:
+    """
+    The sentence the card says on this hole, or ``''`` when the format has
+    nothing to say.
+
+    Two of them, and they are the two the packet asks for by name:
+
+    * **Scotch, once the drive is picked** — *Maiolini plays the second shot,
+      then alternate.*  The partner whose drive was NOT taken plays the second
+      shot, which is why the tap is an instruction rather than a record.
+    * **Alternate shot, on every tee** — *Maiolini tees.*  Without exception:
+      a pair that loses track plays a hole out of order and the round is gone.
+
+    Computed here, on the server, so the client never re-derives a rule.
+    """
+    from tournament.models import TeamPlayConfig
+
+    kind = drive_control_kind(config)
+    real = _real_memberships(foursome)
+    # Surnames on the card, the way the packet draws it and the way a pair says
+    # it out loud — "Maiolini tees", not "Anna Maiolini tees". The tracker off
+    # the card keeps full names, where there is room for them.
+    names = {m.player_id: short_label(m.player) for m in real}
+
+    if kind == 'rota':
+        state = getattr(foursome, 'team_play_state', None)
+        pairs = (state.drive_pairs if state else []) or []
+        if not pairs:
+            return 'Set the tee rota before the first score.'
+        rota = [tuple(p) for p in pairs]
+        up   = pair_on_hole(rota, hole_number) or ()
+        return f'{names.get(up[0], "")} tees.' if up else ''
+
+    if kind == 'instruction':
+        picked = drive_picks(foursome).get(hole_number)
+        if picked is None:
+            return 'Both drive — take the better one. The pick says who plays next.'
+        other = next((pid for pid in names if pid != picked), None)
+        if other is None:
+            return ''
+        return f'{names[other]} plays the second shot, then alternate.'
+
+    if config.team_format == TeamPlayConfig.FORMAT_CHAPMAN:
+        return 'Both drive, swap for the second, then one ball in turn.'
+    if config.team_format == TeamPlayConfig.FORMAT_BEST_BALL:
+        return 'Both play their own ball. The better net counts.'
+    return ''
+
+
 # ---------------------------------------------------------------------------
 # 4. The read model
 # ---------------------------------------------------------------------------
+
+def team_name(foursome, config, real=None) -> str:
+    """
+    What the team is called before the TD names it.
+
+    **A foursome is `Group N`.**  Four surnames fit nowhere and a colour the TD
+    never chose is one more thing on screen that does not help him.
+
+    **A pair is its two surnames** — `Maiolini & Yau`.  That is not the app
+    inventing a name: it is the only thing anybody calls a pair, two fit on a
+    leaderboard row, and golfers say it that way out loud.  Sixteen characters,
+    the same cap the ball game uses, and a pair whose surnames overflow it
+    falls back to `Group N` rather than being truncated mid-word.  Free text
+    over it either way, and the colour is still assigned for the card.
+    """
+    if foursome.name:
+        return foursome.name
+    fallback = f'Group {foursome.group_number}'
+    if not config.is_pairs:
+        return fallback
+    return _pair_surnames(foursome, real) or fallback
+
+
+@transaction.atomic
+def apply_default_name(foursome, config, state=None):
+    """
+    Write a pair's surname name onto the Foursome, so every surface reads it —
+    the round hub, the tee sheet, the chat header and the board, none of which
+    know Team Play exists.
+
+    Only while ``name_is_default``: the moment the TD types his own name over
+    it, a roster change stops dragging the name along with it.
+
+    A foursome is untouched.  `Group N` is a label rather than a name, and
+    writing a colour a TD never chose into the field would make it one.
+    """
+    if not config.is_pairs:
+        return None
+    state = state or ensure_team_state(foursome)
+    if not state.name_is_default:
+        return None
+    derived = _pair_surnames(foursome)
+    if derived and foursome.name != derived:
+        foursome.name = derived
+        foursome.save(update_fields=['name'])
+    return derived
+
+
+def _pair_surnames(foursome, real=None):
+    """`Maiolini & Yau`, or `''` when the roster cannot produce one."""
+    if real is None:
+        real = _real_memberships(foursome)
+    if len(real) != 2:
+        return ''
+    surnames = [m.player.name.split()[-1]
+                for m in real if (m.player.name or '').strip()]
+    if len(surnames) != 2:
+        return ''
+    joined = ' & '.join(surnames)
+    # Sixteen characters, the same cap the ball game uses, because the name has
+    # to fit a leaderboard row next to a colour block. Overflow falls back to
+    # `Group N` rather than being truncated mid-word.
+    return joined if len(joined) <= 16 else ''
+
 
 def team_dict(foursome, config) -> dict:
     """One team, as every Team Play surface reads it."""
@@ -388,29 +631,103 @@ def team_dict(foursome, config) -> dict:
             'pct'             : c.pct,
             'strokes'         : str(c.strokes),
             'is_phantom'      : False,
+            'own_ball_handicap': (
+                None if config.plays_one_ball
+                else player_own_ball_handicap(c.course_handicap, c.pct)
+            ),
+            # The name this key had while a shamble was the only own-ball
+            # format. Kept so a client that has not shipped yet still reads.
             'shamble_handicap': (
-                None if config.is_scramble
-                else player_shamble_handicap(c.course_handicap, c.pct)
+                None if config.plays_one_ball
+                else player_own_ball_handicap(c.course_handicap, c.pct)
             ),
         })
+
+    size   = config.team_size
+    filled = len(real) + (1 if phantom else 0)
 
     return {
         'foursome_id'       : foursome.id,
         'group_number'      : foursome.group_number,
-        # Never the colour: an unnamed team is `Group N`, the same thing the
-        # wizard showed. The colour identifies the row; it is not a name.
-        'name'              : foursome.name or f'Group {foursome.group_number}',
+        'name'              : team_name(foursome, config, real),
         'colour'            : state.colour if state else '',
         'real_player_count' : len(real),
+        'team_size'         : size,
         'has_phantom'       : phantom is not None,
-        'seats_open'        : max(0, 4 - len(real) - (1 if phantom else 0)),
+        'seats_open'        : max(0, size - filled),
         'members'           : members,
-        'team_handicap'     : allowance.strokes if len(real) + (1 if phantom else 0) >= 4 else None,
+        # Published once the team is full at ITS size — two for a pair. A team
+        # still being built has no figure, because moving one man changes it.
+        'team_handicap'     : allowance.strokes if filled >= size else None,
         'team_handicap_raw' : str(allowance.raw),
         'allowance'         : allowance_label(foursome, config),
         'drive'             : drive_state(foursome, config),
+        'drive_control'     : drive_control_kind(config),
         'thru'              : thru_hole(foursome),
     }
+
+
+def field_blocking(teams, config) -> list:
+    """
+    What stands between the TD and a playable field
+    (docs/design-review/handoff-team-pairs/SPEC.md §3.1).
+
+    Empty for a foursome event: the group sizes slice the whole field, a short
+    team fields a phantom, and no golfer can be left over.
+
+    **Pairs need an even field**, and there is no phantom to paper over an odd
+    one — in fours the phantom is a handicap device for a team that still hits
+    four balls; in pairs it would be an imaginary man taking half the shots in
+    an alternate shot.  So the block is plain, and it **names the golfer** who
+    has no partner rather than reporting a count: the fix is about one man and
+    the TD needs to know which one is standing there.
+
+    Two kinds:
+
+    ``unpaired``    a team of one.  Three ways out, offered on the block —
+                    add a golfer, take him out, or let one team play three.
+                    **The third is best-ball only**: a third ball is just
+                    another option to count, alternate shot and Chapman cannot
+                    honour it at all, and in a scramble it is a straight
+                    advantage.  Offering a choice four of the five formats
+                    reject is worse than not offering it.
+    ``three_ball``  a team of three outside best ball.  Same reason, the other
+                    way round.
+    """
+    if not config.is_pairs:
+        return []
+
+    three_ok = config.counts_every_ball
+    out = []
+    for team in teams:
+        real = team['real_player_count']
+        if real == 0:
+            continue
+        if real < 2:
+            golfer = team['members'][0] if team['members'] else None
+            out.append({
+                'kind'        : 'unpaired',
+                'foursome_id' : team['foursome_id'],
+                'golfer'      : golfer,
+                'three_ball_available': three_ok,
+                'detail'      : (
+                    f"{golfer['name']} has no partner." if golfer
+                    else 'A pair is short a golfer.'
+                ),
+            })
+        elif real > 2 and not three_ok:
+            out.append({
+                'kind'        : 'three_ball',
+                'foursome_id' : team['foursome_id'],
+                'team'        : team['name'],
+                'three_ball_available': False,
+                'detail'      : (
+                    f"{team['name']} has {real} golfers. Only best ball can "
+                    f"play a three — a third ball is another option to count, "
+                    f"and in the other formats it cannot work at all."
+                ),
+            })
+    return out
 
 
 def team_play_summary(tournament) -> dict:
@@ -437,6 +754,16 @@ def team_play_summary(tournament) -> dict:
     return {
         'configured'   : True,
         'format'       : config.team_format,
+        'team_size'    : config.team_size,
+        # The format list the size allows, and the drive rules the FORMAT
+        # allows. Both are server-owned so the wizard cannot offer a
+        # combination the scoring cannot honour.
+        'formats'      : list(
+            config.FORMATS_BY_SIZE.get(config.team_size, ())),
+        'drive_rules'  : list(config.drive_rules_allowed),
+        'drive_control': drive_control_kind(config),
+        'requires_drive_pick': config.requires_drive_pick,
+        'blocking'     : field_blocking(teams, config),
         'locked'       : config.is_locked,
         'handicap_mode': config.handicap_mode,
         'ball_counts'  : {str(k): v for k, v in counts.items()},

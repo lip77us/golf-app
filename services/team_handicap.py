@@ -47,6 +47,58 @@ from decimal import Decimal, ROUND_HALF_UP
 # list, which is why every screen sorts members low to high.
 SCRAMBLE_TABLE = (Decimal('0.25'), Decimal('0.20'), Decimal('0.15'), Decimal('0.10'))
 
+
+# ---------------------------------------------------------------------------
+# Pairs — five formats, and the allowance is doing enormous work
+# ---------------------------------------------------------------------------
+#
+# The finding worth acting on (docs/design-review/handoff-team-pairs/SPEC.md
+# §4).  The SAME pair — Maiolini 4, Yau 19 — plays off:
+#
+#     Scramble        35% low + 15% high      1.40 + 2.85 = 4.25  →   4
+#     Best ball       85% of each, own ball   3.40 / 16.15    →   3 / 16
+#     Alternate shot  50% of combined         23 × 0.50 = 11.50   →  12
+#     Scotch          60% low + 40% high      2.40 + 7.60 = 10.00 →  10
+#     Chapman         60% low + 40% high                          →  10
+#
+# Three times the strokes from the format alone, which is why the format screen
+# shows the pair's figure on EVERY option before it is chosen.
+#
+# Four of the five end in one ball and are positional tables — lowest first,
+# summed, rounded once — which is the arithmetic `scramble_allowance` already
+# does.  50% of combined is 50% low + 50% high, so alternate shot is a table
+# like the rest and needs no special case.
+#
+# **Scotch and Chapman share a table.**  Both are two drives then one ball;
+# Chapman buys one extra shot of position, which is not worth a stroke.  The
+# honest answer, rather than a manufactured difference.
+PAIRS_TABLES = {
+    'scramble'      : (Decimal('0.35'), Decimal('0.15')),
+    'alternate_shot': (Decimal('0.50'), Decimal('0.50')),
+    'scotch'        : (Decimal('0.60'), Decimal('0.40')),
+    'chapman'       : (Decimal('0.60'), Decimal('0.40')),
+}
+
+# Best ball is the ONLY pairs format whose allowance is per golfer: each man
+# plays his own strokes and the better net counts.  Not a team figure at all —
+# the summed number exists solely as a balance figure for the strip, the same
+# way the shamble's does.
+BEST_BALL_PCT = 85
+
+
+def allowance_table(team_size: int, team_format: str):
+    """
+    The positional table for a one-ball format, or ``None`` when the format
+    handicaps each golfer on his own ball.
+
+    Keyed on **(size, format)** and never on the format alone: `scramble` is
+    the one format both sizes run and its table is not shared — four men take
+    25/20/15/10 and two take 35/15.
+    """
+    if int(team_size) == 2:
+        return PAIRS_TABLES.get(team_format)
+    return SCRAMBLE_TABLE if team_format == 'scramble' else None
+
 # Shamble: the allowance follows how many balls count.  The fewer balls, the
 # lower the percentage.
 SHAMBLE_PCT_BY_BALLS = {1: 75, 2: 85, 3: 95, 4: 100}
@@ -123,10 +175,14 @@ def phantom_course_handicap(real_course_handicaps) -> int:
     return _round_half_up(Decimal(sum(hcaps)) / Decimal(len(hcaps)))
 
 
-def scramble_allowance(course_handicaps, *, override_pct=None,
-                       phantom_index=None) -> TeamAllowance:
+def positional_allowance(course_handicaps, table, *, override_pct=None,
+                         phantom_index=None) -> TeamAllowance:
     """
-    One team figure built from four handicaps.
+    One team figure built from a POSITIONAL percentage table — the arithmetic
+    behind every format that ends in one ball.
+
+    ``table`` is the percentages in table order, lowest handicap first:
+    ``SCRAMBLE_TABLE`` for four men, one of ``PAIRS_TABLES`` for two.
 
     ``course_handicaps`` need not be sorted — this sorts them low to high,
     because the percentage is POSITIONAL and a manual order would be a lie.
@@ -134,7 +190,7 @@ def scramble_allowance(course_handicaps, *, override_pct=None,
     ORIGINAL list and it is tracked through the sort, so the caller can draw
     the phantom's row italic wherever it lands.
 
-    ``override_pct`` applies one flat percentage to all four — a group's
+    ``override_pct`` applies one flat percentage to every man — a group's
     tradition beats the table — and the worked result is still returned so the
     TD sees what he did.
     """
@@ -146,11 +202,13 @@ def scramble_allowance(course_handicaps, *, override_pct=None,
     for position, (hcap, original_index) in enumerate(indexed):
         if override_pct is not None:
             pct = int(override_pct)
-        elif position < len(SCRAMBLE_TABLE):
-            pct = int(SCRAMBLE_TABLE[position] * 100)
+        elif position < len(table):
+            pct = int(table[position] * 100)
         else:
-            # More than four men in a group is not a shape this tournament
-            # builds, but a fifth must not silently take 10% again.
+            # More men than the table has rows is not a shape this tournament
+            # builds, but an extra one must not silently repeat the last
+            # percentage.  (A three-man best-ball pair never reaches here —
+            # best ball handicaps each man on his own ball.)
             pct = 0
         contributions.append(Contribution(
             course_handicap = hcap,
@@ -164,6 +222,15 @@ def scramble_allowance(course_handicaps, *, override_pct=None,
         strokes       = _round_half_up(raw),
         raw           = raw,
         contributions = contributions,
+    )
+
+
+def scramble_allowance(course_handicaps, *, override_pct=None,
+                       phantom_index=None) -> TeamAllowance:
+    """The four-man scramble: 25 / 20 / 15 / 10, lowest first, summed."""
+    return positional_allowance(
+        course_handicaps, SCRAMBLE_TABLE,
+        override_pct=override_pct, phantom_index=phantom_index,
     )
 
 
@@ -212,13 +279,51 @@ def shamble_allowance(course_handicaps, *, avg_ball_count=2,
     )
 
 
-def player_shamble_handicap(course_handicap: int, pct: int) -> int:
+def best_ball_allowance(course_handicaps, *, override_pct=None) -> TeamAllowance:
     """
-    One golfer's playing handicap in a shamble — his own course handicap at the
-    format's percentage, rounded to whole strokes.
+    Best ball — **85% of each man's own course handicap**, his own ball, the
+    better net counting.
 
-    Rounded PER GOLFER here, unlike the scramble, and for the same reason: this
-    is the number he plays with on his own ball, so it is his figure that has to
-    be whole rather than a team total's.
+    The only pairs format whose allowance is per golfer, and the only one
+    entering two scores.  Maiolini 4 → 3, Yau 19 → 16; the card reads
+    ``3 / 16`` rather than one figure.
+
+    Like the shamble's, the ``strokes`` returned here is a BALANCE figure only
+    — the sum of the two allowances, rounded once, so the strip can stack one
+    pair against another.  It is never subtracted from anything.
+
+    A three-man best-ball pair (the odd-field way out) works unchanged: each of
+    the three takes 85% of his own.
+    """
+    pct = int(override_pct) if override_pct is not None else BEST_BALL_PCT
+    contributions = [
+        Contribution(
+            course_handicap = hcap,
+            pct             = pct,
+            strokes         = _contribution(hcap, pct),
+        )
+        for hcap in sorted(course_handicaps)
+    ]
+    raw = sum((c.strokes for c in contributions), Decimal('0'))
+    return TeamAllowance(
+        strokes       = _round_half_up(raw),
+        raw           = raw,
+        contributions = contributions,
+    )
+
+
+def player_own_ball_handicap(course_handicap: int, pct: int) -> int:
+    """
+    One golfer's playing handicap when he plays his own ball — his own course
+    handicap at the format's percentage, rounded to whole strokes.  Shamble and
+    best ball alike.
+
+    Rounded PER GOLFER here, unlike the one-ball formats, and for the same
+    reason: this is the number he plays with on his own ball, so it is his
+    figure that has to be whole rather than a team total's.
     """
     return _round_half_up(_contribution(course_handicap, pct))
+
+
+# The name this had while a shamble was the only own-ball format.
+player_shamble_handicap = player_own_ball_handicap

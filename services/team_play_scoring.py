@@ -2,21 +2,26 @@
 services/team_play_scoring.py
 -----------------------------
 Team Play scoring — the two cards, the board and the pot
-(docs/design-review/handoff-team-play/SPEC.md §10).
+(docs/design-review/handoff-team-play/SPEC.md §10,
+docs/design-review/handoff-team-pairs/SPEC.md §6).
 
-Two formats, two scorecards, and the difference reaches all the way down here:
+**Six formats, TWO scorecards**, and the split reaches all the way down here.
+Nothing below branches on a format name — it branches on which card the format
+takes, because four of the five pair formats take the scramble's.
 
-**Scramble** — four men make ONE number.  Pretending otherwise (four boxes,
-three of them ignored) is the single easiest way to get a scramble card wrong.
-The team score is a :class:`games.models.TeamHoleScore` row with a null team —
-the team IS the foursome, so the (foursome, hole) pair is unambiguous — and the
-handicap is one whole-number team figure applied to the ROUND, not a stroke on
-a hole.
+**One ball** — scramble, alternate shot, Scotch, Chapman.  The team makes ONE
+number.  Pretending otherwise (four boxes, three of them ignored) is the single
+easiest way to get a scramble card wrong.  The team score is a
+:class:`games.models.TeamHoleScore` row with a null team — the team IS the
+foursome, so the (foursome, hole) pair is unambiguous — and the handicap is one
+whole-number team figure applied to the ROUND, not a stroke on a hole.
 
-**Shamble** — four men play four balls and the best N net count.  Ordinary
-per-golfer ``HoleScore`` rows; the counting subset is DERIVED on read and never
-stored, because the ball count can be edited right up until the first score
-lands and a stored subset would go stale silently.
+**Own ball** — shamble (four balls, best N) and best ball (two balls, best 1).
+Ordinary per-golfer ``HoleScore`` rows; the counting subset is DERIVED on read
+and never stored, because the ball count can be edited right up until the first
+score lands and a stored subset would go stale silently.  Best ball is a
+shamble whose count is fixed at 1 by the format rather than set by the TD,
+which is the whole of what makes it reuse this path.
 
 Net on the board, gross on the card.  A whole-number team figure applied to the
 round is not a stroke on a hole, and showing it on the card would invite
@@ -43,7 +48,8 @@ from services.team_play_state import (
 @transaction.atomic
 def submit_team_score(foursome, hole_number: int, gross_score):
     """
-    A scramble hole: one number for the ball the team played.
+    A one-ball hole — scramble, alternate shot, Scotch or Chapman: one number
+    for the ball the team played in.
 
     Stamps the tournament's format lock on the first score — a one-number card
     cannot be re-read as four, and a hole scored under 'best 2' cannot be
@@ -67,7 +73,7 @@ def submit_team_score(foursome, hole_number: int, gross_score):
 
 
 def team_hole_scores(foursome) -> dict:
-    """``{hole_number: gross}`` for a scramble team."""
+    """``{hole_number: gross}`` for a team playing one ball."""
     from games.models import TeamHoleScore
     return {
         r.hole_number: r.gross_score
@@ -79,15 +85,19 @@ def team_hole_scores(foursome) -> dict:
 def shamble_hole(foursome, hole_number: int, counts: dict,
                  config) -> dict:
     """
-    One shamble hole: four scores, and which of them counted.
+    One own-ball hole: every man's score, and which of them counted.
+
+    **Shamble** — four scores, best N.  **Best ball** — two scores, best 1;
+    the same card with two rows instead of four, and the same reason for it.
 
     The counting scores are tinted and the rest greyed, live, as they are
-    entered — because two men's cards do nothing on a given hole, and a man who
-    shot 5 needs to see instantly that his 5 was not used.  Otherwise the team
-    total looks wrong and someone re-enters it.
+    entered — because some men's cards do nothing on a given hole, and a man
+    who shot 5 needs to see instantly that his 5 was not used.  Otherwise the
+    team total looks wrong and someone re-enters it.
 
     The phantom's ball is one of the four available.  Nothing about the count
-    changes for a short team; that is the point of handicapping it as four.
+    changes for a short foursome; that is the point of handicapping it as four.
+    A pair has no phantom.
     """
     from scoring.models import HoleScore
 
@@ -112,7 +122,7 @@ def shamble_hole(foursome, hole_number: int, counts: dict,
     # playing_handicap, which for a Foursome Play round is the untouched course
     # handicap because the round itself never carries an allowance. Using it
     # handed everybody 100% and quietly inflated every net score on the board.
-    from services.team_handicap import player_shamble_handicap
+    from services.team_handicap import player_own_ball_handicap
     from services.team_play_state import allowance_label
 
     gross_only = config.handicap_mode == 'gross'
@@ -121,7 +131,7 @@ def shamble_hole(foursome, hole_number: int, counts: dict,
     rows = []
     for m in members:
         gross = scores.get(m.player_id)
-        handicap = 0 if gross_only else player_shamble_handicap(
+        handicap = 0 if gross_only else player_own_ball_handicap(
             m.course_handicap, pct)
         strokes = _strokes_on_hole(handicap, si)
         rows.append({
@@ -137,7 +147,8 @@ def shamble_hole(foursome, hole_number: int, counts: dict,
             'counts'     : False,
         })
 
-    # The two lowest NET count. The rest are recorded and ignored.
+    # The N lowest NET count — two of four in a shamble, one of two in best
+    # ball. The rest are recorded and ignored.
     scored = sorted((r for r in rows if r['net'] is not None),
                     key=lambda r: (r['net'], r['gross']))
     for r in scored[:n]:
@@ -163,15 +174,15 @@ def team_round(foursome, config) -> dict:
     """
     A team's gross, net and progress — the row the leaderboard draws.
 
-    A scramble's net is ``gross − team allowance``, taken once off the round
-    total.  A shamble's net is the sum of the counting nets, hole by hole,
-    because its handicap never stopped being per golfer.
+    A one-ball format's net is ``gross − team allowance``, taken once off the
+    round total.  An own-ball format's net is the sum of the counting nets,
+    hole by hole, because its handicap never stopped being per golfer.
     """
     state   = getattr(foursome, 'team_play_state', None)
     holes   = hole_data(foursome)
     par     = sum(h.get('par', 0) for h in holes)
 
-    if config.is_scramble:
+    if config.plays_one_ball:
         scores    = team_hole_scores(foursome)
         allowance = (state.team_handicap if state and state.team_handicap
                      is not None else 0)
@@ -240,7 +251,7 @@ def team_round(foursome, config) -> dict:
     # not 4. Comparing a two-ball total against one hole's par put every
     # shamble team about +70 and made the column meaningless.
     par_map    = {h['number']: h.get('par', 0) for h in holes}
-    if config.is_scramble:
+    if config.plays_one_ball:
         par_played = sum(par_map.get(n, 0) for n in by_hole)
     else:
         counts_map = resolved_counts(foursome, config)
@@ -271,14 +282,15 @@ def team_round(foursome, config) -> dict:
 def _board_strokes_by_hole(foursome, config, allowance) -> dict:
     """`{hole: strokes}` for the row the board draws.
 
-    A scramble has one team figure, so the dots are the team's. A shamble keeps
-    handicaps per golfer and the board row is the TEAM's counted total, so
-    there is no single golfer whose dots belong on it — the entry card shows
-    those, per golfer, where the question is "where do I get shots".
+    A one-ball format has one team figure, so the dots are the team's. An
+    own-ball format keeps handicaps per golfer and the board row is the TEAM's
+    counted total, so there is no single golfer whose dots belong on it — the
+    entry card shows those, per golfer, where the question is "where do I get
+    shots".
     """
     from scoring.handicap import _strokes_on_hole
 
-    if not config.is_scramble or not allowance:
+    if not config.plays_one_ball or not allowance:
         return {}
     return {
         str(h['number']): _strokes_on_hole(
@@ -290,20 +302,20 @@ def _board_strokes_by_hole(foursome, config, allowance) -> dict:
 def _board_to_par_by_hole(foursome, config, rnd) -> dict:
     """`{hole: team score against par}`.
 
-    A scramble plays one ball, so par is the hole's. A shamble's figure is the
-    sum of the COUNTING balls, so par is multiplied by the count — best-2 on a
-    par 4 is a par of 8.
+    A one-ball format plays one ball, so par is the hole's. An own-ball
+    format's figure is the sum of the COUNTING balls, so par is multiplied by
+    the count — best-2 on a par 4 is a par of 8, and best-1 on a par 4 is 4.
     """
     holes   = {h['number']: h.get('par', 0) for h in hole_data(foursome)}
     by_hole = rnd.get('by_hole') or {}
-    counts  = {} if config.is_scramble else resolved_counts(foursome, config)
+    counts  = {} if config.plays_one_ball else resolved_counts(foursome, config)
 
     out = {}
     for n, v in by_hole.items():
         gross = v.get('gross')
         if gross is None:
             continue
-        par = holes.get(n, 0) * (1 if config.is_scramble else counts.get(n, 1))
+        par = holes.get(n, 0) * (1 if config.plays_one_ball else counts.get(n, 1))
         out[str(n)] = gross - par
     return out
 
@@ -311,19 +323,20 @@ def _board_to_par_by_hole(foursome, config, rnd) -> dict:
 def net_to_par_by_hole(foursome, config, rnd) -> dict:
     """`{hole: net against par}` for the team's net line.
 
-    A scramble's per-hole net is already on `by_hole`; a shamble's is the sum
-    of the counting nets, and its par is multiplied by the ball count.
+    A one-ball format's per-hole net is already on `by_hole`; an own-ball
+    format's is the sum of the counting nets, and its par is multiplied by the
+    ball count.
     """
     holes   = {h['number']: h.get('par', 0) for h in hole_data(foursome)}
     by_hole = rnd.get('by_hole') or {}
-    counts  = {} if config.is_scramble else resolved_counts(foursome, config)
+    counts  = {} if config.plays_one_ball else resolved_counts(foursome, config)
 
     out = {}
     for n, v in by_hole.items():
         net = v.get('net')
         if net is None:
             continue
-        par = holes.get(n, 0) * (1 if config.is_scramble else counts.get(n, 1))
+        par = holes.get(n, 0) * (1 if config.plays_one_ball else counts.get(n, 1))
         out[str(n)] = net - par
     return out
 
@@ -331,13 +344,13 @@ def net_to_par_by_hole(foursome, config, rnd) -> dict:
 def golfers_by_hole(foursome, config) -> list:
     """Per-golfer gross, net, strokes and counted-flag, hole by hole.
 
-    Shamble only — a scramble has no per-golfer ball to show.
+    Own-ball formats only — a one-ball format has no per-golfer ball to show.
     """
     # A LIST either way. Returning {} for the scramble made the field change
     # type between formats, and the client — which casts it once — died on the
     # scramble board. Same fault as the allowance clobber: a payload key that
     # is a map on one path and a list on another.
-    if config.is_scramble:
+    if config.plays_one_ball:
         return []
 
     counts = resolved_counts(foursome, config)

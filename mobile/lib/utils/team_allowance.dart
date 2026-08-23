@@ -28,6 +28,56 @@ const List<int> kScrambleTable = [25, 20, 15, 10];
 /// that count, the lower the percentage.
 const Map<int, int> kShamblePctByBalls = {1: 75, 2: 85, 3: 95, 4: 100};
 
+/// The pairs tables — low handicap first
+/// (docs/design-review/handoff-team-pairs/SPEC.md §4).
+///
+/// **The allowance is doing enormous work here.** The same pair — Maiolini 4,
+/// Yau 19 — plays off 4 in a scramble and 12 in an alternate shot. Three times
+/// the strokes for the same two men, purely from the format, which is why the
+/// format screen prints the figure on EVERY option before it is chosen.
+///
+/// Scotch and Chapman share a table, and that is the honest answer rather than
+/// a manufactured difference: both are two drives then one ball, and Chapman
+/// buys one extra shot of position, which is not worth a stroke.
+///
+/// 50% low + 50% high IS 50% of the combined, so alternate shot needs no
+/// special case — it is a positional table like the rest.
+const Map<String, List<int>> kPairsTables = {
+  'scramble'      : [35, 15],
+  'alternate_shot': [50, 50],
+  'scotch'        : [60, 40],
+  'chapman'       : [60, 40],
+};
+
+/// Best ball is the ONE pairs format whose allowance is per golfer: each man
+/// plays his own strokes at 85% and the better net counts. The card reads
+/// `3 / 16`, not one figure.
+const int kBestBallPct = 85;
+
+/// The formats each team size may play. `scramble` is the only one both run,
+/// and its table is NOT shared — four men take 25/20/15/10 and two take 35/15.
+const Map<int, List<String>> kFormatsBySize = {
+  4: ['scramble', 'shamble'],
+  2: ['scramble', 'best_ball', 'alternate_shot', 'scotch', 'chapman'],
+};
+
+/// Display names, so nothing in the UI spells `alternate_shot` by hand.
+const Map<String, String> kTeamFormatNames = {
+  'scramble'      : 'Scramble',
+  'shamble'       : 'Shamble',
+  'best_ball'     : 'Best ball',
+  'alternate_shot': 'Alternate shot',
+  'scotch'        : 'Scotch',
+  'chapman'       : 'Chapman',
+};
+
+/// True for the four pair formats that end in one ball. They take the
+/// scramble's one-number card; best ball is the only pairs format entering two
+/// scores.
+bool playsOneBall(String format) =>
+    format == 'scramble' || format == 'alternate_shot' ||
+    format == 'scotch'   || format == 'chapman';
+
 /// One man's line on the worked card.
 class AllowanceLine {
   final int  courseHandicap;
@@ -114,6 +164,76 @@ TeamAllowanceResult scrambleAllowance(
   return TeamAllowanceResult(
     rounded: _roundHalfUp(raw), rawHundredths: raw, lines: lines);
 }
+
+/// A positional table applied to a roster — the arithmetic behind every format
+/// that ends in one ball, at either size.
+TeamAllowanceResult positionalAllowance(
+  List<int> courseHandicaps,
+  List<int> table, {
+  int? overridePct,
+  int? phantomHandicap,
+}) {
+  final entries = <(int, bool)>[
+    for (final h in courseHandicaps) (h, false),
+    if (phantomHandicap != null) (phantomHandicap, true),
+  ]..sort((a, b) => a.$1.compareTo(b.$1));
+
+  final lines = <AllowanceLine>[];
+  for (var i = 0; i < entries.length; i++) {
+    final pct = overridePct ?? (i < table.length ? table[i] : 0);
+    lines.add(AllowanceLine(
+      courseHandicap: entries[i].$1,
+      pct           : pct,
+      hundredths    : entries[i].$1 * pct,
+      isPhantom     : entries[i].$2,
+    ));
+  }
+
+  final raw = lines.fold<int>(0, (a, l) => a + l.hundredths);
+  return TeamAllowanceResult(
+    rounded: _roundHalfUp(raw), rawHundredths: raw, lines: lines);
+}
+
+/// The team's figure for any (size, format) pair — what the format step prints
+/// on every option, and what the handicap step works on the TD's own teams.
+///
+/// Returns a balance figure for the own-ball formats (shamble, best ball),
+/// where the strokes belong to golfers and the sum only stacks one team
+/// against another.
+TeamAllowanceResult teamAllowanceFor({
+  required int teamSize,
+  required String format,
+  required List<int> courseHandicaps,
+  double avgBallCount = 2,
+  int? overridePct,
+  int? phantomHandicap,
+}) {
+  if (format == 'best_ball') {
+    return positionalAllowance(
+      courseHandicaps,
+      List.filled(courseHandicaps.length, overridePct ?? kBestBallPct),
+      phantomHandicap: null,
+    );
+  }
+  if (teamSize == 2) {
+    return positionalAllowance(
+      courseHandicaps, kPairsTables[format] ?? kPairsTables['scramble']!,
+      overridePct: overridePct);
+  }
+  if (format == 'shamble') {
+    return shambleAllowance(courseHandicaps,
+        avgBallCount: avgBallCount, overridePct: overridePct,
+        phantomHandicap: phantomHandicap);
+  }
+  return scrambleAllowance(courseHandicaps,
+      overridePct: overridePct, phantomHandicap: phantomHandicap);
+}
+
+/// One golfer's whole-stroke figure when he plays his own ball — shamble and
+/// best ball alike. Rounded PER GOLFER, unlike a team total, because it is the
+/// number he plays with.
+int playerOwnBallHandicap(int courseHandicap, int pct) =>
+    _roundHalfUp(courseHandicap * pct);
 
 /// A ceiling, not a round-to-nearest: a grid averaging 2.3 asks for three
 /// balls somewhere, so it takes 95% rather than 85%.

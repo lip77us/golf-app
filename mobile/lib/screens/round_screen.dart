@@ -307,6 +307,7 @@ class _RoundScreenState extends State<RoundScreen> {
                   isComplete:      isComplete,
                   isCupRound:      round.isCupRound,
                   isTeamPlayRound: round.isTeamPlayRound,
+                  teamPlaySize:    round.teamPlaySize,
                   sixesActive:     fsGames.contains('sixes'),
                   sixesStarted:    rp.sixesIsStarted(fs.id),
                   roundActiveGames: round.activeGames,
@@ -321,10 +322,11 @@ class _RoundScreenState extends State<RoundScreen> {
                     // skip all setup routing and go directly to score entry.
                     final String route;
                     if (round.isTeamPlayRound) {
-                      // Team Play owns its own card: a stepper and one huge
-                      // number for a scramble, the four-man grid with the
-                      // counting scores tinted for a shamble. The drive row
-                      // sits on both.
+                      // Team Play owns its own card: one huge number for a
+                      // format that ends in one ball, a row a man with the
+                      // counting scores tinted for one that does not. The
+                      // drive control sits on whichever formats choose a tee
+                      // shot.
                       Navigator.of(context).pushNamed('/team-play-score',
                           arguments: {
                             'foursomeId'  : fs.id,
@@ -1044,10 +1046,13 @@ class _FoursomeCard extends StatelessWidget {
   final bool         canManage;
   final bool         isComplete;
   final bool         isCupRound;
-  /// Foursome Play: the group IS the team, so it can carry a team name. The
+  /// Team Play: the group IS the team, so it can carry a team name. The
   /// wizard deliberately does not ask for one — teams name themselves here,
   /// once the men who are actually playing have turned up.
   final bool         isTeamPlayRound;
+  /// Four or two, when this is a Team Play round. A pair is renamed with
+  /// different words, and clearing its name gives back the two surnames.
+  final int?         teamPlaySize;
   final bool         sixesActive;
   final bool         sixesStarted;
   final List<String> roundActiveGames;
@@ -1073,6 +1078,7 @@ class _FoursomeCard extends StatelessWidget {
     required this.isComplete,
     required this.isCupRound,
     required this.isTeamPlayRound,
+    this.teamPlaySize,
     required this.sixesActive,
     required this.sixesStarted,
     required this.roundActiveGames,
@@ -1512,18 +1518,24 @@ class _FoursomeCard extends StatelessWidget {
   /// TD-only "rename group" tool — give this foursome a custom name (e.g. a
   /// team name) shown everywhere in place of "Group N".  Clearing the field
   /// resets it back to the default label.
-  /// Rename a group — or, on a Foursome Play round, a TEAM.
+  /// Rename a group — or, on a Team Play round, a TEAM.
   ///
   /// Same action either way, because in that shape the group IS the team; only
   /// the words and the cap change. Foursome Play teams arrive as Group 1…N and
   /// name themselves here, which is why the wizard never asks: a TD inventing
   /// six names for men who have not turned up yet is work nobody wanted.
   ///
+  /// **A pair arrives already named** — `Maiolini & Yau`. Two surnames fit on
+  /// a leaderboard row where four do not, and it is the only thing anybody
+  /// calls a pair, so it is a default rather than an invention. Clearing the
+  /// field puts it back.
+  ///
   /// Sixteen characters for a team, the same cap as the ball game, because the
   /// name has to fit a leaderboard row next to a colour block.
   Future<void> _renameGroup(BuildContext context, Foursome fs) async {
     final team = isTeamPlayRound;
-    final noun = team ? 'team' : 'group';
+    final pair = teamPlaySize == 2;
+    final noun = team ? (pair ? 'pair' : 'team') : 'group';
     final ctrl = TextEditingController(text: fs.name);
     final newName = await showDialog<String>(
       context: context,
@@ -1535,9 +1547,13 @@ class _FoursomeCard extends StatelessWidget {
           maxLength: team ? 16 : 50,
           textCapitalization: TextCapitalization.words,
           decoration: InputDecoration(
-            labelText: team ? 'Team name' : 'Group name',
-            hintText: 'Group ${fs.groupNumber}',
-            helperText: 'Leave blank to reset to "Group ${fs.groupNumber}".',
+            labelText: team
+                ? (pair ? 'Pair name' : 'Team name')
+                : 'Group name',
+            hintText: pair ? fs.name : 'Group ${fs.groupNumber}',
+            helperText: pair
+                ? 'Leave blank to reset to the two surnames.'
+                : 'Leave blank to reset to "Group ${fs.groupNumber}".',
           ),
           onSubmitted: (v) => Navigator.pop(dctx, v.trim()),
         ),

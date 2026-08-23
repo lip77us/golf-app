@@ -671,6 +671,7 @@ class RoundSerializer(serializers.ModelSerializer):
         counts = resolved_counts(first, cfg) if first else {}
         return {
             'format'     : cfg.team_format,
+            'team_size'  : cfg.team_size,
             'ball_counts': {str(k): v for k, v in counts.items()},
             'holes'      : hole_data(first) if first else [],
         }
@@ -689,15 +690,29 @@ class RoundSerializer(serializers.ModelSerializer):
         """Total count of expected-but-unscored holes across all foursomes
         (0 when the round is fully scored).  Drives the Complete Round warning."""
         from .views import RoundCompleteView
+        from games.models import TeamHoleScore
         from scoring.models import HoleScore
+        # A one-ball team format posts a TeamHoleScore rather than four
+        # HoleScores, so counting the wrong table reports every hole
+        # outstanding on a round that is finished.
+        config = getattr(
+            getattr(obj, 'tournament', None), 'team_play_config', None)
+        one_ball = config is not None and config.plays_one_ball
         total = 0
         for fs in obj.foursomes.all():
             expected = RoundCompleteView._expected_holes(fs)
-            scored = set(
-                HoleScore.objects
-                .filter(foursome=fs, gross_score__isnull=False)
-                .values_list('hole_number', flat=True)
-            )
+            if one_ball:
+                scored = set(
+                    TeamHoleScore.objects
+                    .filter(foursome=fs, team=None, gross_score__isnull=False)
+                    .values_list('hole_number', flat=True)
+                )
+            else:
+                scored = set(
+                    HoleScore.objects
+                    .filter(foursome=fs, gross_score__isnull=False)
+                    .values_list('hole_number', flat=True)
+                )
             total += len(expected - scored)
         return total
 
