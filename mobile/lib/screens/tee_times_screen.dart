@@ -36,7 +36,17 @@ const int kTeeInterval = 10;
 
 class TeeTimesScreen extends StatefulWidget {
   final int roundId;
-  const TeeTimesScreen({super.key, required this.roundId});
+  /// The event this sheet belongs to.
+  ///
+  /// **A sheet of `Group 1 / Group 2 / Group 3` and three times names nothing
+  /// at all.** Opened from a list of tournaments it is impossible to tell
+  /// which one you are looking at, and a TD running two events on one day will
+  /// happily edit the wrong sheet.
+  final String tournamentName;
+
+  const TeeTimesScreen({
+    super.key, required this.roundId, this.tournamentName = '',
+  });
 
   @override
   State<TeeTimesScreen> createState() => _TeeTimesScreenState();
@@ -79,6 +89,21 @@ class _TeeTimesScreenState extends State<TeeTimesScreen> {
   /// the app reads `Foursome.name` this way.
   static String _label(Foursome fs) =>
       fs.name.trim().isEmpty ? 'Group ${fs.groupNumber}' : fs.name.trim();
+
+  /// Who is in a group, by surname — `Seder · Carson · Schroeder · Bird`.
+  ///
+  /// The phantom is named rather than dropped: it is a row on every other
+  /// surface, and a foursome of three reading as three names with no
+  /// explanation looks like somebody was left off the sheet.
+  static String _roster(Foursome fs) {
+    final names = [
+      for (final m in fs.memberships)
+        m.player.isPhantom
+            ? 'phantom'
+            : (m.player.name.trim().split(' ').last),
+    ];
+    return names.isEmpty ? 'Nobody assigned' : names.join(' · ');
+  }
 
   /// The order they actually go out: by tee time, then group number.
   ///
@@ -381,7 +406,21 @@ class _TeeTimesScreenState extends State<TeeTimesScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Edit tee times')),
+      // The event's name under the title. Without it the screen is three
+      // times and the word "Group", which names neither the tournament nor
+      // the round — and a TD with two events on the go edits the wrong sheet.
+      appBar: AppBar(
+        title: widget.tournamentName.isEmpty
+            ? const Text('Edit tee times')
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Edit tee times'),
+                  Text(widget.tournamentName,
+                      style: Theme.of(context).textTheme.labelSmall),
+                ],
+              ),
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -453,18 +492,27 @@ class _TeeTimesScreenState extends State<TeeTimesScreen> {
                             title: Text(_label(fs),
                                 style: const TextStyle(
                                     fontWeight: FontWeight.w600)),
+                            // **Who is in it.** A tee sheet with no names on it
+                            // is a list of times: you cannot find your own
+                            // group on it, and you cannot tell one event's
+                            // sheet from another's. The clash and the missing
+                            // time still outrank the roster, because those are
+                            // things to fix.
                             subtitle: clash
                                 ? Text('Same time as another group',
                                     style: theme.textTheme.bodySmall?.copyWith(
                                         color: theme.colorScheme.error))
-                                : (fs.teeTime == null
-                                    ? Text('No time yet',
-                                        style: theme.textTheme.bodySmall
-                                            ?.copyWith(
-                                              color: theme.colorScheme
-                                                  .onSurfaceVariant,
-                                            ))
-                                    : null),
+                                : Text(
+                                    fs.teeTime == null
+                                        ? 'No time yet · ${_roster(fs)}'
+                                        : _roster(fs),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: fs.teeTime == null
+                                          ? theme.colorScheme.onSurfaceVariant
+                                          : theme.colorScheme.onSurfaceVariant,
+                                    )),
                             trailing: saving
                                 ? const SizedBox(
                                     width: 20,

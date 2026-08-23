@@ -562,8 +562,8 @@ class _TournamentListScreenState extends State<TournamentListScreen>
                 .then((_) { if (mounted) _load(); }),
             onEditTeeTimes: (round) => Navigator.of(context)
                 .push(MaterialPageRoute(
-                    builder: (_) =>
-                        TeeTimesScreen(roundId: round.id)))
+                    builder: (_) => TeeTimesScreen(
+                          roundId: round.id, tournamentName: t.name)))
                 .then((_) { if (mounted) _load(); }),
             onChangeCupGame: (round) => _showChangeCupGameSheet(round, t),
             onRecalculateCupPoints: (round) async {
