@@ -32,6 +32,10 @@ class TeamScorecardRow {
   final bool italic;
   /// Bold, with a rule above: the team's line under the golfers'.
   final bool total;
+  /// Print each cell against par — `+2` / `E` / `-1` — instead of as a raw
+  /// score. Two 5s on a par 4 is +2, and "10" says nothing without doing the
+  /// multiplication in your head.
+  final bool toPar;
 
   const TeamScorecardRow({
     required this.label,
@@ -40,6 +44,7 @@ class TeamScorecardRow {
     this.counted = const {},
     this.italic = false,
     this.total = false,
+    this.toPar = false,
   });
 }
 
@@ -101,6 +106,13 @@ class TeamScorecard extends StatelessWidget {
 
     int total(Iterable<int> hs, Map<int, int> from) =>
         hs.map((h) => from[h] ?? 0).fold(0, (a, b) => a + b);
+
+    String toParLabel(int v) => v == 0 ? 'E' : (v > 0 ? '+$v' : '$v');
+    String fmt(TeamScorecardRow r, int h) {
+      final v = r.scores[h];
+      if (v == null) return '';
+      return r.toPar ? toParLabel(v) : '$v';
+    }
 
     Widget band(Widget child, Color? colour) =>
         Container(color: colour, child: child);
@@ -222,7 +234,7 @@ class TeamScorecard extends StatelessWidget {
               child: Row(children: [
                 labelCell(r.label, bold: r.total, italic: r.italic),
                 for (final h in hs)
-                  cell(r.scores[h]?.toString() ?? '',
+                  cell(fmt(r, h),
                        current: h == currentHole,
                        counted: r.counted.contains(h),
                        faded  : r.scores[h] != null &&
@@ -232,9 +244,13 @@ class TeamScorecard extends StatelessWidget {
                        bold   : r.total,
                        dots   : r.strokes[h] ?? 0,
                        goTo   : h),
-                cell(hs.any((h) => r.scores[h] != null)
-                        ? '${total(hs, r.scores)}' : '',
-                     bold: true, width: _totalW),
+                cell(
+                    hs.any((h) => r.scores[h] != null)
+                        ? (r.toPar
+                            ? toParLabel(total(hs, r.scores))
+                            : '${total(hs, r.scores)}')
+                        : '',
+                    bold: true, width: _totalW),
               ]),
             ),
         ],

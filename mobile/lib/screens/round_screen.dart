@@ -82,6 +82,23 @@ class _RoundScreenState extends State<RoundScreen> {
   }
 
   @override
+  /// The board this round actually has.
+  ///
+  /// A Foursome Play round carries no round-level games, so the generic board
+  /// draws empty tabs over "No championship games configured" — its own
+  /// leaderboard is the one with the six team rows on it. Both entry points on
+  /// this hub go through here so they cannot disagree.
+  void _openLeaderboard(BuildContext context, dynamic round) {
+    if (round.isTeamPlayRound == true && round.tournamentId != null) {
+      Navigator.of(context).pushNamed('/team-play-leaderboard', arguments: {
+        'tournamentId'  : round.tournamentId,
+        'tournamentName': '',
+      });
+      return;
+    }
+    Navigator.of(context).pushNamed('/leaderboard', arguments: round.id);
+  }
+
   Widget build(BuildContext context) {
     final rp      = context.watch<RoundProvider>();
     final auth    = context.read<AuthProvider>();
@@ -120,9 +137,7 @@ class _RoundScreenState extends State<RoundScreen> {
             icon: const Icon(Icons.bar_chart),
             tooltip: 'Leaderboard',
             onPressed: round == null
-                ? null
-                : () => Navigator.of(context)
-                    .pushNamed('/leaderboard', arguments: round.id),
+                ? null : () => _openLeaderboard(context, round),
           ),
         ],
       ),
@@ -144,8 +159,7 @@ class _RoundScreenState extends State<RoundScreen> {
                     ))
               : isComplete
                   ? FilledButton.icon(
-                      onPressed: () => Navigator.of(context)
-                          .pushNamed('/leaderboard', arguments: round.id),
+                      onPressed: () => _openLeaderboard(context, round),
                       icon: const Icon(Icons.emoji_events),
                       label: const Text('Final Results'),
                     )

@@ -287,6 +287,27 @@ def _board_strokes_by_hole(foursome, config, rnd) -> dict:
     }
 
 
+def _board_to_par_by_hole(foursome, config, rnd) -> dict:
+    """`{hole: team score against par}`.
+
+    A scramble plays one ball, so par is the hole's. A shamble's figure is the
+    sum of the COUNTING balls, so par is multiplied by the count — best-2 on a
+    par 4 is a par of 8.
+    """
+    holes   = {h['number']: h.get('par', 0) for h in hole_data(foursome)}
+    by_hole = rnd.get('by_hole') or {}
+    counts  = {} if config.is_scramble else resolved_counts(foursome, config)
+
+    out = {}
+    for n, v in by_hole.items():
+        gross = v.get('gross')
+        if gross is None:
+            continue
+        par = holes.get(n, 0) * (1 if config.is_scramble else counts.get(n, 1))
+        out[str(n)] = gross - par
+    return out
+
+
 def _board_golfers_by_hole(foursome, config) -> list:
     """Per-golfer gross, net, strokes and counted-flag, hole by hole.
 
@@ -300,12 +321,19 @@ def _board_golfers_by_hole(foursome, config) -> list:
         return []
 
     counts = resolved_counts(foursome, config)
+    names  = {
+        m.player_id: (m.player.short_name or m.player.name[:5])
+        for m in foursome.memberships.select_related('player')
+    }
     out = {}
     for n in sorted(counts):
         for r in shamble_hole(foursome, n, counts, config)['rows']:
             entry = out.setdefault(r['player_id'], {
                 'player_id' : r['player_id'],
                 'name'      : r['name'],
+                # The scorecard's label column is five characters wide; full
+                # names wrap to two lines and turn the grid into a wall.
+                'short_name': names.get(r['player_id'], r['name'][:5]),
                 'is_phantom': r['is_phantom'],
                 'handicap'  : r['handicap'],
                 'scores'    : {},
@@ -363,6 +391,10 @@ def leaderboard(tournament) -> dict:
         # marked — the team's total is two of them, and a board that shows only
         # the total cannot answer "whose scores made it".
         team['golfers_by_hole'] = _board_golfers_by_hole(foursome, config)
+        # The team's line reads against par, not as a raw total: two 5s on a
+        # par 4 is +2, and "10" says nothing without doing the multiplication
+        # in your head.
+        team['to_par_by_hole'] = _board_to_par_by_hole(foursome, config, rnd)
         rows.append(team)
 
     # Rank the teams that have a score. A team with nothing entered sits at the

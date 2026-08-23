@@ -212,8 +212,11 @@ class _Row extends StatelessWidget {
                         // Three names against four would look like a mistake;
                         // naming the phantom explains the figure in the space
                         // already there.
+                        // Every name, wrapping to a second line rather than
+                        // trailing off — three names and an ellipsis tells a
+                        // golfer nothing about whether he is on this team.
                         Text(team.memberLine,
-                            maxLines: 1,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: Halved.label()),
                       ],
@@ -259,34 +262,10 @@ class _Detail extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Divider(height: 14),
-          // The raw totals live here, where a scorecard puts them — the row
-          // above is for the number a golfer quotes.
-          Text(
-            'Gross ${team.gross ?? '—'} · allowance '
-            '${team.teamHandicap ?? '—'} · net ${team.net ?? '—'}',
-            style: Halved.body(color: Halved.muted),
-          ),
-          const SizedBox(height: 8),
-          for (final m in team.members)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(m.name,
-                        style: Halved.body(
-                          color: m.isPhantom ? Halved.muted : Halved.deepPine,
-                        ).copyWith(
-                          fontStyle: m.isPhantom
-                              ? FontStyle.italic : FontStyle.normal,
-                        )),
-                  ),
-                  Text('${m.courseHandicap}', style: Halved.label()),
-                ],
-              ),
-            ),
+          // No totals line and no roster here: the row above already names
+          // every golfer, and the scorecard below carries the numbers. Both
+          // were saying it a third time.
           if (team.pars.isNotEmpty) ...[
-            const SizedBox(height: 12),
             // The same widget the entry card draws, so a golfer who has just
             // come off his own scorecard recognises this one. A shamble shows
             // all FOUR balls with the counting ones tinted and the rest pale —
@@ -298,7 +277,7 @@ class _Detail extends StatelessWidget {
               rows         : [
                 for (final g in team.golfersByHole)
                   TeamScorecardRow(
-                    label  : g.name.split(' ').last,
+                    label  : g.shortName,
                     scores : g.scores,
                     strokes: g.strokes,
                     counted: g.counted,
@@ -306,9 +285,11 @@ class _Detail extends StatelessWidget {
                   ),
                 TeamScorecardRow(
                   label  : 'Team',
-                  scores : team.scoresByHole,
+                  // Against par, not as a raw total.
+                  scores : team.toParByHole,
                   strokes: team.strokesByHole,
                   total  : true,
+                  toPar  : true,
                 ),
               ],
             ),
@@ -318,14 +299,14 @@ class _Detail extends StatelessWidget {
           // gross upstream.
           if (drive.shortfall > 0) ...[
             const SizedBox(height: 8),
+            // "N drives short" read as short YARDAGE. Say what actually
+            // happened: required drives that never got used.
             TeamNote(
               drive.penaltyStrokes > 0
-                  ? '${drive.shortfall} drive'
-                    '${drive.shortfall == 1 ? '' : 's'} short — '
+                  ? 'Never used ${drive.shortfall} of the required drives — '
                     '${drive.penaltyStrokes} strokes added.'
-                  : '${drive.shortfall} drive'
-                    '${drive.shortfall == 1 ? '' : 's'} short — recorded, '
-                    'no penalty.',
+                  : 'Never used ${drive.shortfall} of the required drives — '
+                    'recorded, no penalty.',
             ),
           ],
         ],

@@ -288,3 +288,34 @@ class BallCountAllowanceTests(_Base):
             reverse('api-team-play', args=[self.tourn.id])).json()
         self.assertEqual(summary['ball_count']['counted'], 36)
         self.assertEqual(summary['teams'][0]['allowance']['pct'], 85)
+
+
+class GenericBoardTests(_Base):
+    """A per-golfer stroke total is not a score anybody played in this shape,
+    so the generic round board must not offer one."""
+
+    def _games(self):
+        r = self.client.get(
+            reverse('api-leaderboard', args=[self.round.id]))
+        self.assertEqual(r.status_code, 200, r.content)
+        return (r.json().get('games') or {})
+
+    def test_no_stroke_play_tab_on_a_scramble(self):
+        self.configure(team_format='scramble')
+        self.assertNotIn('low_net_round', self._games())
+
+    def test_no_stroke_play_tab_on_a_shamble(self):
+        """A shamble DOES have four individual balls, which is why it needs
+        saying: the competition is the team's counted best-N off a format
+        allowance, so ranking the four individually invents a contest nobody
+        entered."""
+        self.configure(team_format='shamble')
+        self.assertNotIn('low_net_round', self._games())
+
+    def test_an_ordinary_round_still_gets_one(self):
+        """The exclusion is this shape's, not everybody's."""
+        other = Round.objects.create(
+            account=self.acct, course=self.round.course,
+            round_number=2, status='in_progress')
+        r = self.client.get(reverse('api-leaderboard', args=[other.id]))
+        self.assertIn('low_net_round', (r.json().get('games') or {}))

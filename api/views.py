@@ -495,11 +495,18 @@ def _build_leaderboard(round_obj: Round) -> dict:
             'label': 'Stroke Play',
             **low_net_round_summary(round_obj),
         }
-    elif not ({'triple_cup', 'scramble'} & set(active_games)):
+    elif not ({'triple_cup', 'scramble'} & set(active_games)) \
+            and not _is_team_play_round(round_obj):
         # Every individual-ball round (casual OR tournament) gets a Low Net
         # "scores" tab — it's the only place to see each player's actual score,
-        # even in a points-only game like Stableford. Excluded only for
-        # team-ball formats (Triple Cup alt-shot, Scramble).
+        # even in a points-only game like Stableford. Excluded for team-ball
+        # formats, where a per-golfer stroke total is not a score anybody
+        # played: Triple Cup alt-shot, Scramble, and Foursome Play.
+        #
+        # Foursome Play needs saying for both its formats. A scramble has no
+        # per-golfer ball at all. A shamble does, but the competition is the
+        # team's counted best-N off a format allowance — ranking the four
+        # individually invents a contest nobody entered.
         from services.low_net_round import low_net_round_summary
         games['low_net_round'] = {
             'label': 'Stroke Play',
@@ -9564,6 +9571,12 @@ def _golfer_strokes_by_hole(foursome, config):
             for h in holes
         }
     return out
+
+
+def _is_team_play_round(round_obj) -> bool:
+    """True when this round belongs to a configured Foursome Play tournament."""
+    t = round_obj.tournament
+    return bool(t and t.is_team_play and hasattr(t, 'team_play_config'))
 
 
 def _first_unplayed_team_hole(foursome, config, order):

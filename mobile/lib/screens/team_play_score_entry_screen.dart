@@ -686,24 +686,6 @@ class _ShambleRows extends StatelessWidget {
             )
           else
             _GolferLine(row: row, onTap: () => onSelect(row.playerId)),
-        const Divider(height: 18),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(children: [
-            Expanded(
-              child: Text('Hole total',
-                  style: theme.textTheme.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-            ),
-            Text(
-              h.teamNet == null
-                  ? 'waiting on ${h.rows.where((r) => r.gross == null).length}'
-                  : '${h.teamNet}',
-              style: theme.textTheme.titleSmall
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-          ]),
-        ),
       ],
     );
   }
