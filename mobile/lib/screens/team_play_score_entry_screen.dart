@@ -271,6 +271,11 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
           golferId: card.isScramble ? null : _activeGolfer(card),
         ),
 
+        const SizedBox(height: 16),
+        // The rules sit at the BOTTOM. They are read once on the 1st tee and
+        // are furniture by the 3rd; the hole, the scores and the card are what
+        // the screen is for.
+        _Banner(context_: _context(card)),
       ],
     );
   }
@@ -860,14 +865,11 @@ class _CardScorecard extends StatelessWidget {
                 .last ??
             'Team');
 
-    // Par over the holes actually PLAYED — a part round against the full 72
-    // would read as twenty under through six.
-    final parSoFar = card.pars.keys
-        .where((h) => scores[h] != null)
-        .map((h) => card.pars[h] ?? 0)
-        .fold<int>(0, (a, b) => a + b);
-    final gross = scores.values.fold<int>(0, (a, b) => a + b);
-    final net   = card.round.net;
+    // Taken from the server, not recomputed here. A shamble's par is
+    // multiplied by the ball count — best-2 on a par 4 is a par of 8 — and a
+    // client summing `pars` alone is out by a whole par a hole, which is how
+    // this line came to read "+57" through ten.
+    final net = card.round.netToPar;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -877,9 +879,13 @@ class _CardScorecard extends StatelessWidget {
               style: theme.textTheme.titleSmall
                   ?.copyWith(fontWeight: FontWeight.bold))),
           if (card.round.thru > 0)
+            // Net only. Gross to par is not a number anybody plays for here —
+            // on a shamble it is a two-ball aggregate against a doubled par,
+            // and on a scramble the net is the same figure shifted by a
+            // constant.
             Text(
-              'thru ${card.round.thru} · Gross ${_toPar(gross - parSoFar)}'
-              '${net == null ? '' : ' · Net ${_toPar(net - parSoFar)}'}',
+              'thru ${card.round.thru}'
+              '${net == null ? '' : ' · Net ${_toPar(net)}'}',
               style: theme.textTheme.labelSmall
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),

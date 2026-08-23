@@ -451,3 +451,30 @@ class BoardSortTests(_Base):
         self.assertTrue(board[0]['tied'])
         self.assertTrue(board[1]['tied'])
         self.assertEqual(board[0]['rank'], board[1]['rank'])
+
+
+class ShambleCardSummaryTests(_Base):
+    """The card's summary reads the SERVER's to-par figure.
+
+    Recomputing it client-side from `pars` means summing one par a hole, and a
+    shamble's team score is two balls — which is how the line came to read
+    "+57" through ten holes.
+    """
+
+    def test_the_card_carries_a_net_to_par_for_a_shamble(self):
+        self.configure(team_format='shamble')
+        self.shamble_round('Slate', gross=5, holes=10)
+
+        card = self.client.get(
+            reverse('api-team-play-card', args=[self.teams['Slate'].id]),
+            {'hole': 1}).json()
+        rnd = card['round']
+
+        self.assertEqual(rnd['thru'], 10)
+        # Ten par-4s at best-2 is a par of 80, not 40.
+        self.assertEqual(rnd['par_played'], 80)
+        # Whatever the golfers shot, the figure has to be in a sane range —
+        # a client summing single pars would land near +40 here.
+        self.assertIsNotNone(rnd['net_to_par'])
+        self.assertLess(abs(rnd['net_to_par']), 20)
+        self.assertEqual(rnd['net_to_par'], rnd['net'] - rnd['par_played'])

@@ -5670,13 +5670,17 @@ class TeamPlayRound {
   final int  par;
   /// Two strokes per missing drive, added to the gross at the END of the round.
   final int  penalty;
+  /// Against par, computed SERVER-SIDE — on a shamble par is multiplied by the
+  /// ball count, which a client recomputing from `pars` alone gets wrong by a
+  /// whole par a hole.
+  final int? netToPar;
   /// `{hole: team gross}` — what the scorecard under the entry draws.
   final Map<int, int> byHole;
 
   const TeamPlayRound({
     this.gross, this.net, this.allowance, required this.thru,
     required this.complete, required this.par, required this.penalty,
-    this.byHole = const {},
+    this.netToPar, this.byHole = const {},
   });
 
   factory TeamPlayRound.fromJson(Map<String, dynamic> j) => TeamPlayRound(
@@ -5687,6 +5691,7 @@ class TeamPlayRound {
         complete : j['complete'] == true,
         par      : (j['par'] ?? 72) as int,
         penalty  : (j['penalty'] ?? 0) as int,
+        netToPar : j['net_to_par'] as int?,
         byHole   : {
           for (final e in Map<String, dynamic>.from(
                   (j['by_hole'] ?? const {}) as Map).entries)

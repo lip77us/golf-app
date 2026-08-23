@@ -128,13 +128,12 @@ class _Header extends StatelessWidget {
           children: [
             SizedBox(width: 38, child: Text('', style: Halved.label())),
             Expanded(child: Text('TEAM', style: Halved.label())),
-            // Named as to-par, because the figures are +2 / E / −3 rather than
-            // 74 and 68 — an unlabelled "-3" under "NET" reads as a total.
-            SizedBox(width: 52,
-                child: Text('GROSS\n TO PAR', textAlign: TextAlign.right,
-                    style: Halved.label())),
-            SizedBox(width: 52,
-                child: Text('NET\nTO PAR', textAlign: TextAlign.right,
+            // One score column. Gross to par is not a number anybody plays
+            // for here — on a shamble it is a two-ball aggregate against a
+            // doubled par, and on a scramble it is the net shifted by a
+            // constant. Dropping it gives the width back to the names.
+            SizedBox(width: 60,
+                child: Text('NET TO PAR', textAlign: TextAlign.right,
                     style: Halved.label())),
           ],
         ),
@@ -223,14 +222,7 @@ class _Row extends StatelessWidget {
                     ),
                   ),
                   SizedBox(
-                    width: 52,
-                    child: Text(_toPar(team.grossToPar),
-                        textAlign: TextAlign.right,
-                        style: Halved.body(
-                            color: toParColor(team.grossToPar) ?? Halved.muted)),
-                  ),
-                  SizedBox(
-                    width: 52,
+                    width: 60,
                     child: Text(_toPar(team.netToPar),
                         textAlign: TextAlign.right,
                         style: Halved.sectionHead().copyWith(
