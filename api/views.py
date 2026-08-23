@@ -9329,6 +9329,24 @@ class TeamPlaySetupView(APIView):
             or TeamPlayConfig.DRIVE_NONE)
         if current_rule not in rules:
             defaults['drive_rule'] = rules[0]
+
+        # A window can only be asked for as many drives as it has holes to
+        # give, shared between the men: two each per nine for a foursome, four
+        # for a pair. Above that the quota is impossible before a ball is
+        # struck — a different thing from the shortfall the tracker warns
+        # about, which the team chose. Clamped rather than refused, like the
+        # drive rule above: switching size or rule should not send the TD back
+        # to un-set a number that used to be legal.
+        probe.drive_rule = defaults.get(
+            'drive_rule', getattr(existing, 'drive_rule', None)
+            or TeamPlayConfig.DRIVE_NONE)
+        cap = probe.max_drives_per_golfer
+        wanted = defaults.get(
+            'drives_required', getattr(existing, 'drives_required', 1) or 1)
+        if wanted > cap:
+            defaults['drives_required'] = cap
+        elif wanted < 1:
+            defaults['drives_required'] = 1
         if 'ball_counts' in d:
             defaults['ball_counts'] = d['ball_counts'] or {}
         if 'split_pcts' in d:

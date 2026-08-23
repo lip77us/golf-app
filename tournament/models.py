@@ -1224,6 +1224,30 @@ class TeamPlayConfig(models.Model):
                 self.DRIVE_ALTERNATING)
 
     @property
+    def drive_window_holes(self) -> int:
+        """Holes one quota window covers. Per nine is TWO windows of nine; the
+        front does not carry to the back."""
+        return 9 if self.drive_rule == self.DRIVE_PER_NINE else 18
+
+    @property
+    def max_drives_per_golfer(self) -> int:
+        """
+        The most one golfer can be asked for in a window: the holes in it,
+        divided between the men.
+
+        **It scales with the team size.**  Four men sharing nine holes top out
+        at two each, and four each across eighteen — which is where the shipped
+        figures came from.  TWO men sharing the same nine top out at **four
+        each**, and **nine each across eighteen**: every hole spoken for and
+        nothing left over.
+
+        Above this the quota is impossible before a ball is struck, which is a
+        different thing from the shortfall the tracker warns about — that one
+        the team chose.
+        """
+        return max(1, self.drive_window_holes // max(1, self.team_size))
+
+    @property
     def requires_drive_pick(self) -> bool:
         """
         Whether a hole is incomplete until the drive is picked.

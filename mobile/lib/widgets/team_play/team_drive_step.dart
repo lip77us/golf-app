@@ -82,6 +82,20 @@ class TeamDriveStep extends StatelessWidget {
   int get _windowHoles => _isPerNine ? 9 : 18;
   int get _free => (_windowHoles - _required).clamp(0, 18);
 
+  /// The most a window can actually be asked for: the holes in it, divided
+  /// between the men.
+  ///
+  /// **It scales with the team size, and it always did — the old 2-and-4 was
+  /// four men's answer hardcoded.** Four men have nine holes to share, so two
+  /// each is the ceiling and four each across eighteen; TWO men have the same
+  /// nine holes between them, so four each per nine and nine each across
+  /// eighteen, which is every hole spoken for and nothing left over.
+  ///
+  /// Mirrors `TeamPlayConfig.max_drives_per_golfer`, which clamps the same
+  /// figure server-side. The wizard sets this before the config row exists, so
+  /// it cannot ask the server for it.
+  int get _maxPerGolfer => (_windowHoles ~/ teamSize).clamp(1, 18);
+
   String get _headerBody {
     if (_hasNoControl) {
       return 'Both men drive every hole in ${format == 'chapman'
@@ -190,7 +204,7 @@ class TeamDriveStep extends StatelessWidget {
                                     : 'Anywhere in the round',
                   value: drivesRequired,
                   min  : 1,
-                  max  : _isPerNine ? 2 : 4,
+                  max  : _maxPerGolfer,
                   onChanged: onDrivesRequired,
                 ),
                 const SizedBox(height: 14),
@@ -211,12 +225,16 @@ class TeamDriveStep extends StatelessWidget {
                     'three.',
                   ),
                 ],
-                if (_isPairs) ...[
+                // The slack is the point of the note, so it only makes the
+                // argument while there IS slack. At the ceiling every hole is
+                // spoken for and the warning below says so instead.
+                if (_isPairs && _free > 0) ...[
                   const SizedBox(height: 12),
                   TeamNote(
                     'Two men and ${_isPerNine ? 'nine' : 'eighteen'} holes is '
-                    'a lot of slack — $_free of them are free. One each per '
-                    'nine is the usual rule.',
+                    'a lot of room — $_free hole${_free == 1 ? '' : 's'} '
+                    '${_free == 1 ? 'is' : 'are'} free either way. One each '
+                    'per nine is the usual rule.',
                   ),
                 ],
                 if (_free <= 0) ...[

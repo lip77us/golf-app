@@ -373,6 +373,44 @@ class DriveControlTests(PairsBase):
         self.assertEqual(drive['free'], 7)
         self.assertEqual(drive['floating'], 0)   # no phantom to cover
 
+    def test_a_pair_may_be_asked_for_four_drives_a_nine(self):
+        """The ceiling is the window's holes divided between the men, and it
+        scales with the size: four men sharing nine top out at two each, two
+        men at FOUR each. The shipped 2-and-4 was four men's answer
+        hardcoded."""
+        self._configure('scramble', drive_rule='per_nine', drives_required=4)
+        drive = self._team(self._summary(), 1)['drive']
+        self.assertEqual(drive['per_golfer'], 4)
+        self.assertEqual(drive['required'], 8)     # of nine holes
+        self.assertEqual(drive['free'], 1)
+
+    def test_a_pair_may_be_asked_for_nine_drives_across_eighteen(self):
+        # Every hole spoken for, nothing left over.
+        self._configure('scramble', drive_rule='per_eighteen',
+                        drives_required=9)
+        drive = self._team(self._summary(), 1)['drive']
+        self.assertEqual(drive['per_golfer'], 9)
+        self.assertEqual(drive['required'], 18)
+        self.assertEqual(drive['free'], 0)
+
+    def test_more_than_the_window_holds_is_clamped(self):
+        """Above the ceiling the quota is impossible before a ball is struck —
+        a different thing from the shortfall the tracker warns about, which the
+        team chose. Clamped rather than refused, like the drive rule."""
+        self._configure('scramble', drive_rule='per_nine', drives_required=9)
+        self.assertEqual(self._summary()['drive_rule'], 'per_nine')
+        self.assertEqual(
+            self._team(self._summary(), 1)['drive']['per_golfer'], 4)
+
+    def test_a_foursome_ceiling_is_unchanged(self):
+        self.client.post(self._setup_url(),
+                         {'team_size': 4, 'team_format': 'scramble',
+                          'drive_rule': 'per_nine', 'drives_required': 9},
+                         format='json')
+        cfg = TeamPlayConfig.objects.get(tournament=self.tourn)
+        self.assertEqual(cfg.max_drives_per_golfer, 2)
+        self.assertEqual(cfg.drives_required, 2)
+
     def test_scotch_is_an_instruction(self):
         self._configure('scotch')
         summary = self._summary()

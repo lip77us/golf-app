@@ -226,6 +226,10 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   void _applyTpFormatRules() {
     final rules = _tpDriveRulesAllowed;
     if (!rules.contains(_tpDriveRule)) _tpDriveRule = rules.first;
+    // Switching pairs → fours halves what a window can be asked for, so a
+    // figure set at the pairs ceiling has to come down with it.
+    final cap = _tpMaxDrivesPerGolfer;
+    if (_tpDrivesReq > cap) _tpDrivesReq = cap;
   }
 
   /// Best ball and Chapman have both men driving every hole with no choice to
@@ -237,6 +241,19 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     if (_tpFormat == 'alternate_shot') return const ['alternating'];
     if (_tpTeamSize == 2) return const ['none', 'per_nine', 'per_eighteen'];
     return const ['none', 'per_nine', 'per_eighteen', 'alternating'];
+  }
+
+  /// The most drives one golfer can be asked for in a window: the holes in it,
+  /// divided between the men.
+  ///
+  /// Four men sharing nine holes tops out at two each, and four each across
+  /// eighteen. **Two men sharing the same nine top out at four each**, and
+  /// nine each across eighteen — every hole spoken for, nothing left over.
+  /// Mirrors `TeamPlayConfig.max_drives_per_golfer`; the wizard sets this
+  /// before the config row exists, so it cannot ask the server.
+  int get _tpMaxDrivesPerGolfer {
+    final holes = _tpDriveRule == 'per_nine' ? 9 : 18;
+    return (holes ~/ _tpTeamSize).clamp(1, 18);
   }
 
   /// The odd-field block, computed on the roster the Groups & Tees step
@@ -1697,10 +1714,12 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           hasShortTeam  : _tpHasShortTeam,
           onRule           : (r) => setState(() {
             _tpDriveRule = r;
-            // Per nine allows one or two; per eighteen two or three. Carrying
-            // a 3 across from one rule to the other would ask for more drives
-            // than the window has room for.
-            if (r == 'per_nine' && _tpDrivesReq > 2) _tpDrivesReq = 2;
+            // A window can only be asked for as many drives as it has holes to
+            // give, shared between the men — two each per nine for a foursome,
+            // four for a pair. Carrying a per-eighteen figure across to per
+            // nine would otherwise ask for more drives than the window holds.
+            final cap = _tpMaxDrivesPerGolfer;
+            if (_tpDrivesReq > cap) _tpDrivesReq = cap;
           }),
           onDrivesRequired: (n) => setState(() => _tpDrivesReq = n),
           onPenalty       : (p) => setState(() => _tpDrivePenalty = p),
