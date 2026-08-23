@@ -7,7 +7,7 @@ Artifact; this file is the copy that lives with the packet.
 The build follows the packet closely — one round, one pool, no side games, the
 phantom 4th, ties combined and split, odd cents to the highest course handicap.
 Every worked example reproduces: Pine 6.15 → 6, Clay 7.50 → 8, Slate 8.45 → 8,
-Dune three men plus a phantom 16 → 10, and the drawn settlement to the cent
+Dune three golfers plus a phantom 16 → 10, and the drawn settlement to the cent
 including which named golfer takes the odd pennies.
 
 What follows is only the divergences. Most came out of playing real rounds;
@@ -23,7 +23,7 @@ a few want a design ruling rather than a note.
 | 2 | Step 2 tees, step 6 build teams | **No build-teams step; nine steps** | Groups & Tees already assigns, and the group IS the team. Asking twice let the second answer silently win. The allowance/balance moved to the handicap step. |
 | 3 | Teams default to a colour name | **Group 1 … Group N** | Teams name themselves from the hub. The colour still identifies the row; it is not the name. |
 | 4 | A bespoke full-screen stepper | **The app's standard card** | `InlineScorePicker` in the Survivor/Skins row pattern — the component every other game renders. A fourth idiom here bought nothing. |
-| 5 | A drive row on the card | **A drive chip strip above the scores** | The drive is its own question; hanging the score off a driver's row says the score is his. All the packet's drive rules are intact. |
+| 5 | A drive row on the card | **A drive chip strip above the scores** | The drive is its own question; hanging the score off a driver's row says the score is their. All the packet's drive rules are intact. |
 | 6 | "Net is not shown on the card" | **Stroke dots + a net-to-par line** | ⚠ Deliberate departure — *the one we would most like design to rule on.* Seeing which holes carry a stroke matters on the tee, and the dots are the app's existing notation. The round figure is never printed on a hole; the `gets 10` chip states it once. |
 | 7 | Board columns Gross / Net as totals | **Net to par only; ranks on it** | Every other board in the app reads against par. Ranking on raw totals contradicted the column while teams were still out. Gross to par dropped — on a shamble it is a two-ball aggregate against a doubled par. Totals moved into the expanded row. |
 | 8 | Rota illustration starts at hole 8 | **The rota starts at hole 1** | Both illustrations start their cycle at 8, which cannot be reconciled with hole 1 taking the first pair. Read as showing the pattern, not an offset. Easy to flip. |

@@ -4,8 +4,8 @@
 /// does (docs/design-review/handoff-team-pairs/SPEC.md §5).
 ///
 /// **The ceiling scales with the team size**, and the shipped 2-and-4 was four
-/// men's answer hardcoded. Four men sharing nine holes top out at two drives
-/// each; two men sharing the same nine top out at four each, and nine each
+/// men's answer hardcoded. Four golfers sharing nine holes top out at two drives
+/// each; two golfers sharing the same nine top out at four each, and nine each
 /// across eighteen — every hole spoken for and nothing left over.
 ///
 /// This is mirrored from `TeamPlayConfig.max_drives_per_golfer`, because the
@@ -144,7 +144,7 @@ void main() {
   });
 
   group('a step with nothing to set is not a step', () {
-    // In best ball and Chapman both men drive every hole: no drive to choose,
+    // In best ball and Chapman both golfers drive every hole: no drive to choose,
     // no quota to count, no penalty to apply. The wizard drops the step rather
     // than showing a page whose only content says there is nothing on it.
     test('best ball and chapman have no drive step', () {
@@ -167,7 +167,7 @@ void main() {
     });
 
     test('alternating pairs stays a fours rule', () {
-      // Two men have no pairs to alternate; their rota IS alternate shot.
+      // Two golfers have no pairs to alternate; their rota IS alternate shot.
       expect(driveRulesFor(2, 'scramble'), isNot(contains('alternating')));
       expect(driveRulesFor(4, 'scramble'), contains('alternating'));
     });

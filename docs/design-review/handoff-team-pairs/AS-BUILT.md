@@ -21,8 +21,8 @@ notes.
 
 | # | Packet | Shipped | Why |
 |---|---|---|---|
-| 1 | Pairs are a **team-size control on step 1** under one `Team Play` card | **Two picker cards** — `Foursome Play` and `Pairs Play` — routing into one flow | ⚠ *The one we would most like a ruling on.* The packet's argument is "do not duplicate seven screens to change two", and nothing is duplicated: same `_stepFlow`, same `TeamPlayConfig` row, same widgets. But the product name that shipped is **Foursome Play**, and "Foursome Play — team size: pairs" is a contradiction on screen. The picker also already drew a `Two-man team` card, disabled pending this engine. One extra radio on a screen the TD sees once is not a duplicated screen. |
-| 2 | A **build-pairs screen** with a tray, drag-to-move and a balance strip | **No build step** | Carried over from the fours build for the same reason: Groups & Tees already assigns, and the group IS the team. Sizes default to twos, the balance strip and the per-man contribution live on the handicap step, and the odd-field block gates Next there. The repair is "go back to Groups & Tees", not drag-from-a-tray. |
+| 1 | Pairs are a **team-size control on step 1** under one `Team Play` card | **Two picker cards** — `Foursome Play` and `Pairs Play` — routing into one flow | ⚠ *The one we would most like a ruling on.* The packet's argument is "do not duplicate seven screens to change two", and nothing is duplicated: same `_stepFlow`, same `TeamPlayConfig` row, same widgets. But the product name that shipped is **Foursome Play**, and "Foursome Play — team size: pairs" is a contradiction on screen. The picker also already drew a `Two-golfer team` card, disabled pending this engine. One extra radio on a screen the TD sees once is not a duplicated screen. |
+| 2 | A **build-pairs screen** with a tray, drag-to-move and a balance strip | **No build step** | Carried over from the fours build for the same reason: Groups & Tees already assigns, and the group IS the team. Sizes default to twos, the balance strip and the per-golfer contribution live on the handicap step, and the odd-field block gates Next there. The repair is "go back to Groups & Tees", not drag-from-a-tray. |
 | 3 | Pair name **defaults to the two surnames** | Same, and it is **written to the team**, not just displayed | The hub, the tee sheet and the chat header know nothing about Team Play, so a derived-only name would have left the board saying `Maiolini & Yau` while the hub said `Group 1`. `TeamPlayTeamState.name_is_default` lets the name follow a roster change until the TD types over it. A foursome is untouched — `Group N` is a label, not a name. |
 | 4 | (not stated) | **Clearing a name resets to the default, not the colour** | The rename endpoint set a blank name to the colour, which contradicts the fours decision that "an unnamed team is `Group N`, the colour identifies the row". Now blank gives back `Group N` for a foursome and the two surnames for a pair. **This changes fours behaviour too.** |
 | 5 | *Maiolini plays the second shot* | Surname on the card, full name everywhere else | The packet writes both tee sentences in surnames, and it is right: `Anna Maiolini plays the second shot, then alternate.` wraps to two lines and reads nothing like the way a pair talks. The drive tracker, the roster and settlement keep full names. |
@@ -41,20 +41,20 @@ notes.
   `../handoff-team-play/AS-BUILT.md` lists "no on-course card for setting the
   alternating pairs" as still open — the endpoint was written and tested and
   nothing called it. The card now calls it at **both** sizes: two ways to split
-  a pair, three ways to split a foursome, AB/BC/AC for three men.
+  a pair, three ways to split a foursome, AB/BC/AC for three golfers.
 - **The card carries the drive roster even with no quota.** Scotch needs the
   tap on every hole because it is the instruction, and a no-quota rule has no
   windows to draw chips from. `drive_options` sends the roster and the pick.
 - **The two sentences are computed on the server** (`tee_note`), as is what the
   control does (`drive_control`: `record` / `instruction` / `rota` / `none`).
   A client re-deriving "who plays the second shot" is a rule in two places.
-- **The format list and the drive-rule list are server-owned.** A two-man
-  shamble and a four-man Chapman are refused, and a drive rule the new format
+- **The format list and the drive-rule list are server-owned.** A two-golfer
+  shamble and a four-golfer Chapman are refused, and a drive rule the new format
   cannot honour is **coerced rather than refused** — a TD switching to best
   ball should not have to go back and un-set a quota that no longer exists.
 - **The size locks with the format at the first score.** A card that entered
   two numbers a hole cannot be re-read as one.
-- **A three-man best-ball pair owes three men's worth of drives**, not two.
+- **A three-golfer best-ball pair owes three golfers' worth of drives**, not two.
   The quota follows the roster when the roster is bigger than the size; the
   phantom's floating share falls out at zero, because pairs have no phantom.
 
@@ -82,5 +82,5 @@ notes.
   leaves them.
 - **Odd-field repair is not on the block.** The block names the golfer and
   states the three ways out, and Next waits on it — but the fix happens back on
-  Groups & Tees rather than by dragging him into a seventh pair, because that
+  Groups & Tees rather than by dragging them into a seventh pair, because that
   is where this app assigns golfers.

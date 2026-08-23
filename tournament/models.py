@@ -88,7 +88,7 @@ class Tournament(models.Model):
     @property
     def is_team_play(self) -> bool:
         """
-        True for a Team Play tournament — many four-man teams, one round, one
+        True for a Team Play tournament — many four-golfer teams, one round, one
         leaderboard (docs/design-review/handoff-team-play/SPEC.md). Like
         'team_cup' this is a client-set marker in active_games rather than a
         per-round GameType: the team layer sits on top of the round.
@@ -98,7 +98,7 @@ class Tournament(models.Model):
     @property
     def is_individual_play(self) -> bool:
         """
-        True for an every-golfer-for-himself tournament — the type the
+        True for an every-golfer-for-themselves tournament — the type the
         individual-play spec governs. The other two shapes are excluded by the
         presence of their own marker:
 
@@ -336,7 +336,7 @@ class Foursome(models.Model):
                             ),
                         )
     # Mini Singles day 2: the champions' foursome is DERIVED, never set. The
-    # TD cannot know the four group winners when he builds Sunday's tee times,
+    # TD cannot know the four group winners when they builds Sunday's tee times,
     # so the groups step RESERVES a group here and services/mini_singles.py
     # swaps the winners into it once day 1 resolves. Everyone displaced takes
     # the seat the winner vacated, so tees and tee times stay intact.
@@ -427,7 +427,7 @@ class FoursomeMembership(models.Model):
     # Team Play: which team inside the playing group this golfer belongs to.
     #
     # **The foursome is the PLAYING group, not the team.**  That distinction
-    # does not exist in a four-man event — the group is the team, everybody
+    # does not exist in a four-golfer event — the group is the team, everybody
     # sits at slot 1, and nothing here changes.  A pairs event puts TWO teams
     # in one group: four golfers, one tee time, one scorer, one card, and two
     # separate pairs on it.  Slot 2 is the second pair
@@ -907,7 +907,7 @@ class RyderCupMatchPoints(models.Model):
 
 
 # ---------------------------------------------------------------------------
-# TEAM PLAY  (the third tournament shape — many 4-man teams, ONE round)
+# TEAM PLAY  (the third tournament shape — many 4-golfer teams, ONE round)
 # ---------------------------------------------------------------------------
 #
 # docs/design-review/handoff-team-play/SPEC.md
@@ -970,7 +970,7 @@ class TeamPlayConfig(models.Model):
     ]
 
     # Which formats each size may play.  `scramble` is the only one both sizes
-    # run, and its ALLOWANCE is not shared — 25/20/15/10 on four men, 35/15 on
+    # run, and its ALLOWANCE is not shared — 25/20/15/10 on four golfers, 35/15 on
     # two.  Every table lookup is therefore keyed on (size, format), never on
     # the format alone.
     FORMATS_BY_SIZE = {
@@ -1041,7 +1041,7 @@ class TeamPlayConfig(models.Model):
         max_length=16, choices=FORMAT_CHOICES, default=FORMAT_SCRAMBLE,
         help_text=(
             "Fours: scramble (all four hit, best ball played, ONE score a "
-            "hole) or shamble (best drive, then each man plays his own ball "
+            "hole) or shamble (best drive, then each golfer plays their own ball "
             "in, FOUR scores a hole).  Pairs: scramble, best ball, alternate "
             "shot, Scotch or Chapman — four of the five end in one ball, and "
             "best ball is the only one entering two scores."
@@ -1079,8 +1079,8 @@ class TeamPlayConfig(models.Model):
         default=1,
         help_text=(
             "Quota rules only: drives owed per golfer per WINDOW (per nine, or "
-            "per eighteen).  A short team owes four men's worth, not three — "
-            "the phantom's share rotates through the three real men."
+            "per eighteen).  A short team owes four golfers' worth, not three — "
+            "the phantom's share rotates through the three real golfers."
         ),
     )
     drive_penalty = models.CharField(
@@ -1175,7 +1175,7 @@ class TeamPlayConfig(models.Model):
         """
         One number per golfer with the best N counting — shamble and best ball.
 
-        **Best ball is a shamble whose count is 1.**  Two men, one score
+        **Best ball is a shamble whose count is 1.**  Two golfers, one score
         counting, and every consumer of the ball-count dict works untouched:
         best-1 on a par 4 is a par of 4, which is right.
         """
@@ -1190,7 +1190,7 @@ class TeamPlayConfig(models.Model):
     @property
     def format_allowed(self) -> bool:
         """Is this format legal at this team size? Enforced by the setup
-        endpoint — a two-man shamble and a four-man Chapman are both nonsense
+        endpoint — a two-golfer shamble and a four-golfer Chapman are both nonsense
         and neither should be reachable by an API caller."""
         return self.team_format in self.FORMATS_BY_SIZE.get(self.team_size, ())
 
@@ -1221,10 +1221,10 @@ class TeamPlayConfig(models.Model):
         * **A rota** — alternate shot.  Odd/even, set on the 1st tee, fixed for
           eighteen.  Not a quota: nothing to fall short of, so no warning and
           no penalty setting.
-        * **Absent** — best ball and Chapman.  Both men drive every hole with
+        * **Absent** — best ball and Chapman.  Both golfers drive every hole with
           no choice to record.
 
-        Alternating pairs stays a fours rule: two men have no pairs to
+        Alternating pairs stays a fours rule: two golfers have no pairs to
         alternate, and their alternate-shot rota is the odd/even tee order,
         which is the `alternate_shot` format's own schedule.
         """
@@ -1247,11 +1247,11 @@ class TeamPlayConfig(models.Model):
     def max_drives_per_golfer(self) -> int:
         """
         The most one golfer can be asked for in a window: the holes in it,
-        divided between the men.
+        divided between the golfers.
 
-        **It scales with the team size.**  Four men sharing nine holes top out
+        **It scales with the team size.**  Four golfers sharing nine holes top out
         at two each, and four each across eighteen — which is where the shipped
-        figures came from.  TWO men sharing the same nine top out at **four
+        figures came from.  TWO golfers sharing the same nine top out at **four
         each**, and **nine each across eighteen**: every hole spoken for and
         nothing left over.
 
@@ -1283,7 +1283,7 @@ class TeamPlayTeamState(models.Model):
     Per-team state for Team Play — one row per TEAM, which is not always one
     row per group.
 
-    **The foursome is the playing group.**  In a four-man event the group IS
+    **The foursome is the playing group.**  In a four-golfer event the group IS
     the team, there is one row at slot 1, and everything reads as it always
     did.  A pairs event puts two teams in one playing group — four golfers, one
     tee time, one scorer, one card — so it gets a row at slot 1 and another at
@@ -1291,8 +1291,8 @@ class TeamPlayTeamState(models.Model):
 
     ``colour`` is assigned whether or not the TD renames the team, because it
     does real work on the leaderboard and the scorecard: six team names, most
-    of them one syllable and all unfamiliar, and the colour block is how a man
-    finds his team without reading.
+    of them one syllable and all unfamiliar, and the colour block is how a golfer
+    finds their team without reading.
     """
 
     foursome = models.ForeignKey(
@@ -1332,13 +1332,13 @@ class TeamPlayTeamState(models.Model):
     name_is_default = models.BooleanField(
         default=True,
         help_text=(
-            "False once the TD names the team himself, after which the roster "
+            "False once the TD names the team themselves, after which the roster "
             "may change without the name following it."
         ),
     )
 
     # The team figure and the number that explains it.  Rounded ONCE, on the
-    # total: rounding each man's contribution first turns 1.00+1.60+1.65+1.90
+    # total: rounding each golfer's contribution first turns 1.00+1.60+1.65+1.90
     # into 7, where rounding the sum gives 6.  Half rounds up.
     team_handicap = models.SmallIntegerField(
         null=True, blank=True,
@@ -1352,12 +1352,12 @@ class TeamPlayTeamState(models.Model):
     # Alternating-pairs rule only.  Set by the team on the 1st tee, before the
     # first score, then FIXED for eighteen holes — a rota that can be re-cut
     # mid-round is not a rota.  The app does not derive it from handicap: four
-    # men decide in ten seconds and would override a computed pairing anyway.
+    # golfers decide in ten seconds and would override a computed pairing anyway.
     drive_pairs = models.JSONField(
         default=list, blank=True,
         help_text=(
-            "[[player_id, player_id], [player_id, player_id]] for four men; "
-            "three men run AB / BC / AC repeating, stored as three pairs.  "
+            "[[player_id, player_id], [player_id, player_id]] for four golfers; "
+            "three golfers run AB / BC / AC repeating, stored as three pairs.  "
             "Immutable once written."
         ),
     )

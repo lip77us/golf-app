@@ -9,7 +9,7 @@
 /// two's meaning.
 ///
 /// **Worked, not described.** Every control shows its consequence in dollars
-/// as it moves — a TD setting 50/30/20 is not choosing percentages, he is
+/// as it moves — a TD setting 50/30/20 is not choosing percentages, they are
 /// choosing what third place gets.
 library;
 
@@ -25,7 +25,7 @@ class TeamPayoutStep extends StatelessWidget {
   final List<int> splitPcts;
   final int    golfers;
   final int    teamCount;
-  /// True when a team plays three — per-man figures assume four, and the
+  /// True when a team plays three — per-golfer figures assume four, and the
   /// screen says so rather than quietly being wrong for one team.
   final bool   hasShortTeam;
 
@@ -275,8 +275,8 @@ class TeamPayoutStep extends StatelessWidget {
       List.generate(a.length, (i) => a[i] == b[i]).every((x) => x);
 }
 
-/// One place: the percentage the TD moves, and the two figures that tell him
-/// what he just did — the team's prize and the per-man share.
+/// One place: the percentage the TD moves, and the two figures that tell them
+/// what they just did — the team's prize and the per-golfer share.
 class _PlaceRow extends StatelessWidget {
   final String label;
   final int    pct;
@@ -315,7 +315,7 @@ class _PlaceRow extends StatelessWidget {
           children: [
             Text('\$${amount.toStringAsFixed(2)}',
                  style: Halved.body(weight: FontWeight.w700)),
-            // $287.50 to a team means nothing until it is divided. A man
+            // $287.50 to a team means nothing until it is divided. A golfer
             // decides by whether $25 is worth maybe winning $72.
             Text('\$${(amount / 4).toStringAsFixed(2)} a golfer',
                  style: Halved.label()),

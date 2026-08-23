@@ -1,4 +1,4 @@
-# Spec: Pairs Play — two-man teams, one round, one leaderboard
+# Spec: Pairs Play — two-golfer teams, one round, one leaderboard
 
 > **Read `../handoff-team-play/SPEC.md` first.** Everything it decides still
 > holds. This file covers only what pairs change, and the places the shipped
@@ -39,7 +39,7 @@ Two reasons, both about the name the product already shipped:
    name first). "Foursome Play — team size: pairs" is a contradiction on screen.
 2. **The picker already draws the card.** `_EventType.pair` exists in
    `new_round_wizard.dart` with the body *"Pairs against the field. Chapman,
-   alternate shot, best ball."*, disabled pending a two-man scoring engine.
+   alternate shot, best ball."*, disabled pending a two-golfer scoring engine.
    This is that engine. Enabling the card costs nothing; it routes into
    `_isTeamPlay` with `team_size = 2` and every step after it is the same widget.
 
@@ -124,14 +124,14 @@ untouched. Best-1 on a par 4 is a par of 4, which is right.
 
 `ensure_phantom_fourth` returns `None` and deletes a stale row whenever
 `team_size == 2`. In fours the phantom is a handicap device for a team that
-still hits four balls; in pairs it would be an imaginary man taking half the
+still hits four balls; in pairs it would be an imaginary partner taking half the
 shots in an alternate shot.
 
 ### 2.5 The rota reuses `drive_pairs`
 
-An alternate-shot tee rota is odd/even for two men. Stored in the existing
+An alternate-shot tee rota is odd/even for two golfers. Stored in the existing
 `TeamPlayTeamState.drive_pairs` as **two singleton entries** —
-`[[odd_player_id], [even_player_id]]`. `pair_on_hole` then returns the man who
+`[[odd_player_id], [even_player_id]]`. `pair_on_hole` then returns the golfer who
 tees on that hole with no change, `TeamPlayPairsView` already refuses a second
 POST (which is the "fixed for eighteen" rule), and `drive_state` already emits
 per-hole names.
@@ -140,7 +140,7 @@ per-hole names.
 
 ## 3. Building the pairs (step 3, Groups & Tees)
 
-The four-man build screen was not built as drawn (`handoff-team-play/SPEC.md`
+The four-golfer build screen was not built as drawn (`handoff-team-play/SPEC.md`
 §3) because **Groups & Tees already assigns and the group IS the team**. That
 holds for pairs, with three changes.
 
@@ -148,7 +148,7 @@ holds for pairs, with three changes.
    field wants `[2, 2, 2, …]` and a trailing `[1]` when the field is odd. New
    `pairSizes(n)` in `utils/grouping.dart`; the size override clamps to
    `{2}` — or `{2, 3}` in best ball, see below.
-2. **The balance strip and the per-man contribution** live on the handicap step,
+2. **The balance strip and the per-golfer contribution** live on the handicap step,
    as they do for fours. The argument is *stronger* here and the screen is the
    same: four handicaps average out, two do not — a scramble pair of 3 and 22
    plays off 4 and a pair of 9 and 23 plays off 7, three strokes apart on a card
@@ -167,12 +167,12 @@ holds for pairs, with three changes.
 
 The handicap step draws it and **Next waits on it** — the same gate the fours
 flow puts on an empty tray, for the same reason: balance is advice, a golfer
-with no partner is a broken tournament. The button names the man
-(*"Dave Kwan has no partner"*), not a count, because the fix is about one man
+with no partner is a broken tournament. The button names the golfer
+(*"Dave Kwan has no partner"*), not a count, because the fix is about one golfer
 and the TD needs to know which one is standing there.
 
 **Three ways out, offered on the block** — nothing is disabled without saying
-why: add a golfer, take him out, or **let one team play three**. The third is
+why: add a golfer, take them out, or **let one team play three**. The third is
 **best-ball only and hidden otherwise**. A third ball is another option to
 count; alternate shot and Chapman cannot honour it at all and in a scramble it
 is a straight advantage. Offering a choice four of the five formats reject is
@@ -197,7 +197,7 @@ whose surnames overflow 16 characters falls back to `Group N`.
 
 **This is the finding to act on.** The same pair — Maiolini 4, Yau 19 — plays
 off 4 in a scramble and 12 in alternate shot. Three times the strokes for the
-same two men, purely from the format.
+same two golfers, purely from the format.
 
 | Format | Rule | Maiolini 4 · Yau 19 | Card |
 |---|---|---|---|
@@ -216,7 +216,7 @@ becomes one caller.
 `(50, 50)` and the screen still reads it back the packet's way — `4`, `19`,
 `23 COMBINED`, `50% ALLOWANCE`, `12 PAIR`.
 
-**Best ball is not a team figure.** Each man plays his own strokes at 85% and
+**Best ball is not a team figure.** Each golfer plays their own strokes at 85% and
 the better net counts. It is the only pairs format whose allowance is per
 golfer and the only one entering two scores. The summed figure exists solely as
 a balance number for the strip, exactly as the shamble's does.
@@ -228,13 +228,13 @@ worth a stroke. Stated plainly rather than manufacturing a difference.
 **The figure shows on every option before it is chosen.** The format step
 computes all five for the TD's *own* first pair and prints them on the radio
 rows — a TD picking Chapman because it sounds fun should see that it more than
-doubles his field's strokes against a scramble. Picking alternate shot raises a
+doubles their field's strokes against a scramble. Picking alternate shot raises a
 note saying so.
 
 Unchanged: whole strokes, half up, rounded **once on the total**, computed off
 **course** handicap with the tee named. Members sort low to high, always — the
 percentage is positional, so a manual order would be a lie. The flat override
-still applies to both men.
+still applies to both golfers.
 
 ---
 
@@ -248,18 +248,18 @@ does differs, and that is the part to get right in code.**
 | Scramble | **A record** — compliance against a quota | none · per nine · per eighteen | `none` |
 | Scotch | **An instruction** — it says who hits next | none · per nine · per eighteen | `none`, tap still required |
 | Alternate shot | **A rota** — odd/even, set on the 1st tee | `alternating` only | forced |
-| Best ball, Chapman | **Absent** — both men drive every hole | `none` only | forced |
+| Best ball, Chapman | **Absent** — both golfers drive every hole | `none` only | forced |
 
 1. **`alternating` means something different at each size.** In fours it is the
    driving *pairs*; in pairs it is the odd/even *tee order*. Same field, same
    immutability, same one-line-on-the-tee UI.
-2. **A pairs quota is two men's worth, not four.** `BALLS_PER_HOLE` is replaced
+2. **A pairs quota is two golfers' worth, not four.** `BALLS_PER_HOLE` is replaced
    by `config.team_size` throughout `services/team_play.py`: `required =
    team_size × drives_required`. One each per nine is `2 of 9`, seven free —
-   *"two men and eighteen holes is a lot of slack"*, which is why one each per
+   *"two golfers and eighteen holes is a lot of slack"*, which is why one each per
    nine is the usual rule and the default when a quota is chosen.
 3. **The floating share is zero in pairs.** It exists to cover a phantom, and
-   there is no phantom. A three-man best-ball pair owes three men's worth.
+   there is no phantom. A three-golfer best-ball pair owes three golfers' worth.
 4. **Scotch requires the tap on every hole even with no quota**, because the tap
    is the instruction. The card's completion gate reads *"Pick whose drive to
    continue"* for Scotch regardless of `drive_rule`.
@@ -304,7 +304,7 @@ allowance (`Scotch · 10`).
 
 **Best ball** — the shipped shamble card with **two rows instead of four** and
 `1 of 2 counts` in the header. The counting score tints and the other greys as
-they land, for the same reason: a man who shot 5 must see instantly that it was
+they land, for the same reason: a golfer who shot 5 must see instantly that it was
 not used.
 
 **The drive control** sits above the rows on scramble and Scotch, and is absent

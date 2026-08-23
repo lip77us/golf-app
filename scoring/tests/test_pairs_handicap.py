@@ -5,7 +5,7 @@ The pairs allowance tables (docs/design-review/handoff-team-pairs/SPEC.md §4).
 
 **The allowance is doing enormous work here, and that is the finding under
 test.** The same pair — Maiolini 4, Yau 19 — plays off 4 in a scramble and 12
-in an alternate shot. Three times the strokes for the same two men, purely from
+in an alternate shot. Three times the strokes for the same two golfers, purely from
 the format, which is why the format screen prints the figure on every option
 before it is chosen.
 
@@ -76,7 +76,7 @@ class PairsAllowanceTests(SimpleTestCase):
         self.assertEqual(player_own_ball_handicap(19, BEST_BALL_PCT), 16)
 
     def test_the_format_alone_triples_the_strokes(self):
-        """The finding to act on: the same two men, three times the strokes."""
+        """The finding to act on: the same two golfers, three times the strokes."""
         figures = {
             fmt: _pairs(self.PAIR, fmt).strokes for fmt in PAIRS_TABLES
         }
@@ -112,7 +112,7 @@ class PairsRoundingTests(SimpleTestCase):
 
     def test_override_beats_the_table(self):
         """A group's tradition beats the table, and the worked result is still
-        returned so the TD sees what he did."""
+        returned so the TD sees what they did."""
         a = _pairs([4, 19], 'scramble', override_pct=50)
         self.assertEqual(a.raw, Decimal('11.50'))
         self.assertEqual([c.pct for c in a.contributions], [50, 50])
@@ -182,7 +182,7 @@ class BestBallAllowanceTests(SimpleTestCase):
         self.assertEqual([c.pct for c in a.contributions], [85, 85])
 
     def test_a_three_man_best_ball_pair_works_unchanged(self):
-        """The odd-field way out: each of the three takes 85% of his own."""
+        """The odd-field way out: each of the three takes 85% of their own."""
         a = best_ball_allowance([4, 19, 12])
         self.assertEqual([c.course_handicap for c in a.contributions],
                          [4, 12, 19])

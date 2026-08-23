@@ -6,13 +6,13 @@
 /// The choice reaches further than any other answer in the wizard: it sets
 /// **how many numbers get entered per hole** and **what the handicap even is**.
 ///
-/// Two formats at four men, five at two
+/// Two formats at four golfers, five at two
 /// (docs/design-review/handoff-team-pairs/SPEC.md §4). **In pairs the
-/// allowance is doing enormous work**: the same two men — Maiolini 4, Yau 19 —
+/// allowance is doing enormous work**: the same two golfers — Maiolini 4, Yau 19 —
 /// play off 4 in a scramble and 12 in an alternate shot. Three times the
 /// strokes from the format alone, so the pair's OWN figure prints on every
 /// option before it is chosen. A TD picking Chapman because it sounds fun
-/// should see what it does to his field.
+/// should see what it does to their field.
 ///
 /// The ball-count controls **expand in place under the Shamble radio**. House
 /// rule from the Irish Rumble work: no game gets a second rules screen. There
@@ -33,8 +33,8 @@ class TeamFormatStep extends StatelessWidget {
   final int    teamSize;
   final String format;                    // scramble | shamble | best_ball | …
   /// The TD's own first pair, for the figures on the options. A generic
-  /// illustration proves nothing — his own two men and their two percentages
-  /// are the only numbers he will check. Null before the tees are set, and the
+  /// illustration proves nothing — their own two golfers and their two percentages
+  /// are the only numbers they will check. Null before the tees are set, and the
   /// options simply carry their percentage instead.
   final ({String name, List<int> handicaps})? samplePair;
   final String ballCountMode;
@@ -163,7 +163,7 @@ class TeamFormatStep extends StatelessWidget {
               'Alternate shot is the most generous format by a distance — '
               '${_figureFor('alternate_shot') ?? 12} strokes against a '
               "scramble's ${_figureFor('scramble') ?? 4}, for the same two "
-              'men. One ball means both mistakes count, and the allowance is '
+              'golfers. One ball means both mistakes count, and the allowance is '
               'right — but the round will score very differently.',
               warn: true,
             ),
@@ -188,7 +188,7 @@ class TeamFormatStep extends StatelessWidget {
           const SizedBox(height: 10),
           TeamRadioCard(
             title   : 'Shamble',
-            body    : 'Best drive, then everyone plays his own ball in. '
+            body    : 'Best drive, then everyone plays their own ball in. '
                       'Best two count.',
             selected: _isShamble,
             enabled : !locked,
@@ -240,7 +240,7 @@ class TeamFormatStep extends StatelessWidget {
             _isShamble
                 ? 'Allowance follows the average. Set on the handicap step, '
                   'from the tees you picked on step 2.'
-                : 'A three-man team fields a phantom 4th at the average of the '
+                : 'A team of three fields a phantom 4th at the average of the '
                   'three, so the ordinary 25/20/15/10 table applies and the '
                   'format is unchanged.',
           ),
@@ -248,7 +248,7 @@ class TeamFormatStep extends StatelessWidget {
           const TeamNote(
             'No phantom partner in pairs — in fours the phantom is a handicap '
             'device for a team that still hits four balls, and here it would '
-            'be an imaginary man taking half the shots. The field has to be '
+            'be an imaginary partner taking half the shots. The field has to be '
             'even.',
           ),
         if (locked) ...[

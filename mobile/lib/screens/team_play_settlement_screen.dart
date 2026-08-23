@@ -15,7 +15,7 @@
 /// Three rules meet here:
 ///   * **A tie is one prize**, drawn as one block with both teams inside it.
 ///     Two rows each reading $143.75 would hide that it was one prize.
-///   * **A three-man team splits three ways and takes more each** — the
+///   * **A team of three splits three ways and takes more each** — the
 ///     phantom 4th earned the strokes and cannot be paid.
 ///   * **Odd cents go to the team's highest course handicap**, so the pool
 ///     balances to zero rather than leaving an unexplained $71.89 next to

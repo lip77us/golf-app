@@ -46,11 +46,11 @@ List<int> groupSizes(int n) {
 /// ONE when the field is odd (docs/design-review/handoff-team-pairs/SPEC.md
 /// §3.1).
 ///
-/// The odd man is left visible as a group of one on purpose. There is no
-/// phantom partner to hide him behind — in fours the phantom is a handicap
+/// The odd golfer is left visible as a group of one on purpose. There is no
+/// phantom partner to hide them behind — in fours the phantom is a handicap
 /// device for a team that still hits four balls, and in pairs it would be an
-/// imaginary man taking half the shots in an alternate shot. So the field is
-/// blocked and the block NAMES him: the fix is about one man, and the TD needs
+/// imaginary partner taking half the shots in an alternate shot. So the field is
+/// blocked and the block NAMES them: the fix is about one golfer, and the TD needs
 /// to know which one is standing there.
 ///
 ///  n=12 → [2, 2, 2, 2, 2, 2]
@@ -71,7 +71,7 @@ List<int> pairSizes(int n) {
 ///  n= 6 → [4, 2]        one group of two pairs, one of a single pair
 ///  n=10 → [4, 4, 2]
 ///  n=12 → [4, 4, 4]
-///  n=13 → [4, 4, 4, 1]  the odd man, left visible so the block can name him
+///  n=13 → [4, 4, 4, 1]  the odd golfer, left visible so the block can name them
 List<int> pairPlayGroupSizes(int n) {
   if (n <= 0) return [];
   final pairs = n ~/ 2;
@@ -84,10 +84,10 @@ List<int> pairPlayGroupSizes(int n) {
 
 /// Split one playing group into its teams, by position.
 ///
-/// The first two men are pair 1 and the next two are pair 2 — the order the TD
+/// The first two golfers are pair 1 and the next two are pair 2 — the order the TD
 /// dragged them into on Groups & Tees, which is the same default the server
-/// applies. A three-man group in **best ball** is ONE team of three, the
-/// packet's odd-field way out and the only shape three men can legally take.
+/// applies. A three-golfer group in **best ball** is ONE team of three, the
+/// packet's odd-field way out and the only shape three golfers can legally take.
 List<List<T>> splitIntoPairs<T>(List<T> group, {bool bestBall = false}) {
   if (group.isEmpty) return [];
   if (group.length == 3 && bestBall) return [List<T>.from(group)];
@@ -105,7 +105,7 @@ List<List<T>> splitIntoPairs<T>(List<T> group, {bool bestBall = false}) {
 ///
 /// **A pair is complete at two.** In fours the phantom is a handicap device
 /// for a team that still hits four balls; in pairs it would be an imaginary
-/// man taking half the shots in an alternate shot, so there is never one at
+/// golfer taking half the shots in an alternate shot, so there is never one at
 /// any roster size. An odd field is a problem to fix, not a gap to pad — the
 /// Handicap step names the golfer standing there.
 ///

@@ -4,7 +4,7 @@
 ///
 /// The one thing that must not be quietly lost: **the pair's own figure shows
 /// on every option, before it is chosen.** A TD picking Chapman because it
-/// sounds fun should see that it more than doubles his field's strokes against
+/// sounds fun should see that it more than doubles their field's strokes against
 /// a scramble, and the argument only works if all five figures are on screen
 /// at once.
 library;

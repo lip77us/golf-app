@@ -1,7 +1,7 @@
 /// utils/team_allowance.dart
 /// ------------------------
 /// The Team Play allowance, computed on the client so the build-teams screen
-/// can show a team's figure move as the TD assigns men to it.
+/// can show a team's figure move as the TD assigns golfers to it.
 ///
 /// **`services/team_handicap.py` is the source of truth.** The server
 /// recomputes every figure and the board reads its answer; this exists only so
@@ -33,7 +33,7 @@ const Map<int, int> kShamblePctByBalls = {1: 75, 2: 85, 3: 95, 4: 100};
 ///
 /// **The allowance is doing enormous work here.** The same pair — Maiolini 4,
 /// Yau 19 — plays off 4 in a scramble and 12 in an alternate shot. Three times
-/// the strokes for the same two men, purely from the format, which is why the
+/// the strokes for the same two golfers, purely from the format, which is why the
 /// format screen prints the figure on EVERY option before it is chosen.
 ///
 /// Scotch and Chapman share a table, and that is the honest answer rather than
@@ -49,13 +49,13 @@ const Map<String, List<int>> kPairsTables = {
   'chapman'       : [60, 40],
 };
 
-/// Best ball is the ONE pairs format whose allowance is per golfer: each man
-/// plays his own strokes at 85% and the better net counts. The card reads
+/// Best ball is the ONE pairs format whose allowance is per golfer: each golfer
+/// plays their own strokes at 85% and the better net counts. The card reads
 /// `3 / 16`, not one figure.
 const int kBestBallPct = 85;
 
 /// The formats each team size may play. `scramble` is the only one both run,
-/// and its table is NOT shared — four men take 25/20/15/10 and two take 35/15.
+/// and its table is NOT shared — four golfers take 25/20/15/10 and two take 35/15.
 const Map<int, List<String>> kFormatsBySize = {
   4: ['scramble', 'shamble'],
   2: ['scramble', 'best_ball', 'alternate_shot', 'scotch', 'chapman'],
@@ -88,10 +88,10 @@ bool playsOneBall(String format) =>
 ///     happens every hole and a quota is available on top, off by default.
 ///   * **A rota** — alternate shot. Odd/even, set on the 1st tee, fixed for
 ///     eighteen. Not a quota: nothing to fall short of.
-///   * **Absent** — best ball and Chapman. Both men drive every hole with no
+///   * **Absent** — best ball and Chapman. Both golfers drive every hole with no
 ///     choice to record.
 ///
-/// Alternating pairs stays a FOURS rule: two men have no pairs to alternate,
+/// Alternating pairs stays a FOURS rule: two golfers have no pairs to alternate,
 /// and their alternate-shot rota is the `alternate_shot` format's own schedule.
 List<String> driveRulesFor(int teamSize, String format) {
   if (format == 'best_ball' || format == 'chapman') return const ['none'];
@@ -103,7 +103,7 @@ List<String> driveRulesFor(int teamSize, String format) {
 /// Whether the wizard shows a Drives step at all.
 ///
 /// **A step with nothing to set is not a step.** In best ball and Chapman both
-/// men drive every hole, so there is no drive to choose, no quota to count and
+/// golfers drive every hole, so there is no drive to choose, no quota to count and
 /// no penalty to apply — the page's whole content was a note saying so, which
 /// is a worse way to say it than not asking.
 ///
@@ -118,17 +118,17 @@ bool hasDriveStep(int teamSize, String format) {
 }
 
 /// The most drives one golfer can be asked for in a window: the window's holes
-/// divided between the men. Mirrors `TeamPlayConfig.max_drives_per_golfer`.
+/// divided between the golfers. Mirrors `TeamPlayConfig.max_drives_per_golfer`.
 ///
-/// Four men sharing nine holes top out at two each, and four each across
-/// eighteen. **Two men sharing the same nine top out at four each**, and nine
+/// Four golfers sharing nine holes top out at two each, and four each across
+/// eighteen. **Two golfers sharing the same nine top out at four each**, and nine
 /// each across eighteen — every hole spoken for, nothing left over.
 int maxDrivesPerGolfer(int teamSize, String driveRule) {
   final holes = driveRule == 'per_nine' ? 9 : 18;
   return (holes ~/ (teamSize < 1 ? 1 : teamSize)).clamp(1, 18);
 }
 
-/// One man's line on the worked card.
+/// One golfer's line on the worked card.
 class AllowanceLine {
   final int  courseHandicap;
   final int  pct;
@@ -147,7 +147,7 @@ class AllowanceLine {
   String get strokes => (hundredths / 100).toStringAsFixed(2);
 }
 
-/// The two numbers a TD needs: the one he plays with, and the one that
+/// The two numbers a TD needs: the one they play with, and the one that
 /// explains it.
 class TeamAllowanceResult {
   final int rounded;
@@ -168,10 +168,10 @@ class TeamAllowanceResult {
 /// inherited.
 int _roundHalfUp(int hundredths) => (hundredths + 50) ~/ 100;
 
-/// A three-man team fields a phantom 4th at the AVERAGE of its three real men.
+/// A team of three fields a phantom 4th at the AVERAGE of its three real golfers.
 /// Bellini 9, Kwan 15, Ortega 23 → 16.
 ///
-/// Four handicaps, so the ordinary table applies with no special three-man
+/// Four handicaps, so the ordinary table applies with no special three-golfer
 /// row. Dropping the table's bottom row instead would give 9 — a stroke TAKEN
 /// from a team already short a ball, which is backwards. The allowance follows
 /// the roster, not the number of balls hit.
@@ -279,9 +279,9 @@ TeamAllowanceResult teamAllowanceFor({
       overridePct: overridePct, phantomHandicap: phantomHandicap);
 }
 
-/// One golfer's whole-stroke figure when he plays his own ball — shamble and
+/// One golfer's whole-stroke figure when they play their own ball — shamble and
 /// best ball alike. Rounded PER GOLFER, unlike a team total, because it is the
-/// number he plays with.
+/// number they play with.
 int playerOwnBallHandicap(int courseHandicap, int pct) =>
     _roundHalfUp(courseHandicap * pct);
 
@@ -293,7 +293,7 @@ int shambleAllowancePct(double avgBallCount) {
   return kShamblePctByBalls[balls] ?? 85;
 }
 
-/// A shamble handicaps each golfer on his own ball, so the figure this returns
+/// A shamble handicaps each golfer on their own ball, so the figure this returns
 /// is a BALANCE number only — the sum of the four allowances, for the strip
 /// that shows one team against another. It is never subtracted from anything.
 TeamAllowanceResult shambleAllowance(

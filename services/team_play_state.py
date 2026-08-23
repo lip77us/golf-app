@@ -10,13 +10,13 @@ This module is where they meet the round.
 Two things it exists to get right
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 **The phantom has to be provisioned here, not by round setup.**  Team Play
-always sends EXPLICIT groups — step 6 is the TD assigning all 23 men by hand —
+always sends EXPLICIT groups — step 6 is the TD assigning all 23 golfers by hand —
 and ``services/round_setup`` deliberately does not pad an explicit group,
-because a 2-man multi-skins group would be distorted by a phantom.  Its
+because a 2-golfer multi-skins group would be distorted by a phantom.  Its
 auto-grouped phantom also carries a flat 36 handicap, which is the wrong number
 here by a distance: a Team Play phantom is the **average of the three real
-men**, and that average is what makes the ordinary 25/20/15/10 table apply with
-no special three-man row.
+golfers**, and that average is what makes the ordinary 25/20/15/10 table apply with
+no special three-golfer row.
 
 **A team is a Foursome.**  The team name is ``Foursome.name``; everything a
 Foursome has no field for — colour, the team figure and its raw sum, the drive
@@ -41,7 +41,7 @@ from services.team_play import (
 
 # Colour is assigned whether or not the TD renames the team, because it does
 # real work on the leaderboard and the scorecard: six team names, most of them
-# one syllable and all unfamiliar, and the colour block is how a man finds his
+# one syllable and all unfamiliar, and the colour block is how a golfer finds their
 # team without reading.  The packet's six come first, in its order.
 TEAM_COLOURS = [
     'Pine', 'Clay', 'Slate', 'Dune', 'Fern', 'Rust',
@@ -69,7 +69,7 @@ def _real_memberships(foursome, slot=None):
     The real golfers on a team, low handicap first.
 
     ``slot`` narrows to ONE team inside the playing group.  Omit it for a
-    four-man event, where the group is the team and there is nothing to narrow
+    four-golfer event, where the group is the team and there is nothing to narrow
     — and pass it for pairs, where a group of four holds two teams.
     """
     qs = foursome.memberships.filter(player__is_phantom=False)
@@ -101,7 +101,7 @@ def team_slots(foursome, config) -> list:
     """
     The teams inside this playing group, as slot numbers.
 
-    ``[1]`` for a four-man event — the group IS the team.  ``[1]`` or ``[1, 2]``
+    ``[1]`` for a four-golfer event — the group IS the team.  ``[1]`` or ``[1, 2]``
     for pairs, depending on whether the TD put one pair or two out together.
     """
     if not config.is_pairs:
@@ -118,17 +118,17 @@ def assign_slots(foursome, config) -> list:
 
     **The foursome is the playing group, and in pairs it holds two teams.**
     Four golfers go off one tee time with one scorer and one card, and the two
-    pairs on it are scored separately — so each golfer has to say which pair he
+    pairs on it are scored separately — so each golfer has to say which pair they
     is in.
 
     The default split is by the order the TD dragged them into on Groups &
-    Tees: the first two men are pair 1 and the next two are pair 2.  Once
+    Tees: the first two golfers are pair 1 and the next two are pair 2.  Once
     anybody has been moved off that default the split is the TD's and is left
     alone.
 
-    A three-man group in **best ball** defaults to ONE team of three rather
+    A three-golfer group in **best ball** defaults to ONE team of three rather
     than a pair plus a spare — that is the packet's odd-field way out, and it
-    is the only shape three men can legally take in a pairs event, so choosing
+    is the only shape three golfers can legally take in a pairs event, so choosing
     it is not a guess.
     """
     real = list(foursome.memberships.filter(player__is_phantom=False)
@@ -140,7 +140,7 @@ def assign_slots(foursome, config) -> list:
             m.save(update_fields=['team_play_slot'])
 
     if not config.is_pairs:
-        # A four-man event has one team per group. Anything else is a stale
+        # A four-golfer event has one team per group. Anything else is a stale
         # split left behind by a size change, and it would silently halve the
         # team.
         for m in real:
@@ -163,15 +163,15 @@ def assign_slots(foursome, config) -> list:
 @transaction.atomic
 def ensure_phantom_fourth(foursome, config=None):
     """
-    Give a three-man FOURSOME its phantom 4th, handicapped at the average of
-    the three real men — and take it away again if a fourth golfer lands.
+    Give a three-golfer FOURSOME its phantom 4th, handicapped at the average of
+    the three real golfers — and take it away again if a fourth golfer lands.
 
     Nobody is ever borrowed.  A golfer from another team would be hitting shots
-    for a team he is competing against, and every good one costs his own team
+    for a team they are competing against, and every good one costs their own team
     the pot; there is no version of that a TD can defend at the scoring table.
 
     **A pair never gets one.**  In fours the phantom is a handicap device for a
-    team that still hits four balls; in pairs it would be an imaginary man
+    team that still hits four balls; in pairs it would be an imaginary partner
     taking half the shots in an alternate shot.  An odd field is blocked
     instead, naming the golfer who has no partner — a ten-second fix that does
     not deserve a special case
@@ -198,7 +198,7 @@ def ensure_phantom_fourth(foursome, config=None):
         return None
 
     if len(real) != 3:
-        # Four men (or a team still being built) — no phantom, and remove a
+        # Four golfers (or a team still being built) — no phantom, and remove a
         # stale one so a team that just filled up stops carrying it.
         if existing:
             existing.delete()
@@ -248,7 +248,7 @@ def ensure_team_state(foursome, *, index=None, slot=1):
         state.colour = team_colour_for(index or foursome.group_number)
         state.save(update_fields=['colour'])
     # The colour is NOT written into Foursome.name. A team the TD never named
-    # is `Group N` — that is what he was shown in the wizard, and calling it
+    # is `Group N` — that is what they were shown in the wizard, and calling it
     # Pine on the hub is the app inventing a name nobody chose. The colour
     # still identifies the row on the board; it just is not the team's name.
     return state
@@ -340,9 +340,9 @@ def average_ball_count(foursome, config) -> Decimal:
 
 def compute_allowance(foursome, config, slot=None):
     """
-    The team's figure, worked on its own men.
+    The team's figure, worked on its own golfers.
 
-    A generic illustration proves nothing; his own four men and their four
+    A generic illustration proves nothing; their own four golfers and their four
     percentages are the only numbers a TD will check — which is why this
     returns the contributions, not just the total.
     """
@@ -367,7 +367,7 @@ def compute_allowance(foursome, config, slot=None):
         )
 
     if config.counts_every_ball:
-        # Best ball — 85% of each man's own, and the better net counts. Not a
+        # Best ball — 85% of each golfer's own, and the better net counts. Not a
         # team figure at all; the sum is the balance strip's number.
         return best_ball_allowance(
             handicaps, override_pct=config.allowance_override_pct)
@@ -396,7 +396,7 @@ def allowance_label(foursome, config) -> dict:
 
     if config.counts_every_ball:
         # Best ball is the ONE pairs format whose allowance is per golfer: each
-        # man plays his own strokes and the better net counts. The card reads
+        # golfer plays their own strokes and the better net counts. The card reads
         # `3 / 16`, not one figure.
         return {
             'kind' : 'own_ball_pct',
@@ -520,7 +520,7 @@ def drive_state(foursome, config, slot=1) -> dict:
 
     req = window_requirement(config, len(ids))
 
-    # The card names the man — "Maiolini owes 1", not a player id. The pure
+    # The card names the golfer — "Maiolini owes 1", not a player id. The pure
     # tracker in services/team_play deals in ids because it has no DB; the
     # names are attached here, where the memberships already are.
     def _named(window):
@@ -547,7 +547,7 @@ def drive_state(foursome, config, slot=1) -> dict:
 
 def short_label(player) -> str:
     """
-    What a golfer is called in one word on a card — his surname.
+    What a golfer is called in one word on a card — their surname.
 
     The two tee sentences sit on the card, where a full name pushes the line
     onto two rows and reads nothing like the way a pair talks: *Maiolini tees*,
@@ -556,7 +556,7 @@ def short_label(player) -> str:
 
     Not ``Player.short_name``: that is the scorecard's five-character column
     label and comes out as initials (`AM`), which is a grid header rather than
-    something you say to a man on a tee.
+    something you say to a golfer on a tee.
     """
     full = (player.name or '').strip()
     return full.split()[-1] if full else ''
@@ -661,7 +661,7 @@ def team_name(foursome, config, real=None, slot=1) -> str:
     What the team is called before the TD names it.
 
     **A foursome is `Group N`.**  Four surnames fit nowhere and a colour the TD
-    never chose is one more thing on screen that does not help him.
+    never chose is one more thing on screen that does not help them.
 
     **A pair is its two surnames** — `Maiolini & Yau`.  That is not the app
     inventing a name: it is the only thing anybody calls a pair, two fit on a
@@ -699,7 +699,7 @@ def apply_default_name(foursome, config, state=None, slot=1):
     pairs share one. The tee sheet and the round hub name the group; the board
     and the card name the pair.
 
-    Only while ``name_is_default``: the moment the TD types his own name over
+    Only while ``name_is_default``: the moment the TD types their own name over
     it, a roster change stops dragging the name along with it.
 
     A foursome is untouched.  `Group N` is a label rather than a name, and
@@ -741,7 +741,7 @@ def _pair_surnames(foursome, real=None, slot=1):
 def team_dict(foursome, config, slot=1) -> dict:
     """One TEAM, as every Team Play surface reads it.
 
-    A four-man event has one of these per playing group. Pairs have one per
+    A four-golfer event has one of these per playing group. Pairs have one per
     slot — two teams sharing a tee time, a scorer and a card, scored apart."""
     real      = _real_memberships(foursome, slot)
     phantom   = _phantom_membership(foursome) if slot == 1 else None
@@ -805,7 +805,7 @@ def team_dict(foursome, config, slot=1) -> dict:
         'seats_open'        : max(0, size - filled),
         'members'           : members,
         # Published once the team is full at ITS size — two for a pair. A team
-        # still being built has no figure, because moving one man changes it.
+        # still being built has no figure, because moving one golfer changes it.
         'team_handicap'     : allowance.strokes if filled >= size else None,
         'team_handicap_raw' : str(allowance.raw),
         'allowance'         : allowance_label(foursome, config),
@@ -825,15 +825,15 @@ def field_blocking(teams, config) -> list:
 
     **Pairs need an even field**, and there is no phantom to paper over an odd
     one — in fours the phantom is a handicap device for a team that still hits
-    four balls; in pairs it would be an imaginary man taking half the shots in
+    four balls; in pairs it would be an imaginary partner taking half the shots in
     an alternate shot.  So the block is plain, and it **names the golfer** who
-    has no partner rather than reporting a count: the fix is about one man and
+    has no partner rather than reporting a count: the fix is about one golfer and
     the TD needs to know which one is standing there.
 
     Two kinds:
 
     ``unpaired``    a team of one.  Three ways out, offered on the block —
-                    add a golfer, take him out, or let one team play three.
+                    add a golfer, take them out, or let one team play three.
                     **The third is best-ball only**: a third ball is just
                     another option to count, alternate shot and Chapman cannot
                     honour it at all, and in a scramble it is a straight
@@ -893,7 +893,7 @@ def team_play_summary(tournament) -> dict:
 
     round_obj = tournament.rounds.order_by('round_number').first()
     foursomes = list(round_obj.foursomes.order_by('group_number')) if round_obj else []
-    # One row per TEAM. A four-man group is one; a pairs group of four is two,
+    # One row per TEAM. A four-golfer group is one; a pairs group of four is two,
     # sharing the tee time and the card and scored apart.
     teams     = [team_dict(f, config, slot)
                  for f in foursomes for slot in team_slots(f, config)]

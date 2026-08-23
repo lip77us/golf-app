@@ -9,8 +9,8 @@
 /// worked will not trust it.
 ///
 /// So the screen does not ask "what allowance". It **states the allowance the
-/// chosen format uses**, shows it applied to his OWN teams, and lets him
-/// override the whole thing with one number if his group has its own
+/// chosen format uses**, shows it applied to their OWN teams, and lets them
+/// override the whole thing with one number if their group has its own
 /// tradition. Presenting a table as an open question invites a guess.
 library;
 
@@ -22,13 +22,13 @@ import '../section_card.dart';
 import 'team_play_bits.dart';
 
 /// One team as this screen needs it — enough to work the allowance and name
-/// the men it was worked on.
+/// the golfers it was worked on.
 class TeamHandicapPreview {
   /// `Group 1` … `Group 6`. Teams name themselves from the round hub once
-  /// they exist; the wizard has no business inventing six names for men who
+  /// they exist; the wizard has no business inventing six names for golfers who
   /// have not turned up yet.
   final String name;
-  /// Real men only, in any order — the screen sorts them, because the
+  /// Real golfers only, in any order — the screen sorts them, because the
   /// percentage is positional and a manual order would be a lie.
   final List<({int playerId, String name, int courseHandicap})> members;
 
@@ -85,7 +85,7 @@ class TeamHandicapStep extends StatelessWidget {
 
   int get _shamblePct => shambleAllowancePct(avgBallCount);
 
-  /// The percentage each golfer takes of his own, for the own-ball formats.
+  /// The percentage each golfer takes of their own, for the own-ball formats.
   int get _ownBallPct => format == 'best_ball' ? kBestBallPct : _shamblePct;
 
   /// The table this (size, format) states rather than asks.
@@ -95,11 +95,11 @@ class TeamHandicapStep extends StatelessWidget {
 
   TeamAllowanceResult _allowanceFor(TeamHandicapPreview team) {
     final hcaps = team.members.map((m) => m.courseHandicap).toList();
-    // A three-man FOURSOME is handicapped as four: the phantom sorts into the
+    // A three-golfer FOURSOME is handicapped as four: the phantom sorts into the
     // order like anyone else and takes its percentage like anyone else, so the
     // team's figure comes from the ordinary table with no special row.
     //
-    // **A pair never gets a phantom.** It would be an imaginary man taking
+    // **A pair never gets a phantom.** It would be an imaginary partner taking
     // half the shots in an alternate shot; an odd field is blocked instead.
     final phantom = (!_isPairs && hcaps.length == 3)
         ? phantomCourseHandicap(hcaps) : null;
@@ -138,7 +138,7 @@ class TeamHandicapStep extends StatelessWidget {
   String get _allowanceBlurb {
     if (!_isOneBall) {
       final tail = format == 'best_ball'
-          ? ' — his own ball, and the better net counts.'
+          ? ' — their own ball, and the better net counts.'
           : ' — it tracks the ball count, which averages '
             '${avgBallCount.toStringAsFixed(1)} a hole.';
       return '$_ownBallPct% of each golfer\u2019s own course handicap from '
@@ -155,7 +155,7 @@ class TeamHandicapStep extends StatelessWidget {
       return '${_table.first}% of the low handicap and ${_table.last}% of the '
              'high, from the $teeName tees.';
     }
-    return 'The standard allowance for a four-man scramble, applied to course '
+    return 'The standard allowance for a four-golfer scramble, applied to course '
            'handicap from the $teeName tees.';
   }
 
@@ -165,8 +165,8 @@ class TeamHandicapStep extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
         // A golfer with no partner is a broken tournament, and it is the one
-        // thing Next waits on. The block names the man, because the fix is
-        // about one man and the TD needs to know which one is standing there.
+        // thing Next waits on. The block names the golfer, because the fix is
+        // about one golfer and the TD needs to know which one is standing there.
         if (problems.isNotEmpty) ...[
           for (final problem in problems) ...[
             TeamNote(problem, warn: true),
@@ -182,16 +182,16 @@ class TeamHandicapStep extends StatelessWidget {
                      style: Halved.body(color: Halved.muted)),
                 const SizedBox(height: 8),
                 const _WayOut('Add a golfer',
-                    'The usual answer — partner him yourself, or add anyone '
+                    'The usual answer — partner them yourself, or add anyone '
                     'from My Golfers.'),
-                const _WayOut('Take him out',
+                const _WayOut('Take them out',
                     'He sits out, or plays a casual round alongside the '
                     'tournament.'),
                 _WayOut('Let one team play three',
                     threeBallAvailable
                         ? 'Allowed in best ball — edit the group sizes so one '
-                          'team has three. Each man still plays off '
-                          '$kBestBallPct% of his own.'
+                          'team has three. Each golfer still plays off '
+                          '$kBestBallPct% of their own.'
                         : 'Best ball only. A third ball is another option to '
                           'count — in alternate shot and Chapman it cannot '
                           'work at all, and in a scramble it is a straight '
@@ -204,7 +204,7 @@ class TeamHandicapStep extends StatelessWidget {
           const TeamNote(
             'No phantom partner. In fours the phantom is a handicap device for '
             'a team that still hits four balls. In pairs it would be an '
-            'imaginary man taking half the shots.',
+            'imaginary partner taking half the shots.',
           ),
           const SizedBox(height: 16),
         ],
@@ -216,7 +216,7 @@ class TeamHandicapStep extends StatelessWidget {
           body : _isOneBall
               ? "${_isPairs ? 'Pair' : 'Team'} handicap comes off the "
                 "${_isPairs ? "pair's" : "team's"} gross."
-              : "Each golfer plays his own ball off his own strokes.",
+              : "Each golfer plays their own ball off their own strokes.",
           selected: !_isGross,
           onTap   : () => onHandicapMode('net'),
         ),
@@ -253,7 +253,7 @@ class TeamHandicapStep extends StatelessWidget {
 
                 const SizedBox(height: 14),
                 // A group's tradition beats the table — and the screen keeps
-                // showing the worked result so the TD sees what he did.
+                // showing the worked result so the TD sees what they did.
                 SwitchListTile.adaptive(
                   contentPadding: EdgeInsets.zero,
                   value: overridePct != null,
@@ -263,7 +263,7 @@ class TeamHandicapStep extends StatelessWidget {
                   title: Text('Use my own percentage instead',
                       style: Halved.body(weight: FontWeight.w600)),
                   subtitle: Text(
-                    'One flat number applied to ${_isPairs ? 'both men'
+                    'One flat number applied to ${_isPairs ? 'both golfers'
                         : 'all four'}.',
                     style: Halved.body(color: Halved.muted)
                         .copyWith(fontSize: 13),
@@ -310,7 +310,7 @@ class TeamHandicapStep extends StatelessWidget {
                   _isPairs
                       ? 'Allowance per pair. Two handicaps do not average out '
                         'the way four do — the TD is not being told what to '
-                        'do, he is being told what he just did.'
+                        'do, they are being told what they just did.'
                       : 'Allowance per team, across the field.',
                   style: Halved.body(color: Halved.muted),
                 ),
@@ -401,8 +401,8 @@ class _PctChip extends StatelessWidget {
       );
 }
 
-/// The card that shows a TD his own four men, their four percentages and the
-/// sum — the only numbers he will check.
+/// The card that shows a TD their own four golfers, their four percentages and the
+/// sum — the only numbers they will check.
 class _WorkedTeam extends StatelessWidget {
   final TeamHandicapPreview team;
   final TeamAllowanceResult allowance;

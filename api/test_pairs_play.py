@@ -1,7 +1,7 @@
 """
 api/test_pairs_play.py
 ----------------------
-Pairs Play — two-man teams (docs/design-review/handoff-team-pairs/SPEC.md).
+Pairs Play — two-golfer teams (docs/design-review/handoff-team-pairs/SPEC.md).
 
 Pairs are Foursome Play with the size set to two: the same wizard, the same
 leaderboard, the same pool, the same settlement. Only two steps behave
@@ -127,7 +127,7 @@ class TeamSizeTests(PairsBase):
             ['scramble', 'best_ball', 'alternate_shot', 'scotch', 'chapman'])
 
     def test_a_two_man_shamble_is_refused(self):
-        """There is no two-man shamble. Nonsense rather than a preference, so
+        """There is no two-golfer shamble. Nonsense rather than a preference, so
         it is refused rather than silently accepted."""
         r = self._configure('shamble')
         self.assertEqual(r.status_code, 400)
@@ -213,7 +213,7 @@ class PairsTeamTests(PairsBase):
 
     def test_no_phantom_partner_ever(self):
         """In fours the phantom is a handicap device for a team that still hits
-        four balls. In pairs it would be an imaginary man taking half the shots
+        four balls. In pairs it would be an imaginary partner taking half the shots
         in an alternate shot."""
         self._configure('alternate_shot')
         for team in self._summary()['teams']:
@@ -306,7 +306,7 @@ class OddFieldTests(PairsBase):
     ROSTER = PAIRS + [[('Dave Kwan', 15)]]
 
     def test_the_block_names_the_unpaired_golfer(self):
-        """The fix is about one man, so the block says which one rather than
+        """The fix is about one golfer, so the block says which one rather than
         reporting a count."""
         self._configure('scramble')
         blocking = self._summary()['blocking']
@@ -347,7 +347,7 @@ class ThreeManPairTests(PairsBase):
                            ('Dave Kwan', 15)]]
 
     def test_three_men_outside_best_ball_leave_one_unpaired(self):
-        """Three golfers in a playing group are a pair and a man on his own —
+        """Three golfers in a playing group are a pair and a golfer on their own —
         only best ball can make them one team of three."""
         self._configure('chapman')
         blocking = self._summary()['blocking']
@@ -379,7 +379,7 @@ class DriveControlTests(PairsBase):
                          ['none', 'per_nine', 'per_eighteen'])
 
     def test_a_pairs_quota_is_two_men_s_worth_not_four(self):
-        """One each per nine is TWO of nine, seven free — two men and eighteen
+        """One each per nine is TWO of nine, seven free — two golfers and eighteen
         holes is a lot of slack, which is why one each per nine is the usual
         rule."""
         self._configure('scramble', drive_rule='per_nine', drives_required=1)
@@ -389,9 +389,9 @@ class DriveControlTests(PairsBase):
         self.assertEqual(drive['floating'], 0)   # no phantom to cover
 
     def test_a_pair_may_be_asked_for_four_drives_a_nine(self):
-        """The ceiling is the window's holes divided between the men, and it
-        scales with the size: four men sharing nine top out at two each, two
-        men at FOUR each. The shipped 2-and-4 was four men's answer
+        """The ceiling is the window's holes divided between the golfers, and it
+        scales with the size: four golfers sharing nine top out at two each, two
+        golfers at FOUR each. The shipped 2-and-4 was four golfers' answer
         hardcoded."""
         self._configure('scramble', drive_rule='per_nine', drives_required=4)
         drive = self._team(self._summary(), 1)['drive']
@@ -462,7 +462,7 @@ class DriveControlTests(PairsBase):
                          'Yau plays the second shot, then alternate.')
 
     def test_best_ball_and_chapman_have_no_drive_control(self):
-        """Both men drive every hole with no choice to record."""
+        """Both golfers drive every hole with no choice to record."""
         for fmt in ('best_ball', 'chapman'):
             self._configure(fmt, drive_rule='per_nine')
             summary = self._summary()
@@ -704,7 +704,7 @@ class WizardOrderTests(TestCase):
     Every other test in this file builds its Foursomes by hand, which skips the
     two calls the wizard actually makes and in the order it makes them:
 
-        POST /rounds/<id>/setup/     explicit 2-man groups, auto_setup_games
+        POST /rounds/<id>/setup/     explicit 2-golfer groups, auto_setup_games
         POST /tournaments/<id>/team-play/setup/   team_size=2, best_ball
 
     The config does not exist yet during the first call, so anything that pads
@@ -762,7 +762,7 @@ class WizardOrderTests(TestCase):
 
     def test_no_phantom_lands_on_a_pair(self):
         """In fours the phantom is a handicap device for a team that still hits
-        four balls. In pairs it would be an imaginary man taking half the
+        four balls. In pairs it would be an imaginary partner taking half the
         shots, so there must not be one anywhere."""
         r = self._run_wizard()
         self.assertEqual(r.status_code, 200, r.content)
@@ -806,7 +806,7 @@ class WizardOrderTests(TestCase):
             foursome__round=self.round, player__is_phantom=True).exists())
 
     def test_a_three_man_best_ball_pair_gets_no_phantom_either(self):
-        """The odd-field way out is a real group of three, not two men and an
+        """The odd-field way out is a real group of three, not two golfers and an
         imaginary one — best ball simply counts the best of three balls."""
         # 3 + 3 + 2 + 2 + 2 = 12.
         sizes, groups = [3, 3, 2, 2, 2], []
@@ -899,7 +899,7 @@ class PlayingGroupTests(PairsBase):
     board (docs/design-review/handoff-team-pairs/SPEC.md §3).
 
     The field here is six golfers in two groups: one carrying two pairs, one
-    carrying a single pair, which is exactly the shape a six-man event takes.
+    carrying a single pair, which is exactly the shape a six-golfer event takes.
     """
 
     ROSTER = [

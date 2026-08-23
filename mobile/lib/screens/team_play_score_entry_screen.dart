@@ -20,7 +20,7 @@
 ///   * **One ball** — scramble, alternate shot, Scotch, Chapman. The team
 ///     makes ONE number, so there is one row: TEAM. Its picker is always open,
 ///     because there is nothing to choose between.
-///   * **Own ball** — shamble (four balls) and best ball (two). One row a man;
+///   * **Own ball** — shamble (four balls) and best ball (two). One row a golfer;
 ///     tap one to aim the picker, and the counting scores tint while the rest
 ///     grey as they land.
 ///
@@ -36,7 +36,7 @@
 ///   * **A rota** — alternate shot. No choice; the card NAMES the tee, on
 ///     every hole without exception, because a pair that loses track plays a
 ///     hole out of order and the round is gone.
-///   * **Absent** — best ball and Chapman. Both men drive every hole.
+///   * **Absent** — best ball and Chapman. Both golfers drive every hole.
 ///
 /// It never blocks the tap — the team may knowingly take the shortfall, and by
 /// default a shortfall costs nothing.
@@ -164,7 +164,7 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
     _load();
   }
 
-  /// The golfer the picker is aimed at: the tap, else the first man still
+  /// The golfer the picker is aimed at: the tap, else the first golfer still
   /// without a score, else the first row. Auto-advancing to whoever is missing
   /// is what makes four entries four taps.
   int? _activeGolfer(TeamPlayCardTeam team) {
@@ -315,7 +315,7 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
     final n = card.shamble?.count ?? 2;
     return (
       'Shamble',
-      'Best drive, then everyone plays his own ball in. '
+      'Best drive, then everyone plays their own ball in. '
       'The ${n == 1 ? 'lowest net counts' : '$n lowest nets count'}; '
       'the rest are recorded and ignored.',
     );
@@ -339,9 +339,6 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
             team    : team,
             hole    : _hole!,
             busy    : _busy,
-            // Only worth a heading when there is another team to tell it
-            // apart from.
-            showHeading: _teams(card).length > 1,
             needsRota  : _needsRota(team),
             selected   : card.isOneBall ? null : _activeGolfer(team),
             onSetRota  : (pairs) => _setRota(team.slot, pairs),
@@ -369,14 +366,13 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
 ///
 /// **A pairs playing group stacks two of these.** They share the hole header,
 /// the rules banner and the hole navigation, because those belong to the group
-/// — four men walking one course together — while everything in here belongs
+/// — four golfers walking one course together — while everything in here belongs
 /// to the pair.
 class _TeamBlock extends StatelessWidget {
   final TeamPlayCard     card;
   final TeamPlayCardTeam team;
   final int  hole;
   final bool busy;
-  final bool showHeading;
   final bool needsRota;
   final int? selected;
 
@@ -389,67 +385,99 @@ class _TeamBlock extends StatelessWidget {
 
   const _TeamBlock({
     required this.card, required this.team, required this.hole,
-    required this.busy, required this.showHeading, required this.needsRota,
+    required this.busy, required this.needsRota,
     required this.selected,
     required this.onSetRota, required this.onPickDrive,
     required this.onSetTeam, required this.onSelect,
     required this.onSetGolfer, required this.onGo,
   });
 
+  /// `E` / `+3` / `-2` — the app's to-par label, the same one the board prints.
+  static String _toPar(int diff) =>
+      diff == 0 ? 'E' : (diff > 0 ? '+$diff' : '$diff');
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (showHeading) ...[
-          Row(children: [
-            TeamColourBlock(colour: team.colour, size: 10),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(team.name,
-                  style: theme.textTheme.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-            ),
-            if (team.teamStrokes > 0)
-              Text('gets ${team.teamStrokes}',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant)),
-          ]),
-          const SizedBox(height: 8),
-        ],
+    final net   = team.round.netToPar;
 
-        // The rota is set once, before the first score, and then fixed. Until
-        // it is, this is the only thing on the block that matters — an
-        // alternate shot with no agreed tee order is not a round.
-        if (needsRota) ...[
-          _RotaSetup(team: team, busy: busy, onSet: onSetRota),
-          const SizedBox(height: 12),
-        ],
-
-        // Drawn only when the format has something to say about the tee. With
-        // no drive requirement there is nothing to record, so nothing is asked.
-        if (!needsRota &&
-            (team.showsDriveChips ||
-             team.driveControl == 'rota' ||
-             team.teeNote.isNotEmpty)) ...[
-          _DriveStrip(card: card, team: team, hole: hole, onPick: onPickDrive),
-          const SizedBox(height: 12),
-        ],
-
-        // The rows sit on WHITE, matching Skins: an unscored golfer is plain
-        // paper, and only the row being entered is tinted. On the app's sage
-        // surface every row looked half-greyed.
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: theme.colorScheme.outlineVariant),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ONE header row for the whole block. It used to be three — the
+          // team heading, the score row's own label with a `gets N` chip, and
+          // the scorecard's "Scorecard" bar — each naming the same team and
+          // between them eating a third of the screen. Name on the left, what
+          // the round is worth and the number just made on the right.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+            child: Row(children: [
+              TeamColourBlock(colour: team.colour, size: 10),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(team.name,
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+              ),
+              if (team.round.thru > 0) ...[
+                // Net only. Gross to par is not a number anybody plays for
+                // here — on an own-ball format it is an aggregate against a
+                // multiplied par, and on a one-ball format the net is the same
+                // figure shifted by a constant.
+                Text(
+                  'thru ${team.round.thru}'
+                  '${net == null ? '' : ' · Net ${_toPar(net)}'}',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+                const SizedBox(width: 10),
+              ],
+              if (card.isOneBall)
+                _ScoreBox(
+                  score     : team.teamScore,
+                  active    : true,
+                  strokeHere: team.teamStrokes > 0,
+                )
+              else if ((team.shamble?.count ?? 0) > 0)
+                Text('${team.shamble!.count} of '
+                     '${team.shamble!.rows.length} count',
+                     style: theme.textTheme.labelSmall
+                         ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            ]),
           ),
-          clipBehavior: Clip.antiAlias,
+
+          // The rota is set once, before the first score, and then fixed.
+          // Until it is, this is the only thing on the block that matters — an
+          // alternate shot with no agreed tee order is not a round.
+          if (needsRota)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+              child: _RotaSetup(team: team, busy: busy, onSet: onSetRota),
+            ),
+
+          // Drawn only when the format has something to say about the tee.
+          // With no drive requirement there is nothing to record, so nothing
+          // is asked.
+          if (!needsRota &&
+              (team.showsDriveChips ||
+               team.driveControl == 'rota' ||
+               team.teeNote.isNotEmpty))
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+              child: _DriveStrip(
+                  card: card, team: team, hole: hole, onPick: onPickDrive),
+            ),
+
           // Nothing is tappable while a save is in flight — two taps on one
           // hole would race each other's reload.
-          child: IgnorePointer(
+          IgnorePointer(
             ignoring: busy,
             child: card.isOneBall
                 ? _TeamScoreRow(
@@ -465,19 +493,20 @@ class _TeamBlock extends StatelessWidget {
                     onSet   : onSetGolfer,
                   ),
           ),
-        ),
 
-        const SizedBox(height: 16),
-        // The card so far, under the entry — the same place every other score
-        // screen keeps its by-hole grid.
-        _CardScorecard(
-          card    : card,
-          team    : team,
-          hole    : hole,
-          onGo    : onGo,
-          golferId: card.isOneBall ? null : selected,
-        ),
-      ],
+          // The card so far, in the SAME container as the entry rather than a
+          // section of its own. It is the same team, the same hole strip and
+          // the same colour — splitting it off bought a second border and a
+          // second title and said nothing new.
+          _CardScorecard(
+            card    : card,
+            team    : team,
+            hole    : hole,
+            onGo    : onGo,
+            golferId: card.isOneBall ? null : selected,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -538,11 +567,6 @@ class _HoleHeader extends StatelessWidget {
       // Stated on EVERY hole, per the packet — it is the one piece of the
       // shamble's rule that is operative rather than reference, so it stays up
       // here even though the rule itself moved to the bottom.
-      // Stated on every hole. Under an escalating shamble count it changes at
-      // 7 and again at 13, which is exactly why it is stated — and best ball's
-      // `1 of 2 counts` settles the same question at the green.
-      if (card.shamble != null)
-        '${card.shamble!.count} of ${card.shamble!.rows.length} count',
     ];
     return Container(
       width: double.infinity,
@@ -568,7 +592,7 @@ class _HoleHeader extends StatelessWidget {
 
 /// A chip per golfer, the pips on the chip, and the consequence stated beside
 /// it. Its own control because it is its own question — the score belongs to
-/// the team, and hanging it off a man's row would say otherwise.
+/// the team, and hanging it off a golfer's row would say otherwise.
 ///
 /// **The same control does three different jobs.** A scramble records
 /// compliance; Scotch issues an instruction and answers with a sentence; an
@@ -715,7 +739,7 @@ class _DriveStrip extends StatelessWidget {
           if (w.owed > 0 && (w.tight || w.impossible)) ...[
             const SizedBox(height: 8),
             // The consequence in a sentence, on the tee — the moment a quota
-            // becomes unsatisfiable is invisible to four men who have had a
+            // becomes unsatisfiable is invisible to four golfers who have had a
             // few. It never blocks the tap.
             Text(
               w.impossible
@@ -736,14 +760,14 @@ class _DriveStrip extends StatelessWidget {
 /// Setting the rota, on the 1st tee, once
 /// (docs/design-review/handoff-team-pairs/SPEC.md §5.2).
 ///
-/// **The app does not derive it from handicap.** The men decide in ten
+/// **The app does not derive it from handicap.** The golfers decide in ten
 /// seconds, it is the only part of the rule anyone enjoys, and a computed
 /// order would be overridden on the spot. Then it is fixed for eighteen — a
 /// rota that can be re-cut mid-round is not a rota, and the server refuses a
 /// second POST for exactly that reason.
 ///
-/// Two men → who tees the odd holes, two ways.
-/// Four men → the two driving pairs, three ways to split four into two and two.
+/// Two golfers → who tees the odd holes, two ways.
+/// Four golfers → the two driving pairs, three ways to split four into two and two.
 class _RotaSetup extends StatelessWidget {
   final TeamPlayCardTeam team;
   final bool busy;
@@ -772,7 +796,7 @@ class _RotaSetup extends StatelessWidget {
            [[o[a].playerId, o[b].playerId], [o[c].playerId, o[d].playerId]]),
       ];
     }
-    // Three men run AB / BC / AC — two drivers every hole, each sitting out
+    // Three golfers run AB / BC / AC — two drivers every hole, each sitting out
     // every third, which is as even as three into two goes.
     if (o.length == 3) {
       return [
@@ -965,10 +989,14 @@ class _TeamScoreRow extends StatelessWidget {
     final theme = Theme.of(context);
     final box   = theme.colorScheme.primary;
     final par   = card.par ?? 4;
-    final label = teamName.isEmpty ? 'Team' : teamName;
 
-    // Always open: four men make one number, so there is nothing to choose
+    // Always open: the team makes one number, so there is nothing to choose
     // between and no reason to make the TD tap a row first.
+    //
+    // **No header of its own.** The team's name, its score box and its
+    // to-par line all live on the block's single header row — this used to
+    // repeat the name and add a `gets N` chip, which made three header rows
+    // per team saying overlapping things.
     return Container(
       decoration: BoxDecoration(
         color: box.withValues(alpha: 0.10),
@@ -982,39 +1010,6 @@ class _TeamScoreRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(children: [
-              Expanded(
-                child: Row(children: [
-                  Text(label,
-                      style: theme.textTheme.bodyLarge
-                          ?.copyWith(fontWeight: FontWeight.w600)),
-                  // "gets N" is the ROUND's figure, as it is on every other
-                  // card — how many strokes this team has all day. Which HOLES
-                  // carry one is the dot's job.
-                  if ((team.round.allowance ?? 0) > 0) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text('gets ${team.round.allowance}',
-                          style: theme.textTheme.labelSmall),
-                    ),
-                  ],
-                ]),
-              ),
-              _ScoreBox(
-                score     : team.teamScore,
-                active    : true,
-                strokeHere: team.teamStrokes > 0,
-              ),
-            ]),
-          ),
           InlineScorePicker(
             // The team's strokes ARE passed, so the strip anchors on net par
             // and the handicap dots appear on the holes the team gets one.
@@ -1035,7 +1030,7 @@ class _TeamScoreRow extends StatelessWidget {
   }
 }
 
-// ── Shamble: four rows, the active one open ─────────────────────────────────
+// ── Own ball: a row a golfer, the active one open ───────────────────────────
 
 class _ShambleRows extends StatelessWidget {
   final TeamPlayCardTeam team;
@@ -1093,11 +1088,11 @@ class _ShambleRows extends StatelessWidget {
   }
 }
 
-/// One golfer's line: name, his strokes, his gross, and whether it counted.
+/// One golfer's line: name, their strokes, their gross, and whether it counted.
 ///
 /// The counting scores tint and the rest grey, live, as they are entered —
-/// two men's cards do nothing on a given hole, and a man who shot 5 needs to
-/// see instantly that his 5 was not used or the total looks wrong and someone
+/// two golfers' cards do nothing on a given hole, and a golfer who shot 5 needs to
+/// see instantly that their 5 was not used or the total looks wrong and someone
 /// re-enters it.
 class _GolferLine extends StatelessWidget {
   final TeamPlayShambleRow row;
@@ -1137,22 +1132,10 @@ class _GolferLine extends StatelessWidget {
                   ),
                 ),
               ),
-              // "gets N" is his figure for the ROUND — course handicap at the
-              // shamble's allowance — matching every other card. Which holes
-              // carry a stroke is the dots' job, on the box and on the grid.
-              if (row.handicap > 0) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text('gets ${row.handicap}',
-                      style: theme.textTheme.labelSmall),
-                ),
-              ],
+              // No "gets N" chip. The dots on the grid below already say
+              // where the strokes fall, which is the question anybody
+              // standing on a tee is actually asking — the round total
+              // restates it in a place nobody plays off.
               if (counts && scored) ...[
                 const SizedBox(width: 8),
                 Icon(Icons.check_circle,
@@ -1243,18 +1226,14 @@ class _CardScorecard extends StatelessWidget {
     required this.onGo, required this.golferId,
   });
 
-  /// `E` / `+3` / `-2` — the app's to-par label, the same one the board
-  /// prints. The raw totals are on the OUT / IN cells, where a scorecard puts
-  /// them.
-  static String _toPar(int diff) =>
-      diff == 0 ? 'E' : (diff > 0 ? '+$diff' : '$diff');
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     if (card.pars.isEmpty) return const SizedBox.shrink();
 
     final scores = team.round.byHole;
+    // The label on the score line. On a one-ball format the line IS the team,
+    // and the header two rows up has already named it, so `Team` is the right
+    // word for the grid's own column.
     final name = golferId == null
         ? 'Team'
         : (team.shamble?.rows
@@ -1265,31 +1244,9 @@ class _CardScorecard extends StatelessWidget {
                 .last ??
             'Team');
 
-    // Taken from the server, not recomputed here. A shamble's par is
-    // multiplied by the ball count — best-2 on a par 4 is a par of 8 — and a
-    // client summing `pars` alone is out by a whole par a hole, which is how
-    // this line came to read "+57" through ten.
-    final net = team.round.netToPar;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: [
-          Expanded(child: Text('Scorecard',
-              style: theme.textTheme.titleSmall
-                  ?.copyWith(fontWeight: FontWeight.bold))),
-          if (team.round.thru > 0)
-            // Net only. Gross to par is not a number anybody plays for here —
-            // on a shamble it is a two-ball aggregate against a doubled par,
-            // and on a scramble the net is the same figure shifted by a
-            // constant.
-            Text(
-              'thru ${team.round.thru}'
-              '${net == null ? '' : ' · Net ${_toPar(net)}'}',
-              style: theme.textTheme.labelSmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-        ]),
         const SizedBox(height: 6),
         TeamScorecard(
           pars         : card.pars,

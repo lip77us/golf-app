@@ -1924,7 +1924,7 @@ class TournamentLowNetSetupView(APIView):
         # Nobody should be worse off for playing better. Winning 36-hole money
         # disqualifies a golfer from the day bet, so if the last paying
         # championship place pays less than day-bet 1st, finishing in the money
-        # actively costs him money. Checked HERE and not only in the UI, so an
+        # actively costs them money. Checked HERE and not only in the UI, so an
         # API caller cannot post a table that fails it.
         reason = _day_bet_floor_problem(tournament, payouts)
         if reason:
@@ -4466,7 +4466,7 @@ class FoursomeRemovePlayerView(APIView):
                 transaction.savepoint_rollback(sid)
                 return Response(
                     {'detail': 'No donor scores are available. A group playing '
-                               'a man short takes its phantom partner’s scores '
+                               'a golfer short takes its phantom partner’s scores '
                                'from a full group teeing off ahead of it, and '
                                'this change would leave a short group without '
                                'one. Swap the short group to a later tee '
@@ -4785,7 +4785,7 @@ class FoursomeSwapPositionView(APIView):
                 transaction.savepoint_rollback(sid)
                 return Response(
                     {'detail': 'This tee order leaves a short group with no '
-                               'donors. A group playing a man short takes its '
+                               'donors. A group playing a golfer short takes its '
                                'phantom partner’s scores from a full group '
                                'teeing off ahead of it — this swap would put a '
                                'short group with none ahead of it. Keep at '
@@ -5057,7 +5057,7 @@ class RoundMovePlayerView(APIView):
                 transaction.savepoint_rollback(sid)
                 return Response(
                     {'detail': 'No donor scores are available. A group playing '
-                               'a man short takes its phantom partner’s scores '
+                               'a golfer short takes its phantom partner’s scores '
                                'from a full group teeing off ahead of it, and '
                                'this move would leave a short group without '
                                'one. Keep at least one full group teeing off '
@@ -9284,8 +9284,8 @@ class TeamPlaySetupView(APIView):
                 )
 
         # The team size decides which formats are legal, and a mismatch is
-        # nonsense rather than a preference: there is no two-man shamble and no
-        # four-man Chapman. Refused here so an API caller cannot post a shape
+        # nonsense rather than a preference: there is no two-golfer shamble and no
+        # four-golfer Chapman. Refused here so an API caller cannot post a shape
         # the scoring has no card for.
         size = int(d.get('team_size', getattr(existing, 'team_size', 4)) or 4)
         if size not in TeamPlayConfig.FORMATS_BY_SIZE:
@@ -9312,7 +9312,7 @@ class TeamPlaySetupView(APIView):
                 defaults[field] = int(d[field])
 
         # The tee-shot control does three different jobs and the FORMAT picks
-        # which. Best ball and Chapman have both men driving every hole with no
+        # which. Best ball and Chapman have both golfers driving every hole with no
         # choice to record, so there is nothing a quota could count; alternate
         # shot has a rota, which is a schedule and not a quota at all. Coerced
         # rather than refused — a TD switching format should not have to go
@@ -9331,7 +9331,7 @@ class TeamPlaySetupView(APIView):
             defaults['drive_rule'] = rules[0]
 
         # A window can only be asked for as many drives as it has holes to
-        # give, shared between the men: two each per nine for a foursome, four
+        # give, shared between the golfers: two each per nine for a foursome, four
         # for a pair. Above that the quota is impossible before a ball is
         # struck — a different thing from the shortfall the tracker warns
         # about, which the team chose. Clamped rather than refused, like the
@@ -9396,7 +9396,7 @@ class TeamPlayTeamView(APIView):
     POST /api/foursomes/{id}/team-play/team/ — rename a team.
 
     Colour is assigned regardless and is NOT settable here: it does real work
-    on the leaderboard and the scorecard, and a TD renaming his team should not
+    on the leaderboard and the scorecard, and a TD renaming their team should not
     be able to leave two teams sharing a block.
 
     **Blank resets to the default** — `Group N` for a foursome, the two
@@ -9430,7 +9430,7 @@ class TeamPlayTeamView(APIView):
             foursome.name = name
             foursome.save(update_fields=['name'])
         # A pair's surname default follows the roster until somebody types over
-        # it; after that a swapped golfer must not drag the name with him.
+        # it; after that a swapped golfer must not drag the name with them.
         state.name_is_default = not name
         state.save(update_fields=['name', 'name_is_default'])
         if config is not None:
@@ -9452,9 +9452,9 @@ class TeamPlaySplitView(APIView):
     a playing group.
 
     Four golfers go off one tee time as one group; in a pairs event that group
-    holds TWO teams, and this says which two men are which. The default is the
+    holds TWO teams, and this says which two golfers are which. The default is the
     order the TD dragged them into on Groups & Tees — first two, then the next
-    two — and this is how he changes it without rebuilding the round.
+    two — and this is how they changes it without rebuilding the round.
 
     Body: ``{"slots": {"<player_id>": 1 | 2}}``. Every real golfer in the
     group must be named, because a split that leaves somebody out is a golfer
@@ -9490,7 +9490,7 @@ class TeamPlaySplitView(APIView):
             wanted[m.player_id] = int(v)
 
         # A team of one is a golfer with no partner. It is allowed to EXIST —
-        # the odd-field block names him and the wizard waits on it — but it
+        # the odd-field block names them and the wizard waits on it — but it
         # cannot be created deliberately here while a legal split is available.
         counts = {}
         for v in wanted.values():
@@ -9579,7 +9579,7 @@ class TeamPlayPairsView(APIView):
 
         if state.pairs_are_set:
             return Response(
-                {'detail': 'The rota is set for the round. Four men decide who '
+                {'detail': 'The rota is set for the round. Four golfers decide who '
                            'is with whom on the 1st tee, and a rota that can be '
                            're-cut mid-round is not a rota.'},
                 status=status.HTTP_409_CONFLICT,
@@ -9643,8 +9643,8 @@ class TeamPlayCardView(APIView):
     GET /api/foursomes/{id}/team-play/card/?hole=7
 
     The hole as the card draws it. For a shamble that means the four scores
-    with the counting ones flagged — a man who shot 5 must see instantly that
-    his 5 was not used, or the total looks wrong and someone re-enters it.
+    with the counting ones flagged — a golfer who shot 5 must see instantly that
+    their 5 was not used, or the total looks wrong and someone re-enters it.
     """
     def get(self, request, pk):
         from services.team_play_state import (
@@ -9717,7 +9717,7 @@ class TeamPlayCardView(APIView):
                 #
                 # A one-ball format has a single team figure, so this is the
                 # team's. An own-ball format keeps handicaps per golfer, so it
-                # is keyed by player and the card shows whichever man is
+                # is keyed by player and the card shows whichever golfer is
                 # selected.
                 'strokes_by_hole': _team_strokes_by_hole(
                     foursome, config, rnd, slot),
@@ -9778,7 +9778,7 @@ class TeamPlayCardView(APIView):
 def _team_slot(request, foursome, config) -> int:
     """Which team inside the playing group this write is for.
 
-    A four-man event has exactly one, so the parameter is absent and the answer
+    A four-golfer event has exactly one, so the parameter is absent and the answer
     is 1 — which is what every existing caller sends by not sending it. A pairs
     group of four holds two, and the card names the one it is writing.
 
@@ -9803,7 +9803,7 @@ def _team_drive_options(foursome, config, hole, slot=1):
     """`[{player_id, name, picked}]` — the chips the card draws, and which one
     is on.
 
-    Empty only when the control is absent — best ball and Chapman have both men
+    Empty only when the control is absent — best ball and Chapman have both golfers
     driving every hole, so there is nobody to tap.
 
     A ROTA sends the roster too, with nothing picked. Nothing is chosen on the

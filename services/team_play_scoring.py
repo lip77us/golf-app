@@ -91,14 +91,14 @@ def team_hole_scores(foursome, slot=1) -> dict:
 def shamble_hole(foursome, hole_number: int, counts: dict,
                  config, slot=1) -> dict:
     """
-    One own-ball hole: every man's score, and which of them counted.
+    One own-ball hole: every golfer's score, and which of them counted.
 
     **Shamble** — four scores, best N.  **Best ball** — two scores, best 1;
     the same card with two rows instead of four, and the same reason for it.
 
     The counting scores are tinted and the rest greyed, live, as they are
-    entered — because some men's cards do nothing on a given hole, and a man
-    who shot 5 needs to see instantly that his 5 was not used.  Otherwise the
+    entered — because some cards do nothing on a given hole, and a golfer
+    who shot 5 needs to see instantly that their 5 was not used.  Otherwise the
     team total looks wrong and someone re-enters it.
 
     The phantom's ball is one of the four available.  Nothing about the count
@@ -225,7 +225,7 @@ def team_round(foursome, config, slot=1) -> dict:
             # two landed, and a round of half-scored holes could reach "signed
             # for 18" — which is what gates settlement.
             #
-            # (A golfer who withdraws mid-round therefore stalls his team's
+            # (A golfer who withdraws mid-round therefore stalls their team's
             # count. Mid-round withdrawal is not wired into this shape yet;
             # see docs/mid-round-withdrawal.md for how the other games do it.)
             if not hole['complete'] or hole['team_net'] is None:
@@ -539,7 +539,7 @@ def settlement(tournament) -> dict:
 
     * **A tie is one prize, drawn as one block with both teams inside it.**
       Two rows each reading $143.75 would hide that it was one prize.
-    * **A three-man team divides its share three ways and takes more each.**
+    * **A team of three divides its share three ways and takes more each.**
       The phantom 4th earned the strokes and cannot be paid.
     * **Odd cents go to the team's highest course handicap**, so the pool
       balances to zero rather than leaving an unexplained $71.89 beside three

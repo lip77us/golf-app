@@ -10,7 +10,7 @@
 /// marked and drawn adjacent, teams still out marked rather than sorted away.
 /// A team is just what sits in the name column. Inventing a bespoke board
 /// would mean a golfer who reads three leaderboards a month has to learn a
-/// fourth layout to find out he finished fourth.
+/// fourth layout to find out they finished fourth.
 ///
 /// **No tabs.** With no side games there is nothing to tab between, and the
 /// bar does not sit there empty waiting to be useful.
@@ -213,7 +213,7 @@ class _Row extends StatelessWidget {
                         // already there.
                         // Every name, wrapping to a second line rather than
                         // trailing off — three names and an ellipsis tells a
-                        // golfer nothing about whether he is on this team.
+                        // golfer nothing about whether they are on this team.
                         Text(team.memberLine,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -259,7 +259,7 @@ class _Detail extends StatelessWidget {
           // were saying it a third time.
           if (team.pars.isNotEmpty) ...[
             // The same widget the entry card draws, so a golfer who has just
-            // come off his own scorecard recognises this one. A shamble shows
+            // come off their own scorecard recognises this one. A shamble shows
             // all FOUR balls with the counting ones tinted and the rest pale —
             // the team's total is two of them, and a row showing only the
             // total cannot answer whose scores made it.

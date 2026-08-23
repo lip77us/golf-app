@@ -10,7 +10,7 @@
 ///
 /// **The finding under test is that the allowance is doing enormous work.**
 /// The same pair — Maiolini 4, Yau 19 — plays off 4 in a scramble and 12 in an
-/// alternate shot. Three times the strokes for the same two men, purely from
+/// alternate shot. Three times the strokes for the same two golfers, purely from
 /// the format, which is why the format step prints the figure on every option
 /// before it is chosen.
 library;
@@ -86,7 +86,7 @@ void main() {
       expect(a.lines.map((l) => l.courseHandicap), [4, 19]);
     });
 
-    test('an override applies one flat percentage to both men', () {
+    test('an override applies one flat percentage to both golfers', () {
       final a = teamAllowanceFor(
           teamSize: 2, format: 'scramble', courseHandicaps: pair,
           overridePct: 50);
@@ -136,7 +136,7 @@ void main() {
       expect(kFormatsBySize[4], contains('scramble'));
       expect(kFormatsBySize[2], contains('scramble'));
       expect(kScrambleTable, isNot(kPairsTables['scramble']));
-      // Four men: Pine 6.15 → 6. Two men on the same low handicaps: a
+      // Four golfers: Pine 6.15 → 6. Two golfers on the same low handicaps: a
       // different table entirely.
       expect(teamAllowanceFor(
           teamSize: 4, format: 'scramble',
@@ -155,14 +155,14 @@ void main() {
     });
   });
 
-  group('a pairs field is twos, and the odd man stays visible', () {
+  group('a pairs field is twos, and the odd golfer stays visible', () {
     test('an even field pairs cleanly', () {
       expect(pairSizes(12), [2, 2, 2, 2, 2, 2]);
     });
 
     test('an odd field leaves a group of one', () {
-      // Left visible on purpose: there is no phantom partner to hide him
-      // behind, and the block has to name him.
+      // Left visible on purpose: there is no phantom partner to hide them
+      // behind, and the block has to name them.
       expect(pairSizes(13), [2, 2, 2, 2, 2, 2, 1]);
     });
 
@@ -187,7 +187,7 @@ void main() {
       expect(pairPlayGroupSizes(10), [4, 4, 2]);
     });
 
-    test('an odd FIELD still leaves the unpaired man visible', () {
+    test('an odd FIELD still leaves the unpaired golfer visible', () {
       expect(pairPlayGroupSizes(13), [4, 4, 4, 1]);
     });
 
@@ -196,7 +196,7 @@ void main() {
       expect(splitIntoPairs([1, 2]), [[1, 2]]);
     });
 
-    test('three men in best ball are ONE team, not a pair and a spare', () {
+    test('three golfers in best ball are ONE team, not a pair and a spare', () {
       expect(splitIntoPairs([1, 2, 3], bestBall: true), [[1, 2, 3]]);
       expect(splitIntoPairs([1, 2, 3]), [[1, 2], [3]]);
     });
@@ -204,13 +204,13 @@ void main() {
 
   group('a pair is complete at two — nothing pads it', () {
     // The review step labelled a finished pair "+ 1 phantom" for being two
-    // men, because "anything under four gets a phantom" was written out
+    // golfers, because "anything under four gets a phantom" was written out
     // longhand wherever groups are drawn.
     test('a pair never gets a phantom, at any roster size', () {
       expect(groupNeedsPhantom(2, teamPlaySize: 2), isFalse);
       expect(groupNeedsPhantom(3, teamPlaySize: 2), isFalse);
       // Even a golfer with no partner: that is a problem to fix, named on the
-      // Handicap step, not a gap to pad with an imaginary man.
+      // Handicap step, not a gap to pad with an imaginary partner.
       expect(groupNeedsPhantom(1, teamPlaySize: 2), isFalse);
     });
 

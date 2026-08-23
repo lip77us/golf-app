@@ -17,7 +17,7 @@ schedule has no slack at all — what it needs is one line on the tee.
 from decimal import Decimal, ROUND_HALF_UP
 
 
-BALLS_PER_HOLE = 4          # a four-man team hits four balls, phantom included
+BALLS_PER_HOLE = 4          # a team of four hits four balls, phantom included
 FRONT = (1, 9)
 BACK  = (10, 18)
 
@@ -28,7 +28,7 @@ def balls_per_hole(config) -> int:
 
     Four for a foursome, two for a pair.  Everything a quota measures scales
     off this: a pairs quota of one each per nine is **two of nine**, seven
-    free, which is why "one each per nine" is the usual pairs rule — two men
+    free, which is why "one each per nine" is the usual pairs rule — two golfers
     and eighteen holes is a lot of slack.
     """
     return int(getattr(config, 'team_size', BALLS_PER_HOLE) or BALLS_PER_HOLE)
@@ -127,8 +127,8 @@ def drive_windows(config) -> list:
     The windows a quota is measured over.
 
     **Per nine is TWO windows, and the front does not carry to the back.**  A
-    man short on the front is already short; a tracker that only totals
-    eighteen says he is fine until the 18th green.
+    golfer short on the front is already short; a tracker that only totals
+    eighteen says they are fine until the 18th green.
     """
     from tournament.models import TeamPlayConfig
 
@@ -143,24 +143,24 @@ def window_requirement(config, real_player_count: int) -> dict:
     """
     What one window asks of a team, and how much room that leaves.
 
-    **A short FOUR-man team owes four men's worth, not three.**  It fields a
-    phantom, so the quota is four men's worth and the phantom's share FLOATS —
-    any of the three real men can cover it.  Three men at two each would be six
-    drives, but a three-man foursome is not really three.
+    **A short FOUR-golfer team owes four golfers' worth, not three.**  It fields a
+    phantom, so the quota is four golfers' worth and the phantom's share FLOATS —
+    any of the three real golfers can cover it.  Three golfers at two each would be six
+    drives, but a foursome playing three is not really three.
 
-    **A pair has no phantom**, so nothing floats: a two-man team owes two men's
-    worth and a three-man best-ball pair owes three.  ``real_player_count``
+    **A pair has no phantom**, so nothing floats: a pair owes two golfers'
+    worth and a three-golfer best-ball pair owes three.  ``real_player_count``
     above the team size therefore raises the quota rather than lowering it, and
     the ``floating`` term falls out at zero on its own.
 
     ``free`` is the figure a captain actually uses: twelve required of eighteen
-    means six free, and that is what tells him whether he can let his long
+    means six free, and that is what tells them whether they can let their long
     hitter drive the par 5.
     """
     per_golfer = int(config.drives_required)
     size       = balls_per_hole(config)
     # A team owes its SIZE's worth, or its roster's worth when the roster is
-    # bigger — a three-man best-ball pair owes three, not two.
+    # bigger — a three-golfer best-ball pair owes three, not two.
     total      = max(size, real_player_count) * per_golfer
     holes      = 9 if len(drive_windows(config)) == 2 else 18
     return {
@@ -168,7 +168,7 @@ def window_requirement(config, real_player_count: int) -> dict:
         'required'       : total,
         'holes'          : holes,
         'free'           : max(0, holes - total),
-        # The phantom's share, satisfiable by ANY of the real men rather than
+        # The phantom's share, satisfiable by ANY of the real golfers rather than
         # owed by a particular one.  Zero in pairs, which have no phantom.
         'floating'       : max(0, size - real_player_count) * per_golfer,
     }
@@ -189,7 +189,7 @@ def window_state(config, window, picks: dict, real_player_ids,
     states separately —
 
         ``tight``       owed == holes remaining.  It still works, but only if
-                        every remaining hole goes to a man who owes one.
+                        every remaining hole goes to a golfer who owes one.
         ``impossible``  owed > holes remaining.  The window cannot be satisfied.
 
     Both are amber on screen.  Neither ever blocks the tap: the team may
@@ -207,7 +207,7 @@ def window_state(config, window, picks: dict, real_player_ids,
             holes_used[pid].append(hole)
 
     # Personal shortfall, then the phantom's floating share — which any drive
-    # beyond a man's own minimum goes toward.
+    # beyond a golfer's own minimum goes toward.
     personal_owed = sum(max(0, per_golfer - n) for n in used.values())
     surplus       = sum(max(0, n - per_golfer) for n in used.values())
     floating_owed = max(0, req['floating'] - surplus)
@@ -224,8 +224,8 @@ def window_state(config, window, picks: dict, real_player_ids,
         'owed'        : owed,
         'holes_left'  : holes_left,
         # Holes left that are NOT already spoken for. This is the number a
-        # captain actually uses — it tells him whether he can give the par 5 to
-        # his long hitter, which "4 required of 9" does not.
+        # captain actually uses — it tells them whether they can give the par 5 to
+        # their long hitter, which "4 required of 9" does not.
         'free_left'   : max(0, holes_left - owed),
         'tight'       : owed == holes_left and owed > 0,
         'impossible'  : owed > holes_left,
@@ -277,16 +277,16 @@ def build_rota(player_ids) -> list:
     """
     The repeating cycle of whoever is up on the tee.
 
-    Four men → the two driving pairs the team set, alternating.
-    Three men → **AB, BC, AC, repeat.**  Two drivers every hole and each man
-    sits out every third, which is as even as three into two goes.  The man
+    Four golfers → the two driving pairs the team set, alternating.
+    Three golfers → **AB, BC, AC, repeat.**  Two drivers every hole and each golfer
+    sits out every third, which is as even as three into two goes.  The golfer
     sitting out plays the phantom's ball — the 1st and 4th shots.
-    **Two men → A, B, repeat** — the alternate-shot tee rota, odd holes to the
-    first man and even to the second.  Same mechanic, one name per entry
+    **Two golfers → A, B, repeat** — the alternate-shot tee rota, odd holes to the
+    first golfer and even to the second.  Same mechanic, one name per entry
     instead of two.
 
     The rota is the TEAM's, set on the 1st tee and then fixed for eighteen
-    holes.  The app does not derive it from handicap: the men decide in ten
+    holes.  The app does not derive it from handicap: the golfers decide in ten
     seconds, it is the only part of the rule anyone enjoys, and a computed
     order would be overridden on the spot.  A rota that can be re-cut mid-round
     is not a rota — and in an alternate shot a pair that loses track plays a
@@ -320,7 +320,7 @@ def pair_on_hole(rota, hole_number: int):
 
 
 def phantom_cover_on_hole(rota, player_ids, hole_number: int):
-    """For a three-man team, the man not driving — he takes the phantom's 1st
+    """For a team of three, the golfer not driving — they take the phantom's 1st
     and 4th shots.  The team hits four balls either way, which is the whole
     point of the phantom."""
     pair = pair_on_hole(rota, hole_number)
