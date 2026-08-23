@@ -32,7 +32,7 @@ const Map<int, int> kShamblePctByBalls = {1: 75, 2: 85, 3: 95, 4: 100};
 /// (docs/design-review/handoff-team-pairs/SPEC.md §4).
 ///
 /// **The allowance is doing enormous work here.** The same pair — Maiolini 4,
-/// Yau 19 — plays off 4 in a scramble and 12 in an alternate shot. Three times
+/// Yau 19 — gets 4 in a scramble and 12 in an alternate shot. Three times
 /// the strokes for the same two golfers, purely from the format, which is why the
 /// format screen prints the figure on EVERY option before it is chosen.
 ///

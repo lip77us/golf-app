@@ -123,7 +123,7 @@ def shamble_hole(foursome, hole_number: int, counts: dict,
         if s.gross_score is not None
     }
 
-    # Each golfer plays off HIS OWN course handicap at the format's allowance —
+    # Each golfer gets HIS OWN course handicap at the format's allowance —
     # 85% at two balls, 75% at one, 95% at three — not off the membership's
     # playing_handicap, which for a Foursome Play round is the untouched course
     # handicap because the round itself never carries an allowance. Using it

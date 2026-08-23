@@ -200,4 +200,62 @@ void main() {
       expect(activeGolferAcross([], {}, 3), isNull);
     });
   });
+
+  group('what a team gets, across all five pairs formats', () {
+    // Verified against Seder 19 / Carson 24 and Bird 35 / Schroeder 40 —
+    // the pair whose net nobody could account for, because the figure was on
+    // neither the card nor the board.
+    TeamPlayTeam row({required int? teamHandicap, List<int?> own = const []}) =>
+        TeamPlayTeam.fromJson({
+          'foursome_id': 1, 'slot': 1, 'group_number': 1,
+          'name': 'B & S', 'colour': 'Pine', 'real_player_count': 2,
+          'has_phantom': false, 'seats_open': 0,
+          'team_handicap': teamHandicap, 'team_handicap_raw': '0',
+          'allowance': const {}, 'drive': const {}, 'thru': 0,
+          'members': [
+            for (final o in own)
+              {'player_id': 1, 'name': 'X', 'course_handicap': 0, 'pct': 0,
+               'strokes': '0', 'is_phantom': false, 'own_ball_handicap': o},
+          ],
+        });
+
+    test('a one-ball format shows the ONE team figure', () {
+      // Scramble 18, alternate shot 38, Scotch and Chapman 37 — all one ball
+      // off one figure, so one number is the whole truth.
+      expect(row(teamHandicap: 38, own: const [null, null]).getsLabel,
+             'gets 38');
+    });
+
+    test('best ball shows each golfer, never the team total', () {
+      // The total (64 for Bird and Schroeder) is a BALANCE number the strip
+      // uses to stack one pair against another. Printing it would invite
+      // subtracting 64 from a ball played off 30.
+      expect(row(teamHandicap: 64, own: const [30, 34]).getsLabel,
+             'gets 30 / 34');
+    });
+
+    test('a team still being built says nothing', () {
+      // The figure moves when a golfer moves, so there is nothing honest to
+      // print until the pair is full.
+      expect(row(teamHandicap: null).getsLabel, '');
+      expect(row(teamHandicap: 0).getsLabel, '');
+    });
+
+    test('the phantom is not one of the golfers who gets strokes', () {
+      final t = TeamPlayTeam.fromJson({
+        'foursome_id': 1, 'slot': 1, 'group_number': 1, 'name': 'Dune',
+        'colour': 'Pine', 'real_player_count': 3, 'has_phantom': true,
+        'seats_open': 0, 'team_handicap': 40, 'team_handicap_raw': '0',
+        'allowance': const {}, 'drive': const {}, 'thru': 0,
+        'members': const [
+          {'player_id': 1, 'name': 'A', 'course_handicap': 0, 'pct': 0,
+           'strokes': '0', 'is_phantom': false, 'own_ball_handicap': 9},
+          {'player_id': 2, 'name': 'Phantom 4th', 'course_handicap': 0,
+           'pct': 0, 'strokes': '0', 'is_phantom': true,
+           'own_ball_handicap': 14},
+        ],
+      });
+      expect(t.getsLabel, 'gets 9');
+    });
+  });
 }

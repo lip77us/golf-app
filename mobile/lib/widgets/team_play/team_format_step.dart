@@ -9,7 +9,7 @@
 /// Two formats at four golfers, five at two
 /// (docs/design-review/handoff-team-pairs/SPEC.md §4). **In pairs the
 /// allowance is doing enormous work**: the same two golfers — Maiolini 4, Yau 19 —
-/// play off 4 in a scramble and 12 in an alternate shot. Three times the
+/// get 4 in a scramble and 12 in an alternate shot. Three times the
 /// strokes from the format alone, so the pair's OWN figure prints on every
 /// option before it is chosen. A TD picking Chapman because it sounds fun
 /// should see what it does to their field.

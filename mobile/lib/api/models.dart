@@ -5135,6 +5135,11 @@ class TeamPlayMember {
   final String  strokes;
   final bool    isPhantom;
   /// Shamble only: this golfer's own whole-stroke playing handicap.
+  /// This golfer's OWN whole-stroke figure, in the formats where the
+  /// allowance stays per golfer — shamble and best ball. Null in a one-ball
+  /// format, where the figure is the team's and nobody has one of their own.
+  final int?    ownBallHandicap;
+  /// The name this carried while a shamble was the only own-ball format.
   final int?    shambleHandicap;
 
   const TeamPlayMember({
@@ -5144,6 +5149,7 @@ class TeamPlayMember {
     required this.pct,
     required this.strokes,
     required this.isPhantom,
+    this.ownBallHandicap,
     this.shambleHandicap,
   });
 
@@ -5154,6 +5160,8 @@ class TeamPlayMember {
         pct            : (j['pct'] ?? 0) as int,
         strokes        : (j['strokes'] ?? '0').toString(),
         isPhantom      : j['is_phantom'] == true,
+        ownBallHandicap: (j['own_ball_handicap'] ?? j['shamble_handicap'])
+            as int?,
         shambleHandicap: j['shamble_handicap'] as int?,
       );
 }
@@ -5507,6 +5515,28 @@ class TeamPlayTeam {
   /// foursome id alone collides — keying anything on it expands, selects or
   /// scrolls to both of them at once.
   String get rowKey => '$foursomeId:$slot';
+
+  /// What the team gets, in the form the format actually uses.
+  ///
+  /// **The five pairs formats do not agree on this, and the difference is the
+  /// whole point.** Scramble, alternate shot, Scotch and Chapman end in one
+  /// ball off ONE team figure — `gets 38`. Best ball keeps the allowance per
+  /// golfer and the better net counts, so its team total is a BALANCE number
+  /// the strip uses to stack one pair against another and nothing anybody
+  /// gets — printing it would invite subtracting 20 from a ball played
+  /// off 3. That one reads `gets 3 / 16`.
+  ///
+  /// Empty while the team is still being built, because moving one golfer
+  /// changes it.
+  String get getsLabel {
+    final own = [
+      for (final m in members)
+        if (!m.isPhantom && m.ownBallHandicap != null) m.ownBallHandicap!,
+    ];
+    if (own.isNotEmpty) return 'gets ${own.join(' / ')}';
+    final figure = teamHandicap ?? 0;
+    return figure > 0 ? 'gets $figure' : '';
+  }
 }
 
 /// The whole Team Play read model — one call, because the build-teams screen
@@ -5951,6 +5981,19 @@ class TeamPlayCardTeam {
                               driveOptions.isNotEmpty;
   int? get pickedDriver => driveOptions
       .where((o) => o.picked).map((o) => o.playerId).firstOrNull;
+
+  /// What this team gets — `gets 38`, or `gets 3 / 16` in best ball
+  /// where the allowance stays per golfer and the team total is a balance
+  /// number nobody uses. Empty when there is no allowance.
+  String get getsLabel {
+    final own = [
+      for (final g in golfersByHole)
+        if (!g.isPhantom && g.handicap > 0) g.handicap,
+    ];
+    if (own.isNotEmpty) return 'gets ${own.join(' / ')}';
+    final figure = round.allowance ?? 0;
+    return figure > 0 ? 'gets $figure' : '';
+  }
 
   /// Where this team's strokes fall across the round.
   ///

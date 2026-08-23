@@ -7,7 +7,7 @@ Written to go back to design, and a companion to
 The build follows the packet closely. **Pairs are the same flow with the size
 set to two** — same wizard, same groups screen, same payout, same board, same
 settlement, same receipt, and not one screen duplicated. Every worked figure
-reproduces: Maiolini 4 and Yau 19 play off **4** in a scramble, **3 / 16** in
+reproduces: Maiolini 4 and Yau 19 get **4** in a scramble, **3 / 16** in
 best ball, **12** in an alternate shot and **10** in both Scotch and Chapman;
 the drawn field of six pairs comes out 4, 5, 5, 5, 4, 7 and the balance strip
 reads **4 – 7**.
@@ -82,7 +82,7 @@ notes.
   the scorer less. The colour bar ties the row to the named block above it.
 
 - **No `gets N` chip on either card.** It restates the round's total where
-  nobody plays off it; the dots already answer the question somebody standing
+  nobody uses it; the dots already answer the question somebody standing
   on a tee is asking, which is which holes carry a stroke.
 - **Golfers, not men.** Coed play is the expectation, so the copy does not
   assume otherwise anywhere in the flow. `men's` and `women's` survive in

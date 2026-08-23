@@ -77,13 +77,13 @@ enum _StepKind {
   // most common event a club runs and the least complicated thing it does.
   teamFormat,   // Scramble or shamble, and the shamble ball count in place
   teamDrives,   // The four drive rules — three quotas and one schedule
-  teamHandicap, // The allowance the format prescribes, worked on his own teams
+  teamHandicap, // The allowance the format prescribes, worked on their own teams
   teamPayout,   // Fee, places and split — after teams, because it needs both
   review,       // Review → create
 }
 
 /// Who is competing — the "scoring unit" the whole flow derives from.  Cup,
-/// solo and quad (Team Play) are wired; pair is drawn but staged (no two-man
+/// solo and quad (Team Play) are wired; pair is drawn but staged (no two-golfer
 /// scoring engine yet), so the picker shows it disabled.
 enum _EventType { cup, solo, pair, quad }
 
@@ -143,7 +143,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       // STATED, not chosen, and nothing downstream has a round dimension.
       //
       // **Drives drops out when the format has no tee shot to choose.** In
-      // best ball and Chapman both men drive every hole, so the step had no
+      // best ball and Chapman both golfers drive every hole, so the step had no
       // control on it at all — a page whose only content was a note saying
       // there was nothing to set. Seven steps, and the header count reads this
       // list, so it stays honest.
@@ -188,7 +188,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   /// second answer would silently win.
   ///
   /// **Field size sets the team count, not the reverse**: 23 golfers become
-  /// six teams, five of four and one of three, and he moves men from there.
+  /// six teams, five of four and one of three, and they moves golfers from there.
   List<List<int>> get _tpRosters {
     final ids   = _orderedPlayerIds;
     final sizes = _effectiveGroupSizes;
@@ -206,7 +206,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   /// The TEAMS, as rosters of player ids.
   ///
   /// **A playing group is not a team in a pairs event.** `_tpRosters` gives
-  /// the groups that walk the course together — four men, one tee time, one
+  /// the groups that walk the course together — four golfers, one tee time, one
   /// card — and this splits each of them into the one or two pairs that are
   /// actually scored. A foursome event returns exactly the groups.
   List<List<int>> get _tpTeams {
@@ -219,8 +219,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
 
   /// `Group 1` … `Group 6` for a foursome; **`Maiolini & Yau` for a pair.**
   ///
-  /// The wizard has no business inventing names for four men — a colour the TD
-  /// never chose is one more thing on screen that does not help him. But a
+  /// The wizard has no business inventing names for four golfers — a colour the TD
+  /// never chose is one more thing on screen that does not help them. But a
   /// pair's two surnames are not an invented name: they are the only thing
   /// anybody calls it, they fit on a leaderboard row, and golfers say a pair
   /// that way out loud. The server applies the same rule, so the two agree.
@@ -269,10 +269,10 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       driveRulesFor(_tpTeamSize, _tpFormat);
 
   /// The most drives one golfer can be asked for in a window: the holes in it,
-  /// divided between the men.
+  /// divided between the golfers.
   ///
-  /// Four men sharing nine holes tops out at two each, and four each across
-  /// eighteen. **Two men sharing the same nine top out at four each**, and
+  /// Four golfers sharing nine holes tops out at two each, and four each across
+  /// eighteen. **Two golfers sharing the same nine top out at four each**, and
   /// nine each across eighteen — every hole spoken for, nothing left over.
   /// Mirrors `TeamPlayConfig.max_drives_per_golfer`; the wizard sets this
   /// before the config row exists, so it cannot ask the server.
@@ -284,7 +284,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   ///
   /// **Pairs need an even field**, and there is no phantom partner to paper
   /// over an odd one. The block names the golfer rather than reporting a
-  /// count, because the fix is about one man and the TD needs to know which
+  /// count, because the fix is about one golfer and the TD needs to know which
   /// one is standing there.
   ///
   /// A team of three is allowed in **best ball only** — a third ball is
@@ -308,8 +308,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     return out;
   }
 
-  /// A golfer as the Foursome Play screens need him — name and course handicap
-  /// off the tee he was given on the Groups & Tees step.
+  /// A golfer as the Foursome Play screens need them — name and course handicap
+  /// off the tee they were given on the Groups & Tees step.
   ({int playerId, String name, int courseHandicap})? _tpGolfer(int id) {
     final player = _allPlayers.where((p) => p.id == id).firstOrNull;
     if (player == null) return null;
@@ -328,8 +328,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
 
   /// The TD's own first pair, for the figures printed on the format options.
   ///
-  /// **A generic illustration proves nothing.** His own two men and their two
-  /// percentages are the only numbers he will check, and the point of showing
+  /// **A generic illustration proves nothing.** His own two golfers and their two
+  /// percentages are the only numbers they will check, and the point of showing
   /// them before the format is chosen is that the format alone triples the
   /// strokes.
   ({String name, List<int> handicaps})? get _tpSamplePair {
@@ -419,7 +419,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     GameIds.championshipStrokePlay,
   };
 
-  // ---- Team Play (four-man teams, or pairs) ----
+  // ---- Team Play (four-golfer teams, or pairs) ----
   // One config, set across steps 5–9 and posted once the round exists. The
   // defaults ARE a legitimate event: a one-round scramble with no drive
   // requirement takes every one of them, which is the point of the flow being
@@ -535,7 +535,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   // ---- Individual play: the Stableford points table ----
   // Chosen per tournament, never a global preference: a club's Sunday game
   // and its member-guest use different scales. Negatives are valid — the TD
-  // sets the points as he sees fit and the screen reports what an unusual
+  // sets the points as they see fit and the screen reports what an unusual
   // table implies rather than arguing with it.
   static const Map<String, List<int>> _kStablefordPresets = {
     // albatross, eagle, birdie, par, bogey, double+
@@ -817,7 +817,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       case _StepKind.handicap:
       case _StepKind.scoring:
       case _StepKind.stablefordPoints:
-        // Every answer on these steps is valid — the TD sets the points as he
+        // Every answer on these steps is valid — the TD sets the points as they
         // sees fit, and there is always a live method and allowance.
         return true;
       case _StepKind.payouts:
@@ -920,12 +920,12 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         // from is_individual_play.
         //
         // **Fours and pairs are the SAME marker and the same step flow.** The
-        // size is a control, not a fourth shape: a separate two-man wizard
+        // size is a control, not a fourth shape: a separate two-golfer wizard
         // would duplicate seven screens to change two.
         _tournamentActiveGames.add(GameIds.teamPlay);
         _tpTeamSize = _eventType == _EventType.pair ? 2 : 4;
-        // A format legal at the other size has to go — there is no two-man
-        // shamble and no four-man Chapman, and the server refuses the pair.
+        // A format legal at the other size has to go — there is no two-golfer
+        // shamble and no four-golfer Chapman, and the server refuses the pair.
         if (!(kFormatsBySize[_tpTeamSize] ?? const []).contains(_tpFormat)) {
           _tpFormat = 'scramble';
         }
@@ -1467,7 +1467,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         splitPcts     : _tpSplit.take(_tpPlacesPaid).toList(),
       );
       // No names posted here. Teams arrive as Group 1…Group N and name
-      // themselves from the round hub — the TD inventing six names for men
+      // themselves from the round hub — the TD inventing six names for golfers
       // who have not turned up yet is work nobody asked for.
     }
     if (!mounted) return;
@@ -1711,9 +1711,9 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           perHoleCounts : _tpPerHoleCounts,
           parByHole     : _tpParByHole(),
           // The pair's OWN figure on every option, before it is chosen. The
-          // same two men play off 4 in a scramble and 12 in an alternate shot,
+          // same two golfers get 4 in a scramble and 12 in an alternate shot,
           // so a TD picking Chapman because it sounds fun should see what it
-          // does to his field.
+          // does to their field.
           samplePair    : _tpSamplePair,
           // Nothing is locked before the round exists — the lock is stamped by
           // the first score, which cannot have happened in the wizard.
@@ -1739,7 +1739,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           onRule           : (r) => setState(() {
             _tpDriveRule = r;
             // A window can only be asked for as many drives as it has holes to
-            // give, shared between the men — two each per nine for a foursome,
+            // give, shared between the golfers — two each per nine for a foursome,
             // four for a pair. Carrying a per-eighteen figure across to per
             // nine would otherwise ask for more drives than the window holds.
             final cap = _tpMaxDrivesPerGolfer;
@@ -1757,7 +1757,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           avgBallCount : _tpAvgBallCount,
           teeName      : _tpTeeName,
           // Blocking, not advice: a golfer with no partner is a broken
-          // tournament, and the button says which man it is waiting on.
+          // tournament, and the button says which golfer it is waiting on.
           problems     : _tpPairsProblems,
           threeBallAvailable: _tpFormat == 'best_ball',
           teams        : [
@@ -2262,9 +2262,9 @@ class _Step1TypeFormat extends StatelessWidget {
         _typeCard(context, _EventType.cup, 'Team — cup play',
             'Two to four drafted sides playing match segments for points.', 'Side'),
         _typeCard(context, _EventType.solo, 'Individual',
-            'Every golfer for himself, against the field.', 'Golfer'),
+            'Every golfer for themselves, against the field.', 'Golfer'),
         _typeCard(context, _EventType.pair, 'Pairs Play',
-            'Two-man teams against the field. Scramble, best ball, alternate '
+            'Two-golfer teams against the field. Scramble, best ball, alternate '
             'shot, Scotch or Chapman.', 'Pair'),
         _typeCard(context, _EventType.quad, 'Foursome Play',
             'Small teams of four, all against each other on one leaderboard.',
@@ -3088,7 +3088,7 @@ class _StepHandicap extends StatelessWidget {
 ///    Double-Bogey Cap toggle, default on — one setting wearing a format's
 ///    clothes, and the field cannot tell from a leaderboard which way it was
 ///    set. It is always on, stated with a worked ceiling so a golfer who
-///    picks up knows exactly what lands on his card.
+///    picks up knows exactly what lands on their card.
 ///  * **No strokes off.** SO Low is a Cup mechanism: it exists so a match
 ///    plays off the low golfer, and against a field there is no low golfer to
 ///    play off. It must not render on this type.
@@ -3242,7 +3242,7 @@ class _StepScoring extends StatelessWidget {
           mode:            handicapMode,
           netPercent:      netPercent,
           // Strokes off the low index needs a single opponent to anchor to.
-          // Against a field there is no low man, so it is not offered — it
+          // Against a field there is no low golfer, so it is not offered — it
           // survives on the Mini Singles Bracket alone.
           allowStrokesOff: false,
           onModeChanged:   (m) => onChangeHandicap(m, netPercent),
@@ -3436,7 +3436,7 @@ class _StepPayoutsState extends State<_StepPayouts> {
             const SizedBox(height: 8),
             // The pool line names its SCOPE and its COUNT. Two money cards in
             // a row look identical otherwise, and a captain should not have to
-            // count players to know which pot he is filling.
+            // count players to know which pot they are filling.
             Text(
               pooLine(_fee, widget.numPlayers, field: true),
               style: theme.textTheme.bodySmall?.copyWith(
@@ -3519,7 +3519,7 @@ String pooLine(int fee, int count, {required bool field}) =>
 /// Entry is a flat fee per game taken at signup, so the fee sits beside the
 /// chip that turns the game on. Then post-creation has nothing left to
 /// collect, the field's entries are known before round one, and no golfer is
-/// asked for money after he has teed off.
+/// asked for money after they have teed off.
 class _StepSideGames extends StatelessWidget {
   final Set<String> activeGames;
   final int         numPlayers;
@@ -3729,8 +3729,8 @@ class _StepSideGames extends StatelessWidget {
       const SizedBox(height: 4),
       Text(
         'A percentage off the top of the championship pool. There is no day-2 '
-        "entry, which is why 4th has nothing to refund — he is still in the "
-        'main tournament, and losing a semi on Sunday costs him nothing he '
+        "entry, which is why 4th has nothing to refund — they are still in the "
+        'main tournament, and losing a semi on Sunday costs them nothing they '
         'was otherwise going to win.',
         style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant, height: 1.45),
@@ -3795,7 +3795,7 @@ class _StepSideGames extends StatelessWidget {
 
       const SizedBox(height: 4),
       Text(
-        'Handicap: strokes off low. A match has two players and a low man to '
+        'Handicap: strokes off low. A match has two players and a low golfer to '
         'anchor to — the reverse of the field games, which inherit full net. '
         'Change it on the Mini Singles setup screen.',
         style: theme.textTheme.bodySmall?.copyWith(
@@ -3945,7 +3945,7 @@ class _DayBetPayoutsState extends State<_DayBetPayouts> {
           numPayouts : _n,
           payoutCtrls: _ctrls,
           // Ten eligible pays three places; a smaller field drops to two, then
-          // one — three places on a small field would pay most of the men who
+          // one — three places on a small field would pay most of the golfers who
           // entered, which is not what this bet is for.
           maxPayouts : 3,
           onNumPayoutsChanged: (n) { setState(() => _n = n); _notify(); },
@@ -4063,7 +4063,7 @@ class _GameFeeCardState extends State<_GameFeeCard> {
 ///    1st/2nd/3rd at signup — so paid places, set on Payouts);
 ///  * the active preset is marked, and editing any value flips it to Custom.
 ///
-/// No floor and no validation of the table: the TD sets the points as he sees
+/// No floor and no validation of the table: the TD sets the points as they see
 /// fit. Negatives, a 10 for an albatross, zero for par are all valid. The
 /// screen reports what the table implies and gets out of the way.
 class _StepStablefordPoints extends StatelessWidget {
@@ -4615,11 +4615,11 @@ class _Step3GroupsAndTees extends StatelessWidget {
           Text(
             minGroupSize == 1
                 // A pairs field. There is no phantom partner to pad with — it
-                // would be an imaginary man taking half the shots in an
+                // would be an imaginary partner taking half the shots in an
                 // alternate shot — so an odd field is a problem to fix, and
                 // the Handicap step names the golfer standing there.
                 ? 'Two pairs go off together — one tee time, one scorer, one '
-                  'card. The first two men in a group are one pair and the '
+                  'card. The first two golfers in a group are one pair and the '
                   'next two are the other. A golfer left without a partner is '
                   'named on the Handicap step, and Next waits on it.'
                 : 'Groups with fewer than 4 players will have a phantom added '
@@ -5113,7 +5113,7 @@ class _StepSideGame extends StatelessWidget {
 // one.  You set HOW MANY of each game runs (the count is the pick — >0 means
 // it's in the day), then what each match is worth, and the totals follow.
 //
-// NOTE (scaffold ahead of scoring): the one-ball formats (Chapman, two-man
+// NOTE (scaffold ahead of scoring): the one-ball formats (Chapman, two-golfer
 // scramble, scramble) are drawn and priced but the app can't score them yet —
 // `scoreable:false`.  Singles are counted in twosomes as drawn; the engine
 // prices per foursome (two singles each), so an ODD twosome can't fully persist
@@ -5126,7 +5126,7 @@ class _StepSideGame extends StatelessWidget {
 const _kMixedGames = <(String, String, String, String, int, int, bool, bool)>[
   ('nassau',           'Nassau pairs',      '2 v 2 inside a foursome — one match each',
       'foursome', 2, 3, false, true),
-  ('two_man_chapman',  'Two-man Chapman',   '2 v 2 inside a foursome — one ball a pair',
+  ('two_man_chapman',  'Two-golfer Chapman',   '2 v 2 inside a foursome — one ball a pair',
       'foursome', 2, 1, false, false),
   ('foursomes',        'Foursomes',         'Alternate shot — 2 v 2, one ball a pair',
       'foursome', 2, 1, false, false),
@@ -5277,7 +5277,7 @@ class _MixedGamesByRound extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Chapman, two-man scramble and scramble are drawn but not scored yet; '
+          'Chapman, two-golfer scramble and scramble are drawn but not scored yet; '
           'their points are indicative.',
           style: theme.textTheme.bodySmall
               ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
@@ -6541,10 +6541,10 @@ class _Step5Review extends StatelessWidget {
   /// Championship entry per golfer, and the carve-out taken off the top.
   final int                championshipFee;
   final int                carvePct;
-  /// Team Play only: how many men make a complete team. **A pair of two is
+  /// Team Play only: how many golfers make a complete team. **A pair of two is
   /// complete** — it fields no phantom, because in fours the phantom is a
   /// handicap device for a team that still hits four balls and here it would
-  /// be an imaginary man taking half the shots. Null for every other shape,
+  /// be an imaginary partner taking half the shots. Null for every other shape,
   /// where the old fill-to-four rule stands.
   final int?               teamPlaySize;
 
@@ -6682,7 +6682,7 @@ class _Step5Review extends StatelessWidget {
           final color = _groupColors[g % _groupColors.length];
           // A group is short only against the size its shape actually fills.
           // A pairs event fills to TWO, so a complete pair was being labelled
-          // "+ 1 phantom" for being two men — which is the whole team.
+          // "+ 1 phantom" for being two golfers — which is the whole team.
           final needsPhantom = gr.groupNeedsPhantom(
               groupPlayers.length, teamPlaySize: teamPlaySize);
 

@@ -219,10 +219,25 @@ class _Row extends StatelessWidget {
                         // Every name, wrapping to a second line rather than
                         // trailing off — three names and an ellipsis tells a
                         // golfer nothing about whether they are on this team.
-                        Text(team.memberLine,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: Halved.label()),
+                        Row(children: [
+                          Flexible(
+                            child: Text(team.memberLine,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Halved.label()),
+                          ),
+                          // **What the team gets.** Without it the board
+                          // shows a net and no way to account for it: two
+                          // pairs on the same hole with the same gross come
+                          // out a stroke apart, and nothing on screen says
+                          // why. It is the round's figure, so it belongs
+                          // beside the roster that produced it.
+                          if (team.getsLabel.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            Text(team.getsLabel,
+                                style: Halved.label(color: Halved.pine)),
+                          ],
+                        ]),
                       ],
                     ),
                   ),

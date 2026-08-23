@@ -324,7 +324,7 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
   /// what it is doing right now. Neither the allowance nor the ball count
   /// belongs on a row, and neither should be hidden either.
   (String, String) _context(TeamPlayCard card) {
-    // No "plays off N" in any of these — the team row's `gets N` chip says it,
+    // No "gets N" in any of these — the team row's `gets N` chip says it,
     // in the place every other card in the app says it.
     switch (card.format) {
       case 'scramble':
@@ -1172,7 +1172,7 @@ class _GolferLine extends StatelessWidget {
               // No "gets N" chip. The dots on the grid below already say
               // where the strokes fall, which is the question anybody
               // standing on a tee is actually asking — the round total
-              // restates it in a place nobody plays off.
+              // restates it in a place nobody uses.
               if (counts && scored) ...[
                 const SizedBox(width: 8),
                 Icon(Icons.check_circle,
@@ -1356,12 +1356,48 @@ class _GroupScorecard extends StatelessWidget {
         border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       clipBehavior: Clip.antiAlias,
-      child: TeamScorecard(
-        pars         : card.pars,
-        strokeIndexes: card.strokeIndexes,
-        currentHole  : hole,
-        onTapHole    : (h) => onGo(h),
-        rows         : rows,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // **How many strokes each team gets, above the dots it accounts
+          // for.** The dots say WHICH holes carry one; this says how many
+          // there are all day, and it is the only thing that explains two
+          // pairs posting the same gross and coming out a stroke apart.
+          //
+          // It used to sit on the entry row, where beside a single hole's dot
+          // it restated the round in a place nobody uses it. Taking it off the
+          // card altogether went too far the other way and left the net with
+          // nothing behind it.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 2,
+              children: [
+                for (final t in teams)
+                  if (t.getsLabel.isNotEmpty)
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      if (many) ...[
+                        TeamColourBlock(colour: t.colour, size: 7),
+                        const SizedBox(width: 5),
+                      ],
+                      Text(
+                        many ? '${t.shortName} ${t.getsLabel}' : t.getsLabel,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    ]),
+              ],
+            ),
+          ),
+          TeamScorecard(
+            pars         : card.pars,
+            strokeIndexes: card.strokeIndexes,
+            currentHole  : hole,
+            onTapHole    : (h) => onGo(h),
+            rows         : rows,
+          ),
+        ],
       ),
     );
   }

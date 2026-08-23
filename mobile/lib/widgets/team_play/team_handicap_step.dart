@@ -39,8 +39,8 @@ class TeamHandicapPreview {
 
 class TeamHandicapStep extends StatelessWidget {
   /// Four or two. **Balance matters MORE in pairs, not less**: four handicaps
-  /// average out and two do not, so a scramble pair of 3 and 22 plays off 4
-  /// while a pair of 9 and 23 plays off 7 — three strokes on a card the field
+  /// average out and two do not, so a scramble pair of 3 and 22 gets 4
+  /// while a pair of 9 and 23 gets 7 — three strokes on a card the field
   /// will finish inside six.
   final int    teamSize;
   final String format;               // scramble | shamble | best_ball | …
@@ -190,7 +190,7 @@ class TeamHandicapStep extends StatelessWidget {
                 _WayOut('Let one team play three',
                     threeBallAvailable
                         ? 'Allowed in best ball — edit the group sizes so one '
-                          'team has three. Each golfer still plays off '
+                          'team has three. Each golfer still gets '
                           '$kBestBallPct% of their own.'
                         : 'Best ball only. A third ball is another option to '
                           'count — in alternate shot and Chapman it cannot '
@@ -512,7 +512,7 @@ class _WorkedTeam extends StatelessWidget {
             const SizedBox(height: 8),
             const TeamNote(
               'Handicaps stay per golfer here — this total is for comparison, '
-              'not a stroke anybody plays off.',
+              'not a stroke anybody gets.',
             ),
           ],
         ],

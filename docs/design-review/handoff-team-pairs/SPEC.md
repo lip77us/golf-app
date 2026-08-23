@@ -151,7 +151,7 @@ holds for pairs, with three changes.
 2. **The balance strip and the per-golfer contribution** live on the handicap step,
    as they do for fours. The argument is *stronger* here and the screen is the
    same: four handicaps average out, two do not — a scramble pair of 3 and 22
-   plays off 4 and a pair of 9 and 23 plays off 7, three strokes apart on a card
+   gets 4 and a pair of 9 and 23 gets 7, three strokes apart on a card
    the field finishes inside six.
 3. **The odd field is blocked, and the block names the golfer.**
 

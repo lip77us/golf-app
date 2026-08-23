@@ -53,7 +53,7 @@ SCRAMBLE_TABLE = (Decimal('0.25'), Decimal('0.20'), Decimal('0.15'), Decimal('0.
 # ---------------------------------------------------------------------------
 #
 # The finding worth acting on (docs/design-review/handoff-team-pairs/SPEC.md
-# §4).  The SAME pair — Maiolini 4, Yau 19 — plays off:
+# §4).  The SAME pair — Maiolini 4, Yau 19 — gets:
 #
 #     Scramble        35% low + 15% high      1.40 + 2.85 = 4.25  →   4
 #     Best ball       85% of each, own ball   3.40 / 16.15    →   3 / 16
