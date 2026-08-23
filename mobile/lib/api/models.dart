@@ -5212,6 +5212,9 @@ class TeamPlayDriveWindow {
   final int  perGolfer;
   final int  owed;
   final int  holesLeft;
+  /// Holes left that are not already spoken for — what a captain uses to
+  /// decide whether the long hitter can have the par 5.
+  final int  freeLeft;
   /// Owed equals the holes remaining: it still works, but only if every one of
   /// them goes to a man who owes.
   final bool tight;
@@ -5223,8 +5226,8 @@ class TeamPlayDriveWindow {
   const TeamPlayDriveWindow({
     required this.start, required this.end, required this.started,
     required this.required, required this.perGolfer, required this.owed,
-    required this.holesLeft, required this.tight, required this.impossible,
-    required this.golfers,
+    required this.holesLeft, required this.freeLeft,
+    required this.tight, required this.impossible, required this.golfers,
   });
 
   factory TeamPlayDriveWindow.fromJson(Map<String, dynamic> j) {
@@ -5237,6 +5240,7 @@ class TeamPlayDriveWindow {
       perGolfer : (j['per_golfer'] ?? 0) as int,
       owed      : (j['owed'] ?? 0) as int,
       holesLeft : (j['holes_left'] ?? 0) as int,
+      freeLeft  : (j['free_left'] ?? 0) as int,
       tight     : j['tight'] == true,
       impossible: j['impossible'] == true,
       golfers   : ((j['golfers'] as List?) ?? const [])
@@ -5248,6 +5252,16 @@ class TeamPlayDriveWindow {
 
   String get label => end <= 9 ? 'Front nine'
       : (start >= 10 ? 'Back nine' : 'The round');
+
+  /// "0 free drives left on the front nine" / "3 free drives left in the
+  /// round" — named for the window it belongs to, because a per-nine
+  /// requirement has two and they do not carry.
+  String get freeLabel {
+    final where = end <= 9
+        ? 'on the front nine'
+        : (start >= 10 ? 'on the back nine' : 'in the round');
+    return '$freeLeft free drive${freeLeft == 1 ? '' : 's'} left $where';
+  }
 }
 
 /// One hole of the alternating-pairs rota — the schedule, not a quota. What it
@@ -5370,8 +5384,11 @@ class TeamPlayTeam {
   final Map<int, int> strokesByHole;
   /// Shamble only: every ball, hole by hole, with the counting ones flagged.
   final List<TeamPlayGolferCard> golfersByHole;
-  /// `{hole: team score against par}` — what the Team line prints.
+  /// `{hole: team score against par}` and `{hole: net against par}` — the
+  /// board shows the score the team made AND what it was worth, on separate
+  /// lines, because one does not imply the other once strokes are involved.
   final Map<int, int> toParByHole;
+  final Map<int, int> netToParByHole;
 
   // Present on the leaderboard; null on the setup board.
   final int?    gross;
@@ -5394,6 +5411,7 @@ class TeamPlayTeam {
     this.pars = const {}, this.strokeIndexes = const {},
     this.scoresByHole = const {}, this.strokesByHole = const {},
     this.golfersByHole = const [], this.toParByHole = const {},
+    this.netToParByHole = const {},
     this.gross, this.net, this.grossToPar, this.netToPar,
     this.rank, this.tied = false, this.complete = false,
   });
@@ -5422,6 +5440,7 @@ class TeamPlayTeam {
         scoresByHole  : _intMap(j['scores_by_hole']),
         strokesByHole : _intMap(j['strokes_by_hole']),
         toParByHole   : _intMap(j['to_par_by_hole']),
+        netToParByHole: _intMap(j['net_to_par_by_hole']),
         golfersByHole : ((j['golfers_by_hole'] as List?) ?? const [])
             .map((e) => TeamPlayGolferCard.fromJson(
                 Map<String, dynamic>.from(e as Map)))
@@ -5707,6 +5726,8 @@ class TeamPlayCard {
   /// golfer.
   final Map<int, int> strokesByHole;
   final Map<int, Map<int, int>> golferStrokes;
+  /// `{hole: net against par}` — what each hole's score was worth.
+  final Map<int, int> netToParByHole;
   final TeamPlayRound round;
   final TeamPlayDrive drive;
   final int?   teamScore;                 // scramble
@@ -5718,7 +5739,8 @@ class TeamPlayCard {
     this.par, this.strokeIndex, this.yards, this.teamStrokes = 0,
     this.pars = const {}, this.strokeIndexes = const {},
     this.strokesByHole = const {},
-    this.golferStrokes = const {}, this.teamScore, this.shamble,
+    this.golferStrokes = const {}, this.netToParByHole = const {},
+    this.teamScore, this.shamble,
   });
 
   factory TeamPlayCard.fromJson(Map<String, dynamic> j) => TeamPlayCard(
@@ -5753,6 +5775,7 @@ class TeamPlayCard {
                 int.parse(h.key): h.value as int,
             },
         },
+        netToParByHole: _intMap(j['net_to_par_by_hole']),
         round    : TeamPlayRound.fromJson(
             Map<String, dynamic>.from((j['round'] ?? {}) as Map)),
         drive    : TeamPlayDrive.fromJson(

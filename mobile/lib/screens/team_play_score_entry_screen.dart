@@ -882,14 +882,35 @@ class _CardScorecard extends StatelessWidget {
             ),
         ]),
         const SizedBox(height: 6),
-        TeamScorecard.single(
+        TeamScorecard(
           pars         : card.pars,
           strokeIndexes: card.strokeIndexes,
-          scores       : scores,
-          strokes      : card.strokesFor(golferId),
-          label        : name,
           currentHole  : hole,
           onTapHole    : (h) => onGo(h),
+          rows         : [
+            // A scramble's team score is one ball, so the raw line means
+            // something and both are worth showing: what the team made, and
+            // what it was worth once the stroke landed.
+            //
+            // A shamble's is the sum of the counting balls — a "10" that is
+            // two 5s — so the raw line is arithmetic nobody performs. Only the
+            // net to par goes on it.
+            if (card.isScramble)
+              TeamScorecardRow(
+                label  : name,
+                scores : scores,
+                strokes: card.strokesFor(golferId),
+              ),
+            if (card.netToParByHole.isNotEmpty)
+              TeamScorecardRow(
+                label  : 'Net',
+                scores : card.netToParByHole,
+                strokes: card.isScramble
+                    ? const {} : card.strokesFor(golferId),
+                total  : true,
+                toPar  : true,
+              ),
+          ],
         ),
       ],
     );

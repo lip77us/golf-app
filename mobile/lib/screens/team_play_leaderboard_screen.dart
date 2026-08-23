@@ -283,17 +283,33 @@ class _Detail extends StatelessWidget {
                     counted: g.counted,
                     italic : g.isPhantom,
                   ),
+                // Two lines, because the score the team made and what it was
+                // worth are different facts once strokes are involved — a 4 on
+                // a stroke hole is level, and one row cannot say both.
                 TeamScorecardRow(
                   label  : 'Team',
-                  // Against par, not as a raw total.
-                  scores : team.toParByHole,
+                  scores : team.scoresByHole,
                   strokes: team.strokesByHole,
+                  total  : true,
+                ),
+                TeamScorecardRow(
+                  label  : 'Net',
+                  scores : team.netToParByHole,
                   total  : true,
                   toPar  : true,
                 ),
               ],
             ),
           ],
+          // How much room is left, per window — the figure a captain uses.
+          // Per nine has two of them and they do not carry, so each is named.
+          for (final w in drive.windows)
+            if (w.started || w.owed > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: TeamNote(w.freeLabel,
+                    warn: w.freeLeft == 0 && w.owed > 0),
+              ),
           // Recorded on the row if it happened. It changes the money only if
           // the TD chose the stroke penalty, and then it already changed the
           // gross upstream.

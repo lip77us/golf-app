@@ -268,7 +268,7 @@ def team_round(foursome, config) -> dict:
 # 3. The board
 # ---------------------------------------------------------------------------
 
-def _board_strokes_by_hole(foursome, config, rnd) -> dict:
+def _board_strokes_by_hole(foursome, config, allowance) -> dict:
     """`{hole: strokes}` for the row the board draws.
 
     A scramble has one team figure, so the dots are the team's. A shamble keeps
@@ -278,11 +278,11 @@ def _board_strokes_by_hole(foursome, config, rnd) -> dict:
     """
     from scoring.handicap import _strokes_on_hole
 
-    if not config.is_scramble or not rnd.get('allowance'):
+    if not config.is_scramble or not allowance:
         return {}
     return {
         str(h['number']): _strokes_on_hole(
-            rnd['allowance'], h.get('stroke_index', h['number']))
+            allowance, h.get('stroke_index', h['number']))
         for h in hole_data(foursome)
     }
 
@@ -305,6 +305,26 @@ def _board_to_par_by_hole(foursome, config, rnd) -> dict:
             continue
         par = holes.get(n, 0) * (1 if config.is_scramble else counts.get(n, 1))
         out[str(n)] = gross - par
+    return out
+
+
+def net_to_par_by_hole(foursome, config, rnd) -> dict:
+    """`{hole: net against par}` for the team's net line.
+
+    A scramble's per-hole net is already on `by_hole`; a shamble's is the sum
+    of the counting nets, and its par is multiplied by the ball count.
+    """
+    holes   = {h['number']: h.get('par', 0) for h in hole_data(foursome)}
+    by_hole = rnd.get('by_hole') or {}
+    counts  = {} if config.is_scramble else resolved_counts(foursome, config)
+
+    out = {}
+    for n, v in by_hole.items():
+        net = v.get('net')
+        if net is None:
+            continue
+        par = holes.get(n, 0) * (1 if config.is_scramble else counts.get(n, 1))
+        out[str(n)] = net - par
     return out
 
 
@@ -376,6 +396,10 @@ def leaderboard(tournament) -> dict:
         # figure in team_round. Merging blind replaced the block with an int
         # and the board's client blew up casting it back to a map. The figure
         # is already on the row as `team_handicap`, so drop the duplicate.
+        # Keep the figure before dropping the key — the dots and the net row
+        # are both allocated off it, and popping first silently produced a
+        # scorecard with no strokes marked anywhere.
+        allowance = rnd.get('allowance')
         rnd.pop('allowance', None)
         team.update(rnd)
         # Enough for the expanded row to draw the same scorecard the entry
@@ -386,7 +410,12 @@ def leaderboard(tournament) -> dict:
             str(h['number']): h.get('stroke_index') for h in holes}
         team['scores_by_hole'] = {
             str(n): v.get('gross') for n, v in (rnd.get('by_hole') or {}).items()}
-        team['strokes_by_hole'] = _board_strokes_by_hole(foursome, config, rnd)
+        team['strokes_by_hole'] = _board_strokes_by_hole(
+            foursome, config, allowance)
+        # The net line, against par. A scramble's net is gross minus the
+        # strokes that fall on THAT hole; a shamble's is the counted nets.
+        team['net_to_par_by_hole'] = net_to_par_by_hole(
+            foursome, config, rnd)
         # A shamble's expanded row shows all FOUR balls with the counting ones
         # marked — the team's total is two of them, and a board that shows only
         # the total cannot answer "whose scores made it".

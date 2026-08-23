@@ -319,3 +319,81 @@ class GenericBoardTests(_Base):
             round_number=2, status='in_progress')
         r = self.client.get(reverse('api-leaderboard', args=[other.id]))
         self.assertIn('low_net_round', (r.json().get('games') or {}))
+
+
+class DriveSlackTests(_Base):
+    """`free_left` is what a captain actually uses: holes left that are not
+    already spoken for. "4 required of 9" does not tell him whether the long
+    hitter can have the par 5."""
+
+    def test_two_a_nine_leaves_one_free_at_the_start(self):
+        self.configure(drive_rule='per_nine', drives_required=2)
+        front = self.row('Slate')['drive']['windows'][0]
+        # Four golfers at two each is eight of the nine holes.
+        self.assertEqual(front['required'], 8)
+        self.assertEqual(front['holes_left'], 9)
+        self.assertEqual(front['owed'], 8)
+        self.assertEqual(front['free_left'], 1)
+
+    def test_the_slack_closes_as_holes_go_by(self):
+        self.configure(drive_rule='per_nine', drives_required=2)
+        fs  = self.teams['Slate']
+        url = reverse('api-team-play-drive', args=[fs.id])
+        ids = [m.player_id for m in fs.memberships.all()]
+        # Hole 1 to a golfer who owes: eight holes left, seven owed.
+        self.client.post(url, {'hole_number': 1, 'player_id': ids[0]},
+                         format='json')
+        self.scramble_round('Slate', holes=1)
+
+        front = self.row('Slate')['drive']['windows'][0]
+        self.assertEqual(front['owed'], 7)
+        self.assertEqual(front['holes_left'], 8)
+        self.assertEqual(front['free_left'], 1)
+
+    def test_a_wasted_hole_spends_the_slack(self):
+        """Giving hole 1 to somebody who has already driven leaves eight holes
+        for eight owed drives — no room left at all."""
+        self.configure(drive_rule='per_nine', drives_required=1)
+        fs  = self.teams['Slate']
+        url = reverse('api-team-play-drive', args=[fs.id])
+        ids = [m.player_id for m in fs.memberships.all()]
+        for hole in (1, 2):
+            self.client.post(url, {'hole_number': hole, 'player_id': ids[0]},
+                             format='json')
+        self.scramble_round('Slate', holes=2)
+
+        front = self.row('Slate')['drive']['windows'][0]
+        self.assertEqual(front['owed'], 3)        # three golfers still owe
+        self.assertEqual(front['holes_left'], 7)
+        self.assertEqual(front['free_left'], 4)
+
+
+class NetLineTests(_Base):
+    """The board and the card both carry a net-to-par line, and the dots have
+    to survive the allowance being popped off the merged dict."""
+
+    def test_a_scramble_row_has_dots_and_a_net_line(self):
+        self.configure()
+        self.scramble_round('Slate', gross_per_hole=4, holes=9)
+        row = self.row('Slate')
+
+        # Slate plays off 8; stroke index equals hole number, so holes 1-8
+        # carry a stroke and the dots must be there.
+        self.assertTrue(row['strokes_by_hole'],
+                        'the dots vanished when allowance was popped')
+        self.assertEqual(row['strokes_by_hole']['1'], 1)
+        # Level par gross on hole 1, one stroke → one under net.
+        self.assertEqual(row['to_par_by_hole']['1'], 0)
+        self.assertEqual(row['net_to_par_by_hole']['1'], -1)
+
+    def test_a_shamble_net_line_reads_against_the_ball_count(self):
+        self.configure(team_format='shamble')
+        self.shamble_round('Slate', gross=5, holes=1)
+        row = self.row('Slate')
+        # Best two 5s is 10 against a par of 8 → +2 gross.
+        self.assertEqual(row['to_par_by_hole']['1'], 2)
+        # Slate is 5/12/16/24, so at 85% it plays off 4/10/14/20. On stroke
+        # index 1 that is one stroke each except Vaughn, who is over 18 and
+        # takes two. Nets are 4/4/4/3, the best two are 3 and 4, and 7 against
+        # a par of 8 is one under.
+        self.assertEqual(row['net_to_par_by_hole']['1'], -1)

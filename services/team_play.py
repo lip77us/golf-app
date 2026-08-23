@@ -203,6 +203,10 @@ def window_state(config, window, picks: dict, real_player_ids,
         'per_golfer'  : per_golfer,
         'owed'        : owed,
         'holes_left'  : holes_left,
+        # Holes left that are NOT already spoken for. This is the number a
+        # captain actually uses — it tells him whether he can give the par 5 to
+        # his long hitter, which "4 required of 9" does not.
+        'free_left'   : max(0, holes_left - owed),
         'tight'       : owed == holes_left and owed > 0,
         'impossible'  : owed > holes_left,
         'golfers'     : [
