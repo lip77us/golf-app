@@ -216,17 +216,13 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
   /// belongs on a row, and neither should be hidden either.
   (String, String) _context(TeamPlayCard card) {
     if (card.isScramble) {
-      final a = card.round.allowance;
-      return (
-        'Scramble',
-        a == null
-            ? 'All four hit, you play the best ball.'
-            : 'All four hit, you play the best ball · the team plays off $a.',
-      );
+      // No "plays off N" here — the team row's `gets N` chip says it, in the
+      // place every other card says it.
+      return ('Scramble', 'All four hit, you play the best ball.');
     }
     final n = card.shamble?.count ?? 2;
     return (
-      'Shamble · $n of 4 count',
+      'Shamble',
       'Best drive, then everyone plays his own ball in. '
       'The ${n == 1 ? 'lowest net counts' : '$n lowest nets count'}; '
       'the rest are recorded and ignored.',
@@ -237,8 +233,6 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
       children: [
-        _Banner(context_: _context(card)),
-        const SizedBox(height: 12),
         _HoleHeader(card: card, hole: _hole!),
         const SizedBox(height: 12),
 
@@ -335,6 +329,10 @@ class _HoleHeader extends StatelessWidget {
       // on its first hole or its ninth.
       if (card.playOrder.isNotEmpty && card.playOrder.first != 1)
         '${card.positionOf(hole)} of ${card.playOrder.length}',
+      // Stated on EVERY hole, per the packet — it is the one piece of the
+      // shamble's rule that is operative rather than reference, so it stays up
+      // here even though the rule itself moved to the bottom.
+      if (card.shamble != null) '${card.shamble!.count} of 4 count',
     ];
     return Container(
       width: double.infinity,
