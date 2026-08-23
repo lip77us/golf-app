@@ -138,7 +138,7 @@ void main() {
     // and that pair's own net row — splitting the thing it was meant to bind.
     test('a summing row rules above by default', () {
       const r = TeamScorecardRow(label: 'Net', scores: {}, total: true);
-      expect(r.ruleAbove, isTrue);
+      expect(r.drawsRuleAbove, isTrue);
       expect(r.ruleBelow, isFalse);
     });
 
@@ -146,13 +146,24 @@ void main() {
       // Two lines around one row is a box, not a separator.
       const r = TeamScorecardRow(
           label: 'Net', scores: {}, total: true, ruleBelow: true);
-      expect(r.ruleAbove, isFalse);
+      expect(r.drawsRuleAbove, isFalse);
       expect(r.ruleBelow, isTrue);
+    });
+
+    test('the LAST pair on a two-team card takes neither rule', () {
+      // It gets no rule below because the card ends there — and the derived
+      // default would then put one back ABOVE its net, which is the same
+      // split one row further down. Saying so outright is the only way to get
+      // neither.
+      const r = TeamScorecardRow(
+          label: 'Net', scores: {}, total: true, ruleAbove: false);
+      expect(r.drawsRuleAbove, isFalse);
+      expect(r.ruleBelow, isFalse);
     });
 
     test('an ordinary row rules neither way', () {
       const r = TeamScorecardRow(label: 'B & P', scores: {});
-      expect(r.ruleAbove, isFalse);
+      expect(r.drawsRuleAbove, isFalse);
       expect(r.ruleBelow, isFalse);
     });
   });

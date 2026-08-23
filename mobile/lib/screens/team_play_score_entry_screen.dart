@@ -1288,10 +1288,14 @@ class _GroupScorecard extends StatelessWidget {
           accent : accent,
           // With two pairs on one card the rule goes UNDER the net, where it
           // separates one pair from the next. Above it — the default for a
-          // summing row — it fell between a pair's scores and that pair's own
-          // net, splitting the thing it was meant to bind. The last pair needs
-          // no rule; the card ends there.
+          // summing row — it falls between a pair's scores and that pair's own
+          // net, splitting the thing it is meant to bind.
+          //
+          // Both flags are needed. The LAST pair takes no rule below, because
+          // the card ends there — and then the derived default would put one
+          // back above its net, which is the same split one row further down.
           ruleBelow: many && !last,
+          ruleAbove: many ? false : null,
         ));
       }
     }

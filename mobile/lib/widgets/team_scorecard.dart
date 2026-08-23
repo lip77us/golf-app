@@ -73,12 +73,20 @@ class TeamScorecardRow {
     this.total = false,
     this.toPar = false,
     this.ruleBelow = false,
+    this.ruleAbove,
     this.accent,
   });
 
-  /// A rule above is the default for a summing row, and is suppressed when the
-  /// row asks for one below instead — two lines around one row is a box.
-  bool get ruleAbove => total && !ruleBelow;
+  /// Whether the rule goes above, when the caller wants to say so outright.
+  ///
+  /// Null means work it out: a summing row rules above unless it has asked for
+  /// one below instead. That default is right for a card carrying ONE team,
+  /// and wrong for the last team on a card carrying two — there the row below
+  /// is another pair's, so `ruleBelow` is off, and deriving would put the line
+  /// back between that pair's scores and its own net.
+  final bool? ruleAbove;
+
+  bool get drawsRuleAbove => ruleAbove ?? (total && !ruleBelow);
 }
 
 class TeamScorecard extends StatefulWidget {
@@ -188,11 +196,11 @@ class _TeamScorecardState extends State<TeamScorecard> {
     }
 
     BoxDecoration? _rule(TeamScorecardRow r, ThemeData th) {
-      if (!r.ruleAbove && !r.ruleBelow) return null;
+      if (!r.drawsRuleAbove && !r.ruleBelow) return null;
       final side = BorderSide(color: th.colorScheme.outlineVariant);
       return BoxDecoration(
         border: Border(
-          top:    r.ruleAbove ? side : BorderSide.none,
+          top:    r.drawsRuleAbove ? side : BorderSide.none,
           bottom: r.ruleBelow ? side : BorderSide.none,
         ),
       );
