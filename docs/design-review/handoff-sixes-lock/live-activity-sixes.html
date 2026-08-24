@@ -1,0 +1,230 @@
+<!-- @dsCard group="Live Activities" name="Sixes — lock screen" subtitle="SixesLiveActivity — neutral scoreboard across the round, the pairing-change notification, High-Low, always-on and a quieter alternative" viewport="1560x1320" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Sixes Live Activity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--mint:#3BD89A;--muted:#5C6B62;--blue:#5AA7F5;--orange:#F3A059}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:28px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.home{position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 "Spline Sans",system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.own{background:#fff;border:1px solid #DCE5DD;border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:100px;color:var(--deepPine);font-weight:600}
+.wrap{position:relative;margin-bottom:36px}
+.cap{position:absolute;left:0;right:0;bottom:-30px;text-align:center;font-size:11.5px;font-weight:600;color:var(--muted)}
+.lock{width:352px;height:762px;border:10px solid #0B1F1A;border-radius:44px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);background:radial-gradient(120% 90% at 50% 0%,#1E4038 0%,#0C1F1B 45%,#050D0B 100%);flex:none;color:#fff}
+.lock.aod{filter:brightness(.74) saturate(.82)}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:112px;height:31px;border-radius:20px;background:#000}
+.clock{text-align:center;padding:58px 0 0}
+.clock .d{font-size:14px;font-weight:600;opacity:.72}
+.clock .t{font-family:"Schibsted Grotesk",sans-serif;font-size:74px;font-weight:600;line-height:1.02;letter-spacing:-2px;margin-top:2px}
+.la{margin:26px 14px 0;border-radius:24px;background:rgba(255,255,255,.13);backdrop-filter:blur(20px);padding:13px 15px 14px;border:.5px solid rgba(255,255,255,.14)}
+.lah{display:flex;align-items:center;gap:7px;margin-bottom:11px}
+.lah .mark{width:17px;height:17px;border-radius:5px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 10px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.lah .g{font-size:11.5px;font-weight:700;letter-spacing:.3px}
+.lah .seg{margin-left:auto;font-size:10.5px;font-weight:600;opacity:.62}
+.big{display:flex;align-items:flex-end;gap:11px}
+.big .st{font-family:"Schibsted Grotesk",sans-serif;font-size:36px;font-weight:700;line-height:.94;letter-spacing:-1px;color:var(--mint)}
+.big .sub{padding-bottom:4px;font-size:12px;line-height:1.4;opacity:.8}
+.big .sub .lead{font-weight:700;opacity:1}
+.big .sub .dim{opacity:.6}
+.big .st.blue{color:var(--blue)}
+.big .st.orange{color:var(--orange)}
+.big .sub .lead.blue{color:var(--blue)}
+.big .sub .lead.orange{color:var(--orange)}
+.pill .bl{color:var(--blue)}
+.dotb,.doto{display:inline-block;width:7px;height:7px;border-radius:2px;vertical-align:1px;margin-right:5px}
+.big .st{flex:none;white-space:nowrap}
+.big .state,.big .money{flex:none;white-space:nowrap}
+.big .sub{flex:1;min-width:0}
+.dotb{background:var(--blue)}.doto{background:var(--orange)}
+.state{margin-left:auto;text-align:right;padding-bottom:3px}
+.state b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;line-height:1;letter-spacing:.2px}
+.state u{text-decoration:none;display:block;font-size:9px;font-weight:700;letter-spacing:.4px;opacity:.55;margin-top:4px}
+.state b.blue{color:var(--blue)}.state b.orange{color:var(--orange)}
+.pips{display:flex;gap:5px;margin-top:12px}
+.pips i{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.2)}
+.pips i.b{background:var(--blue)}.pips i.o{background:var(--orange)}
+.pips i.now{background:rgba(255,255,255,.62)}
+.foot{display:flex;align-items:center;gap:8px;margin-top:11px;font-size:11px;opacity:.66}
+.foot .r{margin-left:auto;opacity:1;font-weight:600}
+.bar{position:absolute;left:50%;bottom:9px;transform:translateX(-50%);width:126px;height:5px;border-radius:3px;background:rgba(255,255,255,.5)}
+.torch{position:absolute;bottom:38px;left:0;right:0;display:flex;justify-content:space-between;padding:0 34px;opacity:.5;font-size:17px}
+.torch span{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center}
+.notif{margin:16px 14px 0;border-radius:22px;background:rgba(255,255,255,.19);backdrop-filter:blur(20px);padding:12px 14px;border:.5px solid rgba(255,255,255,.16);display:flex;gap:11px;align-items:flex-start}
+.notif .ic{flex:none;width:34px;height:34px;border-radius:9px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 16px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.notif .tx{flex:1;min-width:0}
+.notif .tx .t1{display:flex;align-items:baseline;gap:7px;font-size:11px;font-weight:700;letter-spacing:.3px;opacity:.7}
+.notif .tx .t1 span{margin-left:auto;font-weight:600;opacity:.8}
+.notif .tx .t2{font-size:14px;font-weight:700;margin-top:3px}
+.notif .tx .t3{font-size:12.5px;opacity:.82;margin-top:2px;line-height:1.4}
+/* quiet variant */
+.la.quiet{background:rgba(10,22,18,.55);border-color:rgba(255,255,255,.1);padding:12px 15px}
+.la.quiet .lah{margin-bottom:9px}
+.la.quiet .st{font-size:22px}
+.la.quiet .sub{font-size:11.5px;opacity:.6}
+.la.quiet .money b{font-size:15px;opacity:.85}
+.la.quiet .pips{margin-top:10px}
+.la.quiet .pips i{height:3px}
+/* island */
+.di{background:#0B1F1A;border-radius:22px;padding:22px 20px;width:372px;flex:none;color:#fff;margin-bottom:36px}
+.di h4{font-family:"Schibsted Grotesk",sans-serif;font-size:13px;font-weight:700;margin:0 0 4px}
+.di p{font-size:11px;line-height:1.5;opacity:.6;margin:0 0 13px}
+.dr{margin-bottom:16px}
+.dr>span{display:block;font-size:9.5px;font-weight:700;letter-spacing:.4px;opacity:.5;margin-bottom:6px}
+.pill{background:#000;border-radius:20px;height:37px;display:inline-flex;align-items:center;gap:9px;padding:0 13px;font-size:13px;font-weight:700}
+.pill .mk{flex:none;width:15px;height:15px;border-radius:4px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 9px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.pill .mint{color:var(--mint)}
+.pill.min{width:52px;gap:0;justify-content:space-between;padding:0 11px}
+.exp{background:#000;border-radius:26px;padding:14px 16px 15px}
+.exp .top{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;opacity:.6;letter-spacing:.3px}
+.exp .mid{display:flex;align-items:flex-end;gap:10px;margin-top:9px}
+.exp .mid b{font-family:"Schibsted Grotesk",sans-serif;font-size:29px;font-weight:700;line-height:.95;color:var(--mint)}
+.exp .mid span{font-size:11.5px;opacity:.72;padding-bottom:3px;line-height:1.4}
+.exp .mid .m{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;padding-bottom:2px}
+</style></head>
+<body>
+<a class="home" href="../index-contents.html">&#8592; Contents</a>
+<div class="notes">
+<h1>Sixes on the lock screen</h1>
+<p>Sixes is the right first Live Activity, and not because it is the simplest. It is the one game where <b>something changes that you cannot know without being told</b>: the pairing changes at hole 7, and it is drawn rather than scheduled.</p>
+<p>Everything else the app could put on a lock screen &mdash; your score, the money &mdash; you already know, because you were there when it happened. Sixes has news.</p>
+<h3>It is a scoreboard, not a personal report</h3>
+<p><b>2 UP</b>, with both pairings named and the leader bold. Not <i>you are 2 up</i>.</p>
+<p>Four golfers see the same string, which matters more than it sounds: the Sixes pairing changes mid-round, so a phone that says <i>2 UP</i> without saying <i>who</i> is unreadable forty minutes later. Naming both sides fixes the partner problem and the perspective problem in one line, and it means two men can look at one phone.</p>
+<p><b>The number wears the leading team&rsquo;s colour</b>, and so does their name. Mint said nothing &mdash; it is the app&rsquo;s colour, not a side&rsquo;s, so a mint <i>2 UP</i> above a blue row and an orange row leaves the reader guessing which one is up. Blue number, blue name, the other side dimmed: the tie between the score and the side is carried by colour rather than by reading order, which nobody trusts.</p>
+<h3>The right-hand slot is the state of the match, not the money</h3>
+<p>An earlier pass put a running balance there under the label <i>yours</i>, and nobody could tell what it meant &mdash; yours as opposed to whose? On a neutral board a personal number in the loudest corner is a category error.</p>
+<p>It carries <b>DORMIE</b> instead. Two up with two to play is the one fact that changes how the next hole gets played, and it is the word golfers actually say. When no state word applies the slot holds <b>holes remaining</b>, which is the same question answered less dramatically.</p>
+<p><b>Money moves to the footer</b> &mdash; <i>+$5 so far</i> &mdash; beside the stake, where the context makes the label unnecessary. It is the second question all round and it now reads like one.</p>
+<h3>Thru sits in the footer, not on the sides line</h3>
+<p>The headline band holds three things and two of them cannot shrink, so the pairing line has about a hundred pixels. <i>Sam &amp; Lee &middot; thru 4</i> does not fit in it and breaks after &ldquo;thru&rdquo;.</p>
+<p>The hole count is <b>round context, not a side</b> &mdash; it belongs beside the stake in the footer, which already carries that kind of thing. Moving it buys the pairing its own line, which is the slot three rounds of this design have been about.</p>
+<h3>Three pips carry the round</h3>
+<p>The whole shape of Sixes fits in three bars &mdash; blue won, orange won, live. It answers &ldquo;how much is left&rdquo; without a sentence, and it is the one element identical in every state, so the eye learns where to look.</p>
+<h3>The draw gets no special state</h3>
+<p>An earlier pass gave the hole-7 draw its own card with an <i>Open to draw</i> button. That was wrong twice over: a lock-screen button on group state strands the other three, and a Live Activity that <b>asks for something</b> stops being a glance.</p>
+<p>So the activity does what it does the rest of the round &mdash; <b>it updates.</b> The pairing changes, the two names change, the pip advances. No banner, no CTA, no waiting state.</p>
+<h3>The notification does the announcing</h3>
+<p>What the draw actually needs is a <b>push</b>, once, when the pairing lands: <i>New partners &mdash; holes 7&ndash;12.</i> That is a different object with a different job. It arrives, it is read, it is dismissed, and the Live Activity underneath is already correct.</p>
+<p>One moment in a round earns one: the draw at hole 7. A segment match that closes out early leaves extra holes, and those are drawn too &mdash; so a second push is possible, but it is not scheduled. Nothing else pushes.</p>
+<div class="own"><table>
+<tr><td>Activity</td><td>Ambient. Always current, never asks.</td></tr>
+<tr><td>Notification</td><td>Punctual. Fires on the pairing change &mdash; at hole 7, and again only if extra holes are drawn.</td></tr>
+<tr><td>Never both</td><td>The activity does not also flash. It is already showing the answer the push announced.</td></tr>
+</table></div>
+<h3>Points, not holes, in High-Low</h3>
+<p>Classic scores a point a hole and reads <b>2 UP</b>. High-Low scores two &mdash; low v low and high v high &mdash; and the same phrasing would be a lie. It reads <b>+3 PTS</b>.</p>
+<p><b>The split does not go on the lock screen.</b> An earlier pass showed <i>low +2 &middot; high +1</i>, which is how the points were earned rather than what they are &mdash; and a running total is the only thing the match is decided on. The breakdown belongs in the app, on a card that can afford it.</p>
+<h3>Always-on is the same view, held back</h3>
+<p>No separate composition. iOS pulls the refresh rate and the brightness down; the activity keeps its structure because <b>the big number is already the only thing that has to survive there</b>. Anything needing a second glance would fail, which is a useful test to apply before adding a line.</p>
+<p>Drawn at roughly the real reduction rather than the theoretical one. A near-black mock made the state look broken when it is simply quieter &mdash; and the panel&rsquo;s own contrast, mint and blue on a frosted dark ground, is what carries it.</p>
+<h3>The quiet alternative</h3>
+<p>The second treatment drops the frosted panel for a dark slab, shrinks the number, and pulls the mint back to a single accent on the pips. It is what this should look like <b>if it turns out people leave it running for four hours and resent it</b> &mdash; the same information, asking for none of the attention.</p>
+<p>Worth shipping the loud one and watching. A glanceable thing that nobody glances at is the failure mode, not a thing that is slightly too bright.</p>
+<h3>Eight hours, and the start moment</h3>
+<p>iOS ends a Live Activity after eight hours, and a slow round with a turn is close. It starts on the <b>first score posted</b> &mdash; which buys back the half hour in the car park and on the range, and means an abandoned round never leaves a ghost on the lock screen.</p>
+<h3>The last state is not a scoreboard</h3>
+<p>When the round signs, the neutral board becomes the one personal thing: <b>what you won, and who to see.</b> It holds a few minutes and dismisses itself. Nobody needs a match summary on a lock screen; they need to know who has the cash.</p>
+<h3>Sixes owns the round</h3>
+<p>One activity per round. If a foursome is running skins alongside, it is not on here &mdash; two activities for one round would be the worst outcome, and Sixes is the one with news.</p>
+</div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">10:24</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SIXES</span><span class="seg">SEGMENT 1 &middot; HOLES 1&ndash;6</span></div>
+<div class="big"><span class="st blue">2 UP</span><span class="sub"><span class="lead blue"><span class="dotb"></span>Paul &amp; Dave</span><br><span class="dim"><span class="doto"></span>Sam &amp; Lee</span></span><span class="state"><b class="blue">DORMIE</b><u>2 TO PLAY</u></span></div>
+<div class="pips"><i class="now"></i><i></i><i></i></div>
+<div class="foot"><span>Thru 4 &middot; $5 a match</span><span class="r">+$5 so far</span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Segment 1 &mdash; the ordinary state</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">11:07</div></div>
+<div class="notif">
+<div class="ic">H</div>
+<div class="tx"><div class="t1">HALVED<span>now</span></div>
+<div class="t2">New partners &mdash; holes 7&ndash;12</div>
+<div class="t3"><b style="font-weight:700">Pairing 2:</b> <span class="dotb"></span>Paul &amp; Sam <span style="opacity:.6">v.</span> <span class="doto"></span>Dave &amp; Lee</div></div>
+</div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SIXES</span><span class="seg">SEGMENT 2 &middot; HOLES 7&ndash;12</span></div>
+<div class="big"><span class="st" style="color:#fff;opacity:.9">ALL SQ</span><span class="sub"><span class="dotb"></span>Paul &amp; Sam<br><span class="doto"></span>Dave &amp; Lee</span><span class="state"><b>&mdash;</b><u>6 TO PLAY</u></span></div>
+<div class="pips"><i class="b"></i><i class="now"></i><i></i></div>
+<div class="foot"><span>Segment 1 won by blue, 4&amp;2</span><span class="r">+$5 so far</span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">The draw &mdash; push announces, activity is already right</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">12:41</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SIXES &middot; HIGH-LOW</span><span class="seg">SEGMENT 3 &middot; 13&ndash;18</span></div>
+<div class="big"><span class="st orange">+3 PTS</span><span class="sub"><span class="lead orange"><span class="doto"></span>Sam &amp; Lee</span><br><span class="dim"><span class="dotb"></span>Paul &amp; Dave</span></span><span class="state"><b>&mdash;</b><u>3 TO PLAY</u></span></div>
+<div class="pips"><i class="b"></i><i class="o"></i><i class="now"></i></div>
+<div class="foot"><span>Thru 15 &middot; 6 pts live</span><span class="r">&minus;$5 so far</span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">High-Low &mdash; one running total</div></div>
+
+<div class="wrap"><div class="lock aod">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">12:52</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SIXES</span><span class="seg">SEGMENT 3 &middot; 13&ndash;18</span></div>
+<div class="big"><span class="st blue">1 UP</span><span class="sub"><span class="lead blue"><span class="dotb"></span>Paul &amp; Lee</span><br><span class="dim"><span class="doto"></span>Dave &amp; Sam</span></span><span class="state"><b class="blue">DORMIE</b><u>2 TO PLAY</u></span></div>
+<div class="pips"><i class="b"></i><i class="o"></i><i class="now"></i></div>
+<div class="foot"><span>Thru 16 &middot; $5 a match</span><span class="r">+$5 so far</span></div>
+</div>
+<div class="bar"></div>
+</div><div class="cap">Always-on &mdash; same view, held back</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">1:18</div></div>
+<div class="la quiet">
+<div class="lah"><span class="mark" style="background:rgba(255,255,255,.22);color:#fff">H</span><span class="g" style="opacity:.72">SIXES</span><span class="seg">SEGMENT 2 &middot; 7&ndash;12</span></div>
+<div class="big"><span class="st blue">2 UP</span><span class="sub"><span class="lead blue"><span class="dotb"></span>Paul &amp; Sam</span> v. <span class="dim"><span class="doto"></span>Dave &amp; Lee</span></span><span class="state"><b>&mdash;</b><u>3 TO PLAY</u></span></div>
+<div class="pips"><i class="b"></i><i class="now"></i><i></i></div>
+</div>
+<div class="la" style="margin-top:14px;background:rgba(255,255,255,.13)">
+<div class="lah"><span class="mark">H</span><span class="g">SIXES</span><span class="seg">ROUND COMPLETE</span></div>
+<div class="big"><span class="st" style="font-size:42px">+$10</span><span class="sub">Blue won 1 and 3<br>Collect from <b>Sam</b></span></div>
+<div class="pips"><i class="b"></i><i class="o"></i><i class="b"></i></div>
+<div class="foot"><span>The one personal state</span><span class="r">Dismisses in 5 min</span></div>
+</div>
+<div class="bar"></div>
+</div><div class="cap">Quiet treatment (top) &middot; final state (below)</div></div>
+
+<div class="di">
+<h4>Dynamic Island</h4>
+<p>Three sizes. The compact pair is what people actually see &mdash; it sits beside the clock all round.</p>
+<div class="dr"><span>MINIMAL &mdash; ANOTHER APP IS ACTIVE</span>
+<div class="pill min"><span class="mk">H</span><span class="mint">&#9679;</span></div></div>
+<div class="dr"><span>COMPACT &mdash; THE DEFAULT</span>
+<div class="pill"><span class="mk">H</span><span class="bl">2 UP</span><span style="opacity:.55;font-weight:600">blue</span></div></div>
+<div class="dr"><span>COMPACT &mdash; ALL SQUARE</span>
+<div class="pill"><span class="mk">H</span><span style="opacity:.9">ALL SQ</span><span style="opacity:.55;font-weight:600">thru 9</span></div></div>
+<div class="dr" style="margin-bottom:0"><span>EXPANDED &mdash; LONG PRESS</span>
+<div class="exp">
+<div class="top"><span style="width:14px;height:14px;border-radius:4px;background:var(--mint);display:inline-flex;align-items:center;justify-content:center;font:700 9px/1 'Schibsted Grotesk',sans-serif;color:#06231A">H</span><span>SIXES &middot; SEGMENT 1</span></div>
+<div class="mid"><b style="color:var(--blue)">2 UP</b><span><span class="dotb"></span><span style="color:var(--blue);font-weight:700">Paul &amp; Dave</span><br><span style="opacity:.6"><span class="doto"></span>Sam &amp; Lee</span></span><span class="m" style="color:var(--blue);font-size:13px">DORMIE</span></div>
+<div class="pips" style="margin-top:11px"><i class="now"></i><i></i><i></i></div>
+</div></div>
+</div>
+</body></html>
