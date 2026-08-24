@@ -28,10 +28,9 @@ search term, and `stakes` is a gambling-adjacent word we'd rather not lead on.)
 (Skins/Nassau are already in the subtitle, so they're omitted here — Apple
 indexes the subtitle words anyway; keywords spend the budget on new terms.)
 
-## Promotional text (170 max, editable without review) — 165 chars
+## Promotional text (170 max, editable without review) — 162 chars
 New: Survivor — worst score is knocked out, and the last two standing duel for
-the hole. Plus a rebuilt cup setup, clearer stroke dots, and live results all
-round.
+the hole. Plus fully developed tournaments for singles, pairs, foursomes and teams.
 
 ## Description (4000 max)
 Halved keeps score for the games golfers really play. Set up a round, pick your

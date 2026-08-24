@@ -24,29 +24,38 @@ Tag: `v2.7.0`, annotated, on the commit that set build 25.
 
 ### App Review Information
 
-Sign-in **is** required. Production reviewers use username + password, not the
-phone code — console SMS cannot reach Apple's reviewer.
+**Password login is disabled in production.** Sign-in is a phone number plus a
+fixed bypass code — no SMS is sent. The full block to paste, and the deletion
+account for Guideline 5.1.1(v), live in **`docs/app-store-review-notes.md`**,
+which is the source of truth for this section.
 
-| | |
+| Field | Value |
 |---|---|
-| Username | `reviewer` |
-| Password | the value `seed_demo` was run with on production |
-| Notes | see below |
+| User name | `3105550101` |
+| Password | `246810` — the bypass code, not a password |
 
-> **Reviewer notes (paste into App Review Information → Notes)**
->
-> Sign in with the username and password above — tap "Sign in with a username
-> instead" on the first screen. The account is pre-loaded with completed and
-> in-progress rounds and two tournaments, so every screen has real data.
->
-> Halved tracks friendly wagers among friends for scoring purposes only. It
-> does not process payments, hold funds, or facilitate any transfer of money.
-> The dollar figures shown are a scorekeeping convenience, the same as writing
-> them on a scorecard.
+Both are fictional NANP 555-01xx numbers. The backend accepts the fixed code
+for those two numbers only, and only while `REVIEW_BYPASS_PHONE` /
+`REVIEW_BYPASS_CODE` are set on Railway.
 
-**Before submitting:** confirm `seed_demo` has been run against the production
-backend and that the `+1310555xxxx` reviewer accounts are intact — the
-reviewer's app talks to production, not a local server.
+**Before submitting**, confirm on production — the reviewer's app talks to
+production, not a local server:
+
+- `REVIEW_BYPASS_PHONE=+13105550101,+13105550102` and `REVIEW_BYPASS_CODE`
+  are set and deployed
+- `PASSWORD_LOGIN_ENABLED` is unset or false
+- `seed_demo --reset` has been run, so those two numbers map to seeded users
+
+`seed_demo` cannot be run from a laptop: Railway's Postgres has an
+internal-only host. It runs inside the app container — Railway dashboard →
+**Golf App** service (not Postgres) → Terminal:
+
+```
+cd /app
+/opt/venv/bin/python manage.py seed_demo --reset
+```
+
+Expect `DemoClub seeded successfully`, 12 players, 7 rounds.
 
 ---
 

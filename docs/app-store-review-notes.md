@@ -64,8 +64,10 @@ WHAT YOU CAN TRY:
 - Open a tournament from "Tournaments" for multi-foursome standings.
 
 NEW IN THIS VERSION (optional):
-- Las Vegas: start a casual round with 4 players and pick "Las Vegas" — the
-  Leaderboard shows each 2-player side's running total and a hole-by-hole grid.
+- Team tournaments: tap "New Tournament" and choose "Foursome Play" (small
+  teams of four) or "Pairs Play" (two-golfer teams). The setup asks how a team
+  scores, whether every golfer must give a drive, and shows each team's stroke
+  allowance worked from the tees before you create it.
 - Follow friends: the demo account is added to another group's rounds, so the
   Rounds / Tournaments lists show entries flagged "Observing" (watch-only,
   eye icon) alongside rounds you play in. Tapping an "Observing" round opens a
@@ -92,7 +94,7 @@ that lookup). Privacy policy: https://halved.golf/privacy
       on Railway (deployed).
 - [ ] `seed_demo --reset` run against **prod** (so the two numbers map to users).
 - [ ] `PASSWORD_LOGIN_ENABLED` left unset/false — password login stays off.
-- [ ] iOS build is 2.5.1 (2.5.1+19); privacy-policy URL set in App Store Connect.
+- [ ] iOS build is 2.7.0 (2.7.0+25); privacy-policy URL set in App Store Connect.
 - [ ] Force-upgrade: ensure Railway `CLIENT_MIN_VERSION=2.1.0` (or clear the env
       so the 2.1.0 code default applies). Safe to set now — 2.0.0 only gets a
       soft update nag, and 2.1.0+ is hard-blocked below this (no dismiss).
