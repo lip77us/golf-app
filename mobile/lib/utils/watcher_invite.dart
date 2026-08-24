@@ -208,6 +208,10 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
   /// rewrite — which is also why it states nothing we haven't checked. Naming
   /// the game and course is safe; claiming who is winning is not.
   ///
+  /// When there IS a watch link the body is just the link. The preview card the
+  /// link unfurls into already carries the sender, the game, the course and a
+  /// Watch live button, so a sentence above it is the same information twice.
+  ///
   /// One halved.golf link for everyone; the download link is appended only for
   /// someone not already on Halved, who would otherwise have nowhere to go.
   String _watchInviteBody({
@@ -225,17 +229,25 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
       if (gameLabel.isNotEmpty) gameLabel,
       if (courseName.isNotEmpty) 'at $courseName',
     ].join(' ');
-    final b = StringBuffer(
-      inviter.isNotEmpty
-          ? (what.isEmpty
-              ? 'Come rail me — I’m out on the course ⛳'
-              : 'Come rail me — I’m playing $what ⛳')
-          : (what.isEmpty
-              ? '$by is out on the course ⛳'
-              : '$by is playing $what ⛳'),
-    );
+    // With a watch link the message is JUST the link: the link preview card
+    // already names the sender, the game and the course, and renders a Watch
+    // live button. A sentence above it says the same thing twice.
+    //
+    // Without one there is no card, so the sentence is all the recipient gets
+    // and it stays.
+    final b = StringBuffer();
     if (watchUrl != null) {
-      b.write(' $watchUrl');
+      b.write(watchUrl);
+    } else {
+      b.write(
+        inviter.isNotEmpty
+            ? (what.isEmpty
+                ? 'Come rail me — I’m out on the course ⛳'
+                : 'Come rail me — I’m playing $what ⛳')
+            : (what.isEmpty
+                ? '$by is out on the course ⛳'
+                : '$by is playing $what ⛳'),
+      );
     }
     if (!onApp && downloadUrl != null) {
       b.write('\n\nGet Halved: $downloadUrl');
