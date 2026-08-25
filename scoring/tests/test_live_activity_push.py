@@ -26,7 +26,8 @@ class ConsoleBackendMixin:
 
     def setUp(self):
         patcher = mock.patch.dict(
-            os.environ, {'LIVE_ACTIVITY_BACKEND': 'console'})
+            os.environ, {'LIVE_ACTIVITY_BACKEND': 'console',
+                         'LIVE_ACTIVITY_ENABLED': '1'})
         patcher.start()
         self.addCleanup(patcher.stop)
         super().setUp()
@@ -179,3 +180,26 @@ class NeverBreaksScoringTests(ConsoleBackendMixin, TestCase):
         self.assertEqual(
             HoleScore.objects.filter(foursome=self.fs, hole_number=1).count(),
             4)
+
+
+class DarkTests(ConsoleBackendMixin, TestCase):
+    """Shipped dark: the code is present and inert until someone turns it on."""
+
+    def test_off_unless_set(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(lap.is_enabled())
+
+    def test_a_configured_key_does_not_turn_it_on(self):
+        """Going live is a decision, not a side effect of credentials being
+        present — otherwise setting up the key on Railway silently ships it."""
+        with mock.patch.dict(os.environ, {'APNS_KEY_P8': 'x',
+                                          'APNS_KEY_ID': 'y',
+                                          'APNS_TEAM_ID': 'z'}, clear=True):
+            self.assertTrue(lap.is_configured())
+            self.assertFalse(lap.is_enabled())
+
+    def test_nothing_is_pushed_while_off(self):
+        with mock.patch.dict(os.environ, {'LIVE_ACTIVITY_ENABLED': '0'}):
+            with mock.patch.object(lap, 'send_state') as send:
+                self.assertEqual(lap.push_round(mock.Mock()), 0)
+            send.assert_not_called()

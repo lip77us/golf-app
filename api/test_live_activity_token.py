@@ -9,7 +9,9 @@ the token mid-round, so the interesting behaviour is that a second POST
 *replaces* rather than appends — a duplicate would mean pushing the same board
 twice, once to an address that no longer resolves.
 """
+import os
 from decimal import Decimal
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -159,6 +161,9 @@ class LiveActivityStateTests(TestCase):
         self.client.force_authenticate(self.user)
         self.url = reverse('api-round-live-activity-state',
                            args=[self.round.id])
+        on = mock.patch.dict(os.environ, {'LIVE_ACTIVITY_ENABLED': '1'})
+        on.start()
+        self.addCleanup(on.stop)
 
     def _play(self, hole, t1, t2):
         self.submit_hole(self.fs, hole, [
@@ -221,3 +226,41 @@ class LiveActivityStateTests(TestCase):
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 200, resp.data)
         self.assertFalse(resp.data['state']['footer']['money'])
+
+
+class StateIsDarkWhenOffTests(TestCase):
+    """The switch gates the CLIENT, not only delivery.
+
+    Off has to mean no phone raises an activity in the first place.  Gating
+    only the sender would leave boards frozen wherever one had already gone
+    up, which reads as broken rather than absent.
+    """
+
+    def test_the_state_endpoint_says_nothing_while_off(self):
+        from scoring.tests._helpers import make_foursome, make_round, make_tee
+        from services.sixes import setup_sixes
+
+        tee = make_tee()
+        rnd = make_round(tee.course)
+        rnd.active_games = ['sixes']
+        rnd.save(update_fields=['active_games'])
+        fs = make_foursome(rnd, [('Paul', 0), ('Dave', 0), ('Sam', 0),
+                                 ('Lee', 0)], tee=tee)
+        pid = [m.player_id for m in fs.memberships.all()]
+        setup_sixes(fs, [{'team_select_method': 'long_drive',
+                          'team1_player_ids': pid[:2],
+                          'team2_player_ids': pid[2:],
+                          'start_hole': 1, 'end_hole': 6}],
+                    handicap_mode='gross')
+
+        user = User.objects.create_user(username='td', account=rnd.account)
+        user.is_account_admin = True
+        user.save(update_fields=['is_account_admin'])
+        client = APIClient()
+        client.force_authenticate(user)
+        url = reverse('api-round-live-activity-state', args=[rnd.id])
+
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(client.get(url).data, {})
+        with mock.patch.dict(os.environ, {'LIVE_ACTIVITY_ENABLED': '1'}):
+            self.assertIn('state', client.get(url).data)

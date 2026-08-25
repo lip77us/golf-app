@@ -238,8 +238,18 @@ the Firebase project: it is the same key, and it must not be revoked to "start
 clean", because Firebase uses it to deliver every ordinary iOS push. Apple
 allows two APNs keys per team; make a second one rather than replacing this.
 
+**It ships dark.** `LIVE_ACTIVITY_ENABLED` is off unless explicitly set, and
+it gates the *state endpoint* as well as delivery — so while it is off no phone
+raises an activity at all. Switching off only the sender would leave boards
+frozen wherever one had already gone up, which reads as broken rather than
+absent. Flipping it needs no app release in either direction.
+
+It is deliberately not inferred from whether a key is configured: going live
+should be a decision someone made, not a side effect of setting up credentials.
+
 | Variable | Local | Railway |
 |---|---|---|
+| `LIVE_ACTIVITY_ENABLED` | `1` | unset until you go live |
 | `LIVE_ACTIVITY_BACKEND` | `apns` | `apns` |
 | `APNS_KEY_PATH` | path to the `.p8` | — |
 | `APNS_KEY_P8` | — | the file's contents |

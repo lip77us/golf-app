@@ -61,6 +61,23 @@ _jwt_cache = {'token': None, 'issued': 0.0}
 # Configuration
 # --------------------------------------------------------------------------
 
+def is_enabled() -> bool:
+    """The one switch for the whole feature, off unless set.
+
+    Gates the STATE ENDPOINT as well as delivery, and that is the point.  
+    Switching off only the sender would leave phones raising activities that
+    then never move — a board frozen at the third hole is worse than no board,
+    because it reads as broken rather than absent.  Off here means no phone
+    ever starts one, so nothing needs taking down when it flips.
+
+    Deliberately not derived from whether a key happens to be configured:
+    going live should be a decision someone made, not a side effect of
+    credentials existing.
+    """
+    return (os.environ.get('LIVE_ACTIVITY_ENABLED', '') or '').lower() \
+        in ('1', 'true', 'yes')
+
+
 def _backend() -> str:
     return getattr(settings, 'LIVE_ACTIVITY_BACKEND', None) \
         or os.environ.get('LIVE_ACTIVITY_BACKEND', 'console')
@@ -233,6 +250,9 @@ def push_round(round_obj, *, final=False) -> int:
 
     Returns the number Apple accepted.
     """
+    if not is_enabled():
+        return 0
+
     from api.views import _holes_played, _sixes_foursome_for
     from services.live_activity import sixes_activity_state, sixes_final_state
     from tournament.models import LiveActivityToken

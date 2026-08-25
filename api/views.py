@@ -9264,7 +9264,13 @@ class RoundLiveActivityStateView(APIView):
         from accounts.scoring_access import round_for_reader
         from services.live_activity import (sixes_activity_state,
                                             sixes_final_state)
+        from services.live_activity_push import is_enabled
         rnd = round_for_reader(request.user, pk)
+        # Off means no phone starts one at all — see is_enabled().  Answering
+        # {} is the same "nothing to show" the app already handles, so the
+        # switch needs no app release to flip in either direction.
+        if not is_enabled():
+            return Response({})
         foursome, player_id = _sixes_foursome_for(rnd, request.user)
         if foursome is None:
             return Response({})
