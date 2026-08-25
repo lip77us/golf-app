@@ -9186,6 +9186,43 @@ class RoundMessagesReadView(APIView):
         return Response({'unread': messaging.unread_count(thread, request.user)})
 
 
+class RoundLiveActivityTokenView(APIView):
+    """
+    POST   /api/rounds/<pk>/live-activity/token/  {token}  → {ok: true}
+    DELETE /api/rounds/<pk>/live-activity/token/           → {ok: true}
+
+    iOS hands the app a push token per Live Activity, and may reissue it while
+    the activity is running, so the app posts here every time it changes and we
+    upsert rather than append.  DELETE is the app saying the activity is over:
+    a push to an ended activity is discarded by APNs, so the row is only a way
+    to waste a request.
+
+    Read access is enough to register.  A watcher following the round on their
+    lock screen wants the same board the players see; the only slot that
+    differs between the four golfers is the money line.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        from accounts.scoring_access import round_for_reader
+        from tournament.models import LiveActivityToken
+        rnd   = round_for_reader(request.user, pk)
+        token = (request.data.get('token') or '').strip()
+        if not token:
+            return Response({'detail': 'token is required.'}, status=400)
+        LiveActivityToken.objects.update_or_create(
+            round=rnd, user=request.user, defaults={'token': token})
+        return Response({'ok': True})
+
+    def delete(self, request, pk):
+        from accounts.scoring_access import round_for_reader
+        from tournament.models import LiveActivityToken
+        rnd = round_for_reader(request.user, pk)
+        LiveActivityToken.objects.filter(round=rnd, user=request.user).delete()
+        return Response({'ok': True})
+
+
 # ---------------------------------------------------------------------------
 # TEAM PLAY  (docs/design-review/handoff-team-play/SPEC.md)
 # ---------------------------------------------------------------------------

@@ -2465,4 +2465,19 @@ class ApiClient {
     return TeamPlaySettlement.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
+  /// Register a Live Activity's APNs push token for a round.
+  ///
+  /// This is the ACTIVITY's token, not the device's — Live Activity updates are
+  /// addressed to it, and iOS may reissue it mid-round, so the native side
+  /// sends it every time it changes rather than once at start.
+  Future<void> registerLiveActivityToken({
+    required int roundId,
+    required String token,
+  }) =>
+      _post('/rounds/$roundId/live-activity/token/', {'token': token});
+
+  /// Tell the server the Live Activity is over, so nothing pushes to it.
+  Future<void> clearLiveActivityToken({required int roundId}) =>
+      _delete('/rounds/$roundId/live-activity/token/');
+
 }

@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -1411,6 +1412,45 @@ class TeamDrivePick(models.Model):
     def __str__(self):
         return (f"Drive — {self.foursome.display_name} slot {self.slot} — "
                 f"Hole {self.hole_number} — {self.player.name}")
+
+# ---------------------------------------------------------------------------
+# LIVE ACTIVITY TOKENS  (iOS lock-screen updates)
+# ---------------------------------------------------------------------------
+
+class LiveActivityToken(models.Model):
+    """One golfer's Live Activity push token for one round.
+
+    This is the **activity's** token, not the device's. Live Activity updates
+    are an APNs push type addressed to a token iOS issues per activity, and it
+    may be reissued mid-round — so the app sends it every time it changes and
+    this row is upserted rather than appended to.
+
+    It is per (round, user) because all four golfers in a Sixes foursome run
+    their own activity showing the same board, and each needs addressing
+    separately. The only slot that differs between them is the money line.
+
+    Rows die with the round: an activity iOS has ended cannot be updated, and a
+    stale token is a push that silently goes nowhere.
+    """
+
+    round      = models.ForeignKey(
+                     Round, on_delete=models.CASCADE,
+                     related_name='live_activity_tokens')
+    user       = models.ForeignKey(
+                     settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                     related_name='live_activity_tokens')
+    token      = models.CharField(
+                     max_length=200,
+                     help_text='Hex APNs token for this activity.')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('round', 'user')
+
+    def __str__(self):
+        return f'Live Activity — round {self.round_id} — {self.user_id}'
+
 
 # ---------------------------------------------------------------------------
 # WATCHERS  (non-playing spectators invited to follow in-app, read-only)
