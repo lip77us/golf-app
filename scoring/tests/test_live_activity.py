@@ -13,6 +13,7 @@ from django.test import TestCase
 
 from services.live_activity import (
     BLUE, NEUTRAL, ORANGE, pairing_push, segment_ordinal, sixes_activity_state,
+    sixes_final_state,
 )
 from services.sixes import calculate_sixes, setup_sixes
 from ._helpers import make_foursome, make_round, make_tee, submit_hole
@@ -247,3 +248,127 @@ class PipTests(TestCase):
         pips = self._pips(segs)
         self.assertEqual(len(pips), 3)
         self.assertEqual(pips, [BLUE, 'live', 'unplayed'])
+
+
+class ContractTests(TestCase):
+    """The Python state and the Swift `ContentState` are one contract in two
+    languages, and nothing else checks that they still agree.
+
+    An APNs `content-state` payload decodes straight into the Swift struct, so a
+    key renamed on this side does not fail a build — it fails on a lock screen,
+    on a course, silently. These tests read the Swift source and compare.
+    """
+
+    SWIFT = 'mobile/ios/SixesActivity/SixesActivity.swift'
+
+    def setUp(self):
+        import os
+        from django.conf import settings
+        path = os.path.join(settings.BASE_DIR, self.SWIFT)
+        with open(path) as fh:
+            self.swift = fh.read()
+
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course)
+        self.fs = make_foursome(
+            self.round,
+            [('Paul', 0), ('Dave', 0), ('Sam', 0), ('Lee', 0)],
+            tee=self.tee,
+        )
+        pid = {m.player.name: m.player_id
+               for m in self.fs.memberships.select_related('player')}
+        self.paul = pid['Paul']
+        setup_sixes(
+            self.fs,
+            _teams(pid['Paul'], pid['Dave'], pid['Sam'], pid['Lee']),
+            handicap_mode='gross',
+        )
+
+    def test_every_top_level_slot_exists_in_the_swift_struct(self):
+        state = sixes_activity_state(self.fs, player_id=self.paul)
+        for key in state:
+            self.assertIn(f'let {key}:', self.swift,
+                          f'`{key}` has no field in ContentState')
+
+    def test_the_nested_keys_the_swift_decodes_are_all_emitted(self):
+        state = sixes_activity_state(self.fs, player_id=self.paul, thru=3)
+        self.assertEqual(set(state['header']), {'game', 'segment'})
+        self.assertEqual(set(state['number']), {'text', 'colour'})
+        self.assertEqual(set(state['state']),  {'word', 'to_play'})
+        self.assertEqual(set(state['footer']), {'context', 'money'})
+        for side in state['sides']:
+            self.assertEqual(set(side), {'names', 'colour', 'leading'})
+
+    def test_to_play_is_snake_case_because_swift_maps_it(self):
+        """Swift renames exactly one key. If this side stops sending
+        `to_play`, the CodingKeys mapping silently yields nothing."""
+        self.assertIn('case toPlay = "to_play"', self.swift)
+        self.assertIn('to_play', sixes_activity_state(self.fs)['state'])
+
+    def test_final_is_always_present_so_the_optional_decodes(self):
+        ordinary = sixes_activity_state(self.fs, player_id=self.paul)
+        self.assertIn('final', ordinary)
+        self.assertIsNone(ordinary['final'])
+
+    def test_the_final_state_fills_the_three_fields_swift_draws(self):
+        final = sixes_final_state(self.fs, player_id=self.paul)
+        self.assertEqual(set(final['final']), {'amount', 'detail', 'collect'})
+        self.assertEqual(final['header']['segment'], 'ROUND COMPLETE')
+
+    def test_the_colours_the_server_names_are_the_ones_swift_switches_on(self):
+        """`Sixes.side` and `Sixes.pip` switch on these literals; a colour name
+        the Swift does not know falls through to a default and the side loses
+        its identity."""
+        for name in ('blue', 'orange'):
+            self.assertIn(f'case "{name}":', self.swift)
+        for name in ('halved', 'void', 'live'):
+            self.assertIn(f'case "{name}":', self.swift)
+
+
+class FinalStateTests(TestCase):
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course)
+        self.fs = make_foursome(
+            self.round,
+            [('Paul', 0), ('Dave', 0), ('Sam', 0), ('Lee', 0)],
+            tee=self.tee,
+        )
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        setup_sixes(
+            self.fs,
+            _teams(self.pid['Paul'], self.pid['Dave'],
+                   self.pid['Sam'],  self.pid['Lee']),
+            handicap_mode='gross',
+        )
+
+    def _win_segment(self, holes):
+        for h in holes:
+            par = self.tee.hole(h)['par']
+            submit_hole(self.fs, h, [
+                (self.pid['Paul'], par), (self.pid['Dave'], par),
+                (self.pid['Sam'], par + 1), (self.pid['Lee'], par + 1),
+            ])
+            calculate_sixes(self.fs)
+
+    def test_it_says_what_you_won_and_who_to_see(self):
+        self._win_segment(range(1, 7))       # blue takes segment 1
+        winner = sixes_final_state(self.fs, player_id=self.pid['Paul'])
+        loser  = sixes_final_state(self.fs, player_id=self.pid['Sam'])
+
+        self.assertTrue(winner['final']['amount'].startswith('+'))
+        self.assertTrue(winner['final']['collect'].startswith('Collect from'))
+        self.assertTrue(loser['final']['amount'].startswith('-'))
+        self.assertTrue(loser['final']['collect'].startswith('Pay'))
+
+    def test_the_detail_names_the_segments_a_side_took(self):
+        self._win_segment(range(1, 7))
+        final = sixes_final_state(self.fs, player_id=self.pid['Paul'])
+        self.assertIn('Blue won 1', final['final']['detail'])
+
+    def test_all_square_says_there_is_nothing_to_settle(self):
+        final = sixes_final_state(self.fs, player_id=self.pid['Paul'])
+        self.assertEqual(final['final']['collect'],
+                         'All square — nothing to settle')

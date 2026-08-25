@@ -2,72 +2,243 @@
 //  SixesActivityLiveActivity.swift
 //  SixesActivity
 //
-//  Created by Paul Lipkin on 8/24/26.
+//  The Sixes lock screen — five slots, one view, every state
+//  (docs/design-review/handoff-sixes-lock/SPEC.md).
+//
+//  **Build one view; the states are data.** There is no draw state, no waiting
+//  card and no "open to draw" button: the pairing changes, the two names change,
+//  the pip advances. A push announces it; the activity is already correct.
+//
+//  **Read-only, deliberately.** No buttons anywhere. Every action in Sixes is
+//  group state that wants the app's confirmation, and a lock-screen button on
+//  group state strands the other three golfers.
 //
 
 import ActivityKit
-import WidgetKit
 import SwiftUI
-
-struct SixesActivityAttributes: ActivityAttributes {
-    public struct ContentState: Codable, Hashable {
-        // Dynamic stateful properties about your activity go here!
-        var emoji: String
-    }
-
-    // Fixed non-changing properties about your activity go here!
-    var name: String
-}
+import WidgetKit
 
 struct SixesActivityLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: SixesActivityAttributes.self) { context in
-            // Lock screen/banner UI goes here
-            VStack {
-                Text("Hello \(context.state.emoji)")
-            }
-            .activityBackgroundTint(Color.cyan)
-            .activitySystemActionForegroundColor(Color.black)
+            LockScreenView(state: context.state)
+                .activityBackgroundTint(Sixes.deepPine.opacity(0.92))
+                .activitySystemActionForegroundColor(Sixes.mint)
 
         } dynamicIsland: { context in
-            DynamicIsland {
-                // Expanded UI goes here.  Compose the expanded UI through
-                // various regions, like leading/trailing/center/bottom
+            let s = context.state
+            return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Text("Leading")
+                    Text(s.number.text)
+                        .font(Sixes.display(26, .bold))
+                        .foregroundStyle(Sixes.side(s.number.colour))
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text("Trailing")
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text(s.state.word).font(Sixes.display(15, .semibold))
+                        Text(s.state.toPlay)
+                            .font(Sixes.body(9, .bold))
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
+                }
+                DynamicIslandExpandedRegion(.center) {
+                    Text("\(s.header.game) · \(s.header.segment)")
+                        .font(Sixes.body(9, .semibold))
+                        .foregroundStyle(.white.opacity(0.55))
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    Text("Bottom \(context.state.emoji)")
-                    // more content
+                    VStack(spacing: 5) {
+                        SidesView(sides: s.sides)
+                        PipsView(pips: s.pips)
+                    }
                 }
             } compactLeading: {
-                Text("L")
+                Image(systemName: "flag.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Sixes.mint)
             } compactTrailing: {
-                Text("T \(context.state.emoji)")
+                // What people actually see all round, beside the clock.
+                Text(s.number.text)
+                    .font(Sixes.display(13, .bold))
+                    .foregroundStyle(Sixes.side(s.number.colour))
             } minimal: {
-                Text(context.state.emoji)
+                Image(systemName: "circle.fill")
+                    .font(.system(size: 8))
+                    .foregroundStyle(Sixes.mint)
             }
-            .widgetURL(URL(string: "http://www.apple.com"))
-            .keylineTint(Color.red)
         }
     }
 }
 
-extension SixesActivityAttributes {
-    fileprivate static var preview: SixesActivityAttributes {
-        SixesActivityAttributes(name: "World")
+// MARK: - The lock screen
+
+private struct LockScreenView: View {
+    let state: SixesActivityAttributes.ContentState
+
+    var body: some View {
+        Group {
+            if let final = state.final {
+                FinalView(header: state.header, final: final)
+            } else {
+                BoardView(state: state)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
     }
 }
 
-extension SixesActivityAttributes.ContentState {
-    fileprivate static var smiley: SixesActivityAttributes.ContentState {
-        SixesActivityAttributes.ContentState(emoji: "😀")
-     }
-     
-     fileprivate static var starEyes: SixesActivityAttributes.ContentState {
-         SixesActivityAttributes.ContentState(emoji: "🤩")
-     }
+/// The neutral scoreboard — 95% of the round, and identical on all four phones
+/// bar the money line.
+private struct BoardView: View {
+    let state: SixesActivityAttributes.ContentState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HeaderView(header: state.header)
+
+            HStack(alignment: .top, spacing: 12) {
+                // The number and both sides. The number wears the LEADING
+                // side's colour so the tie between the score and the side is
+                // carried by colour rather than by reading order.
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(state.number.text)
+                        .font(Sixes.display(36, .bold))
+                        .tracking(-1)
+                        .foregroundStyle(Sixes.side(state.number.colour))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    SidesView(sides: state.sides)
+                }
+                Spacer(minLength: 0)
+                StateView(state: state.state)
+            }
+
+            PipsView(pips: state.pips)
+            FooterView(footer: state.footer)
+        }
+    }
+}
+
+private struct HeaderView: View {
+    let header: SixesActivityAttributes.ContentState.Header
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "flag.fill")
+                .font(.system(size: 10))
+                .foregroundStyle(Sixes.mint)
+            Text(header.game)
+                .font(Sixes.body(10, .bold))
+                .tracking(1.1)
+                .foregroundStyle(.white.opacity(0.82))
+            Spacer(minLength: 4)
+            Text(header.segment)
+                .font(Sixes.body(10, .semibold))
+                .tracking(0.6)
+                .foregroundStyle(.white.opacity(0.50))
+        }
+    }
+}
+
+/// Both pairings, always named. **Never "you are 2 up"** — four golfers read the
+/// same string, and the pairing changes at the turn, so a number without a name
+/// is unreadable forty minutes later.
+///
+/// The rows do not reorder when the lead changes; the leader is marked instead.
+private struct SidesView: View {
+    let sides: [SixesActivityAttributes.ContentState.Side]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(sides, id: \.names) { side in
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(Sixes.side(side.colour))
+                        .frame(width: 5, height: 5)
+                    Text(side.names)
+                        .font(Sixes.body(12, side.leading ? .bold : .regular))
+                        .foregroundStyle(side.leading
+                                         ? Sixes.side(side.colour)
+                                         : .white.opacity(0.60))
+                        .lineLimit(1)
+                }
+            }
+        }
+    }
+}
+
+/// The state of the MATCH, never the money. `DORMIE` is the one fact that
+/// changes how the next hole gets played, and it is the word golfers say.
+private struct StateView: View {
+    let state: SixesActivityAttributes.ContentState.MatchState
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Text(state.word)
+                .font(Sixes.display(17, .semibold))
+                .foregroundStyle(.white.opacity(0.92))
+            Text(state.toPlay)
+                .font(Sixes.body(9, .bold))
+                .tracking(0.4)
+                .foregroundStyle(.white.opacity(0.55))
+        }
+    }
+}
+
+/// Three bars: the whole shape of Sixes. **Identical in every state** — the one
+/// element that never moves, so the eye learns where to look.
+private struct PipsView: View {
+    let pips: [String]
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(Array(pips.enumerated()), id: \.offset) { _, pip in
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(Sixes.pip(pip))
+                    .frame(height: 4)
+            }
+        }
+    }
+}
+
+/// Round context left, money right. Thru lives here because the headline band
+/// holds three things and two of them cannot shrink.
+private struct FooterView: View {
+    let footer: SixesActivityAttributes.ContentState.Footer
+
+    var body: some View {
+        HStack {
+            Text(footer.context)
+                .font(Sixes.body(11))
+                .foregroundStyle(.white.opacity(0.66))
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Text(footer.money)
+                .font(Sixes.body(11, .semibold))
+                .foregroundStyle(.white.opacity(0.66))
+        }
+    }
+}
+
+/// The last state is not a scoreboard. What you won, and who to see.
+private struct FinalView: View {
+    let header: SixesActivityAttributes.ContentState.Header
+    let final: SixesActivityAttributes.ContentState.Final
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HeaderView(header: header)
+            Text(final.amount)
+                .font(Sixes.display(36, .bold))
+                .tracking(-1)
+                .foregroundStyle(Sixes.mint)
+            Text(final.detail)
+                .font(Sixes.body(12))
+                .foregroundStyle(.white.opacity(0.72))
+            Text(final.collect)
+                .font(Sixes.body(12, .semibold))
+                .foregroundStyle(.white.opacity(0.92))
+        }
+    }
 }

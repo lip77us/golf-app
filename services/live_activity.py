@@ -218,6 +218,9 @@ def sixes_activity_state(foursome, *, player_id=None, thru=None) -> dict:
             'to_play'   : f'{holes_left} TO PLAY',
         },
         'pips'  : _pips(segments),
+        # Always present so the Swift `final: Final?` decodes on every state
+        # rather than only on the last one.
+        'final' : None,
         'footer': {
             # Thru lives HERE, not on the sides line: the headline band holds
             # three things and two cannot shrink, so "Sam & Lee · thru 4" breaks
@@ -254,3 +257,78 @@ def pairing_push(seg, segments=None) -> dict:
         'title': f'New partners — holes {holes}',
         'body' : f'Pairing {n}: {t1} v. {t2}',
     }
+
+
+def _segments_won(segments):
+    """`Blue won 1 and 3` — which segments each side took.
+
+    Reads the pips' own logic rather than re-deriving it, so the sentence and
+    the bars can never disagree.
+    """
+    pips = _pips(segments)
+    by_side = {BLUE: [], ORANGE: []}
+    for i, pip in enumerate(pips, start=1):
+        if pip in by_side:
+            by_side[pip].append(str(i))
+
+    def phrase(nums):
+        if len(nums) == 1:
+            return nums[0]
+        return f"{', '.join(nums[:-1])} and {nums[-1]}"
+
+    parts = [f'{name.title()} won {phrase(nums)}'
+             for name, nums in by_side.items() if nums]
+    return ' · '.join(parts) if parts else 'All three halved'
+
+
+def _settle_line(summary, player_id):
+    """`Collect from Sam` / `Pay Sam` — who has the cash.
+
+    Sixes settles as per-player amounts, not as a set of pairwise debts, so
+    there is no stored "who pays whom". This names the largest counterparty on
+    the other side of the ledger, which is what a group of four actually does:
+    one golfer squares up with one other.
+
+    A build-time call, not the packet's — flagged in SPEC §7 as worth a ruling
+    if design wants the full pairwise split instead.
+    """
+    rows = (summary.get('money') or {}).get('by_player') or []
+    me = next((r for r in rows if r.get('player_id') == player_id), None)
+    if not me or not me.get('amount'):
+        return 'All square — nothing to settle'
+
+    if me['amount'] > 0:
+        payers = sorted((r for r in rows if (r.get('amount') or 0) < 0),
+                        key=lambda r: r['amount'])
+        return f"Collect from {payers[0]['name']}" if payers else 'Collect your winnings'
+    winners = sorted((r for r in rows if (r.get('amount') or 0) > 0),
+                     key=lambda r: -r['amount'])
+    return f"Pay {winners[0]['name']}" if winners else 'Settle up'
+
+
+def sixes_final_state(foursome, *, player_id=None) -> dict:
+    """The one personal state, on round sign.
+
+    It replaces the board rather than decorating it: nobody needs a match
+    summary on a lock screen, they need to know what they won and who to see.
+    Holds a few minutes, then dismisses itself.
+    """
+    summary  = sixes_summary(foursome)
+    segments = summary.get('segments') or []
+    if not segments:
+        return {}
+
+    state = sixes_activity_state(foursome, player_id=player_id)
+    rows  = (summary.get('money') or {}).get('by_player') or []
+    me    = next((r for r in rows if r.get('player_id') == player_id), None)
+    amount = (me or {}).get('amount') or 0
+    sign = '+' if amount > 0 else ('-' if amount < 0 else '')
+
+    state['header'] = {'game': state['header']['game'],
+                       'segment': 'ROUND COMPLETE'}
+    state['final'] = {
+        'amount' : f'{sign}${abs(amount):,.0f}',
+        'detail' : _segments_won(segments),
+        'collect': _settle_line(summary, player_id),
+    }
+    return state
