@@ -262,12 +262,26 @@ def _recalculate_games(foursome: Foursome) -> None:
     # nothing on the rounds that never raised one.  Swallowed whole: a stale
     # lock screen is a nuisance, a failed scoring request is not.
     if 'sixes' in active_games:
-        try:
-            from services.live_activity_push import push_round
-            push_round(round_obj)
-        except Exception:
-            logger.exception('live activity push failed for round %s',
-                             round_obj.id)
+        def _push():
+            try:
+                from services.live_activity_push import push_round
+                push_round(round_obj)
+            except Exception:
+                logger.exception('live activity push failed for round %s',
+                                 round_obj.id)
+
+        # on_commit, not a bare call.  A try/except is NOT enough protection
+        # here: this runs inside the scoring transaction, and Postgres aborts
+        # the whole transaction on the first failed statement — so catching the
+        # error in Python still leaves every later query failing with
+        # InFailedSqlTransaction.  A missing table in the lock-screen code
+        # would take the score post down with it.
+        #
+        # Deferring past the commit makes that structurally impossible, and is
+        # more correct anyway: nothing should announce a board built from
+        # scores that might still roll back.
+        from django.db import transaction as _txn
+        _txn.on_commit(_push)
 
 
 def _build_scorecard(foursome: Foursome) -> dict:

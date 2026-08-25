@@ -101,6 +101,8 @@ enum Sixes {
     /// orange row leaves the reader guessing which one is up.
     static let mint     = Color(hex: 0x3BD89A)
     static let muted    = Color(hex: 0x5C6B62)
+    /// The mark's cream — the H, its flagstick leg, and the pennant.
+    static let cream    = Color(hex: 0xF3F1EA)
     static let blue     = Color(hex: 0x5AA7F5)
     static let orange   = Color(hex: 0xF3A059)
 

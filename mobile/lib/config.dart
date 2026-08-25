@@ -9,6 +9,10 @@
 /// Local Django server (iOS Simulator):
 ///   flutter run --dart-define=USE_LOCAL=true
 ///
+/// Local Django server from a PHYSICAL phone — `localhost` there means the
+/// phone itself, so it needs the Mac's address on the network:
+///   flutter run --dart-define=API_BASE=http://192.168.4.137:8000/api
+///
 /// In VS Code, use the "Golf (Local)" or "Golf (Railway)" launch configs.
 
 import 'package:package_info_plus/package_info_plus.dart';
@@ -20,7 +24,13 @@ class Config {
   static const String _railway = 'https://web-production-b84d4a.up.railway.app/api';
   static const String _local   = 'http://localhost:8000/api';
 
-  static const String baseUrl = _useLocal ? _local : _railway;
+  /// An explicit base wins over both. This exists for testing a physical phone
+  /// against the Mac, where neither default is right: Railway is the wrong
+  /// server and `localhost` is the wrong machine.
+  static const String _explicit = String.fromEnvironment('API_BASE');
+
+  static const String baseUrl =
+      _explicit != '' ? _explicit : (_useLocal ? _local : _railway);
 
   /// The version string of this build.  Populated at startup by [init] from the
   /// app bundle (package_info_plus) so it can NEVER drift from pubspec.yaml —

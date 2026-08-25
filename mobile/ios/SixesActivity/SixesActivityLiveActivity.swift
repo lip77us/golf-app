@@ -53,9 +53,7 @@ struct SixesActivityLiveActivity: Widget {
                     }
                 }
             } compactLeading: {
-                Image(systemName: "flag.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Sixes.mint)
+                HalvedMark(size: 13)
             } compactTrailing: {
                 // What people actually see all round, beside the clock.
                 Text(s.number.text)
@@ -120,14 +118,62 @@ private struct BoardView: View {
     }
 }
 
+/// The Halved mark — the H whose right leg is a flagstick planted in the cup.
+///
+/// Drawn rather than shipped as an image. At 12pt a raster of the full logo is
+/// mush, a vector stays crisp at any size, and this way the two brand colours
+/// come from the same tokens as the rest of the card instead of being baked
+/// into a PNG that would drift the next time the palette moves.
+///
+/// Geometry is lifted straight from `mobile/assets/icon/halved_mark.svg` and
+/// normalised against its own bounding box (x 288…956, y 210…880), so the two
+/// stay in step: change the SVG and these numbers are what to update.
+private struct HalvedMark: View {
+    var size: CGFloat = 12
+
+    private static let ox: CGFloat = 288
+    private static let oy: CGFloat = 210
+    private static let span: CGFloat = 670
+
+    private func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+        CGPoint(x: (x - Self.ox) / Self.span * size,
+                y: (y - Self.oy) / Self.span * size)
+    }
+
+    private func rect(_ x: CGFloat, _ y: CGFloat,
+                      _ w: CGFloat, _ h: CGFloat) -> CGRect {
+        CGRect(origin: pt(x, y),
+               size: CGSize(width:  w / Self.span * size,
+                            height: h / Self.span * size))
+    }
+
+    var body: some View {
+        Canvas { ctx, _ in
+            // The cup first, so the flagstick reads as standing in it.
+            ctx.fill(Path(ellipseIn: rect(582, 796, 240, 84)),
+                     with: .color(Sixes.mint))
+
+            var h = Path()
+            h.addRect(rect(288, 262, 118, 600))   // thick left leg
+            h.addRect(rect(406, 486, 270,  96))   // crossbar
+            h.addRect(rect(676, 210,  52, 640))   // right leg = the flagstick
+            // The pennant, flown high and breaking right.
+            h.move(to:    pt(728, 224))
+            h.addLine(to: pt(956, 314))
+            h.addLine(to: pt(728, 404))
+            h.closeSubpath()
+            ctx.fill(h, with: .color(Sixes.cream))
+        }
+        .frame(width: size, height: size)
+    }
+}
+
 private struct HeaderView: View {
     let header: SixesActivityAttributes.ContentState.Header
 
     var body: some View {
         HStack(spacing: 7) {
-            Image(systemName: "flag.fill")
-                .font(.system(size: 10))
-                .foregroundStyle(Sixes.mint)
+            HalvedMark(size: 12)
             Text(header.game)
                 .font(Sixes.body(10, .bold))
                 .tracking(1.1)
