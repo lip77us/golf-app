@@ -2480,4 +2480,19 @@ class ApiClient {
   Future<void> clearLiveActivityToken({required int roundId}) =>
       _delete('/rounds/$roundId/live-activity/token/');
 
+  /// The Live Activity's opening frame — or, with [isFinal], its closing one.
+  ///
+  /// Returns null when there is nothing to show: not a Sixes round, or no
+  /// segment has begun.  Eligibility is decided on the server so the app never
+  /// has to know what makes a round qualify.
+  Future<Map<String, dynamic>?> getLiveActivityState({
+    required int roundId,
+    bool isFinal = false,
+  }) async {
+    final data = await _get('/rounds/$roundId/live-activity/state/'
+        '${isFinal ? '?final=1' : ''}');
+    final map = Map<String, dynamic>.from(data as Map);
+    return map.isEmpty ? null : map;
+  }
+
 }

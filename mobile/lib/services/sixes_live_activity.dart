@@ -27,7 +27,10 @@ class SixesLiveActivity {
 
   static const _channel = MethodChannel('halved/sixes_live_activity');
 
-  final ApiClient _client;
+  ApiClient _client;
+
+  /// The client is swapped when the auth token changes, same as SyncService.
+  void updateClient(ApiClient client) => _client = client;
 
   /// Rounds this device has already started an activity for, so a second score
   /// on the same round does not ask again. The native side is also idempotent;
@@ -48,42 +51,54 @@ class SixesLiveActivity {
   /// Start the activity for [roundId], if this round is a Sixes round and one
   /// is not already running.
   ///
-  /// [state] is the server's five slots — the same object the push carries, so
-  /// the opening frame and every frame after it come from one place.
-  Future<void> start({
-    required int roundId,
-    required String courseName,
-    required Map<String, dynamic> state,
-  }) async {
+  /// The opening frame is fetched here rather than passed in, so that every
+  /// call site is one fire-and-forget line and the server stays the only place
+  /// that knows what the five slots say.  A round that is not eligible answers
+  /// with nothing and no activity starts.
+  Future<void> start({required int roundId}) async {
     if (_started.contains(roundId)) return;
     if (!await isSupported) return;
+
+    // Claim the round before the await, so two scores landing together cannot
+    // both get past the guard and raise two activities for one round.
+    _started.add(roundId);
     try {
+      final frame = await _client.getLiveActivityState(roundId: roundId);
+      if (frame == null) {
+        _started.remove(roundId);
+        return;
+      }
       await _channel.invokeMethod('start', {
         'roundId'   : roundId,
-        'courseName': courseName,
-        'state'     : jsonEncode(state),
+        'courseName': frame['course_name'] ?? '',
+        'state'     : jsonEncode(frame['state']),
       });
-      _started.add(roundId);
-    } on PlatformException catch (e) {
-      // A lock-screen extra never breaks scoring. The round carries on.
-      debugPrint('Live Activity start failed: ${e.message}');
+    } catch (e) {
+      // A lock-screen extra never breaks scoring. The round carries on, and
+      // the next score posted tries again.
+      _started.remove(roundId);
+      debugPrint('Live Activity start failed: $e');
     }
   }
 
   /// End it on round sign, with the one personal state — what you won and who
   /// to see. iOS dismisses it a few minutes later.
-  Future<void> end({
-    required int roundId,
-    Map<String, dynamic>? finalState,
-  }) async {
+  ///
+  /// Deliberately NOT gated on [_started]: that set is in-memory, so after an
+  /// app restart mid-round it is empty while the activity is still on the lock
+  /// screen.  The native side finds it by round id, and finds nothing when
+  /// there is nothing — which is the honest answer either way.
+  Future<void> end({required int roundId}) async {
     if (!await isSupported) return;
     try {
+      final frame = await _client.getLiveActivityState(roundId: roundId,
+                                                       isFinal: true);
       await _channel.invokeMethod('end', {
         'roundId': roundId,
-        if (finalState != null) 'state': jsonEncode(finalState),
+        if (frame != null) 'state': jsonEncode(frame['state']),
       });
-    } on PlatformException catch (e) {
-      debugPrint('Live Activity end failed: ${e.message}');
+    } catch (e) {
+      debugPrint('Live Activity end failed: $e');
     } finally {
       _started.remove(roundId);
       await _forget(roundId);

@@ -14,11 +14,14 @@
 ///   • [localPendingByHole] — exposed so the scorecard UI can overlay unsynced
 ///                    scores without an extra async call.
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import '../api/client.dart';
 import '../api/models.dart';
 import '../game_catalog.dart' show resolvePrimary;
 import '../local/local_database.dart';
+import '../services/sixes_live_activity.dart';
 import '../sync/sync_service.dart';
 import '../widgets/error_view.dart';
 
@@ -26,6 +29,10 @@ class RoundProvider extends ChangeNotifier {
   ApiClient         _client;
   final LocalDatabase _localDb;
   final SyncService   _sync;
+
+  /// The Sixes lock screen (docs/design-review/handoff-sixes-lock/SPEC.md).
+  /// A no-op on Android and on iOS below 16.2.
+  late final SixesLiveActivity _liveActivity = SixesLiveActivity(_client);
 
   RoundProvider(this._client, this._localDb, this._sync) {
     _sync.addListener(_onSyncChanged);
@@ -35,6 +42,29 @@ class RoundProvider extends ChangeNotifier {
   void updateClient(ApiClient client) {
     _client = client;
     _sync.updateClient(client);
+    _liveActivity.updateClient(client);
+  }
+
+  /// True when the group this foursome belongs to is playing Sixes — the union
+  /// of round-level and foursome-level games, the same resolution the server
+  /// uses to decide which calculators run.
+  bool _runsSixes(int foursomeId) {
+    final rnd = _round;
+    if (rnd == null) return false;
+    if (rnd.activeGames.contains('sixes')) return true;
+    for (final fs in rnd.foursomes) {
+      if (fs.id == foursomeId) return fs.activeGames.contains('sixes');
+    }
+    return false;
+  }
+
+  /// Sixes anywhere in the round.  Used on sign, where we no longer care which
+  /// group the golfer was in — only whether there is a board to take down.
+  bool _roundRunsSixes(int roundId) {
+    final rnd = _round;
+    if (rnd == null || rnd.id != roundId) return false;
+    return rnd.activeGames.contains('sixes')
+        || rnd.foursomes.any((fs) => fs.activeGames.contains('sixes'));
   }
 
   @override
@@ -406,6 +436,15 @@ class RoundProvider extends ChangeNotifier {
       //    do a quiet scorecard refresh to get updated net scores / totals.
       if (_sync.isOnline && _sync.pendingCount == 0) {
         _refreshScorecardQuietly(foursomeId);
+      }
+
+      // 4. Raise the lock screen on the FIRST score of the round, not at the
+      //    tee time — that buys back the half hour in the car park against the
+      //    eight-hour iOS cap, and an abandoned round never leaves a ghost.
+      //    Unawaited: the commit point is the local write above, and a lock
+      //    screen must never sit between the golfer and their next hole.
+      if (_round != null && _runsSixes(foursomeId)) {
+        unawaited(_liveActivity.start(roundId: _round!.id));
       }
 
       return true;
@@ -1237,6 +1276,11 @@ class RoundProvider extends ChangeNotifier {
     try {
       final lb = await _client.completeRound(roundId);
       _leaderboard = lb;
+      // Signed — swap the board for the one personal state (what you won and
+      // who to see) and let iOS dismiss it a few minutes later.
+      if (_roundRunsSixes(roundId)) {
+        unawaited(_liveActivity.end(roundId: roundId));
+      }
       if (_round != null) {
         _round = Round(
           id:          _round!.id,

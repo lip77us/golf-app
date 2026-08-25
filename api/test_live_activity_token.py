@@ -117,3 +117,107 @@ class LiveActivityTokenTests(TestCase):
         self._post('slate-token')
         self.assertEqual(
             LiveActivityToken.objects.filter(round=self.round).count(), 2)
+
+
+class LiveActivityStateTests(TestCase):
+    """The opening and closing frames the app fetches
+    (docs/design-review/handoff-sixes-lock/SPEC.md)."""
+
+    def setUp(self):
+        from scoring.tests._helpers import (make_foursome, make_round,
+                                            make_tee, submit_hole)
+        from services.sixes import setup_sixes
+
+        self.submit_hole = submit_hole
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course)
+        self.round.active_games = ['sixes']
+        self.round.save(update_fields=['active_games'])
+        self.fs = make_foursome(
+            self.round,
+            [('Paul', 0), ('Dave', 0), ('Sam', 0), ('Lee', 0)],
+            tee=self.tee,
+        )
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        base = {'team_select_method': 'long_drive',
+                'team1_player_ids': [self.pid['Paul'], self.pid['Dave']],
+                'team2_player_ids': [self.pid['Sam'], self.pid['Lee']]}
+        setup_sixes(self.fs, [
+            {**base, 'start_hole':  1, 'end_hole':  6},
+            {**base, 'start_hole':  7, 'end_hole': 12},
+            {**base, 'start_hole': 13, 'end_hole': 18},
+        ], handicap_mode='gross')
+
+        acct = self.round.account
+        self.user = User.objects.create_user(username='paul', account=acct)
+        paul = self.fs.memberships.get(player__name='Paul').player
+        paul.user = self.user
+        paul.save(update_fields=['user'])
+
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        self.url = reverse('api-round-live-activity-state',
+                           args=[self.round.id])
+
+    def _play(self, hole, t1, t2):
+        self.submit_hole(self.fs, hole, [
+            (self.pid['Paul'], t1), (self.pid['Dave'], t1),
+            (self.pid['Sam'],  t2), (self.pid['Lee'],  t2),
+        ])
+
+    def test_returns_the_five_slots_once_a_hole_is_in(self):
+        self._play(1, 4, 5)
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200, resp.data)
+        state = resp.data['state']
+        self.assertEqual(
+            set(state), {'header', 'number', 'sides', 'state', 'pips',
+                         'final', 'footer'})
+        self.assertEqual(resp.data['course_name'], self.tee.course.name)
+
+    def test_thru_is_the_group_not_the_leader(self):
+        """A card reads 'thru 7' when the GROUP is through 7 — one golfer
+        running ahead does not move it."""
+        self._play(1, 4, 5)
+        self._play(2, 4, 5)
+        self.submit_hole(self.fs, 3, [(self.pid['Paul'], 4)])
+        self.assertIn('Thru 2', self.client.get(self.url).data['state']
+                                    ['footer']['context'])
+
+    def test_final_frame_is_the_personal_one(self):
+        for h in range(1, 19):
+            self._play(h, 4, 5)
+        resp = self.client.get(self.url, {'final': '1'})
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertIsNotNone(resp.data['state']['final'])
+
+    def test_a_round_with_no_sixes_returns_nothing(self):
+        """The app treats {} as 'don't start', so eligibility is decided here
+        rather than in the client."""
+        self.round.active_games = ['skins']
+        self.round.save(update_fields=['active_games'])
+        self.fs.active_games = []
+        self.fs.save(update_fields=['active_games'])
+        self._play(1, 4, 5)
+        self.assertEqual(self.client.get(self.url).data, {})
+
+    def test_the_board_is_valid_before_a_ball_is_struck(self):
+        """The endpoint does not gate on play — it answers with the board as it
+        stands.  WHEN the activity starts is the app's decision (first score
+        posted), which also lets it restart cleanly after an app kill."""
+        state = self.client.get(self.url).data['state']
+        self.assertEqual(state['number']['text'], 'ALL SQ')
+        self.assertEqual(state['state']['to_play'], '6 TO PLAY')
+
+    def test_a_watcher_gets_the_board_without_a_money_line(self):
+        elsewhere = Account.objects.create(name='Watcher Club')
+        watcher = User.objects.create_user(username='watch', account=elsewhere,
+                                           phone='+13105550101')
+        from tournament.models import Watcher
+        Watcher.objects.create(round=self.round, phone='+13105550101')
+        self._play(1, 4, 5)
+        self.client.force_authenticate(watcher)
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertFalse(resp.data['state']['footer']['money'])

@@ -9186,6 +9186,83 @@ class RoundMessagesReadView(APIView):
         return Response({'unread': messaging.unread_count(thread, request.user)})
 
 
+def _sixes_foursome_for(rnd, user):
+    """The foursome whose Sixes board belongs on this user's lock screen, and
+    the player_id the money line is written for.
+
+    A golfer gets their own group.  A watcher — or a TD reading someone else's
+    round — gets the first group running Sixes and no money line, because the
+    money is the one slot that is personal.
+    """
+    from accounts.phone import normalize
+    phone = normalize(getattr(user, 'phone', None) or '') or None
+
+    running = [fs for fs in rnd.foursomes.all()
+               if 'sixes' in (set(fs.active_games or [])
+                              | set(rnd.active_games or []))]
+    for fs in running:
+        for m in fs.memberships.all():
+            mine = (m.player.user_id == user.id
+                    or (phone and m.player.phone
+                        and normalize(m.player.phone) == phone))
+            if mine:
+                return fs, m.player_id
+    return (running[0] if running else None), None
+
+
+class RoundLiveActivityStateView(APIView):
+    """
+    GET /api/rounds/<pk>/live-activity/state/[?final=1]  → {course_name, state}
+
+    The opening frame, fetched once when the activity starts, and the closing
+    one when the round is signed.  Everything between those two arrives by
+    push: the server owns the five slots because when any one golfer posts a
+    score, the other three phones have to move.
+
+    ``{}`` means "nothing to show" — not a Sixes round, or no segment has begun
+    — and the app treats that as "don't start".  Deciding it here keeps the
+    client from having to know what makes a round eligible.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        from accounts.scoring_access import round_for_reader
+        from services.live_activity import (sixes_activity_state,
+                                            sixes_final_state)
+        rnd = round_for_reader(request.user, pk)
+        foursome, player_id = _sixes_foursome_for(rnd, request.user)
+        if foursome is None:
+            return Response({})
+
+        want_final = str(request.query_params.get('final', '')).lower() \
+            in ('1', 'true', 'yes')
+        if want_final:
+            state = sixes_final_state(foursome, player_id=player_id)
+        else:
+            state = sixes_activity_state(foursome, player_id=player_id,
+                                         thru=_holes_played(foursome))
+        if not state:
+            return Response({})
+        return Response({
+            'course_name': rnd.course.name if rnd.course_id else '',
+            'state'      : state,
+        })
+
+
+def _holes_played(foursome) -> int:
+    """Holes the group has finished — the highest hole every golfer has a score
+    on, not the highest anyone has.  A card is only 'thru 7' when the group is."""
+    from scoring.models import HoleScore
+    counts = {}
+    for hs in HoleScore.objects.filter(foursome=foursome,
+                                       gross_score__isnull=False):
+        counts[hs.hole_number] = counts.get(hs.hole_number, 0) + 1
+    size = foursome.memberships.count()
+    done = [h for h, n in counts.items() if n >= size]
+    return max(done) if done else 0
+
+
 class RoundLiveActivityTokenView(APIView):
     """
     POST   /api/rounds/<pk>/live-activity/token/  {token}  → {ok: true}
