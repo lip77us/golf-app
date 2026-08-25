@@ -199,7 +199,6 @@ automatic event pushes **and** user-to-user messaging.
 ---
 
 ## Open questions
-- iOS: confirm Apple Developer push key (.p8) for the Firebase project.
 - Do watchers get **every** skin or an opt-in digest? (Default: same as
   participants; add digest in Phase 2.)
 - Exclude the **actor** (scorer) from the event they caused? (Lean yes.)
@@ -218,3 +217,53 @@ automatic event pushes **and** user-to-user messaging.
   `services/push.py`, device + prefs endpoints.
 - Mobile: `firebase_messaging` init, `AuthProvider` (register/unregister),
   `settings_screen.dart` (prefs), leaderboard deep-link routing.
+
+
+---
+
+## Live Activities go straight to Apple, not through Firebase
+
+The Sixes lock screen (`docs/design-review/handoff-sixes-lock/SPEC.md`) is the
+one push path that bypasses FCM entirely, and not by preference. A Live
+Activity update is its own APNs push type: header `apns-push-type:
+liveactivity`, a topic suffixed `.push-type.liveactivity`, and a
+`content-state` object where a notification would normally go. Firebase
+exposes no way to set any of the three. So `services/live_activity_push.py` is
+a direct APNs client, pluggable the same way `services/push.py` is —
+`LIVE_ACTIVITY_BACKEND=console` logs and sends nothing, `apns` delivers.
+
+**The key.** `AuthKey_KQMU88YXV7.p8`, Team Scoped (All topics), Sandbox &
+Production — which also answers the old open question above about the .p8 for
+the Firebase project: it is the same key, and it must not be revoked to "start
+clean", because Firebase uses it to deliver every ordinary iOS push. Apple
+allows two APNs keys per team; make a second one rather than replacing this.
+
+| Variable | Local | Railway |
+|---|---|---|
+| `LIVE_ACTIVITY_BACKEND` | `apns` | `apns` |
+| `APNS_KEY_PATH` | path to the `.p8` | — |
+| `APNS_KEY_P8` | — | the file's contents |
+| `APNS_KEY_ID` | `KQMU88YXV7` | same |
+| `APNS_TEAM_ID` | `V5P3HRQA4G` | same |
+| `APNS_SANDBOX` | `1` | unset |
+
+Local has to use a path: the `.env` reader in `my_golf_app/settings.py` is
+line-based and cannot hold a multi-line value. Railway's variables can.
+
+`APNS_SANDBOX` is the most common reason a correct-looking push vanishes. A
+build installed by Xcode or `flutter run` gets a sandbox token, and the
+production host answers `BadDeviceToken` for it. TestFlight and the App Store
+are production.
+
+**Testing without playing golf.** `python manage.py push_activity <round_id>`
+pushes the current board to whoever has an activity registered; `--show`
+prints the state and sends nothing. This exists because the failure that
+matters is silent: if the Python dict and Swift's `CodingKeys` disagree, Apple
+accepts the push, the phone discards it, and the lock screen simply never
+moves.
+
+To prove the key itself without a device, push to an invalid device token.
+`BadDeviceToken` is the *good* answer — it means the provider token, the team,
+and the topic were all accepted and only the device was wrong.
+`InvalidProviderToken` means the key, Key ID or Team ID is wrong;
+`TopicDisallowed` means the App ID lacks the Push Notifications capability.
