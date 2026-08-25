@@ -44,6 +44,8 @@ Match Play
   GET    /api/foursomes/{id}/match-play/   MatchPlayResultView
 """
 
+import logging
+
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.http import Http404, JsonResponse
@@ -56,6 +58,8 @@ from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
+
+logger = logging.getLogger(__name__)
 
 from accounts import otp as otp_service
 from accounts.scoring_access import (
@@ -248,6 +252,22 @@ def _recalculate_games(foursome: Foursome) -> None:
         calculate_ryder_cup_points(round_obj)
     except Exception:
         pass  # not a cup round — skip silently
+
+    # ── Sixes lock screen ──────────────────────────────────────────────────────
+    # The board moves for all four golfers when any one of them posts, so the
+    # push goes out from here rather than from the phone that scored — that
+    # phone is the only one that already knows.
+    #
+    # Sent only to rounds with an activity registered, which is why this costs
+    # nothing on the rounds that never raised one.  Swallowed whole: a stale
+    # lock screen is a nuisance, a failed scoring request is not.
+    if 'sixes' in active_games:
+        try:
+            from services.live_activity_push import push_round
+            push_round(round_obj)
+        except Exception:
+            logger.exception('live activity push failed for round %s',
+                             round_obj.id)
 
 
 def _build_scorecard(foursome: Foursome) -> dict:

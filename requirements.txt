@@ -14,3 +14,10 @@ firebase-admin>=6.5.0,<7.0.0
 # else here: Railway installs from THIS file, not poetry.lock, so a loose
 # range drifts on the next rebuild. Keep in sync with pyproject.toml.
 pillow>=11.0.0,<12.0.0
+# A Live Activity update is its own APNs push type and Firebase cannot set it
+# (services/live_activity_push.py), so that one path talks to Apple directly:
+# PyJWT signs the ES256 provider token, httpx speaks the HTTP/2 APNs requires.
+# Capped like everything else here — Railway installs from THIS file, not
+# poetry.lock. Keep in sync with pyproject.toml.
+pyjwt[crypto]>=2.9.0,<3.0.0
+httpx[http2]>=0.27.0,<1.0.0
