@@ -179,6 +179,30 @@ def _headers(provider_token: str) -> dict:
     }
 
 
+_client = None
+
+
+def _http():  # pragma: no cover - needs creds
+    """One long-lived HTTP/2 client, reused across pushes.
+
+    This matters more than it looks.  The sends happen inside the score-post
+    request, one per golfer in the group, and a fresh client per send means a
+    fresh TLS and HTTP/2 handshake per send — four of them, sequentially, in
+    front of the golfer waiting for their score to save.  APNs is built to be
+    held open and multiplexed, so holding one connection turns four handshakes
+    into four frames on a socket that is already warm.
+    """
+    global _client
+    if _client is None:
+        import httpx  # httpx[http2] — APNs is HTTP/2 only
+        _client = httpx.Client(
+            http2=True,
+            timeout=httpx.Timeout(5.0, connect=3.0),
+            limits=httpx.Limits(max_keepalive_connections=4),
+        )
+    return _client
+
+
 def _send_apns(device_token, payload) -> bool:  # pragma: no cover - needs creds
     token = _provider_token()
     if token is None:
@@ -186,11 +210,9 @@ def _send_apns(device_token, payload) -> bool:  # pragma: no cover - needs creds
                      'APNS key configured')
         return False
 
-    import httpx  # httpx[http2] — APNs is HTTP/2 only
-    with httpx.Client(http2=True, timeout=10.0) as client:
-        resp = client.post(f'{_host()}/3/device/{device_token}',
-                           headers=_headers(token),
-                           content=json.dumps(payload))
+    resp = _http().post(f'{_host()}/3/device/{device_token}',
+                        headers=_headers(token),
+                        content=json.dumps(payload))
     if resp.status_code == 200:
         return True
     logger.error('live_activity_push: APNs %s for %s… — %s',
