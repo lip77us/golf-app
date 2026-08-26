@@ -1,0 +1,206 @@
+<!-- @dsCard group="Live Activities" name="The pattern" subtitle="LiveActivityPattern — five slots generalised from Sixes, filled for skins, Nassau and team play, with the test for which games earn one" viewport="1560x1260" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Live Activity pattern</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--mint:#3BD89A;--muted:#5C6B62;--blue:#5AA7F5;--orange:#F3A059;--cardBorder:#DCE5DD;--warn:#8A5216}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:30px 34px 46px;max-width:1500px;margin:0 auto}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.home{position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 "Spline Sans",system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)}
+h1{font-family:"Schibsted Grotesk",sans-serif;font-size:27px;font-weight:600;margin:0 0 6px}
+.lede{color:var(--muted);font-size:14px;line-height:1.6;max-width:780px;margin:0 0 26px}
+.lede b{color:var(--deepPine)}
+h2{font-family:"Schibsted Grotesk",sans-serif;font-size:14px;font-weight:700;margin:32px 0 12px;padding-bottom:7px;border-bottom:1.5px solid #CBD8CE}
+.two{display:grid;grid-template-columns:392px 1fr;gap:26px;align-items:start}
+/* anatomy */
+.anat{background:#0B1F1A;border-radius:26px;padding:20px 20px 20px 12px;display:grid;grid-template-columns:23px 1fr;column-gap:10px;align-items:center}
+.panelbg{grid-column:2;grid-row:1/4;background:rgba(255,255,255,.13);border:.5px solid rgba(255,255,255,.16);border-radius:24px}
+.band{grid-column:2;position:relative;padding:0 15px;color:#fff}
+.band.b1{grid-row:1;padding-top:13px}
+.band.b2{grid-row:2}
+.band.b3{grid-row:3;padding-bottom:14px}
+.gut{grid-column:1;display:flex;align-items:center;justify-content:center}
+.gut span{writing-mode:vertical-rl;transform:rotate(180deg);font:700 8.5px/1 "Spline Sans",system-ui,sans-serif;letter-spacing:1.2px;color:var(--mint);opacity:.85;text-transform:uppercase}
+.bandtag{display:inline-block;background:rgba(15,110,86,.1);color:var(--pine);font:700 9px/1 "Spline Sans",system-ui,sans-serif;letter-spacing:.5px;padding:3px 6px;border-radius:5px;margin-left:7px;vertical-align:2px}
+.gut.g1{grid-row:1}.gut.g2{grid-row:2}.gut.g3{grid-row:3}
+.la{border-radius:24px;background:rgba(255,255,255,.13);padding:13px 15px 14px;border:.5px solid rgba(255,255,255,.16);color:#fff}
+.lah{display:flex;align-items:center;gap:7px;margin-bottom:11px}
+.lah .mark{width:17px;height:17px;border-radius:5px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 10px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.lah .g{font-size:11.5px;font-weight:700;letter-spacing:.3px}
+.lah .seg{margin-left:auto;font-size:10.5px;font-weight:600;opacity:.62}
+.big{display:flex;align-items:flex-end;gap:11px}
+.big .st{font-family:"Schibsted Grotesk",sans-serif;font-size:36px;font-weight:700;line-height:.94;letter-spacing:-1px;color:var(--mint)}
+.big .sub{padding-bottom:4px;font-size:12px;line-height:1.4;opacity:.8}
+.big .sub .lead{font-weight:700;opacity:1}
+.dotb,.doto{display:inline-block;width:7px;height:7px;border-radius:2px;vertical-align:1px;margin-right:5px}
+.big .st{flex:none;white-space:nowrap}
+.big .state,.big .money{flex:none;white-space:nowrap}
+.big .sub{flex:1;min-width:0}
+.dotb{background:var(--blue)}.doto{background:var(--orange)}
+.money{margin-left:auto;text-align:right;padding-bottom:3px}
+.money b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;line-height:1;letter-spacing:.2px}
+.money u{text-decoration:none;display:block;font-size:9px;font-weight:700;letter-spacing:.4px;opacity:.55;margin-top:4px}
+.pips{display:flex;gap:5px;margin-top:12px}
+.pips i{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.2)}
+.pips i.b{background:var(--blue)}.pips i.o{background:var(--orange)}
+.pips i.now{background:rgba(255,255,255,.62)}
+.pips i.w{background:var(--mint)}
+.foot{display:flex;align-items:center;gap:8px;margin-top:11px;font-size:11px;opacity:.66;color:#fff}
+.foot .r{margin-left:auto;opacity:1;font-weight:600}
+.tagn{background:var(--mint);color:#06231A;font:700 10px/1 "Spline Sans",system-ui,sans-serif;width:19px;height:19px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none}
+.slots{list-style:none;margin:0;padding:0}
+.slots li{display:flex;gap:11px;padding:11px 0;border-bottom:1px solid var(--cardBorder)}
+.slots li:last-child{border:none}
+.slots .n{flex:none;width:21px;height:21px;border-radius:50%;background:var(--pine);color:#fff;font:700 11px/1 "Spline Sans",system-ui,sans-serif;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.slots .tx>b{display:block;font-size:13.5px;font-family:"Schibsted Grotesk",sans-serif}
+.slots .tx>span{display:block;font-size:12.5px;color:var(--muted);line-height:1.5;margin-top:2px}
+.slots .tx i{color:var(--deepPine);font-style:normal;font-weight:600}
+/* table */
+table.m{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--cardBorder);border-radius:14px;overflow:hidden;font-size:12.5px}
+table.m th{text-align:left;padding:10px 12px;font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);background:#F5F8F6;border-bottom:1px solid var(--cardBorder)}
+table.m td{padding:10px 12px;border-bottom:1px solid #F2F6F3;color:var(--muted);vertical-align:top;line-height:1.5}
+table.m td:first-child{font-weight:700;color:var(--deepPine);width:132px}
+table.m tr:last-child td{border-bottom:none}
+table.m td.y{color:var(--pine);font-weight:700}
+table.m td.n{color:var(--muted);font-weight:600}
+table.m tr.hi td{background:#F4FAF6}
+/* cards row */
+.row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.exb .big{flex-wrap:wrap}
+.exb .big .sub{flex:0 0 100%;order:3;padding-bottom:0;margin-top:9px}
+.exb .big .money{margin-left:auto}
+.exb{background:#0B1F1A;border-radius:24px;padding:16px}
+.exb .lbl{color:#fff;font-size:10px;font-weight:700;letter-spacing:.5px;opacity:.5;margin-bottom:11px}
+.why{background:#fff;border:1px solid var(--cardBorder);border-radius:14px;padding:12px 14px;font-size:12.5px;line-height:1.55;color:var(--muted);margin-top:11px}
+.why b{color:var(--deepPine)}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.note{display:flex;gap:9px;background:#F4FAF6;border:1px solid #C9E3D4;border-radius:12px;padding:11px 13px;font-size:12.5px;line-height:1.55;color:#38564A;margin:0 0 14px}
+.note b{color:var(--deepPine)}
+.note.amber{background:#FDF3E7;border-color:#E8D6BC;color:#5C4326}
+.note.amber b{color:#5C4326}
+</style></head>
+<body>
+<a class="home" href="../index-contents.html">&#8592; Contents</a>
+<h1>Live Activities &mdash; the pattern</h1>
+<p class="lede"><a href="live-activity-sixes.html">Sixes</a> is the worked example. This is what generalises out of it: <b>five slots, one test for which games earn an activity at all, and a second test for which of them earn a push.</b> The layout never changes between games &mdash; only what fills the slots does.</p>
+
+<h2>Anatomy</h2>
+<p class="lede" style="margin:-16px 0 18px;max-width:none">Three bands, six slots. The list reads left to right within each band.</p>
+<div class="two">
+<div class="anat">
+<div class="panelbg"></div>
+<div class="gut g1"><span>Header</span></div>
+<div class="band b1">
+<div class="lah" style="margin-bottom:0"><span class="mark">H</span><span class="g">SIXES</span><span class="seg">MATCH 1 &middot; HOLES 1&ndash;6</span></div>
+</div>
+<div class="gut g2"><span>Headline</span></div>
+<div class="band b2">
+<div class="big" style="padding:11px 0"><span class="st" style="color:var(--blue)">2 UP</span><span class="sub"><span class="lead" style="color:var(--blue)"><span class="dotb"></span>Paul &amp; Dave</span><br><span style="opacity:.6"><span class="doto"></span>Sam &amp; Lee &middot; thru 4</span></span><span class="money"><b style="color:var(--blue)">DORMIE</b><u>2 TO PLAY</u></span></div>
+</div>
+<div class="gut g3"><span>Footer</span></div>
+<div class="band b3">
+<div class="pips" style="margin-top:0"><i class="now"></i><i></i><i></i></div>
+<div class="foot"><span>Classic &middot; $5 a match</span><span class="r">+$5 so far</span></div>
+</div>
+</div>
+<ul class="slots">
+<li><span class="n">1</span><span class="tx"><b>The game<span class="bandtag">HEADER &middot; LEFT</span></b><span>Its name, always. A lock screen has no navigation, so the activity has to say what it is before it says anything else.</span></span></li>
+<li><span class="n">2</span><span class="tx"><b>Where you are<span class="bandtag">HEADER &middot; RIGHT</span></b><span>The unit the game is scored in &mdash; <i>segment 1</i>, <i>front nine</i>, <i>round 2</i>, <i>hole 7</i>. Not the time, not the date.</span></span></li>
+<li><span class="n">3</span><span class="tx"><b>The number<span class="bandtag">HEADLINE &middot; LEFT</span></b><span>The state of the thing that pays, and nothing else. Where there are two sides it takes <b>the leading side&rsquo;s colour</b>, so no reading order is required to tell who is up. <i>2 UP</i>, <i>3 skins live</i>, <i>&minus;4 net</i>. One number, biggest thing on the panel, readable at a nit on an always-on display.</span></span></li>
+<li><span class="n">4</span><span class="tx"><b>The sides<span class="bandtag">HEADLINE &middot; MIDDLE</span></b><span>Who is in it. Present <b>only when it is not obvious or it changes</b> &mdash; essential in Sixes, pointless in stroke play. This is the slot most games leave empty.</span></span></li>
+<li><span class="n">5</span><span class="tx"><b>The state<span class="bandtag">HEADLINE &middot; RIGHT</span></b><span>The match in a word &mdash; <i>dormie</i>, <i>closed</i>, <i>all square</i> &mdash; in the leading side&rsquo;s colour. When no word applies it holds <b>holes remaining</b>. This is the slot that changes how the next hole is played, which is why it beat a running balance for the position.</span></span></li>
+<li><span class="n">6</span><span class="tx"><b>The shape<span class="bandtag">FOOTER</span></b><span>How much game is left, with the stake and your running money beside it. A <b>slot, not a component</b> &mdash; three pips in Sixes, three in a Nassau, a carry count in skins, a thru number in stroke play. Whatever answers &ldquo;how far in are we&rdquo; in one glance.</span></span></li>
+</ul>
+</div>
+
+<h2>Which games earn one</h2>
+<div class="note"><span>&#9679;</span><span><b>The test: does the game have news?</b> Something changed while you were not looking, and you cannot work it out from your own card. If the answer is no, the activity is a widget with extra steps &mdash; the golfer already knows, because he was standing there.</span></div>
+<table class="m">
+<tr><th>Game</th><th>The number</th><th>The sides</th><th>The shape</th><th style="width:96px">News?</th><th>What the news is</th></tr>
+<tr class="hi"><td>Sixes</td><td>2 UP / +3 pts</td><td>Both pairings, leader bold</td><td>Holes left in the round</td><td class="y">Yes</td><td>The pairing is <b>drawn</b> every time a match is decided &mdash; three times at least, and there is no ceiling. Nobody can predict it.</td></tr>
+<tr><td>Skins</td><td>3 skins live</td><td class="n">&mdash;</td><td>Carry count</td><td class="y">Yes</td><td>Another group settles a carried skin. Money moves while you are on a different hole.</td></tr>
+<tr><td>Nassau</td><td>2 UP &middot; front</td><td>Both sides</td><td>3 pips &mdash; front, back, total</td><td class="y">Yes</td><td>You have been <b>pressed</b>. The stake changed without your consent.</td></tr>
+<tr><td>Survivor</td><td>7 left</td><td class="n">&mdash;</td><td>Alive count</td><td class="y">Yes</td><td>Someone else went out. Your odds moved on a hole you did not play.</td></tr>
+<tr><td>Irish Rumble</td><td>&minus;4 &middot; 2 balls count</td><td>The group</td><td>3 count bands</td><td class="y">Yes</td><td>The count escalates at 7 and 13, and a borrowed 4th may post late.</td></tr>
+<tr><td>Team play</td><td>&minus;4 &middot; 3rd</td><td class="n">Team name only</td><td>Field position</td><td class="y">Yes</td><td>Five other teams are scoring. Your position moves without you hitting a shot.</td></tr>
+<tr><td>Cup</td><td>8&frac12; &ndash; 6&frac12;</td><td>Both sides</td><td>Points to win</td><td class="y">Yes</td><td>Eleven other matches. This is the strongest case in the app.</td></tr>
+<tr><td>Rabbit</td><td>Rabbit: Dave</td><td class="n">&mdash;</td><td>Holes held</td><td class="y">Yes</td><td>The rabbit changes hands, sometimes on a hole you halved.</td></tr>
+<tr><td>Ball game</td><td>Alive &middot; hole 12</td><td class="n">&mdash;</td><td>Groups still in</td><td class="y">Yes</td><td>Another group loses the ball and you move up without doing anything.</td></tr>
+<tr><td>Stroke play, no bet</td><td>&minus;2 thru 11</td><td class="n">&mdash;</td><td>Thru</td><td class="n">No</td><td>You wrote every number on it. Nothing can surprise you &mdash; this is a widget, not an activity.</td></tr>
+</table>
+<p class="lede" style="margin:14px 0 0"><b>Almost everything passes</b>, which is the point worth noticing: the app is built on games where other people's scores move your money. The one that fails is the one with no bet on it.</p>
+
+<h2>Which of them earn a push</h2>
+<div class="note amber"><span>&#9888;</span><span><b>A Live Activity that asks for something stops being a glance.</b> The activity is ambient and always current. When a moment genuinely needs announcing, that is a <b>notification</b> &mdash; a different object, punctual, dismissed once read, with the activity underneath already showing the answer.</span></div>
+<div class="cols2">
+<table class="m">
+<tr><th colspan="2">Earns a push</th></tr>
+<tr><td>Sixes</td><td>Every new pairing. Nothing else.</td></tr>
+<tr><td>Nassau</td><td>A press against you. It changes what you owe, without your agreement.</td></tr>
+<tr><td>Survivor</td><td>Your own elimination. Everyone else&rsquo;s is not your business.</td></tr>
+<tr><td>Ball game</td><td>Your group loses the ball. The moment the game ends for you.</td></tr>
+<tr><td>Cup</td><td>The cup is clinched. Once, and it is the whole event.</td></tr>
+</table>
+<table class="m">
+<tr><th colspan="2">Does not</th></tr>
+<tr><td>Every hole</td><td>Eighteen pushes is uninstall behaviour.</td></tr>
+<tr><td>Position changes</td><td>The activity already shows it. That is what it is for.</td></tr>
+<tr><td>Skins carrying</td><td>Common, expected, and visible on the pip. Only a <i>settled</i> carry of real size is arguable, and it is not built.</td></tr>
+<tr><td>Someone else&rsquo;s birdie</td><td>Not news. Chat exists.</td></tr>
+<tr><td>Round complete</td><td>The final state does this, quietly, on the activity that is already there.</td></tr>
+</table>
+</div>
+
+<h2>The same five slots, three other games</h2>
+<div class="row">
+<div>
+<div class="exb"><div class="lbl">SKINS &mdash; SIDES SLOT EMPTY</div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SKINS</span><span class="seg">HOLE 12 &middot; PAR 4</span></div>
+<div class="big"><span class="st">3 LIVE</span><span class="sub">carried from 9<br>worth $60</span><span class="money"><b>$60</b><u>ON THIS HOLE</u></span></div>
+<div class="pips"><i class="w"></i><i class="w"></i><i></i><i></i><i class="now"></i><i></i><i></i></div>
+<div class="foot"><span>$5 a hole &middot; 2 won &middot; 6 to play</span><span class="r">+$20 so far</span></div>
+</div></div>
+<div class="why"><b>The shape slot becomes the holes,</b> won ones filled. Nobody is named because in skins the field is the opponent &mdash; naming it would be a list. The number is the <i>carry</i>, not your score, and the state slot prices it: <b>$60 on this hole</b> is what everyone on the tee is thinking about.</div>
+</div>
+<div>
+<div class="exb"><div class="lbl">NASSAU &mdash; ALL SIX SLOTS USED</div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">NASSAU</span><span class="seg">BACK NINE &middot; THRU 14</span></div>
+<div class="big"><span class="st" style="color:var(--orange)">1 DN</span><span class="sub"><span class="lead" style="color:var(--orange)"><span class="doto"></span>Sam</span><br><span style="opacity:.6"><span class="dotb"></span>Paul &middot; pressed on 13</span></span><span class="money"><b style="color:var(--orange)">DORMIE</b><u>4 TO PLAY</u></span></div>
+<div class="pips"><i class="b"></i><i class="now"></i><i></i></div>
+<div class="foot"><span>$10 &middot; 1 press live &middot; $30 at stake</span><span class="r">&minus;$10 so far</span></div>
+</div></div>
+<div class="why"><b>Three pips, and they are the Nassau itself</b> &mdash; front won, back live, total open. <i>Dormie</i> works here exactly as in Sixes. The press lives in the footer: it changed the stake, not the score, and the number must keep meaning one thing.</div>
+</div>
+<div>
+<div class="exb"><div class="lbl">TEAM PLAY &mdash; A FIELD, NOT AN OPPONENT</div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SCRAMBLE</span><span class="seg">PINE &middot; THRU 14</span></div>
+<div class="big"><span class="st">3rd</span><span class="sub">&minus;4 net &middot; 50 gross<br>2 back of Fern</span><span class="money"><b>IN THE MONEY</b><u>3 PLACES PAY</u></span></div>
+<div class="pips"><i class="w"></i><i class="w"></i><i class="now"></i><i></i><i></i><i></i></div>
+<div class="foot"><span>6 teams &middot; $575 pool &middot; 4 to play</span><span class="r">Projected</span></div>
+</div></div>
+<div class="why"><b>The number is a position, not a score,</b> because in a field the position is what pays. There is no match to be dormie in, so the state slot answers the equivalent question &mdash; <b>in the money</b> &mdash; and the footer says <i>projected</i>, the same rule as the leaderboard. A lock screen is the last place to imply a payout is settled.</div>
+</div>
+</div>
+
+<h2>Rules that hold across all of them</h2>
+<table class="m">
+<tr><td>One per round</td><td>A foursome running Sixes and skins gets <b>one</b> activity, and it goes to <b>the primary game</b> &mdash; the one the group named at setup. Side games get none. Two activities for one round is the worst outcome.</td></tr>
+<tr><td>Neutral board</td><td>The match belongs to the group and two golfers should be able to read one phone. Nothing personal sits in the headline band &mdash; <b>money lives in the footer</b>, beside the stake, where the context makes a label unnecessary.</td></tr>
+<tr><td>Read-only</td><td>No buttons. Every action in these games is group state that wants the app&rsquo;s confirmation, and a mis-tap on a lock screen is expensive.</td></tr>
+<tr><td>Starts on the first score</td><td>Not the tee time. Buys back the half hour on the range against the eight-hour limit, and an abandoned round leaves no ghost.</td></tr>
+<tr><td>Ends personal</td><td>Whatever the round was, the last state is <b>what you won and who to see</b>, held a few minutes, then dismissed.</td></tr>
+<tr><td>Survives one nit</td><td>If a line needs a second glance on an always-on display, it does not belong in the activity. Useful test to apply before adding anything.</td></tr>
+</table>
+
+<h2>Open</h2>
+<table class="m">
+<tr><td><s style="text-decoration:line-through;opacity:.55">Ranking the games</s></td><td><b>Closed.</b> No ranking is needed: the activity goes to the <b>primary game</b>, which the group already named at setup. Superseded proposal was an order of Cup &gt; Sixes &gt; Nassau &gt; Survivor &gt; skins &gt; everything else &mdash; unconfirmed.</td></tr>
+<tr><td>Tournament spectators</td><td>A golfer not playing who wants the Cup on his lock screen. Plausible and not designed &mdash; it breaks the &ldquo;one per round&rdquo; rule, since he has no round.</td></tr>
+<tr><td>Eight hours in a Cup</td><td>Two-day events exceed the limit by a wide margin. The activity presumably restarts per round, but the handoff between rounds is undrawn.</td></tr>
+<tr><td>Watch</td><td>Every one of these is a better watch complication than a lock-screen panel. Out of scope here and worth its own pass.</td></tr>
+</table>
+</body></html>

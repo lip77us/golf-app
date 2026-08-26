@@ -1,0 +1,202 @@
+<!-- @dsCard group="Live Activities" name="Skins — lock screen" subtitle="SkinsLiveActivity — the pot on this hole, the carry, the provisional problem, pool mode, always-on and the final state" viewport="1560x1320" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Skins Live Activity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--mint:#3BD89A;--muted:#5C6B62;--amber:#F3A059}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:28px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.home{position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 "Spline Sans",system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.own{background:#fff;border:1px solid #DCE5DD;border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:104px;color:var(--deepPine);font-weight:600}
+.wrap{position:relative;margin-bottom:36px}
+.cap{position:absolute;left:0;right:0;bottom:-30px;text-align:center;font-size:11.5px;font-weight:600;color:var(--muted)}
+.lock{width:352px;height:762px;border:10px solid #0B1F1A;border-radius:44px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);background:radial-gradient(120% 90% at 50% 0%,#1E4038 0%,#0C1F1B 45%,#050D0B 100%);flex:none;color:#fff}
+.lock.aod{filter:brightness(.74) saturate(.82)}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:112px;height:31px;border-radius:20px;background:#000}
+.clock{text-align:center;padding:58px 0 0}
+.clock .d{font-size:14px;font-weight:600;opacity:.72}
+.clock .t{font-family:"Schibsted Grotesk",sans-serif;font-size:74px;font-weight:600;line-height:1.02;letter-spacing:-2px;margin-top:2px}
+.la{margin:26px 14px 0;border-radius:24px;background:rgba(255,255,255,.13);backdrop-filter:blur(20px);padding:13px 15px 14px;border:.5px solid rgba(255,255,255,.14)}
+.lah{display:flex;align-items:center;gap:7px;margin-bottom:10px}
+.lah .mark{width:17px;height:17px;border-radius:5px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 10px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.lah .g{font-size:11.5px;font-weight:700;letter-spacing:.3px}
+.lah .seg{margin-left:auto;font-size:10.5px;font-weight:600;opacity:.62}
+.big{display:flex;flex-wrap:wrap;align-items:flex-end;column-gap:11px;row-gap:0}
+.big .st{order:1;flex:none;font-family:"Schibsted Grotesk",sans-serif;font-size:36px;font-weight:700;line-height:.94;letter-spacing:-1px;color:var(--mint);white-space:nowrap}
+.big .st.prov{color:#fff;opacity:.92}
+.big .state{order:2;flex:none;margin-left:auto;text-align:right;padding-bottom:2px;white-space:nowrap}
+.big .state b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:15px;font-weight:700;letter-spacing:.2px}
+.big .state b.prv{font-size:12.5px;color:var(--amber);letter-spacing:.4px}
+.big .state u{display:block;text-decoration:none;font-size:9px;font-weight:700;letter-spacing:.4px;opacity:.55;margin-top:3px}
+.big .sub{order:3;flex:0 0 100%;min-width:0;margin-top:10px;font-size:12.5px;line-height:1.55;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.big .sub s{text-decoration:none;opacity:.5}
+.foot{display:flex;align-items:center;gap:8px;margin-top:11px;padding-top:10px;border-top:.5px solid rgba(255,255,255,.11);font-size:11px;opacity:.66}
+.foot .r{margin-left:auto;opacity:1;font-weight:600;font-variant-numeric:tabular-nums}
+.bar{position:absolute;left:50%;bottom:9px;transform:translateX(-50%);width:126px;height:5px;border-radius:3px;background:rgba(255,255,255,.5)}
+.torch{position:absolute;bottom:38px;left:0;right:0;display:flex;justify-content:space-between;padding:0 34px;opacity:.5;font-size:17px}
+.torch span{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center}
+.notif{margin:16px 14px 0;border-radius:22px;background:rgba(255,255,255,.19);backdrop-filter:blur(20px);padding:12px 14px;border:.5px solid rgba(255,255,255,.16);display:flex;gap:11px;align-items:flex-start}
+.notif .ic{flex:none;width:34px;height:34px;border-radius:9px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 16px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.notif .tx{flex:1;min-width:0}
+.notif .tx .t1{display:flex;align-items:baseline;gap:7px;font-size:11px;font-weight:700;letter-spacing:.3px;opacity:.7}
+.notif .tx .t1 span{margin-left:auto;font-weight:600;opacity:.8}
+.notif .tx .t2{font-size:14px;font-weight:700;margin-top:3px}
+.notif .tx .t3{font-size:12.5px;opacity:.82;margin-top:2px;line-height:1.4}
+.fin{display:flex;align-items:flex-end;gap:11px;margin-top:2px}
+.fin b{font-family:"Schibsted Grotesk",sans-serif;font-size:42px;font-weight:700;line-height:.94;letter-spacing:-1px}
+.fin span{font-size:12.5px;line-height:1.55;opacity:.8;padding-bottom:3px}
+.la.quiet{background:rgba(10,22,18,.55);border-color:rgba(255,255,255,.1);padding:12px 15px}
+.la.quiet .big .st{font-size:22px}
+.la.quiet .big .sub{font-size:12px;opacity:.6;margin-top:8px}
+.di{background:#0B1F1A;border-radius:22px;padding:22px 20px;width:372px;flex:none;color:#fff;margin-bottom:36px}
+.di h4{font-family:"Schibsted Grotesk",sans-serif;font-size:13px;font-weight:700;margin:0 0 4px}
+.di p{font-size:11px;line-height:1.5;opacity:.6;margin:0 0 13px}
+.dr{margin-bottom:16px}
+.dr>span{display:block;font-size:9.5px;font-weight:700;letter-spacing:.4px;opacity:.5;margin-bottom:6px}
+.pill{background:#000;border-radius:20px;height:37px;display:inline-flex;align-items:center;gap:9px;padding:0 13px;font-size:13px;font-weight:700}
+.pill .mk{flex:none;width:15px;height:15px;border-radius:4px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 9px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.pill .mn{color:var(--mint)}
+.pill.min{width:52px;gap:0;justify-content:space-between;padding:0 11px}
+.exp{background:#000;border-radius:26px;padding:14px 16px 15px}
+.exp .top{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;opacity:.6;letter-spacing:.3px}
+.exp .top .rr{margin-left:auto;opacity:.9}
+</style></head>
+<body>
+<a class="home" href="../index-contents.html">&#8592; Contents</a>
+<div class="notes">
+<h1>Skins on the lock screen</h1>
+<p>Skins gets the <b>one big number</b> back. Nassau needed two rows because it always has two matches live; skins has one thing that pays &mdash; <b>the hole you are standing on</b> &mdash; so the composition Sixes was built on returns intact.</p>
+<p>The number is <b>what this hole is worth</b>. Not your position, not the leaderboard: the pot in front of you, which is the only figure that changes how the next tee shot gets played.</p>
+<h3>Only when skins is the primary game</h3>
+<p>A round gets <b>one</b> Live Activity and it belongs to <b>the primary game, named at setup</b>. So this card ships when skins is what the group came to play &mdash; and a foursome running skins alongside a Nassau gets the Nassau card and no skins card at all.</p>
+<p>Worth stating because it closes a question the pattern left open: there is no ranking of games by newsworthiness and nothing to arbitrate at runtime. <b>The group already answered it.</b> Side games settle in the app like everything else.</p>
+<h3>The money is in the headline, and this is the exception</h3>
+<p>Both earlier activities pushed money to the footer, because a lock screen is a <b>neutral board</b> two golfers should be able to read and personal money in the headline breaks that.</p>
+<p>Skins is the one game where <b>the pot is not personal</b>. Everyone on the tee is playing for the same $18. So it can hold the headline without breaking the rule &mdash; and because there are no sides, <b>mint is free to carry it</b>, which it never was in Sixes or Nassau where mint was the app&rsquo;s colour and could not be mistaken for a team&rsquo;s.</p>
+<h3>Nobody is named</h3>
+<p>The sides slot is empty and stays empty. In skins <b>the field is the opponent</b>, and naming it would be a list &mdash; the thing a lock screen has least room for.</p>
+<p>What the slot holds instead is <b>where the pot came from</b>: <i>3 skins, carried from the 10th.</i> That is the story of the hole and it is the reason the number is big.</p>
+<h3>The pot is provisional, and the card has to say so</h3>
+<p>This is the structural problem skins has and the other games do not. A skin is not decided until <b>every group has played that hole</b>. Your group can tie the 10th and think it carries, while a group an hour ahead already won it.</p>
+<p>So the pot on your current hole is <b>a forecast, not a fact</b>, and the card marks it: the number goes white instead of mint, the state slot reads <b>PROVISIONAL</b>, and beneath it <b>2 GROUPS OUT</b> &mdash; how many are still to play the holes in the carry.</p>
+<p>When the field is through and nothing is outstanding, the number turns mint and the state reads <b>ALL IN</b>. Same slot, two truths, and the colour does the work at a glance.</p>
+<p>Two consequences. <b>Pool mode is always mint</b> &mdash; the number there is the pool, which is fixed by the ante at setup and cannot be provisional; what is uncertain in pool is your <i>share</i>, and <i>falling</i> carries that. And <b>the quiet treatment keeps the mint on the number</b> even though it pulls it off everything else: the colour is load-bearing here, not decoration, and a quiet card that cannot distinguish a real pot from a guess has lost the one thing this card is for.</p>
+<h3>The news is a skin settling behind you</h3>
+<p><i>The 10th went to Sam Reid.</i> A group ahead won a hole your group tied, so the carry you were counting on breaks &mdash; this hole is $12, not $18. Money moved while you were standing somewhere else, and no amount of watching your own card would have told you.</p>
+<p>That is the exact test the other activities used, and skins passes it more cleanly than either: it is <b>the only game here where the thing in front of you can change without you doing anything</b>.</p>
+<div class="own"><table>
+<tr><td>Activity</td><td>Ambient. The pot on this hole, always current.</td></tr>
+<tr><td>Notification</td><td>Punctual. Fires when a skin settles behind you and changes the carry.</td></tr>
+<tr><td>Never both</td><td>The activity does not flash. It already shows the corrected pot.</td></tr>
+</table></div>
+<p><b>Not</b> every carry. A hole carrying is normal, expected, and already on the card &mdash; pushing it would be eighteen notifications. Only a settlement that <b>moves the number in front of you</b> is news.</p>
+<h3>Gross leads the footer</h3>
+<p><i>+2 &middot; $2 a player &middot; 6 settled.</i> Same rule as the other two cards: gross is the number a golfer checks without meaning to, and the footer is already the row where the reader&rsquo;s own round lives.</p>
+<p>It earns its place here twice over, because <b>par is in the header</b> and gross is the other half of that sentence. Net skins turn on strokes, so <i>par 4</i> and <i>+2</i> together tell the reader what the last eleven holes have done to his chances on this one.</p>
+<h3>The money beside it is net, and settled</h3>
+<p><i>+$4</i> after six skins: two collected at $6, four paid at $2 each. Both directions, or it is not your position &mdash; a gross figure of skins won reads like a win when you are down.</p>
+<p>Settled only, same rule as Nassau. A provisional pot has not paid anyone, so it is not in there.</p>
+<h3>Pool mode inverts it</h3>
+<p>Per-skin pays a fixed amount per hole won. <b>Pool</b> divides one pot among however many skins get won, which means <b>every new skin makes yours worth less</b>. The card says that out loud: <i>$15 a skin, falling.</i></p>
+<p>Nothing else about the composition changes. The pot slot holds the pool, the carry line holds the count so far.</p>
+<h3>Par is in the header</h3>
+<p><i>HOLE 12 &middot; PAR 4.</i> Skins is the one game where par belongs on the lock screen &mdash; net skins turn on strokes, and whether a 4 is good enough is the question the number is asking.</p>
+<h3>Always-on and the eight hours</h3>
+<p>One 36px number holds up under the brightness pull better than anything else drawn for this system. Skins is the easiest of the three to read at arm&rsquo;s length in sun.</p>
+<p>Starts on the <b>first score posted</b>, ends on round sign with the final state, dismisses after ~5 minutes.</p>
+</div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">11:48</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SKINS</span><span class="seg">HOLE 12 &middot; PAR 4</span></div>
+<div class="big"><span class="st prov">$18</span><span class="state"><b class="prv">PROVISIONAL</b><u>2 GROUPS OUT</u></span><span class="sub">3 skins, carried from the 10th</span></div>
+<div class="foot"><span>+2 &middot; $2 a player &middot; 6 settled</span><span class="r">+$4</span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">A live carry &mdash; the pot is a forecast</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">11:52</div></div>
+<div class="notif">
+<div class="ic">H</div>
+<div class="tx"><div class="t1">HALVED<span>now</span></div>
+<div class="t2">The 10th went to Sam Reid</div>
+<div class="t3">The carry breaks. This hole is $12, not $18.</div></div>
+</div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SKINS</span><span class="seg">HOLE 12 &middot; PAR 4</span></div>
+<div class="big"><span class="st prov">$12</span><span class="state"><b class="prv">PROVISIONAL</b><u>1 GROUP OUT</u></span><span class="sub">2 skins, carried from the 11th &nbsp;<s>&mdash; was 3</s></span></div>
+<div class="foot"><span>+2 &middot; $2 a player &middot; 7 settled</span><span class="r">+$2</span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">A skin settles behind you &mdash; the pot in front of you shrinks</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">10:26</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SKINS &middot; POOL</span><span class="seg">HOLE 7 &middot; PAR 3</span></div>
+<div class="big"><span class="st">$60</span><span class="state"><b>$15</b><u>A SKIN, FALLING</u></span><span class="sub">4 skins won so far &middot; 12 in the pool</span></div>
+<div class="foot"><span>+1 &middot; $5 ante &middot; 1 won</span><span class="r">+$10</span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Pool mode &mdash; every new skin dilutes yours</div></div>
+
+<div class="wrap"><div class="lock aod">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">1:09</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SKINS</span><span class="seg">HOLE 17 &middot; PAR 5</span></div>
+<div class="big"><span class="st">$36</span><span class="state"><b>ALL IN</b><u>FIELD IS THROUGH</u></span><span class="sub">6 skins, carried from the 12th</span></div>
+<div class="foot"><span>+6 &middot; $2 a player &middot; 11 settled</span><span class="r">+$10</span></div>
+</div>
+<div class="bar"></div>
+</div><div class="cap">Always-on &mdash; nothing outstanding, so the pot is mint</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">1:31</div></div>
+<div class="la quiet">
+<div class="lah"><span class="mark" style="background:rgba(255,255,255,.22);color:#fff">H</span><span class="g" style="opacity:.72">SKINS</span><span class="seg">HOLE 14 &middot; PAR 4</span></div>
+<div class="big"><span class="st">$6</span><span class="state"><b>ALL IN</b><u>NO CARRY</u></span><span class="sub">1 skin &middot; the 13th was won</span></div>
+</div>
+<div class="la" style="margin-top:14px">
+<div class="lah"><span class="mark">H</span><span class="g">SKINS</span><span class="seg">ROUND COMPLETE</span></div>
+<div class="fin"><b>+$4</b><span>Won 5 of 18 skins<br>Lost the 17th &mdash; it was worth <b>$36</b></span></div>
+<div class="foot"><span>+7 gross &middot; nothing outstanding</span><span class="r">Dismisses in 5 min</span></div>
+</div>
+<div class="bar"></div>
+</div><div class="cap">Quiet treatment (top) &middot; final state (below)</div></div>
+
+<div class="di">
+<h4>Dynamic Island</h4>
+<p>The pot is the one number, so compact is easy here &mdash; easier than either of the others. It keeps the provisional/settled colour split.</p>
+<div class="dr"><span>MINIMAL &mdash; ANOTHER APP IS ACTIVE</span>
+<div class="pill min"><span class="mk">H</span><span class="mn">&#9679;</span></div></div>
+<div class="dr"><span>COMPACT &mdash; SETTLED, NOTHING OUTSTANDING</span>
+<div class="pill"><span class="mk">H</span><span class="mn">$36</span><span style="opacity:.55;font-weight:600">hole 17</span></div></div>
+<div class="dr"><span>COMPACT &mdash; PROVISIONAL</span>
+<div class="pill"><span class="mk">H</span><span style="color:#fff">$18</span><span style="color:var(--amber);font-weight:700">prov</span></div></div>
+<div class="dr" style="margin-bottom:0"><span>EXPANDED &mdash; LONG PRESS</span>
+<div class="exp">
+<div class="top"><span style="width:14px;height:14px;border-radius:4px;background:var(--mint);display:inline-flex;align-items:center;justify-content:center;font:700 9px/1 'Schibsted Grotesk',sans-serif;color:#06231A">H</span><span>SKINS</span><span class="rr">HOLE 12 &middot; PAR 4</span></div>
+<div class="big" style="margin-top:9px"><span class="st prov">$18</span><span class="state"><b class="prv">PROVISIONAL</b><u>2 GROUPS OUT</u></span><span class="sub">3 skins, carried from the 10th</span></div>
+<div class="foot"><span>+2 &middot; $2 a player &middot; 6 settled</span><span class="r">+$4</span></div>
+</div></div>
+</div>
+</body></html>

@@ -1,0 +1,231 @@
+<!-- @dsCard group="Live Activities" name="Nassau — lock screen" subtitle="NassauLiveActivity — two live matches, the exposure range, the press notification, 2v2, always-on and the final state" viewport="1560x1320" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Nassau Live Activity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--mint:#3BD89A;--muted:#5C6B62;--blue:#5AA7F5;--orange:#F3A059}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:28px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.home{position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 "Spline Sans",system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.own{background:#fff;border:1px solid #DCE5DD;border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:104px;color:var(--deepPine);font-weight:600}
+.wrap{position:relative;margin-bottom:36px}
+.cap{position:absolute;left:0;right:0;bottom:-30px;text-align:center;font-size:11.5px;font-weight:600;color:var(--muted)}
+.lock{width:352px;height:762px;border:10px solid #0B1F1A;border-radius:44px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);background:radial-gradient(120% 90% at 50% 0%,#1E4038 0%,#0C1F1B 45%,#050D0B 100%);flex:none;color:#fff}
+.lock.aod{filter:brightness(.74) saturate(.82)}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:112px;height:31px;border-radius:20px;background:#000}
+.clock{text-align:center;padding:58px 0 0}
+.clock .d{font-size:14px;font-weight:600;opacity:.72}
+.clock .t{font-family:"Schibsted Grotesk",sans-serif;font-size:74px;font-weight:600;line-height:1.02;letter-spacing:-2px;margin-top:2px}
+.la{margin:26px 14px 0;border-radius:24px;background:rgba(255,255,255,.13);backdrop-filter:blur(20px);padding:13px 15px 14px;border:.5px solid rgba(255,255,255,.14)}
+.lah{display:flex;align-items:center;gap:7px;margin-bottom:9px}
+.lah .mark{width:17px;height:17px;border-radius:5px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 10px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.lah .g{font-size:11.5px;font-weight:700;letter-spacing:.3px}
+.lah .seg{margin-left:auto;font-size:10.5px;font-weight:600;opacity:.62}
+.sides{font-size:12.5px;line-height:1.5;opacity:.82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sides .vs{opacity:.5;margin:0 5px}
+.dotb,.doto{display:inline-block;width:7px;height:7px;border-radius:2px;vertical-align:1px;margin-right:5px}
+.dotb{background:var(--blue)}.doto{background:var(--orange)}
+.mm{margin-top:10px}
+.m{display:flex;align-items:center;gap:10px;padding:8px 0 7px;border-top:.5px solid rgba(255,255,255,.11)}
+.m .lb{flex:none;width:56px;font-size:9.5px;font-weight:700;letter-spacing:.5px;opacity:.52;line-height:1.3}
+.m .n{flex:none;font-family:"Schibsted Grotesk",sans-serif;font-size:25px;font-weight:700;line-height:.94;letter-spacing:-.6px}
+.m .n.blue{color:var(--blue)}.m .n.orange{color:var(--orange)}
+.m .n.sq{color:#fff;opacity:.9}
+.m .n.done{font-size:19px;opacity:.5}
+.m .rt{margin-left:auto;text-align:right;flex:none;font-size:9px;font-weight:700;letter-spacing:.4px;opacity:.55;line-height:1.3}
+.m .rt b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:13px;font-weight:700;letter-spacing:.2px;opacity:1;margin-bottom:3px}
+.m .rt b.blue{color:var(--blue)}.m .rt b.orange{color:var(--orange)}
+.prs{display:inline-block;font-size:8.5px;font-weight:700;letter-spacing:.3px;background:rgba(243,160,89,.2);color:var(--orange);border-radius:5px;padding:2px 5px;vertical-align:2px;margin-left:7px}
+.foot{display:flex;align-items:center;gap:8px;margin-top:11px;font-size:11px;opacity:.66}
+.foot .r{margin-left:auto;opacity:1;font-weight:600;font-variant-numeric:tabular-nums}
+.bar{position:absolute;left:50%;bottom:9px;transform:translateX(-50%);width:126px;height:5px;border-radius:3px;background:rgba(255,255,255,.5)}
+.torch{position:absolute;bottom:38px;left:0;right:0;display:flex;justify-content:space-between;padding:0 34px;opacity:.5;font-size:17px}
+.torch span{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center}
+.notif{margin:16px 14px 0;border-radius:22px;background:rgba(255,255,255,.19);backdrop-filter:blur(20px);padding:12px 14px;border:.5px solid rgba(255,255,255,.16);display:flex;gap:11px;align-items:flex-start}
+.notif .ic{flex:none;width:34px;height:34px;border-radius:9px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 16px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.notif .tx{flex:1;min-width:0}
+.notif .tx .t1{display:flex;align-items:baseline;gap:7px;font-size:11px;font-weight:700;letter-spacing:.3px;opacity:.7}
+.notif .tx .t1 span{margin-left:auto;font-weight:600;opacity:.8}
+.notif .tx .t2{font-size:14px;font-weight:700;margin-top:3px}
+.notif .tx .t3{font-size:12.5px;opacity:.82;margin-top:2px;line-height:1.4}
+.fin{display:flex;align-items:flex-end;gap:11px;margin-top:2px}
+.fin b{font-family:"Schibsted Grotesk",sans-serif;font-size:42px;font-weight:700;line-height:.94;letter-spacing:-1px}
+.fin span{font-size:12.5px;line-height:1.55;opacity:.8;padding-bottom:3px}
+.la.quiet{background:rgba(10,22,18,.55);border-color:rgba(255,255,255,.1);padding:12px 15px}
+.la.quiet .m .n{font-size:21px}
+.la.quiet .sides{font-size:12px;opacity:.62}
+.di{background:#0B1F1A;border-radius:22px;padding:22px 20px;width:372px;flex:none;color:#fff;margin-bottom:36px}
+.di h4{font-family:"Schibsted Grotesk",sans-serif;font-size:13px;font-weight:700;margin:0 0 4px}
+.di p{font-size:11px;line-height:1.5;opacity:.6;margin:0 0 13px}
+.dr{margin-bottom:16px}
+.dr>span{display:block;font-size:9.5px;font-weight:700;letter-spacing:.4px;opacity:.5;margin-bottom:6px}
+.pill{background:#000;border-radius:20px;height:37px;display:inline-flex;align-items:center;gap:9px;padding:0 13px;font-size:13px;font-weight:700}
+.pill .mk{flex:none;width:15px;height:15px;border-radius:4px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 9px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.pill .mint{color:var(--mint)}.pill .bl{color:var(--blue)}
+.pill.min{width:52px;gap:0;justify-content:space-between;padding:0 11px}
+.exp{background:#000;border-radius:26px;padding:14px 16px 15px}
+.exp .top{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;opacity:.6;letter-spacing:.3px}
+.exp .top .rr{margin-left:auto;opacity:.9}
+</style></head>
+<body>
+<a class="home" href="../index-contents.html">&#8592; Contents</a>
+<div class="notes">
+<h1>Nassau on the lock screen</h1>
+<p>Nassau is the second Live Activity, and it breaks the composition the first one was built on. Sixes had <b>one match at a time</b>, so it got one big number. Nassau always has <b>two live at once</b> &mdash; the nine you are playing and the eighteen &mdash; and there is no honest way to pick which of them is the headline.</p>
+<p>So the card is two equal rows. Nothing is 36px any more; both numbers sit at 25px, which is still the largest thing on the panel and still readable in a pocket-glance.</p>
+<h3>The sides are named once, at the top</h3>
+<p>The one thing Nassau gives back. In Sixes the pairing changes every match, so both sides had to be re-stated on every update &mdash; that line was the whole design problem. <b>Nassau&rsquo;s sides are fixed at setup and never move</b>, so they are named once, above the matches, and the space goes to the scores instead.</p>
+<p>It also means colour is stable for the whole round: blue is blue on the 1st and on the 18th, in both matches. A number can wear its side&rsquo;s colour and the reader never has to re-learn it.</p>
+<h3>Two rows, and the current nine goes first</h3>
+<p><b>FRONT 9</b> then <b>OVERALL</b>; after the turn, <b>BACK 9</b> then <b>OVERALL</b>. The nine leads because it settles sooner and it is the one that changes character &mdash; the overall match drifts, the nine gets urgent.</p>
+<p>The settled nine does <b>not</b> stay on the card as a third row. It is over, its money is in the footer figure, and a row that cannot change is a row spending space on history. What it leaves behind is the money and nothing else.</p>
+<h3>The hole, not the thru count</h3>
+<p>Sixes counted holes played. Nassau names the hole you are standing on: <b>HOLE 12</b>. Two live matches means two different remaining-hole counts, so a single <i>thru</i> figure no longer does the work it did &mdash; and the hole number is what a group actually says out loud.</p>
+<p>Each row keeps its own <b>n TO PLAY</b>, which is the honest way to carry two clocks at once: 6 to play on the back nine, 6 to play on the overall, and they diverge the moment a nine closes out.</p>
+<h3>The exposure range replaces the running total</h3>
+<p><i>&minus;$10 to +$20.</i> Two numbers: the worst and best places this round can finish, given what is settled and what is still live. It is the answer to the question people actually have on the 14th, which is not <i>where am I</i> but <b>how bad can this get</b>.</p>
+<p>A single running figure cannot answer it in Nassau, because presses mean the amount at stake is not fixed at setup. Three open bets at $5 is a $30 swing; the same round after two presses is a $50 swing, and the running total looks identical in both.</p>
+<p>The range <b>includes settled money</b>, so it is a real forecast rather than a bracket around zero &mdash; win the front nine and the floor rises with you. And it <b>converges</b>: every bet that settles pulls the two ends together, until on the 18th green they meet at the single number that is the final state. Same slot all round, no special final treatment needed.</p>
+<p><b>All three bets exist from the 1st tee.</b> The back nine is not played yet but it is already at stake, so the range opens at <i>&minus;$15 to +$15</i> on a $5 Nassau &mdash; not &minus;$10, which would count only the matches under way. This is the correction that makes the whole slot honest: the range is about <b>money at risk</b>, and the back nine is at risk from the moment the round starts.</p>
+<p>The arithmetic, exactly: <b>settled &plusmn; the sum of every live stake</b>, presses included. Midpoint is the money already banked; half-span is what is still on the table. Both ends move on every settlement and every press, and <b>they are checkable against the rows</b> &mdash; which is worth saying because a range that contradicts the scores above it is worse than no range at all.</p>
+<h3>Presses are the news</h3>
+<p>A press is called by a person, mid-round, and it changes what the round is worth. That is exactly the shape of thing that earns a push &mdash; the same test Sixes applied to the draw.</p>
+<p><i>Dave pressed the back nine.</i> The activity underneath is already showing it: the row carries a <b>+1 PRESS</b> chip and the exposure range has widened. No banner, no CTA, no <i>accept</i> button &mdash; a press is not a negotiation on a lock screen, and a mis-tap there is expensive.</p>
+<div class="own"><table>
+<tr><td>Activity</td><td>Ambient. Two rows, always current.</td></tr>
+<tr><td>Notification</td><td>Punctual. Fires on a press, and on a nine closing out.</td></tr>
+<tr><td>Never both</td><td>The activity does not flash. It already shows what the push announced.</td></tr>
+</table></div>
+<p>The second push is <b>a nine closing out</b> &mdash; <i>Front nine to blue, 3&amp;2</i>. Money changed hands and one of the two rows disappeared, which is the only other event in Nassau nobody can infer from the hole they are standing on.</p>
+<h3>Where the press chip lives</h3>
+<p>On the row it belongs to, not in the header. A press is <b>a bet on one match</b>, and floating the count up to the top would say the round has presses without saying which match carries them &mdash; which is the whole content.</p>
+<p>Orange rather than mint, because a press is not neutral: someone did it. Where a match has two, it reads <b>+2 PRESS</b> and not two chips.</p>
+<h3>2v2 is the same card</h3>
+<p>Four names on one line instead of two, shrink-to-fit, and every other slot identical. Worth checking on the narrowest phone: <i>Paul Kelly &amp; Dave Moran v. Sam Reid &amp; Lee Naylor</i> is the longest string this design has to hold, and it is the reason the sides line got the full width.</p>
+<h3>Late on, the card has one row</h3>
+<p>Both nines settled and only the eighteen still live: the two-row composition collapses to one. It is not a degraded state, it is <b>the only point in the round where the floor is positive</b> &mdash; $10 banked against a single $5 bet, so the range reads <i>+$5 to +$15</i> and the round cannot be lost.</p>
+<p>Worth knowing it exists, because a card built to hold two rows has to look deliberate holding one. The row keeps its size; nothing stretches to fill the gap.</p>
+<h3>Always-on and the eight hours</h3>
+<p>Same view, held back. A 25px number survives the brightness pull where a stack of 13px rows would not &mdash; which is the argument for having spent the card&rsquo;s space on two numbers and nothing else.</p>
+<p>Starts on the <b>first score posted</b>, same as Sixes, for the same reason: it buys back the range and the car park against the eight-hour limit, and an abandoned round leaves no ghost.</p>
+<h3>The last state is the collection</h3>
+<p>The range has converged, so the card says the one thing left: <b>what you won, and who to see.</b> Holds a few minutes and dismisses itself.</p>
+</div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">9:52</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">NASSAU</span><span class="seg">HOLE 5</span></div>
+<div class="sides"><span class="dotb"></span>Paul Kelly<span class="vs">v.</span><span class="doto"></span>Dave Moran</div>
+<div class="mm">
+<div class="m"><span class="lb">FRONT 9</span><span class="n blue">2 UP</span><span class="rt"><b class="blue">Kelly</b>5 TO PLAY</span></div>
+<div class="m"><span class="lb">OVERALL</span><span class="n blue">2 UP</span><span class="rt"><b class="blue">Kelly</b>14 TO PLAY</span></div>
+</div>
+<div class="foot"><span>+2 &middot; $5 a match</span><span class="r">&minus;$15 to +$15</span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Front nine &mdash; the ordinary state</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">12:16</div></div>
+<div class="notif">
+<div class="ic">H</div>
+<div class="tx"><div class="t1">HALVED<span>now</span></div>
+<div class="t2">Dave pressed the back nine</div>
+<div class="t3">A new $5 bet from hole 13. The back nine now carries $10.</div></div>
+</div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">NASSAU</span><span class="seg">HOLE 13</span></div>
+<div class="sides"><span class="dotb"></span>Paul Kelly<span class="vs">v.</span><span class="doto"></span>Dave Moran</div>
+<div class="mm">
+<div class="m"><span class="lb">BACK 9</span><span class="n blue">3 UP</span><span class="prs">+1 PRESS</span><span class="rt"><b class="blue">Kelly</b>6 TO PLAY</span></div>
+<div class="m"><span class="lb">OVERALL</span><span class="n blue">5 UP</span><span class="rt"><b class="blue">Kelly</b>6 TO PLAY</span></div>
+</div>
+<div class="foot"><span>+7 &middot; $5 a match</span><span class="r">&minus;$10 to +$20</span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">A press &mdash; push announces, the range has widened</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">11:31</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">NASSAU &middot; 2v2</span><span class="seg">HOLE 10</span></div>
+<div class="sides"><span class="dotb"></span>Kelly &amp; Moran<span class="vs">v.</span><span class="doto"></span>Reid &amp; Naylor</div>
+<div class="mm">
+<div class="m"><span class="lb">BACK 9</span><span class="n sq">ALL SQ</span><span class="rt">9 TO PLAY</span></div>
+<div class="m"><span class="lb">OVERALL</span><span class="n orange">1 UP</span><span class="rt"><b class="orange">Reid</b>9 TO PLAY</span></div>
+</div>
+<div class="foot"><span>+5 &middot; $5 a match</span><span class="r">&minus;$15 to +$5</span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">2v2 &mdash; four names, one line, every other slot the same</div></div>
+
+<div class="wrap"><div class="lock aod">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">1:04</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">NASSAU</span><span class="seg">HOLE 17</span></div>
+<div class="sides"><span class="dotb"></span>Paul Kelly<span class="vs">v.</span><span class="doto"></span>Dave Moran</div>
+<div class="mm">
+<div class="m"><span class="lb">OVERALL</span><span class="n blue">2 UP</span><span class="rt"><b class="blue">DORMIE</b>2 TO PLAY</span></div>
+</div>
+<div class="foot"><span>+9 &middot; both nines in &middot; $5 a match</span><span class="r">+$5 to +$15</span></div>
+</div>
+<div class="bar"></div>
+</div><div class="cap">Always-on &mdash; both nines settled, one row left</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">1:22</div></div>
+<div class="la quiet">
+<div class="lah"><span class="mark" style="background:rgba(255,255,255,.22);color:#fff">H</span><span class="g" style="opacity:.72">NASSAU</span><span class="seg">HOLE 14</span></div>
+<div class="sides"><span class="dotb"></span>Paul Kelly<span class="vs">v.</span><span class="doto"></span>Dave Moran</div>
+<div class="mm">
+<div class="m"><span class="lb">BACK 9</span><span class="n blue">1 UP</span><span class="rt">5 TO PLAY</span></div>
+<div class="m"><span class="lb">OVERALL</span><span class="n sq">ALL SQ</span><span class="rt">5 TO PLAY</span></div>
+</div>
+</div>
+<div class="la" style="margin-top:14px">
+<div class="lah"><span class="mark">H</span><span class="g">NASSAU</span><span class="seg">ROUND COMPLETE</span></div>
+<div class="fin"><b>+$15</b><span>Won the back nine, the press and the eighteen<br>Collect from <b>Dave</b></span></div>
+<div class="foot"><span>The range has converged</span><span class="r">Dismisses in 5 min</span></div>
+</div>
+<div class="bar"></div>
+</div><div class="cap">Quiet treatment (top) &middot; final state (below)</div></div>
+
+<div class="di">
+<h4>Dynamic Island</h4>
+<p>Compact can hold one number, and Nassau has two. It holds <b>the current nine</b> &mdash; the match that settles sooner and moves more. The overall is one long press away.</p>
+<div class="dr"><span>MINIMAL &mdash; ANOTHER APP IS ACTIVE</span>
+<div class="pill min"><span class="mk">H</span><span class="mint">&#9679;</span></div></div>
+<div class="dr"><span>COMPACT &mdash; THE DEFAULT</span>
+<div class="pill"><span class="mk">H</span><span class="bl">2 UP</span><span style="opacity:.55;font-weight:600">back 9</span></div></div>
+<div class="dr"><span>COMPACT &mdash; A PRESS IS LIVE</span>
+<div class="pill"><span class="mk">H</span><span class="bl">3 UP</span><span style="color:var(--orange);font-weight:700">+1</span></div></div>
+<div class="dr" style="margin-bottom:0"><span>EXPANDED &mdash; LONG PRESS</span>
+<div class="exp">
+<div class="top"><span style="width:14px;height:14px;border-radius:4px;background:var(--mint);display:inline-flex;align-items:center;justify-content:center;font:700 9px/1 'Schibsted Grotesk',sans-serif;color:#06231A">H</span><span>NASSAU</span><span class="rr">HOLE 13</span></div>
+<div class="sides" style="margin-top:9px"><span class="dotb"></span>Paul Kelly<span class="vs">v.</span><span class="doto"></span>Dave Moran</div>
+<div class="mm">
+<div class="m"><span class="lb">BACK 9</span><span class="n blue">3 UP</span><span class="prs">+1 PRESS</span><span class="rt">6 TO PLAY</span></div>
+<div class="m"><span class="lb">OVERALL</span><span class="n blue">5 UP</span><span class="rt">6 TO PLAY</span></div>
+</div>
+<div class="foot"><span>$5 a match</span><span class="r">&minus;$10 to +$20</span></div>
+</div></div>
+</div>
+</body></html>

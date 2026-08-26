@@ -1,0 +1,226 @@
+<!-- @dsCard group="Live Activities" name="Rabbit — lock screen" subtitle="RabbitLiveActivity — who holds it, the lead as the number, the locked-early push, extra rabbits, always-on and the quiet alternative" viewport="1560x1320" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Rabbit Live Activity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--mint:#3BD89A;--muted:#5C6B62;--blue:#5AA7F5;--orange:#F3A059}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:28px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.home{position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 "Spline Sans",system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.own{background:#fff;border:1px solid #DCE5DD;border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:104px;color:var(--deepPine);font-weight:600}
+.wrap{position:relative;margin-bottom:36px}
+.cap{position:absolute;left:0;right:0;bottom:-30px;text-align:center;font-size:11.5px;font-weight:600;color:var(--muted)}
+.lock{width:352px;height:762px;border:10px solid #0B1F1A;border-radius:44px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);background:radial-gradient(120% 90% at 50% 0%,#1E4038 0%,#0C1F1B 45%,#050D0B 100%);flex:none;color:#fff}
+.lock.aod{filter:brightness(.74) saturate(.82)}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:112px;height:31px;border-radius:20px;background:#000}
+.clock{text-align:center;padding:58px 0 0}
+.clock .d{font-size:14px;font-weight:600;opacity:.72}
+.clock .t{font-family:"Schibsted Grotesk",sans-serif;font-size:74px;font-weight:600;line-height:1.02;letter-spacing:-2px;margin-top:2px}
+.la{margin:26px 14px 0;border-radius:24px;background:rgba(255,255,255,.13);backdrop-filter:blur(20px);padding:13px 15px 14px;border:.5px solid rgba(255,255,255,.14)}
+.lah{display:flex;align-items:center;gap:7px;margin-bottom:11px}
+.lah .mark{width:17px;height:17px;border-radius:5px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 10px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.lah .g{font-size:11.5px;font-weight:700;letter-spacing:.3px;white-space:nowrap}
+.lah .seg{margin-left:auto;font-size:10.5px;font-weight:600;opacity:.62;white-space:nowrap}
+.lah .seg.ex{opacity:1;color:var(--orange)}
+.big{display:flex;flex-wrap:wrap;align-items:flex-end;column-gap:11px;row-gap:0}
+.big .st{order:1;flex:none;white-space:nowrap;font-family:"Schibsted Grotesk",sans-serif;font-size:36px;font-weight:700;line-height:.94;letter-spacing:-1px;color:var(--mint)}
+.big .st.loose{color:#fff;opacity:.9;font-size:31px}
+.big .st.orange{color:var(--orange)}
+.big .sub{order:3;flex:0 0 100%;min-width:0;margin-top:10px;font-size:12.5px;line-height:1.55;opacity:.8;white-space:nowrap}
+.big .sub .lead{font-weight:700;opacity:1;color:var(--mint)}
+.big .sub .lead.orange{color:var(--orange)}
+.big .sub .dim{opacity:.6}
+.big .state,.big .money{order:2;flex:none;white-space:nowrap}
+.dotm,.dotd,.dotx{display:inline-block;width:7px;height:7px;border-radius:2px;vertical-align:1px;margin-right:5px}
+.dotm{background:var(--mint)}.dotd{background:rgba(255,255,255,.34)}.dotx{background:var(--orange)}
+.state{margin-left:auto;text-align:right;padding-bottom:2px}
+.state b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;line-height:1;letter-spacing:.2px}
+.state u{text-decoration:none;display:block;font-size:9px;font-weight:700;letter-spacing:.4px;opacity:.55;margin-top:4px}
+.state b.mint{color:var(--mint)}.state b.orange{color:var(--orange)}
+.foot{display:flex;align-items:center;gap:8px;margin-top:11px;font-size:11px;opacity:.66}
+.foot .r{margin-left:auto;opacity:1;font-weight:600}
+.bar{position:absolute;left:50%;bottom:9px;transform:translateX(-50%);width:126px;height:5px;border-radius:3px;background:rgba(255,255,255,.5)}
+.torch{position:absolute;bottom:38px;left:0;right:0;display:flex;justify-content:space-between;padding:0 34px;opacity:.5;font-size:17px}
+.torch span{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center}
+.notif{margin:16px 14px 0;border-radius:22px;background:rgba(255,255,255,.19);backdrop-filter:blur(20px);padding:12px 14px;border:.5px solid rgba(255,255,255,.16);display:flex;gap:11px;align-items:flex-start}
+.notif .ic{flex:none;width:34px;height:34px;border-radius:9px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 16px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.notif .tx{flex:1;min-width:0}
+.notif .tx .t1{display:flex;align-items:baseline;gap:7px;font-size:11px;font-weight:700;letter-spacing:.3px;opacity:.7}
+.notif .tx .t1 span{margin-left:auto;font-weight:600;opacity:.8}
+.notif .tx .t2{font-size:14px;font-weight:700;margin-top:3px}
+.notif .tx .t3{font-size:12.5px;opacity:.82;margin-top:2px;line-height:1.4}
+.la.quiet{background:rgba(10,22,18,.55);border-color:rgba(255,255,255,.1);padding:12px 15px}
+.la.quiet .lah{margin-bottom:9px}
+.la.quiet .st{font-size:22px}
+.la.quiet .sub{font-size:12px;opacity:.6;margin-top:8px}
+.di{background:#0B1F1A;border-radius:22px;padding:22px 20px;width:372px;flex:none;color:#fff;margin-bottom:36px}
+.di h4{font-family:"Schibsted Grotesk",sans-serif;font-size:13px;font-weight:700;margin:0 0 4px}
+.di p{font-size:11px;line-height:1.5;opacity:.6;margin:0 0 13px}
+.dr{margin-bottom:16px}
+.dr>span{display:block;font-size:9.5px;font-weight:700;letter-spacing:.4px;opacity:.5;margin-bottom:6px}
+.pill{background:#000;border-radius:20px;height:37px;display:inline-flex;align-items:center;gap:9px;padding:0 13px;font-size:13px;font-weight:700}
+.pill .mk{flex:none;width:15px;height:15px;border-radius:4px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 9px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.pill .mint{color:var(--mint)}
+.pill.min{width:52px;gap:0;justify-content:space-between;padding:0 11px}
+.exp{background:#000;border-radius:26px;padding:14px 16px 15px}
+.exp .top{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;opacity:.6;letter-spacing:.3px}
+.exp .mid{display:flex;align-items:flex-end;gap:10px;margin-top:9px}
+.exp .mid b{font-family:"Schibsted Grotesk",sans-serif;font-size:29px;font-weight:700;line-height:.95;color:var(--mint)}
+.exp .mid span{font-size:11.5px;opacity:.72;padding-bottom:3px;line-height:1.4}
+.exp .mid .m{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;padding-bottom:2px}
+.exp .runs{display:flex;gap:5px;margin-top:12px}
+.exp .runs i{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.2)}
+.exp .runs i.done{background:rgba(255,255,255,.5)}
+.exp .runs i.now{background:var(--mint)}
+.exp .runs i.ex{background:var(--orange);flex:0 0 22px}
+</style></head>
+<body>
+<a class="home" href="../index-contents.html">&#8592; Contents</a>
+<div class="notes">
+<h1>Rabbit on the lock screen</h1>
+<p>Rabbit takes the Sixes card almost unchanged, which is the point &mdash; same five slots, same footer, same one-push rule. Three things are genuinely different: <b>there are no sides</b>, <b>the number is a lead rather than a score</b>, and <b>the round can grow a segment that was not on the card when it started.</b></p>
+<h3>What the reader cannot know</h3>
+<p>In Sixes the news is the draw &mdash; you cannot know your new partners without being told. In Rabbit you were standing there when the rabbit changed hands, so the holder is never news.</p>
+<p>What you cannot know is <b>the arithmetic</b>: whether the lead has got big enough that this rabbit is already over, and which holes the next one runs. That is the one thing this activity is for.</p>
+<h3>The lead is the big number</h3>
+<p><b>+2</b>, in mint, with the holder named on the line below. The number is not a score &mdash; it is <b>how many holes the holder can lose before the rabbit goes free</b>, which is the number that decides how the next tee gets played.</p>
+<p>When nobody has it the slot reads <b>LOOSE</b> in plain white and all three names go dim &mdash; there is no leader to name, and a lead of zero is a different fact from a lead of one.</p>
+<h3>Mint means held</h3>
+<p>Sixes could not use mint, because mint is the app&rsquo;s colour and a mint <i>2 UP</i> above two sides picks neither. Rabbit has no sides. There is exactly one distinguished party and one binary question &mdash; <b>is it held or is it loose</b> &mdash; so colour has a job it can do alone: mint number, mint holder, the two chasers in dim white.</p>
+<p><b>Orange is reserved for the extra</b> &mdash; the holes that fall off the end of the round once the sixes have run. A rabbit created by an early lock is still a six and still mint; only the tail at the end is a different kind of thing, and it is the one playing for a different amount.</p>
+<h3>The right slot holds HELD, LOOSE or LOCKED</h3>
+<p>Same slot as Sixes&rsquo; <b>DORMIE</b>, and <b>LOCKED</b> is the same idea: a lead bigger than the holes left in the rabbit cannot be run down, so it is decided and the money is real. It is the one state that changes what the group does next, because <b>the next six start on the next tee</b> rather than at the block boundary.</p>
+<p>Under it, <b>holes remaining in this rabbit</b> &mdash; never in the round. A group on the 8th with a rabbit running to 12 is <b>5 TO PLAY</b>.</p>
+<h3>A rabbit is six holes, starting when the last one ended</h3>
+<p>Blocks are not fixed to the card. <b>A rabbit runs six holes from wherever it starts</b>, and it starts the moment the previous one is decided &mdash; lock on the 11th and the next rabbit is <b>holes 12&ndash;17</b>, not 13&ndash;18. Every rabbit after an early lock is a full six playing for a full stake, which is the whole reason the group locks anything.</p>
+<p>What is left over is left over <b>at the end of the round</b>, not in the middle of it: the holes that fall off the back once the sixes have run. Those are the <b>extra rabbit</b>.</p>
+<h3>Extra rabbits, and why the header has no denominator</h3>
+<p>An extra is played rather than walked &mdash; a hole or two of nothing at the end of a round is worse than a rabbit for half stake. Which means a round that began as three rabbits can finish as five.</p>
+<p>The header therefore reads <b>RABBIT 2 &middot; HOLES 7&ndash;12</b> and never <i>2 of 3</i>. Sixes cut its segment pips for exactly this reason &mdash; <b>nothing on this card may be composed as thirds</b> &mdash; and a printed denominator is the same mistake in words.</p>
+<p>An extra carries its range in orange, and <b>a rabbit that runs a single hole flags &frac12; STAKE</b> in the state slot: it pays half the stake, which is the sort of thing a golfer will otherwise get wrong out loud on the 18th tee.</p>
+<div class="own"><table>
+<tr><td>RABBIT 1, 2, 3&hellip;</td><td>A six-hole rabbit, wherever it starts. Full stake. Mint.</td></tr>
+<tr><td>EXTRA RABBIT</td><td>The holes left at the end of the round once the sixes have run, or a deciding hole. Orange, and named by its real holes.</td></tr>
+<tr><td>&frac12; STAKE</td><td>Single-hole rabbit, half stake. Shown, not calculated by the reader.</td></tr>
+</table></div>
+<h3>One push, and it is not the catch</h3>
+<p>The activity updates silently when the rabbit changes hands &mdash; everybody in the group just watched it happen, and a push for it would fire on half the holes of the round.</p>
+<p>The push fires when <b>a new rabbit starts</b>: at the end of a six, or the moment a lock starts the next six early. That second one is the only genuinely new information the game produces, and it needs saying in words &mdash; the holes have moved: <i>Rabbit 2 is safe &mdash; new rabbit, holes 12&ndash;17.</i></p>
+<div class="own"><table>
+<tr><td>Activity</td><td>Ambient. Holder, lead, holes left, money. Never asks.</td></tr>
+<tr><td>Notification</td><td>Fires on a new rabbit only &mdash; end of a six, or an early lock moving the next one. Three or four in a round.</td></tr>
+<tr><td>Silent</td><td>Catches, escapes, halved holes. You were there.</td></tr>
+</table></div>
+<h3>The footer is the Sixes footer</h3>
+<p><i>+2 &middot; Thru 4 &middot; $5 a rabbit</i>, with <b>settled money</b> on the right. A rabbit pays when it closes, so the slot is <b>empty until the first one is settled</b> rather than <i>$0</i> &mdash; and a rabbit voided by running loose to its last hole moves nothing, which is why the number can sit still for six holes and still be right.</p>
+<p>Gross leads because it is the number a golfer checks without meaning to, and it is the one personal figure a board with three players on it can afford. The arithmetic behind the slot: <b>a rabbit pays its stake from each of the other two</b> &mdash; +$10 to the holder, &minus;$5 each &mdash; and a single-hole extra pays half of that.</p>
+<h3>Stop-after-one has no lead to show</h3>
+<p>The variant where the rabbit is lost on the first hole the holder is beaten has no accumulating number, so the big slot carries <b>HELD</b> and the state slot carries only the holes remaining. Same card, one fewer fact &mdash; and drawn here in the quiet treatment, since a game with nothing to count is the one most likely to be left running all afternoon.</p>
+<p>It also cannot lock. One beaten hole frees the rabbit, so <b>no lead can ever outrun the holes left</b> &mdash; which means stop-after-one plays three fixed sixes, the ranges never shift, and the only extra it can produce is a deciding hole after the 18th.</p>
+<h3>Always-on, and the last state</h3>
+<p>No separate composition; iOS pulls the brightness and the refresh rate down and the card keeps its structure, because the lead is already the only thing that has to survive there.</p>
+<p>When the round signs, the board becomes the one personal thing it has been avoiding all round: <b>what you won and who to see.</b> It holds a few minutes and dismisses itself.</p>
+<h3>One activity per round</h3>
+<p>Same rule as Sixes. If a group is running Rabbit alongside skins, Rabbit is the one with news &mdash; and with extras in play it is also the only one whose shape the reader cannot predict.</p>
+</div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">10:24</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">RABBIT</span><span class="seg">RABBIT 1 &middot; HOLES 1&ndash;6</span></div>
+<div class="big"><span class="st">+2</span><span class="sub"><span class="lead"><span class="dotm"></span>Paul Kelly</span><br><span class="dim"><span class="dotd"></span>Dave Moran &middot; Sam Reid</span></span><span class="state"><b class="mint">HELD</b><u>3 TO PLAY</u></span></div>
+<div class="foot"><span>+2 &middot; Thru 4 &middot; $5 a rabbit</span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Rabbit 1 &mdash; held, two clear</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">11:07</div></div>
+<div class="notif">
+<div class="ic">H</div>
+<div class="tx"><div class="t1">HALVED<span>now</span></div>
+<div class="t2">New rabbit &mdash; holes 7&ndash;12</div>
+<div class="t3">Rabbit 1 went to <b style="font-weight:700">Sam Reid</b>. Nobody holds this one yet.</div></div>
+</div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">RABBIT</span><span class="seg">RABBIT 2 &middot; HOLES 7&ndash;12</span></div>
+<div class="big"><span class="st loose">LOOSE</span><span class="sub"><span class="dim"><span class="dotd"></span>Paul Kelly &middot; Dave Moran &middot; Sam Reid</span></span><span class="state"><b>&mdash;</b><u>6 TO PLAY</u></span></div>
+<div class="foot"><span>+3 &middot; Thru 7 &middot; $5 a rabbit</span><span class="r">&minus;$5</span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">A new rabbit &mdash; pushed once, loose until someone wins a hole</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">12:19</div></div>
+<div class="notif">
+<div class="ic">H</div>
+<div class="tx"><div class="t1">HALVED<span>now</span></div>
+<div class="t2">New rabbit &mdash; holes 12&ndash;17</div>
+<div class="t3">Rabbit 2 is safe: <b style="font-weight:700">Dave Moran</b> is 3 clear with 1 to play. The next six start here.</div></div>
+</div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">RABBIT</span><span class="seg">RABBIT 3 &middot; HOLES 12&ndash;17</span></div>
+<div class="big"><span class="st loose">LOOSE</span><span class="sub"><span class="dim"><span class="dotd"></span>Paul Kelly &middot; Dave Moran &middot; Sam Reid</span></span><span class="state"><b>&mdash;</b><u>6 TO PLAY</u></span></div>
+<div class="foot"><span>+6 &middot; Thru 11 &middot; $5 a rabbit</span><span class="r">&minus;$10</span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Locked early &mdash; the next six start on the next tee</div></div>
+
+<div class="wrap"><div class="lock aod">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">1:46</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">RABBIT</span><span class="seg ex">EXTRA RABBIT &middot; HOLE 18</span></div>
+<div class="big"><span class="st orange">+1</span><span class="sub"><span class="lead orange"><span class="dotx"></span>Paul Kelly</span><br><span class="dim"><span class="dotd"></span>Dave Moran &middot; Sam Reid</span></span><span class="state"><b class="orange">LOCKED</b><u>&frac12; STAKE</u></span></div>
+<div class="foot"><span>+11 &middot; Thru 18 &middot; $5 a rabbit</span><span class="r">+$5</span></div>
+</div>
+<div class="bar"></div>
+</div><div class="cap">Always-on &mdash; the extra at the end of the round, half stake</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">2:02</div></div>
+<div class="la quiet">
+<div class="lah"><span class="mark" style="background:rgba(255,255,255,.22);color:#fff">H</span><span class="g" style="opacity:.72">RABBIT</span><span class="seg">STOP AFTER ONE &middot; 13&ndash;18</span></div>
+<div class="big"><span class="st">HELD</span><span class="sub"><span class="lead"><span class="dotm"></span>Sam Reid</span><br><span class="dim"><span class="dotd"></span>Paul Kelly &middot; Dave Moran</span></span><span class="state"><b>&mdash;</b><u>4 TO PLAY</u></span></div>
+</div>
+<div class="la" style="margin-top:14px;background:rgba(255,255,255,.13)">
+<div class="lah"><span class="mark">H</span><span class="g">RABBIT</span><span class="seg">ROUND COMPLETE</span></div>
+<div class="big"><span class="st" style="font-size:42px">+$5</span><span class="sub">Won rabbit 3 and the last extra<br>Collect from <b>Dave</b></span></div>
+<div class="foot"><span>The one personal state</span><span class="r">Dismisses in 5 min</span></div>
+</div>
+<div class="bar"></div>
+</div><div class="cap">Stop-after-one, quiet treatment (top) &middot; final state (below)</div></div>
+
+<div class="di">
+<h4>Dynamic Island</h4>
+<p>The compact pair is what people actually see. Rabbit gets one extra job here: the run strip, which is the only place the shape of the round &mdash; uneven sixes and the extra &mdash; is drawn.</p>
+<div class="dr"><span>MINIMAL &mdash; ANOTHER APP IS ACTIVE</span>
+<div class="pill min"><span class="mk">H</span><span class="mint">&#9679;</span></div></div>
+<div class="dr"><span>COMPACT &mdash; HELD</span>
+<div class="pill"><span class="mk">H</span><span class="mint">+2</span><span style="opacity:.55;font-weight:600">Paul</span></div></div>
+<div class="dr"><span>COMPACT &mdash; LOOSE</span>
+<div class="pill"><span class="mk">H</span><span style="opacity:.9">LOOSE</span><span style="opacity:.55;font-weight:600">thru 7</span></div></div>
+<div class="dr" style="margin-bottom:0"><span>EXPANDED &mdash; LONG PRESS</span>
+<div class="exp">
+<div class="top"><span style="width:14px;height:14px;border-radius:4px;background:var(--mint);display:inline-flex;align-items:center;justify-content:center;font:700 9px/1 'Schibsted Grotesk',sans-serif;color:#06231A">H</span><span>RABBIT 2 &middot; HOLES 7&ndash;12</span></div>
+<div class="mid"><b>+2</b><span><span class="dotm"></span><span style="color:var(--mint);font-weight:700">Paul Kelly</span><br><span style="opacity:.6"><span class="dotd"></span>Dave Moran &middot; Sam Reid</span></span><span class="m" style="color:var(--mint);font-size:13px">HELD</span></div>
+<div class="runs"><i class="done"></i><i class="now"></i><i></i><i class="ex"></i></div>
+</div></div>
+</div>
+</body></html>
