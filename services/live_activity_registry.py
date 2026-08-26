@@ -87,8 +87,18 @@ def _sixes(foursome, player_id, *, final):
 # slug -> builder.  A game absent from here has no card, which is the answer
 # for every side game and for the shapes design has not drawn — Triple Nassau
 # among them, where three simultaneous pairings will not fit two rows.
+def _rabbit(foursome, player_id, *, final):
+    from services.live_activity_rabbit import rabbit_activity_state
+    if final:
+        # TODO: the closing frame — what you won and who to see.
+        return {}
+    return rabbit_activity_state(foursome, player_id=player_id,
+                                 thru=holes_played(foursome))
+
+
 BUILDERS = {
-    'sixes': _sixes,
+    'sixes' : _sixes,
+    'rabbit': _rabbit,
 }
 
 

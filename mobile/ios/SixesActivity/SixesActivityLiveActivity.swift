@@ -75,9 +75,9 @@ struct SixesActivityLiveActivity: Widget {
 // MARK: - The lock screen
 
 private struct LockScreenView: View {
-    /// The only card this build draws.  Grows to a switch when the second one
-    /// lands (docs/design-review/handoff-live-activities/SPEC.md).
-    static let known = "sixes"
+    /// The cards this build can draw
+    /// (docs/design-review/handoff-live-activities/SPEC.md).
+    static let known: Set<String> = ["sixes", "rabbit"]
 
     let state: SixesActivityAttributes.ContentState
     var isStale: Bool = false
@@ -89,10 +89,12 @@ private struct LockScreenView: View {
             // named is a layout added after this app was installed, and
             // drawing it as a Sixes board would put one game's numbers under
             // another game's labels.
-            if let kind = state.kind, kind != Self.known {
+            if let kind = state.kind, !Self.known.contains(kind) {
                 UnsupportedView(header: state.header)
             } else if let final = state.final {
                 FinalView(header: state.header, final: final)
+            } else if state.kind == "rabbit" {
+                RabbitBoardView(state: state, isStale: isStale)
             } else {
                 BoardView(state: state, isStale: isStale)
             }
@@ -131,6 +133,71 @@ private struct BoardView: View {
 
             PipsView(pips: state.pips)
             FooterView(footer: state.footer, isStale: isStale)
+        }
+    }
+}
+
+
+/// Rabbit — one holder, no sides, and a number that is a lead rather than a
+/// score (docs/design-review/handoff-live-activities/rabbit-HANDOFF.md).
+///
+/// The run strip is deliberately absent here. It is the only place the shape of
+/// the round is drawn, and there is no room for it on the lock card — so it
+/// lives in the expanded Dynamic Island and the state slot carries the holes
+/// instead.
+private struct RabbitBoardView: View {
+    let state: SixesActivityAttributes.ContentState
+    var isStale: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HeaderView(header: state.header)
+
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(state.number.text)
+                        // A word in a number's slot: matching the digits' size
+                        // makes LOOSE shout, and it is the quietest state on
+                        // the card.
+                        .font(Sixes.display(state.number.isWord ? 31 : 36,
+                                            .bold))
+                        .tracking(-1)
+                        .foregroundStyle(Sixes.side(state.number.colour))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    HolderView(lines: state.sides)
+                }
+                Spacer(minLength: 0)
+                StateView(state: state.state)
+            }
+
+            FooterView(footer: state.footer, isStale: isStale)
+        }
+    }
+}
+
+/// The holder on one line and the chasers on the next — or, when nobody holds
+/// it, all three dim on one line. There is no leader to name then, and putting
+/// somebody first would imply one.
+private struct HolderView: View {
+    let lines: [SixesActivityAttributes.ContentState.Side]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(lines, id: \.names) { line in
+                HStack(spacing: 5) {
+                    if line.leading {
+                        Circle()
+                            .fill(Sixes.side(line.colour))
+                            .frame(width: 5, height: 5)
+                    }
+                    Text(line.names)
+                        .font(Sixes.body(12.5, line.leading ? .bold : .regular))
+                        .foregroundStyle(Sixes.side(line.colour))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+            }
         }
     }
 }
@@ -199,7 +266,11 @@ private struct HeaderView: View {
             Text(header.segment)
                 .font(Sixes.body(10, .semibold))
                 .tracking(0.6)
-                .foregroundStyle(.white.opacity(0.50))
+                // Both labels stay on one line: the variant strings here are
+                // longer than Sixes' and wrapped the row before it was pinned.
+                .fixedSize(horizontal: true, vertical: false)
+                .foregroundStyle(header.accent.map(Sixes.side)
+                                 ?? .white.opacity(0.50))
         }
     }
 }

@@ -27,6 +27,10 @@ struct SixesActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
 
         struct Header: Codable, Hashable {
+            /// Optional emphasis on the right-hand label.  Rabbit's extra —
+            /// the tail at the end of the round — is the one leg playing for a
+            /// different amount, which is what earns it a different colour.
+            var accent: String? = nil
             /// `SIXES`, or `SIXES · HIGH-LOW` when that variant is on.
             let game: String
             /// `SEGMENT 2 · HOLES 7-12`, or `EXTRA HOLES · 5-6`.
@@ -34,6 +38,14 @@ struct SixesActivityAttributes: ActivityAttributes {
         }
 
         struct Number: Codable, Hashable {
+            /// True when the slot holds a word rather than digits — `LOOSE`,
+            /// not `+2`.  Derived rather than sent, so no card has to remember
+            /// to flag it: a word set at the digits' size shouts, and every
+            /// word that lands in this slot is a quiet state.
+            var isWord: Bool {
+                text.rangeOfCharacter(from: .decimalDigits) == nil
+            }
+
             /// `2 UP` / `ALL SQ` / `+3 PTS`.
             let text: String
             /// `blue` | `orange` | `neutral`.
@@ -120,6 +132,10 @@ enum Sixes {
         switch name {
         case "blue":   return blue
         case "orange": return orange
+        // Rabbit has one distinguished party rather than two sides, so mint is
+        // free to mean "holds it" — the thing Sixes could never let it mean.
+        case "mint":   return mint
+        case "dim":    return .white.opacity(0.55)
         default:       return .white.opacity(0.90)
         }
     }
@@ -134,6 +150,12 @@ enum Sixes {
         case "halved": return .white.opacity(0.45)
         case "void":   return .white.opacity(0.18)
         case "live":   return .white.opacity(0.62)
+        // Rabbit's run strip: one bar per rabbit, generated from the computed
+        // list rather than a fixed three — a round that opens as three can
+        // finish as five, so nothing here may be composed as thirds.
+        case "mint":       return mint
+        case "extra":      return orange.opacity(0.55)
+        case "extra-live": return orange
         default:       return .white.opacity(0.20)
         }
     }
