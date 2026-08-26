@@ -104,10 +104,19 @@ def _nassau(foursome, player_id, *, final):
                                  thru=holes_played(foursome))
 
 
+def _skins(foursome, player_id, *, final):
+    from services.live_activity_skins import skins_activity_state
+    if final:
+        return {}   # TODO: the closing frame
+    return skins_activity_state(foursome, player_id=player_id,
+                                thru=holes_played(foursome))
+
+
 BUILDERS = {
     'sixes' : _sixes,
     'rabbit': _rabbit,
     'nassau': _nassau,
+    'skins' : _skins,
     # nassau_nine and match_18 ride the same NassauGame model but are one match,
     # not three — they need the single-number composition, not two rows, and are
     # not drawn. Triple Nassau is explicitly not designed: three simultaneous

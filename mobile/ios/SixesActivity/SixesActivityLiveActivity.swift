@@ -77,7 +77,7 @@ struct SixesActivityLiveActivity: Widget {
 private struct LockScreenView: View {
     /// The cards this build can draw
     /// (docs/design-review/handoff-live-activities/SPEC.md).
-    static let known: Set<String> = ["sixes", "rabbit", "nassau"]
+    static let known: Set<String> = ["sixes", "rabbit", "nassau", "skins"]
 
     let state: SixesActivityAttributes.ContentState
     var isStale: Bool = false
@@ -97,6 +97,8 @@ private struct LockScreenView: View {
                 RabbitBoardView(state: state, isStale: isStale)
             } else if state.kind == "nassau", let rows = state.rows {
                 NassauBoardView(state: state, rows: rows, isStale: isStale)
+            } else if state.kind == "skins" {
+                SkinsBoardView(state: state, isStale: isStale)
             } else {
                 BoardView(state: state, isStale: isStale)
             }
@@ -140,6 +142,56 @@ private struct BoardView: View {
 }
 
 
+
+
+/// Skins — one number, nobody named
+/// (docs/design-review/handoff-live-activities/skins-HANDOFF.md).
+///
+/// The one card that puts money in the headline, and the packet is explicit
+/// that no other may: everyone on the tee is playing for the same pot, so it is
+/// not personal and does not break the neutral board. The footer's money IS
+/// personal, which is why this is also the only card in the family with a
+/// divider — the two figures are different money and should not read as one
+/// column.
+///
+/// The sides slot stays empty of names. In skins the field is the opponent, and
+/// naming it would be a list — the thing a lock screen has least room for. What
+/// sits there is where the pot came from, which is the reason the number is big.
+private struct SkinsBoardView: View {
+    let state: SixesActivityAttributes.ContentState
+    var isStale: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HeaderView(header: state.header)
+
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(state.number.text)
+                        .font(Sixes.display(36, .bold))
+                        .tracking(-1)
+                        .foregroundStyle(Sixes.side(state.number.colour))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    if let story = state.sides.first {
+                        Text(story.names)
+                            .font(Sixes.body(11.5))
+                            .foregroundStyle(.white.opacity(0.62))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                }
+                Spacer(minLength: 0)
+                StateView(state: state.state)
+            }
+
+            Rectangle()
+                .fill(.white.opacity(0.11))
+                .frame(height: 0.5)
+            FooterView(footer: state.footer, isStale: isStale)
+        }
+    }
+}
 
 /// Nassau — two matches, two equal rows, no 36px number anywhere
 /// (docs/design-review/handoff-live-activities/nassau-HANDOFF.md).
