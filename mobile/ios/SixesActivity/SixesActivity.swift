@@ -75,6 +75,14 @@ struct SixesActivityAttributes: ActivityAttributes {
             let collect: String     // "Collect from Sam"
         }
 
+        /// Which card this is, and so which layout draws it.
+        ///
+        /// Optional deliberately: an activity already on someone's lock screen
+        /// was started before this field existed, and a decode failure there
+        /// is silent — the push is accepted and the board simply stops moving.
+        /// Absent means Sixes, which is the only card that shipped without it.
+        let kind: String?
+
         let header: Header
         let number: Number
         let sides: [Side]

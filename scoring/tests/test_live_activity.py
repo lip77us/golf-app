@@ -290,6 +290,26 @@ class ContractTests(TestCase):
             self.assertIn(f'let {key}:', self.swift,
                           f'`{key}` has no field in ContentState')
 
+    def test_the_dispatched_payload_is_the_one_that_must_decode(self):
+        """The builders are not what goes over the wire — the registry's state
+        is, and it adds `kind`.  Testing the builder alone would miss anything
+        the dispatcher puts on top."""
+        from services.live_activity_registry import activity_state
+        from django.contrib.auth import get_user_model
+        submit_hole(self.fs, 1, [(self.paul, 4)])
+        user = get_user_model().objects.create_user(
+            username='reader', account=self.round.account)
+        user.is_account_admin = True
+        user.save(update_fields=['is_account_admin'])
+        self.round.active_games = ['sixes']
+        self.round.save(update_fields=['active_games'])
+
+        state = activity_state(self.round, user)
+        self.assertEqual(state['kind'], 'sixes')
+        for key in state:
+            self.assertIn(f'let {key}:', self.swift,
+                          f'`{key}` has no field in ContentState')
+
     def test_the_nested_keys_the_swift_decodes_are_all_emitted(self):
         state = sixes_activity_state(self.fs, player_id=self.paul, thru=3)
         self.assertEqual(set(state['header']), {'game', 'segment'})

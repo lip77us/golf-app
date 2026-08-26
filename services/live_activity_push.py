@@ -268,8 +268,7 @@ def push_round(round_obj, *, final=False) -> int:
     if not is_enabled():
         return 0
 
-    from api.views import _holes_played, _sixes_foursome_for
-    from services.live_activity import sixes_activity_state, sixes_final_state
+    from services.live_activity_registry import activity_state
     from tournament.models import LiveActivityToken
 
     rows = list(LiveActivityToken.objects.filter(round=round_obj)
@@ -280,15 +279,7 @@ def push_round(round_obj, *, final=False) -> int:
     sent = 0
     for row in rows:
         try:
-            foursome, player_id = _sixes_foursome_for(round_obj, row.user)
-            if foursome is None:
-                continue
-            if final:
-                state = sixes_final_state(foursome, player_id=player_id)
-            else:
-                state = sixes_activity_state(
-                    foursome, player_id=player_id,
-                    thru=_holes_played(foursome))
+            state = activity_state(round_obj, row.user, final=final)
             if not state:
                 continue
             if send_state(row.token, state,

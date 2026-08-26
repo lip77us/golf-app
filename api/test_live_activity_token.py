@@ -177,8 +177,9 @@ class LiveActivityStateTests(TestCase):
         self.assertEqual(resp.status_code, 200, resp.data)
         state = resp.data['state']
         self.assertEqual(
-            set(state), {'header', 'number', 'sides', 'state', 'pips',
+            set(state), {'kind', 'header', 'number', 'sides', 'state', 'pips',
                          'final', 'footer'})
+        self.assertEqual(state['kind'], 'sixes')
         self.assertEqual(resp.data['course_name'], self.tee.course.name)
 
     def test_thru_is_the_group_not_the_leader(self):
@@ -264,3 +265,64 @@ class StateIsDarkWhenOffTests(TestCase):
             self.assertEqual(client.get(url).data, {})
         with mock.patch.dict(os.environ, {'LIVE_ACTIVITY_ENABLED': '1'}):
             self.assertIn('state', client.get(url).data)
+
+
+class OwnershipTests(TestCase):
+    """One activity per round, owned by the primary game named at setup.
+
+    There is nothing to arbitrate at runtime — the group already answered it.
+    A game with no card, or a side game, gets no activity at all.
+    """
+
+    def setUp(self):
+        from scoring.tests._helpers import (make_foursome, make_round,
+                                            make_tee, submit_hole)
+        from services.sixes import setup_sixes
+
+        tee = make_tee()
+        self.round = make_round(tee.course)
+        self.fs = make_foursome(
+            self.round, [('Paul', 0), ('Dave', 0), ('Sam', 0), ('Lee', 0)],
+            tee=tee)
+        pid = [m.player_id for m in self.fs.memberships.all()]
+        setup_sixes(self.fs, [{'team_select_method': 'long_drive',
+                               'team1_player_ids': pid[:2],
+                               'team2_player_ids': pid[2:],
+                               'start_hole': 1, 'end_hole': 6}],
+                    handicap_mode='gross')
+        submit_hole(self.fs, 1, [(p, 4) for p in pid])
+        self.user = User.objects.create_user(username='td',
+                                             account=self.round.account)
+        self.user.is_account_admin = True
+        self.user.save(update_fields=['is_account_admin'])
+
+    def _state(self):
+        from services.live_activity_registry import activity_state
+        return activity_state(self.round, self.user)
+
+    def _set(self, primary, active):
+        self.round.primary_game = primary
+        self.round.active_games = active
+        self.round.save(update_fields=['primary_game', 'active_games'])
+        self.fs.active_games = []
+        self.fs.save(update_fields=['active_games'])
+
+    def test_the_primary_game_owns_the_card(self):
+        self._set('sixes', ['sixes', 'skins'])
+        self.assertEqual(self._state()['kind'], 'sixes')
+
+    def test_a_side_game_never_gets_one(self):
+        """Sixes running alongside a primary with no card gets nothing — the
+        pick at setup decides, not which game happens to have a builder."""
+        self._set('stableford', ['stableford', 'sixes'])
+        self.assertEqual(self._state(), {})
+
+    def test_a_game_with_no_card_gets_nothing(self):
+        self._set('wolf', ['wolf'])
+        self.assertEqual(self._state(), {})
+
+    def test_a_legacy_round_falls_back_to_the_active_set(self):
+        """primary_game is null on tournament and legacy rounds, where the set
+        was never an explicit pick."""
+        self._set(None, ['sixes'])
+        self.assertEqual(self._state()['kind'], 'sixes')

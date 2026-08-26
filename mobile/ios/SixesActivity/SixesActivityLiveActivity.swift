@@ -75,12 +75,23 @@ struct SixesActivityLiveActivity: Widget {
 // MARK: - The lock screen
 
 private struct LockScreenView: View {
+    /// The only card this build draws.  Grows to a switch when the second one
+    /// lands (docs/design-review/handoff-live-activities/SPEC.md).
+    static let known = "sixes"
+
     let state: SixesActivityAttributes.ContentState
     var isStale: Bool = false
 
     var body: some View {
         Group {
-            if let final = state.final {
+            // A card this build does not know how to draw.  Sixes shipped
+            // before `kind` existed, so absent means Sixes; anything else
+            // named is a layout added after this app was installed, and
+            // drawing it as a Sixes board would put one game's numbers under
+            // another game's labels.
+            if let kind = state.kind, kind != Self.known {
+                UnsupportedView(header: state.header)
+            } else if let final = state.final {
                 FinalView(header: state.header, final: final)
             } else {
                 BoardView(state: state, isStale: isStale)
@@ -270,6 +281,29 @@ private struct FooterView: View {
             Text(footer.money)
                 .font(Sixes.body(11, .semibold))
                 .foregroundStyle(.white.opacity(0.66))
+        }
+    }
+}
+
+/// Honest about not knowing, rather than confidently wrong.  A board is money
+/// information, and the wrong labels on the right numbers is the worst outcome
+/// available to it.
+private struct UnsupportedView: View {
+    let header: SixesActivityAttributes.ContentState.Header
+
+    var body: some View {
+        HStack(spacing: 9) {
+            HalvedMark(size: 15)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(header.game)
+                    .font(Sixes.body(10, .bold))
+                    .tracking(1.1)
+                    .foregroundStyle(.white.opacity(0.82))
+                Text("Update Halved to follow this round here")
+                    .font(Sixes.body(11))
+                    .foregroundStyle(.white.opacity(0.60))
+            }
+            Spacer(minLength: 0)
         }
     }
 }

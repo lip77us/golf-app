@@ -63,16 +63,10 @@ class Command(BaseCommand):
     def _show(self, rnd, final):
         import json
 
-        from api.views import _holes_played, _sixes_foursome_for
-        from services.live_activity import (sixes_activity_state,
-                                            sixes_final_state)
+        from services.live_activity_registry import activity_state
 
         for row in LiveActivityToken.objects.filter(round=rnd):
-            foursome, player_id = _sixes_foursome_for(rnd, row.user)
-            if foursome is None:
-                continue
-            state = (sixes_final_state(foursome, player_id=player_id) if final
-                     else sixes_activity_state(foursome, player_id=player_id,
-                                               thru=_holes_played(foursome)))
+            state = activity_state(rnd, row.user, final=final)
             self.stdout.write(f'\n— {row.user} —')
-            self.stdout.write(json.dumps(state, indent=2))
+            self.stdout.write(json.dumps(state, indent=2) if state
+                              else '(nothing to show)')
