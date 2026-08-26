@@ -47,6 +47,16 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+# How long a board stays believable without a new score.  A foursome plays a
+# hole in about fifteen minutes, so an hour is three holes — long enough to sit
+# through the halfway house, short enough that an abandoned round starts
+# admitting it rather than showing yesterday's match all evening.
+#
+# iOS will not remove the activity at this point; it flips `context.isStale`,
+# and the view fades and says "No scores in a while".  Removal is still the
+# eight-hour system cap, or the app ending it on round sign.
+STALE_AFTER = 60 * 60
+
 _PROD_HOST    = 'https://api.push.apple.com'
 _SANDBOX_HOST = 'https://api.sandbox.push.apple.com'
 
@@ -148,11 +158,16 @@ def _apns_payload(state, *, event='update', dismiss_after=None) -> dict:
     `timestamp` is not decoration: iOS uses it to discard a push that arrives
     out of order, which on a golf course is routine rather than exotic.
     """
+    now = int(time.time())
     aps = {
-        'timestamp'     : int(time.time()),
+        'timestamp'     : now,
         'event'         : event,
         'content-state' : state,
     }
+    if event == 'update':
+        # Refreshed on every score, so the clock restarts whenever the group is
+        # still playing and only runs out when they have genuinely stopped.
+        aps['stale-date'] = now + STALE_AFTER
     if event == 'end':
         # A few minutes on the lock screen after the round is signed, then it
         # takes itself away.

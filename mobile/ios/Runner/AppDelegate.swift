@@ -65,6 +65,13 @@ import UIKit
       // same round is a no-op rather than a duplicate on the lock screen.
       if currentActivity(for: roundId) != nil { return result(nil) }
 
+      // Past this, iOS flips context.isStale and the card fades and says so.
+      // Every push carries a fresh one, so the clock only runs out when the
+      // group has genuinely stopped scoring.
+      let staleDate = (args["staleAfter"] as? Int).map {
+        Date.now.addingTimeInterval(TimeInterval($0))
+      }
+
       do {
         let state = try decodeState(stateJson)
         let attrs = SixesActivityAttributes(
@@ -73,7 +80,7 @@ import UIKit
         )
         let activity = try Activity.request(
           attributes: attrs,
-          content: .init(state: state, staleDate: nil),
+          content: .init(state: state, staleDate: staleDate),
           pushType: .token
         )
         // The token is what the server addresses its updates to, and it can be

@@ -69,9 +69,12 @@ class SixesLiveActivity {
         return;
       }
       await _channel.invokeMethod('start', {
-        'roundId'   : roundId,
-        'courseName': frame['course_name'] ?? '',
-        'state'     : jsonEncode(frame['state']),
+        'roundId'    : roundId,
+        'courseName' : frame['course_name'] ?? '',
+        'state'      : jsonEncode(frame['state']),
+        // How long this frame stays believable. The server owns the number so
+        // the opening frame and every push after it agree.
+        'staleAfter' : frame['stale_after_seconds'],
       });
     } catch (e) {
       // A lock-screen extra never breaks scoring. The round carries on, and

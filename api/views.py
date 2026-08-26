@@ -9284,9 +9284,13 @@ class RoundLiveActivityStateView(APIView):
                                          thru=_holes_played(foursome))
         if not state:
             return Response({})
+        from services.live_activity_push import STALE_AFTER
         return Response({
             'course_name': rnd.course.name if rnd.course_id else '',
             'state'      : state,
+            # The opening frame needs the same window the pushes carry, or the
+            # first board is the one that never goes stale.
+            'stale_after_seconds': STALE_AFTER,
         })
 
 

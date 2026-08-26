@@ -203,3 +203,30 @@ class DarkTests(ConsoleBackendMixin, TestCase):
             with mock.patch.object(lap, 'send_state') as send:
                 self.assertEqual(lap.push_round(mock.Mock()), 0)
             send.assert_not_called()
+
+
+class StaleTests(ConsoleBackendMixin, TestCase):
+    """A board nobody has scored on for an hour should stop looking live.
+
+    iOS does not remove it at that point — it flips `context.isStale`, and the
+    card fades and says "No scores in a while". Removal is the eight-hour
+    system cap, or the app ending it on round sign.
+    """
+
+    def test_updates_carry_a_stale_date(self):
+        aps = lap._apns_payload({})['aps']
+        self.assertEqual(aps['stale-date'], aps['timestamp'] + lap.STALE_AFTER)
+
+    def test_the_window_survives_the_halfway_house(self):
+        """Fifteen minutes a hole, so an hour is three holes — long enough to
+        sit through a break at the turn, short enough that an abandoned round
+        stops claiming to be live."""
+        self.assertGreaterEqual(lap.STALE_AFTER, 45 * 60)
+        self.assertLessEqual(lap.STALE_AFTER, 90 * 60)
+
+    def test_the_closing_frame_does_not_go_stale(self):
+        """The final state is what you won and who to see. It is true forever,
+        and it has a dismissal date instead."""
+        aps = lap._apns_payload({}, event='end')['aps']
+        self.assertNotIn('stale-date', aps)
+        self.assertIn('dismissal-date', aps)

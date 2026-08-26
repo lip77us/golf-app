@@ -21,7 +21,11 @@ import WidgetKit
 struct SixesActivityLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: SixesActivityAttributes.self) { context in
-            LockScreenView(state: context.state)
+            LockScreenView(state: context.state, isStale: context.isStale)
+                // Faded rather than hidden.  A board nobody has scored on in
+                // an hour is still true about the last hole played — it just
+                // should not look as live as one that moved a minute ago.
+                .opacity(context.isStale ? 0.55 : 1)
                 .activityBackgroundTint(Sixes.deepPine.opacity(0.92))
                 .activitySystemActionForegroundColor(Sixes.mint)
 
@@ -72,13 +76,14 @@ struct SixesActivityLiveActivity: Widget {
 
 private struct LockScreenView: View {
     let state: SixesActivityAttributes.ContentState
+    var isStale: Bool = false
 
     var body: some View {
         Group {
             if let final = state.final {
                 FinalView(header: state.header, final: final)
             } else {
-                BoardView(state: state)
+                BoardView(state: state, isStale: isStale)
             }
         }
         .padding(.horizontal, 16)
@@ -90,6 +95,7 @@ private struct LockScreenView: View {
 /// bar the money line.
 private struct BoardView: View {
     let state: SixesActivityAttributes.ContentState
+    var isStale: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -113,7 +119,7 @@ private struct BoardView: View {
             }
 
             PipsView(pips: state.pips)
-            FooterView(footer: state.footer)
+            FooterView(footer: state.footer, isStale: isStale)
         }
     }
 }
@@ -252,10 +258,11 @@ private struct PipsView: View {
 /// holds three things and two of them cannot shrink.
 private struct FooterView: View {
     let footer: SixesActivityAttributes.ContentState.Footer
+    var isStale: Bool = false
 
     var body: some View {
         HStack {
-            Text(footer.context)
+            Text(isStale ? "No scores in a while" : footer.context)
                 .font(Sixes.body(11))
                 .foregroundStyle(.white.opacity(0.66))
                 .lineLimit(1)
