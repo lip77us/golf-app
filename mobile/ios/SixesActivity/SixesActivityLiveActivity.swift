@@ -77,7 +77,7 @@ struct SixesActivityLiveActivity: Widget {
 private struct LockScreenView: View {
     /// The cards this build can draw
     /// (docs/design-review/handoff-live-activities/SPEC.md).
-    static let known: Set<String> = ["sixes", "rabbit"]
+    static let known: Set<String> = ["sixes", "rabbit", "nassau"]
 
     let state: SixesActivityAttributes.ContentState
     var isStale: Bool = false
@@ -95,6 +95,8 @@ private struct LockScreenView: View {
                 FinalView(header: state.header, final: final)
             } else if state.kind == "rabbit" {
                 RabbitBoardView(state: state, isStale: isStale)
+            } else if state.kind == "nassau", let rows = state.rows {
+                NassauBoardView(state: state, rows: rows, isStale: isStale)
             } else {
                 BoardView(state: state, isStale: isStale)
             }
@@ -137,6 +139,96 @@ private struct BoardView: View {
     }
 }
 
+
+
+/// Nassau — two matches, two equal rows, no 36px number anywhere
+/// (docs/design-review/handoff-live-activities/nassau-HANDOFF.md).
+///
+/// The second row is paid for by the sides moving up. Sixes restated both
+/// pairings on every update because the pairing changed every match; Nassau's
+/// are fixed at setup, so naming them once buys the space — and a number can
+/// wear its side's colour without the reader ever re-learning which is which.
+private struct NassauBoardView: View {
+    let state: SixesActivityAttributes.ContentState
+    let rows: [SixesActivityAttributes.ContentState.Row]
+    var isStale: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HeaderView(header: state.header)
+            NamedOnceView(sides: state.sides)
+            ForEach(rows, id: \.label) { MatchRowView(row: $0) }
+            FooterView(footer: state.footer, isStale: isStale)
+        }
+    }
+}
+
+/// Both sides on one line, named once. The longest string this design has to
+/// hold — four surnames in the 2v2 variant — so it shrinks rather than wraps.
+private struct NamedOnceView: View {
+    let sides: [SixesActivityAttributes.ContentState.Side]
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(Array(sides.enumerated()), id: \.offset) { i, side in
+                if i > 0 {
+                    Text("v.")
+                        .font(Sixes.body(11))
+                        .foregroundStyle(.white.opacity(0.40))
+                }
+                Circle()
+                    .fill(Sixes.side(side.colour))
+                    .frame(width: 5, height: 5)
+                Text(side.names)
+                    .font(Sixes.body(12.5, .semibold))
+                    .foregroundStyle(.white.opacity(0.88))
+            }
+            Spacer(minLength: 0)
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.62)
+    }
+}
+
+/// One match: label, number in the leading side's colour, its press chip, and
+/// the state on the right.
+private struct MatchRowView: View {
+    let row: SixesActivityAttributes.ContentState.Row
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(row.label)
+                .font(Sixes.body(9.5, .bold))
+                .tracking(0.5)
+                .foregroundStyle(.white.opacity(0.52))
+                .frame(width: 52, alignment: .leading)
+
+            Text(row.text)
+                .font(Sixes.display(25, .bold))
+                .tracking(-0.6)
+                .foregroundStyle(Sixes.side(row.colour))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            if let chip = row.chip {
+                Text(chip)
+                    .font(Sixes.body(8.5, .bold))
+                    .foregroundStyle(Sixes.orange)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Sixes.orange.opacity(0.20),
+                                in: Capsule())
+            }
+
+            Spacer(minLength: 4)
+
+            Text(row.note)
+                .font(Sixes.body(9, .bold))
+                .tracking(0.4)
+                .foregroundStyle(.white.opacity(0.55))
+        }
+    }
+}
 
 /// Rabbit — one holder, no sides, and a number that is a lead rather than a
 /// score (docs/design-review/handoff-live-activities/rabbit-HANDOFF.md).

@@ -95,8 +95,24 @@ struct SixesActivityAttributes: ActivityAttributes {
         /// Absent means Sixes, which is the only card that shipped without it.
         let kind: String?
 
+        /// Nassau's two matches.  Nothing else uses it, and Nassau uses it
+        /// INSTEAD of `number`: two matches are always live — the nine being
+        /// played and the eighteen — and there is no honest way to nominate
+        /// one of them as a 36px headline.
+        struct Row: Codable, Hashable {
+            let label: String
+            let text: String
+            let colour: String
+            let note: String
+            /// `+2 PRESS`, on the row that owns the bet.  Never in the header:
+            /// floating the count to the top would say the round has presses
+            /// without saying which match carries them.
+            var chip: String? = nil
+        }
+
         let header: Header
         let number: Number
+        var rows: [Row]? = nil
         let sides: [Side]
         let state: MatchState
         /// Three, always — the shape of the round.
