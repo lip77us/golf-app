@@ -96,35 +96,44 @@ exactly this. That is a test, not a comment.
 Team variants: 1v1 and 2v2 only. Triple Nassau is explicitly not designed and
 must return `{}` rather than a broken card.
 
-### 4. Skins — see the blocker below
+### 4. Skins
 
-## The Skins blocker
+Simplest of the three once the provisional machinery is gone — see the ruling
+below. One 36px number, nobody named, two headline modes off `carryover` and
+`payout_style`. Par goes in the header because net skins turn on strokes.
 
-The Skins card is built on two things at once: **carries** (`3 skins, carried
-from the 10th`) and **a field that has not finished the hole**
-(`PROVISIONAL` / `2 GROUPS OUT`). This codebase has two skins games and
-neither has both:
+## Skins — resolved (ruling from Paul, 2026-08-26)
 
-| | Carryover | Multiple groups |
-| --- | --- | --- |
-| `services/skins.py` (per-foursome) | **Yes** — `carryover` is a setup flag | **No** — decided inside the group |
-| `services/multi_skins.py` (field-wide) | **No** — "tied best score → skin dies" | **Yes** — crosses foursomes and rounds |
+> We will never have multi-group skins with carryover. Carryover is optional in
+> single group skins; if it is not carryover then it is pool based.
 
-So on the app as built, a per-foursome skin is settled the moment the group
-holes out: `outstanding_groups` is always 0, the card is always `ALL IN`, and
-the provisional machinery — which is the most distinctive thing on it — has no
-source. Wiring it to multi-skins instead means adding carryover to a settled
-game, which changes how real money is calculated.
+That settles it, and it removes the blocker rather than working around it.
+Skins is **always single-group**, so every skin is decided the moment the group
+holes out. Three consequences:
 
-This wants a decision before any of it is built, and probably a question back
-to design. Options, worst to best in my view:
+- **`PROVISIONAL` and `n GROUPS OUT` never occur.** `outstanding_groups` is
+  structurally zero. The card is always `ALL IN`, always mint. Do not build the
+  white/provisional branch — it has no reachable state, and an unreachable
+  branch on a money display is worse than an absent one.
+- **Skins gets no pushes.** Its only push was "a skin settles behind you and
+  changes the pot in front of you", which cannot happen inside one group. The
+  activity is ambient and updates on score; nothing about that is a loss.
+- **`multi_skins` is out of scope entirely** and stays as it is. No carryover is
+  being added to it.
 
-- **Build it against per-foursome skins, always `ALL IN`.** Ships something,
-  but silently drops the half of the card that earns it.
-- **Add carryover to multi-skins.** Faithful, but it is a scoring change to a
-  game people have played for money, for the sake of a lock screen.
-- **Ship Nassau and Rabbit; take Skins back to design** with the table above.
-  The card may be describing a game we do not have yet.
+The two headline modes the packet draws both exist already, though as two
+independent flags rather than one:
+
+| Packet | Code |
+| --- | --- |
+| Carry headline — `$18`, `3 skins, carried from the 10th` | `carryover=True`, pot = accumulated skins × per-skin value |
+| Pool headline — `$60` pool, `$15` / `A SKIN, FALLING` | `payout_style='pool'` — `pool = num_players × bet_unit`, each skin worth `pool / total_skins_won`, so it falls as more are won |
+
+Drive the card off `carryover` and `payout_style` directly rather than assuming
+they pair, since the model lets them vary independently.
+
+Skins therefore moves into the build order, after Nassau — it is the simplest
+of the three once the provisional machinery is gone.
 
 ## Open questions worth answering in code, not comments
 
