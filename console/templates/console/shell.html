@@ -1,0 +1,45 @@
+{% extends "console/base.html" %}{% load static %}
+
+{% comment %} The shell every signed-in page shares: dark sidebar, account block, main
+   column.  Items that aren't built yet stay visible and greyed with a `soon`
+   tag — the nav's shape is information, and hiding half of it would make the
+   console look smaller than it is. {% endcomment %}
+
+{% block body %}
+<div class="app">
+  <nav class="side">
+    <a class="brand" href="{% url 'console:import' %}">
+      <img class="mk" src="{% static 'console/logo.svg' %}" alt="">
+      <span><b>Halved</b><em>TD CONSOLE</em></span>
+    </a>
+
+    <h5>Roster</h5>
+    <a class="nav {% if nav == 'import' %}on{% endif %}" href="{% url 'console:import' %}">Import from Golf Genius</a>
+    <a class="nav soon" href="#">Golfers</a>
+
+    <h5>Courses</h5>
+    <a class="nav soon" href="#">Course library</a>
+    <a class="nav soon" href="#">Custom tees</a>
+
+    <h5>Account</h5>
+    <a class="nav soon" href="#">Settings</a>
+
+    <div class="spacer"></div>
+    {% comment %} The account is stated on every page that writes, not tucked in a menu.
+       On the import page it relabels to IMPORTING INTO, because importing 87
+       golfers into the wrong roster is the expensive mistake here. {% endcomment %}
+    <div class="acct">
+      <u>{{ account_label }}</u>
+      <b>{{ account.name }}</b>
+      <span class="who">{{ me.get_full_name|default:me.username }}</span>
+      <form method="post" action="{% url 'console:sign-out' %}">{% csrf_token %}
+        <button type="submit">Sign out</button>
+      </form>
+    </div>
+  </nav>
+
+  <main class="main">
+    {% block main %}{% endblock %}
+  </main>
+</div>
+{% endblock %}

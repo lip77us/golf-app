@@ -1,0 +1,92 @@
+{% extends "console/_auth.html" %}
+
+{% block title %}Enter your code · Halved TD console{% endblock %}
+
+{% block form %}
+{% comment %} The back link carries the number, so a typo is fixable without
+   re-navigating and re-reading what you typed. {% endcomment %}
+<a class="back" href="{% url 'console:sign-in' %}">&#8592; {{ typed }}</a>
+<h1>Enter the code</h1>
+<p class="lede">Texted to your phone just now. It expires in 10 minutes.</p>
+
+<form method="post" id="codeform" novalidate>{% csrf_token %}
+  <div class="otp {% if error %}err{% endif %}" id="otp">
+    {% for i in "123456" %}
+      <input name="digit" type="text" inputmode="numeric" pattern="[0-9]*"
+             maxlength="1" autocomplete="{% if forloop.first %}one-time-code{% else %}off{% endif %}"
+             aria-label="Digit {{ forloop.counter }}"
+             {% if forloop.first %}autofocus{% endif %}>
+    {% endfor %}
+  </div>
+
+  {% if error %}
+    {% comment %} The message counts the tries left rather than saying "invalid code" —
+       "two tries left" is the part a person can act on. {% endcomment %}
+    <div class="err"><s>&#9888;</s><span>{{ error }}</span></div>
+  {% endif %}
+
+  {# On by default: a TD uses the same laptop every time. #}
+  <label class="keep"><input type="checkbox" name="remember" value="1" checked>
+    Keep me signed in on this computer for 30 days</label>
+
+  <button class="cta" type="submit">Verify</button>
+</form>
+
+<div class="resend">
+  {% comment %} The countdown is the default; a failed attempt unlocks Resend at once,
+     because by then the likeliest problem is the wrong phone. {% endcomment %}
+  <span id="waiting" {% if not resend_wait %}hidden{% endif %}>Didn’t arrive? Resend in
+    <b id="countdown" data-seconds="{{ resend_wait }}">0:{{ resend_wait|stringformat:"02d" }}</b></span>
+  <form method="post" id="resendform" style="display:inline" {% if resend_wait %}hidden{% endif %}>{% csrf_token %}
+    <input type="hidden" name="action" value="resend">
+    Sent to the wrong phone? <button type="submit">Resend now</button>
+  </form>
+</div>
+
+<script>
+// Six boxes, one code: type straight across, backspace straight back, and a
+// pasted code fills the row.  Nothing here is required to submit — the six
+// inputs post under one name and the server joins them.
+(function () {
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('#otp input'));
+  boxes.forEach(function (box, i) {
+    box.addEventListener('input', function () {
+      box.value = box.value.replace(/\D/g, '').slice(0, 1);
+      if (box.value && i < boxes.length - 1) boxes[i + 1].focus();
+      if (boxes.every(function (b) { return b.value; })) {
+        document.getElementById('codeform').submit();
+      }
+    });
+    box.addEventListener('keydown', function (e) {
+      if (e.key === 'Backspace' && !box.value && i > 0) boxes[i - 1].focus();
+    });
+    box.addEventListener('paste', function (e) {
+      var text = (e.clipboardData || window.clipboardData).getData('text') || '';
+      var digits = text.replace(/\D/g, '').slice(0, boxes.length);
+      if (!digits) return;
+      e.preventDefault();
+      boxes.forEach(function (b, j) { b.value = digits[j] || ''; });
+      (boxes[Math.min(digits.length, boxes.length - 1)]).focus();
+      if (digits.length === boxes.length) document.getElementById('codeform').submit();
+    });
+  });
+
+  var counter = document.getElementById('countdown');
+  var waiting = document.getElementById('waiting');
+  var resendForm = document.getElementById('resendform');
+  var left = counter ? parseInt(counter.dataset.seconds, 10) : 0;
+  if (left > 0) {
+    var tick = setInterval(function () {
+      left -= 1;
+      if (left <= 0) {
+        clearInterval(tick);
+        waiting.hidden = true;
+        resendForm.hidden = false;
+        return;
+      }
+      counter.textContent = '0:' + (left < 10 ? '0' : '') + left;
+    }, 1000);
+  }
+})();
+</script>
+{% endblock %}

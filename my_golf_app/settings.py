@@ -78,6 +78,9 @@ INSTALLED_APPS = [
     'games',
     'tournament',
     'api',
+    # Server-rendered TD console (web).  Sits on this backend and reuses its
+    # session + account resolution rather than being a separate front end.
+    'console',
 ]
 
 # Custom user model lives in the `accounts` app.  Every Player /

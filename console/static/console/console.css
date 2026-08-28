@@ -1,0 +1,245 @@
+/* ==========================================================================
+   TD console
+   --------------------------------------------------------------------------
+   The Halved design system, at desktop sizes.  Deliberately NOT the token set
+   the public /watch/ templates use (--primary #2e7d32, system fonts): those
+   are share links opened cold by spectators, where skipping a webfont
+   round-trip is the right call.  This is an authenticated tool used by
+   someone who also uses the app, so it takes pine, mint and the real faces.
+
+   Composed at 1180px, which is the width this is used at.  A phone-width
+   layout is out of scope — the app is the phone surface.
+
+   Dark mode is a known gap.  The watch pages have it and this does not; the
+   fix belongs in the design system rather than in this file.
+   ========================================================================== */
+
+:root{
+  --deepPine:#0B1F1A; --pine:#0F6E56; --mint:#3BD89A;
+  --surface:#EEF3EE; --card:#fff; --cardBorder:#D3DED6; --muted:#5C6B62;
+  --win:#2F7D4F; --amber:#B07A22; --under:#C2402C; --ink2:#38473F;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--surface);
+  font-family:"Spline Sans",system-ui,-apple-system,sans-serif;
+  color:var(--deepPine);
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--pine)}
+a:hover{color:var(--deepPine)}
+
+/* --- shell ---------------------------------------------------------------
+   Sidebar, account block, main column.  Built once; every page uses it. */
+.app{display:flex;min-height:100vh}
+
+.side{
+  width:214px;flex:none;background:var(--deepPine);color:#fff;
+  padding:16px 0 18px;display:flex;flex-direction:column;
+  position:sticky;top:0;height:100vh;
+}
+.side .brand{display:flex;align-items:center;gap:8px;padding:0 16px 16px;text-decoration:none;color:#fff}
+/* The mark sits directly on the deep pine — its own ground colour — so the
+   clubs and the ball read as inline art rather than a badge on a tile. */
+.side .brand .mk{width:26px;height:26px;border-radius:7px;display:block;flex:none}
+.side .brand b{font-family:"Schibsted Grotesk",sans-serif;font-size:14px;font-weight:600;display:block;line-height:1.1}
+.side .brand em{font-style:normal;font-size:9.5px;font-weight:700;letter-spacing:.5px;opacity:.5;display:block;margin-top:2px}
+.side h5{font-size:9.5px;font-weight:700;letter-spacing:.5px;opacity:.42;margin:14px 0 5px;padding:0 16px;text-transform:uppercase}
+.side a.nav{display:flex;align-items:center;gap:8px;padding:7px 16px;font-size:13px;color:rgba(255,255,255,.78);text-decoration:none}
+.side a.nav:hover{color:#fff;background:rgba(255,255,255,.05)}
+.side a.nav.on{color:#fff;font-weight:600;background:rgba(59,216,154,.14);box-shadow:inset 3px 0 0 var(--mint)}
+/* Unavailable items stay visible and greyed.  The nav's shape is
+   information; hiding half of it makes the console look smaller than it is. */
+.side a.nav.soon{opacity:.42;pointer-events:none}
+.side a.nav.soon:after{content:"soon";margin-left:auto;font-size:8.5px;font-weight:700;letter-spacing:.4px;border:1px solid rgba(255,255,255,.28);border-radius:4px;padding:1px 4px}
+.side .acct{margin:16px 12px 0;padding:9px 11px;border-radius:9px;background:rgba(255,255,255,.07);font-size:11.5px}
+.side .acct u{text-decoration:none;display:block;font-size:9px;font-weight:700;letter-spacing:.4px;opacity:.5;margin-bottom:3px}
+.side .acct b{font-weight:600;font-size:13px;display:block}
+.side .acct .who{display:block;margin-top:5px;opacity:.55;font-size:11px}
+.side .acct form{margin:6px 0 0}
+.side .acct button{background:none;border:none;padding:0;color:rgba(255,255,255,.55);font:600 11px/1 "Spline Sans",sans-serif;cursor:pointer;text-decoration:underline}
+.side .acct button:hover{color:#fff}
+.side .spacer{margin-top:auto}
+
+.main{flex:1;min-width:0;padding:22px 26px 40px;max-width:1180px}
+
+/* --- page furniture ------------------------------------------------------ */
+.h1{font-family:"Schibsted Grotesk",sans-serif;font-size:22px;font-weight:600;margin:0}
+.sub{color:var(--muted);font-size:12.5px;margin:4px 0 0}
+.head{display:flex;align-items:flex-start;gap:16px;margin-bottom:18px}
+.head .r{margin-left:auto;display:flex;gap:9px;align-items:center}
+
+.btn{height:36px;border-radius:9px;border:1.5px solid var(--pine);background:transparent;color:var(--pine);font:600 13px/1 "Spline Sans",sans-serif;padding:0 15px;display:inline-flex;align-items:center;gap:7px;cursor:pointer;text-decoration:none}
+.btn.p{background:var(--pine);color:#fff;border-color:var(--pine)}
+.btn.q{border-color:var(--cardBorder);color:var(--ink2)}
+.btn:disabled,.btn.off{opacity:.4;cursor:not-allowed}
+.btn:disabled:hover,.btn.off:hover{color:var(--pine)}
+
+.sel{height:36px;border:1px solid var(--cardBorder);border-radius:9px;background:#fff;display:inline-flex;align-items:center;gap:9px;padding:0 12px;font-size:13px;font-weight:600}
+.sel u{text-decoration:none;font-size:9px;font-weight:700;letter-spacing:.4px;color:var(--muted)}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+.panel{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:14px 16px}
+.panel h4{font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--pine);text-transform:uppercase;margin:0 0 8px}
+.panel ul{margin:0;padding-left:16px;color:var(--muted);font-size:12.5px;line-height:1.65}
+.panel ul b{color:var(--deepPine);font-weight:600}
+.panel p{color:var(--muted);font-size:12.5px;line-height:1.6;margin:0 0 8px}
+.panel p:last-child{margin-bottom:0}
+
+.foot{display:flex;align-items:center;gap:12px;margin-top:16px}
+.foot .m{color:var(--muted);font-size:12px;max-width:560px;line-height:1.5}
+.foot .r{margin-left:auto;display:flex;gap:9px}
+
+/* A disabled button states its blocker rather than going silently grey. */
+.dry{display:inline-flex;align-items:center;gap:6px;background:rgba(176,122,34,.12);border:1px solid rgba(176,122,34,.34);color:var(--amber);border-radius:7px;padding:4px 9px;font-size:11px;font-weight:700;letter-spacing:.2px}
+
+.alert{display:flex;gap:9px;align-items:flex-start;background:rgba(194,64,44,.08);border:1px solid rgba(194,64,44,.3);border-radius:10px;padding:11px 13px;font-size:12.5px;line-height:1.5;color:#8C2C1D;margin-bottom:16px}
+.alert s{text-decoration:none;font-weight:700;flex:none}
+
+/* --- drop zone ----------------------------------------------------------- */
+/* The drop zone is a <label> wrapping the file input, so it needs an explicit
+   display — an inline label fragments around its block children. */
+.drop{display:block;cursor:pointer;background:#fff;border:1.5px dashed #B9C9BD;border-radius:14px;padding:38px 30px;text-align:center}
+.drop.over{border-color:var(--pine);background:rgba(15,110,86,.04)}
+.drop .ic{width:46px;height:46px;border-radius:12px;background:rgba(15,110,86,.1);color:var(--pine);display:flex;align-items:center;justify-content:center;font-size:20px;margin:0 auto 12px}
+.drop b{font-family:"Schibsted Grotesk",sans-serif;font-size:16px;font-weight:600;display:block}
+.drop p{color:var(--muted);font-size:12.5px;margin:5px 0 15px}
+.drop input[type=file]{display:none}
+
+.fb{background:#fff;border:1px solid var(--cardBorder);border-radius:11px;padding:11px 14px;display:flex;align-items:center;gap:12px;margin-bottom:14px;font-size:12.5px}
+.fb .fi{width:30px;height:30px;border-radius:8px;background:rgba(15,110,86,.1);color:var(--pine);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex:none}
+.fb b{font-weight:600}
+.fb .m{color:var(--muted)}
+.fb .x{margin-left:auto}
+.fb .x button{background:none;border:none;color:var(--muted);font:600 12px/1 "Spline Sans",sans-serif;cursor:pointer;padding:0}
+.fb .x button:hover{color:var(--under)}
+
+/* --- buckets ------------------------------------------------------------- */
+.buckets{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.bk{background:#fff;border:1px solid var(--cardBorder);border-radius:11px;padding:11px 13px 12px;text-decoration:none;color:inherit;display:block}
+.bk.on{border-color:var(--pine);box-shadow:0 0 0 1px var(--pine) inset}
+.bk u{text-decoration:none;font-size:9.5px;font-weight:700;letter-spacing:.5px;color:var(--muted);text-transform:uppercase}
+.bk b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:27px;font-weight:700;line-height:1.05;margin-top:3px;font-variant-numeric:tabular-nums}
+.bk.c b{color:var(--win)} .bk.u b{color:var(--pine)}
+.bk.n b{color:var(--muted)} .bk.s b{color:var(--amber)}
+.bk small{display:block;font-size:11px;color:var(--muted);margin-top:1px}
+
+/* --- plan table ---------------------------------------------------------- */
+.tbl{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;overflow:hidden}
+.tsec{display:flex;align-items:center;gap:9px;padding:10px 15px;background:#F4F8F4;border-bottom:1px solid var(--cardBorder);border-top:1px solid var(--cardBorder);font-size:11.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--ink2)}
+.tbl > .tsec:first-child{border-top:none}
+.tsec .n{color:var(--muted);font-weight:600;letter-spacing:0;text-transform:none}
+.tsec .hint{margin-left:auto;font-size:11px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--muted)}
+.tsec summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:9px;width:100%}
+.tsec summary::-webkit-details-marker{display:none}
+
+table.rows{width:100%;border-collapse:collapse;font-size:12.5px}
+table.rows td,table.rows th{padding:8px 15px;border-bottom:1px solid #E8EEE9;vertical-align:middle;text-align:left}
+table.rows th{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);background:#FAFCFA}
+table.rows tr:last-child td{border-bottom:none}
+table.rows td.ln{width:44px;color:#9AAAA0;font-size:11px;font-variant-numeric:tabular-nums}
+table.rows td.nm{font-weight:600;width:172px}
+table.rows td.idx{width:104px;font-variant-numeric:tabular-nums}
+table.rows td.ghin{width:112px;font-variant-numeric:tabular-nums;color:var(--muted)}
+table.rows td.ph{width:150px;font-variant-numeric:tabular-nums;color:var(--muted)}
+table.rows td.tag{width:104px}
+table.rows td.note{color:var(--muted);font-size:11.5px}
+/* Read-only means locked, not just discouraged: a file-error row is greyed
+   and carries no control at all. */
+table.rows tr.locked td.nm{color:var(--muted);font-weight:500}
+
+.k{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--cardBorder);border-radius:6px;padding:1px 6px;font-size:10px;font-weight:700;letter-spacing:.3px;color:var(--muted);background:#F7FAF7}
+.k.phone{color:var(--pine);border-color:rgba(15,110,86,.32);background:rgba(15,110,86,.07)}
+.k.ghin{color:var(--ink2)}
+
+.chg{display:inline-flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+.chg s{text-decoration:none;color:var(--muted)}
+.chg em{font-style:normal;color:#9AAAA0}
+.chg b{font-weight:600;color:var(--win)}
+.chg .blank{color:var(--muted);font-weight:400}
+.sep{color:#C7D4C9;padding:0 5px}
+.conflict{color:var(--amber);font-size:11.5px}
+.plus{color:var(--win);font-weight:600}
+
+.why{color:var(--amber);font-weight:500}
+.why.bad{color:var(--under)}
+.detail{color:var(--muted);font-size:11.5px}
+
+.fixform{display:flex;gap:6px;align-items:center;justify-content:flex-end}
+.fixform input{width:70px;height:28px;border:1px solid var(--cardBorder);border-radius:7px;background:#fff;padding:0 8px;font:400 12px/1 "Spline Sans",sans-serif;font-variant-numeric:tabular-nums}
+.fixform input:focus{outline:none;border-color:var(--pine);box-shadow:0 0 0 3px rgba(15,110,86,.14)}
+.fix{height:28px;border:1px solid var(--pine);border-radius:7px;background:#fff;color:var(--pine);font:600 11.5px/1 "Spline Sans",sans-serif;padding:0 10px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}
+.fix.clear{border-color:var(--cardBorder);color:var(--muted)}
+
+/* --- receipt ------------------------------------------------------------- */
+.receipt{background:#fff;border:1px solid var(--cardBorder);border-radius:14px;padding:20px 22px}
+.receipt .top{display:flex;align-items:center;gap:11px}
+.receipt .tick{width:34px;height:34px;border-radius:10px;background:rgba(47,125,79,.12);color:var(--win);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex:none}
+.receipt h3{font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:600;margin:0}
+.receipt .top p{margin:2px 0 0;font-size:12.5px;color:var(--muted)}
+.rr{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0 0}
+.rr div{border:1px solid var(--cardBorder);border-radius:10px;padding:9px 12px}
+.rr u{text-decoration:none;font-size:9.5px;font-weight:700;letter-spacing:.5px;color:var(--muted);text-transform:uppercase}
+.rr b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+.after{display:flex;gap:9px;margin-top:16px;align-items:center;flex-wrap:wrap}
+.after .m{color:var(--muted);font-size:12px;margin-left:auto}
+
+/* --- signed-in-but-empty ------------------------------------------------- */
+.empty{background:#fff;border:1px solid var(--cardBorder);border-radius:14px;padding:44px 30px;text-align:center}
+.empty .ic{width:50px;height:50px;border-radius:14px;background:var(--surface);border:1px solid var(--cardBorder);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;color:var(--muted);font-size:20px}
+.empty h4{font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:600;margin:0}
+.empty p{color:var(--muted);font-size:13px;line-height:1.55;margin:7px auto 20px;max-width:44ch}
+
+/* ==========================================================================
+   Sign in — a two-column front door, no sidebar
+   ========================================================================== */
+.auth{display:flex;min-height:100vh;background:var(--surface)}
+.rail{width:38%;max-width:452px;flex:none;background:var(--deepPine);color:#fff;padding:44px 44px;display:flex;flex-direction:column}
+.rail .brand{display:flex;align-items:center;gap:10px}
+.rail .brand .mk{width:34px;height:34px;display:block;flex:none}
+.rail .brand b{font-family:"Schibsted Grotesk",sans-serif;font-size:16px;font-weight:600;display:block;line-height:1.1}
+.rail .brand em{font-style:normal;font-size:9.5px;font-weight:700;letter-spacing:.6px;opacity:.5;display:block;margin-top:3px}
+.rail h2{font-family:"Schibsted Grotesk",sans-serif;font-size:26px;font-weight:600;line-height:1.22;margin:38px 0 0;max-width:15ch}
+.rail ul{list-style:none;margin:22px 0 0;padding:0;display:flex;flex-direction:column;gap:11px}
+.rail li{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;color:rgba(255,255,255,.8);line-height:1.4}
+.rail li s{text-decoration:none;color:var(--mint);font-weight:700;flex:none;line-height:1.35}
+.rail .footnote{margin-top:auto;padding-top:26px;font-size:12px;color:rgba(255,255,255,.44);line-height:1.5;border-top:1px solid rgba(255,255,255,.1)}
+
+.pane{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;padding:34px 40px}
+.form{width:100%;max-width:352px}
+.form h1{font-family:"Schibsted Grotesk",sans-serif;font-size:25px;font-weight:600;margin:0}
+.form .lede{color:var(--muted);font-size:13.5px;line-height:1.5;margin:6px 0 26px}
+.lab{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;display:flex;align-items:baseline;gap:6px}
+.lab a{margin-left:auto;font-weight:600;font-size:11.5px}
+.field{width:100%;border:1.5px solid var(--cardBorder);background:var(--card);border-radius:11px;padding:13px 15px;font:600 16px/1.2 "Spline Sans",sans-serif;font-variant-numeric:tabular-nums;color:var(--deepPine)}
+.field::placeholder{color:var(--muted);font-weight:400}
+.field:focus{outline:none;border-color:var(--pine);box-shadow:0 0 0 3px rgba(15,110,86,.14)}
+.cta{width:100%;height:48px;border-radius:12px;border:none;background:var(--pine);color:#fff;font:700 15px/1 "Spline Sans",sans-serif;margin-top:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}
+.cta.q{background:transparent;border:1.5px solid var(--cardBorder);color:var(--ink2);font-weight:600;height:44px}
+.fine{color:var(--muted);font-size:11.5px;line-height:1.55;margin-top:14px}
+.rule{height:1px;background:var(--cardBorder);margin:22px 0 0}
+.back{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--pine);margin-bottom:14px;text-decoration:none}
+
+.otp{display:flex;gap:9px;margin:2px 0 0}
+.otp input{flex:1;width:100%;min-width:0;height:56px;border:1.5px solid var(--cardBorder);background:var(--card);border-radius:11px;text-align:center;font:700 23px/1 "Spline Sans",sans-serif;font-variant-numeric:tabular-nums;color:var(--deepPine)}
+.otp input:focus{outline:none;border-color:var(--pine);box-shadow:0 0 0 3px rgba(15,110,86,.14)}
+.otp.err input{border-color:var(--under);color:var(--under)}
+
+.err{display:flex;gap:7px;align-items:flex-start;color:var(--under);font-size:12.5px;line-height:1.45;font-weight:500;margin-top:11px}
+.err s{text-decoration:none;font-weight:700;flex:none}
+.keep{display:flex;align-items:center;gap:9px;margin-top:16px;font-size:12.5px;color:var(--ink2);cursor:pointer}
+.keep input{width:17px;height:17px;accent-color:var(--pine);margin:0}
+.resend{color:var(--muted);font-size:12.5px;margin-top:16px;text-align:center}
+.resend b{color:var(--deepPine);font-variant-numeric:tabular-nums}
+.resend button{background:none;border:none;padding:0;font:600 12.5px/1 "Spline Sans",sans-serif;color:var(--pine);cursor:pointer;text-decoration:underline}
+.resend button[disabled]{color:var(--muted);text-decoration:none;cursor:default}
+.notice{display:flex;gap:9px;align-items:flex-start;background:rgba(176,122,34,.1);border:1px solid rgba(176,122,34,.3);border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.45;color:#7A5314;margin-bottom:20px}
+.notice s{text-decoration:none;font-weight:700;flex:none}
+
+@media (max-width:900px){
+  .auth{flex-direction:column}
+  .rail{width:100%;max-width:none;padding:26px}
+  .rail h2{margin-top:22px}
+  .rail ul,.rail .footnote{display:none}
+}

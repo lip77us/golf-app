@@ -139,6 +139,14 @@ class ParsedRow:
     sex: str                        # 'M' | 'W'
     index: Decimal | None
     error: str | None = None        # set => fatal, row is skipped
+    error_code: str = ''            # SKIP_* key for `error`, for the console
+    # Verbatim contents of the Index cell.  The CLI never needed it; the web
+    # console quotes it back ("index cell read \u2018NH\u2019") so a TD can tell
+    # an empty cell from one the parser refused.
+    index_raw: str = ''
+    # True when `index` did not come from the file at all — a TD typed it into
+    # the preview to rescue a "new golfer has no index" skip.
+    td_index: bool = False
 
 
 def _header_map(header: list[str]) -> dict[str, int]:
@@ -183,6 +191,17 @@ def parse_index(raw: str) -> Decimal | None:
     return -val if neg else val
 
 
+def header_line(rows: list[list[str]]) -> int:
+    """1-based source row number of the header row.
+
+    Golf Genius prefixes a title banner, so this is rarely 1 — and the console
+    reports it, because pointing the importer at the wrong sheet fails
+    silently: the only symptom is a plausible-looking small row count.
+    """
+    idx, _ = _find_header(rows)
+    return idx + 1
+
+
 def parse_rows(rows: list[list[str]]) -> tuple[list[ParsedRow], dict[str, int]]:
     """Locate the header and normalize/validate each data row.  Returns
     ``(parsed_rows, header_map)``.  Rows with a fatal problem carry ``.error``
@@ -202,6 +221,7 @@ def parse_rows(rows: list[list[str]]) -> tuple[list[ParsedRow], dict[str, int]]:
         ghin_raw  = _cell(row, hmap, COL_GHIN)
         gender    = _cell(row, hmap, COL_GENDER).upper()
 
+        index_raw = _cell(row, hmap, COL_INDEX)
         pr = ParsedRow(
             line=offset,
             name=name,
@@ -210,13 +230,16 @@ def parse_rows(rows: list[list[str]]) -> tuple[list[ParsedRow], dict[str, int]]:
             phone=normalize_phone(phone_raw),
             ghin=re.sub(r'\D', '', ghin_raw),        # digits only
             sex='W' if gender.startswith('F') else 'M',
-            index=parse_index(_cell(row, hmap, COL_INDEX)),
+            index=parse_index(index_raw),
+            index_raw=index_raw,
         )
 
         if not name:
             pr.error = 'no name'
+            pr.error_code = SKIP_NO_NAME
         elif pr.index is not None and not (INDEX_MIN <= pr.index <= INDEX_MAX):
             pr.error = f'index {pr.index} out of range ({INDEX_MIN}..{INDEX_MAX})'
+            pr.error_code = SKIP_INDEX_RANGE
         parsed.append(pr)
 
     return parsed, hmap
@@ -226,18 +249,47 @@ def parse_rows(rows: list[list[str]]) -> tuple[list[ParsedRow], dict[str, int]]:
 # Planning  (account + parsed -> ImportPlan)   — no writes
 # ---------------------------------------------------------------------------
 
+# Skip-reason codes.  `SkipItem.reason` stays a human sentence (the CLI prints
+# it verbatim); `SkipItem.code` is the stable key the console keys its row
+# rendering off — which reasons a TD can fix inline, which are the file's
+# problem and stay read-only.
+SKIP_NO_INDEX      = 'no_index'        # TD-fixable: type an index, row becomes a create
+SKIP_DUP_PHONE     = 'dup_phone'
+SKIP_DUP_GHIN      = 'dup_ghin'
+SKIP_NO_NAME       = 'no_name'
+SKIP_INDEX_RANGE   = 'index_range'
+SKIP_ALREADY_MATCHED = 'already_matched'
+
+# The two reasons a TD can clear from the preview without re-exporting.
+SKIP_FIXABLE = {SKIP_NO_INDEX}
+
+
 @dataclass
 class UpdateItem:
     row: ParsedRow
     player_id: int
     player_name: str
     changes: dict            # field -> new value
+    # Which key hit — 'phone' or 'ghin'.  The CLI never printed this; the
+    # console shows it on every update row, because a GHIN match carrying a
+    # different phone number is the one case where two people can become one.
+    matched_by: str = ''
+    # field -> value the golfer holds today, so the console can render a real
+    # diff (`idx 8.4 -> 7.9`) rather than just the new value.
+    before: dict = field(default_factory=dict)
+    # Set when the match came via GHIN and the file's phone disagrees with the
+    # number already linked.  We keep the linked one; the console says so.
+    phone_conflict: str = ''
 
 
 @dataclass
 class SkipItem:
     row: ParsedRow
     reason: str
+    code: str = ''
+    # Reason-specific extra: the line number that won a duplicate, the bound
+    # that an out-of-range index broke.  Rendered as trailing detail.
+    detail: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -246,6 +298,10 @@ class ImportPlan:
     to_update: list[UpdateItem] = field(default_factory=list)
     unchanged: list[ParsedRow] = field(default_factory=list)
     skipped:   list[SkipItem]  = field(default_factory=list)
+    # Filled in by apply_plan: the Player ids it created, in to_create order.
+    # The console stores them on the import run so a reversal is possible later
+    # without re-deriving which golfers this run was responsible for.
+    created_ids: list[int] = field(default_factory=list)
 
     def summary(self) -> dict:
         return {
@@ -256,10 +312,22 @@ class ImportPlan:
         }
 
 
-def build_plan(account, parsed: list[ParsedRow]) -> ImportPlan:
+def build_plan(account, parsed: list[ParsedRow],
+               index_overrides: dict[int, Decimal] | None = None) -> ImportPlan:
     """Diff the parsed rows against the account's existing roster.  Pure read —
-    no database writes."""
+    no database writes.
+
+    ``index_overrides`` maps a source line number to an index the TD typed into
+    the console's preview.  It is the console's one addition to the importer:
+    "new golfer has no index" is the common skip and the only one a TD can
+    clear without going back to Golf Genius, so the plan has to be re-buildable
+    with values that were never in the file.  An override only fills a *blank*
+    index — it never overwrites one the file supplied, and it cannot rescue a
+    row that failed parsing for some other reason.
+    """
     from core.models import Player
+
+    overrides = index_overrides or {}
 
     existing = list(Player.objects.filter(account=account, is_phantom=False))
     by_phone: dict[str, Player] = {}
@@ -272,57 +340,93 @@ def build_plan(account, parsed: list[ParsedRow]) -> ImportPlan:
             by_ghin.setdefault(p.ghin, p)
 
     plan = ImportPlan()
-    seen_phone: set[str] = set()
-    seen_ghin: set[str] = set()
+    # Remember which line claimed each identity so a duplicate can name the row
+    # that won rather than leaving the TD to work it out.
+    seen_phone: dict[str, int] = {}
+    seen_ghin: dict[str, int] = {}
     matched_ids: set[int] = set()
 
     for row in parsed:
+        # A TD-supplied index applies before anything else, so the row can move
+        # out of `skipped` and into `to_create` on the rebuild.
+        if row.index is None and not row.error and row.line in overrides:
+            row.index = overrides[row.line]
+            row.td_index = True
+
         if row.error:
-            plan.skipped.append(SkipItem(row, row.error))
+            plan.skipped.append(
+                SkipItem(row, row.error, row.error_code,
+                         {'min': str(INDEX_MIN), 'max': str(INDEX_MAX)}
+                         if row.error_code == SKIP_INDEX_RANGE else {}))
             continue
 
         # Duplicate rows within the same file (same identity) — import once.
         if row.phone and row.phone in seen_phone:
-            plan.skipped.append(SkipItem(row, 'duplicate phone in file'))
+            plan.skipped.append(SkipItem(
+                row, 'duplicate phone in file', SKIP_DUP_PHONE,
+                {'won_line': seen_phone[row.phone]}))
             continue
         if row.ghin and row.ghin in seen_ghin:
-            plan.skipped.append(SkipItem(row, 'duplicate GHIN in file'))
+            plan.skipped.append(SkipItem(
+                row, 'duplicate GHIN in file', SKIP_DUP_GHIN,
+                {'won_line': seen_ghin[row.ghin]}))
             continue
         if row.phone:
-            seen_phone.add(row.phone)
+            seen_phone[row.phone] = row.line
         if row.ghin:
-            seen_ghin.add(row.ghin)
+            seen_ghin[row.ghin] = row.line
 
-        match = (row.phone and by_phone.get(row.phone)) or \
-                (row.ghin and by_ghin.get(row.ghin)) or None
+        match, matched_by = None, ''
+        if row.phone and by_phone.get(row.phone):
+            match, matched_by = by_phone[row.phone], 'phone'
+        elif row.ghin and by_ghin.get(row.ghin):
+            match, matched_by = by_ghin[row.ghin], 'ghin'
 
         if match is None:
             if row.index is None:
-                plan.skipped.append(SkipItem(row, 'new golfer has no index'))
+                plan.skipped.append(
+                    SkipItem(row, 'new golfer has no index', SKIP_NO_INDEX))
             else:
                 plan.to_create.append(row)
             continue
 
         if match.id in matched_ids:
-            plan.skipped.append(SkipItem(row, f'already matched to {match.name}'))
+            plan.skipped.append(SkipItem(
+                row, f'already matched to {match.name}', SKIP_ALREADY_MATCHED,
+                {'player_name': match.name}))
             continue
         matched_ids.add(match.id)
 
         changes: dict = {}
+        before: dict = {}
         if row.index is not None and row.index != match.handicap_index:
             changes['handicap_index'] = row.index
+            before['handicap_index'] = match.handicap_index
         if row.ghin and row.ghin != match.ghin:
             changes['ghin'] = row.ghin
+            before['ghin'] = match.ghin
         if row.email and not match.email:
             changes['email'] = row.email
+            before['email'] = match.email
         # Backfill phone only when the existing copy has none (never clobber an
         # already-linked number — the match may have come via GHIN).
-        if row.phone and not normalize_phone(match.phone):
+        linked_phone = normalize_phone(match.phone)
+        if row.phone and not linked_phone:
             changes['phone'] = row.phone
+            before['phone'] = match.phone
+
+        # Matched on GHIN, and the file disagrees about the phone number.  We
+        # keep the linked one; this is the row a human has to eyeball, so the
+        # conflict travels with the item instead of being silently dropped.
+        conflict = ''
+        if matched_by == 'ghin' and row.phone and linked_phone \
+                and row.phone != linked_phone:
+            conflict = row.phone
 
         if changes:
-            plan.to_update.append(
-                UpdateItem(row, match.id, match.name, changes))
+            plan.to_update.append(UpdateItem(
+                row, match.id, match.name, changes,
+                matched_by=matched_by, before=before, phone_conflict=conflict))
         else:
             plan.unchanged.append(row)
 
@@ -340,9 +444,10 @@ def apply_plan(account, plan: ImportPlan) -> tuple[int, int]:
     from core.models import Player
 
     created = updated = 0
+    plan.created_ids = []
     with transaction.atomic():
         for row in plan.to_create:
-            Player.objects.create(
+            player = Player.objects.create(
                 account=account,
                 name=row.name,
                 email=row.email,
@@ -351,6 +456,7 @@ def apply_plan(account, plan: ImportPlan) -> tuple[int, int]:
                 sex=row.sex,
                 handicap_index=row.index,
             )
+            plan.created_ids.append(player.id)
             created += 1
 
         for item in plan.to_update:

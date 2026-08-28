@@ -1,0 +1,90 @@
+{% extends "console/shell.html" %}
+
+{% block title %}Import roster · Halved TD console{% endblock %}
+
+{% block main %}
+<div class="head">
+  <div>
+    <h2 class="h1">Import roster</h2>
+    <p class="sub">Golf Genius roster export — .xlsx or .csv</p>
+  </div>
+  <div class="r"><span class="sel"><u>ACCOUNT</u> {{ account.name }}</span></div>
+</div>
+
+{% if error %}<div class="alert"><s>&#9888;</s><span>{{ error }}</span></div>{% endif %}
+
+{% comment %} Nothing commits on the first press: this posts the file, the next screen is
+   the dry run, and Apply is the second, deliberate press. {% endcomment %}
+<form method="post" enctype="multipart/form-data" id="dropform">{% csrf_token %}
+  <label class="drop" id="drop" for="file">
+    <span class="ic">&#8681;</span>
+    <b>Drop the export here</b>
+    <p>or choose a file — nothing is written until you apply</p>
+    <input type="file" name="file" id="file" accept=".csv,.xlsx">
+    <span class="btn q">Choose file</span>
+  </label>
+</form>
+
+<div class="two">
+  <div class="panel">
+    <h4>What we read</h4>
+    <ul>
+      <li><b>First Name</b> and <b>Last Name</b> — required, and how the header row is found</li>
+      <li><b>Index</b>, <b>GHIN ID</b>, <b>Phone Number</b>, <b>Email</b>, <b>Gender</b></li>
+      <li>Every other Golf Genius column is ignored</li>
+    </ul>
+  </div>
+  <div class="panel">
+    <h4>How golfers are matched</h4>
+    <ul>
+      <li>By <b>phone number</b> first — the identity key across accounts</li>
+      <li>Then by <b>GHIN</b>, if the phone is absent or unknown</li>
+      <li>No match makes a new golfer with no login</li>
+    </ul>
+  </div>
+</div>
+
+{% if recent %}
+<div class="two">
+  <div class="panel">
+    <h4>Recent runs</h4>
+    <ul>
+      {% for r in recent %}
+        <li><a href="{% url 'console:import-run' r.number %}"><b>#{{ r.number }}</b></a>
+          {{ r.applied_at|date:"j M, H:i" }} —
+          {{ r.result.counts.create }} created, {{ r.result.counts.update }} updated</li>
+      {% endfor %}
+    </ul>
+  </div>
+  <div class="panel">
+    <h4>Nothing here is a guess</h4>
+    <p>The preview is the same diff the <code>import_genius_roster</code> command
+      prints, read from the same file. Applying it runs the same code.</p>
+  </div>
+</div>
+{% endif %}
+
+<script>
+// Drag-and-drop is the affordance the page advertises, so it has to actually
+// work; the click path through the label is what runs when it doesn't.
+(function () {
+  var drop = document.getElementById('drop');
+  var input = document.getElementById('file');
+  var form = document.getElementById('dropform');
+
+  input.addEventListener('change', function () { if (input.files.length) form.submit(); });
+
+  ['dragenter', 'dragover'].forEach(function (evt) {
+    drop.addEventListener(evt, function (e) { e.preventDefault(); drop.classList.add('over'); });
+  });
+  ['dragleave', 'drop'].forEach(function (evt) {
+    drop.addEventListener(evt, function (e) { e.preventDefault(); drop.classList.remove('over'); });
+  });
+  drop.addEventListener('drop', function (e) {
+    if (!e.dataTransfer || !e.dataTransfer.files.length) return;
+    input.files = e.dataTransfer.files;
+    form.submit();
+  });
+})();
+</script>
+{% endblock %}

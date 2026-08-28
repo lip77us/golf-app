@@ -1,0 +1,25 @@
+{% extends "console/shell.html" %}
+
+{% comment %} The portal is open — anyone may sign in, and there is no TD role to grant.
+   A golfer who runs nothing gets a signed-in empty state naming what would
+   fill it, not a rejection and not a request-access dead end. {% endcomment %}
+
+{% block title %}Nothing to manage · Halved TD console{% endblock %}
+
+{% block main %}
+<div class="head">
+  <div>
+    <h2 class="h1">Import roster</h2>
+    <p class="sub">You’re signed in to {{ account.name }}</p>
+  </div>
+</div>
+
+<div class="empty">
+  <div class="ic">&#9776;</div>
+  <h4>No roster to manage</h4>
+  <p>You’re signed in, but you don’t administer <b>{{ account.name }}</b>, so
+    there’s no roster here for you to change. An admin of the account can
+    hand that over, or you can run your own events from the app.</p>
+  <a class="cta q" style="max-width:280px;margin:0 auto" href="https://halved.golf">Open Halved on your phone</a>
+</div>
+{% endblock %}

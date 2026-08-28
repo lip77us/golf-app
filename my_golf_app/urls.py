@@ -88,6 +88,11 @@ urlpatterns = [
     path('watch/<str:token>/', watch_views.watch_cup_round,
          name='watch-cup-round'),
 
+    # TD console — the web surface for the keyboard work (roster import,
+    # course administration).  Mounted under one prefix so a td.halved.golf
+    # subdomain can be pointed here later without touching any route.
+    path('td/', include('console.urls')),
+
     # Public invite landing page — shared by the in-app "Invite Friends" button.
     path('i/<str:code>/', invite_views.invite_landing, name='invite-landing'),
 ]

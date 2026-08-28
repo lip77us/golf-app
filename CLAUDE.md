@@ -663,12 +663,13 @@ cross-account plumbing).
 - Tests: `api/test_genius_import.py` (plus-handicap/sentinel parsing, header
   below banner, phone-match + GHIN-match update, new-without-index skip,
   create-with-plus-handicap, idempotent re-import).
-- **Deferred — Slice 3 (TD-facing):** account-scoped API endpoints
-  (`POST /api/roster/import/{preview,apply}/`, upload → diff → commit) + a mobile
-  "Import roster" screen in the TD flow, **gated behind the paywall** when billing
-  lands. The engine + command already share the exact functions the endpoint will
-  call, so Slice 3 is pure surface. (Verified against a real 213-golfer Tilden
-  Seniors export: 211 phones, 188 GHINs, 176 indexes, 0 parse errors.)
+- **Slice 3 landed as the TD console (web), not a mobile screen** — see the TD
+  console section below. The engine is unchanged in behaviour; the additions are
+  additive metadata the CLI ignores (`ParsedRow.index_raw`/`td_index`,
+  `SkipItem.code`/`detail`, `UpdateItem.matched_by`/`before`/`phone_conflict`,
+  `ImportPlan.created_ids`, `header_line()`, and `build_plan(...,
+  index_overrides=)`). (Verified against a real 213-golfer Tilden Seniors export:
+  211 phones, 188 GHINs, 176 indexes, 0 parse errors.)
 
 ---
 
@@ -1473,3 +1474,88 @@ balance check that blocks Settle and NAMES the game, and the sum-zero footer.
 
 **Deferred by the packet:** flights; Mini Singles above 16 golfers; per-golfer
 settle marking; a settlement text export.
+
+---
+
+## TD console (web) — Phase 1 + 2 implemented
+
+A **new surface**, not a redesign: a server-rendered web console for the work a
+tournament director does on a laptop the night before an event. Built from
+`~/Downloads/handoff-td-console/` (HANDOFF.md + four HTML design screens).
+Django app `console/`, mounted at **`/td/`** by `my_golf_app/urls.py` — the
+design draws it on `td.halved.golf`, which is a DNS + ALLOWED_HOSTS change, not
+a routing one. Plain Django templates + a little vanilla JS; **no front-end
+build step**, and it reuses the existing session and account resolution.
+
+### Phase 1 — sign in (`console/auth.py`, `console/views.py`)
+- **Same identity as the app**: phone → 6-digit SMS code, through the existing
+  `accounts/otp.py`. The web adds no new auth concept — only a session cookie
+  where the app holds a token. `login()` is called with an explicit
+  `backend='accounts.backends.AccountBackend'` (that backend is the only entry
+  in `AUTHENTICATION_BACKENDS` and we never go through `authenticate()`).
+- **No account is created on the web.** `otp.verify_code` self-creates an
+  Account for an unknown phone, so `auth.start()` checks `phone_is_known()`
+  BEFORE sending — an unrecognised number is a dead end that costs no SMS.
+  `auth.finish()` also hard-fails on `is_new` as a belt-and-braces guard.
+- Wrong codes **count down out loud** ("Two tries left"), 3 attempts then the
+  code is spent; Resend unlocks on the first failure (before that, a 30s
+  countdown). `Keep me signed in` is on by default → 30-day cookie; unchecked →
+  browser session. A lapsed session **names the screen** it threw you off and
+  returns you to it (`td_required('<label>')`).
+- Routes `/td/sign-in/`, `/td/sign-in/code/`, `/td/sign-out/`. Verify lands on
+  **Import roster**, not a dashboard.
+- The portal is **open** — anyone may sign in. The WRITE is what's gated: an
+  import changes a roster the whole account shares, so `_can_write` requires
+  `is_account_admin`, and a non-admin gets a signed-in empty state naming what
+  would fill it, not a rejection.
+
+### Phase 2 — Golf Genius import (`console/models.py`, `plan.py`, `views.py`)
+A **UI over `services/genius_import.py`**, not a second importer. The command is
+dry-run by default and needs `--apply`; that shape carries over exactly — **the
+preview IS the confirm**, there is no dialog, and the primary button is never
+`Import` but `Apply — create 12, update 5`, counts in the label.
+- **`ImportRun`** (migration `console/0001`) stores the parsed file + the TD's
+  typed indexes, so the plan is a pure function of `(parsed, overrides)` and is
+  **rebuilt on every render**. That is what makes inline index entry possible
+  without a re-upload. Numbered **per account, on apply only** (an abandoned
+  draft never burns a number). `result.log` keeps per-row before/after — the
+  data a future undo would need. **There is no undo today** and the receipt
+  draws no button for one.
+- Apply is one transaction over the golfer writes AND the run record, with
+  `select_for_update` on the run so a double-submit can't write twice.
+- The preview shows what the CLI can't: **which key matched** (`PHONE`/`GHIN`
+  tag — a GHIN match with a different phone is where two people become one),
+  **field-level diffs** (`idx 8.4 → 7.9`, `(was blank)` on backfills), the
+  **header row it found** (`Header found on row 4 · 87 data rows`), and all six
+  skip reasons as sentences with the offending cell quoted (`index cell read
+  "NH"`). Only `no_index` is editable inline; file errors are greyed and inert.
+- **Plus handicaps display as `+2.3`** (stored `-2.3`). `plan.fmt_index` is the
+  single place that undoes the storage convention.
+- Field display order is **pinned** (`plan._FIELD_ORDER`) because
+  `ImportRun.result` is a `jsonb` column and jsonb does NOT preserve key order —
+  without it the receipt lists a change in a different order than the preview.
+- Routes: `/td/roster/import/`, `.../preview/<pk>/`, `.../runs/<number>/`,
+  `.../runs/<number>/csv/`.
+
+### Gotchas this build hit (worth not re-learning)
+- **`{# … #}` is single-line only.** Every multi-line one rendered as visible
+  text on the page. Use `{% comment %}` blocks. (`console/templates/console/`
+  is all `{% comment %}` now.)
+- **`collectstatic` is now required at deploy.** `STORAGES` uses
+  `CompressedManifestStaticFilesStorage`, and `{% static %}` RAISES at render
+  time for anything missing from the manifest. Nothing used `{% static %}`
+  before this, so it was never exercised — added to `railway.toml`'s
+  `startCommand`. Tests override `STORAGES` (`console/tests.py::plain_static`).
+- A `<label>` used as a drop zone needs `display:block`, or it fragments.
+
+Tests: `console/tests.py` (22) — the two web-specific auth promises (no account
+created, tries counted), and the import invariants that would break silently
+(preview writes nothing, plan rebuilds from typed values, `+2.3` never renders
+negative, apply is atomic and cannot run twice, cross-account 404).
+
+**Not built (Phases 3 + 4 of the handoff):** course library / correction report,
+and custom tee sets. Decision taken for Phase 3: the console will **edit the
+account's own Course/Tee clone directly** (replacing `manage_courses_screen.dart`
+and `manage_course_tees_screen.dart`) **and** offer "Send to Halved" to push the
+correction upstream to the shared `CatalogCourse` — rather than the handoff's
+report-only design, which assumed the TD does not own the record.

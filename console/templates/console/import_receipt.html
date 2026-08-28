@@ -1,0 +1,88 @@
+{% extends "console/shell.html" %}
+
+{% block title %}Import complete · Halved TD console{% endblock %}
+
+{% block main %}
+<div class="head">
+  <div>
+    <h2 class="h1">Import complete</h2>
+    <p class="sub">{{ run.filename }} · applied {{ run.applied_at|date:"H:i" }} by {{ run.user.get_full_name|default:run.user.username }}</p>
+  </div>
+</div>
+
+<div class="receipt">
+  <div class="top">
+    <span class="tick">&#10003;</span>
+    <div>
+      <h3>{{ counts.create }} golfer{{ counts.create|pluralize }} created,
+        {{ counts.update }} updated in {{ account.name }}</h3>
+      <p>
+        {% if counts.td_index %}{{ counts.td_index }} row{{ counts.td_index|pluralize }}
+          {{ counts.td_index|pluralize:"was,were" }} created here with an index you typed.{% endif %}
+        {% if counts.skipped %}{{ counts.skipped }} row{{ counts.skipped|pluralize }}
+          {{ counts.skipped|pluralize:"was,were" }} skipped and nothing was written for
+          {{ counts.skipped|pluralize:"it,them" }}.{% else %}Nothing was skipped.{% endif %}
+      </p>
+    </div>
+  </div>
+
+  <div class="rr">
+    <div><u>Created</u><b style="color:var(--win)">{{ counts.create }}</b></div>
+    <div><u>Updated</u><b style="color:var(--pine)">{{ counts.update }}</b></div>
+    <div><u>Unchanged</u><b style="color:var(--muted)">{{ counts.unchanged }}</b></div>
+    <div><u>Skipped</u><b style="color:var(--amber)">{{ counts.skipped }}</b></div>
+  </div>
+
+  {% comment %} No undo button, because the importer has no undo.  The run is kept as a
+     record instead; drawing a control that does not exist would be worse
+     than not having one. {% endcomment %}
+  <div class="after">
+    <a class="btn q" href="{% url 'console:import-run-csv' run.number %}">Download this run as CSV</a>
+    <a class="btn q" href="{% url 'console:import' %}">Import another file</a>
+    <span class="m">Kept as run #{{ run.number }}{% if roster_after %} · the roster is now {{ roster_after }} golfers{% endif %}</span>
+  </div>
+</div>
+
+<div class="two">
+  <div class="panel">
+    <h4>Still to sort out</h4>
+    {% if still_wrong %}
+      <ul>{% for line in still_wrong %}<li>{{ line }}</li>{% endfor %}</ul>
+    {% else %}
+      <p>Nothing. Every row in the file either landed or was already correct.</p>
+    {% endif %}
+  </div>
+  <div class="panel">
+    <h4>Recent runs</h4>
+    <ul>
+      {% for r in recent %}
+        <li><a href="{% url 'console:import-run' r.number %}"><b>#{{ r.number }}</b></a>
+          {% if r.number == run.number %}today{% else %}{{ r.applied_at|date:"j M" }}{% endif %} —
+          {{ r.result.counts.create }} created, {{ r.result.counts.update }} updated</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+
+{% if updates %}
+<div class="tbl" style="margin-top:16px">
+  <div class="tsec">What was written <span class="n">{{ counts.update }} update{{ counts.update|pluralize }}</span>
+    <span class="hint">Field by field, as applied</span></div>
+  <table class="rows">
+    {% for u in updates %}
+      <tr>
+        <td class="ln">{{ u.line }}</td>
+        <td class="nm">{{ u.name }}</td>
+        <td class="tag"><span class="k {{ u.matched_by }}">{{ u.matched_by|upper }}</span></td>
+        <td>
+          {% for d in u.diffs %}{% if not forloop.first %}<span class="sep">·</span>{% endif %}<span class="chg">{{ d.label }}
+            {% if d.before %}<s>{{ d.before }}</s>{% endif %}<em>&rarr;</em><b>{{ d.after }}</b>
+            {% if d.was_blank %}<span class="blank">(was blank)</span>{% endif %}</span>{% endfor %}
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+{% endblock %}

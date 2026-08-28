@@ -1,0 +1,34 @@
+{% extends "console/_auth.html" %}
+
+{% block title %}Sign in · Halved TD console{% endblock %}
+
+{% block form %}
+{% if expired_label %}
+  {% comment %} A lapsed session names the screen it threw you off, so the return trip
+     is one code rather than a re-navigation. {% endcomment %}
+  <div class="notice"><s>&#8635;</s><span>Your 30 days ran out. Enter a fresh code and we’ll drop you back on <b>{{ expired_label }}</b>.</span></div>
+  <h1>Sign back in</h1>
+  <p class="lede">Same number, new code.</p>
+{% else %}
+  <h1>Sign in</h1>
+  <p class="lede">Use the same mobile number as the Halved app.</p>
+{% endif %}
+
+<form method="post" novalidate>{% csrf_token %}
+  <div class="lab">
+    <label for="phone">Mobile number</label>
+    {% if expired_label %}<a href="{% url 'console:sign-in' %}?fresh=1">Not you?</a>{% endif %}
+  </div>
+  <input class="field" id="phone" name="phone" type="tel" inputmode="tel"
+         autocomplete="tel" autofocus placeholder="(415) 555-0148"
+         value="{{ typed }}">
+  {% if error %}<div class="err"><s>&#9888;</s><span>{{ error }}</span></div>{% endif %}
+  <button class="cta" type="submit">Send code</button>
+</form>
+
+<p class="fine">We’ll text a one-time 6-digit code. Message &amp; data rates may apply.</p>
+<div class="rule"></div>
+{% comment %} No account is created on the web.  Sign-up needs a name, an index and a
+   phone in hand, so an unrecognised number is a dead end by design. {% endcomment %}
+<p class="fine">New to Halved? Create your account in the app first — the console shows the events you already run.</p>
+{% endblock %}

@@ -1,0 +1,157 @@
+{% extends "console/shell.html" %}
+
+{% comment %} The dry run IS the screen.  The command is dry-run by default and needs
+   --apply to write, and that shape carries over exactly — so there is no
+   separate confirm dialog, because this page is the confirm. {% endcomment %}
+
+{% block title %}Import preview · Halved TD console{% endblock %}
+
+{% block main %}
+<div class="head">
+  <div>
+    <h2 class="h1">Import preview</h2>
+    {% comment %} Report what the header scan found.  Point the importer at the wrong
+       sheet and the only symptom is a plausible-looking small number. {% endcomment %}
+    <p class="sub">Header found on row {{ run.header_line }} · {{ run.data_rows }} data row{{ run.data_rows|pluralize }} ·
+      matched against {{ run.roster_size }} golfer{{ run.roster_size|pluralize }} in {{ account.name }}</p>
+  </div>
+  <div class="r"><span class="dry">DRY RUN — NOTHING WRITTEN</span></div>
+</div>
+
+{% if error %}<div class="alert"><s>&#9888;</s><span>{{ error }}</span></div>{% endif %}
+
+<div class="fb">
+  <span class="fi">{% if run.filename|slice:"-4:" == ".csv" %}CSV{% else %}XLS{% endif %}</span>
+  <span><b>{{ run.filename }}</b>
+    <span class="m">· {{ run.file_size|filesizeformat }} · loaded {{ run.created_at|date:"H:i" }}</span></span>
+  <span class="x">
+    <form method="post">{% csrf_token %}
+      <input type="hidden" name="action" value="discard">
+      <button type="submit">Replace ×</button>
+    </form>
+  </span>
+</div>
+
+<div class="buckets">
+  <div class="bk c {% if plan.counts.create %}on{% endif %}">
+    <u>Create</u><b>{{ plan.counts.create }}</b><small>new golfers, no login</small></div>
+  <div class="bk u {% if plan.counts.update %}on{% endif %}">
+    <u>Update</u><b>{{ plan.counts.update }}</b><small>index, GHIN, backfills</small></div>
+  <div class="bk n">
+    <u>Unchanged</u><b>{{ plan.counts.unchanged }}</b><small>nothing to write</small></div>
+  <div class="bk s {% if plan.counts.skipped %}on{% endif %}">
+    <u>Skipped</u><b>{{ plan.counts.skipped }}</b>
+    <small>{% if plan.counts.fixable %}{{ plan.counts.fixable }} you can fix here{% else %}nothing written for these{% endif %}</small></div>
+</div>
+
+<div class="tbl">
+
+{% if plan.creates %}
+  <div class="tsec">Create <span class="n">{{ plan.counts.create }} golfer{{ plan.counts.create|pluralize }}</span>
+    <span class="hint">Created with no login — they join by claiming their phone number</span></div>
+  <table class="rows">
+    {% for r in plan.creates %}
+      <tr>
+        <td class="ln">{{ r.line }}</td>
+        <td class="nm">{{ r.name }}</td>
+        {% comment %} A plus handicap is shown the way it is printed on the sheet the TD
+           is holding; the negative is a storage convention. {% endcomment %}
+        <td class="idx">idx {% if r.is_plus %}<b class="plus">{{ r.index }}</b>{% else %}{{ r.index }}{% endif %}</td>
+        <td class="ghin">{% if r.ghin != "—" %}GHIN {{ r.ghin }}{% else %}—{% endif %}</td>
+        <td class="ph">{{ r.phone }}</td>
+        <td class="note">{{ r.note }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+{% endif %}
+
+{% if plan.updates %}
+  <div class="tsec">Update <span class="n">{{ plan.counts.update }} golfer{{ plan.counts.update|pluralize }}</span>
+    <span class="hint">Index and GHIN overwrite · email and phone only fill a blank</span></div>
+  <table class="rows">
+    {% for u in plan.updates %}
+      <tr>
+        <td class="ln">{{ u.line }}</td>
+        <td class="nm">{{ u.name }}</td>
+        {% comment %} Which key hit.  A GHIN match carrying a different phone number is
+           the one case where two people can turn into one, and this row is
+           the only place a human can catch it. {% endcomment %}
+        <td class="tag"><span class="k {{ u.matched_by }}">{{ u.matched_by|upper }}</span></td>
+        <td>
+          {% for d in u.diffs %}{% if not forloop.first %}<span class="sep">·</span>{% endif %}<span class="chg">{{ d.label }}
+            {% if d.before %}<s>{{ d.before }}</s>{% endif %}<em>&rarr;</em><b>{{ d.after }}</b>
+            {% if d.was_blank %}<span class="blank">(was blank)</span>{% endif %}</span>{% endfor %}
+          {% if u.conflict %}{% if u.diffs %}<span class="sep">·</span>{% endif %}<span class="conflict">file phone {{ u.conflict }} differs — kept the linked number</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+{% endif %}
+
+{% if plan.skips %}
+  <div class="tsec">Skipped <span class="n">{{ plan.counts.skipped }} row{{ plan.counts.skipped|pluralize }}</span>
+    <span class="hint">Nothing is written for these</span></div>
+  <table class="rows">
+    {% for s in plan.skips %}
+      <tr {% if s.is_file_error %}class="locked"{% endif %}>
+        <td class="ln">{{ s.line }}</td>
+        <td class="nm">{{ s.name }}</td>
+        <td>
+          <span class="why {% if s.is_file_error %}bad{% endif %}">{{ s.reason }}</span>
+          {% if s.detail %}<span class="detail">· {{ s.detail }}</span>{% endif %}
+        </td>
+        <td style="text-align:right;width:230px">
+          {% if s.fixable %}
+            {% comment %} Inline index entry is the console's one addition to the
+               importer, and the reason it beats the CLI: type the index and
+               the row moves to Create.  No re-export, no round trip. {% endcomment %}
+            <form method="post" class="fixform">{% csrf_token %}
+              <input type="hidden" name="action" value="index">
+              <input type="hidden" name="line" value="{{ s.line }}">
+              <input name="index" value="{{ s.typed }}" placeholder="idx"
+                     inputmode="decimal" aria-label="Index for {{ s.name }}">
+              <button class="fix" type="submit">Add index &amp; create</button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+{% endif %}
+
+{% if plan.unchanged %}
+  {# The biggest bucket and the least interesting, so it is collapsed. #}
+  <details>
+    <summary class="tsec">Unchanged <span class="n">{{ plan.counts.unchanged }} golfer{{ plan.counts.unchanged|pluralize }}</span>
+      <span class="hint">Matched, nothing to write — click to expand</span></summary>
+    <table class="rows">
+      {% for r in plan.unchanged %}
+        <tr><td class="ln">{{ r.line }}</td><td class="nm">{{ r.name }}</td><td class="idx">idx {{ r.index }}</td><td></td></tr>
+      {% endfor %}
+    </table>
+  </details>
+{% endif %}
+
+</div>
+
+<div class="foot">
+  <span class="m">Applied in one transaction. If anything fails, nothing is written.</span>
+  <div class="r">
+    <form method="post">{% csrf_token %}
+      <input type="hidden" name="action" value="discard">
+      <button class="btn q" type="submit">Discard</button>
+    </form>
+    <form method="post">{% csrf_token %}
+      <input type="hidden" name="action" value="apply">
+      {% comment %} The primary button is never "Import" — the counts are in the label, so
+         a TD who reads nothing else still cannot commit without seeing what
+         it does.  A disabled button states its blocker. {% endcomment %}
+      {% if plan.counts.create or plan.counts.update %}
+        <button class="btn p" type="submit">Apply — create {{ plan.counts.create }}, update {{ plan.counts.update }}</button>
+      {% else %}
+        <button class="btn off" type="submit" disabled>Nothing to apply — no creates, no updates</button>
+      {% endif %}
+    </form>
+  </div>
+</div>
+{% endblock %}

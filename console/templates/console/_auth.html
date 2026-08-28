@@ -1,0 +1,29 @@
+{% extends "console/base.html" %}{% load static %}
+
+{% comment %} The front door: brand rail on the left, one form on the right.  The rail
+   says what the console is for, because someone arriving here has only ever
+   used the phone app. {% endcomment %}
+
+{% block body %}
+<div class="auth">
+  <aside class="rail">
+    <div class="brand">
+      <img class="mk" src="{% static 'console/logo.svg' %}" alt="">
+      <span><b>Halved</b><em>TD CONSOLE</em></span>
+    </div>
+    <h2>The keyboard work, on a keyboard.</h2>
+    <ul>
+      <li><s>&#8593;</s>Import a field from Golf Genius instead of typing forty names</li>
+      <li><s>&#10003;</s>Check a course against the printed card and file corrections</li>
+      <li><s>&#9673;</s>Build custom tees for a combo card</li>
+    </ul>
+    <div class="footnote">Scoring, groups and settlement stay in the app. The console is for the work you do the night before.</div>
+  </aside>
+
+  <div class="pane">
+    <div class="form">
+      {% block form %}{% endblock %}
+    </div>
+  </div>
+</div>
+{% endblock %}

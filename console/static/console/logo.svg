@@ -1,0 +1,10 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" role="img" aria-label="Halved">
+<rect x="0" y="0" width="1024" height="1024" fill="#0B1F1A"></rect>
+<ellipse cx="702" cy="838" rx="120" ry="42" fill="#3BD89A"></ellipse>
+<ellipse cx="702" cy="828" rx="112" ry="36" fill="#0B1F1A"></ellipse>
+<rect x="288" y="262" width="118" height="600" rx="22" fill="#F3F1EA"></rect>
+<rect x="676" y="210" width="52" height="640" rx="24" fill="#F3F1EA"></rect>
+<rect x="406" y="486" width="270" height="96" fill="#F3F1EA"></rect>
+<path d="M582 838 A120 42 0 0 0 822 838 L822 844 A120 42 0 0 1 582 844 Z" fill="#3BD89A"></path>
+<path d="M728 224 L956 314 L728 404 Z" fill="#F3F1EA"></path>
+</svg>
