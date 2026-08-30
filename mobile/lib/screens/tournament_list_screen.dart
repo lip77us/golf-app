@@ -19,6 +19,7 @@ import 'ryder_cup_draft_screen.dart';
 import 'ryder_cup_scoreboard_screen.dart';
 import 'cup_round_setup_screen.dart';
 import 'tee_times_screen.dart';
+import 'tournament_settlement_screen.dart';
 
 class TournamentListScreen extends StatefulWidget {
   const TournamentListScreen({super.key});
@@ -518,6 +519,12 @@ class _TournamentListScreenState extends State<TournamentListScreen>
             // closure picks the latest non-pending round; falls back to
             // round 1, then to RyderCupScoreboardScreen if no rounds at
             // all have been created.
+            onSettleUp: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => TournamentSettlementScreen(
+                tournamentId  : t.id,
+                tournamentName: t.name,
+              ),
+            )),
             onViewLeaderboard: () {
               if (t.activeGames.contains('team_cup')) {
                 _openCupTab(context, t);
@@ -610,6 +617,8 @@ class _TournamentCard extends StatelessWidget {
   final void Function(int roundId) onRoundTap;
   final void Function(int roundId) onSetupRound;
   final VoidCallback onViewLeaderboard;
+  /// Opens tournament settlement — the receipts and the field text.
+  final VoidCallback onSettleUp;
   final VoidCallback onConfigureLowNet;
   final VoidCallback onOpenCupDraft;
   final VoidCallback onOpenCupScoreboard;
@@ -626,6 +635,7 @@ class _TournamentCard extends StatelessWidget {
     required this.onRoundTap,
     required this.onSetupRound,
     required this.onViewLeaderboard,
+    required this.onSettleUp,
     required this.onConfigureLowNet,
     required this.onOpenCupDraft,
     required this.onOpenCupScoreboard,
@@ -740,6 +750,21 @@ class _TournamentCard extends StatelessWidget {
                         : 'Championship Leaderboard',
                 onTap: onViewLeaderboard,
               ),
+              // Settle up was previously reachable ONLY as an unlabelled icon
+              // in the tournament leaderboard's app bar — two screens deep,
+              // findable only if you already knew the icon. It is the last
+              // thing a TD does at an event, so it gets a name here.
+              //
+              // Same gate as the leaderboard's own else-branch: cup and team
+              // play have their own boards and do not settle through
+              // TournamentSettlementScreen.
+              if (!tournament.activeGames.contains('team_cup') &&
+                  !tournament.activeGames.contains('team_play'))
+                _ActionButton(
+                  icon : Icons.receipt_long_outlined,
+                  label: 'Settle up & receipts',
+                  onTap: onSettleUp,
+                ),
             ],
             if (isStaff && !isComplete &&
                 tournament.activeGames.contains('low_net'))

@@ -24,6 +24,7 @@ import 'share_scorecard_screen.dart';
 import 'round_receipt_screen.dart';
 import 'match_play_screen.dart' show MatchPlayDetailView;
 import 'tournament_leaderboard_screen.dart' show ChampionshipTabView;
+import 'tournament_settlement_screen.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   final int roundId;
@@ -541,6 +542,53 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
               ]),
             ),
           ),
+
+        // Settlement is TOURNAMENT-scoped, so a tournament round's board has
+        // no settlement tab and never will. Without this line the screen just
+        // looks like the feature is missing — which is exactly how it read
+        // when the money was sitting one level up the whole time.
+        //
+        // Individual play only. Cup rounds land on this same board (the cup
+        // tab is opened here), and they do NOT settle through
+        // tournament_settlement — pointing them at it would trade a confusing
+        // absence for a broken screen.
+        if (lb.tournamentId != null && lb.isIndividualPlayTournament)
+          Material(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: InkWell(
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => TournamentSettlementScreen(
+                  tournamentId  : lb.tournamentId!,
+                  tournamentName: lb.tournamentName ?? 'Tournament',
+                ),
+              )),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                child: Row(children: [
+                  Icon(Icons.receipt_long_outlined,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Part of ${lb.tournamentName ?? "a tournament"} — '
+                      'settle up & receipts',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ),
+                  Icon(Icons.chevron_right,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ]),
+              ),
+            ),
+          ),
+
         Expanded(
           child: TabBarView(
             controller: _tabController,

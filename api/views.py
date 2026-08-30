@@ -5275,6 +5275,11 @@ class LeaderboardView(APIView):
             'tournament_name'       : t.name if t else None,
             'cup_name'              : cup_name,
             'tournament_active_games': t.active_games or [] if t else [],
+            # Authoritative, not re-derived on the client. This board is shared
+            # by casual, cup and team-play rounds; only an INDIVIDUAL-play
+            # tournament settles through services/tournament_settlement, so
+            # only it may point at that screen.
+            'tournament_individual_play': bool(t.is_individual_play) if t else False,
             'games'                 : lb_games,
         })
 

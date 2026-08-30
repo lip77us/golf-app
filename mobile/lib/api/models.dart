@@ -4522,6 +4522,12 @@ class Leaderboard {
   /// part of a cup competition.
   final String? cupName;
   final List<String> tournamentActiveGames;
+  /// True when the owning tournament is INDIVIDUAL play — the only shape that
+  /// settles through services/tournament_settlement. This board is shared by
+  /// casual, cup and team-play rounds, so it is what gates the pointer up to
+  /// tournament settlement. Server-derived; defaults false on older backends,
+  /// which correctly shows nothing rather than linking somewhere broken.
+  final bool isIndividualPlayTournament;
   /// The account that owns this round. Lets the app flag a cross-account
   /// (support / shared) read-only view. Null on older backends.
   final int? accountId;
@@ -4539,6 +4545,7 @@ class Leaderboard {
     this.tournamentName,
     this.cupName,
     this.tournamentActiveGames = const [],
+    this.isIndividualPlayTournament = false,
     this.accountId,
     this.accountName,
   });
@@ -4566,6 +4573,8 @@ class Leaderboard {
       cupName: j['cup_name'] as String?,
       tournamentActiveGames: List<String>.from(
           j['tournament_active_games'] as List? ?? []),
+      isIndividualPlayTournament:
+          j['tournament_individual_play'] as bool? ?? false,
       accountId:   j['account_id']   as int?,
       accountName: j['account_name'] as String?,
     );
