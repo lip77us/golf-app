@@ -3278,7 +3278,7 @@ class SurvivorGame(models.Model):
                     )
     # Zombie Option (docs/design-review/handoff-survivor-zombie/SPEC.md).
     zombie_option = models.BooleanField(
-                        default=False,
+                        default=True,
                         help_text="When on, the eliminated player (the Zombie) "
                                   "keeps playing; going strictly low on a decider "
                                   "hole brings them back in and sends a decider "

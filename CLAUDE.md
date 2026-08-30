@@ -1300,8 +1300,8 @@ Now built from `docs/design-review/handoff-survivor-zombie/`:
 - **Token:** `Halved.zombie` = `#6E4B8E` — the packet's one new colour,
   deliberately neither the win green nor the out red, because a Zombie is
   neither.
-- **Setup** (`survivor_setup_screen.dart`): the toggle, off by default, with the
-  three cases that actually differ (back-in-with-Zombieville, back-in-all-three,
+- **Setup** (`survivor_setup_screen.dart`): the toggle, **on by default** (see
+  below), with the three cases that actually differ (back-in-with-Zombieville, back-in-all-three,
   no-change) and a footnote for the 18th-hole kill + no blood. **Locked once any
   hole is scored** — the option decides who is still in the Survivor, so
   flipping it mid-round would rewrite played holes.
@@ -1318,6 +1318,28 @@ Now built from `docs/design-review/handoff-survivor-zombie/`:
 - Model/client: `SurvivorSummary.zombieOption`, `SurvivorHoleEntry.isZombie` /
   `isResurrected`, `SurvivorHole.resurrectedId/Short`, `SurvivorLeg.killedById/
   Short` + `isKilled`, and `postSurvivorSetup(zombieOption:)`.
+
+#### Zombie is the DEFAULT game (was off)
+Flipped in five places, because five of them decide it: `SurvivorGame
+.zombie_option` (`games/0070`, a Django-level default — the migration's SQL is
+empty, and **existing rows keep whatever they stored**), `SurvivorSetupSerializer`,
+the `d.get(...)` in `SurvivorSetupView`, `setup_survivor()`'s own kwarg, and
+`_empty_summary()` so a not-yet-configured game reports what it will get.
+Mobile: `survivor_setup_screen._zombieOption` and `client.postSurvivorSetup`.
+
+**It does not reach the shipped app until a new build.** The client ALWAYS
+sends `zombie_option` explicitly, so a 2.7.0 phone keeps posting `false` from
+its own screen default — the server can't tell that from a TD deliberately
+turning it off, and shouldn't try.
+
+`models.dart`'s `fromJson` fallback is deliberately still `false`: that is the
+"the server didn't tell us" case, not a default, and the summary always carries
+the key.
+
+Two test suites relied on the OLD implicit default and now say what they mean —
+`SurvivorTests` (`scoring/tests/test_survivor.py`) and `SurvivorEventTests`
+(`test_messaging_events.py`) pass `zombie_option=False` in setUp, because their
+whole subject is the classic game: knocked out is knocked out.
 
 ## Release tags
 

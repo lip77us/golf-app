@@ -474,7 +474,9 @@ class SurvivorEventTests(TestCase):
             [(self.ann, 0), (self.ben, 0), (self.cal, 0)],
             tee=self.tee)
         from services.survivor import setup_survivor
-        setup_survivor(self.fs, handicap_mode='gross')
+        # Zombie-OFF explicitly: these assert the CLASSIC announcements
+        # (out, split, no blood).  The service default is now Zombie-on.
+        setup_survivor(self.fs, handicap_mode='gross', zombie_option=False)
 
     def _play(self, hole, a, b, c):
         from services.survivor import calculate_survivor

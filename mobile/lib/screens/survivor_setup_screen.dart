@@ -49,7 +49,7 @@ class _SurvivorSetupScreenState extends State<SurvivorSetupScreen> {
   /// Off by default — plain Survivor is the game most groups mean.
   /// Read-only once a hole is scored: it changes who is still in the Survivor,
   /// so flipping it mid-round would rewrite holes already played.
-  bool   _zombieOption = false;
+  bool   _zombieOption = true;   // Zombie is the default game now
   int    _netPercent = 100;
 
   final TextEditingController _betCtrl = TextEditingController();

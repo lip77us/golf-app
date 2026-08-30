@@ -1716,7 +1716,7 @@ class SurvivorSetupSerializer(serializers.Serializer):
                         choices=['net', 'gross', 'strokes_off'], default='net')
     net_percent   = serializers.IntegerField(
                         min_value=0, max_value=200, default=100)
-    zombie_option = serializers.BooleanField(default=False)
+    zombie_option = serializers.BooleanField(default=True)
 
 
 class WolfOrderSerializer(serializers.Serializer):

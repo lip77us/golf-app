@@ -37,7 +37,11 @@ class SurvivorTests(TestCase):
                     for m in self.fs.memberships.select_related('player')}
         self.sn = {m.player.name: m.player.short_name
                    for m in self.fs.memberships.select_related('player')}
-        setup_survivor(self.fs, handicap_mode='gross')
+        # Explicitly Zombie-OFF: this suite is the classic game — knocked out
+        # is knocked out.  It used to rely on the service default, which is now
+        # Zombie-on, and an implicit default is the wrong thing for a suite
+        # whose whole subject is who is still in the Survivor.
+        setup_survivor(self.fs, handicap_mode='gross', zombie_option=False)
 
     # ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -557,8 +561,13 @@ class SurvivorZombieTests(TestCase):
 
     def test_option_is_reported_in_the_summary(self):
         assert self._summary()['zombie_option'] is True
-        setup_survivor(self.fs, handicap_mode='gross')
+        setup_survivor(self.fs, handicap_mode='gross', zombie_option=False)
         assert self._summary()['zombie_option'] is False
+
+    def test_it_is_on_when_nobody_said_otherwise(self):
+        """Zombie is the default game now."""
+        setup_survivor(self.fs, handicap_mode='gross')
+        assert self._summary()['zombie_option'] is True
 
     def test_settlement_stays_zero_sum_with_a_kill_in_the_mix(self):
         self._to_hole(17)

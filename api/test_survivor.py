@@ -193,10 +193,21 @@ class SurvivorZombieEndpointTests(_SurvivorApiMixin, TestCase):
     per-hole flags the play screen needs come through the summary.
     (The resurrection maths is covered by scoring/tests/test_survivor.py.)"""
 
-    def test_option_defaults_off(self):
+    def test_option_defaults_on(self):
+        """Zombie is the default game — a setup that says nothing gets it."""
         resp = self._setup()
         self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertTrue(resp.data['zombie_option'])
+
+    def test_it_can_still_be_turned_off_explicitly(self):
+        """Defaulting on must not make off unreachable — a client that sends
+        False means it, and that is the shipped 2.7.0 app's every request."""
+        resp = self._setup(zombie_option=False)
+        self.assertEqual(resp.status_code, 201, resp.data)
         self.assertFalse(resp.data['zombie_option'])
+
+        got = self.client.get(reverse('api-survivor-result', args=[self.fs.id]))
+        self.assertFalse(got.data['zombie_option'])
 
     def test_option_round_trips(self):
         resp = self._setup(zombie_option=True)

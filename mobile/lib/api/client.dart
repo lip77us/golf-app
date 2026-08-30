@@ -1753,7 +1753,7 @@ class ApiClient {
     int    netPercent   = 100,
     /// Off by default. When on, the eliminated player keeps playing and can
     /// come back in by going low outright on a decider hole.
-    bool   zombieOption = false,
+    bool   zombieOption = true,
   }) async {
     final data = await _post('/foursomes/$foursomeId/survivor/setup/', {
       'handicap_mode': handicapMode,

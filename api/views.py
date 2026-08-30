@@ -6040,7 +6040,7 @@ class SurvivorSetupView(APIView):
             foursome,
             handicap_mode = d.get('handicap_mode', 'net'),
             net_percent   = d.get('net_percent', 100),
-            zombie_option = d.get('zombie_option', False),
+            zombie_option = d.get('zombie_option', True),
         )
         calculate_survivor(foursome)
         return Response(survivor_summary(foursome), status=status.HTTP_201_CREATED)

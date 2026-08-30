@@ -69,7 +69,7 @@ def setup_survivor(
     foursome,
     handicap_mode: str = HandicapMode.NET,
     net_percent: int = 100,
-    zombie_option: bool = False,
+    zombie_option: bool = True,
 ) -> 'SurvivorGame':
     """Create (or replace) the Survivor game for a foursome.  Safe to call
     again — the prior game + its hole results are dropped first."""
@@ -384,7 +384,7 @@ def _empty_summary(bet_unit) -> dict:
     return {
         'status'    : 'pending',
         'handicap'  : {'mode': HandicapMode.NET, 'net_percent': 100},
-        'zombie_option': False,
+        'zombie_option': True,
         'survivors' : [],
         'players'   : [],
         'holes'     : [],
