@@ -143,3 +143,47 @@ class CatalogRefreshSupersedesTests(TestCase):
         new = course.tees.get(superseded_by__isnull=True, tee_name='Blue')
         self.assertEqual(new.holes, _changed_holes())
         self.assertEqual(new.sort_priority, 15)  # LOCAL priority preserved, not 99
+
+
+class TeeProvenanceSurvivesRevisionTests(TestCase):
+    """A revision is the same tee, later — so what the tee IS must survive it.
+
+    Without this, editing a played tee reset `curated` to False and `origin` to
+    'api', and the next catalog re-rate would then overwrite a deliberate local
+    variant: precisely what the curated flag exists to prevent.
+    """
+
+    def _played_tee(self, **extra):
+        course = make_course('Provenance')
+        tee = make_tee(course, tee_name='White-Sixes')
+        for field, value in extra.items():
+            setattr(tee, field, value)
+        tee.origin = Tee.ORIGIN_MANUAL
+        tee.curated = True
+        tee.save()
+        rnd = make_round(course)
+        make_foursome(rnd, [('Ann', 10), ('Bob', 4)], tee=tee)
+        return course, tee
+
+    def test_curation_survives_a_supersede(self):
+        _, tee = self._played_tee()
+        new = update_tee_geometry(tee, {'holes': _changed_holes()})
+
+        self.assertNotEqual(new.id, tee.id)            # it did supersede
+        self.assertTrue(new.curated)
+        self.assertEqual(new.origin, Tee.ORIGIN_MANUAL)
+
+    def test_a_custom_index_set_is_still_one_after_an_edit(self):
+        course = make_course('Provenance')
+        source = make_tee(course, tee_name='White')
+        tee = make_tee(course, tee_name='White — club index')
+        tee.origin, tee.curated, tee.custom_index_of = (
+            Tee.ORIGIN_MANUAL, True, source)
+        tee.save()
+        rnd = make_round(course)
+        make_foursome(rnd, [('Ann', 10), ('Bob', 4)], tee=tee)
+
+        new = update_tee_geometry(tee, {'holes': _changed_holes()})
+        self.assertNotEqual(new.id, tee.id)
+        self.assertEqual(new.custom_index_of_id, source.id)
+        self.assertTrue(new.curated)

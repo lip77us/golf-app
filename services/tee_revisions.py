@@ -40,8 +40,9 @@ def update_tee_geometry(tee, attrs: dict):
 
     Returns the CURRENT Tee after the update: the same row updated in place when
     safe, or a freshly-created replacement revision when the holes changed on an
-    already-referenced tee.  Local preferences (sort_priority) are carried onto
-    the replacement unless `attrs` overrides them.
+    already-referenced tee.  Local preferences (sort_priority) and provenance
+    (origin / curated / custom_index_of) are carried onto the replacement unless
+    `attrs` overrides them — a revision is the same tee, later, not a new one.
     """
     new_holes = attrs.get('holes', tee.holes)
     holes_changed = new_holes != tee.holes
@@ -56,6 +57,16 @@ def update_tee_geometry(tee, attrs: dict):
             sex           = attrs.get('sex',           tee.sex),
             holes         = new_holes,
             sort_priority = attrs.get('sort_priority', tee.sort_priority),
+            # Provenance follows the tee, not the revision.  Without this a
+            # played tee LOSES its curation the first time it is edited:
+            # `curated` resets to False and `origin` to 'api', so the next
+            # catalog re-rate would happily overwrite a deliberate local
+            # variant — the exact thing the flag exists to prevent.  It also
+            # keeps a TD's custom index set (Tee.custom_index_of) recognisable
+            # as one after an edit.
+            origin          = tee.origin,
+            curated         = tee.curated,
+            custom_index_of = tee.custom_index_of,
         )
         tee.superseded_by = replacement
         tee.save(update_fields=['superseded_by'])

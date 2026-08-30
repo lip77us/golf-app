@@ -493,3 +493,68 @@ class CustomTeeTests(TestCase):
         self.assertTrue(data['is_custom_index'])
         self.assertEqual(data['custom_index_of'], self.source.pk)
         self.assertFalse(TeeSerializer(self.source).data['is_custom_index'])
+
+
+@plain_static
+class CustomTeeListTests(TestCase):
+    """The nav promises a page; it has to be a real one."""
+
+    def setUp(self):
+        self.account = Account.objects.create(name='Tilden')
+        self.user = User.objects.create_user(
+            username='paul', account=self.account, is_account_admin=True)
+        self.client.force_login(self.user,
+                                backend='accounts.backends.AccountBackend')
+        self.course = Course.objects.create(account=self.account, name='Tilden')
+        self.source = Tee.objects.create(
+            course=self.course, tee_name='White', slope=123,
+            course_rating=Decimal('69.4'), par=70, holes=holes())
+
+    def test_the_empty_state_points_at_the_course_library(self):
+        """There is no create button here — a set is always a re-index OF a
+        tee, so it has to start from a course."""
+        resp = self.client.get(reverse('console:custom-tees'))
+        self.assertContains(resp, 'No custom tees yet')
+        self.assertContains(resp, reverse('console:courses'))
+
+    def test_a_set_is_listed_with_what_it_forked_and_how_much_moved(self):
+        from console import custom_tees as custom
+        vals = list(range(1, 19))
+        vals[3], vals[11] = vals[11], vals[3]
+        custom.create(self.source, 'White — club index', vals)
+        resp = self.client.get(reverse('console:custom-tees'))
+        self.assertContains(resp, 'White — club index')
+        self.assertContains(resp, 'TD SET')
+        self.assertContains(resp, '>2<')            # two holes moved
+
+    def test_another_accounts_set_is_not_listed(self):
+        from console import custom_tees as custom
+        other = Account.objects.create(name='Somebody Else')
+        their_course = Course.objects.create(account=other, name='Theirs')
+        their_tee = Tee.objects.create(
+            course=their_course, tee_name='Blue', slope=120,
+            course_rating=Decimal('70.1'), par=72, holes=holes())
+        custom.create(their_tee, 'Blue — theirs', list(range(1, 19)))
+        resp = self.client.get(reverse('console:custom-tees'))
+        self.assertNotContains(resp, 'Blue — theirs')
+
+    def test_a_retired_set_is_not_listed(self):
+        """A superseded revision exists for the rounds that used it, not to be
+        managed."""
+        from console import custom_tees as custom
+        from services.tee_revisions import update_tee_geometry
+        made = custom.create(self.source, 'White — club index',
+                             list(range(1, 19)))
+        player = Player.objects.create(account=self.account, name='Dave',
+                                       handicap_index=Decimal('8.4'))
+        rnd = Round.objects.create(account=self.account, course=self.course)
+        fs = Foursome.objects.create(round=rnd, group_number=1)
+        FoursomeMembership.objects.create(foursome=fs, player=player, tee=made,
+                                          course_handicap=8, playing_handicap=8)
+        swapped = list(range(1, 19))
+        swapped[0], swapped[1] = swapped[1], swapped[0]
+        update_tee_geometry(made, {'holes': custom.build_holes(self.source, swapped)})
+
+        rows = self.client.get(reverse('console:custom-tees')).context['rows']
+        self.assertEqual(len(rows), 1)
+        self.assertTrue(rows[0]['tee'].is_current)

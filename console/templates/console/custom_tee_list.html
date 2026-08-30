@@ -1,0 +1,54 @@
+{% extends "console/shell.html" %}
+
+{% block title %}Custom tees · Halved TD console{% endblock %}
+
+{% block main %}
+<div class="head">
+  <div>
+    <h2 class="h1">Custom tees</h2>
+    <p class="sub">Your own stroke-index sets — same course, different ranking</p>
+  </div>
+</div>
+
+{% if rows %}
+  <div class="tbl">
+    <table class="rows">
+      <tr><th>Set</th><th>Course</th><th>Starts from</th><th>Holes moved</th><th>Rounds using it</th><th></th></tr>
+      {% for r in rows %}
+        <tr>
+          <td class="nm">{{ r.tee.tee_name }} <span class="st loc">TD SET</span></td>
+          <td class="n">{{ r.course.name }}</td>
+          <td class="n">{{ r.source.tee_name|default:"—" }}
+            <span class="detail">· {{ r.tee.course_rating }} / {{ r.tee.slope }} · par {{ r.tee.par }}</span></td>
+          <td class="n">{{ r.moved }}</td>
+          <td class="n">{{ r.rounds }}</td>
+          <td style="text-align:right">
+            <a href="{% url 'console:custom-tee' r.course.pk r.tee.pk %}">Edit index</a>
+            <span class="sep">·</span>
+            <a href="{% url 'console:course' r.course.pk %}">Course</a>
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+  </div>
+  <div class="foot">
+    <span class="m">Local to this account and never shared upstream. Anyone playing
+      a round you set up can pick one, marked as yours.</span>
+  </div>
+{% else %}
+  {% comment %} No create button: a set is always a re-index OF something, so it
+     starts from a tee, which means starting from a course.  Offering "New set"
+     here would be a dead end asking which course first. {% endcomment %}
+  <div class="empty">
+    <div class="ic">&#9673;</div>
+    <h4>No custom tees yet</h4>
+    <p>A custom set re-ranks the stroke index of a tee you already have —
+      for a course that indexes off the tips, where the 4th plays 478 from
+      the back and 318 from the front and is still index 1.</p>
+    <p>Open the course, find the tee you want to re-rank, and press
+      <b>Re-index</b>. Par, yards, rating and slope come with it and stay locked.</p>
+    <a class="cta q" style="max-width:280px;margin:0 auto"
+       href="{% url 'console:courses' %}">Go to the course library</a>
+  </div>
+{% endif %}
+{% endblock %}

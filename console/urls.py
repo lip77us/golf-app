@@ -33,6 +33,9 @@ urlpatterns = [
     # course, so editing is local and immediate; pushing upstream to the shared
     # catalog is the separate, bigger act.
     path('courses/',                          views.course_library, name='courses'),
+    # Before the <int:pk> route only for readability — "custom" can never match
+    # an int converter anyway.
+    path('courses/custom/',                   views.custom_tee_list, name='custom-tees'),
     path('courses/<int:pk>/',                 views.course_detail,  name='course'),
     path('courses/<int:pk>/tees/<int:tee_pk>/', views.tee_edit,     name='tee-edit'),
     path('courses/<int:pk>/reports/<int:number>/',

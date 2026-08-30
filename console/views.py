@@ -602,6 +602,22 @@ def tee_edit(request, pk, tee_pk):
 # ---------------------------------------------------------------------------
 
 @auth.td_required('Custom tees')
+def custom_tee_list(request):
+    """Every re-index this account owns.
+
+    There is no "create" button here on purpose: a set is always a re-index OF
+    something, so it starts from the tee it forks — which means starting from a
+    course. The empty state says so rather than offering a dead end.
+    """
+    ctx = _shell(request, nav='custom')
+    ctx.update({
+        'rows': courselib.custom_sets(request.user.account),
+        'can_write': _can_write(request),
+    })
+    return render(request, 'console/custom_tee_list.html', ctx)
+
+
+@auth.td_required('Custom tees')
 def custom_tee(request, pk, tee_pk):
     """Build or edit a re-index of one tee.
 

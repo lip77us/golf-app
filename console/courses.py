@@ -124,6 +124,38 @@ def add_totals(tee) -> None:
     tee.yards_total = sum(yards) or None
 
 
+def custom_sets(account) -> list[dict]:
+    """Every re-index this account owns, across every course.
+
+    Worth its own page rather than only living under the course that hosts it:
+    a set is built for an event, and the question a TD asks later is "what have
+    I got, and is anything using it" — not "which course was that on".
+    """
+    from tournament.models import FoursomeMembership
+
+    tees = (Tee.objects
+            .filter(course__account=account, custom_index_of__isnull=False,
+                    superseded_by__isnull=True)
+            .select_related('course', 'custom_index_of'))
+    rows = []
+    for tee in tees:
+        source = tee.custom_index_of
+        moved = []
+        if source:
+            by_number = {h['number']: h.get('stroke_index') for h in source.holes}
+            moved = [h['number'] for h in tee.holes
+                     if by_number.get(h['number']) != h.get('stroke_index')]
+        rows.append({
+            'tee':     tee,
+            'source':  source,
+            'course':  tee.course,
+            'moved':   len(moved),
+            'rounds':  FoursomeMembership.objects.filter(tee=tee).count(),
+        })
+    rows.sort(key=lambda r: (r['course'].name.lower(), r['tee'].tee_name.lower()))
+    return rows
+
+
 # ---------------------------------------------------------------------------
 # Reading an edit off the form
 # ---------------------------------------------------------------------------

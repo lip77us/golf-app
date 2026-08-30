@@ -1661,6 +1661,10 @@ never deletes anything, so a set named "White — club index" is untouchable by 
 - `sort_priority` MATCHES the source rather than beating it: appearing beside
   the tee it forked from is wanted, silently becoming everyone's default pick
   is not.
+- **`/courses/custom/`** lists every set the account owns, across all courses,
+  with what it forked, how many holes moved and how many rounds use it. No
+  "create" button there on purpose: a set is always a re-index OF a tee, so it
+  starts from a course — the empty state says so instead of offering a dead end.
 - **The API marks it** — `TeeSerializer.is_custom_index` / `custom_index_of` and
   `CourseTeeSummarySerializer.is_custom_index`. **The Flutter tee picker showing
   a "TD SET" label is the one piece of Phase 4 still outstanding**; without it
@@ -1670,6 +1674,18 @@ Tests: `console/test_courses.py` (37 total) — the ranking refusals, the lock
 (a forged `par_1`/`yards_1` post cannot move geometry), curated+manual, the
 sort-priority choice, strip/blocker/suggestion units, supersede-on-edit,
 delete-refused-when-played, and the serializer marker.
+
+#### Provenance now survives a tee revision (pre-existing bug, fixed here)
+`services/tee_revisions.update_tee_geometry` built its replacement row from
+geometry only, so a superseded tee came back with `curated=False` and
+`origin='api'` — the DEFAULTS. Editing a played tee therefore silently stripped
+its curation, and the next `sync_course_from_catalog` would overwrite a
+deliberate local variant (a re-rated `White-Sixes`, a combo tee): exactly what
+the flag exists to prevent. Found because a custom index set stopped being one
+after an edit; the curated/origin half is older and bites harder. The
+replacement now carries `origin`, `curated` and `custom_index_of` — a revision
+is the same tee, later, not a new one. Tests:
+`TeeProvenanceSurvivesRevisionTests` in `api/test_tee_revisions.py`.
 
 **Watch out for CSS class collisions in this app's stylesheet.** `.src` was
 defined for the report's radio group (`display:flex;flex-direction:column`) and
