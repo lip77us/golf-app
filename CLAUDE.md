@@ -1839,3 +1839,59 @@ landed BETWEEN the decorator and the function, silently moving atomicity onto
 the new declaration. The tests caught it (the exception class had become a
 function), but a delete-then-recreate losing its transaction is exactly the
 kind of thing that would not show up until it mattered.
+
+## Settlement receipt — receipt screen + field summary send (personal send DEFERRED)
+
+Built from `~/Downloads/handoff-settlement-receipt/`. Settlement answers the
+TD's question — do the pools balance. The receipt answers the golfer's: what do
+I owe, to whom, and what for.
+
+`services/settlement_receipt.py` (composition: `money`, `sms_segments`,
+`compose_personal`, `compose_field`) had shipped alone in `6d7ad19` and was
+imported by nothing but its own test. This wires it up.
+
+- **`receipt_payload(tournament, note=)`** assembles everything the screen and
+  the send need. It **reads `tournament_settlement` and recomputes no money** —
+  same nets, and crucially the same `blocking` list, so the send gate IS the
+  Settle gate (rule 6: provisional money must not leave the app; a texted
+  receipt is treated as final by everyone who gets one).
+- **`GET/POST /api/tournaments/{id}/settlement/receipt/`** —
+  `TournamentReceiptView`. GET takes `?note=` and returns per-golfer receipts
+  (each with the exact text that would go to him + its segment count), the
+  field-summary message, the gate, and the last send. POST records that a send
+  happened; it **sends nothing** and refuses while `can_settle` is false, so
+  the gate is not just a greyed button.
+- **`SettlementSend`** (`tournament/0059`) — mode, recipients, who, when. Kept
+  per send rather than as a flag, because a resend is a real event and the
+  second one is the one people ask about (rule 8).
+- **Mobile:** `settlement_receipt_screen.dart` (one net number, every line that
+  produced it, prizes carrying group + ways, the stamp, the exclusion note, and
+  the message preview), reached from a receipt button on each golfer row in
+  `tournament_settlement_screen.dart`. That screen gained a **Text the field**
+  section: note field, live preview, segment count (amber over three), and a
+  share-sheet send that records only on `ShareResultStatus.success` — a
+  dismissed sheet is not a send, and a false stamp is worse than none.
+
+**Composition is server-side, always.** The client renders the payload and
+shares the string; it never builds one. That is rule 1 — the receipt view and
+the message must not be able to disagree — and it is why the note round-trips
+to the server instead of being concatenated on the phone.
+
+### Why the personal receipt is NOT built
+The handoff's own first open question is transport, and it is sharper than the
+doc knew: **Halved deliberately never sends golfer-facing SMS from the server.**
+The invite flow uses the native share sheet specifically so the user texts from
+their OWN phone (TCPA / App Store safe); `accounts/sms.py` sends to one number
+and exists for OTP, and Twilio Verify is provisioned for login codes only. So
+"Send 14 receipts" is app-initiated bulk SMS to people who never opted in, and
+the share sheet cannot do fourteen threads in one tap. The field summary ships
+because it is ONE message the TD sends himself. Personal receipts need a
+decision first: field-summary-only, in-app pull (each golfer opens his own —
+which also answers the second open question), or real 10DLC transactional
+messaging.
+
+Tests: `ReceiptPayloadTests` (`scoring/tests/test_tournament_settlement.py`) and
+`ReceiptEndpointTests` (`api/test_settlement_receipt.py`) — the payload reads
+settlement rather than recomputing, the note reaches both payloads, the field
+summary carries no itemisation, the gate matches Settle, and a send cannot be
+recorded while a round is open.

@@ -1559,3 +1559,42 @@ class ThreadRead(models.Model):
             models.UniqueConstraint(
                 fields=['thread', 'user'], name='uniq_thread_read'),
         ]
+
+
+class SettlementSend(models.Model):
+    """A record that a settlement receipt actually left the app.
+
+    Rule 8 of the receipt handoff: once sent, the receipt says
+    "Texted 6:12 PM to 14 golfers", and re-opening the sheet offers Resend
+    rather than pretending nothing happened — a TD who is not sure whether it
+    went out will send twice.
+
+    Kept per send rather than as a flag on the tournament, because a resend is
+    a real event and the second one is the one people ask about.
+    """
+
+    MODE_FIELD    = 'field'
+    MODE_PERSONAL = 'personal'
+    MODE_CHOICES = [
+        (MODE_FIELD,    'Field summary — one group thread'),
+        (MODE_PERSONAL, 'Personal receipts — one thread each'),
+    ]
+
+    tournament = models.ForeignKey('tournament.Tournament',
+                                   on_delete=models.CASCADE,
+                                   related_name='settlement_sends')
+    mode       = models.CharField(max_length=10, choices=MODE_CHOICES)
+    # How many golfers it went to.  The design insists a count of 14 out of 16
+    # be explainable, so the number is recorded rather than re-derived later
+    # from a roster that may since have changed.
+    recipients = models.PositiveIntegerField(default=0)
+    sent_by    = models.ForeignKey(settings.AUTH_USER_MODEL, null=True,
+                                   on_delete=models.SET_NULL,
+                                   related_name='settlement_sends')
+    sent_at    = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-sent_at']
+
+    def __str__(self):
+        return f'{self.tournament_id} {self.mode} x{self.recipients}'

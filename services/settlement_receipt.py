@@ -153,3 +153,68 @@ def compose_field(*, event_name: str, golfers: list, pots: int = 0,
     if note:
         out += ['', note]
     return '\n'.join(out)
+
+
+# ---------------------------------------------------------------------------
+# The payload the receipt screen and the send flow both read
+# ---------------------------------------------------------------------------
+
+def receipt_payload(tournament, *, note: str = '') -> dict:
+    """Everything a receipt screen and a field send need, composed here.
+
+    Deliberately assembled server-side rather than in the client: rule 1 says
+    composition is a pure function of settled data, and the surest way to keep
+    the receipt view and the message agreeing is that neither of them builds
+    the other. The client renders this and shares the string; it never writes
+    one.
+
+    Nothing here recomputes money. `tournament_settlement` is the single source
+    of the numbers, including the `blocking` list — so the send gate is the
+    SAME condition as Settle, which is what rule 6 asks for: provisional money
+    must not leave the app.
+    """
+    from services.tournament_settlement import tournament_settlement
+
+    settled = tournament_settlement(tournament)
+    golfers = settled['golfers']
+    event   = tournament.name or 'Tournament'
+
+    for g in golfers:
+        # Composed per golfer even though only the field summary can be sent
+        # today: the receipt screen shows a man exactly what would go to him,
+        # and the personal-send flow is the only thing still missing.
+        g['message'] = compose_personal(
+            event_name=event, golfer_name=g['name'], entries=g['entries'],
+            prizes=g['prizes'], net=g['net'], note=note)
+        g['segments'] = sms_segments(g['message'])
+
+    field_message = compose_field(
+        event_name=event, golfers=golfers,
+        pots=len(settled.get('games') or []), note=note)
+
+    last = tournament.settlement_sends.first()
+    return {
+        'event_name'   : event,
+        'note'         : note,
+        'golfers'      : golfers,
+        'field_summary': {
+            'message' : field_message,
+            'segments': sms_segments(field_message),
+            'recipients': len(golfers),
+        },
+        # The gate, and why — shown as a condition, not an invisible disable.
+        'can_send'     : settled['can_settle'],
+        'blocking'     : settled['blocking'],
+        'excluded_note': settled['excluded_note'],
+        'totals'       : {
+            'collected': settled['total_collected'],
+            'paid'     : settled['total_paid'],
+        },
+        'last_send'    : None if last is None else {
+            'mode'      : last.mode,
+            'recipients': last.recipients,
+            'sent_at'   : last.sent_at.isoformat(),
+            'sent_by'   : (last.sent_by.get_full_name()
+                           or last.sent_by.username) if last.sent_by else '',
+        },
+    }

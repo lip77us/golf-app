@@ -287,3 +287,108 @@ class ScopeTests(SettlementBase):
         s = tournament_settlement(self.tourn)
         self.assertNotIn('skins', [g['key'] for g in s['games']])
         self.assertIn('settle in the group', s['excluded_note'])
+
+
+class ReceiptPayloadTests(SettlementBase):
+    """The golfer's side of settlement (services/settlement_receipt.py).
+
+    The receipt answers a different question from settlement — what do I owe,
+    to whom, and what for — off exactly the same numbers. Nothing here may
+    recompute money, and the send gate must be the same condition as Settle:
+    provisional money does not leave the app.
+    """
+
+    def _payload(self, **kw):
+        from services.settlement_receipt import receipt_payload
+        return receipt_payload(self.tourn, **kw)
+
+    def test_it_reads_settlement_rather_than_recomputing(self):
+        self._play(self.rounds[0]); self._play(self.rounds[1]); self._close()
+        settled = tournament_settlement(self.tourn)
+        payload = self._payload()
+        self.assertEqual([g['net'] for g in payload['golfers']],
+                         [g['net'] for g in settled['golfers']])
+        self.assertEqual(payload['totals']['collected'],
+                         settled['total_collected'])
+
+    def test_every_golfer_carries_the_text_that_would_go_to_him(self):
+        self._play(self.rounds[0]); self._play(self.rounds[1]); self._close()
+        for g in self._payload()['golfers']:
+            self.assertIn(g['name'], g['message'])
+            self.assertIn('to collect' if g['net'] >= 0 else 'to pay',
+                          g['message'])
+            self.assertGreaterEqual(g['segments']['segments'], 1)
+
+    def test_the_field_summary_sorts_collectors_first(self):
+        self._play(self.rounds[0]); self._play(self.rounds[1]); self._close()
+        msg = self._payload()['field_summary']['message']
+        self.assertIn('Collecting', msg)
+        self.assertIn('Paying', msg)
+        self.assertLess(msg.index('Collecting'), msg.index('Paying'))
+
+    def test_the_field_summary_carries_no_itemisation(self):
+        """A man's lines in a sixteen-man thread is the wrong default."""
+        self._play(self.rounds[0]); self._play(self.rounds[1]); self._close()
+        msg = self._payload()['field_summary']['message']
+        self.assertNotIn('Entries', msg)
+        self.assertNotIn('Beer Ball', msg)
+
+    def test_the_note_reaches_both_payloads(self):
+        """The note is the actual reason a TD wants to text at all."""
+        self._play(self.rounds[0]); self._play(self.rounds[1]); self._close()
+        p = self._payload(note='Venmo @paul-lipkin by Friday')
+        self.assertIn('Venmo @paul-lipkin by Friday',
+                      p['field_summary']['message'])
+        self.assertIn('Venmo @paul-lipkin by Friday',
+                      p['golfers'][0]['message'])
+
+    def test_composition_is_a_pure_function(self):
+        self._play(self.rounds[0]); self._play(self.rounds[1]); self._close()
+        self.assertEqual(self._payload()['field_summary']['message'],
+                         self._payload()['field_summary']['message'])
+
+    # -- the gate ------------------------------------------------------------
+
+    def test_nothing_can_be_sent_while_a_round_is_open(self):
+        """Provisional money must not leave the app."""
+        self._play(self.rounds[0])
+        p = self._payload()
+        self.assertFalse(p['can_send'])
+        self.assertTrue(any('closed' in b for b in p['blocking']))
+
+    def test_the_gate_is_the_same_condition_as_settle(self):
+        self._play(self.rounds[0]); self._play(self.rounds[1]); self._close()
+        p = self._payload()
+        self.assertTrue(p['can_send'])
+        self.assertEqual(p['blocking'], [])
+        self.assertEqual(p['can_send'],
+                         tournament_settlement(self.tourn)['can_settle'])
+
+    def test_the_exclusion_note_travels(self):
+        """Foursome side bets are absent, and the omission must not read as a
+        bug."""
+        self._play(self.rounds[0]); self._play(self.rounds[1]); self._close()
+        self.assertTrue(self._payload()['excluded_note'])
+
+    # -- the record ----------------------------------------------------------
+
+    def test_no_send_recorded_yet(self):
+        self.assertIsNone(self._payload()['last_send'])
+
+    def test_a_recorded_send_comes_back_on_the_payload(self):
+        from tournament.models import SettlementSend
+        SettlementSend.objects.create(tournament=self.tourn, mode='field',
+                                      recipients=8)
+        last = self._payload()['last_send']
+        self.assertEqual(last['mode'], 'field')
+        self.assertEqual(last['recipients'], 8)
+
+    def test_the_most_recent_send_wins(self):
+        """A resend is a real event, and the second one is the one people ask
+        about."""
+        from tournament.models import SettlementSend
+        SettlementSend.objects.create(tournament=self.tourn, mode='field',
+                                      recipients=8)
+        SettlementSend.objects.create(tournament=self.tourn, mode='field',
+                                      recipients=7)
+        self.assertEqual(self._payload()['last_send']['recipients'], 7)

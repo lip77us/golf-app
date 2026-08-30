@@ -544,6 +544,38 @@ class ApiClient {
       Map<String, dynamic>.from(
           await _get('/tournaments/$tournamentId/settlement/') as Map);
 
+  /// The golfer's side of settlement: itemised receipts, the field-summary
+  /// text, and the send gate.
+  ///
+  /// The MESSAGE is composed on the server, not here — the receipt view and
+  /// the text must not be able to disagree, so only one of them may build a
+  /// string (receipt handoff, rule 1). `note` travels because it counts toward
+  /// the segment total and appends to both payloads.
+  Future<Map<String, dynamic>> getSettlementReceipt(
+    int tournamentId, {
+    String note = '',
+  }) async {
+    final q = note.isEmpty ? '' : '?note=${Uri.encodeQueryComponent(note)}';
+    return Map<String, dynamic>.from(
+        await _get('/tournaments/$tournamentId/settlement/receipt/$q') as Map);
+  }
+
+  /// Record that a receipt actually left the app.
+  ///
+  /// Nothing is sent from here — the field summary goes out through the
+  /// phone's own share sheet, from the TD's number, which is the same
+  /// user-initiated route the invite flow uses. This is what lets the receipt
+  /// say "Texted 6:12 PM to 14 golfers" and offer Resend (rule 8).
+  Future<Map<String, dynamic>> recordSettlementSend(
+    int tournamentId, {
+    required String mode,
+    required int recipients,
+  }) async =>
+      Map<String, dynamic>.from(await _post(
+        '/tournaments/$tournamentId/settlement/receipt/',
+        {'mode': mode, 'recipients': recipients},
+      ) as Map);
+
   Future<void> deleteTournament(int id) async {
     await _delete('/tournaments/$id/');
   }

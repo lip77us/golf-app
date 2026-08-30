@@ -2338,6 +2338,65 @@ class MiniSinglesSyncView(APIView):
         })
 
 
+class TournamentReceiptView(APIView):
+    """
+    GET  /api/tournaments/{id}/settlement/receipt/?note=...
+    POST /api/tournaments/{id}/settlement/receipt/   { "mode", "recipients" }
+
+    The golfer's side of settlement: what he owes, to whom, and what for —
+    plus the exact text that would leave the app, composed on the server so
+    the screen and the message cannot disagree (receipt handoff, rule 1).
+
+    POST records that a send happened.  It does not send anything: the field
+    summary goes out through the phone's own share sheet, from the TD's number,
+    which is the same user-initiated route the invite flow uses.  Recording it
+    is what lets the receipt say "Texted 6:12 PM to 14 golfers" and offer
+    Resend instead of pretending nothing happened (rule 8).
+    """
+
+    def get(self, request, pk):
+        from services.settlement_receipt import receipt_payload
+        tournament = tournament_for_reader(request.user, pk)
+        note = (request.query_params.get('note') or '').strip()
+        return Response(receipt_payload(tournament, note=note))
+
+    def post(self, request, pk):
+        from tournament.models import SettlementSend
+        # Recording a send is a TD act, not a reader's — it changes what every
+        # other viewer is told about this tournament.
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+
+        mode = request.data.get('mode')
+        if mode not in dict(SettlementSend.MODE_CHOICES):
+            return Response(
+                {'detail': f'Unknown send mode {mode!r}.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        # The gate is the same one Settle uses: provisional money must not
+        # leave the app, and a texted receipt is treated as final by everyone
+        # who receives one.
+        from services.tournament_settlement import tournament_settlement
+        settled = tournament_settlement(tournament)
+        if not settled['can_settle']:
+            return Response(
+                {'detail': 'This tournament cannot be settled yet, so a '
+                           'receipt must not go out.',
+                 'blocking': settled['blocking']},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            recipients = max(0, int(request.data.get('recipients') or 0))
+        except (TypeError, ValueError):
+            recipients = 0
+        send = SettlementSend.objects.create(
+            tournament=tournament, mode=mode, recipients=recipients,
+            sent_by=request.user)
+        return Response(
+            {'mode': send.mode, 'recipients': send.recipients,
+             'sent_at': send.sent_at.isoformat()},
+            status=status.HTTP_201_CREATED)
+
+
 class TournamentSettlementView(APIView):
     """
     GET /api/tournaments/{id}/settlement/

@@ -20,11 +20,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/section_card.dart';
+import 'settlement_receipt_screen.dart';
 
 class TournamentSettlementScreen extends StatefulWidget {
   final int    tournamentId;
@@ -49,6 +51,16 @@ class _TournamentSettlementScreenState
   bool    _byGame  = false;
   final Set<int> _open = {};
 
+  /// The golfer-facing payload: itemised receipts, the field-summary text and
+  /// the send record.  Kept separate from the settlement data because it is a
+  /// different question — the TD's is "do the pools balance", this is "what
+  /// does each man owe".
+  Map<String, dynamic>? _receipt;
+  /// Free text that appends to both payloads — "Venmo @paul-lipkin by Friday".
+  /// The actual reason a TD wants to text at all; without a field for it he
+  /// retypes it sixteen times.
+  String _note = '';
+
   @override
   void initState() {
     super.initState();
@@ -60,11 +72,94 @@ class _TournamentSettlementScreenState
     try {
       final client = context.read<AuthProvider>().client;
       final data   = await client.getTournamentSettlement(widget.tournamentId);
+      Map<String, dynamic>? receipt;
+      try {
+        receipt = await client.getSettlementReceipt(widget.tournamentId,
+                                                    note: _note);
+      } catch (_) {
+        // The receipt is an extra on this screen, not the screen — a TD must
+        // still be able to settle if composing the text fails.
+        receipt = null;
+      }
       if (!mounted) return;
-      setState(() { _data = data; _loading = false; });
+      setState(() { _data = data; _receipt = receipt; _loading = false; });
     } catch (e) {
       if (mounted) setState(() { _error = friendlyError(e); _loading = false; });
     }
+  }
+
+  /// Open one golfer's receipt.
+  ///
+  /// The expander on the row is a peek; the receipt is the proof — with the
+  /// stamp, the exclusion note, and the exact text that would go to him.
+  void _openReceipt(Map<String, dynamic> golfer) {
+    final r = _receipt;
+    if (r == null) return;
+    final pid = golfer['player_id'];
+    final full = ((r['golfers'] as List? ?? const [])
+            .cast<Map<String, dynamic>>())
+        .firstWhere((g) => g['player_id'] == pid, orElse: () => golfer);
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => SettlementReceiptScreen(
+        eventName: r['event_name']?.toString() ?? widget.tournamentName,
+        golfer: full,
+        excludedNote: r['excluded_note']?.toString() ?? '',
+        stamp: _stamp(),
+      ),
+    ));
+  }
+
+  /// "Texted 6:12 PM to 14 golfers" — a TD who is not sure whether it went out
+  /// will send twice.
+  String? _stamp() {
+    final last = _receipt?['last_send'] as Map?;
+    if (last == null) return null;
+    final when = DateTime.tryParse(last['sent_at']?.toString() ?? '')?.toLocal();
+    final t = when == null
+        ? ''
+        : ' ${TimeOfDay.fromDateTime(when).format(context)}';
+    final n = last['recipients'] as int? ?? 0;
+    final who = last['mode'] == 'field'
+        ? 'the group thread'
+        : '$n golfer${n == 1 ? '' : 's'}';
+    return 'Texted$t to $who'
+        '${(last['sent_by']?.toString() ?? '').isEmpty
+            ? '' : ' by ${last['sent_by']}'}.';
+  }
+
+  /// Share the field summary into one group thread, then record that it went.
+  ///
+  /// It leaves through the phone's own share sheet, from the TD's number —
+  /// the same user-initiated route the invite flow uses, and the reason this
+  /// half could ship while the personal-receipt transport is still open.
+  Future<void> _sendFieldSummary() async {
+    final r = _receipt;
+    if (r == null) return;
+    final summary = (r['field_summary'] as Map?) ?? const {};
+    final message = summary['message']?.toString() ?? '';
+    if (message.isEmpty) return;
+
+    final box = context.findRenderObject() as RenderBox?;
+    final result = await Share.share(
+      message,
+      sharePositionOrigin:
+          box == null ? null : box.localToGlobal(Offset.zero) & box.size,
+    );
+    if (!mounted) return;
+    // Only record what actually left. A dismissed sheet is not a send, and a
+    // false stamp is worse than none.
+    if (result.status != ShareResultStatus.success) return;
+    try {
+      await context.read<AuthProvider>().client.recordSettlementSend(
+            widget.tournamentId,
+            mode: 'field',
+            recipients: (summary['recipients'] as int?) ?? 0,
+          );
+    } catch (_) {
+      // The text is already gone; failing to record it must not read as a
+      // failed send.
+    }
+    if (mounted) await _load();
   }
 
   static String _money(num v) {
@@ -131,9 +226,109 @@ class _TournamentSettlementScreenState
             text: data['excluded_note']?.toString() ??
                 'Foursome side bets settle in the group.',
           ),
+
+          const SizedBox(height: 16),
+          ..._textTheFieldSection(),
         ],
       ),
     );
+  }
+
+  // ── Texting the field ─────────────────────────────────────────────────
+  // One message to the group thread: every net, sorted, collectors first, no
+  // itemisation. A man's itemised card in a sixteen-man thread is the wrong
+  // default — the personal receipt is one thread each, and its transport is
+  // still an open question, so only this half ships.
+  List<Widget> _textTheFieldSection() {
+    final r = _receipt;
+    if (r == null) return const [];
+    final theme    = Theme.of(context);
+    final muted    = theme.colorScheme.onSurfaceVariant;
+    final summary  = (r['field_summary'] as Map?) ?? const {};
+    final canSend  = r['can_send'] == true;
+    final n        = (summary['recipients'] as int?) ?? 0;
+    final segments = ((summary['segments'] as Map?)?['segments'] as int?) ?? 0;
+    final stamp    = _stamp();
+
+    return [
+      SectionCard(
+        title: 'Text the field',
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Every golfer\u2019s net, sorted, collectors first \u2014 one '
+               'message to the group thread. No itemisation: a man disputes '
+               'his own lines with you, not in front of fifteen people.',
+               style: theme.textTheme.bodySmall?.copyWith(color: muted)),
+          const SizedBox(height: 10),
+
+          // The note is the actual reason a TD wants to text at all.
+          TextFormField(
+            initialValue: _note,
+            decoration: const InputDecoration(
+              labelText: 'Note (optional)',
+              hintText: 'Venmo @paul-lipkin by Friday',
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
+            onFieldSubmitted: (v) {
+              _note = v.trim();
+              _load();          // recomposed on the server, never here
+            },
+          ),
+          const SizedBox(height: 10),
+
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(11),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: theme.dividerColor),
+            ),
+            child: Text(summary['message']?.toString() ?? '',
+                style: const TextStyle(fontFamily: 'monospace', height: 1.45)),
+          ),
+          const SizedBox(height: 6),
+          // Messages, not characters. Amber over three: it never blocks the
+          // send, it just stops the surprise.
+          Text('$segments message${segments == 1 ? '' : 's'}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                  color: segments > 3 ? Colors.orange.shade800 : muted)),
+
+          if (stamp != null) ...[
+            const SizedBox(height: 8),
+            Text(stamp, style: theme.textTheme.bodySmall),
+          ],
+
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: canSend ? _sendFieldSummary : null,
+              icon: const Icon(Icons.ios_share, size: 18),
+              label: Text(stamp == null
+                  ? 'Send to group thread'
+                  : 'Resend to group thread'),
+            ),
+          ),
+          if (!canSend) ...[
+            const SizedBox(height: 8),
+            // Shown as a condition, not an invisible disable: provisional
+            // money must not leave the app, and a texted receipt is treated as
+            // final by everyone who receives one.
+            const InlineMessage(
+              kind: InlineMessageKind.warn,
+              text: 'Nothing can be texted until the tournament can settle — '
+                    'a receipt that goes out is treated as final.',
+            ),
+          ],
+          if (canSend && n > 0) ...[
+            const SizedBox(height: 6),
+            Text('$n golfer${n == 1 ? '' : 's'} on the summary.',
+                style: theme.textTheme.bodySmall?.copyWith(color: muted)),
+          ],
+        ]),
+      ),
+    ];
   }
 
   // ── By golfer ─────────────────────────────────────────────────────────
@@ -165,6 +360,13 @@ class _TournamentSettlementScreenState
                   style: theme.textTheme.bodySmall,
                 ),
                 trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                  if (_receipt != null)
+                    IconButton(
+                      tooltip: 'Receipt',
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.receipt_long, size: 19),
+                      onPressed: () => _openReceipt(g),
+                    ),
                   Text(
                     net == 0
                         ? '—'
