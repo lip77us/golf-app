@@ -1895,3 +1895,54 @@ Tests: `ReceiptPayloadTests` (`scoring/tests/test_tournament_settlement.py`) and
 settlement rather than recomputing, the note reaches both payloads, the field
 summary carries no itemisation, the gate matches Settle, and a send cannot be
 recorded while a round is open.
+
+### The casual-round receipt — implemented
+The same document one level down, for a round with **no pot and no TD holding
+money**. Four golfers settle among themselves, so the sentence that matters is
+not the net but **"Ben owes you $12"**: the net stays the headline because it is
+what a man checks first, but the TRANSFERS are what he acts on and what belong
+in a group thread. Lines are per GAME, because that is what a casual golfer
+disputes — not "why did I stake that" but "I thought I won the skin on 7".
+
+- **`casual_receipt_payload(round, note=)`** (`services/settlement_receipt.py`,
+  alongside `compose_casual_personal` / `compose_casual_field`) inverts
+  `round_settlement`'s `per_game` into per-golfer lines and phrases each
+  transfer from that golfer's own side (`{other, amount, owes_me}`).
+- **It calls `round_settlement(round_obj, min_games=1)`.** That function used to
+  hard-refuse a single-game round; `min_games` is now a PARAMETER, defaulting to
+  2 so the running-tab behaviour is unchanged. The rule is right for a tab and
+  wrong for a receipt: a skins-only round is the commonest casual round there
+  is, and "Ben owes you $12" is exactly as true with one game as with two.
+- **`GET/POST /api/rounds/{id}/receipt/`** — `RoundReceiptView`. GET 404s when
+  nothing is nettable (an invented empty receipt is worse than saying so); POST
+  records a send and refuses while `can_send` is false.
+- **`SettlementSend` now hangs off EITHER parent** — nullable `tournament` and
+  `round` FKs with a `CheckConstraint` (`settlementsend_exactly_one_parent`)
+  making exactly one required. Migration `tournament/0060`.
+- **Mobile:** `screens/round_receipt_screen.dart`, reached from a
+  "Receipts & text the group" button on the leaderboard's `_SettlementView`
+  (which gained `roundId`). Per-golfer expandable cards — for a four-ball you
+  want all four open at once, not four pushes and four backs — plus the
+  "Text the group" card: note field, live preview, segment count (amber over
+  three), the gate, and Send/Resend. Records only on
+  `ShareResultStatus.success`; a dismissed sheet is not a send.
+
+#### `'completed'` is not a round status — three gates were wedged shut
+`RoundStatus` is `pending` / `in_progress` / **`complete`**. Three places
+compared against the literal **`'completed'`**, which matches nothing, so each
+gate blocked forever:
+- `services/tournament_settlement.py` — "Every round has to be closed before
+  the tournament settles" on a tournament whose rounds were ALL closed, so
+  **Settle could never be pressed**, and since the receipt gate IS the Settle
+  gate, the tournament receipt could never be texted either.
+- `services/day_bet.py` `_tournament_closed()` — never true, so the day bet
+  never resolved.
+- `services/settlement_receipt.py` — the casual gate, same shape.
+
+The tests did not catch it because **they set the same invented value**: Django
+does not validate `choices` on `save()`, so `'completed'` stored happily and the
+test agreed with the code. All six sites (three services, three test helpers)
+now compare against `RoundStatus.COMPLETE`, so a rename breaks loudly instead of
+silently wedging a gate. Found by running the payload against the real local
+database rather than only against fixtures — every completed round came back
+`can_send=False`, which no test would have shown.

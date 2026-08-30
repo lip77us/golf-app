@@ -33,6 +33,7 @@ Public API
     rows   = day_bet_standings(round_obj)
     summary= day_bet_summary(round_obj)
 """
+from core.models import RoundStatus
 from services.low_net_round import _build_ln_player_totals
 from services.payout import payouts_by_place, split_tied_places
 
@@ -90,7 +91,10 @@ def _championship_money_ids(tournament) -> dict:
 def _tournament_closed(tournament) -> bool:
     """True once every round has finished — the day bet resolves last."""
     rounds = list(tournament.rounds.all())
-    return bool(rounds) and all(r.status == 'completed' for r in rounds)
+    # 'complete' is the enum's value; the literal 'completed' matched
+    # nothing, so the day bet never resolved.
+    return bool(rounds) and all(r.status == RoundStatus.COMPLETE
+                                for r in rounds)
 
 
 # ---------------------------------------------------------------------------

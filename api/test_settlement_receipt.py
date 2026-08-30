@@ -151,6 +151,7 @@ from django.test import TestCase                               # noqa: E402
 from django.urls import reverse                                # noqa: E402
 from rest_framework.test import APIClient                      # noqa: E402
 
+from core.models import RoundStatus                            # noqa: E402
 from accounts.models import Account                            # noqa: E402
 from games.models import LowNetChampionshipConfig              # noqa: E402
 from tournament.models import SettlementSend                   # noqa: E402
@@ -196,7 +197,7 @@ class ReceiptEndpointTests(TestCase):
             submit_hole(fs, h['number'], [
                 (m.player, h['par'] + (1 if i < self.players.index(m.player) else 0))
                 for m in members])
-        self.round.status = 'completed'
+        self.round.status = RoundStatus.COMPLETE
         self.round.save(update_fields=['status'])
 
     # -- reading it ----------------------------------------------------------

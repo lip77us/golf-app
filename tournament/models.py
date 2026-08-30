@@ -1580,7 +1580,15 @@ class SettlementSend(models.Model):
         (MODE_PERSONAL, 'Personal receipts — one thread each'),
     ]
 
-    tournament = models.ForeignKey('tournament.Tournament',
+    # Exactly ONE of these is set.  A tournament receipt and a casual-round
+    # receipt are different documents — the first hands back money a TD held,
+    # the second tells four golfers who pays whom — but "this left the app,
+    # at this time, to this many people" is the same fact about both, and one
+    # timeline is easier to trust than two.
+    tournament = models.ForeignKey('tournament.Tournament', null=True, blank=True,
+                                   on_delete=models.CASCADE,
+                                   related_name='settlement_sends')
+    round      = models.ForeignKey('tournament.Round', null=True, blank=True,
                                    on_delete=models.CASCADE,
                                    related_name='settlement_sends')
     mode       = models.CharField(max_length=10, choices=MODE_CHOICES)
@@ -1595,6 +1603,18 @@ class SettlementSend(models.Model):
 
     class Meta:
         ordering = ['-sent_at']
+        constraints = [
+            # A send belongs to one thing or the other, never both and never
+            # neither — otherwise "the last send" has no defined answer.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(tournament__isnull=False, round__isnull=True) |
+                    models.Q(tournament__isnull=True,  round__isnull=False)
+                ),
+                name='settlementsend_exactly_one_parent',
+            ),
+        ]
 
     def __str__(self):
-        return f'{self.tournament_id} {self.mode} x{self.recipients}'
+        parent = f't{self.tournament_id}' if self.tournament_id else f'r{self.round_id}'
+        return f'{parent} {self.mode} x{self.recipients}'

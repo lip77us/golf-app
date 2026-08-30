@@ -21,6 +21,7 @@ import '../theme/halved_brand.dart';
 import '../widgets/stroke_play_strip.dart';
 import '../widgets/borrowed_fourth.dart';
 import 'share_scorecard_screen.dart';
+import 'round_receipt_screen.dart';
 import 'match_play_screen.dart' show MatchPlayDetailView;
 import 'tournament_leaderboard_screen.dart' show ChampionshipTabView;
 
@@ -820,7 +821,7 @@ class _GameView extends StatelessWidget {
       case 'survivor':
         return _ByGroupView(data: data, builder: _SurvivorGroupCard.new);
       case 'settlement':
-        return _SettlementView(data: data);
+        return _SettlementView(data: data, roundId: widget.roundId);
       case 'singles_nassau':
         return _ByGroupView(data: data, builder: _CupSinglesGroupCard.new);
       case 'singles_18':
@@ -851,7 +852,8 @@ class _GameView extends StatelessWidget {
 
 class _SettlementView extends StatelessWidget {
   final Map<String, dynamic> data;
-  const _SettlementView({required this.data});
+  final int roundId;
+  const _SettlementView({required this.data, required this.roundId});
 
   /// Signed money text: green when receiving, red when owing, muted at zero.
   static Widget _money(num v, ThemeData theme, {bool bold = false}) {
@@ -901,6 +903,20 @@ class _SettlementView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
+        // The tab answers "where did the money go". The receipt answers each
+        // golfer's "what do I owe, to whom" — and carries the group text.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => RoundReceiptScreen(roundId: roundId),
+            )),
+            icon: const Icon(Icons.receipt_long, size: 18),
+            label: const Text('Receipts & text the group'),
+          ),
+        ),
+        const SizedBox(height: 12),
+
         // ── Bottom line: each player's net for the whole round. ──
         Card(
           child: Padding(

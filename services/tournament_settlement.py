@@ -48,6 +48,7 @@ any other answer is an arithmetic bug, not a rounding preference.
 """
 from collections import defaultdict
 
+from core.models import RoundStatus
 from services.payout import carve_out
 from tournament.models import FoursomeMembership
 
@@ -394,7 +395,11 @@ def tournament_settlement(tournament) -> dict:
             )
 
     rounds = list(tournament.rounds.all())
-    if not rounds or not all(r.status == 'completed' for r in rounds):
+    # RoundStatus.COMPLETE is 'complete'.  Comparing to the literal
+    # 'completed' matched nothing, so this blocked forever and Settle
+    # could never be pressed on a finished tournament.
+    if not rounds or not all(r.status == RoundStatus.COMPLETE
+                             for r in rounds):
         blocking.append(
             'Every round has to be closed before the tournament settles — the '
             'day bet cannot resolve until the championship does.'

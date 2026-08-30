@@ -9,6 +9,8 @@ from decimal import Decimal
 
 from django.test import TestCase
 
+from core.models import RoundStatus
+
 from services.skins import setup_skins, calculate_skins, skins_summary
 from services.spots import setup_spots, tally_spots, spots_summary
 from services.settlement import _pid_nets_for_game, round_settlement
@@ -227,3 +229,153 @@ class SettlementTabGateTests(TestCase):
         s = round_settlement(self.round)
         self.assertIsNotNone(s)
         self.assertEqual({g['game'] for g in s['per_game']}, {'skins', 'spots'})
+
+
+class CasualReceiptTests(TestCase):
+    """The casual receipt (services/settlement_receipt.py).
+
+    A different document from the tournament one: no pot, no TD holding money.
+    Four golfers settle among themselves, so the sentence that matters is not
+    the net but "Ben owes you $12" — and the transfers are what belong in the
+    group thread.
+    """
+
+    def setUp(self):
+        self.tee = make_tee()
+        self.round = make_round(self.tee.course, active_games=['skins'])
+        self.round.bet_unit = Decimal('1.00')
+        self.round.save(update_fields=['bet_unit'])
+        self.fs = make_foursome(
+            self.round, [('Ann', 0), ('Ben', 0), ('Cal', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        setup_skins(self.fs)
+        submit_round(self.fs, {
+            h: [(self.pid['Ann'], 4), (self.pid['Ben'], 5), (self.pid['Cal'], 6)]
+            for h in range(1, 19)})
+        calculate_skins(self.fs)
+
+    def _payload(self, **kw):
+        from services.settlement_receipt import casual_receipt_payload
+        return casual_receipt_payload(self.round, **kw)
+
+    def _close(self):
+        # RoundStatus.COMPLETE is 'complete'.  This used to say 'completed',
+        # which is not a value the enum has — Django doesn't validate choices
+        # on save(), so the bogus string stored happily and the gate silently
+        # never opened.  Use the enum, so a rename breaks the test loudly.
+        self.round.status = RoundStatus.COMPLETE
+        self.round.save(update_fields=['status'])
+
+    # -- it reads settlement, and says who pays whom -------------------------
+
+    def test_it_reads_settlement_rather_than_recomputing(self):
+        from services.settlement import round_settlement
+        settled = round_settlement(self.round, min_games=1)
+        self.assertEqual([g['net'] for g in self._payload()['golfers']],
+                         [p['net'] for p in settled['players']])
+
+    def test_each_golfer_gets_his_side_of_every_transfer_he_is_in(self):
+        """'Ben pays you $6' and 'You pay Ann $6' are the same transfer."""
+        golfers = {g['name']: g for g in self._payload()['golfers']}
+        ann = golfers['Ann']
+        self.assertTrue(ann['transfers'])
+        self.assertTrue(all(t['owes_me'] for t in ann['transfers']),
+                        'the winner is owed, never owing')
+        ben = golfers['Ben']
+        self.assertTrue(all(not t['owes_me'] for t in ben['transfers']))
+
+    def test_the_personal_message_gives_the_instruction_not_the_arithmetic(self):
+        self._close()
+        msg = {g['name']: g['message'] for g in self._payload()['golfers']}['Ben']
+        self.assertIn('Settle up', msg)
+        self.assertIn('You pay', msg)
+
+    def test_the_field_summary_carries_the_payments(self):
+        """Four people in one thread need the list of payments, not each
+        other's itemisation."""
+        msg = self._payload()['field_summary']['message']
+        self.assertIn('Settle up', msg)
+        self.assertIn('pays', msg)
+
+    def test_lines_are_per_game(self):
+        """What a casual golfer disputes is the game, not an entry."""
+        for g in self._payload()['golfers']:
+            for line in g['games']:
+                self.assertTrue(line['label'])
+                self.assertNotEqual(line['amount'], 0)
+
+    def test_the_event_name_says_where_and_when(self):
+        """A receipt headed 'Round 412' tells the reader nothing."""
+        self.assertIn(self.tee.course.name, self._payload()['event_name'])
+
+    def test_the_note_reaches_both_payloads(self):
+        p = self._payload(note='Venmo @paul-lipkin')
+        self.assertIn('Venmo @paul-lipkin', p['field_summary']['message'])
+        self.assertIn('Venmo @paul-lipkin', p['golfers'][0]['message'])
+
+    # -- the gate ------------------------------------------------------------
+
+    def test_an_unfinished_round_cannot_be_texted(self):
+        p = self._payload()
+        self.assertFalse(p['can_send'])
+        self.assertTrue(any('not finished' in b for b in p['blocking']))
+
+    def test_a_finished_round_can(self):
+        self._close()
+        p = self._payload()
+        self.assertTrue(p['can_send'])
+        self.assertEqual(p['blocking'], [])
+
+    # -- nothing to settle ---------------------------------------------------
+
+    def test_a_round_with_no_money_has_no_receipt(self):
+        """Inventing an empty one would be worse than saying so."""
+        bare = make_round(self.tee.course, active_games=[])
+        make_foursome(bare, [('X', 0), ('Y', 0)], tee=self.tee)
+        self.assertIsNone(self._payload_for(bare))
+
+    def _payload_for(self, round_obj):
+        from services.settlement_receipt import casual_receipt_payload
+        return casual_receipt_payload(round_obj)
+
+    def test_games_that_cannot_be_netted_are_named(self):
+        """The omission would otherwise read as a bug."""
+        self.round.active_games = ['skins', 'nassau']
+        self.round.save(update_fields=['active_games'])
+        note = self._payload()['excluded_note']
+        self.assertIn('nassau', note)
+
+
+class MinGamesTests(TestCase):
+    """The 2+ games rule belongs to the Settlement TAB, not to the money.
+
+    A one-game round still owes somebody something — the tab just has nothing
+    to add over that game's own tab. The receipt asks for min_games=1.
+    """
+
+    def setUp(self):
+        self.tee = make_tee()
+        self.round = make_round(self.tee.course, active_games=['skins'])
+        self.round.bet_unit = Decimal('1.00')
+        self.round.save(update_fields=['bet_unit'])
+        self.fs = make_foursome(
+            self.round, [('Ann', 0), ('Ben', 0), ('Cal', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        setup_skins(self.fs)
+        submit_round(self.fs, {
+            h: [(self.pid['Ann'], 4), (self.pid['Ben'], 5), (self.pid['Cal'], 6)]
+            for h in range(1, 19)})
+        calculate_skins(self.fs)
+
+    def test_the_tab_still_needs_two_games(self):
+        """Unchanged default — a one-game round gets no Settlement tab."""
+        self.assertIsNone(round_settlement(self.round))
+
+    def test_one_game_still_settles_when_asked(self):
+        s = round_settlement(self.round, min_games=1)
+        self.assertIsNotNone(s)
+        self.assertEqual(len(s['per_game']), 1)
+        self.assertTrue(s['transfers'])
+        self.assertAlmostEqual(sum(p['net'] for p in s['players']), 0, places=2)

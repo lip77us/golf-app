@@ -21,6 +21,8 @@ from decimal import Decimal
 
 from django.test import TestCase
 
+from core.models import RoundStatus
+
 from games.models import DayBetConfig, LowNetChampionshipConfig, MiniSinglesConfig
 from services.day_bet import day_bet_standings, day_bet_summary, places_for_field
 from services.payout import check_day_bet_floor
@@ -136,7 +138,7 @@ class DayBetBoardTests(DayBetFixture, TestCase):
         self._play_both_rounds()
         self.assertTrue(day_bet_summary(self.r2)['provisional'])
         for r in (self.r1, self.r2):
-            r.status = 'completed'
+            r.status = RoundStatus.COMPLETE
             r.save(update_fields=['status'])
         self.assertFalse(day_bet_summary(self.r2)['provisional'])
 

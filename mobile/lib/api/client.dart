@@ -576,6 +576,38 @@ class ApiClient {
         {'mode': mode, 'recipients': recipients},
       ) as Map);
 
+  /// The casual-round receipt. A different document from the tournament one:
+  /// no pot and no TD holding money, so the sentence that matters is not the
+  /// net but "Ben owes you $12".
+  ///
+  /// Returns null when the round has nothing nettable — a round with no money
+  /// in it has no receipt, and an empty one would be worse than saying so.
+  Future<Map<String, dynamic>?> getRoundReceipt(
+    int roundId, {
+    String note = '',
+  }) async {
+    final q = note.isEmpty ? '' : '?note=${Uri.encodeQueryComponent(note)}';
+    try {
+      return Map<String, dynamic>.from(
+          await _get('/rounds/$roundId/settlement/receipt/$q') as Map);
+    } on ApiException catch (e) {
+      // 404 is the honest answer for a round with no money in it, not a
+      // failure — the caller shows nothing rather than an error.
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> recordRoundSettlementSend(
+    int roundId, {
+    required String mode,
+    required int recipients,
+  }) async =>
+      Map<String, dynamic>.from(await _post(
+        '/rounds/$roundId/settlement/receipt/',
+        {'mode': mode, 'recipients': recipients},
+      ) as Map);
+
   Future<void> deleteTournament(int id) async {
     await _delete('/tournaments/$id/');
   }

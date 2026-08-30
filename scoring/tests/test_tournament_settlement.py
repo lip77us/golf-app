@@ -20,6 +20,8 @@ from decimal import Decimal
 
 from django.test import TestCase
 
+from core.models import RoundStatus
+
 from games.models import (
     DayBetConfig, IrishRumbleConfig, LowNetChampionshipConfig,
     MiniSinglesConfig, PinkBallConfig,
@@ -85,7 +87,7 @@ class SettlementBase(TestCase):
 
     def _close(self):
         for r in self.rounds:
-            r.status = 'completed'
+            r.status = RoundStatus.COMPLETE
             r.save(update_fields=['status'])
 
     def _by_key(self, s):

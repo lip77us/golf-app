@@ -2338,6 +2338,66 @@ class MiniSinglesSyncView(APIView):
         })
 
 
+class RoundReceiptView(APIView):
+    """
+    GET  /api/rounds/{id}/settlement/receipt/?note=...
+    POST /api/rounds/{id}/settlement/receipt/   { "mode", "recipients" }
+
+    The casual-round receipt.  A different document from the tournament one:
+    there is no pot and no TD holding money, so the useful sentence is not the
+    net but "Ben owes you $12" — the transfers, phrased from each golfer's own
+    side.
+
+    Read is open to anyone who can read the round's leaderboard (a casual round
+    is settled by the people in it, not by a TD).  Recording a send is an
+    own-account act, like every other write on the round.
+    """
+
+    def get(self, request, pk):
+        from services.settlement_receipt import casual_receipt_payload
+        round_obj = round_for_reader(request.user, pk)
+        note = (request.query_params.get('note') or '').strip()
+        payload = casual_receipt_payload(round_obj, note=note)
+        if payload is None:
+            # A round with no money in it has no receipt, and an empty one
+            # would be worse than saying so.
+            return Response(
+                {'detail': 'Nothing to settle in this round.'},
+                status=status.HTTP_404_NOT_FOUND)
+        return Response(payload)
+
+    def post(self, request, pk):
+        from tournament.models import SettlementSend
+        from services.settlement_receipt import casual_receipt_payload
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
+
+        mode = request.data.get('mode')
+        if mode not in dict(SettlementSend.MODE_CHOICES):
+            return Response({'detail': f'Unknown send mode {mode!r}.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        payload = casual_receipt_payload(round_obj)
+        if payload is None:
+            return Response({'detail': 'Nothing to settle in this round.'},
+                            status=status.HTTP_404_NOT_FOUND)
+        if not payload['can_send']:
+            return Response({'detail': 'This round is not finished, so a '
+                                       'receipt must not go out.',
+                             'blocking': payload['blocking']},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            recipients = max(0, int(request.data.get('recipients') or 0))
+        except (TypeError, ValueError):
+            recipients = 0
+        send = SettlementSend.objects.create(
+            round=round_obj, mode=mode, recipients=recipients,
+            sent_by=request.user)
+        return Response({'mode': send.mode, 'recipients': send.recipients,
+                         'sent_at': send.sent_at.isoformat()},
+                        status=status.HTTP_201_CREATED)
+
+
 class TournamentReceiptView(APIView):
     """
     GET  /api/tournaments/{id}/settlement/receipt/?note=...

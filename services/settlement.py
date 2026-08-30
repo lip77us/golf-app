@@ -193,7 +193,7 @@ def player_round_net(round_obj, player_id, foursomes=None) -> float | None:
     return round(total, 2)
 
 
-def round_settlement(round_obj) -> dict | None:
+def round_settlement(round_obj, *, min_games: int = 2) -> dict | None:
     """Net every configured game into one per-player settlement.
 
     Returns ``None`` when the round has no nettable game (nothing to settle),
@@ -240,12 +240,16 @@ def round_settlement(round_obj) -> dict | None:
         for pid, v in pid_net.items():
             nets[pid] += v
 
-    # The Settlement tab is a CROSS-GAME view — only worth showing when 2+ games
-    # actually settled. A single game's payouts already live on its own tab, so a
-    # one-game round (or a round where only one game has settled so far) gets no
-    # Settlement tab rather than one that just restates that game. (Also covers
-    # the "nothing settled yet" case, e.g. only an as-yet-undecided bracket.)
-    if len(per_game) < 2:
+    # The Settlement TAB is a cross-game view — only worth showing when 2+
+    # games actually settled, since a single game's payouts already live on its
+    # own tab and a one-game Settlement tab would just restate them. (Also
+    # covers "nothing settled yet", e.g. only an as-yet-undecided bracket.)
+    #
+    # That is a rule about DISPLAY, not about whether money exists, so it is a
+    # parameter rather than a fact. The receipt passes min_games=1: a skins-only
+    # round is the commonest casual round there is, and "Ben owes you $12" is
+    # exactly as true with one game as with two.
+    if len(per_game) < min_games:
         return None
 
     players = sorted(

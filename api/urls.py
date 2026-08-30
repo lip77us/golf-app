@@ -46,6 +46,7 @@ urlpatterns = [
     path('tournaments/<int:pk>/cup-standings/',       views.TournamentCupStandingsView.as_view(), name='api-tournament-cup-standings'),
     path('tournaments/<int:pk>/settlement/',          views.TournamentSettlementView.as_view(),   name='api-tournament-settlement'),
     path('tournaments/<int:pk>/settlement/receipt/',  views.TournamentReceiptView.as_view(),      name='api-tournament-receipt'),
+    path('rounds/<int:pk>/settlement/receipt/',       views.RoundReceiptView.as_view(),           name='api-round-receipt'),
     # ---- Team Play (four-man teams, one round, one leaderboard) ----
     path('tournaments/<int:pk>/team-play/',       views.TeamPlayView.as_view(),      name='api-team-play'),
     path('tournaments/<int:pk>/team-play/setup/', views.TeamPlaySetupView.as_view(), name='api-team-play-setup'),
