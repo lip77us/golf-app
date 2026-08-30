@@ -18,7 +18,7 @@
     <a class="nav soon" href="#">Golfers</a>
 
     <h5>Courses</h5>
-    <a class="nav soon" href="#">Course library</a>
+    <a class="nav {% if nav == 'courses' %}on{% endif %}" href="{% url 'console:courses' %}">Course library</a>
     <a class="nav soon" href="#">Custom tees</a>
 
     <h5>Account</h5>

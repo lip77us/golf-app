@@ -1,0 +1,83 @@
+{% extends "console/shell.html" %}
+
+{% block title %}{{ course.name }} · Halved TD console{% endblock %}
+
+{% block main %}
+<div class="head">
+  <div>
+    <h2 class="h1">{{ course.name }}</h2>
+    <p class="sub">Halved’s record · {{ tees|length }} tee{{ tees|length|pluralize }} ·
+      {{ rounds }} of your round{{ rounds|pluralize }} used it</p>
+  </div>
+  <div class="r"><a class="btn q" href="{% url 'console:courses' %}">← Library</a></div>
+</div>
+
+{% if error %}<div class="alert"><s>&#9888;</s><span>{{ error }}</span></div>{% endif %}
+
+{% for tee in tees %}
+  <div class="grid">
+    <h4>{{ tee.tee_name }}
+      <span>par {{ tee.par }} · rating {{ tee.course_rating }} / slope {{ tee.slope }}{% if tee.sex %} · {{ tee.get_sex_display }}{% endif %}</span>
+      {% if can_write %}<a class="btn q" style="height:28px;margin-left:auto" href="{% url 'console:tee-edit' course.pk tee.pk %}">Edit</a>{% endif %}
+    </h4>
+    <table class="hg">
+      <tr><th class="lbl">Hole</th>{% for h in tee.holes %}<th>{{ h.number }}</th>{% endfor %}</tr>
+      <tr><td class="lbl">Par</td>{% for h in tee.holes %}<td>{{ h.par }}</td>{% endfor %}</tr>
+      <tr><td class="lbl">Yards</td>{% for h in tee.holes %}<td>{{ h.yards|default:"—" }}</td>{% endfor %}</tr>
+      <tr class="si"><td class="lbl">Index</td>{% for h in tee.holes %}<td>{{ h.stroke_index }}</td>{% endfor %}</tr>
+    </table>
+  </div>
+{% empty %}
+  <div class="panel"><p>This course has no current tees.</p></div>
+{% endfor %}
+
+<div class="two">
+  <div class="panel">
+    <h4>Send the correction to Halved</h4>
+    {% comment %} Editing fixes YOUR copy. This is the separate, bigger act:
+       the shared record every other account clones from. {% endcomment %}
+    <p>Your edits above change <b>this account’s copy only</b>. Pushing upstream
+      changes the shared record every other account clones from.</p>
+    {% if can_write %}
+      <form method="post">{% csrf_token %}
+        <input type="hidden" name="action" value="report">
+        <div class="fld"><u>Where this comes from</u></div>
+        <div class="src">
+          {% for value, label in sources %}
+            <label><input type="radio" name="source" value="{{ value }}" {% if forloop.first %}checked{% endif %}> {{ label }}</label>
+          {% endfor %}
+        </div>
+        <textarea class="ta" name="note" rows="3" placeholder="Anything the person acting on this needs to know."></textarea>
+        <button class="btn p" type="submit" style="margin-top:10px">Send to Halved</button>
+      </form>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    <h4>This course, your history</h4>
+    {% if history %}
+      <div class="dl" style="margin:0">
+        {% for c in history %}
+          <div class="r">
+            <b>{% if c.number %}#{{ c.number }}{% else %}—{% endif %}</b>
+            <span>{{ c.created_at|date:"j M" }}</span><span class="arrow">·</span>
+            <span>{% if c.kind == 'verified' %}checked against the card, nothing wrong
+                  {% elif c.kind == 'edited' %}{{ c.changes|length }} field{{ c.changes|length|pluralize }} corrected{% if c.tee_name %} on {{ c.tee_name }}{% endif %}
+                  {% else %}sent to Halved{% endif %}</span>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p>Nobody has checked this record yet.</p>
+    {% endif %}
+    {% if can_write %}
+      {% comment %} A check that found nothing is the only way a record earns
+         the difference between right and never looked at. {% endcomment %}
+      <form method="post" style="margin-top:10px">{% csrf_token %}
+        <input type="hidden" name="action" value="verify">
+        <button class="btn q" type="submit">Nothing’s wrong — mark verified</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

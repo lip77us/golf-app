@@ -20,7 +20,11 @@ from __future__ import annotations
 import csv
 import io
 
+import logging
+
+from django.conf import settings
 from django.contrib.auth import logout as django_logout
+from django.core.mail import send_mail
 from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -28,11 +32,14 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from core.models import Player
+from core.models import Course, Player, Tee
 from services import genius_import as gi
+from tournament.models import Round
 
-from . import auth, plan as planlib
-from .models import ImportRun
+from . import auth, courses as courselib, plan as planlib
+from .models import CourseCheck, ImportRun
+
+logger = logging.getLogger(__name__)
 
 
 # A Golf Genius roster is a few hundred rows of text.  Anything past these is
@@ -442,3 +449,146 @@ def import_run_csv(request, number):
 @auth.td_required()
 def home(request):
     return redirect(reverse('console:import'))
+
+
+# ---------------------------------------------------------------------------
+# Courses
+# ---------------------------------------------------------------------------
+
+@auth.td_required('Course library')
+def course_library(request):
+    """Every course this account owns, most-played first.
+
+    Carries how many of your rounds used it, when the record last changed, and
+    whether anybody has ever checked it — because a course played six times and
+    never checked is the one worth the printed card before a tournament.
+    """
+    ctx = _shell(request, nav='courses')
+    ctx['rows'] = courselib.library(request.user.account)
+    return render(request, 'console/course_library.html', ctx)
+
+
+@auth.td_required('Course')
+def course_detail(request, pk):
+    """The whole course in one grid — par, yards and stroke index across
+    eighteen holes, per tee — plus the two things you can do about it."""
+    course = get_object_or_404(Course, pk=pk, account=request.user.account)
+
+    error = ''
+    if request.method == 'POST' and _can_write(request):
+        action = request.POST.get('action')
+        if action == 'verify':
+            courselib.mark_verified(course, request.user)
+            return redirect(reverse('console:course', args=[course.pk]))
+        if action == 'report':
+            try:
+                check = _send_report(request, course)
+                return redirect(reverse('console:course-check',
+                                        args=[course.pk, check.number]))
+            except ValueError as exc:
+                error = str(exc)
+
+    ctx = _shell(request, nav='courses')
+    ctx.update({
+        'course':  course,
+        'tees':    courselib.current_tees(course),
+        'history': CourseCheck.objects.filter(course=course)[:8],
+        'rounds':  Round.objects.filter(account=request.user.account,
+                                        course=course).count(),
+        'can_write': _can_write(request),
+        'sources': CourseCheck.SOURCE_CHOICES,
+        'error':   error,
+    })
+    return render(request, 'console/course_detail.html', ctx)
+
+
+def _send_report(request, course):
+    """Push a correction at the shared catalog, and mail it either way.
+
+    The pending diff is whatever this account has already corrected locally
+    since the last push — the console does not ask a TD to retype a change they
+    have already made on the screen in front of them.
+    """
+    source = request.POST.get('source', '')
+    if source not in dict(CourseCheck.SOURCE_CHOICES):
+        raise ValueError('Say where the correction came from — that is what '
+                         'tells the difference between a re-rating and a typo.')
+
+    diff = []
+    for check in CourseCheck.objects.filter(
+            course=course, kind=CourseCheck.KIND_EDITED).order_by('created_at'):
+        diff.extend(check.changes)
+    if not diff:
+        raise ValueError('Nothing to send — correct the record first, then '
+                         'push it upstream.')
+
+    check = courselib.send_upstream(
+        course, request.user, source=source,
+        note=(request.POST.get('note') or '').strip(),
+        diff=diff, is_staff=bool(request.user.is_staff))
+
+    subject, body = courselib.report_email(course, check, request.user)
+    try:
+        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL,
+                  [settings.COURSE_REPORT_EMAIL], fail_silently=False)
+    except Exception:
+        # The record and the catalog write already happened and are the part
+        # that matters; a mail outage should not read as the report failing.
+        logger.exception('course report email failed for course %s', course.id)
+    return check
+
+
+@auth.td_required('Course')
+def course_check(request, pk, number):
+    """The receipt for one push upstream."""
+    course = get_object_or_404(Course, pk=pk, account=request.user.account)
+    check = get_object_or_404(CourseCheck, course=course, number=number,
+                              account=request.user.account)
+    subject, body = courselib.report_email(course, check, request.user)
+    ctx = _shell(request, nav='courses')
+    ctx.update({'course': course, 'check': check,
+                'subject': subject, 'body': body})
+    return render(request, 'console/course_check.html', ctx)
+
+
+@auth.td_required('Course')
+def tee_edit(request, pk, tee_pk):
+    """Edit one tee.
+
+    Everything on the record is editable — you own this copy — but the write
+    goes through `update_tee_geometry`, so a tee that has already been played
+    is superseded rather than changed underneath the rounds that used it.
+    """
+    if not _can_write(request):
+        return _no_events(request)
+
+    course = get_object_or_404(Course, pk=pk, account=request.user.account)
+    tee = get_object_or_404(Tee, pk=tee_pk, course=course,
+                            superseded_by__isnull=True)
+
+    problems, diff = [], []
+    if request.method == 'POST':
+        try:
+            attrs, diff = courselib.read_tee_form(request.POST, tee)
+            if not attrs:
+                problems = ['Nothing changed.']
+            elif request.POST.get('confirm') or not courselib.rating_at_risk(diff):
+                courselib.apply_edit(course, tee, attrs, diff, request.user)
+                return redirect(reverse('console:course', args=[course.pk]))
+        except courselib.EditError as exc:
+            problems = exc.problems
+
+    ctx = _shell(request, nav='courses')
+    ctx.update({
+        'course': course, 'tee': tee,
+        'problems': problems,
+        'diff': diff,
+        # Only asked when the edit changed the SHAPE of the course, not when it
+        # only moved where the strokes fall.
+        'confirm_rating': bool(diff) and courselib.rating_at_risk(diff)
+                          and not problems,
+        'played': Tee.objects.filter(pk=tee.pk,
+                                     memberships__isnull=False).exists(),
+        'posted': request.POST if request.method == 'POST' else None,
+    })
+    return render(request, 'console/tee_edit.html', ctx)

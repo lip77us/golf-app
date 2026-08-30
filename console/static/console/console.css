@@ -243,3 +243,71 @@ table.rows tr.locked td.nm{color:var(--muted);font-weight:500}
   .rail h2{margin-top:22px}
   .rail ul,.rail .footnote{display:none}
 }
+
+/* ==========================================================================
+   Courses — the whole course in one grid, per tee
+   ========================================================================== */
+
+/* Record confidence, in the library.  A course nobody has checked is not the
+   same as one somebody checked and found right, so they never share a tone. */
+.st{display:inline-flex;align-items:center;border-radius:6px;padding:2px 7px;
+    font-size:9.5px;font-weight:700;letter-spacing:.4px;white-space:nowrap}
+.st.old{background:rgba(176,122,34,.12);border:1px solid rgba(176,122,34,.34);color:var(--amber)}
+.st.rev{background:rgba(15,110,86,.08);border:1px solid rgba(15,110,86,.3);color:var(--pine)}
+.st.ok {background:rgba(47,125,79,.12);border:1px solid rgba(47,125,79,.34);color:var(--win)}
+.st.upd{background:rgba(59,216,154,.16);border:1px solid rgba(15,110,86,.3);color:var(--pine)}
+table.rows td.n{font-variant-numeric:tabular-nums;color:var(--muted);width:120px}
+
+.grid{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;
+      padding:14px 16px;margin-top:14px}
+.grid h4{display:flex;align-items:center;gap:10px;margin:0 0 10px;
+         font-family:"Schibsted Grotesk",sans-serif;font-size:15px;font-weight:600}
+.grid h4 span{font-family:"Spline Sans",sans-serif;font-size:11.5px;font-weight:400;color:var(--muted)}
+
+/* 18 holes across.  Scrolls inside itself rather than widening the page. */
+.grid .hg{width:100%;border-collapse:collapse;font-size:12px;
+          font-variant-numeric:tabular-nums;display:block;overflow-x:auto}
+.hg th,.hg td{border:1px solid #E8EEE9;padding:5px 0;text-align:center;min-width:38px}
+.hg th{background:#F4F8F4;font-size:10.5px;font-weight:700;color:var(--muted)}
+.hg .lbl{text-align:left;padding:5px 10px;white-space:nowrap;font-weight:600;
+         font-size:11px;color:var(--ink2);min-width:110px;background:#FAFCFA}
+.hg tr.si td{background:rgba(15,110,86,.04)}
+/* An editable cell has to look editable at rest, not only once focused —
+   a grid of plain numbers reads as a report, which is exactly what the
+   read-only course view IS. */
+.hg .cellin{width:38px;border:1px solid transparent;border-radius:4px;
+            background:#F4F8F4;text-align:center;
+            font:400 12px/1 "Spline Sans",sans-serif;font-variant-numeric:tabular-nums;
+            padding:3px 0;color:var(--deepPine)}
+.hg .cellin:hover{border-color:var(--cardBorder);background:#fff}
+.hg .cellin:focus{outline:none;background:#fff;box-shadow:inset 0 0 0 1.5px var(--pine);border-radius:4px}
+
+.fld{margin-bottom:10px}
+.fld u{text-decoration:none;display:block;font-size:9.5px;font-weight:700;
+       letter-spacing:.4px;color:var(--muted);text-transform:uppercase;margin-bottom:4px}
+.fld .in{display:block;width:100%;border:1.5px solid var(--cardBorder);border-radius:9px;
+         background:#fff;padding:8px 10px;font:600 13px/1.2 "Spline Sans",sans-serif;
+         font-variant-numeric:tabular-nums;color:var(--deepPine)}
+.fld .in:focus{outline:none;border-color:var(--pine);box-shadow:0 0 0 3px rgba(15,110,86,.14)}
+.fld .in.mut{background:var(--surface);color:var(--muted);font-weight:400}
+
+/* Source is required — three answers that sort the queue on their own. */
+.src{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+.src label{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink2);cursor:pointer}
+.src input{accent-color:var(--pine);margin:0}
+.ta{width:100%;border:1.5px solid var(--cardBorder);border-radius:9px;background:#fff;
+    padding:9px 11px;font:400 12.5px/1.55 "Spline Sans",sans-serif;color:var(--ink2);resize:vertical}
+.ta:focus{outline:none;border-color:var(--pine);box-shadow:0 0 0 3px rgba(15,110,86,.14)}
+
+/* The email, shown before it goes — a report you cannot read is one you will
+   not trust. */
+.mailto{background:var(--surface);border:1px solid var(--cardBorder);border-radius:9px;
+        padding:11px 13px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+        font-size:11.5px;line-height:1.65;color:var(--ink2);white-space:pre-wrap}
+
+.dl .r{display:flex;align-items:center;gap:7px;padding:6px 0;
+       border-bottom:1px solid #E8EEE9;font-size:12.5px}
+.dl .r:last-child{border-bottom:none}
+.dl .r b{font-variant-numeric:tabular-nums;min-width:34px}
+.dl .r span{color:var(--muted)}
+.dl .arrow{color:#C7D4C9}

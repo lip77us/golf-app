@@ -1577,12 +1577,59 @@ state instead. Note `OTP_REQUESTS_PER_HOUR = 5` per number, which is easy to
 hit while poking at it; clear with
 `PhoneOTP.objects.filter(phone='+1…').delete()` in a shell.
 
-**Not built (Phases 3 + 4 of the handoff):** course library / correction report,
-and custom tee sets. Decision taken for Phase 3: the console will **edit the
-account's own Course/Tee clone directly** (replacing `manage_courses_screen.dart`
-and `manage_course_tees_screen.dart`) **and** offer "Send to Halved" to push the
-correction upstream to the shared `CatalogCourse` — rather than the handoff's
-report-only design, which assumed the TD does not own the record.
+### Phase 3 — course library and editor (`console/courses.py`, `test_courses.py`)
+Built as **editor + push upstream**, not the handoff's report-only design: the
+account OWNS its Course/Tee clone (see "Shared course catalog + copy-on-add"),
+so there is nobody to ask for permission to fix it.
+
+- **Library** (`/courses/`) — every course the account owns, **sorted by rounds
+  played, not alphabetically**, with tee count, rounds, record-last-updated and a
+  confidence state. `NEVER CHECKED` is deliberately distinct from
+  `VERIFIED BY YOU`: a record nobody has looked at is not the same as one
+  somebody checked and found right, and the library is the only place that shows.
+- **Course** (`/courses/<pk>/`) — the whole course in one grid per tee (par,
+  yards, stroke index × 18), read-only, with Edit per tee.
+- **Editor** (`/courses/<pk>/tees/<pk>/`) — everything is editable, but:
+  - **All geometry goes through `services/tee_revisions.update_tee_geometry`.**
+    Nothing writes `Tee.holes` directly. A played tee is SUPERSEDED, so a
+    completed round keeps the exact par/SI it was scored against; an unplayed
+    tee updates in place (no revision churn).
+  - **Stroke index is enforced, not warned about** — reuses
+    `services/course_quality.validate_tee_holes`, the same permutation check the
+    API import gate runs.
+  - **Changing par or yards asks first** (`rating_at_risk`): a re-index leaves
+    the rating describing the same course, but a shape change means the rating
+    describes a course that does not exist and every net score from it is
+    quietly wrong. Confirm-to-save, not blocked — the record may be catching up
+    with a real re-measure.
+  - Only CURRENT tees are editable; a retired revision 404s.
+- **`CourseCheck`** (migration `console/0002`) — one timeline for all three
+  things that can happen to a record: `verified` (checked, nothing wrong —
+  the one people forget, and the only thing that earns *right* over *never
+  looked at*), `edited` (local correction, field-level diff), `reported` (pushed
+  upstream). The library's state is simply the most recent one.
+- **Send to Halved** — staff (`is_staff`) write STRAIGHT THROUGH to the shared
+  catalog via `services/catalog.catalog_from_course(overwrite=True)`; everyone
+  else files a tracked report. Either way the diff is emailed to
+  `COURSE_REPORT_EMAIL` (default `info@halved.golf`) and shown on screen before
+  it goes. A source is required — scorecard / GHIN / club — because that is what
+  distinguishes a re-rating from a typo. **Note a catalog write marks those tees
+  `curated=True`**, which protects them from a later GolfCourseAPI re-import; that
+  is the intent, but it does stop the API correcting that course automatically.
+
+Tests: `console/test_courses.py` (19) — the permutation rejection, the
+supersede-vs-in-place split with a played round's geometry asserted frozen, the
+par-change confirm gate, staff-vs-non-staff upstream, the emailed diff, and
+cross-account 404s.
+
+**Still not built (Phase 4):** custom tee sets — a private re-index of a tee,
+account-owned, consumed by the app's tee picker marked as a custom set.
+
+**Deliberately NOT done:** retiring the app's course screens
+(`manage_courses_screen.dart`, `manage_course_tees_screen.dart`, the paste
+screens). The handoff says they come out when this ships, but that needs a
+Flutter release and would leave no way to fix a course from a phone. Retire them
+in a later release once the console has proven itself.
 
 ### Merging import duplicates — `merge_duplicate_golfers`
 The importer matches on **normalized phone, then GHIN**. A golfer already on the

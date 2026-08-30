@@ -1,0 +1,43 @@
+{% extends "console/shell.html" %}
+
+{% block title %}Report #{{ check.number }} · Halved TD console{% endblock %}
+
+{% block main %}
+<div class="head">
+  <div>
+    <h2 class="h1">{% if check.upstream %}Sent to Halved{% else %}Report filed{% endif %}</h2>
+    <p class="sub">{{ course.name }} · {{ check.changes|length }} field{{ check.changes|length|pluralize }} · report #{{ check.number }}</p>
+  </div>
+</div>
+
+<div class="receipt">
+  <div class="top">
+    <span class="tick">&#10003;</span>
+    <div>
+      <h3>{{ subject }}</h3>
+      {% if check.upstream %}
+        {% comment %} Staff write straight through, so say what actually moved. {% endcomment %}
+        <p>The shared course record was updated, so every account that clones this
+          course picks it up. Those tees are now marked curated, which means a later
+          GolfCourseAPI re-import will not overwrite them.</p>
+      {% else %}
+        <p>Your own copy is already corrected and your rounds use it now. This asks
+          Halved to make the same change on the shared record.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="two">
+  <div class="panel">
+    <h4>What was sent</h4>
+    <div class="mailto">{{ body }}</div>
+  </div>
+  <div class="panel">
+    <h4>Why you can read it</h4>
+    <p>Plain, and readable by someone who has never met you and is looking at a
+      database row. You can read it because you are the one sending it.</p>
+    <p style="margin:0"><a href="{% url 'console:course' course.pk %}">Back to {{ course.name }} &rarr;</a></p>
+  </div>
+</div>
+{% endblock %}

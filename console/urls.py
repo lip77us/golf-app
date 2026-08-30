@@ -28,4 +28,13 @@ urlpatterns = [
     path('roster/import/runs/<int:number>/',  views.import_run,     name='import-run'),
     path('roster/import/runs/<int:number>/csv/',
          views.import_run_csv, name='import-run-csv'),
+
+    # Course library and the editor.  The account owns its own clone of every
+    # course, so editing is local and immediate; pushing upstream to the shared
+    # catalog is the separate, bigger act.
+    path('courses/',                          views.course_library, name='courses'),
+    path('courses/<int:pk>/',                 views.course_detail,  name='course'),
+    path('courses/<int:pk>/tees/<int:tee_pk>/', views.tee_edit,     name='tee-edit'),
+    path('courses/<int:pk>/reports/<int:number>/',
+         views.course_check, name='course-check'),
 ]

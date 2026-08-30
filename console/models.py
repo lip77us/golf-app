@@ -103,3 +103,105 @@ class ImportRun(models.Model):
                    .filter(account=self.account, number__isnull=False)
                    .aggregate(models.Max('number'))['number__max'])
         return (highest or 0) + 1
+
+
+class CourseCheck(models.Model):
+    """A record that somebody looked at a course record and what came of it.
+
+    Three things can happen when a TD holds the printed card next to our data,
+    and all three are worth keeping:
+
+    * ``verified`` — nothing was wrong.  This is the one people forget to
+      record, and it is the only way a course record earns the difference
+      between *right* and *never looked at*.  Without it the library cannot
+      tell a checked course from an unchecked one.
+    * ``edited``   — the account's own copy was corrected.  Local and
+      immediate; the account owns its clone.
+    * ``reported`` — the correction was pushed at the SHARED catalog, which
+      every other account clones from.  Staff write straight through;
+      everyone else files it and it is actioned elsewhere.
+
+    Keeping all three in one table is deliberate: the library's state is
+    "whatever happened to this course most recently", and that question has one
+    answer only if there is one timeline.
+    """
+
+    KIND_VERIFIED = 'verified'
+    KIND_EDITED   = 'edited'
+    KIND_REPORTED = 'reported'
+    KIND_CHOICES = [
+        (KIND_VERIFIED, 'Checked, nothing wrong'),
+        (KIND_EDITED,   'Record corrected'),
+        (KIND_REPORTED, 'Sent to Halved'),
+    ]
+
+    # Where the TD's information came from.  Whoever fixes the shared record
+    # needs to know whether they are looking at a re-rating or a typo, and
+    # these three answers sort the queue on their own.
+    SOURCE_CARD  = 'scorecard'
+    SOURCE_GHIN  = 'ghin'
+    SOURCE_CLUB  = 'club'
+    SOURCE_CHOICES = [
+        (SOURCE_CARD, 'The printed scorecard'),
+        (SOURCE_GHIN, 'GHIN'),
+        (SOURCE_CLUB, 'The club told me'),
+    ]
+
+    STATUS_SENT     = 'sent'
+    STATUS_REVIEW   = 'in_review'
+    STATUS_APPLIED  = 'applied'
+    STATUS_CHOICES = [
+        (STATUS_SENT,    'Sent'),
+        (STATUS_REVIEW,  'In review'),
+        (STATUS_APPLIED, 'Applied upstream'),
+    ]
+
+    account    = models.ForeignKey('accounts.Account', on_delete=models.CASCADE,
+                                   related_name='course_checks')
+    course     = models.ForeignKey('core.Course', on_delete=models.CASCADE,
+                                   related_name='checks')
+    user       = models.ForeignKey(settings.AUTH_USER_MODEL, null=True,
+                                   on_delete=models.SET_NULL,
+                                   related_name='course_checks')
+    kind       = models.CharField(max_length=10, choices=KIND_CHOICES)
+    # Per-account and 1-based, like an import run — a course report a TD can
+    # refer to by number is one they can follow up on.
+    number     = models.PositiveIntegerField(null=True, blank=True)
+
+    # Which tee this concerned, when it concerned one.  Kept as a plain label
+    # rather than an FK: an edit SUPERSEDES the Tee row it changed (see
+    # services/tee_revisions), so an FK here would point at a retired revision
+    # and read as though the check applied to something no longer current.
+    tee_name   = models.CharField(max_length=50, blank=True)
+
+    # Field-level before/after, the same shape the import receipt uses:
+    # [{'label': 'hole 5 index', 'before': '5', 'after': '12'}, ...]
+    changes    = models.JSONField(default=list, blank=True)
+
+    source     = models.CharField(max_length=10, choices=SOURCE_CHOICES, blank=True)
+    note       = models.TextField(blank=True)
+    status     = models.CharField(max_length=10, choices=STATUS_CHOICES, blank=True)
+    # True when this actually wrote to the shared CatalogCourse rather than
+    # only asking someone to.
+    upstream   = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['account', 'number'],
+                condition=models.Q(number__isnull=False),
+                name='console_coursecheck_account_number_unique',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.course_id} {self.kind} #{self.number or "-"}'
+
+    def next_number(self) -> int:
+        highest = (CourseCheck.objects
+                   .filter(account=self.account, number__isnull=False)
+                   .aggregate(models.Max('number'))['number__max'])
+        return (highest or 0) + 1

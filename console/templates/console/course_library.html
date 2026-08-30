@@ -1,0 +1,35 @@
+{% extends "console/shell.html" %}
+
+{% block title %}Course library · Halved TD console{% endblock %}
+
+{% block main %}
+<div class="head">
+  <div>
+    <h2 class="h1">Course library</h2>
+    <p class="sub">The courses your rounds have used — and how confident we are in each record</p>
+  </div>
+</div>
+
+<div class="tbl">
+  <table class="rows">
+    <tr><th>Course</th><th>Tees</th><th>Your rounds</th><th>Record last updated</th><th>State</th><th></th></tr>
+    {% for r in rows %}
+      <tr>
+        <td class="nm">{{ r.course.name }}{% if r.course.city %}<span class="detail"> · {{ r.course.city }}{% if r.course.state %}, {{ r.course.state }}{% endif %}</span>{% endif %}</td>
+        <td class="n">{{ r.tees }}</td>
+        <td class="n">{{ r.rounds }}</td>
+        <td class="n">{{ r.updated|date:"j M Y" }}</td>
+        <td><span class="st {{ r.state.tone }}">{{ r.state.label }}</span></td>
+        <td style="text-align:right"><a href="{% url 'console:course' r.course.pk %}">{{ r.state.action }}</a></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="detail">No courses yet — add one from the app, then it shows up here.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="foot">
+  {% comment %} The ordering is the only nudge the page needs. {% endcomment %}
+  <span class="m">Sorted by rounds played, not alphabetically — the course you are about to run a tournament on is the one worth checking.</span>
+</div>
+{% endblock %}

@@ -140,6 +140,10 @@ MIDDLEWARE = [
 _console_hosts = os.environ.get('CONSOLE_HOSTS', '')
 CONSOLE_HOSTS = [h.strip() for h in _console_hosts.split(',') if h.strip()]
 
+# Where a TD's course correction is mailed.  The console also writes the
+# shared catalog directly for staff; this is the copy a human reads.
+COURSE_REPORT_EMAIL = os.environ.get('COURSE_REPORT_EMAIL', 'info@halved.golf')
+
 ROOT_URLCONF = 'my_golf_app.urls'
 
 TEMPLATES = [
