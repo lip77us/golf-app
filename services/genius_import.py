@@ -371,10 +371,21 @@ def build_plan(account, parsed: list[ParsedRow],
                 row, 'duplicate GHIN in file', SKIP_DUP_GHIN,
                 {'won_line': seen_ghin[row.ghin]}))
             continue
-        if row.phone:
-            seen_phone[row.phone] = row.line
-        if row.ghin:
-            seen_ghin[row.ghin] = row.line
+
+        def _claim():
+            """Record this row as the one holding its phone / GHIN.
+
+            Called ONLY once the row is known to land — created, updated, or
+            matched-and-already-correct.  A row that claimed an identity and was
+            then skipped itself used to block its partner, and the partner's
+            skip reason then named a row that was never imported: two golfers
+            sharing a home phone lost BOTH entries, and the receipt explained it
+            with something untrue.
+            """
+            if row.phone:
+                seen_phone[row.phone] = row.line
+            if row.ghin:
+                seen_ghin[row.ghin] = row.line
 
         match, matched_by = None, ''
         if row.phone and by_phone.get(row.phone):
@@ -384,10 +395,13 @@ def build_plan(account, parsed: list[ParsedRow],
 
         if match is None:
             if row.index is None:
+                # Skipped, so it claims nothing — the next row carrying this
+                # phone is a real golfer, not a duplicate of a dropped one.
                 plan.skipped.append(
                     SkipItem(row, 'new golfer has no index', SKIP_NO_INDEX))
             else:
                 plan.to_create.append(row)
+                _claim()
             continue
 
         if match.id in matched_ids:
@@ -396,6 +410,7 @@ def build_plan(account, parsed: list[ParsedRow],
                 {'player_name': match.name}))
             continue
         matched_ids.add(match.id)
+        _claim()
 
         changes: dict = {}
         before: dict = {}

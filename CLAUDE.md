@@ -1617,3 +1617,31 @@ the transaction before deleting. Tests: `api/test_merge_duplicate_golfers.py` (1
 Finding the candidates is a read-only query — the applied run's
 `result->'log'->'created'` gives the exact player ids the import created, which
 beats guessing; join those against account players that have history and no phone.
+
+#### Shared-phone fix — a row claims its identity only once it lands
+Found in the first real import. `build_plan` recorded `seen_phone` / `seen_ghin`
+the moment a row passed the duplicate check — BEFORE knowing whether the row
+would survive. So a row that claimed a number and was then skipped itself
+blocked its partner, and the partner's skip named it as the winner: **Charlie
+Han was skipped `no_index` but had already claimed the shared home phone, so
+Diana Han was dropped as a duplicate of a row that never landed — and the
+receipt said "row 89 was imported" about a row that wasn't.** Both Hans
+vanished, explained by something untrue.
+
+The claim now happens in a local `_claim()` called only on create / update /
+matched-and-unchanged. A skipped row claims nothing, so `won_line` always names
+a row that is actually in the roster. Tests: `SharedPhoneTests` in
+`api/test_genius_import.py` (4).
+
+**Not changed:** the rule that same-phone-in-file means same-person. The real
+cases were older couples sharing a HOME phone, and the right fix is distinct
+cells at the source — two golfers sharing a number in our data would be actively
+wrong, since phone is the cross-account identity key (`by_phone` would resolve
+to whichever Player row came first, and "On Halved" / shared rounds would
+confuse them). Deliberately NOT relaxed to "different GHIN ⇒ different people".
+
+**Operational note:** the importer can only match on phone or GHIN, so a golfer
+holding neither is recreated no matter how clean the file is. Before re-importing
+after a source-data fix, put the new phone on the EXISTING record of anyone with
+history — otherwise they arrive as a fresh duplicate needing
+`merge_duplicate_golfers`.

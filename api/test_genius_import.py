@@ -110,3 +110,73 @@ class GeniusPlanApplyTests(TestCase):
         s = plan2.summary()
         self.assertEqual(s['create'], 0)
         self.assertEqual(s['update'], 0)
+
+
+class SharedPhoneTests(TestCase):
+    """Two golfers on one phone — the older-couple-with-a-home-phone case.
+
+    Real data: Charlie Han had no index and was skipped, but had already
+    claimed the shared number, so Diana Han was dropped as a duplicate of a
+    row that never landed — and her skip reason said "row 89 was imported"
+    about a row that wasn't.  Both Hans vanished, explained by something
+    untrue.  A row now claims its phone only once it is known to land.
+    """
+
+    def setUp(self):
+        self.account = Account.objects.create(name='Shared Phone')
+
+    def _plan(self, csv):
+        rows = gi.read_rows('roster.csv', csv.encode())
+        parsed, _ = gi.parse_rows(rows)
+        return gi.build_plan(self.account, parsed)
+
+    HEADER = "Email,First Name,Last Name,Index,GHIN Id,Phone Number,Gender\n"
+
+    def test_a_skipped_row_does_not_block_its_partner(self):
+        plan = self._plan(
+            self.HEADER +
+            "c@x.com,Charlie,Han,NH,111,510-555-0150,M\n"    # skipped: no index
+            "d@x.com,Diana,Han,18.2,222,510-555-0150,F\n"    # must still land
+        )
+        created = {r.name for r in plan.to_create}
+        self.assertEqual(created, {'Diana Han'})
+        reasons = {s.row.name: s.code for s in plan.skipped}
+        self.assertEqual(reasons, {'Charlie Han': gi.SKIP_NO_INDEX})
+
+    def test_the_winning_line_named_by_a_duplicate_actually_landed(self):
+        """The detail must never point at a row that was itself skipped."""
+        plan = self._plan(
+            self.HEADER +
+            "c@x.com,Charlie,Han,NH,111,510-555-0150,M\n"    # skipped
+            "d@x.com,Diana,Han,18.2,222,510-555-0150,F\n"    # created
+            "e@x.com,Eve,Han,20.0,333,510-555-0150,F\n"      # duplicate of Diana
+        )
+        dup = [s for s in plan.skipped if s.code == gi.SKIP_DUP_PHONE]
+        self.assertEqual(len(dup), 1)
+        self.assertEqual(dup[0].row.name, 'Eve Han')
+        won = dup[0].detail['won_line']
+        diana = next(r for r in plan.to_create if r.name == 'Diana Han')
+        self.assertEqual(won, diana.line)          # the row that actually landed
+        charlie = next(s.row for s in plan.skipped if s.row.name == 'Charlie Han')
+        self.assertNotEqual(won, charlie.line)     # never the skipped one
+        landed = {r.line for r in plan.to_create} | {u.row.line for u in plan.to_update} \
+            | {r.line for r in plan.unchanged}
+        self.assertIn(won, landed)
+
+    def test_a_genuine_duplicate_is_still_skipped(self):
+        plan = self._plan(
+            self.HEADER +
+            "a@x.com,Ann,Bird,10.0,111,510-555-0151,F\n"
+            "b@x.com,Bob,Bird,12.0,222,510-555-0151,M\n"     # same phone, lands second
+        )
+        self.assertEqual([r.name for r in plan.to_create], ['Ann Bird'])
+        self.assertEqual([(s.row.name, s.code) for s in plan.skipped],
+                         [('Bob Bird', gi.SKIP_DUP_PHONE)])
+
+    def test_a_skipped_row_does_not_block_a_shared_ghin_either(self):
+        plan = self._plan(
+            self.HEADER +
+            "c@x.com,Carl,Gee,NH,4242,,M\n"                  # skipped: no index
+            "g@x.com,Gloria,Gee,21.0,4242,,F\n"              # must still land
+        )
+        self.assertEqual([r.name for r in plan.to_create], ['Gloria Gee'])
