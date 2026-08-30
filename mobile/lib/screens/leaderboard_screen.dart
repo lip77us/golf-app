@@ -592,6 +592,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
                 child: _GameView(
                   gameKey: gameKey,
                   game: game,
+                  roundId: widget.roundId,
                   tournamentId: lb.tournamentId,
                   cupName: lb.cupName ?? lb.tournamentName ?? 'Cup',
                   // Score-entry (membership) order, when the round is loaded.
@@ -741,10 +742,14 @@ class _GameView extends StatelessWidget {
   // Cup context — lets the Triple Cup tab top itself with the cup scoreboard.
   final int?    tournamentId;
   final String? cupName;
+  // The round this board belongs to. _GameView is a StatelessWidget, so this
+  // has to be threaded in as a field — there is no `widget` to read it off.
+  // The settlement tab needs it to open the casual receipt.
+  final int     roundId;
 
   const _GameView(
-      {required this.gameKey, required this.game, this.playerOrder = const [],
-       this.tournamentId, this.cupName});
+      {required this.gameKey, required this.game, required this.roundId,
+       this.playerOrder = const [], this.tournamentId, this.cupName});
 
   @override
   Widget build(BuildContext context) {
@@ -821,7 +826,7 @@ class _GameView extends StatelessWidget {
       case 'survivor':
         return _ByGroupView(data: data, builder: _SurvivorGroupCard.new);
       case 'settlement':
-        return _SettlementView(data: data, roundId: widget.roundId);
+        return _SettlementView(data: data, roundId: roundId);
       case 'singles_nassau':
         return _ByGroupView(data: data, builder: _CupSinglesGroupCard.new);
       case 'singles_18':
