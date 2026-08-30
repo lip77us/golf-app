@@ -264,23 +264,34 @@ table.rows td.n{font-variant-numeric:tabular-nums;color:var(--muted);width:120px
          font-family:"Schibsted Grotesk",sans-serif;font-size:15px;font-weight:600}
 .grid h4 span{font-family:"Spline Sans",sans-serif;font-size:11.5px;font-weight:400;color:var(--muted)}
 
-/* 18 holes across.  Scrolls inside itself rather than widening the page. */
+/* 18 holes across.  Scrolls inside itself rather than widening the page.
+   Ruled like a scorecard: a line between every hole, and a heavier one at the
+   turn, because that is how the card in the TD's hand is divided. */
 .grid .hg{width:100%;border-collapse:collapse;font-size:12px;
           font-variant-numeric:tabular-nums;display:block;overflow-x:auto}
-.hg th,.hg td{border:1px solid #E8EEE9;padding:5px 0;text-align:center;min-width:38px}
+.hg th,.hg td{border:1px solid var(--cardBorder);padding:0;text-align:center;
+              width:32px;min-width:32px;height:26px}
 .hg th{background:#F4F8F4;font-size:10.5px;font-weight:700;color:var(--muted)}
-.hg .lbl{text-align:left;padding:5px 10px;white-space:nowrap;font-weight:600;
-         font-size:11px;color:var(--ink2);min-width:110px;background:#FAFCFA}
-.hg tr.si td{background:rgba(15,110,86,.04)}
-/* An editable cell has to look editable at rest, not only once focused —
-   a grid of plain numbers reads as a report, which is exactly what the
-   read-only course view IS. */
-.hg .cellin{width:38px;border:1px solid transparent;border-radius:4px;
-            background:#F4F8F4;text-align:center;
+.hg .lbl{text-align:left;padding:0 10px;white-space:nowrap;font-weight:600;
+         font-size:11px;color:var(--ink2);width:104px;min-width:104px;
+         background:#FAFCFA;position:sticky;left:0;z-index:1}
+.hg tr.si td{background:rgba(15,110,86,.05)}
+.hg tr.si td.lbl{background:#FAFCFA}
+/* The turn.  Nine out, nine in. */
+.hg .turn{border-right:2px solid #B9C9BD}
+
+/* Sized to the widest thing it holds — three digits of yardage — rather than
+   left at a text field's default, which on an 18-column grid is most of the
+   screen. */
+.hg .cellin{display:block;width:100%;height:24px;border:1px solid transparent;
+            border-radius:3px;background:#F4F8F4;text-align:center;
             font:400 12px/1 "Spline Sans",sans-serif;font-variant-numeric:tabular-nums;
-            padding:3px 0;color:var(--deepPine)}
+            padding:0;color:var(--deepPine);-moz-appearance:textfield}
+.hg .cellin::-webkit-outer-spin-button,
+.hg .cellin::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .hg .cellin:hover{border-color:var(--cardBorder);background:#fff}
-.hg .cellin:focus{outline:none;background:#fff;box-shadow:inset 0 0 0 1.5px var(--pine);border-radius:4px}
+.hg .cellin:focus{outline:none;background:#fff;border-color:var(--pine);
+                  box-shadow:0 0 0 2px rgba(15,110,86,.18)}
 
 .fld{margin-bottom:10px}
 .fld u{text-decoration:none;display:block;font-size:9.5px;font-weight:700;
