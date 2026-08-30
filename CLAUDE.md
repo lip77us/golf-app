@@ -1583,3 +1583,37 @@ account's own Course/Tee clone directly** (replacing `manage_courses_screen.dart
 and `manage_course_tees_screen.dart`) **and** offer "Send to Halved" to push the
 correction upstream to the shared `CatalogCourse` — rather than the handoff's
 report-only design, which assumed the TD does not own the record.
+
+### Merging import duplicates — `merge_duplicate_golfers`
+The importer matches on **normalized phone, then GHIN**. A golfer already on the
+roster with NEITHER cannot be matched by any means, so the file's row correctly
+becomes a NEW golfer — two rows for one person: the original holding every round
+they have played, and the new one holding the phone/email/GHIN that would have
+matched them. (First real import: 165 created, 13 of them duplicates of golfers
+with history.)
+
+Neither row can just be dropped. The original is **PROTECTed** — every
+`FoursomeMembership` / `HoleScore` / per-game result table references `Player`
+with `on_delete=PROTECT` — and deleting the new one alone loses the contact
+details and lets the next import recreate it. So the fix is a one-directional
+merge: **contact details move onto the record with the history; the empty
+duplicate is deleted.** Phone is the cross-account identity key, so it belongs
+on the row that owns the rounds.
+
+`core/management/commands/merge_duplicate_golfers.py` — dry-run by default like
+the importer, `--apply` commits, one transaction for the whole batch.
+`--pairs keep:delete,...` (keep = the id with the rounds), `--rename` to take the
+duplicate's spelling, `--keep-index` to leave the handicap alone (default takes
+the imported value, which is the current WHS number).
+
+**Pairs are explicit on purpose — name matching is NOT automated.** The real data
+had `Wendel`/`Wendell Doman` and `Rico Young`/`Richard (Rico) Young` (exact
+matching misses both) sitting alongside `Roger Bird`/`Francis Bird` — same
+surname, two different people, which surname matching would have fused. A human
+reads the list; the command only executes it. It refuses a reversed pair (naming
+the corrected `--pairs`), a cross-account pair, and re-checks for history inside
+the transaction before deleting. Tests: `api/test_merge_duplicate_golfers.py` (12).
+
+Finding the candidates is a read-only query — the applied run's
+`result->'log'->'created'` gives the exact player ids the import created, which
+beats guessing; join those against account players that have history and no phone.
