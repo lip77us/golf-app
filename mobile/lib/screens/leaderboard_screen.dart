@@ -204,17 +204,26 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     super.dispose();
   }
 
-  /// Build the public spectator URL for this round and copy it to the
-  /// clipboard.  Strips the `/api` suffix off Config.baseUrl since the
-  /// watch page is served from the bare host.
-  void _shareWatchLink(BuildContext context, String token) {
+  /// Copy this round's `/watch/<token>/` link to the clipboard.
+  ///
+  /// This is the plumbing option, not the social one: inviting someone to
+  /// watch is "Invite a watcher", which texts this link for you.  What you
+  /// need it on the clipboard for is JOINING TWO ROUNDS — pasting it into the
+  /// other foursome's "Link to a Skins pool" so both cards feed one side game
+  /// (docs/multi-skins-cross-round.md).  Hence its place at the bottom of the
+  /// menu, under the things a player reaches for every round.
+  ///
+  /// Strips the `/api` suffix off Config.baseUrl since the watch page is
+  /// served from the bare host.
+  void _copyRoundLink(BuildContext context, String token) {
     final api  = Config.baseUrl;
     final host = api.endsWith('/api') ? api.substring(0, api.length - 4) : api;
     final url  = '$host/watch/$token/';
     Clipboard.setData(ClipboardData(text: url));
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       duration: const Duration(seconds: 4),
-      content: Text('Spectator link copied: $url'),
+      content: Text('Round link copied — paste it into the other round to '
+          'link a side game.\n$url'),
     ));
   }
 
@@ -238,7 +247,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
   }
 
   /// The leaderboard's secondary actions, folded behind a more_vert menu so the
-  /// header stays uncluttered on a narrow phone (the spectator link used to get
+  /// header stays uncluttered on a narrow phone (the round link used to get
   /// pushed off the edge once the chat icon was added).
   Widget _buildOverflowMenu(
     BuildContext context,
@@ -268,8 +277,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
           case 'invite':
             inviteWatcher(context, roundId: widget.roundId);
             break;
-          case 'share':
-            if (watchToken != null) _shareWatchLink(context, watchToken);
+          case 'copy_link':
+            if (watchToken != null) _copyRoundLink(context, watchToken);
             break;
           case 'help':
             showLeaderboardHelp(context);
@@ -288,15 +297,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
             contentPadding: EdgeInsets.zero,
           ),
         ),
-        if (watchToken != null)
-          const PopupMenuItem(
-            value: 'share',
-            child: ListTile(
-              leading: Icon(Icons.copy_outlined),
-              title: Text('Copy spectator link'),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
         const PopupMenuItem(
           value: 'refresh',
           child: ListTile(
@@ -330,6 +330,18 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
             contentPadding: EdgeInsets.zero,
           ),
         ),
+        // Last on purpose: this is the utility that links two rounds into one
+        // side game, not a second way to invite someone to watch.
+        if (watchToken != null)
+          const PopupMenuItem(
+            value: 'copy_link',
+            child: ListTile(
+              leading: Icon(Icons.link),
+              title: Text('Copy round link'),
+              subtitle: Text('To link a side game with another round'),
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
       ],
     );
   }
@@ -402,7 +414,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       appBar: GolfAppBar(
         title: 'Leaderboard',
         // Keep the header to a few direct icons + an overflow menu so it never
-        // crowds out the spectator link on a narrow phone (GolfAppBar guidance:
+        // crowds out the overflow items on a narrow phone (GolfAppBar guidance:
         // 0–2 actions, fold the rest behind more_vert).
         actions: [
           // Round chat / event feed. Hidden in a support view (read-only).

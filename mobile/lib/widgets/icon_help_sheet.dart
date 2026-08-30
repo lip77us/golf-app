@@ -144,14 +144,16 @@ const List<IconHelpEntry> _leaderboardHelp = [
   IconHelpEntry(
     icon: Icons.visibility_outlined,
     title: 'Invite a watcher',
-    body: "Invite someone who isn't playing to follow this round in the app — "
-        'read-only.',
+    body: "Invite someone who isn't playing to follow this round, read-only. "
+        'We open a text with the watch link: a Halved golfer opens it in the '
+        'app, anyone else watches in a browser — no app needed.',
   ),
   IconHelpEntry(
-    icon: Icons.copy_outlined,
-    title: 'Copy spectator link',
-    body: 'Copy a public web link so anyone can watch the live scores in a '
-        'browser — no app needed.',
+    icon: Icons.link,
+    title: 'Copy round link',
+    body: "Copy this round's link so you can paste it into another round and "
+        'link the two into one side game (Multi-Group Skins). To invite a '
+        'person, use Invite a watcher instead — it sends this for you.',
   ),
 ];
 

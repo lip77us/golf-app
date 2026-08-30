@@ -1,8 +1,9 @@
 /// utils/watcher_invite.dart
 /// "Invite a watcher" flow — invite a non-playing spectator to follow a round
 /// or tournament in-app (read-only). Pick from My Golfers or enter a phone;
-/// the person is recorded as a watcher (and added to your roster), then the
-/// app-download link is shared so they can install and follow.
+/// the person is recorded as a watcher (and added to your roster), then ONE
+/// watch link is texted to them — it opens the round in Halved for a Halved
+/// user and the read-only web watch page for anyone else.
 
 import 'package:flutter/material.dart';
 import 'package:halved_sms/halved_sms.dart';
@@ -67,16 +68,14 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
   }
 
   /// Record the watcher, then open Messages pre-filled with a watch invite —
-  /// the SAME halved.golf link for everyone (it opens the app for a Halved
-  /// user, or the read-only web page otherwise), with a download link added
-  /// only when the recipient isn't on Halved yet.  The user just taps Send and
-  /// is returned to the app.
+  /// the SAME halved.golf link for everyone, because the recipient decides
+  /// what it is: a Halved user has the app associated with the domain, so it
+  /// opens the round in-app; anyone else lands on the read-only web watch
+  /// page.  The user just taps Send and is returned to the app.
   Future<void> _invite(
       {int? playerId, String? phone, String? name, PlayerProfile? player}) async {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
-    final inviter =
-        context.read<AuthProvider>().player?.name.trim() ?? '';
     final who = (name?.trim().isNotEmpty == true) ? name!.trim() : 'They';
     setState(() => _busy = true);
     try {
@@ -89,14 +88,7 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
       final rosterNew  = res['roster_created'] == true;
       navigator.pop(); // close the sheet
 
-      final body = _watchInviteBody(
-        inviter: inviter,
-        onApp: onApp,
-        watchUrl: watchUrl,
-        downloadUrl: dlUrl,
-        courseName: (res['course_name'] as String?) ?? '',
-        gameLabel: (res['game_label'] as String?) ?? '',
-      );
+      final body = _watchInviteBody(watchUrl: watchUrl, downloadUrl: dlUrl);
 
       // They ARE a watcher at this point — the server matched them. An empty
       // phone here means we found them by name and never learned their number,
@@ -106,7 +98,7 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
         toPhone = await _askForNumber(player, onApp: onApp) ?? '';
       }
 
-      final sent = toPhone.isNotEmpty
+      final sent = (toPhone.isNotEmpty && body.isNotEmpty)
           ? await _launchWatchSms(phone: toPhone, body: body)
           : false;
 
@@ -196,64 +188,31 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
     return typed;
   }
 
-  /// Body of the watch-invite text.
+  /// Body of the watch-invite text: JUST the link.
   ///
   /// This lands with people who have often never heard of Halved, which makes
-  /// it one of the few places the app talks to a stranger — so it reads like a
-  /// person inviting a friend, not a system issuing a notification. The old
-  /// wording ("X invited you to observe an active Halved round") described the
-  /// database row rather than the thing happening on the course.
+  /// it one of the few places the app talks to a stranger. It goes into an
+  /// editable composer, so it is a first draft the sender can rewrite — which
+  /// is also why it states nothing we haven't checked.
   ///
-  /// It goes into an editable composer, so it is a first draft the sender can
-  /// rewrite — which is also why it states nothing we haven't checked. Naming
-  /// the game and course is safe; claiming who is winning is not.
+  /// No sentence above the link. The preview card the link unfurls into
+  /// already names the sender, the game and the course and renders a Watch
+  /// live button, so a line like "Come rail me — I'm playing Survivor at Metro
+  /// GL" is the same information twice, in smaller type, next to the picture
+  /// that says it better.
   ///
-  /// When there IS a watch link the body is just the link. The preview card the
-  /// link unfurls into already carries the sender, the game, the course and a
-  /// Watch live button, so a sentence above it is the same information twice.
+  /// One link for everyone, and the RECIPIENT decides what it opens: a Halved
+  /// user has the app associated with the domain, so it opens the round in
+  /// Halved; anyone else lands on the read-only web watch page. That page
+  /// carries its own "Get the app" CTA, which is why we no longer append a
+  /// download URL for someone who isn't on Halved — a second link in a
+  /// two-line text only competes with the one that matters.
   ///
-  /// One halved.golf link for everyone; the download link is appended only for
-  /// someone not already on Halved, who would otherwise have nowhere to go.
-  String _watchInviteBody({
-    required String inviter,
-    required bool   onApp,
-    String?         watchUrl,
-    String?         downloadUrl,
-    String          courseName = '',
-    String          gameLabel  = '',
-  }) {
-    final by = inviter.isNotEmpty ? inviter : 'A friend';
-    // "playing Nassau at Tilden Park" / "playing at Tilden Park" / "out on the
-    // course" — each clause appears only when we actually know it.
-    final what = [
-      if (gameLabel.isNotEmpty) gameLabel,
-      if (courseName.isNotEmpty) 'at $courseName',
-    ].join(' ');
-    // With a watch link the message is JUST the link: the link preview card
-    // already names the sender, the game and the course, and renders a Watch
-    // live button. A sentence above it says the same thing twice.
-    //
-    // Without one there is no card, so the sentence is all the recipient gets
-    // and it stays.
-    final b = StringBuffer();
-    if (watchUrl != null) {
-      b.write(watchUrl);
-    } else {
-      b.write(
-        inviter.isNotEmpty
-            ? (what.isEmpty
-                ? 'Come rail me — I’m out on the course ⛳'
-                : 'Come rail me — I’m playing $what ⛳')
-            : (what.isEmpty
-                ? '$by is out on the course ⛳'
-                : '$by is playing $what ⛳'),
-      );
-    }
-    if (!onApp && downloadUrl != null) {
-      b.write('\n\nGet Halved: $downloadUrl');
-    }
-    return b.toString();
-  }
+  /// [downloadUrl] survives as a fallback for the case where the server sent
+  /// no watch link at all (a tournament with no rounds yet); with neither, the
+  /// body is empty and the caller skips the text rather than sending nothing.
+  String _watchInviteBody({String? watchUrl, String? downloadUrl}) =>
+      watchUrl ?? downloadUrl ?? '';
 
   /// Open the native message composer pre-addressed to [phone] with [body].
   /// Returns false if the device can't send SMS or the composer failed.
@@ -366,8 +325,9 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
                   Text('Invite a watcher', style: theme.textTheme.titleLarge),
                   const SizedBox(height: 4),
                   Text(
-                    'Pick who to invite — we’ll open a text with a link to '
-                    'follow this round live (read-only). Just tap Send.',
+                    'Pick who to invite — we’ll open a text with the watch '
+                    'link. A Halved golfer opens it in the app; anyone else '
+                    'watches on the web. Read-only either way — just tap Send.',
                     style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant),
                   ),

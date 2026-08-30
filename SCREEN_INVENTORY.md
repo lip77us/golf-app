@@ -461,7 +461,7 @@ Derived entirely from the Dart source under `mobile/lib/screens/`. Class/widget 
   - *Permission / support:* support cross-account view shows an amber "Support · read-only" banner and hides chat/overflow (refresh stays inline).
   - *Offline / sync:* not directly surfaced here (the leaderboard is a server read); auto-refreshes on `didPopNext` and app resume.
 - **Interactions & exits:**
-  - Overflow `_buildOverflowMenu`: "Invite a watcher" → `inviteWatcher`; **"Copy spectator link"** → `_shareWatchLink` (builds `<host>/watch/<token>/`, copies to clipboard + SnackBar); "Refresh" → `loadLeaderboard`; help sheet; "Reopen round" → `_confirmReopen` → `reopenRound` then pop; **"Share scorecard"** → pushes `ShareScorecardScreen(foursomeId: _landscapeFoursomeId)`.
+  - Overflow `_buildOverflowMenu`, in order: "Invite a watcher" → `inviteWatcher` (the ONLY invite path — it texts the watch link, which opens in-app for a Halved golfer and on the web page for everyone else); "Refresh" → `loadLeaderboard`; help sheet; "Reopen round" → `_confirmReopen` → `reopenRound` then pop; **"Share scorecard"** → pushes `ShareScorecardScreen(foursomeId: _landscapeFoursomeId)`; **"Copy round link"** (last) → `_copyRoundLink` (builds `<host>/watch/<token>/`, copies to clipboard + SnackBar) — for pasting into another round to link a side game, not for inviting people.
   - `RoundChatButton` → round feed; tab switch → silent `_refresh`; per-row taps → inline expand (Low Net strip, group-card detail); "Done" (final) → `popUntil(isFirst)`; rotate phone → landscape `ScorecardGrid`.
 - **NOTE:** Internal keys `__bandon_cup__` / `_BandonCup*` class names are legacy (pre-"Halved"/trademark-scrub) and intentionally left non-user-visible; the tab label falls back to `cupName ?? 'Cup'`.
 
@@ -1244,7 +1244,7 @@ Colours literal `Color(0xFF…)` used outside the theme files (grep of lib/), by
 
 ### Flow 5 — Watch a shared round (spectator / friend)
 1. Universal link `halved.golf/watch/<token>` (or a round flagged **"Observing"** inline on the Casual/Tournament lists) → `DeepLinkService`/`openWatchedRound`.
-2. Opens the **read-only LeaderboardScreen** (or `TournamentLeaderboardScreen`) — never the score-entry `/round`. Host shares the link via the leaderboard's **Share spectator link**.
+2. Opens the **read-only LeaderboardScreen** (or `TournamentLeaderboardScreen`) — never the score-entry `/round`. Host shares the link via the leaderboard's **Invite a watcher** (or **Copy round link**).
 
 ### Flow 6 — Delete account (App Store 5.1.1)
 Drawer → **Profile** → **SettingsScreen** (`/settings`) → **Delete Account** → confirm → `AuthProvider.deleteAccount` → token cleared → auth gate → `/login`.

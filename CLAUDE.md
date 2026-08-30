@@ -1228,7 +1228,8 @@ generous, settlement pool-local (no cross-game/-account $ netting).
   manager + group 1, hidden on a pool host round); `multi_skins_setup_screen`
   "Playing in another group" section adds connected (on-app) golfers to the
   roster. The linked round's leaderboard shows the pool tab automatically; the
-  host shares the link via the leaderboard's existing "Share spectator link".
+  host shares the link via the leaderboard's "Copy round link" (last item in
+  the overflow menu, kept there precisely for this).
 
 ## Survivor (`survivor`) — implemented (3-player horse race, primary game)
 
@@ -1482,10 +1483,22 @@ settle marking; a settlement text export.
 A **new surface**, not a redesign: a server-rendered web console for the work a
 tournament director does on a laptop the night before an event. Built from
 `~/Downloads/handoff-td-console/` (HANDOFF.md + four HTML design screens).
-Django app `console/`, mounted at **`/td/`** by `my_golf_app/urls.py` — the
-design draws it on `td.halved.golf`, which is a DNS + ALLOWED_HOSTS change, not
-a routing one. Plain Django templates + a little vanilla JS; **no front-end
-build step**, and it reuses the existing session and account resolution.
+Django app `console/`, mounted at **`/td/`** by `my_golf_app/urls.py`. Plain
+Django templates + a little vanilla JS; **no front-end build step**, and it
+reuses the existing session and account resolution.
+
+### Its own hostname (`CONSOLE_HOSTS`) — off by default
+The design writes the routes as `td.halved.golf/sign-in`, and those paths are
+meant literally. `console/middleware.py` `ConsoleHostMiddleware` swaps
+`request.urlconf` to `my_golf_app/urls_console.py` (console mounted at the ROOT,
+main urlconf appended after it) for any host in the **`CONSOLE_HOSTS`** env var.
+`reverse()` follows `request.urlconf`, so ONE template set links correctly on
+both hosts — `/roster/import/` on the console host, `/td/roster/import/`
+elsewhere. `/td/` still answers on the console host so old links don't 404.
+`CONSOLE_HOSTS` is empty by default → complete no-op until it is set, and the
+host must also be in `ALLOWED_HOSTS` (which auto-fills `CSRF_TRUSTED_ORIGINS`).
+Turning it on is three things: DNS CNAME → the Railway service, the domain added
+in Railway, and `CONSOLE_HOSTS=td.halved.golf` + `ALLOWED_HOSTS` updated.
 
 ### Phase 1 — sign in (`console/auth.py`, `console/views.py`)
 - **Same identity as the app**: phone → 6-digit SMS code, through the existing
@@ -1548,10 +1561,21 @@ preview IS the confirm**, there is no dialog, and the primary button is never
   `startCommand`. Tests override `STORAGES` (`console/tests.py::plain_static`).
 - A `<label>` used as a drop zone needs `display:block`, or it fragments.
 
-Tests: `console/tests.py` (22) — the two web-specific auth promises (no account
-created, tries counted), and the import invariants that would break silently
+Tests: `console/tests.py` (27) — the two web-specific auth promises (no account
+created, tries counted), the import invariants that would break silently
 (preview writes nothing, plan rebuilds from typed values, `+2.3` never renders
-negative, apply is atomic and cannot run twice, cross-account 404).
+negative, apply is atomic and cannot run twice, cross-account 404), and the
+host routing in both states (console host serves at root and reverses rootless;
+default config unchanged).
+
+**Testing it locally** needs no deploy: `python manage.py migrate` then
+`runserver`, and open `http://localhost:8000/td/sign-in/`. With the local
+defaults (`OTP_BACKEND=local`, `SMS_BACKEND=console`) the 6-digit code is
+PRINTED in the runserver terminal, not texted. Sign in as any local user that
+has a phone AND `is_account_admin` — a non-admin correctly gets the empty
+state instead. Note `OTP_REQUESTS_PER_HOUR = 5` per number, which is easy to
+hit while poking at it; clear with
+`PhoneOTP.objects.filter(phone='+1…').delete()` in a shell.
 
 **Not built (Phases 3 + 4 of the handoff):** course library / correction report,
 and custom tee sets. Decision taken for Phase 3: the console will **edit the

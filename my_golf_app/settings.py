@@ -128,7 +128,17 @@ MIDDLEWARE = [
     # diagnose the intermittent client-side silent-logout bug.  See
     # api/middleware.py for the rationale.
     'api.middleware.AuthFailureLogger',
+    # Serves the TD console at the root of its own hostname (CONSOLE_HOSTS).
+    # No-op while that setting is empty, which it is by default.
+    'console.middleware.ConsoleHostMiddleware',
 ]
+
+# Hostnames that should serve the TD console at their ROOT rather than under
+# /td/ — e.g. "td.halved.golf".  Comma-separated; empty disables the behaviour
+# entirely.  Each host must ALSO appear in ALLOWED_HOSTS (which auto-populates
+# CSRF_TRUSTED_ORIGINS above).
+_console_hosts = os.environ.get('CONSOLE_HOSTS', '')
+CONSOLE_HOSTS = [h.strip() for h in _console_hosts.split(',') if h.strip()]
 
 ROOT_URLCONF = 'my_golf_app.urls'
 

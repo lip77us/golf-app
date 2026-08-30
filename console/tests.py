@@ -351,3 +351,46 @@ class ImportTests(TestCase):
         resp = self._upload(name='roster.txt')
         self.assertEqual(ImportRun.objects.count(), 0)
         self.assertContains(resp, 'use a .csv or .xlsx export')
+
+
+@plain_static
+@override_settings(ALLOWED_HOSTS=['testserver', 'td.halved.golf'],
+                   CONSOLE_HOSTS=['td.halved.golf'])
+class ConsoleHostTests(TestCase):
+    """The console at the root of its own hostname.
+
+    The design writes the routes as ``td.halved.golf/sign-in``; these check the
+    hostname actually gets them, that reverse() follows so links are right on
+    both hosts, and that the default (no CONSOLE_HOSTS) changes nothing.
+    """
+
+    def test_console_serves_at_the_root_of_its_own_host(self):
+        resp = self.client.get('/sign-in/', HTTP_HOST='td.halved.golf')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Use the same mobile number')
+
+    def test_links_render_rootless_on_the_console_host(self):
+        """reverse() follows request.urlconf, so one template links correctly
+        on both hosts — the gate must send you to /sign-in/, not /td/sign-in/."""
+        redirect = self.client.get('/roster/import/', HTTP_HOST='td.halved.golf')
+        self.assertRedirects(redirect, '/sign-in/',
+                             fetch_redirect_response=False)
+
+    def test_the_td_prefix_still_answers_on_the_console_host(self):
+        """A link bookmarked before the subdomain existed must not 404."""
+        resp = self.client.get('/td/sign-in/', HTTP_HOST='td.halved.golf')
+        self.assertEqual(resp.status_code, 200)
+
+    def test_other_hosts_are_untouched(self):
+        self.assertEqual(
+            self.client.get('/td/sign-in/', HTTP_HOST='testserver').status_code, 200)
+        self.assertEqual(
+            self.client.get('/sign-in/', HTTP_HOST='testserver').status_code, 404)
+
+
+@plain_static
+class ConsoleHostDisabledTests(TestCase):
+    def test_no_console_hosts_means_no_root_routing(self):
+        """The default is off: nothing changes for an existing deployment."""
+        self.assertEqual(self.client.get('/sign-in/').status_code, 404)
+        self.assertEqual(self.client.get('/td/sign-in/').status_code, 200)
