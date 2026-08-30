@@ -37,4 +37,12 @@ urlpatterns = [
     path('courses/<int:pk>/tees/<int:tee_pk>/', views.tee_edit,     name='tee-edit'),
     path('courses/<int:pk>/reports/<int:number>/',
          views.course_check, name='course-check'),
+
+    # Custom tees — a private re-index.  One route builds and edits: the tee id
+    # is the SOURCE when creating and the custom set when editing, and a custom
+    # set knows what it forked from.
+    path('courses/<int:pk>/tees/<int:tee_pk>/index/',
+         views.custom_tee, name='custom-tee'),
+    path('courses/<int:pk>/tees/<int:tee_pk>/index/delete/',
+         views.custom_tee_delete, name='custom-tee-delete'),
 ]

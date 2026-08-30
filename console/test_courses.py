@@ -270,3 +270,226 @@ class CourseEditorTests(TestCase):
         resp = self.client.get(reverse('console:tee-edit',
                                        args=[self.course.pk, self.tee.pk]))
         self.assertEqual(resp.status_code, 404)
+
+
+@plain_static
+class GridTotalsTests(TestCase):
+    """The total column is derived, so it has to be derived from the holes —
+    not from `Tee.par`, which is the stored value it exists to let you check."""
+
+    def setUp(self):
+        self.account = Account.objects.create(name='Tilden')
+        self.user = User.objects.create_user(
+            username='paul', account=self.account, is_account_admin=True)
+        self.client.force_login(self.user,
+                                backend='accounts.backends.AccountBackend')
+        self.course = Course.objects.create(account=self.account, name='Tilden')
+
+    def test_totals_come_from_the_holes_not_the_stored_par(self):
+        from console import courses as courselib
+        tee = Tee.objects.create(
+            course=self.course, tee_name='White', slope=113,
+            course_rating=Decimal('69.4'),
+            par=99,                                   # deliberately wrong
+            holes=holes(par=4, yards=350))
+        courselib.add_totals(tee)
+        self.assertEqual(tee.par_total, 72)           # 18 x 4, not the stored 99
+        self.assertEqual(tee.yards_total, 6300)
+
+    def test_a_tee_with_no_yardage_shows_a_dash_not_a_zero(self):
+        from console import courses as courselib
+        tee = Tee.objects.create(
+            course=self.course, tee_name='Gross only', slope=113,
+            course_rating=Decimal('69.4'), par=72, holes=holes(yards=0))
+        courselib.add_totals(tee)
+        self.assertEqual(tee.par_total, 72)
+        self.assertIsNone(tee.yards_total)            # template renders "—"
+
+    def test_the_grid_renders_a_total_column(self):
+        Tee.objects.create(course=self.course, tee_name='White', slope=113,
+                           course_rating=Decimal('69.4'), par=72,
+                           holes=holes(par=4, yards=350))
+        resp = self.client.get(reverse('console:course', args=[self.course.pk]))
+        self.assertContains(resp, 'TOT')
+        self.assertContains(resp, '6300')
+
+
+@plain_static
+class CustomTeeTests(TestCase):
+    """A private re-index.
+
+    The rule that matters: a stroke-index set is a RANKING, and a set that is
+    not 1..n each exactly once allocates strokes wrongly, silently, for
+    everyone in the field. So it is refused, not warned about. The other rule
+    is the lock — nothing here may change par or a yardage, because that is
+    what keeps the inherited rating honest.
+    """
+
+    def setUp(self):
+        self.account = Account.objects.create(name='Tilden')
+        self.user = User.objects.create_user(
+            username='paul', account=self.account, is_account_admin=True)
+        self.client.force_login(self.user,
+                                backend='accounts.backends.AccountBackend')
+        self.course = Course.objects.create(account=self.account, name='Tilden')
+        self.source = Tee.objects.create(
+            course=self.course, tee_name='White', slope=123,
+            course_rating=Decimal('69.4'), par=70, sort_priority=30,
+            holes=holes(par=4, yards=350))
+
+    def _post(self, indexes, name='White — club index', tee=None, **extra):
+        data = {'name': name}
+        for i, v in enumerate(indexes, start=1):
+            data[f'index_{i}'] = v
+        data.update(extra)
+        return self.client.post(
+            reverse('console:custom-tee',
+                    args=[self.course.pk, (tee or self.source).pk]), data)
+
+    # -- the ranking is the whole point -------------------------------------
+
+    def test_a_valid_re_index_creates_a_custom_set(self):
+        swapped = list(range(1, 19))
+        swapped[3], swapped[11] = swapped[11], swapped[3]     # holes 4 and 12
+        resp = self._post(swapped)
+        self.assertRedirects(resp,
+                             reverse('console:course', args=[self.course.pk]))
+        made = Tee.objects.get(custom_index_of=self.source)
+        self.assertEqual(made.tee_name, 'White — club index')
+        self.assertTrue(made.is_custom_index)
+        self.assertEqual(made.holes[3]['stroke_index'], 12)
+        self.assertEqual(made.holes[11]['stroke_index'], 4)
+
+    def test_a_duplicate_is_refused_and_names_the_missing_number(self):
+        bad = list(range(1, 19))
+        bad[3] = 5                                   # 5 twice, 4 now missing
+        resp = self._post(bad)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, '5 is used twice')
+        self.assertContains(resp, '4 is not used')
+        self.assertFalse(Tee.objects.filter(custom_index_of=self.source).exists())
+
+    def test_a_blank_index_is_refused(self):
+        vals = list(range(1, 19))
+        vals[6] = ''
+        resp = self._post(vals)
+        self.assertContains(resp, 'Every hole needs an index')
+        self.assertFalse(Tee.objects.filter(custom_index_of=self.source).exists())
+
+    def test_a_name_is_required(self):
+        resp = self._post(list(range(1, 19)), name='  ')
+        self.assertContains(resp, 'Give the set a name')
+
+    # -- the lock ------------------------------------------------------------
+
+    def test_par_and_yards_are_inherited_whatever_the_form_says(self):
+        """The form has no par/yards inputs — but neither may a forged post
+        change them, because the rating describes THAT geometry."""
+        swapped = list(range(1, 19))
+        swapped[0], swapped[1] = swapped[1], swapped[0]
+        self._post(swapped, par_1='6', yards_1='999')
+        made = Tee.objects.get(custom_index_of=self.source)
+        self.assertEqual(made.holes[0]['par'], 4)
+        self.assertEqual(made.holes[0]['yards'], 350)
+        self.assertEqual(made.par, self.source.par)
+        self.assertEqual(made.course_rating, self.source.course_rating)
+        self.assertEqual(made.slope, self.source.slope)
+
+    def test_the_set_is_protected_from_a_catalog_resync(self):
+        """curated + manual is what keeps services/catalog.py away from it."""
+        self._post(list(range(1, 19)))
+        made = Tee.objects.get(custom_index_of=self.source)
+        self.assertTrue(made.curated)
+        self.assertEqual(made.origin, Tee.ORIGIN_MANUAL)
+
+    def test_it_does_not_outrank_the_tee_it_forked_from(self):
+        """Appearing beside the source is wanted; silently becoming everyone's
+        default pick is not."""
+        self._post(list(range(1, 19)))
+        made = Tee.objects.get(custom_index_of=self.source)
+        self.assertEqual(made.sort_priority, self.source.sort_priority)
+
+    # -- the helpers the screen leans on ------------------------------------
+
+    def test_the_strip_marks_doubled_and_missing(self):
+        from console import custom_tees as custom
+        vals = list(range(1, 19))
+        vals[3] = 5
+        states = {c['value']: c['state'] for c in custom.strip(vals, 18)}
+        self.assertEqual(states[5], 'twice')
+        self.assertEqual(states[4], 'missing')
+        self.assertEqual(states[7], 'used')
+
+    def test_the_blocker_counts_what_is_wrong(self):
+        from console import custom_tees as custom
+        vals = list(range(1, 19))
+        vals[3] = 5
+        self.assertEqual(custom.blocker(vals, 18), '1 duplicate, 1 gap')
+        self.assertEqual(custom.blocker(list(range(1, 19)), 18), '')
+
+    def test_one_doubled_and_one_missing_offers_the_assignment(self):
+        """A swap cannot fix a duplicate — something must become the missing
+        number, and the cell just edited is almost always the one."""
+        from console import custom_tees as custom
+        vals = list(range(1, 19))
+        vals[3] = 5                                  # hole 4 now holds 5
+        self.assertEqual(custom.suggestion(vals, 18, changed_hole=4), (4, 4))
+
+    def test_no_suggestion_when_more_than_one_thing_is_wrong(self):
+        from console import custom_tees as custom
+        vals = list(range(1, 19))
+        vals[3], vals[5] = 5, 7
+        self.assertIsNone(custom.suggestion(vals, 18, changed_hole=4))
+
+    # -- editing an existing set --------------------------------------------
+
+    def test_editing_a_played_set_supersedes_it(self):
+        self._post(list(range(1, 19)))
+        made = Tee.objects.get(custom_index_of=self.source)
+        player = Player.objects.create(account=self.account, name='Dave',
+                                       handicap_index=Decimal('8.4'))
+        rnd = Round.objects.create(account=self.account, course=self.course)
+        fs = Foursome.objects.create(round=rnd, group_number=1)
+        FoursomeMembership.objects.create(foursome=fs, player=player, tee=made,
+                                          course_handicap=8, playing_handicap=8)
+
+        swapped = list(range(1, 19))
+        swapped[0], swapped[1] = swapped[1], swapped[0]
+        self._post(swapped, tee=made)
+
+        made.refresh_from_db()
+        self.assertIsNotNone(made.superseded_by_id)
+        self.assertEqual(
+            FoursomeMembership.objects.get(foursome=fs).tee.holes[0]['stroke_index'], 1)
+
+    def test_an_unplayed_set_can_be_deleted(self):
+        self._post(list(range(1, 19)))
+        made = Tee.objects.get(custom_index_of=self.source)
+        self.client.post(reverse('console:custom-tee-delete',
+                                 args=[self.course.pk, made.pk]))
+        self.assertFalse(Tee.objects.filter(pk=made.pk).exists())
+
+    def test_a_played_set_cannot_be_deleted(self):
+        self._post(list(range(1, 19)))
+        made = Tee.objects.get(custom_index_of=self.source)
+        player = Player.objects.create(account=self.account, name='Dave',
+                                       handicap_index=Decimal('8.4'))
+        rnd = Round.objects.create(account=self.account, course=self.course)
+        fs = Foursome.objects.create(round=rnd, group_number=1)
+        FoursomeMembership.objects.create(foursome=fs, player=player, tee=made,
+                                          course_handicap=8, playing_handicap=8)
+        resp = self.client.post(reverse('console:custom-tee-delete',
+                                        args=[self.course.pk, made.pk]))
+        self.assertContains(resp, 'has been played and cannot be removed')
+        self.assertTrue(Tee.objects.filter(pk=made.pk).exists())
+
+    # -- it reaches the app --------------------------------------------------
+
+    def test_the_api_marks_it_so_the_picker_can_label_it(self):
+        self._post(list(range(1, 19)))
+        made = Tee.objects.get(custom_index_of=self.source)
+        from api.serializers import TeeSerializer
+        data = TeeSerializer(made).data
+        self.assertTrue(data['is_custom_index'])
+        self.assertEqual(data['custom_index_of'], self.source.pk)
+        self.assertFalse(TeeSerializer(self.source).data['is_custom_index'])

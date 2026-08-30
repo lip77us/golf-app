@@ -98,10 +98,30 @@ def _state(check) -> dict:
 
 
 def current_tees(course) -> list[Tee]:
-    """Only the live revisions.  A retired tee still exists so old scorecards
-    render, but it is not something anyone should be editing."""
-    return sorted((t for t in course.tees.all() if t.is_current),
+    """Only the live revisions, each carrying its totals.
+
+    A retired tee still exists so old scorecards render, but it is not
+    something anyone should be editing.
+    """
+    tees = sorted((t for t in course.tees.all() if t.is_current),
                   key=lambda t: (t.sort_priority, t.tee_name))
+    for tee in tees:
+        add_totals(tee)
+    return tees
+
+
+def add_totals(tee) -> None:
+    """Hang par and yardage totals off the tee for the grid's last column.
+
+    Derived, never stored: `Tee.par` is the field of record, but a card that
+    shows eighteen numbers and no total makes the reader add them up to check
+    the one number that is stored — so the grid does the addition.  Yardage has
+    no stored total at all, which is the other half of the reason.
+    """
+    tee.par_total = sum(h.get('par') or 0 for h in tee.holes) or None
+    yards = [h.get('yards') or 0 for h in tee.holes]
+    # A tee with no yardage at all shows a dash rather than a confident 0.
+    tee.yards_total = sum(yards) or None
 
 
 # ---------------------------------------------------------------------------

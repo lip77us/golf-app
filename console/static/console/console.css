@@ -280,6 +280,13 @@ table.rows td.n{font-variant-numeric:tabular-nums;color:var(--muted);width:120px
 /* The turn.  Nine out, nine in. */
 .hg .turn{border-right:2px solid #B9C9BD}
 
+/* The total column.  Derived, never editable — so it is visibly a different
+   kind of cell from the eighteen it sums, heavier and set off by its own rule
+   rather than looking like a nineteenth hole you could type in. */
+.hg .tot{border-left:2px solid #B9C9BD;background:#F0F5F0;font-weight:700;
+         color:var(--ink2);width:52px;min-width:52px}
+.hg th.tot{background:#E9F0EA;color:var(--pine)}
+
 /* Sized to the widest thing it holds — three digits of yardage — rather than
    left at a text field's default, which on an 18-column grid is most of the
    screen. */
@@ -302,10 +309,12 @@ table.rows td.n{font-variant-numeric:tabular-nums;color:var(--muted);width:120px
 .fld .in:focus{outline:none;border-color:var(--pine);box-shadow:0 0 0 3px rgba(15,110,86,.14)}
 .fld .in.mut{background:var(--surface);color:var(--muted);font-weight:400}
 
-/* Source is required — three answers that sort the queue on their own. */
-.src{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
-.src label{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink2);cursor:pointer}
-.src input{accent-color:var(--pine);margin:0}
+/* Source is required — three answers that sort the queue on their own.
+   Scoped to the panel: `.src` alone was generic enough to hit a table row
+   elsewhere and turn it into a flex column. */
+.panel .src{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+.panel .src label{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink2);cursor:pointer}
+.panel .src input{accent-color:var(--pine);margin:0}
 .ta{width:100%;border:1.5px solid var(--cardBorder);border-radius:9px;background:#fff;
     padding:9px 11px;font:400 12.5px/1.55 "Spline Sans",sans-serif;color:var(--ink2);resize:vertical}
 .ta:focus{outline:none;border-color:var(--pine);box-shadow:0 0 0 3px rgba(15,110,86,.14)}
@@ -322,3 +331,26 @@ table.rows td.n{font-variant-numeric:tabular-nums;color:var(--muted);width:120px
 .dl .r b{font-variant-numeric:tabular-nums;min-width:34px}
 .dl .r span{color:var(--muted)}
 .dl .arrow{color:#C7D4C9}
+
+/* --- custom tees ---------------------------------------------------------- */
+.st.loc{background:rgba(59,216,154,.18);border:1px solid rgba(15,110,86,.35);color:var(--pine)}
+/* Inherited rows.  Greyed AND inert: read-only has to look read-only, or a TD
+   types into it and believes the change took. */
+.hg tr.lock td{color:var(--muted);background:#FAFBFA}
+.hg tr.fromtee td{color:#9AAAA0;background:#FBFDFB;font-style:italic}
+.hg tr.lock td.lbl,.hg tr.fromtee td.lbl{font-style:normal}
+/* A cell that differs from the source, and one that is doubled. */
+.hg .cellin.ch{color:var(--pine);font-weight:700;background:rgba(15,110,86,.07)}
+.hg .cellin.dup{background:rgba(194,64,44,.12);border-color:var(--under);color:var(--under)}
+
+.val{display:flex;align-items:center;gap:11px;background:#fff;
+     border:1px solid var(--cardBorder);border-radius:12px;padding:11px 14px;
+     margin-top:14px;font-size:12.5px}
+.val .m{color:var(--muted)}
+.chipset{display:flex;flex-wrap:wrap;gap:4px}
+.chipset i{display:inline-flex;align-items:center;justify-content:center;
+           width:24px;height:22px;border-radius:5px;font-style:normal;
+           font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;
+           border:1px solid var(--cardBorder);background:#fff;color:var(--ink2)}
+.chipset i.twice{background:var(--under);border-color:var(--under);color:#fff}
+.chipset i.missing{border-style:dashed;border-color:var(--under);color:var(--under);background:#fff}

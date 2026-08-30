@@ -1,6 +1,29 @@
 {% extends "console/shell.html" %}
 
-{% block title %}Edit {{ tee.tee_name }} · {{ course.name }}{% endblock %}
+{% block title %}Edit {{ tee.tee_name }} · {{ course.name }}
+<script>
+// The totals column is derived, so it has to move as the cells do — a total
+// that still shows the old par while the grid shows the new one is worse than
+// showing nothing at all.
+(function () {
+  function sum(prefix) {
+    let t = 0;
+    document.querySelectorAll('[name^="' + prefix + '_"]').forEach(function (el) {
+      const v = parseInt(el.value, 10);
+      if (!isNaN(v)) t += v;
+    });
+    return t;
+  }
+  function refresh() {
+    document.getElementById('partot').textContent = sum('par') || '—';
+    document.getElementById('yardtot').textContent = sum('yards') || '—';
+  }
+  document.querySelectorAll('.cellin').forEach(function (el) {
+    el.addEventListener('input', refresh);
+  });
+})();
+</script>
+{% endblock %}
 
 {% block main %}
 <div class="head">
@@ -62,13 +85,13 @@
   <div class="grid" style="margin-top:14px">
     <h4>Holes <span>Par totals itself. Stroke index must be 1–{{ tee.holes|length }}, each used exactly once.</span></h4>
     <table class="hg">
-      <tr><th class="lbl">Hole</th>{% for h in tee.holes %}<th{% if forloop.counter == 9 %} class="turn"{% endif %}>{{ h.number }}</th>{% endfor %}</tr>
+      <tr><th class="lbl">Hole</th>{% for h in tee.holes %}<th{% if forloop.counter == 9 %} class="turn"{% endif %}>{{ h.number }}</th>{% endfor %}<th class="tot">TOT</th></tr>
       <tr><td class="lbl">Par</td>
-        {% for h in tee.holes %}<td{% if forloop.counter == 9 %} class="turn"{% endif %}><input class="cellin" name="par_{{ h.number }}" value="{{ h.par }}" inputmode="numeric"></td>{% endfor %}</tr>
+        {% for h in tee.holes %}<td{% if forloop.counter == 9 %} class="turn"{% endif %}><input class="cellin" name="par_{{ h.number }}" value="{{ h.par }}" inputmode="numeric"></td>{% endfor %}<td class="tot" id="partot">{{ tee.par_total|default:"—" }}</td></tr>
       <tr><td class="lbl">Yards</td>
-        {% for h in tee.holes %}<td{% if forloop.counter == 9 %} class="turn"{% endif %}><input class="cellin" name="yards_{{ h.number }}" value="{{ h.yards|default:'' }}" inputmode="numeric"></td>{% endfor %}</tr>
+        {% for h in tee.holes %}<td{% if forloop.counter == 9 %} class="turn"{% endif %}><input class="cellin" name="yards_{{ h.number }}" value="{{ h.yards|default:'' }}" inputmode="numeric"></td>{% endfor %}<td class="tot" id="yardtot">{{ tee.yards_total|default:"—" }}</td></tr>
       <tr class="si"><td class="lbl">Index</td>
-        {% for h in tee.holes %}<td{% if forloop.counter == 9 %} class="turn"{% endif %}><input class="cellin" name="stroke_index_{{ h.number }}" value="{{ h.stroke_index }}" inputmode="numeric"></td>{% endfor %}</tr>
+        {% for h in tee.holes %}<td{% if forloop.counter == 9 %} class="turn"{% endif %}><input class="cellin" name="stroke_index_{{ h.number }}" value="{{ h.stroke_index }}" inputmode="numeric"></td>{% endfor %}<td class="tot">—</td></tr>
     </table>
   </div>
 
@@ -81,4 +104,27 @@
     </div>
   </div>
 </form>
+
+<script>
+// The totals column is derived, so it has to move as the cells do — a total
+// that still shows the old par while the grid shows the new one is worse than
+// showing nothing at all.
+(function () {
+  function sum(prefix) {
+    let t = 0;
+    document.querySelectorAll('[name^="' + prefix + '_"]').forEach(function (el) {
+      const v = parseInt(el.value, 10);
+      if (!isNaN(v)) t += v;
+    });
+    return t;
+  }
+  function refresh() {
+    document.getElementById('partot').textContent = sum('par') || '—';
+    document.getElementById('yardtot').textContent = sum('yards') || '—';
+  }
+  document.querySelectorAll('.cellin').forEach(function (el) {
+    el.addEventListener('input', refresh);
+  });
+})();
+</script>
 {% endblock %}

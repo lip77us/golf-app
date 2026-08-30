@@ -36,7 +36,10 @@ from core.models import Course, Player, Tee
 from services import genius_import as gi
 from tournament.models import Round
 
-from . import auth, courses as courselib, plan as planlib
+from services.tee_revisions import update_tee_geometry
+
+from . import auth, courses as courselib, custom_tees as custom, \
+    plan as planlib
 from .models import CourseCheck, ImportRun
 
 logger = logging.getLogger(__name__)
@@ -592,3 +595,93 @@ def tee_edit(request, pk, tee_pk):
         'posted': request.POST if request.method == 'POST' else None,
     })
     return render(request, 'console/tee_edit.html', ctx)
+
+
+# ---------------------------------------------------------------------------
+# Custom tees — a private re-index
+# ---------------------------------------------------------------------------
+
+@auth.td_required('Custom tees')
+def custom_tee(request, pk, tee_pk):
+    """Build or edit a re-index of one tee.
+
+    `tee_pk` is the SOURCE tee when creating, and the custom set itself when
+    editing — a custom set knows what it forked from, so one route serves both
+    and the page always has the source row to draw above the editable one.
+    """
+    if not _can_write(request):
+        return _no_events(request)
+
+    course = get_object_or_404(Course, pk=pk, account=request.user.account)
+    tee = get_object_or_404(Tee, pk=tee_pk, course=course,
+                            superseded_by__isnull=True)
+    editing = tee if tee.is_custom_index else None
+    source = tee.custom_index_of if editing else tee
+    n = len(source.holes)
+
+    if request.method == 'POST':
+        name, indexes, changed = custom.read_form(request.POST, source)
+        problems = custom.problems(indexes, n)
+        if not name:
+            problems.insert(0, 'Give the set a name — it sits in a picker beside '
+                               'the course’s own tees.')
+        if not problems:
+            if editing:
+                # Same copy-on-write rule as any other tee: a set somebody has
+                # already played keeps the ranking those rounds were scored on.
+                update_tee_geometry(editing, {
+                    'tee_name': name,
+                    'holes': custom.build_holes(source, indexes)})
+            else:
+                custom.create(source, name, indexes)
+            return redirect(reverse('console:course', args=[course.pk]))
+    else:
+        name = editing.tee_name if editing else custom.default_name(source)
+        indexes = [h.get('stroke_index')
+                   for h in (editing.holes if editing else source.holes)]
+        problems, changed = [], None
+
+    ctx = _shell(request, nav='courses')
+    ctx.update({
+        'course': course, 'source': source, 'editing': editing,
+        'name': name,
+        # Zipped so the template can draw source-above-yours per hole without
+        # index arithmetic in the markup.
+        'rows': [{'hole': h, 'source_index': h.get('stroke_index'),
+                  'value': v, 'changed': v != h.get('stroke_index')}
+                 for h, v in zip(source.holes, indexes)],
+        'strip': custom.strip(indexes, n),
+        'problems': problems,
+        'blocker': custom.blocker(indexes, n),
+        'suggestion': custom.suggestion(indexes, n, changed),
+        'played': custom.rounds_using(editing) if editing else 0,
+    })
+    return render(request, 'console/custom_tee.html', ctx)
+
+
+@auth.td_required('Custom tees')
+@require_POST
+def custom_tee_delete(request, pk, tee_pk):
+    """Remove a custom set.
+
+    Refused once a round has used it — the same PROTECT that guards a golfer's
+    history guards the geometry a card was scored against, and Django would
+    raise anyway. Saying so beats a 500.
+    """
+    if not _can_write(request):
+        return _no_events(request)
+    course = get_object_or_404(Course, pk=pk, account=request.user.account)
+    tee = get_object_or_404(Tee, pk=tee_pk, course=course,
+                            custom_index_of__isnull=False)
+    if custom.rounds_using(tee):
+        messages_error = 'That set has been played and cannot be removed.'
+        ctx = _shell(request, nav='courses')
+        ctx.update({'course': course, 'tees': courselib.current_tees(course),
+                    'history': CourseCheck.objects.filter(course=course)[:8],
+                    'rounds': Round.objects.filter(
+                        account=request.user.account, course=course).count(),
+                    'can_write': True, 'sources': CourseCheck.SOURCE_CHOICES,
+                    'error': messages_error})
+        return render(request, 'console/course_detail.html', ctx)
+    tee.delete()
+    return redirect(reverse('console:course', args=[course.pk]))

@@ -468,10 +468,36 @@ class Tee(models.Model):
         help_text='Deliberate local variant — protected from catalog re-sync '
                   'overwrite/delete.')
 
+    # A TD-built re-index of another tee: same par, yards, rating and slope —
+    # only the stroke index differs.  Non-null means "this is a custom set, and
+    # THAT is the tee it was built from".
+    #
+    # It is a real Tee row on purpose: the picker, round setup and every scoring
+    # service then work with no change at all.  What the FK adds is (a) the
+    # marker the app needs to label it in the picker, so a golfer who notices
+    # their stroke landed somewhere new gets an answer, and (b) the source row
+    # the editor draws above the editable one.
+    #
+    # Custom sets are created curated=True + origin='manual', which is what
+    # keeps a catalog re-sync away from them (services/catalog.py never visits
+    # a curated local-only tee, and never deletes anything).
+    custom_index_of = models.ForeignKey(
+                        'self', null=True, blank=True,
+                        on_delete=models.SET_NULL,
+                        related_name='custom_index_sets',
+                        help_text="Source tee when this is a TD re-index; "
+                                  "null for a normal tee.",
+                    )
+
     @property
     def is_current(self):
         """True when this is the live revision (nothing has superseded it)."""
         return self.superseded_by_id is None
+
+    @property
+    def is_custom_index(self):
+        """True for a TD-built re-index of another tee."""
+        return self.custom_index_of_id is not None
 
     def hole(self, number):
         """Return the hole dict for a given hole number (1-based)."""

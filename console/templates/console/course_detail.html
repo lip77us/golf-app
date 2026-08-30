@@ -17,14 +17,33 @@
 {% for tee in tees %}
   <div class="grid">
     <h4>{{ tee.tee_name }}
+      {% if tee.is_custom_index %}<span class="st loc">TD SET</span>{% endif %}
       <span>par {{ tee.par }} · rating {{ tee.course_rating }} / slope {{ tee.slope }}{% if tee.sex %} · {{ tee.get_sex_display }}{% endif %}</span>
-      {% if can_write %}<a class="btn q" style="height:28px;margin-left:auto" href="{% url 'console:tee-edit' course.pk tee.pk %}">Edit</a>{% endif %}
+      {% if can_write %}
+        <span style="margin-left:auto;display:flex;gap:7px">
+          {% if tee.is_custom_index %}
+            {% comment %} A custom set's geometry is its source's; only the
+               ranking is its own, so there is nothing else to edit. {% endcomment %}
+            <a class="btn q" style="height:28px" href="{% url 'console:custom-tee' course.pk tee.pk %}">Edit index</a>
+            <form method="post" action="{% url 'console:custom-tee-delete' course.pk tee.pk %}">{% csrf_token %}
+              <button class="btn q" style="height:28px" type="submit">Delete</button>
+            </form>
+          {% else %}
+            <a class="btn q" style="height:28px" href="{% url 'console:custom-tee' course.pk tee.pk %}">Re-index</a>
+            <a class="btn q" style="height:28px" href="{% url 'console:tee-edit' course.pk tee.pk %}">Edit</a>
+          {% endif %}
+        </span>
+      {% endif %}
     </h4>
+    {% if tee.is_custom_index %}
+      <p class="sub" style="margin:-4px 0 8px">A re-index of <b style="font-weight:600">{{ tee.custom_index_of.tee_name }}</b> —
+        same par, yards, rating and slope; only where the strokes fall is different.</p>
+    {% endif %}
     <table class="hg">
-      <tr><th class="lbl">Hole</th>{% for h in tee.holes %}<th{% if forloop.counter == 9 %} class="turn"{% endif %}>{{ h.number }}</th>{% endfor %}</tr>
-      <tr><td class="lbl">Par</td>{% for h in tee.holes %}<td{% if forloop.counter == 9 %} class="turn"{% endif %}>{{ h.par }}</td>{% endfor %}</tr>
-      <tr><td class="lbl">Yards</td>{% for h in tee.holes %}<td{% if forloop.counter == 9 %} class="turn"{% endif %}>{{ h.yards|default:"—" }}</td>{% endfor %}</tr>
-      <tr class="si"><td class="lbl">Index</td>{% for h in tee.holes %}<td{% if forloop.counter == 9 %} class="turn"{% endif %}>{{ h.stroke_index }}</td>{% endfor %}</tr>
+      <tr><th class="lbl">Hole</th>{% for h in tee.holes %}<th{% if forloop.counter == 9 %} class="turn"{% endif %}>{{ h.number }}</th>{% endfor %}<th class="tot">TOT</th></tr>
+      <tr><td class="lbl">Par</td>{% for h in tee.holes %}<td{% if forloop.counter == 9 %} class="turn"{% endif %}>{{ h.par }}</td>{% endfor %}<td class="tot">{{ tee.par_total|default:"—" }}</td></tr>
+      <tr><td class="lbl">Yards</td>{% for h in tee.holes %}<td{% if forloop.counter == 9 %} class="turn"{% endif %}>{{ h.yards|default:"—" }}</td>{% endfor %}<td class="tot">{{ tee.yards_total|default:"—" }}</td></tr>
+      <tr class="si"><td class="lbl">Index</td>{% for h in tee.holes %}<td{% if forloop.counter == 9 %} class="turn"{% endif %}>{{ h.stroke_index }}</td>{% endfor %}<td class="tot">—</td></tr>
     </table>
   </div>
 {% empty %}

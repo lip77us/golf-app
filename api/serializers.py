@@ -298,10 +298,13 @@ class CourseTeeSummarySerializer(serializers.ModelSerializer):
     18-element `holes` JSON so the course list payload stays small
     while still giving the client enough to render the tee list.
     """
+    # True for a TD-built re-index, so the list can mark it as one.
+    is_custom_index = serializers.BooleanField(read_only=True)
+
     class Meta:
         model  = Tee
         fields = ['id', 'tee_name', 'slope', 'course_rating', 'par',
-                  'sex', 'sort_priority']
+                  'sex', 'sort_priority', 'is_custom_index']
         read_only_fields = fields
 
 
@@ -353,11 +356,20 @@ class CatalogCourseSerializer(serializers.ModelSerializer):
 
 class TeeSerializer(serializers.ModelSerializer):
     course = CourseSerializer(read_only=True)
+    # A TD-built re-index (console/custom_tees.py).  Exposed so the tee picker
+    # can MARK it: a golfer who knows the course will notice their stroke landed
+    # somewhere new, and "the TD set this" is the answer to that question before
+    # it gets asked on the 4th tee.  `custom_index_of` names the tee it forked
+    # from, which is what makes the pair read as a choice rather than a mystery
+    # fifth tee box.
+    is_custom_index = serializers.BooleanField(read_only=True)
+    custom_index_of = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model  = Tee
         fields = ['id', 'course', 'tee_name', 'slope', 'course_rating',
-                  'par', 'holes', 'sex', 'sort_priority']
+                  'par', 'holes', 'sex', 'sort_priority',
+                  'is_custom_index', 'custom_index_of']
         read_only_fields = ['id']
 
 

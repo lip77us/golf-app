@@ -1622,8 +1622,60 @@ supersede-vs-in-place split with a played round's geometry asserted frozen, the
 par-change confirm gate, staff-vs-non-staff upstream, the emailed diff, and
 cross-account 404s.
 
-**Still not built (Phase 4):** custom tee sets — a private re-index of a tee,
-account-owned, consumed by the app's tee picker marked as a custom set.
+The grid is ruled like a scorecard: a line between every hole, a heavier one at
+the turn, a sticky hole-label column, and a **derived TOT column** (par + yards)
+computed from the holes rather than read off `Tee.par` — which is the stored
+value it exists to let you check. The editor recomputes it live as you type.
+
+### Phase 4 — custom tees (`console/custom_tees.py`)
+A **private re-index of a tee set**: same par, yards, rating and slope, only the
+stroke index differs. The case is a course that indexes off the tips, where the
+4th is 478 from the back and 318 from the front and still index 1.
+
+**A custom set is a real `Tee` row** (`Tee.custom_index_of`, self-FK, migration
+`core/0015`) on the same Course. That is the whole trick: the tee picker, round
+setup and every scoring service then need NO change. What the FK adds is the
+marker the app labels it with, and the source row the editor draws above the
+editable one. Created `origin='manual'` + `curated=True`, which is what keeps
+`services/catalog.py` away from it — a catalog re-sync skips a curated tee and
+never deletes anything, so a set named "White — club index" is untouchable by it.
+
+- **Index only; the lock is the feature.** `build_holes()` copies every field
+  except `stroke_index` off the source, so there is no path through the code
+  that changes par or a yardage whatever the form posts. A re-index leaves the
+  rating describing the same course; changing geometry would not, and that is a
+  course correction, so the panel links to the editor.
+- **Eighteen unique indexes, enforced.** `problems()` / `blocker()` / `strip()`.
+  Save is dead until the set is whole and **carries the count** (`Save — 1
+  duplicate, 1 gap`), because a disabled button that doesn't say why is a
+  mystery. The 1..n strip shows the WHOLE ranking — used once plain, twice
+  filled red, missing dashed — since a duplicate is only half the error and the
+  missing number is the one the TD has to find.
+- **`suggestion()`** offers the assignment outright when exactly one number is
+  doubled and one missing, targeting the cell the TD just edited (tracked in a
+  hidden `changed_hole`). A swap can't fix a duplicate — something has to BECOME
+  the missing number.
+- Editing a set that has been played goes through `update_tee_geometry` like
+  everything else, so those cards keep the ranking they were scored on. Deleting
+  is refused once a round has used it.
+- `sort_priority` MATCHES the source rather than beating it: appearing beside
+  the tee it forked from is wanted, silently becoming everyone's default pick
+  is not.
+- **The API marks it** — `TeeSerializer.is_custom_index` / `custom_index_of` and
+  `CourseTeeSummarySerializer.is_custom_index`. **The Flutter tee picker showing
+  a "TD SET" label is the one piece of Phase 4 still outstanding**; without it
+  the set works fine, just unlabelled.
+
+Tests: `console/test_courses.py` (37 total) — the ranking refusals, the lock
+(a forged `par_1`/`yards_1` post cannot move geometry), curated+manual, the
+sort-priority choice, strip/blocker/suggestion units, supersede-on-edit,
+delete-refused-when-played, and the serializer marker.
+
+**Watch out for CSS class collisions in this app's stylesheet.** `.src` was
+defined for the report's radio group (`display:flex;flex-direction:column`) and
+silently turned `<tr class="src">` in the custom-tee grid into a flex column —
+the DOM was correct and the table simply rendered as a vertical stack. Renamed
+to `.fromtee` and the radio rule scoped to `.panel .src`.
 
 **Deliberately NOT done:** retiring the app's course screens
 (`manage_courses_screen.dart`, `manage_course_tees_screen.dart`, the paste

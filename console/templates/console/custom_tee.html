@@ -1,0 +1,206 @@
+{% extends "console/shell.html" %}
+
+{% block title %}{% if editing %}{{ editing.tee_name }}{% else %}New custom tees{% endif %} · {{ course.name }}{% endblock %}
+
+{% block main %}
+<div class="head">
+  <div>
+    <h2 class="h1">{% if editing %}{{ editing.tee_name }}{% else %}New custom tees{% endif %}</h2>
+    <p class="sub">{{ course.name }} · starting from <b style="font-weight:600">{{ source.tee_name }}</b>
+      · par {{ source.par }} · {{ source.course_rating }} / {{ source.slope }}</p>
+  </div>
+  <div class="r"><a class="btn q" href="{% url 'console:course' course.pk %}">Cancel</a></div>
+</div>
+
+{% if problems %}
+  <div class="alert"><s>&#9888;</s><span>
+    {% for p in problems %}{{ p }}{% if not forloop.last %}<br>{% endif %}{% endfor %}
+  </span></div>
+{% endif %}
+
+{% if played %}
+  <div class="notice"><s>&#9432;</s><span>{{ played }} round{{ played|pluralize }}
+    already used this set. Saving creates a <b>new revision</b> — those cards keep
+    the ranking they were scored on.</span></div>
+{% endif %}
+
+<form method="post" id="setform">{% csrf_token %}
+  <input type="hidden" name="changed_hole" id="changed_hole" value="">
+
+  <div class="grid">
+    <h4>Stroke index
+      <span>The only editable row. Everything above it comes from the
+        {{ source.tee_name }} tee and is locked.</span></h4>
+    <table class="hg">
+      <tr><th class="lbl">Hole</th>
+        {% for r in rows %}<th{% if forloop.counter == 9 %} class="turn"{% endif %}>{{ r.hole.number }}</th>{% endfor %}
+        <th class="tot">TOT</th></tr>
+      {% comment %} Locked, and visibly so: a re-index changes nothing about the
+         golf course, which is exactly why the rating still describes it. {% endcomment %}
+      <tr class="lock"><td class="lbl">Par · locked</td>
+        {% for r in rows %}<td{% if forloop.counter == 9 %} class="turn"{% endif %}>{{ r.hole.par }}</td>{% endfor %}
+        <td class="tot">{{ source.par }}</td></tr>
+      <tr class="lock"><td class="lbl">Yards · locked</td>
+        {% for r in rows %}<td{% if forloop.counter == 9 %} class="turn"{% endif %}>{{ r.hole.yards|default:"—" }}</td>{% endfor %}
+        <td class="tot">{{ source.yards_total|default:"—" }}</td></tr>
+      {% comment %} The source stays on screen, dimmed, directly above the row
+         being edited — a diff of eighteen numbers is not something anyone holds
+         in their head. {% endcomment %}
+      <tr class="fromtee"><td class="lbl">{{ source.tee_name }} index</td>
+        {% for r in rows %}<td{% if forloop.counter == 9 %} class="turn"{% endif %}>{{ r.source_index }}</td>{% endfor %}
+        <td class="tot">—</td></tr>
+      <tr><td class="lbl" style="color:var(--pine)">Your index</td>
+        {% for r in rows %}
+          <td{% if forloop.counter == 9 %} class="turn"{% endif %}>
+            <input class="cellin idx {% if r.changed %}ch{% endif %}"
+                   name="index_{{ r.hole.number }}" data-hole="{{ r.hole.number }}"
+                   data-source="{{ r.source_index }}"
+                   value="{{ r.value|default_if_none:'' }}"
+                   inputmode="numeric" aria-label="Index for hole {{ r.hole.number }}">
+          </td>
+        {% endfor %}
+        <td class="tot">—</td></tr>
+    </table>
+  </div>
+
+  {% comment %} A duplicate is only half the error: using 12 twice means
+     something else is missing, and THAT is the number to find.  So the whole
+     ranking is shown at once. {% endcomment %}
+  <div class="val" id="val">
+    <span class="chipset" id="strip">
+      {% for c in strip %}<i class="{{ c.state }}">{{ c.value }}</i>{% endfor %}
+    </span>
+    <span class="m" id="vallabel">used once · <b>twice</b> · <b>missing</b></span>
+    {% comment %} Always in the DOM, hidden until it applies — the offer has to
+       be able to appear as you TYPE, not only after a rejected save. {% endcomment %}
+    <button class="btn q" style="height:30px;margin-left:auto" type="button"
+            id="fix" {% if not suggestion %}hidden{% endif %}
+            data-hole="{{ suggestion.0|default:'' }}"
+            data-value="{{ suggestion.1|default:'' }}">
+      {% if suggestion %}Set hole {{ suggestion.0 }} to {{ suggestion.1 }}{% endif %}</button>
+  </div>
+
+  <div class="two">
+    <div class="panel">
+      <div class="fld"><u>Name</u>
+        <input class="in" name="name" value="{{ name }}"></div>
+      <div class="fld"><u>Starts from</u>
+        <span class="in mut">{{ source.tee_name }} · {{ source.course_rating }} / {{ source.slope }} · par {{ source.par }}</span></div>
+      <div class="fld" style="margin:0"><u>Visible to</u>
+        <span class="in mut">Anyone playing a round you set up</span></div>
+    </div>
+    <div class="panel">
+      <h4>Why par and yards are locked</h4>
+      <p>A re-index does not change the golf course, so the rating and slope
+        still describe it and every handicap in the event stays correct.</p>
+      <p>Change a yardage and they do not — the rating would describe a course
+        that does not exist, and every net score in the field would be quietly
+        wrong. That is a
+        <a href="{% url 'console:tee-edit' course.pk source.pk %}">course correction</a>,
+        not a local override.</p>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span class="m">Nothing is shared upstream. This set is local to your account
+      and never reaches the course record.</span>
+    <div class="r">
+      <a class="btn q" href="{% url 'console:course' course.pk %}">Cancel</a>
+      {% comment %} Save carries the count of what is wrong, so a dead button is
+         never a mystery. {% endcomment %}
+      <button class="btn p" type="submit" id="save"
+              {% if blocker %}disabled{% endif %}>
+        <span id="savelabel">{% if blocker %}Save — {{ blocker }}{% else %}Save{% endif %}</span>
+      </button>
+    </div>
+  </div>
+</form>
+
+<script>
+// The strip and the Save button are the server's answer re-derived in the
+// browser so they move as you type.  The SERVER still enforces the ranking on
+// POST — this is feedback, not the gate.
+(function () {
+  const cells = Array.prototype.slice.call(document.querySelectorAll('.cellin.idx'));
+  const n = cells.length;
+  const strip = document.getElementById('strip');
+  const save = document.getElementById('save');
+  const label = document.getElementById('savelabel');
+  const fix = document.getElementById('fix');
+
+  function values() {
+    return cells.map(function (c) {
+      const v = parseInt(c.value, 10);
+      return isNaN(v) ? null : v;
+    });
+  }
+
+  function refresh() {
+    const vals = values();
+    const counts = {};
+    for (let i = 1; i <= n; i++) counts[i] = 0;
+    vals.forEach(function (v) { if (v in counts) counts[v] += 1; });
+
+    let twice = 0, missing = 0;
+    strip.innerHTML = '';
+    for (let i = 1; i <= n; i++) {
+      const c = counts[i];
+      const state = c === 1 ? 'used' : (c > 1 ? 'twice' : 'missing');
+      if (c > 1) twice++; if (c === 0) missing++;
+      const el = document.createElement('i');
+      el.className = state; el.textContent = i;
+      strip.appendChild(el);
+    }
+    // A cell that differs from the source is marked, so the diff reads itself.
+    cells.forEach(function (c) {
+      c.classList.toggle('ch', c.value !== '' && c.value !== c.dataset.source);
+      const v = parseInt(c.value, 10);
+      c.classList.toggle('dup', !isNaN(v) && counts[v] > 1);
+    });
+
+    const blank = vals.filter(function (v) { return v === null; }).length;
+    const parts = [];
+    if (twice) parts.push(twice + ' duplicate' + (twice === 1 ? '' : 's'));
+    if (missing) parts.push(missing + ' gap' + (missing === 1 ? '' : 's'));
+    const bad = blank || twice || missing;
+    save.disabled = !!bad;
+    label.textContent = bad ? ('Save — ' + (parts.join(', ') || 'incomplete')) : 'Save';
+    // The one case worth offering outright.  A swap cannot fix a duplicate —
+    // something has to BECOME the missing number — and the cell just edited is
+    // almost always the one that used to hold it.
+    if (twice === 1 && missing === 1) {
+      const dup = Object.keys(counts).find(function (k) { return counts[k] > 1; });
+      const gap = Object.keys(counts).find(function (k) { return counts[k] === 0; });
+      const edited = document.getElementById('changed_hole').value;
+      const holding = cells.filter(function (c) { return c.value === dup; });
+      const target = holding.filter(function (c) {
+        return c.dataset.hole === edited; })[0] || holding[holding.length - 1];
+      if (target) {
+        fix.dataset.hole = target.dataset.hole;
+        fix.dataset.value = gap;
+        fix.textContent = 'Set hole ' + target.dataset.hole + ' to ' + gap;
+        fix.hidden = false;
+      }
+    } else {
+      fix.hidden = true;
+    }
+  }
+
+  cells.forEach(function (c) {
+    c.addEventListener('input', function () {
+      document.getElementById('changed_hole').value = c.dataset.hole;
+      refresh();
+    });
+  });
+  if (fix) {
+    fix.addEventListener('click', function () {
+      const target = cells.filter(function (c) {
+        return c.dataset.hole === fix.dataset.hole; })[0];
+      if (target) { target.value = fix.dataset.value; target.focus(); }
+      refresh();
+    });
+  }
+  refresh();
+})();
+</script>
+{% endblock %}
