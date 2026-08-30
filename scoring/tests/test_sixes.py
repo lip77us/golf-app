@@ -450,3 +450,51 @@ class SixesStrokeStabilityTests(TestCase):
         # (15-18, full-round SI <= 9) → 18.
         assert sorted(self._strokes(D)) == [1, 2, 5, 9, 11, 14, 18], \
             sorted(self._strokes(D))
+
+
+class SixesConfiguredGamesTests(TestCase):
+    """`configured_games` must report sixes once teams are set.
+
+    The round hub routes Enter Scores off this. It used to route off an
+    in-memory per-device flag instead, which was only ever set by running setup
+    or loading the summary on THAT device — so a second golfer opening a match
+    already in progress was sent into the team picker. If this contract ever
+    stops holding, that bug comes straight back.
+    """
+
+    def setUp(self):
+        self.tee = make_tee()
+        self.round = make_round(self.tee.course)
+        self.fs = make_foursome(
+            self.round,
+            [('Ann', 0), ('Ben', 0), ('Cal', 0), ('Dee', 0)],
+            tee=self.tee,
+        )
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+
+    def _configured(self):
+        from api.serializers import FoursomeSerializer
+        return FoursomeSerializer(self.fs).data['configured_games']
+
+    def test_not_reported_before_setup(self):
+        self.assertNotIn('sixes', self._configured())
+
+    def test_reported_once_teams_are_set(self):
+        setup_sixes(self.fs, _team_data(
+            self.pid['Ann'], self.pid['Ben'],
+            self.pid['Cal'], self.pid['Dee']), handicap_mode='gross')
+        self.assertIn('sixes', self._configured())
+
+    def test_segments_always_carry_their_teams(self):
+        """The serializer keys off segments EXISTING, so a segment must never
+        exist without players — otherwise 'configured' would be a lie and the
+        hub would skip a setup that is genuinely still needed."""
+        setup_sixes(self.fs, _team_data(
+            self.pid['Ann'], self.pid['Ben'],
+            self.pid['Cal'], self.pid['Dee']), handicap_mode='gross')
+        for seg in self.fs.sixes_segments.all():
+            for team in seg.teams.all():
+                self.assertTrue(team.players.exists(),
+                                f'segment {seg.segment_number} team '
+                                f'{team.team_number} has no players')

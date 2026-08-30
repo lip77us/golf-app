@@ -309,7 +309,13 @@ class _RoundScreenState extends State<RoundScreen> {
                   isTeamPlayRound: round.isTeamPlayRound,
                   teamPlaySize:    round.teamPlaySize,
                   sixesActive:     fsGames.contains('sixes'),
-                  sixesStarted:    rp.sixesIsStarted(fs.id),
+                  // configuredGames comes from the SERVER (sixes_segments
+                  // exist), so it is true for everyone.  rp.sixesIsStarted is
+                  // in-memory and only ever set by THIS device running setup or
+                  // loading the summary — the hub never loads it, so on its own
+                  // it reads false for a second golfer, or after a restart.
+                  sixesStarted:    fs.configuredGames.contains('sixes') ||
+                                   rp.sixesIsStarted(fs.id),
                   roundActiveGames: round.activeGames,
                   allFoursomes:    round.foursomes,
                   roundId:         widget.roundId,
@@ -374,8 +380,18 @@ class _RoundScreenState extends State<RoundScreen> {
                       // status when match play is also active.
                       route = '/pink-ball';
                     } else if (fsGames.contains('sixes') &&
+                        !fs.configuredGames.contains('sixes') &&
                         !rp.sixesIsStarted(fs.id)) {
                       // Sixes needs team / segment setup first.
+                      //
+                      // Asked of the SERVER first, like every other game on
+                      // this screen.  `rp.sixesIsStarted` is a per-device
+                      // in-memory set written only by running setup or by
+                      // loadSixes — and the hub calls neither, so relying on it
+                      // alone sent a second golfer (or anyone who had restarted
+                      // the app) into the team picker on a match already being
+                      // played.  It stays as an OR so the moment right after
+                      // setup still routes correctly, before the hub reloads.
                       route = '/sixes-setup';
                     } else if (fsGames.contains('points_531') &&
                         !fs.configuredGames.contains('points_531')) {

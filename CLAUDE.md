@@ -1782,3 +1782,38 @@ holding neither is recreated no matter how clean the file is. Before re-importin
 after a source-data fix, put the new phone on the EXISTING record of anyone with
 history — otherwise they arrive as a fresh duplicate needing
 `merge_duplicate_golfers`.
+
+### Sixes: a second golfer was sent to the team picker mid-round — fixed
+Reported from the course: a second user re-entering an in-progress Sixes match
+got the pick-teams screen. Deterministic, not a race.
+
+`round_screen.dart` routed Enter Scores off **`rp.sixesIsStarted(fs.id)`** — an
+in-memory `Set<int>` on `RoundProvider`, written ONLY by `postSixesSetup`
+succeeding or by `loadSixes()` completing. **The round hub calls neither.** So
+the set is populated only for the device that ran setup in that app session;
+for a second golfer — or the same golfer after a restart, since the provider is
+rebuilt — it is empty, `sixesIsStarted` is false, and Enter Scores routes to
+`/sixes-setup`. The hub's button also reads `Start Match` instead of
+`Enter Scores` for that user.
+
+What he saw as "a spinner" is `SixesSetupScreen.initState`: not-started → call
+`loadSixes` (the spinner) → now started → `pushReplacementNamed('/score-entry')`.
+So it self-heals when the load succeeds. **The tail is the hazard**: if that
+load fails (offline, slow), the user is left on a team picker for a match
+already being played, and saving would run `setup_sixes`, which begins
+`SixesSegment.objects.filter(foursome=foursome).delete()` — rewriting who was on
+which team for holes already scored.
+
+Sixes was the ONLY game on that screen routing off provider state; every other
+one reads `fs.configuredGames`, which the server derives from
+`obj.sixes_segments.exists()` and is therefore true for everyone. Fixed to ask
+the server first, keeping `sixesIsStarted` as an OR so the moment right after
+setup still routes correctly before the hub reloads. Contract pinned by
+`SixesConfiguredGamesTests` (`scoring/tests/test_sixes.py`), including that a
+segment never exists without players — the serializer keys off existence, so
+that equivalence is what makes "configured" honest.
+
+**Still open (not changed):** `setup_sixes` deletes and recreates segments
+unconditionally, so re-running it mid-round with different teams silently
+rewrites played holes. That is the deliberate "Edit Configuration" path, so
+guarding it is a product decision, not a bug fix.
