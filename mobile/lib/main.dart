@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 // Hide google_fonts' own `Config` — it collides with our app's Config.
 import 'package:google_fonts/google_fonts.dart' hide Config;
@@ -371,7 +372,7 @@ class _GolfAppState extends State<GolfApp> {
         // every screen inherits the clamped MediaQuery.
         builder: (context, child) {
           final mq = MediaQuery.of(context);
-          return MediaQuery(
+          final Widget scaled = MediaQuery(
             data: mq.copyWith(
               textScaler: mq.textScaler.clamp(
                 minScaleFactor: 1.0,
@@ -379,6 +380,26 @@ class _GolfAppState extends State<GolfApp> {
               ),
             ),
             child: child!,
+          );
+          // Which backend this build is talking to, named on screen.
+          //
+          // RELEASE BUILDS NEVER SHOW IT — the App Store app is untouched.
+          // The case worth shouting about is a debug build wired to PROD (red),
+          // because USE_LOCAL defaults to false: a plain `flutter run` hits
+          // Railway, and test data lands in the real account looking exactly
+          // like local data.
+          //
+          // bottomStart on purpose. The conventional top-right corner is where
+          // the app bar actions live — including "Settle up" — so a ribbon
+          // there would cover the buttons it exists to help you test.
+          if (kReleaseMode) return scaled;
+          return Banner(
+            message : Config.backendLabel,
+            location: BannerLocation.bottomStart,
+            color   : Config.isProd
+                ? const Color(0xFFC62828)   // red: real data
+                : const Color(0xFF2E7D32),  // green: safe to break
+            child: scaled,
           );
         },
         theme:     _halvedTheme(Brightness.light),

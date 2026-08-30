@@ -50,6 +50,24 @@ class Config {
     }
   }
 
+  /// Which backend this build is wired to, for the debug ribbon.
+  ///
+  /// The question that matters is not "which server" but the one dangerous
+  /// combination: a DEBUG build talking to PRODUCTION.  `USE_LOCAL` defaults
+  /// to false, so a plain `flutter run` — including on the simulator — points
+  /// at Railway, and throwaway test data lands in the real account.  Nothing
+  /// on screen distinguished that from local, which is exactly how a junk
+  /// tournament got created in production.
+  static bool get isProd => baseUrl == _railway;
+
+  /// Short name for the ribbon.  An explicit --dart-define=API_BASE shows its
+  /// host, since neither label would be true.
+  static String get backendLabel {
+    if (baseUrl == _railway) return 'PROD';
+    if (baseUrl == _local)   return 'LOCAL';
+    return Uri.tryParse(baseUrl)?.host ?? 'CUSTOM';
+  }
+
   /// Public App Store listing — the "Update" button on the blocking
   /// update-required screen sends users here.
   static const String appStoreUrl = 'https://apps.apple.com/app/id6768284628';
