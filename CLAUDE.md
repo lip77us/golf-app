@@ -1813,7 +1813,29 @@ setup still routes correctly before the hub reloads. Contract pinned by
 segment never exists without players — the serializer keys off existence, so
 that equivalence is what makes "configured" honest.
 
-**Still open (not changed):** `setup_sixes` deletes and recreates segments
-unconditionally, so re-running it mid-round with different teams silently
-rewrites played holes. That is the deliberate "Edit Configuration" path, so
-guarding it is a product decision, not a bug fix.
+#### Teams and segment bounds are locked once the match has started
+`setup_sixes` began with `SixesSegment.objects.filter(foursome=...).delete()`,
+so re-running it mid-round with different teams silently rewrote what every
+played hole meant. Now guarded **in the service, not the view**, so every caller
+is covered:
+
+* **Refused** (`SixesLocked` -> 400) once a REAL golfer has posted a gross
+  score, if the request would change team membership, which side is team 1, or
+  a segment's start/end hole. A phantom padding a three-ball does not lock it —
+  same rule the tee-box editor uses.
+* **Allowed**: handicap mode / allowance / scoring format / allocation. A TD
+  correcting "we said gross, we meant net" is legitimate.
+* The allowed path now **updates in place instead of rebuilding**, because a
+  delete-and-recreate would also take the `is_extra` segment and any `is_void`
+  withdrawal state with it.
+
+`team_select_method` is deliberately NOT compared — how a pair was chosen is a
+note about the past, not something a hole was scored against. Tests:
+`SixesTeamLockTests` (`scoring/tests/test_sixes.py`).
+
+**Watch the decorator when inserting above a function.** `setup_sixes` carries
+`@transaction.atomic`; a helper inserted immediately before `def setup_sixes`
+landed BETWEEN the decorator and the function, silently moving atomicity onto
+the new declaration. The tests caught it (the exception class had become a
+function), but a delete-then-recreate losing its transaction is exactly the
+kind of thing that would not show up until it mattered.

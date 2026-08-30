@@ -11,6 +11,7 @@ from django.test import TestCase
 
 from games.models import SixesHoleResult
 from services.sixes import (
+    SixesLocked,
     apply_withdrawal_to_sixes,
     calculate_sixes,
     setup_sixes,
@@ -498,3 +499,106 @@ class SixesConfiguredGamesTests(TestCase):
                 self.assertTrue(team.players.exists(),
                                 f'segment {seg.segment_number} team '
                                 f'{team.team_number} has no players')
+
+
+class SixesTeamLockTests(TestCase):
+    """Teams and segment bounds are locked once the match has started.
+
+    Every played hole was scored against a particular pairing over a
+    particular stretch of holes. `setup_sixes` begins by DELETING the segments,
+    so re-running it with different teams silently rewrites what those holes
+    meant. Locked at the service, not the view, so every caller is covered.
+    """
+
+    def setUp(self):
+        self.tee = make_tee()
+        self.round = make_round(self.tee.course)
+        self.fs = make_foursome(
+            self.round,
+            [('Ann', 0), ('Ben', 0), ('Cal', 0), ('Dee', 0)],
+            tee=self.tee,
+        )
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        self.A, self.B = self.pid['Ann'], self.pid['Ben']
+        self.C, self.D = self.pid['Cal'], self.pid['Dee']
+        setup_sixes(self.fs, _team_data(self.A, self.B, self.C, self.D),
+                    handicap_mode='gross')
+
+    def _swapped(self):
+        """Ann pairs with Cal instead of Ben — a different match entirely."""
+        return _team_data(self.A, self.C, self.B, self.D)
+
+    def _score_one(self):
+        submit_hole(self.fs, 1, [(self.A, 4), (self.B, 5),
+                                 (self.C, 5), (self.D, 6)])
+
+    # -- before anybody has played, everything is still open ----------------
+
+    def test_teams_can_be_changed_before_a_score_exists(self):
+        setup_sixes(self.fs, self._swapped(), handicap_mode='gross')
+        seg = self.fs.sixes_segments.order_by('segment_number').first()
+        t1 = seg.teams.get(team_number=1)
+        self.assertEqual({p.id for p in t1.players.all()}, {self.A, self.C})
+
+    # -- once it has started ------------------------------------------------
+
+    def test_a_team_change_is_refused_once_a_hole_is_scored(self):
+        self._score_one()
+        with self.assertRaises(SixesLocked) as ctx:
+            setup_sixes(self.fs, self._swapped(), handicap_mode='gross')
+        self.assertIn('locked once the match has started', str(ctx.exception))
+        # ...and the original pairing is untouched.
+        seg = self.fs.sixes_segments.order_by('segment_number').first()
+        t1 = seg.teams.get(team_number=1)
+        self.assertEqual({p.id for p in t1.players.all()}, {self.A, self.B})
+
+    def test_moving_a_segment_boundary_is_refused_too(self):
+        self._score_one()
+        moved = _team_data(self.A, self.B, self.C, self.D)
+        moved[0]['end_hole'] = 7          # segment 1 now 1-7
+        with self.assertRaises(SixesLocked):
+            setup_sixes(self.fs, moved, handicap_mode='gross')
+
+    def test_swapping_which_side_is_team_one_is_refused(self):
+        """The sides are reported separately, so the comparison is ordered."""
+        self._score_one()
+        with self.assertRaises(SixesLocked):
+            setup_sixes(self.fs, _team_data(self.C, self.D, self.A, self.B),
+                        handicap_mode='gross')
+
+    # -- settings still move, and without collateral damage -----------------
+
+    def test_settings_can_still_be_corrected_mid_round(self):
+        self._score_one()
+        setup_sixes(self.fs, _team_data(self.A, self.B, self.C, self.D),
+                    handicap_mode='net', net_percent=90)
+        seg = self.fs.sixes_segments.order_by('segment_number').first()
+        self.assertEqual(seg.handicap_mode, 'net')
+        self.assertEqual(seg.net_percent, 90)
+
+    def test_a_settings_change_does_not_rebuild_the_segments(self):
+        """The allowed path must not delete and recreate — that would take the
+        extra segment and any is_void withdrawal state with it."""
+        self._score_one()
+        before = list(self.fs.sixes_segments.order_by('segment_number')
+                      .values_list('id', flat=True))
+        setup_sixes(self.fs, _team_data(self.A, self.B, self.C, self.D),
+                    handicap_mode='net', net_percent=90)
+        after = list(self.fs.sixes_segments.order_by('segment_number')
+                     .values_list('id', flat=True))
+        self.assertEqual(before, after)      # same rows, not replacements
+
+    def test_a_phantom_score_does_not_lock_the_match(self):
+        """A phantom padding a three-ball is not somebody playing."""
+        from core.models import Player
+        phantom = Player.objects.create(
+            account=self.round.account, name='Phantom',
+            handicap_index=0, is_phantom=True)
+        from scoring.models import HoleScore
+        HoleScore.objects.create(foursome=self.fs, player=phantom,
+                                 hole_number=1, gross_score=5)
+        setup_sixes(self.fs, self._swapped(), handicap_mode='gross')
+        seg = self.fs.sixes_segments.order_by('segment_number').first()
+        t1 = seg.teams.get(team_number=1)
+        self.assertEqual({p.id for p in t1.players.all()}, {self.A, self.C})

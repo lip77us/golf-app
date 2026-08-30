@@ -98,6 +98,49 @@ def _short(player) -> str:
 # Setup
 # ---------------------------------------------------------------------------
 
+class SixesLocked(Exception):
+    """A team or segment change asked for after the match has started.
+
+    Carries a message safe to show a person; the API turns it into a 400.
+    """
+
+
+def _foursome_has_real_scores(foursome) -> bool:
+    """True once a REAL golfer has posted a gross score.
+
+    Phantom scores (the Sixes phantom padding a three-ball) are not somebody
+    playing, so they must not lock the match — same rule the tee-box editor
+    uses.
+    """
+    from scoring.models import HoleScore
+    return HoleScore.objects.filter(
+        foursome=foursome, gross_score__isnull=False,
+        player__is_phantom=False,
+    ).exists()
+
+
+def _teams_or_bounds_differ(existing, team_data) -> bool:
+    """Would this setup change WHO plays whom, or over which holes?
+
+    Team 1 vs team 2 is not symmetric — the sides are reported separately — so
+    the comparison is ordered. `team_select_method` is deliberately excluded:
+    how a pair was chosen is a note about the past, not something a played hole
+    was scored against.
+    """
+    if len(existing) != len(team_data):
+        return True
+    for seg, td in zip(existing, team_data):
+        if (seg.start_hole, seg.end_hole) != (td['start_hole'], td['end_hole']):
+            return True
+        by_number = {t.team_number: t for t in seg.teams.all()}
+        for number, key in ((1, 'team1_player_ids'), (2, 'team2_player_ids')):
+            team = by_number.get(number)
+            current = {p.id for p in team.players.all()} if team else set()
+            if current != set(td.get(key) or []):
+                return True
+    return False
+
+
 @transaction.atomic
 def setup_sixes(
     foursome,
@@ -132,6 +175,36 @@ def setup_sixes(
 
     Returns a list of SixesSegment instances.
     """
+    existing = list(SixesSegment.objects.filter(foursome=foursome,
+                                                is_extra=False)
+                    .order_by('segment_number')
+                    .prefetch_related('teams__players'))
+
+    if existing and _foursome_has_real_scores(foursome):
+        # The match is under way.  Who is on which team, and where each
+        # segment starts and ends, decide what every played hole MEANT — so
+        # they are locked, the same way the tee-box editor locks a tee once a
+        # score exists.  Reported from the course: a second golfer landing on
+        # the team picker mid-round could have saved from it, and this function
+        # begins by deleting the segments those holes were scored against.
+        if _teams_or_bounds_differ(existing, team_data):
+            raise SixesLocked(
+                'Teams and segments are locked once the match has started — '
+                'holes already scored were played against them. Withdraw a '
+                'player, or start a new round, to change who plays whom.')
+
+        # Same match, different settings (handicap mode, allowance, format).
+        # Update IN PLACE rather than rebuilding: a delete-and-recreate would
+        # also take the extra segment and any is_void withdrawal state with it.
+        for seg in SixesSegment.objects.filter(foursome=foursome):
+            seg.handicap_mode       = handicap_mode
+            seg.net_percent         = net_percent
+            seg.scoring_format      = scoring_format
+            seg.handicap_allocation = handicap_allocation
+            seg.save(update_fields=['handicap_mode', 'net_percent',
+                                    'scoring_format', 'handicap_allocation'])
+        return existing
+
     SixesSegment.objects.filter(foursome=foursome).delete()
 
     # Clamp percent to the validated range so a bad caller can't poison the DB.

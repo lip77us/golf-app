@@ -5371,16 +5371,23 @@ class SixesSetupView(APIView):
         ser = SixesSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
-        from services.sixes import setup_sixes
+        from services.sixes import setup_sixes, SixesLocked
         data     = ser.validated_data
-        segments = setup_sixes(
-            foursome,
-            data['segments'],
-            handicap_mode       = data.get('handicap_mode', 'net'),
-            net_percent         = data.get('net_percent', 100),
-            scoring_format      = data.get('scoring_format', 'classic'),
-            handicap_allocation = data.get('handicap_allocation', 'per_segment'),
-        )
+        try:
+            segments = setup_sixes(
+                foursome,
+                data['segments'],
+                handicap_mode       = data.get('handicap_mode', 'net'),
+                net_percent         = data.get('net_percent', 100),
+                scoring_format      = data.get('scoring_format', 'classic'),
+                handicap_allocation = data.get('handicap_allocation', 'per_segment'),
+            )
+        except SixesLocked as exc:
+            # Teams and segment bounds are locked once a real score exists —
+            # the played holes were scored against them.  Settings-only edits
+            # still go through.
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
         return Response({'segments_created': len(segments)}, status=status.HTTP_201_CREATED)
 
 
