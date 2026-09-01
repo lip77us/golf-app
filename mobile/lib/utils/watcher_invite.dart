@@ -56,6 +56,35 @@ class _WatcherInviteSheet extends StatefulWidget {
 class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
   bool _busy = false;
 
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _search    = '';
+  /// Show only golfers who have signed up. A watcher who is on Halved opens
+  /// the link in the app and follows live; anyone else lands on the read-only
+  /// web page — so "who already has it" is a real distinction when you are
+  /// deciding who to rail you, not just a badge.
+  bool   _onAppOnly = false;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  /// Roster search, matching My Golfers: name or phone, case-insensitive.
+  ///
+  /// Without this the sheet listed every eligible golfer in the account and
+  /// nothing else. An account that imported a Golf Genius roster has a couple
+  /// of hundred, so picking one meant scrolling past everybody.
+  List<PlayerProfile> get _filtered {
+    final q = _search.trim().toLowerCase();
+    return widget.golfers.where((p) {
+      if (_onAppOnly && !p.isOnApp) return false;
+      if (q.isEmpty) return true;
+      return p.name.toLowerCase().contains(q)
+          || p.phone.toLowerCase().contains(q);
+    }).toList();
+  }
+
   Future<Map<String, dynamic>> _post(
       {int? playerId, String? phone, String? name}) async {
     final c = context.read<AuthProvider>().client;
@@ -341,6 +370,60 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
               onTap: _busy ? null : _byPhone,
             ),
             const Divider(height: 1),
+
+            // Search + the on-Halved filter. Only worth drawing when there is
+            // a list long enough to get lost in — on a four-golfer roster the
+            // controls would take more room than the thing they filter.
+            if (widget.golfers.length > 5)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: _searchCtrl,
+                      onChanged: (v) => setState(() => _search = v),
+                      textInputAction: TextInputAction.search,
+                      // The keyboard covers the list it is filtering, and
+                      // results are already live as you type, so the search
+                      // key just means "done typing".
+                      onSubmitted: (_) => FocusScope.of(context).unfocus(),
+                      decoration: InputDecoration(
+                        hintText: 'name or phone',
+                        prefixIcon: const Icon(Icons.search),
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                        suffixIcon: _search.isEmpty
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.clear),
+                                tooltip: 'Clear',
+                                onPressed: () {
+                                  _searchCtrl.clear();
+                                  setState(() => _search = '');
+                                },
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      FilterChip(
+                        selected: _onAppOnly,
+                        onSelected: (v) => setState(() => _onAppOnly = v),
+                        avatar: const HalvedMark(size: 16),
+                        label: const Text('On Halved'),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${_filtered.length} of ${widget.golfers.length}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    ]),
+                  ],
+                ),
+              ),
+
             Flexible(
               child: widget.golfers.isEmpty
                   ? const Padding(
@@ -348,11 +431,28 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
                       child: Text('No golfers in your list yet.',
                           textAlign: TextAlign.center),
                     )
+                  : _filtered.isEmpty
+                  // Distinct from an empty roster, and it says which filter is
+                  // hiding them — "nobody" and "nobody matching" send you
+                  // looking in different places.
+                  ? Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        _onAppOnly
+                            ? 'No golfers on Halved match that. Invite by phone '
+                              'number, or turn off the On Halved filter.'
+                            : 'No golfers match that. Invite by phone number '
+                              'instead.',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    )
                   : ListView.builder(
                       shrinkWrap: true,
-                      itemCount: widget.golfers.length,
+                      itemCount: _filtered.length,
                       itemBuilder: (_, i) {
-                        final p = widget.golfers[i];
+                        final p = _filtered[i];
                         return ListTile(
                           leading: CircleAvatar(
                             backgroundColor:
