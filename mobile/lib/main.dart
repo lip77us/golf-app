@@ -392,7 +392,14 @@ class _GolfAppState extends State<GolfApp> {
           // bottomStart on purpose. The conventional top-right corner is where
           // the app bar actions live — including "Settle up" — so a ribbon
           // there would cover the buttons it exists to help you test.
-          if (kReleaseMode) return scaled;
+          // A RELEASE build pointed at PRODUCTION is the App Store app —
+          // untouched, no ribbon. A release build pointed anywhere ELSE is a
+          // test build on a real phone, and it has to say so: forgetting
+          // `--dart-define=API_BASE=...` silently sends the whole session to
+          // Railway, and nothing on screen distinguished that from local. It
+          // cost an evening of debugging a feature that was never once being
+          // exercised, and a real Twilio SMS, before the missing flag surfaced.
+          if (kReleaseMode && Config.isProd) return scaled;
           return Banner(
             message : Config.backendLabel,
             location: BannerLocation.bottomStart,
