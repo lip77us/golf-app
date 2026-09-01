@@ -253,7 +253,7 @@ def _recalculate_games(foursome: Foursome) -> None:
     except Exception:
         pass  # not a cup round — skip silently
 
-    # ── Sixes lock screen ──────────────────────────────────────────────────────
+    # ── Lock screen ────────────────────────────────────────────────────────────
     # The board moves for all four golfers when any one of them posts, so the
     # push goes out from here rather than from the phone that scored — that
     # phone is the only one that already knows.
@@ -261,11 +261,24 @@ def _recalculate_games(foursome: Foursome) -> None:
     # Sent only to rounds with an activity registered, which is why this costs
     # nothing on the rounds that never raised one.  Swallowed whole: a stale
     # lock screen is a nuisance, a failed scoring request is not.
-    if 'sixes' in active_games:
+    #
+    # Gated on the REGISTRY, not on a hardcoded slug: this read `'sixes' in
+    # active_games` while the registry had been building Rabbit / Nassau /
+    # Skins boards all along, so those rounds could raise a card and then never
+    # receive a single update — a board frozen on hole 1, which reads as broken
+    # rather than absent.
+    from services.live_activity_registry import round_has_board
+    if round_has_board(round_obj):
         def _push():
             try:
-                from services.live_activity_push import push_round
+                from services.live_activity_push import (
+                    push_round, push_start_to_absent)
+                # Update the cards that exist, then raise one on every phone
+                # that has not got one — the non-scoring golfers and any
+                # watcher. Order matters only in that the start push reads the
+                # registered-token table to know who to skip.
                 push_round(round_obj)
+                push_start_to_absent(round_obj)
             except Exception:
                 logger.exception('live activity push failed for round %s',
                                  round_obj.id)
@@ -9391,6 +9404,65 @@ class RoundLiveActivityStateView(APIView):
             # first board is the one that never goes stale.
             'stale_after_seconds': STALE_AFTER,
         })
+
+
+class LiveActivityStartTokenView(APIView):
+    """
+    POST   /api/live-activity/start-token/  {token}  → {ok: true}
+    DELETE /api/live-activity/start-token/  {token?} → {ok: true}
+
+    The push-to-start token, which is NOT round-scoped: iOS issues one per app
+    install for the activity type, and the server uses it to raise a card on a
+    phone that has not opened the round.  That is what puts the board on the
+    lock screens of the three golfers who are not entering scores.
+
+    Posted at launch and again whenever iOS reissues, so this upserts on the
+    token.  DELETE on sign-out — the token outlives a session and would
+    otherwise raise a board on a phone whose owner has signed out.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from tournament.models import LiveActivityStartToken
+        token  = (request.data.get('token') or '').strip()
+        status_ = (request.data.get('status') or '').strip()
+        if not token:
+            # A phone with no token can still say WHY, and that is worth
+            # recording rather than rejecting: "Live Activities are switched
+            # off" and "iOS never issued one" are different problems, and from
+            # the server they are otherwise identical silences.
+            if status_:
+                # "Waiting for iOS to issue one" is the NORMAL state at launch —
+                # the token arrives asynchronously a moment later — so it logs
+                # as information. A phone that cannot get one is the warning.
+                waiting = request.data.get('waiting') is True
+                (logger.info if waiting else logger.warning)(
+                    'live-activity: user %s has no start token yet — %s',
+                    request.user.pk, status_[:120])
+                return Response({'ok': True, 'recorded': False})
+            return Response({'detail': 'token is required.'}, status=400)
+        # Keyed on the token, not the user: a phone handed to a different
+        # golfer must not leave the previous one addressable on it.
+        LiveActivityStartToken.objects.update_or_create(
+            token=token, defaults={'user': request.user})
+        # Logged loudly on purpose: this arriving is the ONE signal that the
+        # whole iOS half worked — the observer installed, iOS issued a
+        # push-to-start token, and the phone reached this server. Its absence
+        # is otherwise indistinguishable from a phone that never ran the code.
+        logger.info('live-activity: start token registered for user %s (%s…)',
+                    request.user_id if hasattr(request, 'user_id')
+                    else request.user.pk, token[:12])
+        return Response({'ok': True})
+
+    def delete(self, request):
+        from tournament.models import LiveActivityStartToken
+        token = (request.data.get('token') or '').strip()
+        qs = LiveActivityStartToken.objects.filter(user=request.user)
+        if token:
+            qs = qs.filter(token=token)
+        qs.delete()
+        return Response({'ok': True})
 
 
 class RoundLiveActivityTokenView(APIView):

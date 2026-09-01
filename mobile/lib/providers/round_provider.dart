@@ -19,7 +19,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../api/client.dart';
 import '../api/models.dart';
-import '../game_catalog.dart' show resolvePrimary;
+import '../game_catalog.dart' show resolvePrimary, gameHasLiveActivity;
 import '../local/local_database.dart';
 import '../services/sixes_live_activity.dart';
 import '../sync/sync_service.dart';
@@ -32,7 +32,11 @@ class RoundProvider extends ChangeNotifier {
 
   /// The Sixes lock screen (docs/design-review/handoff-sixes-lock/SPEC.md).
   /// A no-op on Android and on iOS below 16.2.
-  late final SixesLiveActivity _liveActivity = SixesLiveActivity(_client);
+  // The shared instance — it owns the platform channel, and the token
+  // lifecycle is tied to the session rather than to a round. Registration
+  // happens in PushService.attach, which main() calls eagerly; this
+  // provider is lazy and does not exist until a round is opened.
+  final SixesLiveActivity _liveActivity = SixesLiveActivity.instance;
 
   RoundProvider(this._client, this._localDb, this._sync) {
     _sync.addListener(_onSyncChanged);
@@ -45,26 +49,34 @@ class RoundProvider extends ChangeNotifier {
     _liveActivity.updateClient(client);
   }
 
-  /// True when the group this foursome belongs to is playing Sixes — the union
-  /// of round-level and foursome-level games, the same resolution the server
-  /// uses to decide which calculators run.
-  bool _runsSixes(int foursomeId) {
+  /// True when this group is playing a game that HAS a lock-screen board — the
+  /// union of round-level and foursome-level games, the same resolution the
+  /// server uses to decide which calculators run.
+  ///
+  /// Was Sixes-only, which quietly meant Rabbit / Nassau / Skins rounds never
+  /// raised a card even though the server has built their boards all along.
+  /// The flag lives on the catalog entry now, so a new game is one line there
+  /// plus a builder in `live_activity_registry.BUILDERS`.
+  bool _runsLiveActivityGame(int foursomeId) {
     final rnd = _round;
     if (rnd == null) return false;
-    if (rnd.activeGames.contains('sixes')) return true;
+    if (rnd.activeGames.any(gameHasLiveActivity)) return true;
     for (final fs in rnd.foursomes) {
-      if (fs.id == foursomeId) return fs.activeGames.contains('sixes');
+      if (fs.id == foursomeId) {
+        return fs.activeGames.any(gameHasLiveActivity);
+      }
     }
     return false;
   }
 
-  /// Sixes anywhere in the round.  Used on sign, where we no longer care which
-  /// group the golfer was in — only whether there is a board to take down.
-  bool _roundRunsSixes(int roundId) {
+  /// A lock-screen game anywhere in the round.  Used on sign, where we no longer
+  /// care which group the golfer was in — only whether there is a board to take
+  /// down.
+  bool _roundRunsLiveActivityGame(int roundId) {
     final rnd = _round;
     if (rnd == null || rnd.id != roundId) return false;
-    return rnd.activeGames.contains('sixes')
-        || rnd.foursomes.any((fs) => fs.activeGames.contains('sixes'));
+    return rnd.activeGames.any(gameHasLiveActivity)
+        || rnd.foursomes.any((fs) => fs.activeGames.any(gameHasLiveActivity));
   }
 
   @override
@@ -290,6 +302,20 @@ class RoundProvider extends ChangeNotifier {
       } else {
         _multiSkinsSummary = null;
       }
+      // Raise the board for a golfer who is NOT the one scoring.
+      //
+      // Push-to-start covers this without anyone opening anything, but only on
+      // iOS 17.2+. Below that a remote start does not exist, so opening the
+      // round is the moment we can start one locally — and on 17.2+ this is
+      // simply a no-op, because the card is already there and both the Dart
+      // guard and the native side treat a second start as nothing.
+      //
+      // Costs nothing on a round with no board: the server answers with
+      // nothing and no activity starts.
+      if (_round!.status == 'in_progress'
+          && _round!.activeGames.any(gameHasLiveActivity)) {
+        unawaited(_liveActivity.start(roundId: roundId));
+      }
     } on NetworkException {
       final cached = await _localDb.getCachedRound(roundId);
       if (cached != null) {
@@ -443,7 +469,7 @@ class RoundProvider extends ChangeNotifier {
       //    eight-hour iOS cap, and an abandoned round never leaves a ghost.
       //    Unawaited: the commit point is the local write above, and a lock
       //    screen must never sit between the golfer and their next hole.
-      if (_round != null && _runsSixes(foursomeId)) {
+      if (_round != null && _runsLiveActivityGame(foursomeId)) {
         unawaited(_liveActivity.start(roundId: _round!.id));
       }
 
@@ -1278,7 +1304,7 @@ class RoundProvider extends ChangeNotifier {
       _leaderboard = lb;
       // Signed — swap the board for the one personal state (what you won and
       // who to see) and let iOS dismiss it a few minutes later.
-      if (_roundRunsSixes(roundId)) {
+      if (_roundRunsLiveActivityGame(roundId)) {
         unawaited(_liveActivity.end(roundId: roundId));
       }
       if (_round != null) {

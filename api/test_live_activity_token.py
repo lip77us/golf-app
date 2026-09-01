@@ -76,6 +76,20 @@ class LiveActivityTokenTests(TestCase):
         self.assertEqual(rows.count(), 1)
         self.assertEqual(rows.first().token, 'second')
 
+    def test_a_real_length_token_fits(self):
+        """A Live Activity token is NOT a device token.
+
+        iOS issues ~320 hex characters for an activity, and Apple documents no
+        fixed length.  The column started life as varchar(200), so every real
+        token a phone ever sent came back a 500 (DataError) while the short
+        fakes in these tests sailed through.  Store a realistic one.
+        """
+        token = 'a1b2c3d4' * 40          # 320 chars, the shape iOS hands over
+        r = self._post(token)
+        self.assertEqual(r.status_code, 200)
+        row = LiveActivityToken.objects.get(round=self.round, user=self.user)
+        self.assertEqual(row.token, token)
+
     def test_empty_token_is_rejected(self):
         resp = self._post('   ')
         self.assertEqual(resp.status_code, 400)
@@ -326,3 +340,64 @@ class OwnershipTests(TestCase):
         was never an explicit pick."""
         self._set(None, ['sixes'])
         self.assertEqual(self._state()['kind'], 'sixes')
+
+
+class LiveActivityStartTokenTests(TestCase):
+    """The push-to-start token — the half that puts a board on a phone which
+    has done nothing.
+
+    The distinction under test is that this token is NOT round-scoped: one row
+    serves every round the golfer plays, which is what lets the server raise a
+    card for a round the phone has never opened.
+    """
+
+    def setUp(self):
+        self.acct = Account.objects.create(name='Start Club')
+        self.user = User.objects.create_user(username='ari', account=self.acct)
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        self.url = reverse('api-live-activity-start-token')
+
+    def _post(self, token):
+        return self.client.post(self.url, {'token': token}, format='json')
+
+    def test_post_stores_the_token(self):
+        from tournament.models import LiveActivityStartToken
+        self.assertEqual(self._post('start-abc').status_code, 200)
+        row = LiveActivityStartToken.objects.get(user=self.user)
+        self.assertEqual(row.token, 'start-abc')
+
+    def test_a_reissued_token_does_not_displace_the_first_device(self):
+        """A golfer with a phone AND an iPad holds two, and both should get
+        the board.  Keyed on the token, so a second device adds a row."""
+        from tournament.models import LiveActivityStartToken
+        self._post('phone-token')
+        self._post('ipad-token')
+        self.assertEqual(
+            LiveActivityStartToken.objects.filter(user=self.user).count(), 2)
+
+    def test_the_same_token_on_a_new_user_moves_rather_than_duplicates(self):
+        """A handed-over phone must not leave the previous owner addressable
+        on it — the unique key is the token, and it reassigns."""
+        from tournament.models import LiveActivityStartToken
+        self._post('shared-device')
+        other = User.objects.create_user(username='bo', account=self.acct)
+        self.client.force_authenticate(other)
+        self._post('shared-device')
+        rows = LiveActivityStartToken.objects.filter(token='shared-device')
+        self.assertEqual(rows.count(), 1)
+        self.assertEqual(rows.first().user_id, other.id)
+
+    def test_empty_token_is_rejected(self):
+        self.assertEqual(self._post('').status_code, 400)
+
+    def test_delete_clears_it(self):
+        from tournament.models import LiveActivityStartToken
+        self._post('start-abc')
+        self.assertEqual(self.client.delete(self.url).status_code, 200)
+        self.assertFalse(
+            LiveActivityStartToken.objects.filter(user=self.user).exists())
+
+    def test_it_needs_authentication(self):
+        self.client.force_authenticate(None)
+        self.assertIn(self._post('start-abc').status_code, (401, 403))

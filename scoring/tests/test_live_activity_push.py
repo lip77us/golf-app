@@ -230,3 +230,187 @@ class StaleTests(ConsoleBackendMixin, TestCase):
         aps = lap._apns_payload({}, event='end')['aps']
         self.assertNotIn('stale-date', aps)
         self.assertIn('dismissal-date', aps)
+
+
+class PushToStartTests(ConsoleBackendMixin, TestCase):
+    """Raising the board on a phone that has not raised one itself.
+
+    This is the half that makes the feature worth having.  A Live Activity can
+    only be started locally by `Activity.request`, which needs the app in the
+    foreground — so before this, the only golfer with a lock screen was the one
+    posting scores, and he is the one man in the group already holding a phone.
+    """
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+
+        from core.models import Player
+        from scoring.tests._helpers import make_foursome, make_round, make_tee
+        from services.sixes import setup_sixes
+
+        tee = make_tee()
+        self.round = make_round(tee.course)
+        self.round.active_games = ['sixes']
+        self.round.save(update_fields=['active_games'])
+        self.fs = make_foursome(
+            self.round, [('Paul', 0), ('Dave', 0), ('Sam', 0), ('Lee', 0)],
+            tee=tee)
+        pid = {m.player.name: m.player_id for m in
+               self.fs.memberships.select_related('player')}
+        base = {'team_select_method': 'long_drive',
+                'team1_player_ids': [pid['Paul'], pid['Dave']],
+                'team2_player_ids': [pid['Sam'], pid['Lee']]}
+        setup_sixes(self.fs, [{**base, 'start_hole': 1, 'end_hole': 6}],
+                    handicap_mode='gross')
+
+        User = get_user_model()
+        acct = self.round.account
+        # Paul is scoring; Dave is not. Both are in the round.
+        self.scorer = User.objects.create_user(username='paul', account=acct)
+        self.other  = User.objects.create_user(username='dave', account=acct)
+        Player.objects.filter(pk=pid['Paul']).update(user=self.scorer)
+        Player.objects.filter(pk=pid['Dave']).update(user=self.other)
+        self.pid = pid
+
+        # A hole so there is a board to send at all.
+        from scoring.models import HoleScore
+        for name, p in pid.items():
+            HoleScore.objects.create(foursome=self.fs, player_id=p,
+                                     hole_number=1, gross_score=4)
+
+    def _start_token(self, user, token):
+        from tournament.models import LiveActivityStartToken
+        return LiveActivityStartToken.objects.create(user=user, token=token)
+
+    def _running(self, user, token='live'):
+        from tournament.models import LiveActivityToken
+        return LiveActivityToken.objects.create(round=self.round, user=user,
+                                                token=token)
+
+    def test_the_non_scoring_golfer_gets_a_card_raised(self):
+        self._start_token(self.other, 'dave-start')
+        with mock.patch.object(lap, 'send_start',
+                               return_value=True) as send:
+            sent = lap.push_start_to_absent(self.round)
+        self.assertEqual(sent, 1)
+        self.assertEqual(send.call_args.args[0], 'dave-start')
+
+    def test_a_golfer_already_running_one_is_skipped(self):
+        """iOS would happily show two cards for one round.  The scorer's phone
+        started its own, so a start push to him is a duplicate."""
+        self._start_token(self.scorer, 'paul-start')
+        self._running(self.scorer)
+        with mock.patch.object(lap, 'send_start') as send:
+            sent = lap.push_start_to_absent(self.round)
+        self.assertEqual(sent, 0)
+        send.assert_not_called()
+
+    def test_a_stranger_with_a_token_gets_nothing(self):
+        from django.contrib.auth import get_user_model
+        from accounts.models import Account
+        User = get_user_model()
+        outsider = User.objects.create_user(
+            username='nosy', account=Account.objects.create(name='Elsewhere'))
+        self._start_token(outsider, 'nosy-start')
+        with mock.patch.object(lap, 'send_start') as send:
+            sent = lap.push_start_to_absent(self.round)
+        self.assertEqual(sent, 0)
+        send.assert_not_called()
+
+    def test_a_watcher_gets_one_too(self):
+        from django.contrib.auth import get_user_model
+        from accounts.models import Account
+        from tournament.models import Watcher
+        User = get_user_model()
+        watcher = User.objects.create_user(
+            username='spec', account=Account.objects.create(name='Watch Club'),
+            phone='+13105550199')
+        Watcher.objects.create(round=self.round, phone='+13105550199')
+        self._start_token(watcher, 'watch-start')
+        with mock.patch.object(lap, 'send_start',
+                               return_value=True) as send:
+            sent = lap.push_start_to_absent(self.round)
+        self.assertEqual(sent, 1)
+        self.assertEqual(send.call_args.args[0], 'watch-start')
+
+    def test_it_is_dark_when_the_feature_is_off(self):
+        self._start_token(self.other, 'dave-start')
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with mock.patch.object(lap, 'send_start') as send:
+                self.assertEqual(lap.push_start_to_absent(self.round), 0)
+            send.assert_not_called()
+
+    def test_a_second_score_does_not_send_a_second_start(self):
+        """The bug real testing found: four cards for two rounds.
+
+        This runs on EVERY score, and a phone takes seconds to register the
+        update token that marks it as already carrying a card. Every hole
+        scored in that gap sent another start push — and a start push cannot
+        see the lock screen, so each one raised another card.
+        """
+        self._start_token(self.other, 'dave-start')
+        with mock.patch.object(lap, 'send_start', return_value=True) as send:
+            first = lap.push_start_to_absent(self.round)
+            second = lap.push_start_to_absent(self.round)   # next hole
+            third = lap.push_start_to_absent(self.round)    # and the next
+        self.assertEqual(first, 1)
+        self.assertEqual((second, third), (0, 0))
+        self.assertEqual(send.call_count, 1)
+
+    def test_the_cooldown_lapses_so_a_phone_that_missed_it_is_re_asked(self):
+        """A phone that was off at the tee is exactly why the retry exists —
+        the cooldown must not become a permanent block."""
+        from datetime import timedelta
+
+        from django.utils import timezone
+        from tournament.models import LiveActivityStartPush
+        self._start_token(self.other, 'dave-start')
+        with mock.patch.object(lap, 'send_start', return_value=True):
+            self.assertEqual(lap.push_start_to_absent(self.round), 1)
+        # Age the record past the cooldown (auto_now forbids a plain save).
+        LiveActivityStartPush.objects.filter(round=self.round).update(
+            sent_at=timezone.now() - lap.START_PUSH_COOLDOWN - timedelta(minutes=1))
+        with mock.patch.object(lap, 'send_start', return_value=True) as send:
+            self.assertEqual(lap.push_start_to_absent(self.round), 1)
+        self.assertEqual(send.call_count, 1)
+
+    def test_a_phone_that_registered_its_card_is_skipped_regardless(self):
+        """Once the update token lands, the cooldown is irrelevant — that phone
+        is carrying a card and must never be sent another start."""
+        self._start_token(self.other, 'dave-start')
+        self._running(self.other, token='dave-live')
+        with mock.patch.object(lap, 'send_start') as send:
+            self.assertEqual(lap.push_start_to_absent(self.round), 0)
+        send.assert_not_called()
+
+    def test_nobody_holding_a_token_costs_no_push(self):
+        with mock.patch.object(lap, 'send_start') as send:
+            self.assertEqual(lap.push_start_to_absent(self.round), 0)
+        send.assert_not_called()
+
+
+class StartPayloadTests(ConsoleBackendMixin, TestCase):
+    """The three fields that make a start push land, each of which fails
+    silently on the phone rather than loudly at Apple."""
+
+    def _aps(self):
+        return lap._apns_start_payload({'kind': 'sixes'}, round_id=7,
+                                       course_name='Pebble')['aps']
+
+    def test_the_event_is_a_start(self):
+        self.assertEqual(self._aps()['event'], 'start')
+
+    def test_the_attributes_type_names_the_swift_struct(self):
+        """Apple matches this string against the ActivityAttributes conformer.
+        A mismatch is accepted by APNs and dropped on the phone."""
+        self.assertEqual(self._aps()['attributes-type'],
+                         'SixesActivityAttributes')
+
+    def test_the_attributes_carry_what_request_would_have_been_given(self):
+        self.assertEqual(self._aps()['attributes'],
+                         {'roundId': 7, 'courseName': 'Pebble'})
+
+    def test_an_alert_rides_along(self):
+        """A start push raises UI with the app not running, so iOS insists on
+        something it could show; without it Apple rejects the push."""
+        self.assertIn('alert', self._aps())

@@ -21,16 +21,28 @@ import 'package:flutter/services.dart';
 import '../api/client.dart';
 
 class SixesLiveActivity {
-  SixesLiveActivity(this._client) {
+  /// A singleton, and it has to be.
+  ///
+  /// `setMethodCallHandler` replaces the handler for a channel NAME globally,
+  /// so a second instance would silently steal every token callback from the
+  /// first. One owner also matches what this actually is: the lock screen
+  /// belongs to the session, not to whichever round happens to be open.
+  static final SixesLiveActivity instance = SixesLiveActivity._();
+
+  SixesLiveActivity._() {
     _channel.setMethodCallHandler(_onNativeCall);
   }
 
   static const _channel = MethodChannel('halved/sixes_live_activity');
 
-  ApiClient _client;
+  /// Null until a session exists. Every call below is a no-op without one —
+  /// there is nowhere to register a token.
+  ApiClient? _apiClient;
+
+  ApiClient get _client => _apiClient ?? const ApiClient();
 
   /// The client is swapped when the auth token changes, same as SyncService.
-  void updateClient(ApiClient client) => _client = client;
+  void updateClient(ApiClient client) => _apiClient = client;
 
   /// Rounds this device has already started an activity for, so a second score
   /// on the same round does not ask again. The native side is also idempotent;
@@ -137,20 +149,124 @@ class SixesLiveActivity {
     }
   }
 
-  /// The native side pushes the activity's APNs token up as it is issued, and
-  /// again whenever iOS reissues it.
-  Future<dynamic> _onNativeCall(MethodCall call) async {
-    if (call.method != 'pushToken') return null;
-    final args = Map<String, dynamic>.from(call.arguments as Map);
-    final roundId = args['roundId'] as int?;
-    final token = args['token'] as String?;
-    if (roundId == null || token == null) return null;
+  /// Start listening for the push-to-start token, and register it.
+  ///
+  /// This is what lets a golfer who is NOT entering scores get the board. An
+  /// activity can only be started locally from the foreground, so before this
+  /// the one man with a lock screen was the one holding the phone to score —
+  /// the one who least needs it. The server addresses this token to raise a
+  /// card on a phone that has done nothing.
+  ///
+  /// Call on sign-in and app start; it is idempotent on both sides. Returns
+  /// false on anything below iOS 17.2, where push-to-start does not exist —
+  /// those phones keep today's behaviour rather than losing anything.
+  Future<bool> observeStartToken() async {
+    // Narrated at every decision point. Each of these used to fail into a
+    // silent catch, which made "iOS never issued a token" and "we never asked"
+    // indistinguishable from the server side — and a release build has no
+    // console unless the app says something out loud.
+    if (defaultTargetPlatform != TargetPlatform.iOS) return false;
+
+    // Reported to the SERVER, not just printed. A release build's debugPrint
+    // never reaches `flutter logs`, so the console is not a channel we have —
+    // and every one of these outcomes otherwise looks identical from the
+    // server: an absent row.
+    Future<bool> report(String status, {bool ok = false}) async {
+      debugPrint('[LA] $status');
+      try {
+        // `ok` doubles as "this is the healthy path" — armed and waiting on
+        // iOS, which is normal, not a fault.
+        await _client.reportLiveActivityStatus(status, waiting: ok);
+      } catch (_) {}
+      return ok;
+    }
+
     try {
-      await _client.registerLiveActivityToken(roundId: roundId, token: token);
+      final enabled = await _channel.invokeMethod<bool>('isSupported') ?? false;
+      if (!enabled) {
+        return report('Live Activities are OFF for Halved '
+            '(Settings > Halved > Live Activities), or iOS < 16.2');
+      }
+      final armed =
+          await _channel.invokeMethod<bool>('observeStartToken') ?? false;
+      return armed
+          ? await report('observers installed — waiting for iOS to issue a '
+              'push-to-start token', ok: true)
+          : await report('observers installed, but push-to-start is '
+              'unavailable (needs iOS 17.2+)');
+    } on MissingPluginException catch (e) {
+      // NOT a PlatformException, so the original catch missed it entirely.
+      return report('platform channel is not registered: $e');
+    } on PlatformException catch (e) {
+      return report('start-token observe failed: $e');
+    }
+  }
+
+  /// Drop the push-to-start token. Called on sign-out: the token outlives a
+  /// session, and a board raised on a phone whose owner has signed out is a
+  /// stranger's match on a lock screen.
+  Future<void> forgetStartToken() async {
+    try {
+      await _client.clearLiveActivityStartToken();
     } catch (e) {
-      // Without the token the activity simply never updates remotely. It is
-      // still correct as started, and the next round will try again.
-      debugPrint('Live Activity token registration failed: $e');
+      debugPrint('Live Activity start-token clear failed: $e');
+    }
+  }
+
+  /// The native side pushes tokens up as iOS issues them, and again on every
+  /// reissue. Two kinds arrive here:
+  ///
+  ///  * `pushToken` — addresses ONE running activity, so it is per round. Sent
+  ///    for a card this phone started AND for one the server raised remotely;
+  ///    without registering the latter, a remotely-started board would sit
+  ///    frozen on the hole it arrived at.
+  ///  * `pushToStartToken` — addresses the app itself, so it is not round
+  ///    scoped. It is how the server reaches a phone with nothing running.
+  Future<dynamic> _onNativeCall(MethodCall call) async {
+    final args = call.arguments == null
+        ? const <String, dynamic>{}
+        : Map<String, dynamic>.from(call.arguments as Map);
+    // The card died on the phone — swiped away, or ended by iOS. Drop the
+    // server's copy of the token, or it goes on addressing an activity that is
+    // not there, AND goes on counting this golfer as already carrying a board,
+    // which blocks him from ever being sent another one for this round.
+    if (call.method == 'activityEnded') {
+      final roundId = args['roundId'] as int?;
+      if (roundId == null) return null;
+      _started.remove(roundId);
+      await _forget(roundId);
+      return null;
+    }
+
+    final token = args['token'] as String?;
+    if (token == null) return null;
+
+    switch (call.method) {
+      case 'pushToken':
+        final roundId = args['roundId'] as int?;
+        if (roundId == null) return null;
+        // A remote start is the first this side hears of the activity, so keep
+        // the guard set true — otherwise a later score would start a second.
+        _started.add(roundId);
+        try {
+          await _client.registerLiveActivityToken(
+              roundId: roundId, token: token);
+        } catch (e) {
+          // Without the token the activity simply never updates remotely. It is
+          // still correct as started, and the next round will try again.
+          debugPrint('Live Activity token registration failed: $e');
+        }
+        return null;
+
+      case 'pushToStartToken':
+        debugPrint('[LA] iOS issued a push-to-start token — registering');
+        try {
+          await _client.registerLiveActivityStartToken(token: token);
+          debugPrint('[LA] start token registered with the server');
+        } catch (e) {
+          debugPrint('[LA] start-token registration failed: $e');
+        }
+        return null;
     }
     return null;
   }

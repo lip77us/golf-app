@@ -57,6 +57,26 @@ logger = logging.getLogger(__name__)
 # eight-hour system cap, or the app ending it on round sign.
 STALE_AFTER = 60 * 60
 
+# How long a start push stands before the same phone is asked again.
+# Long enough that scoring a hole every few minutes never re-asks, short
+# enough that a phone which was genuinely off at the tee still gets a board
+# during the round.
+from datetime import timedelta as _timedelta
+START_PUSH_COOLDOWN = _timedelta(minutes=15)
+
+# The Swift type that conforms to ActivityAttributes, by name.  A push-to-start
+# payload carries this string and iOS matches it against the conformer, so it is
+# part of the wire protocol rather than an implementation detail: renaming the
+# struct without changing it here means every start push is accepted by Apple
+# and then silently dropped on the phone.
+#
+# Still `Sixes...` because that is what the struct is called.  It has served the
+# Rabbit, Nassau and Skins boards since they were built -- the card is one
+# layout with a `kind` discriminator, not four -- and renaming it is an Xcode
+# project change (target, files, bundle) worth doing on its own rather than
+# folded into a wire format.
+ATTRIBUTES_TYPE = 'SixesActivityAttributes'
+
 _PROD_HOST    = 'https://api.push.apple.com'
 _SANDBOX_HOST = 'https://api.sandbox.push.apple.com'
 
@@ -175,6 +195,57 @@ def _apns_payload(state, *, event='update', dismiss_after=None) -> dict:
     return {'aps': aps}
 
 
+def _apns_start_payload(state, *, round_id, course_name) -> dict:
+    """The `aps` envelope for a push-to-start.
+
+    Three things separate this from an update and every one of them is a
+    silent failure if it is wrong:
+
+      * `attributes-type` must be the Swift type's name EXACTLY.  Apple matches
+        the string against the ActivityAttributes conformer; a mismatch is
+        accepted by APNs and then dropped on the phone, which looks precisely
+        like a push that never arrived.
+      * `attributes` is the non-changing half of the activity — the fields the
+        app passes to `Activity.request` when it starts one locally.  It must
+        decode into that struct or the phone drops it just as quietly.
+      * `alert` is required.  A start push raises UI without the app running,
+        so iOS insists on something it could show; without it Apple rejects
+        the push outright.
+    """
+    now = int(time.time())
+    return {
+        'aps': {
+            'timestamp'       : now,
+            'event'           : 'start',
+            'content-state'   : state,
+            'stale-date'      : now + STALE_AFTER,
+            'attributes-type' : ATTRIBUTES_TYPE,
+            'attributes'      : {
+                'roundId'    : round_id,
+                'courseName' : course_name or '',
+            },
+            'alert': {
+                'title' : 'Halved',
+                'body'  : 'Your match is under way.',
+            },
+        }
+    }
+
+
+def send_start(start_token: str, state: dict, *, round_id, course_name) -> bool:
+    """Raise an activity on a phone that has not started one.  Never raises."""
+    backend = _backend()
+    payload = _apns_start_payload(state, round_id=round_id,
+                                  course_name=course_name)
+    try:
+        if backend == 'apns':
+            return _send_apns(start_token, payload)
+        return _send_console(start_token, payload)
+    except Exception:  # pragma: no cover - defensive
+        logger.exception('live_activity_push: start send failed (%s)', backend)
+        return False
+
+
 def send_state(device_token: str, state: dict, *, event='update') -> bool:
     """Push one activity state to one token.  Returns True if Apple took it.
 
@@ -249,12 +320,122 @@ def _send_apns(device_token, payload) -> bool:  # pragma: no cover - needs creds
         return True
     logger.error('live_activity_push: APNs %s for %s… — %s',
                  resp.status_code, device_token[:12], resp.text)
+    _forget_dead_token(device_token, resp)
     return False
+
+
+# Apple's way of saying "this address will never work again".
+_DEAD_REASONS = {'BadDeviceToken', 'Unregistered', 'DeviceTokenNotForTopic',
+                 'ExpiredToken'}
+
+
+def _forget_dead_token(device_token, resp) -> None:  # pragma: no cover
+    """Drop a token Apple has told us is dead.
+
+    Not merely tidiness.  `push_start_to_absent` reads the update-token table
+    to decide who is ALREADY carrying a card, so one stale row silently
+    blocks that phone from ever being sent another board for that round —
+    the golfer dismisses the card once and never sees one again.
+    """
+    try:
+        reason = (resp.json() or {}).get('reason', '')
+    except Exception:
+        reason = ''
+    if resp.status_code != 410 and reason not in _DEAD_REASONS:
+        return
+    try:
+        from tournament.models import (LiveActivityStartToken,
+                                       LiveActivityToken)
+        # One of the two owns it; the tokens are distinct addresses.
+        n = (LiveActivityToken.objects.filter(token=device_token).delete()[0]
+             + LiveActivityStartToken.objects
+               .filter(token=device_token).delete()[0])
+        if n:
+            logger.info('live_activity_push: dropped %s dead token(s) — %s',
+                        n, reason or resp.status_code)
+    except Exception:
+        logger.exception('live_activity_push: could not drop a dead token')
 
 
 # --------------------------------------------------------------------------
 # The round-level entry point
 # --------------------------------------------------------------------------
+
+def push_start_to_absent(round_obj) -> int:
+    """Raise the board on the phones that have not raised one themselves.
+
+    This is the half the feature was missing.  An activity can only be started
+    locally by `Activity.request`, which needs the app in the foreground — so
+    the only golfer who ever got a lock screen was the one posting scores, and
+    he is the one man in the group holding the phone anyway.  Everyone whose
+    round it equally is got nothing.
+
+    Sends to every recipient who has a start token and is NOT already running
+    an activity for this round.  Skipping the ones already running is what
+    keeps a second card off the scorer's lock screen; iOS would happily show
+    two.
+
+    Returns the number Apple accepted.  Never raises: the caller is a scoring
+    request.
+    """
+    if not is_enabled():
+        return 0
+
+    from services.live_activity_registry import activity_state, board_recipients
+    from tournament.models import (LiveActivityStartPush, LiveActivityStartToken,
+                                   LiveActivityToken)
+
+    recipients = board_recipients(round_obj)
+    if not recipients:
+        return 0
+
+    # Already has a card for this round -> a start push would duplicate it.
+    running = set(LiveActivityToken.objects
+                  .filter(round=round_obj, user_id__in=recipients)
+                  .values_list('user_id', flat=True))
+
+    # Asked recently -> leave it alone.  This runs on every score, and a phone
+    # takes several seconds to register the update token that puts it in
+    # `running`; without this, every hole scored in that gap sent ANOTHER start
+    # push, and a start push cannot see what is already on the lock screen, so
+    # each one raised another card.
+    from django.utils import timezone
+    fresh = timezone.now() - START_PUSH_COOLDOWN
+    asked = set(LiveActivityStartPush.objects
+                .filter(round=round_obj, user_id__in=recipients,
+                        sent_at__gte=fresh)
+                .values_list('user_id', flat=True))
+
+    absent = recipients - running - asked
+    if not absent:
+        return 0
+
+    rows = list(LiveActivityStartToken.objects
+                .filter(user_id__in=absent).select_related('user'))
+    if not rows:
+        return 0
+
+    course_name = getattr(getattr(round_obj, 'course', None), 'name', '') or ''
+
+    sent = 0
+    for row in rows:
+        try:
+            state = activity_state(round_obj, row.user)
+            if not state:
+                continue
+            if send_start(row.token, state,
+                          round_id=round_obj.id, course_name=course_name):
+                sent += 1
+                # Recorded on SEND, not on success of the whole batch: one
+                # phone per row, and a second device for the same user should
+                # not re-arm the cooldown for the first.
+                LiveActivityStartPush.objects.update_or_create(
+                    round=round_obj, user_id=row.user_id)
+        except Exception:  # pragma: no cover - one bad row never stops the rest
+            logger.exception('live_activity_push: start round %s user %s',
+                             round_obj.id, row.user_id)
+    return sent
+
 
 def push_round(round_obj, *, final=False) -> int:
     """Send the current board to every activity registered for this round.

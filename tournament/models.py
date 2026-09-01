@@ -1439,8 +1439,11 @@ class LiveActivityToken(models.Model):
     user       = models.ForeignKey(
                      settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                      related_name='live_activity_tokens')
-    token      = models.CharField(
-                     max_length=200,
+    # TextField, not CharField: a Live Activity token is much longer than a
+    # device token (~320 hex chars in practice) and Apple documents no fixed
+    # length, so any cap here is a 500 waiting for the next iOS release. The
+    # 200 this started as rejected every real token with a DataError.
+    token      = models.TextField(
                      help_text='Hex APNs token for this activity.')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1450,6 +1453,71 @@ class LiveActivityToken(models.Model):
 
     def __str__(self):
         return f'Live Activity — round {self.round_id} — {self.user_id}'
+
+
+class LiveActivityStartToken(models.Model):
+    """One device's push-to-start token.
+
+    Not the same thing as `LiveActivityToken`, and the difference is the whole
+    point of this table.  That one addresses an activity that is ALREADY
+    running, and only the phone that started it can hand one over — which is
+    why, until this existed, the only golfer with a lock screen was the one
+    entering scores.  The scorer is the one man in the group who least needs a
+    board: he is holding the phone.
+
+    iOS issues THIS token per app install, for an activity TYPE, whether or not
+    anything is running.  The server can address it to raise a card on a phone
+    that has done nothing — which is what puts the board on the other three
+    golfers' lock screens, and on a watcher's.
+
+    Per (user, token) rather than per round: one row serves every round that
+    user ever plays, and a golfer with a phone and an iPad has two.  Rows are
+    replaced when iOS reissues, and cleared on sign-out.
+
+    iOS 17.2+ only.  An older phone simply never posts one, and gets exactly
+    the behaviour it has today: a board if it scores, nothing if it doesn't.
+    """
+
+    user       = models.ForeignKey(
+                     settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                     related_name='live_activity_start_tokens')
+    token      = models.TextField(unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'Live Activity start token — {self.user_id}'
+
+
+class LiveActivityStartPush(models.Model):
+    """One record of "we asked this phone to raise a card for this round".
+
+    Exists to stop a start push repeating.  `push_start_to_absent` runs on
+    EVERY score, and skips only the phones already holding an update token —
+    but a phone that has just been sent a start does not register one for
+    several seconds.  Every hole scored in that gap sent another start push,
+    and a start push cannot see what is already on the lock screen, so each
+    one raised ANOTHER card.  Four cards across two rounds, in testing.
+
+    A row here means "asked recently, leave it alone".  It is not permanent:
+    after COOLDOWN a phone with still no update token is asked again, because
+    the genuine miss — a phone that was off at the tee — is exactly the case
+    the retry exists for.
+    """
+
+    round      = models.ForeignKey(
+                     Round, on_delete=models.CASCADE,
+                     related_name='live_activity_start_pushes')
+    user       = models.ForeignKey(
+                     settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                     related_name='live_activity_start_pushes')
+    sent_at    = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('round', 'user')
+
+    def __str__(self):
+        return f'start push — round {self.round_id} — {self.user_id}'
 
 
 # ---------------------------------------------------------------------------

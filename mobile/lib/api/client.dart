@@ -2544,6 +2544,32 @@ class ApiClient {
   Future<void> clearLiveActivityToken({required int roundId}) =>
       _delete('/rounds/$roundId/live-activity/token/');
 
+  /// Register this install's push-to-start token.
+  ///
+  /// Deliberately NOT round-scoped: iOS issues one per app install for the
+  /// activity type, whether or not anything is running, and the server uses it
+  /// to raise a card on a phone that has never opened the round. That is what
+  /// puts the board on the lock screens of the golfers who are not scoring.
+  Future<void> registerLiveActivityStartToken({required String token}) =>
+      _post('/live-activity/start-token/', {'token': token});
+
+  /// Drop it on sign-out — the token outlives the session.
+  Future<void> clearLiveActivityStartToken() =>
+      _delete('/live-activity/start-token/');
+
+  /// Say why this phone has NO push-to-start token.
+  ///
+  /// From the server, "Live Activities are switched off" and "iOS never issued
+  /// one" look identical — both are simply an absent row. This makes the phone
+  /// state its reason so the difference is visible where the round is.
+  /// [waiting] true means the app is correctly armed and iOS simply has not
+  /// handed a token over yet — the normal state for a second or two after
+  /// launch, and not something to log as a fault.
+  Future<void> reportLiveActivityStatus(String status,
+          {bool waiting = false}) =>
+      _post('/live-activity/start-token/',
+            {'status': status, 'waiting': waiting});
+
   /// The Live Activity's opening frame — or, with [isFinal], its closing one.
   ///
   /// Returns null when there is nothing to show: not a Sixes round, or no

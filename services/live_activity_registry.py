@@ -124,6 +124,68 @@ BUILDERS = {
 }
 
 
+def board_recipients(rnd) -> set:
+    """User ids that should carry this round's board on their lock screen.
+
+    Everyone the round is legitimately readable by, computed FORWARD from the
+    round rather than by asking `round_for_reader` once per user — the caller
+    is inside a scoring request and the candidate set is four golfers and a
+    couple of watchers, while the set of users holding a start token is the
+    whole app.
+
+    Three ways in, matching the read rules exactly:
+      * a golfer whose Player carries a linked user;
+      * a golfer matched by verified phone (the cross-account link the rest of
+        the friend model runs on — a friend added by name and number);
+      * an invited watcher, likewise phone-matched.
+
+    A watcher belongs here on purpose.  The board is the same string on every
+    phone except the money line, and `foursome_for` already withholds that from
+    anyone who is not playing.
+    """
+    from django.contrib.auth import get_user_model
+    from accounts.phone import normalize
+    from tournament.models import Watcher
+
+    user_ids = set()
+    phones   = set()
+
+    for fs in rnd.foursomes.all():
+        for m in fs.memberships.all():
+            if m.player.user_id:
+                user_ids.add(m.player.user_id)
+            if m.player.phone:
+                p = normalize(m.player.phone)
+                if p:
+                    phones.add(p)
+
+    for w in Watcher.objects.filter(round=rnd):
+        p = normalize(w.phone or '')
+        if p:
+            phones.add(p)
+
+    if phones:
+        User = get_user_model()
+        user_ids.update(
+            User.objects.filter(phone__in=phones).values_list('id', flat=True))
+
+    return user_ids
+
+
+def round_has_board(rnd) -> bool:
+    """True when this round's primary game has a lock-screen board at all.
+
+    The cheap gate callers use before doing any work — `activity_state` is the
+    authority and answers `{}` for anything it cannot build, but a caller
+    sitting inside a scoring request wants to know without loading a foursome.
+
+    Adding a game to the lock screen is a builder in BUILDERS and the matching
+    `hasLiveActivity` flag on the client's catalog entry — nothing else needs
+    to learn the list.
+    """
+    return primary_game(rnd) in BUILDERS
+
+
 def activity_state(rnd, user, *, final=False) -> dict:
     """The five slots for whoever owns this round, or ``{}``.
 

@@ -89,6 +89,8 @@ urlpatterns = [
     path('rounds/<int:pk>/messages/read/', views.RoundMessagesReadView.as_view(), name='api-round-messages-read'),
     path('rounds/<int:pk>/live-activity/state/', views.RoundLiveActivityStateView.as_view(), name='api-round-live-activity-state'),
     path('rounds/<int:pk>/live-activity/token/', views.RoundLiveActivityTokenView.as_view(), name='api-round-live-activity-token'),
+    # Not round-scoped: one push-to-start token per app install.
+    path('live-activity/start-token/', views.LiveActivityStartTokenView.as_view(), name='api-live-activity-start-token'),
     path('rounds/<int:pk>/watchers/',    views.RoundWatcherView.as_view(),  name='api-round-watchers'),
     path('rounds/<int:pk>/watcher-candidates/', views.RoundWatcherCandidatesView.as_view(), name='api-round-watcher-candidates'),
 

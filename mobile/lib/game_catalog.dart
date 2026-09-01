@@ -200,6 +200,18 @@ class GameMeta {
   /// per-player gross overlay is meaningless. See docs/parallel-games.md.
   final bool hostsOverlaySideGames;
 
+  /// This game has a Live Activity board — the iOS lock-screen card the server
+  /// composes and pushes (`services/live_activity_registry.py` BUILDERS). Set
+  /// it here and the client will raise a card for the game; the SERVER stays
+  /// authoritative (it answers with nothing for a round it can't build, and the
+  /// app treats that as "do not start"), so this flag only saves a pointless
+  /// round trip on a round that was never going to get one.
+  ///
+  /// Deliberately NOT set on nassau_nine / match_18 / triple_nassau: they ride
+  /// the same NassauGame model but are one match, not three, and the two-row
+  /// composition doesn't fit them.
+  final bool hasLiveActivity;
+
   /// True for ALT-SHOT primaries (Triple Cup's foursomes segment, Scramble)
   /// where partners share ONE ball — there's no per-player gross, so individual
   /// side games (subset matches, overlays) are physically impossible, not just
@@ -229,6 +241,7 @@ class GameMeta {
     this.sideGameOnly         = false,
     this.cupOnly              = false,
     this.requiresFullRound    = false,
+    this.hasLiveActivity      = false,
   });
 
   /// True if this game can be played with exactly [n] real players.
@@ -251,6 +264,7 @@ const List<GameMeta> kGameCatalog = [
     displayName  : 'Sixes',
     casual       : true,
     exactPlayers : 4,
+    hasLiveActivity: true,
     // Three 6-hole segments — needs a full 18.
     requiresFullRound: true,
     // Sixes owns the foursome's rotating-team entry structure, so it can't
@@ -313,6 +327,7 @@ const List<GameMeta> kGameCatalog = [
     id          : GameIds.nassau,
     displayName : 'Nassau',
     casual      : true,
+    hasLiveActivity: true,
     // F9 / B9 / Overall bets + presses — needs a full 18.
     requiresFullRound: true,
     // Owns the F9/B9/Overall team-bet ENTRY structure, but individual-ball, so
@@ -383,6 +398,7 @@ const List<GameMeta> kGameCatalog = [
     casual      : true,
     minPlayers  : 2,
     maxPlayers  : 4,
+    hasLiveActivity: true,
     // Skins is a pure scoring overlay — usable as a leaderboard-only side game
     // (no junk in that mode, since junk is entered hole-by-hole).
     canBeSideGame: true,
@@ -444,6 +460,7 @@ const List<GameMeta> kGameCatalog = [
     displayName : 'Rabbit',
     casual      : true,
     exactPlayers: 3,
+    hasLiveActivity: true,
     // Rabbit owns its own per-hole score-entry screen, so — like Points 5-3-1 —
     // it can't share a foursome's entry flow. But individual-ball → can host
     // leaderboard-only overlays over each player's gross (docs/parallel-games.md).
@@ -712,6 +729,15 @@ bool gamesCompatible(String gameA, String gameB) {
 /// True if [gameId] can be added as a secondary "side game" (leaderboard-only
 /// overlay) in a casual round.
 bool canBeSideGame(String gameId) => _kGameById[gameId]?.canBeSideGame ?? false;
+
+/// True if [gameId] has a Live Activity lock-screen board.
+///
+/// Mirrors the server's `live_activity_registry.BUILDERS`. The server is still
+/// the authority — it answers a round it cannot build with nothing, and the app
+/// treats that as "do not start" — so this only avoids a pointless round trip.
+/// Adding a game to the lock screen is this flag plus a builder server-side.
+bool gameHasLiveActivity(String gameId) =>
+    _kGameById[gameId]?.hasLiveActivity ?? false;
 
 /// True if [gameId] can be added as a SUBSET side game (an independent bet over
 /// a chosen subset of the foursome, with its own handicap + tab).  See
