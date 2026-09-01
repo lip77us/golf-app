@@ -40,6 +40,7 @@ import '../utils/golf_colors.dart';
 import '../widgets/score_mark.dart';
 import '../widgets/borrowed_fourth.dart';
 import '../widgets/halved_mark.dart';
+import '../widgets/hole_grid_scorecard.dart';
 import '../widgets/spots_capture.dart';
 import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
@@ -4592,6 +4593,19 @@ class _GameStatusSection extends StatelessWidget {
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
             ),
+          // The card the leaderboard shows, under the match scores. Same
+          // widget, same payload, same green hole-winner cell — the group
+          // reads the holes it just played without leaving score entry.
+          if (sixesSummary != null && sixesSummary!.holes.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: HoleGridScorecard(
+                holes:        sixesSummary!.holes,
+                participants: sixesSummary!.players,
+                legend:       null,
+                holesInPlay:  sixesSummary!.holesInPlay,
+              ),
+            ),
           const SizedBox(height: 12),
         ],
 
@@ -7587,11 +7601,6 @@ class _SixesMatchGridState extends State<_SixesMatchGrid> {
     return hp >= sp && hp <= ep;
   }
 
-  int _position(String name) {
-    final idx = members.indexWhere((m) => m.player.name == name);
-    return idx >= 0 ? idx + 1 : 0;
-  }
-
   String _shortFor(String name) {
     final m = members.cast<Membership?>().firstWhere(
       (m) => m?.player.name == name,
@@ -7600,14 +7609,12 @@ class _SixesMatchGridState extends State<_SixesMatchGrid> {
     return m?.player.displayShort ?? _sixesInitials(name);
   }
 
+  /// Initials only — "PL/JS". The seat numbers this used to carry on a
+  /// second line ("(1/2)") cost the card a row per team and told nobody
+  /// anything they couldn't read off the names.
   String _teamLabel(SixesTeamInfo team) {
-    if (!team.hasPlayers) return '??/??\n(?/?)';
-    final abbr = team.players.map(_shortFor).join('/');
-    final pos  = team.players
-        .map((n) => _position(n))
-        .map((p) => p > 0 ? '$p' : '?')
-        .join('/');
-    return '$abbr\n($pos)';
+    if (!team.hasPlayers) return '??/??';
+    return team.players.map(_shortFor).join('/');
   }
 
   @override
@@ -7762,17 +7769,28 @@ class _SixesSegmentCard extends StatelessWidget {
                     color: team1Color,
                     fontWeight: t1Leading ? FontWeight.bold : FontWeight.normal,
                   )),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Text('v.',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              // "v." rides on the front of the second team instead of owning
+              // a row of its own. It's a separator, not a line of the card.
+              RichText(
+                text: TextSpan(
+                  style: theme.textTheme.bodySmall,
+                  children: [
+                    TextSpan(
+                      text: 'v. ',
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                    TextSpan(
+                      text: team2Label,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: team2Color,
+                        fontWeight:
+                            t2Leading ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              Text(team2Label,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: team2Color,
-                    fontWeight: t2Leading ? FontWeight.bold : FontWeight.normal,
-                  )),
               const SizedBox(height: 6),
               Text(
                 _statusLabel(),

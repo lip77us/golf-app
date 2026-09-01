@@ -1501,6 +1501,18 @@ class SixesSummary {
   /// (best+worst, 2 pts/hole, 3 segments only, strict closeout).
   final String scoringFormat;
 
+  /// The per-hole grid exactly as the backend sends it — { hole, par,
+  /// stroke_index, winner_id, scores: [...] }. Kept as raw maps because it
+  /// is handed straight to HoleGridScorecard, the same widget the
+  /// leaderboard renders, so both screens show one identical scorecard.
+  final List<Map<String, dynamic>> holes;
+
+  /// Row order for that grid: { player_id, name, short_name }.
+  final List<Map<String, dynamic>> players;
+
+  /// Holes in play order — shotgun-aware column order for the grid.
+  final List<int> holesInPlay;
+
   const SixesSummary({
     required this.segments,
     required this.team1Wins,
@@ -1510,6 +1522,9 @@ class SixesSummary {
     required this.netPercent,
     this.handicapAllocation = 'per_segment',
     this.scoringFormat      = 'classic',
+    this.holes       = const [],
+    this.players     = const [],
+    this.holesInPlay = const [],
   });
 
   bool get isNet        => handicapMode == 'net';
@@ -1532,6 +1547,15 @@ class SixesSummary {
       netPercent:         hcap['net_percent']    as int?    ?? 100,
       handicapAllocation: hcap['allocation']     as String? ?? 'per_segment',
       scoringFormat:      j['scoring_format']    as String? ?? 'classic',
+      holes: (j['holes'] as List? ?? const [])
+          .map((e) => (e as Map).cast<String, dynamic>())
+          .toList(),
+      players: (j['players'] as List? ?? const [])
+          .map((e) => (e as Map).cast<String, dynamic>())
+          .toList(),
+      holesInPlay: (j['holes_in_play'] as List? ?? const [])
+          .map((e) => (e as num).toInt())
+          .toList(),
     );
   }
 }
