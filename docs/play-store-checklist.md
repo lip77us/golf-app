@@ -11,6 +11,40 @@ while it runs.
 
 ---
 
+## 0. Where things stand
+
+**2026-08-30 — the app exists in Play Console and the first bundle is uploaded.**
+
+- Package name `golf.halved.app` is claimed and permanently bound to the listing.
+  (Play briefly reported it as "already in use" during creation; that was the
+  console being eventually consistent with itself, not a real collision. It
+  cleared after ~30 seconds. Don't panic-rename on that error.)
+- **Internal testing join URL:**
+  https://play.google.com/apps/internaltest/4701572945338269346
+  Testers must open it while signed into the Google account that is on the
+  tester list — a device signed in as a different account silently does nothing.
+- Identity (license) verification was still pending at upload time; it gates
+  rollout, not upload.
+- **2.7.0+25 is the live internal build**, installed on the moto g play from
+  the Play Store (`installerPackageName=com.android.vending`), which proves the
+  whole chain: upload keystore → Play App Signing → real device.
+  (The first upload was accidentally a stale 2.6.1+25 bundle sitting on disk —
+  `flutter build apk` does not refresh the `.aab`. **Rebuild the bundle
+  immediately before every upload.**)
+- Android App Links verified working → §6.
+
+Still to do, in order of what blocks the calendar:
+
+- [ ] **Closed testing track + 12 testers.** Internal testing does NOT advance
+      the 14-day clock — only closed does. Same bundle, same release notes.
+      This is the ONLY remaining item that moves the launch date.
+- [ ] Store listing, data safety, content rating → §5.
+- [ ] The two push defects + two QA findings → `android-qa-findings.md`.
+- [ ] Confirm a REAL watch token opens the leaderboard (only a bogus token has
+      been tested; it correctly fell through to the normal boot).
+
+---
+
 ## 1. The developer account, and the 14-day clock
 
 **Do this first.** A **personal** developer account registered after
@@ -114,23 +148,27 @@ flutter build appbundle --release
 
 ---
 
-## 4. Firebase — must be redone
+## 4. Firebase — DONE 2026-08-22
 
-The `google-services.json` in the repo was downloaded for a **mistyped** package
-(`com.lipkin.usgolf_mobile`, missing a dot), which failed every Android build
-with *"No matching client found for package name"*. The file's `package_name`
-has been corrected locally so the build works, but the `mobilesdk_app_id` in it
-still belongs to that mistyped registration, and FCM registers tokens against
-the app id.
+The original `google-services.json` had been downloaded for a **mistyped**
+package (`com.lipkin.usgolf_mobile`, missing a dot), which failed every Android
+build with *"No matching client found for package name"* — including plain debug
+builds, which is why the Android side appeared to work only until Firebase
+landed in the repo.
 
-- [ ] Firebase console → project `halved-f5327` → add an Android app with
-      package name **`golf.halved.app`**.
-- [ ] Download the fresh `google-services.json` and replace
-      `mobile/android/app/google-services.json` wholesale.
-- [ ] Delete the mistyped app registration.
-- [ ] Verify end to end: sign in on a device, confirm the device token reaches
-      the backend (`registerDevice`, platform `android`), and send a real push.
-      Untested until then — the emulator run only proves the app launches.
+Resolved: `golf.halved.app` registered in project `halved-f5327`
+(`mobilesdk_app_id` `1:1013357037229:android:86b5d4ac6a041e7da4a824`), the
+mistyped registration deleted, and a single-client `google-services.json`
+committed. Verified end to end on 2026-08-22 — a `DeviceToken` row landed with
+`platform='android'`, and a real push was delivered and displayed with the
+correct silhouette icon and mint tint.
+
+Note the backend needed nothing: `FCM_SERVICE_ACCOUNT_JSON` is a **project-level**
+service account, so it already covered the new app.
+
+Two defects remain, both confirmed on device and neither a Play blocker — see
+`android-qa-findings.md`: foreground pushes display nothing, and notifications
+land in FCM's fallback channel because `halved_default` is never created.
 
 ---
 
@@ -170,19 +208,47 @@ treat it as one.
 
 ---
 
-## 6. Android App Links (after the first upload)
+## 6. Android App Links — DONE 2026-08-30
 
-The intent-filter is in the manifest with `autoVerify="true"`, and the backend
-serves `/.well-known/assetlinks.json`. It lists no certificates until you set
-them, so verification simply fails and watch links open the web page — the
-correct pre-launch behaviour, not a bug.
+Verified working: a tap on `https://link.halved.golf/watch/<token>/` opens
+Halved instead of the browser, confirmed on the moto g play with
+`pm get-app-links` reporting `link.halved.golf: verified`.
 
-- [ ] After the first bundle is uploaded: Play Console → Test and release →
-      Setup → App signing. Copy **both** SHA-256 fingerprints — the app-signing
-      certificate Google generates *and* your upload certificate.
-- [ ] Set `ANDROID_CERT_FINGERPRINTS` on Railway to both, comma-separated.
-- [ ] Confirm `https://link.halved.golf/.well-known/assetlinks.json` returns
-      them over HTTPS with no redirect, then reinstall and tap a watch link.
+`ANDROID_CERT_FINGERPRINTS` on Railway carries **three** SHA-256 fingerprints:
+
+| Fingerprint starts | Certificate | Why it's listed |
+|---|---|---|
+| `22:1E:0E:6E` | `deployment_cert` | What Play signs distribution APKs with **today** — the one devices actually carry |
+| `A0:BF:D7:20` | your upload key | So a sideloaded `adb install` build also verifies |
+| `57:C6:FD:20` | `hybrid_classical_cert` | Future-proofing, in case Play migrates to the quantum-ready key |
+
+**The trap, which cost an hour:** the App signing page's prominent
+"SHA-256 certificate fingerprint" copy button sits under a card labelled
+*App signing key — In use — Quantum-ready (beta)*, and it hands you the
+**hybrid** key (`57:C6`), which is **not** what is deployed. Publishing that
+alone leaves verification failing with `Domain verification state: 1024`,
+while `pm get-app-links` shows the device carrying `22:1E`.
+
+Don't trust the copy button. Click **Download certificates**, unzip, and
+fingerprint the files yourself:
+
+```sh
+keytool -printcert -file deployment_cert.der | grep SHA256
+```
+
+`deployment_cert.der` is the one that must be in `assetlinks.json`. The zip also
+contains `hybrid_classical_cert.der` and `hybrid_pqc_cert.der`; the PQC one is
+not used for App Links at all.
+
+Two more things that wasted time and will again:
+
+- **Verification is asynchronous and backs off after a failure.** After fixing
+  the fingerprints, `pm verify-app-links --re-verify golf.halved.app` reported
+  `1024` for another minute or so before flipping to `verified`. Wait a couple
+  of minutes before concluding it's still broken.
+- **A sideloaded build cannot be replaced by the Play build.** They carry
+  different signatures (your upload key vs Google's deployment key), so Android
+  refuses the swap. Uninstall the `adb install` copy before installing from Play.
 
 ---
 
@@ -205,6 +271,12 @@ before shipping it.
 ---
 
 ## 8. Device QA before the first upload
+
+> **Run 2026-08-30 on a real moto g play (2024), Android 14 — results in
+> `android-qa-findings.md`.** Back-stack behaviour and layout passed; two
+> real defects found (back at the launch screen doesn't exit; offline
+> silently truncates the rounds list and doesn't recover on reconnect).
+> The items below marked untested there still need a supervised pass.
 
 Emulator smoke-testing is not enough for the platform-specific parts:
 
