@@ -95,4 +95,6 @@ urlpatterns = [
 
     # Public invite landing page — shared by the in-app "Invite Friends" button.
     path('i/<str:code>/', invite_views.invite_landing, name='invite-landing'),
+    path('i/<str:code>/card.png', invite_views.invite_card_png,
+         name='invite-card'),
 ]

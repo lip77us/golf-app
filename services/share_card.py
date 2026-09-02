@@ -26,22 +26,26 @@ import os
 
 from PIL import Image, ImageDraw, ImageFont
 
-# ── Palette (handoff-share-round #10a) ──────────────────────────────────────
-PINE_TOP    = (0x0F, 0x6E, 0x56)   # gradient start
-PINE_BOTTOM = (0x0B, 0x1F, 0x1A)   # gradient end, and the teams-strip ground
+# ── Palette (handoff-share-link-cards) ──────────────────────────────────────
+# The gradient is three stops now, and dark at the top rather than the bright
+# pine it used to open with: the card is read at thumbnail size inside a
+# message bubble, where a light top edge fought the wordmark sitting on it.
+GRAD_STOPS  = (
+    (0.00, (0x07, 0x13, 0x0F)),
+    (0.46, (0x0B, 0x1F, 0x1A)),
+    (1.00, (0x0D, 0x33, 0x27)),
+)
+PINE_BOTTOM = (0x0B, 0x1F, 0x1A)   # ground behind the gradient
 MINT        = (0x3B, 0xD8, 0x9A)
-BONE        = (0xF3, 0xF1, 0xEA)
-SAGE        = (0x9B, 0xC7, 0xB7)   # meta line
-MUTED       = (0x8F, 0xA7, 0x9B)   # team names
-DIM         = (0x5F, 0x71, 0x69)   # "vs"
-RULE        = (0x14, 0x32, 0x29)   # divider above the teams strip
-FOOT_BG     = (0x08, 0x17, 0x12)
-FOOT_TEXT   = (0x6D, 0x82, 0x7A)
+BONE        = (0xF3, 0xF1, 0xEA)   # wordmark, title
+SUB_TEXT    = (0x9D, 0xBC, 0xAE)   # the line under the title
+DOM_TEXT    = (0x7C, 0x9A, 0x8C)   # link.halved.golf
 
 WIDTH, HEIGHT = 1200, 630
-PAD           = 68
-FOOTER_H      = 78
-STRIP_H       = 132
+PAD           = 52     # .lp-top / .lp-mid / .lp-foot side padding
+PAD_TOP       = 44     # .lp-top padding-top
+# .lp-foot: 26px above the text, a 24px line, 30px below.
+FOOTER_H      = 80
 
 _FONT_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -69,12 +73,13 @@ def _font(path: str, size: int, weight: str | None = None):
         return ImageFont.load_default(size)
 
 
-def _gradient(size, top, bottom, angle_deg: int = 160):
+def _gradient(size, stops=GRAD_STOPS, angle_deg: int = 160):
     """
-    Linear gradient. The design specifies 160deg (CSS convention: 0deg points
-    up, angles run clockwise), which is mostly top-to-bottom leaning left.
-    Built as a small image and scaled -- exact enough at this size and far
-    cheaper than a per-pixel loop over 756,000 pixels.
+    Linear gradient over N colour stops at CSS angles (0deg points up, angles
+    run clockwise), so 160deg is mostly top-to-bottom leaning left.
+
+    Built small and scaled up -- exact enough at this size, and far cheaper
+    than a per-pixel loop over 756,000 pixels.
     """
     import math
     w, h = size
@@ -88,8 +93,17 @@ def _gradient(size, top, bottom, angle_deg: int = 160):
             # Project onto the gradient direction, normalised to 0..1.
             t = ((x / small_w) * dx + (y / small_h) * dy + 1) / 2
             t = min(1.0, max(0.0, t))
+            # Find the pair of stops t falls between and mix them.
+            lo = stops[0]
+            hi = stops[-1]
+            for i in range(len(stops) - 1):
+                if stops[i][0] <= t <= stops[i + 1][0]:
+                    lo, hi = stops[i], stops[i + 1]
+                    break
+            span = (hi[0] - lo[0]) or 1.0
+            k = (t - lo[0]) / span
             px[x, y] = tuple(
-                int(top[i] + (bottom[i] - top[i]) * t) for i in range(3)
+                int(lo[1][i] + (hi[1][i] - lo[1][i]) * k) for i in range(3)
             )
     return grad.resize((w, h), Image.BICUBIC)
 
@@ -126,7 +140,7 @@ def _tracked(draw, xy, text, font, fill, tracking: float = 0.0):
 
 
 def _fit(draw, text, path, max_w, start_size, weight, min_size=28):
-    """Largest size at or below start_size whose text fits max_w."""
+    """Largest size at or below start_size whose text fits max_w on ONE line."""
     size = start_size
     while size > min_size:
         f = _font(path, size, weight)
@@ -136,118 +150,142 @@ def _fit(draw, text, path, max_w, start_size, weight, min_size=28):
     return _font(path, min_size, weight)
 
 
+def _wrap(draw, text, font, max_w) -> list:
+    """Greedy word wrap. A single word longer than max_w is left to overflow —
+    the caller shrinks or truncates, and a mid-word break reads as corruption."""
+    words, lines, cur = (text or '').split(), [], ''
+    for w in words:
+        trial = f'{cur} {w}'.strip()
+        if cur and draw.textlength(trial, font=font) > max_w:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = trial
+    if cur:
+        lines.append(cur)
+    return lines or ['']
+
+
+def _title_block(draw, text, max_lines=2, start=60, min_size=34):
+    """
+    The title, wrapped to at most `max_lines`.
+
+    The design caps the h1 at `20ch` and wraps to two lines; a third overflows
+    the block. The handoff's answer is to truncate the course name server-side,
+    but a card that overflows because someone typed a long course name is a
+    broken card, so this degrades instead: shrink first, and only ellipsise
+    when even the smallest size will not fit.
+
+    `ch` is the width of "0" in the face, so the wrap width is measured rather
+    than assumed — it changes with the font and would silently drift if hard-coded.
+    """
+    # The box is measured ONCE, at the design's own size, and then held fixed.
+    # `20ch` in CSS is computed at the h1's font-size; re-measuring it in the
+    # shrinking font would keep it 20 characters wide at every size, so
+    # shrinking would fit no more text and only make the title small.
+    wrap_w = draw.textlength('0' * 20, font=_font(_DISPLAY, start, 'Bold'))
+    size = start
+    while True:
+        f = _font(_DISPLAY, size, 'Bold')
+        lines = _wrap(draw, text, f, wrap_w)
+        if len(lines) <= max_lines or size <= min_size:
+            break
+        size -= 2
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        while lines[-1] and draw.textlength(lines[-1] + '…', font=f) > wrap_w:
+            lines[-1] = lines[-1][:-1].rstrip()
+        lines[-1] += '…'
+    return f, lines
+
+
 def render_card(ctx: dict) -> bytes:
     """
-    Render the card. `ctx` comes from build_context() and carries only
-    already-formatted strings — this function does no golf logic and makes no
-    claims of its own about the round.
+    Render the card. `ctx` comes from build_context() / build_invite_context()
+    and carries only already-formatted strings — this function does no golf
+    logic and makes no claims of its own.
 
-    Keys: title, meta, state_label (LIVE / FINAL / ...), is_live,
-          left_name, left_score, right_name, right_score, leader ('left' |
-          'right' | None). The teams strip is skipped entirely when
-          left_name is empty, which is the branded-fallback case.
+    Keys: title, meta, pill (LIVE / FINAL / INVITE), is_live (drives the dot),
+          action ("Watch live" / "Get the app"), domain.
+
+    One template, two cards. The invite card is not tied to a round — no
+    course, no format, no score — so nothing here may assume a round exists.
     """
-    img  = Image.new('RGB', (WIDTH, HEIGHT), PINE_BOTTOM)
-    hero_h = HEIGHT - FOOTER_H - (STRIP_H if ctx.get('left_name') else 0)
-    img.paste(_gradient((WIDTH, hero_h), PINE_TOP, PINE_BOTTOM), (0, 0))
+    img = Image.new('RGB', (WIDTH, HEIGHT), PINE_BOTTOM)
+    img.paste(_gradient((WIDTH, HEIGHT)), (0, 0))
     d = ImageDraw.Draw(img, 'RGBA')
 
     # ── Brand row ───────────────────────────────────────────────────────────
-    mark = 60
-    _draw_mark(img, PAD, PAD - 6, mark)
-    word_f = _font(_DISPLAY, 42, 'SemiBold')
-    _tracked(d, (PAD + mark + 20, PAD + 4), 'HALVED', word_f, BONE,
-             tracking=42 * 0.14)
+    mark = 40
+    _draw_mark(img, PAD, PAD_TOP, mark)
+    word_f = _font(_DISPLAY, 30, 'Bold')
+    _tracked(d, (PAD + mark + 16, PAD_TOP + 6), 'HALVED', word_f, BONE,
+             tracking=30 * 0.24)
 
-    # ── State pill (LIVE, or the final result) ──────────────────────────────
-    label   = (ctx.get('state_label') or '').upper()
-    is_live = bool(ctx.get('is_live'))
+    # ── Pill — what KIND of link this is ────────────────────────────────────
+    # LIVE keeps its dot; FINAL and INVITE do not. A finished round still says
+    # FINAL rather than LIVE: a card claiming a round from last Tuesday is
+    # live is worse than no card at all.
+    label = (ctx.get('pill') or '').upper()
+    pill_bottom = PAD_TOP + mark
     if label:
-        pill_f = _font(_DISPLAY, 30, 'Bold')
-        track  = 30 * 0.06
-        text_w = sum(d.textlength(c, font=pill_f) + track for c in label) - track
-        dot_w  = 34 if is_live else 0
-        pill_w = text_w + dot_w + 56
-        pill_h = 56
-        px1    = WIDTH - PAD
-        px0    = px1 - pill_w
-        py0    = PAD - 2
+        pf    = _font(_TEXT, 20, 'Bold')
+        track = 20 * 0.1
+        text_w = sum(d.textlength(c, font=pf) + track for c in label) - track
+        dot_w  = 24 if ctx.get('is_live') else 0      # 14px dot + 10px gap
+        pill_w = text_w + dot_w + 44                  # 22px padding each side
+        pill_h = 45                                   # 11 + 20 + 11 + borders
+        px1, py0 = WIDTH - PAD, PAD_TOP
+        px0 = px1 - pill_w
         d.rounded_rectangle([px0, py0, px1, py0 + pill_h], radius=pill_h / 2,
-                            fill=MINT + (41,),        # 16% mint fill
-                            outline=MINT + (128,),    # 50% mint border
+                            fill=MINT + (36,),        # 14% mint
+                            outline=MINT + (107,),    # 42% mint
                             width=2)
-        tx = px0 + 28
-        if is_live:
+        tx = px0 + 22
+        if ctx.get('is_live'):
             cy = py0 + pill_h / 2
-            d.ellipse([tx - 4, cy - 16, tx + 28, cy + 16], fill=MINT + (64,))
-            d.ellipse([tx + 3, cy - 9, tx + 21, cy + 9], fill=MINT)
+            d.ellipse([tx, cy - 7, tx + 14, cy + 7], fill=MINT)
             tx += dot_w
-        _tracked(d, (tx, py0 + 13), label, pill_f, MINT, tracking=track)
+        _tracked(d, (tx, py0 + 12), label, pf, MINT, tracking=track)
+        pill_bottom = max(pill_bottom, py0 + pill_h)
 
-    # ── Title + meta ────────────────────────────────────────────────────────
-    # Anchored to the BOTTOM of the gradient, not hung off the brand row.
-    # The design's hero is sized to its content; ours is a fixed 630-tall
-    # canvas, so hanging the title from the top left a slab of empty pine
-    # under it and made the card look like it was still loading.
-    title = ctx.get('title') or 'A round on Halved'
-    tf   = _fit(d, title, _DISPLAY, WIDTH - PAD * 2, 62, 'Bold')
-    meta = ctx.get('meta') or ''
-    mf   = _fit(d, meta, _TEXT, WIDTH - PAD * 2, 38, 'Regular', min_size=24) \
-           if meta else None
-    meta_h = (mf.size + 20) if mf else 0
-    block_h = tf.size + meta_h
-    if ctx.get('left_name'):
-        # With a teams strip the hero is short, so the block sits just above
-        # the rule -- the design's own arrangement.
-        ty = hero_h - 52 - meta_h - tf.size
-    else:
-        # Without one the hero owns most of the card. Bottom-anchoring left a
-        # third of the card as empty pine; centre it in the space below the
-        # brand row instead.
-        top_of_space = PAD + mark + 40
-        ty = top_of_space + (hero_h - top_of_space - block_h) // 2
-    d.text((PAD, ty), title, font=tf, fill=(255, 255, 255))
-    if mf:
-        d.text((PAD, ty + tf.size + 20), meta, font=mf, fill=SAGE)
+    # ── Title + sub, centred in the space between the rows ──────────────────
+    tf, lines = _title_block(d, ctx.get('title') or 'A round on Halved')
+    line_h = int(tf.size * 1.08)
+    sub    = ctx.get('meta') or ''
+    sf     = _font(_TEXT, 28, 'Regular') if sub else None
+    sub_h  = int(28 * 1.4) + 14 if sf else 0          # line-height + gap
 
-    # ── Teams strip ─────────────────────────────────────────────────────────
-    if ctx.get('left_name'):
-        top = hero_h
-        d.rectangle([0, top, WIDTH, top + STRIP_H], fill=PINE_BOTTOM)
-        d.line([0, top, WIDTH, top], fill=RULE, width=2)
-        name_f  = _font(_TEXT, 32, 'Regular')
-        score_f = _font(_DISPLAY, 54, 'Bold')
-        leader  = ctx.get('leader')
+    top    = pill_bottom
+    bottom = HEIGHT - FOOTER_H
+    block  = line_h * len(lines) + sub_h
+    ty     = top + (bottom - top - block) // 2
 
-        d.text((PAD, top + 26), ctx['left_name'], font=name_f, fill=MUTED)
-        d.text((PAD, top + 66), ctx.get('left_score') or '',
-               font=score_f, fill=MINT if leader == 'left' else BONE)
-
-        vs_f = _font(_TEXT, 30, 'SemiBold')
-        vs_w = d.textlength('vs', font=vs_f)
-        d.text(((WIDTH - vs_w) / 2, top + 52), 'vs', font=vs_f, fill=DIM)
-
-        rn = ctx.get('right_name') or ''
-        rs = ctx.get('right_score') or ''
-        d.text((WIDTH - PAD - d.textlength(rn, font=name_f), top + 26),
-               rn, font=name_f, fill=MUTED)
-        d.text((WIDTH - PAD - d.textlength(rs, font=score_f), top + 66),
-               rs, font=score_f, fill=MINT if leader == 'right' else BONE)
+    for i, line in enumerate(lines):
+        d.text((PAD, ty + i * line_h), line, font=tf, fill=BONE)
+    if sf:
+        d.text((PAD, ty + line_h * len(lines) + 14), sub, font=sf,
+               fill=SUB_TEXT)
 
     # ── Footer ──────────────────────────────────────────────────────────────
+    # Translucent white over the gradient rather than its own solid colour, so
+    # the gradient carries through and the card reads as one surface.
     fy = HEIGHT - FOOTER_H
-    d.rectangle([0, fy, WIDTH, HEIGHT], fill=FOOT_BG)
-    ff = _font(_TEXT, 30, 'Regular')
-    d.text((PAD, fy + 22), 'link.halved.golf', font=ff, fill=FOOT_TEXT)
-    cta   = 'Watch live'
-    cta_f = _font(_TEXT, 30, 'SemiBold')
+    d.rectangle([0, fy, WIDTH, HEIGHT], fill=(255, 255, 255, 13))   # 5%
+    d.line([0, fy, WIDTH, fy], fill=(255, 255, 255, 20), width=1)   # 8%
+    dom_f = _font(_TEXT, 24, 'Regular')
+    d.text((PAD, fy + 26), ctx.get('domain') or 'link.halved.golf',
+           font=dom_f, fill=DOM_TEXT)
+
+    cta   = ctx.get('action') or 'Watch live'
+    cta_f = _font(_TEXT, 24, 'SemiBold')
     cw    = d.textlength(cta, font=cta_f)
-    cx    = WIDTH - PAD - cw - 34
-    d.text((cx, fy + 22), cta, font=cta_f, fill=MINT)
+    cx    = WIDTH - PAD - cw - 30
+    d.text((cx, fy + 26), cta, font=cta_f, fill=MINT)
     ax, ay = cx + cw + 12, fy + 38
-    d.line([ax, ay, ax + 18, ay], fill=MINT, width=3)
-    d.line([ax + 10, ay - 8, ax + 18, ay], fill=MINT, width=3)
-    d.line([ax + 10, ay + 8, ax + 18, ay], fill=MINT, width=3)
+    d.line([ax, ay, ax + 16, ay], fill=MINT, width=3)
+    d.line([ax + 9, ay - 7, ax + 16, ay], fill=MINT, width=3)
+    d.line([ax + 9, ay + 7, ax + 16, ay], fill=MINT, width=3)
 
     buf = io.BytesIO()
     img.save(buf, format='PNG', optimize=True)
@@ -321,13 +359,15 @@ def build_context(round_obj) -> dict:
     thru     = holes_played(round_obj)
 
     # A card that says LIVE on a round from last Tuesday is worse than no
-    # card, so a finished round shows its state instead of the pill.
+    # card, so a finished round shows its state instead. The handoff's rule
+    # that the pill names the KIND of link only ever illustrates a live round;
+    # it is not a licence to call a finished one live.
     if complete:
-        state_label, is_live = 'FINAL', False
+        pill, is_live = 'FINAL', False
     elif thru:
-        state_label, is_live = 'LIVE', True
+        pill, is_live = 'LIVE', True
     else:
-        state_label, is_live = '', False
+        pill, is_live = '', False
 
     meta_bits = [b for b in (
         game,
@@ -335,14 +375,49 @@ def build_context(round_obj) -> dict:
     ) if b]
 
     return {
-        'title'       : title,
-        'meta'        : ' · '.join(meta_bits),
-        'state_label' : state_label,
-        'is_live'     : is_live,
-        'thru'        : thru,
-        'left_name'   : '',      # teams strip: see docstring
-        'left_score'  : '',
-        'right_name'  : '',
-        'right_score' : '',
-        'leader'      : None,
+        'title'   : title,
+        'meta'    : ' · '.join(meta_bits),
+        'pill'    : pill,
+        'is_live' : is_live,
+        'thru'    : thru,
+        # Same rule as the pill, one line down: "Watch live" on a round that
+        # finished last Tuesday makes the same false promise LIVE would, and
+        # the tap that follows it lands on a scorecard, not a live board.
+        'action'  : 'See the result' if complete else 'Watch live',
+        'domain'  : _domain(),
+    }
+
+
+def _domain() -> str:
+    """The host as it should READ on the card — no scheme, no trailing slash."""
+    from django.conf import settings
+    base = (getattr(settings, 'PUBLIC_BASE_URL', '') or '').strip()
+    return base.split('//')[-1].rstrip('/') or 'link.halved.golf'
+
+
+def build_invite_context(user) -> dict:
+    """The invite card — the same template, no round behind it.
+
+    The only variable is who is inviting. The RECIPIENT cannot appear here:
+    `invite_code` is stable per user, so one link is shared with everybody and
+    the card is rendered without knowing who will open it. The design's
+    recipient line would need per-recipient links, which is a different
+    feature; the pitch carries that slot instead.
+
+    The pill says INVITE and takes no dot — there is nothing live about it.
+    """
+    name = ''
+    try:
+        name = (user.player_profile.name or '').strip()
+    except Exception:
+        name = (user.get_full_name() or '').strip()
+
+    return {
+        'title'   : (f'{name} invited you to Halved' if name
+                     else 'You have been invited to Halved'),
+        'meta'    : 'Scored on the phone, settled to the dollar',
+        'pill'    : 'INVITE',
+        'is_live' : False,
+        'action'  : 'Get the app',
+        'domain'  : _domain(),
     }

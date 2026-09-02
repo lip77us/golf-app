@@ -1996,3 +1996,55 @@ now compare against `RoundStatus.COMPLETE`, so a rename breaks loudly instead of
 silently wedging a gate. Found by running the payload against the real local
 database rather than only against fixtures — every completed round came back
 `can_send=False`, which no test would have shown.
+
+## Share link cards — one template, watch + invite (`handoff-share-link-cards`)
+
+Both link previews now render from `services/share_card.py`: the watch card
+(redesigned) and the invite card (new).
+
+**Rendered with Pillow, not headless Chrome.** The handoff ships an HTML/CSS
+template and a Puppeteer snippet. That template is the DESIGN SPEC — Chromium
+on the Railway deploy is ~300MB of buildpack plus cold-start and per-request
+memory, against a renderer that already draws this in milliseconds with both
+fonts bundled under `core/share_assets/fonts`. Ported the deltas instead:
+the 3-stop gradient (`#07130F → #0B1F1A 46% → #0D3327`, replacing a bright pine
+top that fought the wordmark), the translucent footer over the gradient rather
+than its own solid colour, 52/44 padding, and the 20px Spline pill.
+
+**The invite card is the bigger win.** `/i/<code>/card.png`, same template,
+`INVITE` pill and no dot. It previously served ONE static square icon via
+`INVITE_OG_IMAGE_URL` — precisely the gray-row problem the watch card was built
+to solve, one link over. That setting now defaults to empty (the rendered card
+wins) and survives only as an override.
+
+### Three places the handoff could not be followed literally
+
+- **The recipient's name cannot appear on the invite card.** The handoff's
+  sub-line is `Wendal Doman · Scored on the phone…`, but `invite_code` is
+  STABLE PER USER — one link shared with everybody, rendered without knowing
+  who opens it. Naming a recipient needs per-recipient links, a different
+  feature. The pitch takes that slot; the title still personalises, because the
+  code does identify the *inviter*.
+- **A finished round still says FINAL, not Live.** "The pill states the kind of
+  link, not a status" only ever illustrates a live round. Taken literally it
+  would undo `test_completed_round_never_claims_to_be_live` and put LIVE on a
+  round from last Tuesday. Same rule applied one line down, which the handoff
+  does not cover: the footer now reads **See the result** on a finished round,
+  because "Watch live" makes the identical false promise and the tap behind it
+  lands on a scorecard.
+- **Long titles shrink rather than being truncated upstream.** The handoff says
+  truncate the course name server-side. A card that breaks because someone
+  typed "Corica Park — South Course" is still a broken card, so `_title_block`
+  wraps to two lines, shrinks to fit, and only ellipsises as a last resort.
+
+  **The subtlety that cost a render:** `20ch` must be measured ONCE at 60px and
+  held fixed while the font shrinks. Re-measuring it in the shrinking font
+  keeps the box 20 characters wide at every size, so shrinking fits no more
+  text — it only makes the title small. A 53-character title went from
+  ellipsised at 34px to whole at 52px.
+
+Cache keys hash the title (`invite_views.py`); the raw one carries the
+inviter's name and spaces make a key invalid under memcached.
+
+Tests: `InviteCardTests`, `TitleWrapTests`, `FinishedRoundCopyTests`
+(`api/test_share_card.py`).

@@ -347,12 +347,13 @@ ANDROID_CERT_FINGERPRINTS = [
     for f in os.environ.get('ANDROID_CERT_FINGERPRINTS', '').split(',')
     if f.strip()
 ]
-# Logo image shown in the invite link's social/Messages preview (og:image).
-# Host a square PNG (≈512px) and point this at it; empty = no preview image.
-INVITE_OG_IMAGE_URL = os.environ.get(
-    'INVITE_OG_IMAGE_URL',
-    'https://lip77us.github.io/halved-legal/halved-icon.png',
-)
+# OVERRIDE for the invite link's og:image. Empty (the default) means the
+# invite serves its own rendered 1200x630 card from /i/<code>/card.png — the
+# same template as the watch card, naming the person who invited you. Set this
+# only to pin a fixed image instead; it used to default to a square icon,
+# which is what made an invite arrive as the gray row the watch card exists to
+# avoid.
+INVITE_OG_IMAGE_URL = os.environ.get('INVITE_OG_IMAGE_URL', '')
 
 # Optional incoming-webhook URL (Slack / Discord / Zapier / Make / …) pinged
 # when a user submits a new-game suggestion. Empty = log only (see

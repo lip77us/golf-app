@@ -10,11 +10,13 @@ inviter's first name is shown.
 """
 from __future__ import annotations
 
+import hashlib
 import html
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.http import Http404, HttpResponse
+from django.urls import reverse
 
 
 def _inviter_first_name(user) -> str:
@@ -24,6 +26,44 @@ def _inviter_first_name(user) -> str:
         full = user.get_full_name() or ''
     full = (full or '').strip()
     return full.split()[0] if full else 'A friend'
+
+
+def invite_card_png(request, code: str):
+    """
+    GET /i/<code>/card.png
+
+    The og:image for a personal invite link — the same 1200x630 template the
+    watch card uses, with the INVITE pill and no round behind it.
+
+    Unauthenticated on purpose: the crawler that fetches this carries no
+    credential, and the code is already the credential for the page itself.
+
+    Cached on the inviter's name, which is the only thing that varies. A long
+    TTL is right here — unlike the watch card there is nothing live to go
+    stale, and a rename is not worth a render per crawl.
+    """
+    from django.core.cache import cache
+    from services.share_card import build_invite_context, render_card
+
+    User = get_user_model()
+    try:
+        user = User.objects.select_related('account').get(invite_code=code)
+    except User.DoesNotExist:
+        raise Http404('Unknown invite link.')
+
+    ctx = build_invite_context(user)
+    # Keyed on a HASH of the title, not the title: it carries the inviter's
+    # name, and a cache key with spaces in it is invalid under memcached.
+    stamp = hashlib.sha1(ctx['title'].encode()).hexdigest()[:12]
+    key = f'invitecard:{code}:{stamp}'
+    png = cache.get(key)
+    if png is None:
+        png = render_card(ctx)
+        cache.set(key, png, 60 * 60)
+
+    resp = HttpResponse(png, content_type='image/png')
+    resp['Cache-Control'] = 'public, max-age=3600'
+    return resp
 
 
 def invite_landing(request, code: str):
@@ -36,7 +76,15 @@ def invite_landing(request, code: str):
 
     first = html.escape(_inviter_first_name(user))
     download_url = html.escape(getattr(settings, 'APP_DOWNLOAD_URL', '') or '#')
-    og_image = html.escape(getattr(settings, 'INVITE_OG_IMAGE_URL', '') or '')
+    # The rendered card, not the one static image INVITE_OG_IMAGE_URL used to
+    # serve: the invite is an acquisition surface and a card that names the
+    # person inviting you is the whole difference. The setting stays as an
+    # override for anyone who wants a fixed image back.
+    og_image = html.escape(
+        getattr(settings, 'INVITE_OG_IMAGE_URL', '')
+        or request.build_absolute_uri(
+            reverse('invite-card', args=[code]))
+    )
     page_url = html.escape(request.build_absolute_uri())
     og_title = f"{first} invited you to Halved"
     og_desc = ("Halved is the easiest way to track golf bets — skins, nassau, "

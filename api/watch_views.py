@@ -1929,7 +1929,7 @@ def watch_card_png(request, token: str):
         raise Http404('Unknown watch link.')
 
     ctx = build_context(round_obj)
-    key = f'sharecard:{token}:{ctx["thru"]}:{ctx["state_label"]}'
+    key = f'sharecard:{token}:{ctx["thru"]}:{ctx["pill"]}'
     png = cache.get(key)
     if png is None:
         png = render_card(ctx)
