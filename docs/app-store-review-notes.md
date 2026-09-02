@@ -16,8 +16,20 @@ and put the demo phone + code in the **Sign-In Information** fields.
 > sent**; the backend accepts the fixed code for these numbers only.
 >
 > ### How to run `seed_demo` against prod (start here — this bit is fiddly)
-> Railway's Postgres has an internal-only host, so `railway run`/`railway ssh`
-> from a laptop can't reach the DB. Run it **inside the app container**:
+> Railway's Postgres has an internal-only host, so **`railway run` cannot reach
+> the DB** — it injects prod env into a LOCAL process, and
+> `postgres.railway.internal` does not resolve from a laptop.
+>
+> **`railway ssh` does work**, because it runs inside the container where that
+> hostname resolves. Either drive it from a shell:
+> ```bash
+> railway ssh --service "Golf App" 'cd /app && /opt/venv/bin/python manage.py seed_demo --reset'
+> ```
+> or use the dashboard Terminal below. (Verified 2026-09-01; this note
+> previously said ssh could not reach it either, which is wrong and sent people
+> to the web console unnecessarily.)
+>
+> Via the dashboard, run it **inside the app container**:
 > 1. Railway dashboard → open the **"Golf App"** service (NOT Postgres — a
 >    Postgres shell has `psql` but no Python/Django) → its **Terminal/Shell**.
 > 2. The interactive shell doesn't have the virtualenv on PATH, so `python`
