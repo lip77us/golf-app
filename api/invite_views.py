@@ -5,8 +5,10 @@ Public, unauthenticated landing page for a personal invite link.
 
 A user shares https://<host>/i/<code>/ (from the in-app share sheet); the
 recipient lands here and is pitched the app with a download button.  Mirrors the
-plain-HTML, no-JS, AllowAny style of api/watch_views.py.  No PII beyond the
-inviter's first name is shown.
+plain-HTML, no-JS, AllowAny style of api/watch_views.py.  The only personal
+detail shown is the inviter's own display name — the same one the link-preview
+card carries, resolved by the same `inviter_name` so the preview and the page
+behind it cannot introduce him two different ways.
 """
 from __future__ import annotations
 
@@ -19,13 +21,10 @@ from django.http import Http404, HttpResponse
 from django.urls import reverse
 
 
-def _inviter_first_name(user) -> str:
-    try:
-        full = user.player_profile.name
-    except Exception:
-        full = user.get_full_name() or ''
-    full = (full or '').strip()
-    return full.split()[0] if full else 'A friend'
+def _inviter_display_name(user) -> str:
+    """The inviter's full name, or a neutral stand-in when we have none."""
+    from services.share_card import inviter_name
+    return inviter_name(user) or 'A friend'
 
 
 def invite_card_png(request, code: str):
@@ -74,7 +73,7 @@ def invite_landing(request, code: str):
     except User.DoesNotExist:
         raise Http404('Unknown invite link.')
 
-    first = html.escape(_inviter_first_name(user))
+    who = html.escape(_inviter_display_name(user))
     download_url = html.escape(getattr(settings, 'APP_DOWNLOAD_URL', '') or '#')
     # The rendered card, not the one static image INVITE_OG_IMAGE_URL used to
     # serve: the invite is an acquisition surface and a card that names the
@@ -86,7 +85,7 @@ def invite_landing(request, code: str):
             reverse('invite-card', args=[code]))
     )
     page_url = html.escape(request.build_absolute_uri())
-    og_title = f"{first} invited you to Halved"
+    og_title = f"{who} invited you to Halved"
     og_desc = ("Halved is the easiest way to track golf bets — skins, nassau, "
                "points and more — with your group.")
 
@@ -127,7 +126,7 @@ def invite_landing(request, code: str):
 <body>
   <div class="card">
     <div class="logo">Halved</div>
-    <h1>{first} invited you to play</h1>
+    <h1>{who} invited you to play</h1>
     <p>Halved is the easiest way to track golf bets — skins, nassau, points and
        more — with your group, right from your phone.</p>
     <a class="btn" href="{download_url}">Get the app</a>

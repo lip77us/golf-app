@@ -395,6 +395,23 @@ def _domain() -> str:
     return base.split('//')[-1].rstrip('/') or 'link.halved.golf'
 
 
+def inviter_name(user) -> str:
+    """The inviter's display name, or '' when there isn't one.
+
+    Lives here, and is used by BOTH the card and the landing page, because the
+    two used to resolve the name separately and disagreed: the page showed a
+    first name and the card the full one, so the preview and the page it opened
+    introduced the same person two different ways.
+
+    `.name`, not `str()`: `Player.__str__` appends " (phantom)".
+    """
+    try:
+        name = user.player_profile.name
+    except Exception:
+        name = user.get_full_name() or ''
+    return (name or '').strip()
+
+
 def build_invite_context(user) -> dict:
     """The invite card — the same template, no round behind it.
 
@@ -406,12 +423,7 @@ def build_invite_context(user) -> dict:
 
     The pill says INVITE and takes no dot — there is nothing live about it.
     """
-    name = ''
-    try:
-        name = (user.player_profile.name or '').strip()
-    except Exception:
-        name = (user.get_full_name() or '').strip()
-
+    name = inviter_name(user)
     return {
         'title'   : (f'{name} invited you to Halved' if name
                      else 'You have been invited to Halved'),

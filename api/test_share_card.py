@@ -159,10 +159,12 @@ class InviteCardTests(TestCase):
     def setUp(self):
         self.acct = Account.objects.create(name='Club')
         self.user = User.objects.create_user(username='paul', account=self.acct)
+        # `player_profile` is the REVERSE of Player.user — setting it on the
+        # user only sticks in memory, which quietly made these tests pass
+        # against the nameless fallback.
         self.player = Player.objects.create(
-            account=self.acct, name='Paul Lipkin', handicap_index=4)
-        self.user.player_profile = self.player
-        self.user.save()
+            account=self.acct, name='Paul Lipkin', handicap_index=4,
+            user=self.user)
         self.code = self.user.ensure_invite_code()
 
     def test_the_card_is_a_1200x630_png_and_needs_no_auth(self):
@@ -286,3 +288,45 @@ class FinishedRoundCopyTests(TestCase):
         self.round.status = 'in_progress'
         self.round.save(update_fields=['status'])
         self.assertEqual(build_context(self.round)['action'], 'Watch live')
+
+
+class InviterNameAgreementTests(TestCase):
+    """The card and the page must introduce the same person the same way.
+
+    They used to resolve the name separately — the page took a first name, the
+    card the full one — so the preview said "Paul Lipkin invited you" and the
+    page it opened said "Paul invited you".
+    """
+
+    def setUp(self):
+        self.acct = Account.objects.create(name='Club')
+        self.user = User.objects.create_user(username='paul', account=self.acct)
+        # `player_profile` is the REVERSE of Player.user — setting it on the
+        # user only sticks in memory, which quietly made these tests pass
+        # against the nameless fallback.
+        self.player = Player.objects.create(
+            account=self.acct, name='Paul Lipkin', handicap_index=4,
+            user=self.user)
+        self.code = self.user.ensure_invite_code()
+
+    def test_the_page_uses_the_full_name_the_card_uses(self):
+        from services.share_card import build_invite_context
+        body = self.client.get(f'/i/{self.code}/').content.decode()
+        self.assertIn('Paul Lipkin invited you', body)
+        self.assertIn('Paul Lipkin', build_invite_context(self.user)['title'])
+
+    def test_a_nameless_inviter_gets_a_stand_in_not_an_empty_sentence(self):
+        bare = User.objects.create_user(username='ghost', account=self.acct)
+        code = bare.ensure_invite_code()
+        body = self.client.get(f'/i/{code}/').content.decode()
+        self.assertIn('A friend invited you', body)
+        self.assertNotIn('  invited you', body)
+
+    def test_a_phantom_suffix_never_reaches_either_surface(self):
+        """Player.__str__ appends " (phantom)"; .name does not."""
+        from services.share_card import inviter_name
+        self.player.is_phantom = True
+        self.player.save(update_fields=['is_phantom'])
+        self.assertEqual(inviter_name(self.user), 'Paul Lipkin')
+        body = self.client.get(f'/i/{self.code}/').content.decode()
+        self.assertNotIn('phantom', body)
