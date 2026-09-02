@@ -105,9 +105,10 @@ def _nassau(foursome, player_id, *, final):
 
 
 def _skins(foursome, player_id, *, final):
-    from services.live_activity_skins import skins_activity_state
+    from services.live_activity_skins import (skins_activity_state,
+                                              skins_final_state)
     if final:
-        return {}   # TODO: the closing frame
+        return skins_final_state(foursome, player_id=player_id)
     return skins_activity_state(foursome, player_id=player_id,
                                 thru=holes_played(foursome))
 
