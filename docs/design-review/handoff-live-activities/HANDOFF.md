@@ -1,6 +1,6 @@
-# Handoff — Live Activities (Sixes · Nassau · Skins · Rabbit)
+# Handoff — Live Activities (Sixes · Nassau · Skins · Rabbit · Match play)
 
-**One frame, four games, four shipping surfaces.** This is the umbrella packet. Read this document first for the shared frame and the cross-game rules, then the per-game document for whichever card you are building.
+**One frame, five games, five shipping surfaces.** This is the umbrella packet. Read this document first for the shared frame and the cross-game rules, then the per-game document for whichever card you are building.
 
 | Game | Doc | Card in the design system |
 | --- | --- | --- |
@@ -8,10 +8,13 @@
 | Nassau | `nassau-HANDOFF.md` | **Nassau — lock screen** · `screens/live-activity-nassau.html` |
 | Skins | `skins-HANDOFF.md` | **Skins — lock screen** · `screens/live-activity-skins.html` |
 | Rabbit | `rabbit-HANDOFF.md` | **Rabbit — lock screen** · `screens/live-activity-rabbit.html` |
+| Singles match / Fourball | `match-HANDOFF.md` | **Match play — lock screen** · `screens/live-activity-match.html` |
 
 Generalised pattern card: `live-activity-pattern.html` (**The pattern** — the five slots, which games earn an activity, which earn a push).
 
-Sixes is the reference implementation. Each of the other three documents is written as a set of departures from it.
+Sixes is the reference implementation. Each of the other documents is written as a set of departures from it.
+
+**Match play is the first of the casual-round games** and the first card in the set that **pushes nothing at all** — in a two-side match inside one group, the reader watched every putt. Its packet also settles two rules that reach back across the other four: a **no-stake round removes the footer, not the score** (gross and thru move into the header), and **gross against par appears on every state of every card**, quiet treatments included.
 
 ---
 

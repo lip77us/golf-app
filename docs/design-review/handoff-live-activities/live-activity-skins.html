@@ -1,4 +1,4 @@
-<!-- @dsCard group="Live Activities" name="Skins — lock screen" subtitle="SkinsLiveActivity — the pot on this hole, the carry, the provisional problem, pool mode, always-on and the final state" viewport="1560x1320" -->
+<!-- @dsCard group="Live Activities" name="Skins — lock screen" subtitle="SkinsLiveActivity — both skins games: multi-group reports holes as they close, single-group is the pot in front of you; standing, the skin-taken announcement, pool, watcher, always-on and the final state" viewport="1560x1320" -->
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Skins Live Activity</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -51,12 +51,19 @@ a{color:var(--pine)}a:hover{color:var(--deepPine)}
 .notif .tx .t1 span{margin-left:auto;font-weight:600;opacity:.8}
 .notif .tx .t2{font-size:14px;font-weight:700;margin-top:3px}
 .notif .tx .t3{font-size:12.5px;opacity:.82;margin-top:2px;line-height:1.4}
+.wins{font-size:12.5px;line-height:1.5;opacity:.82;margin-top:9px}
+.wins b{font-weight:700}
+.done{font-family:"Schibsted Grotesk",sans-serif;font-size:21px;font-weight:700;letter-spacing:-.3px;margin:2px 0 9px}
 .fin{display:flex;align-items:flex-end;gap:11px;margin-top:2px}
-.fin b{font-family:"Schibsted Grotesk",sans-serif;font-size:42px;font-weight:700;line-height:.94;letter-spacing:-1px}
+.fin>b{font-family:"Schibsted Grotesk",sans-serif;font-size:42px;font-weight:700;line-height:.94;letter-spacing:-1px}
+.fin span b{font-family:"Spline Sans",system-ui,sans-serif;font-size:12.5px;font-weight:700;line-height:inherit;letter-spacing:0}
 .fin span{font-size:12.5px;line-height:1.55;opacity:.8;padding-bottom:3px}
 .la.quiet{background:rgba(10,22,18,.55);border-color:rgba(255,255,255,.1);padding:12px 15px}
 .la.quiet .big .st{font-size:22px}
 .la.quiet .big .sub{font-size:12px;opacity:.6;margin-top:8px}
+.la.watch{border-color:rgba(255,255,255,.2)}
+.lah .eye{margin-left:auto;font-size:9px;font-weight:700;letter-spacing:.5px;opacity:.62;border:.5px solid rgba(255,255,255,.3);border-radius:5px;padding:2px 5px}
+.lah .eye+.seg{margin-left:7px}
 .di{background:#0B1F1A;border-radius:22px;padding:22px 20px;width:372px;flex:none;color:#fff;margin-bottom:36px}
 .di h4{font-family:"Schibsted Grotesk",sans-serif;font-size:13px;font-weight:700;margin:0 0 4px}
 .di p{font-size:11px;line-height:1.5;opacity:.6;margin:0 0 13px}
@@ -74,58 +81,193 @@ a{color:var(--pine)}a:hover{color:var(--deepPine)}
 <a class="home" href="../index-contents.html">&#8592; Contents</a>
 <div class="notes">
 <h1>Skins on the lock screen</h1>
-<p>Skins gets the <b>one big number</b> back. Nassau needed two rows because it always has two matches live; skins has one thing that pays &mdash; <b>the hole you are standing on</b> &mdash; so the composition Sixes was built on returns intact.</p>
-<p>The number is <b>what this hole is worth</b>. Not your position, not the leaderboard: the pot in front of you, which is the only figure that changes how the next tee shot gets played.</p>
-<h3>Only when skins is the primary game</h3>
-<p>A round gets <b>one</b> Live Activity and it belongs to <b>the primary game, named at setup</b>. So this card ships when skins is what the group came to play &mdash; and a foursome running skins alongside a Nassau gets the Nassau card and no skins card at all.</p>
-<p>Worth stating because it closes a question the pattern left open: there is no ranking of games by newsworthiness and nothing to arbitrate at runtime. <b>The group already answered it.</b> Side games settle in the app like everything else.</p>
-<h3>The money is in the headline, and this is the exception</h3>
-<p>Both earlier activities pushed money to the footer, because a lock screen is a <b>neutral board</b> two golfers should be able to read and personal money in the headline breaks that.</p>
-<p>Skins is the one game where <b>the pot is not personal</b>. Everyone on the tee is playing for the same $18. So it can hold the headline without breaking the rule &mdash; and because there are no sides, <b>mint is free to carry it</b>, which it never was in Sixes or Nassau where mint was the app&rsquo;s colour and could not be mistaken for a team&rsquo;s.</p>
-<h3>Nobody is named</h3>
-<p>The sides slot is empty and stays empty. In skins <b>the field is the opponent</b>, and naming it would be a list &mdash; the thing a lock screen has least room for.</p>
-<p>What the slot holds instead is <b>where the pot came from</b>: <i>3 skins, carried from the 10th.</i> That is the story of the hole and it is the reason the number is big.</p>
-<h3>The pot is provisional, and the card has to say so</h3>
-<p>This is the structural problem skins has and the other games do not. A skin is not decided until <b>every group has played that hole</b>. Your group can tie the 10th and think it carries, while a group an hour ahead already won it.</p>
-<p>So the pot on your current hole is <b>a forecast, not a fact</b>, and the card marks it: the number goes white instead of mint, the state slot reads <b>PROVISIONAL</b>, and beneath it <b>2 GROUPS OUT</b> &mdash; how many are still to play the holes in the carry.</p>
-<p>When the field is through and nothing is outstanding, the number turns mint and the state reads <b>ALL IN</b>. Same slot, two truths, and the colour does the work at a glance.</p>
-<p>Two consequences. <b>Pool mode is always mint</b> &mdash; the number there is the pool, which is fixed by the ante at setup and cannot be provisional; what is uncertain in pool is your <i>share</i>, and <i>falling</i> carries that. And <b>the quiet treatment keeps the mint on the number</b> even though it pulls it off everything else: the colour is load-bearing here, not decoration, and a quiet card that cannot distinguish a real pot from a guess has lost the one thing this card is for.</p>
-<h3>The news is a skin settling behind you</h3>
-<p><i>The 10th went to Sam Reid.</i> A group ahead won a hole your group tied, so the carry you were counting on breaks &mdash; this hole is $12, not $18. Money moved while you were standing somewhere else, and no amount of watching your own card would have told you.</p>
-<p>That is the exact test the other activities used, and skins passes it more cleanly than either: it is <b>the only game here where the thing in front of you can change without you doing anything</b>.</p>
+<p>Skins gets the <b>one big number</b> back. Nassau needed two rows because it always has two matches live; skins has one thing that pays &mdash; <b>a hole</b> &mdash; so the composition Sixes was built on returns intact.</p>
+<p>Which hole is the whole question, and the two games answer it differently. Single group: <b>the hole in front of you</b>, worth whatever has carried into it, the only figure that changes how the next tee shot gets played. Multi-group: <b>the golfer who just won a hole</b>, somewhere out on the course, the moment the last group closed it. A name, not a sum &mdash; multi-group is one pot, and what a skin is worth is not known until the last one has been taken. The counts sit underneath, at stat-line size.</p>
+<h3>Two games, four shapes, and the title says which</h3>
+<p>Skins is run two ways and they are different games. A <b>single-group</b> game is four players and one pot &mdash; the whole competition is the people you are walking with, and a hole is decided the moment the four of you have played it. A <b>multi-group</b> game scores the same hole <b>across the field</b>: your 3 has to beat all sixteen cards, so nothing is decided until every group has been through.</p>
+<p>The header names it outright, because the two cards go on to say different things and the reader has to know which one he is holding:</p>
 <div class="own"><table>
-<tr><td>Activity</td><td>Ambient. The pot on this hole, always current.</td></tr>
-<tr><td>Notification</td><td>Punctual. Fires when a skin settles behind you and changes the carry.</td></tr>
-<tr><td>Never both</td><td>The activity does not flash. It already shows the corrected pot.</td></tr>
+<tr><td>SKINS &middot; &hellip;</td><td><b>Single group.</b> Four players, decided the moment the four of them have played the hole. The word after the dot names the variation &mdash; <i>CARRYOVERS</i>, <i>POOL</i>, <i>POOL + JUNK</i> &mdash; and the card is personal.</td></tr>
+<tr><td>MULTI-GROUP SKINS</td><td><b>Field-scored, one pot, no carries.</b> A hole closes when the last group clears it, and the card reports those closures rather than the reader.</td></tr>
 </table></div>
-<p><b>Not</b> every carry. A hole carrying is normal, expected, and already on the card &mdash; pushing it would be eighteen notifications. Only a settlement that <b>moves the number in front of you</b> is news.</p>
-<h3>Gross leads the footer</h3>
-<p><i>+2 &middot; $2 a player &middot; 6 settled.</i> Same rule as the other two cards: gross is the number a golfer checks without meaning to, and the footer is already the row where the reader&rsquo;s own round lives.</p>
-<p>It earns its place here twice over, because <b>par is in the header</b> and gross is the other half of that sentence. Net skins turn on strokes, so <i>par 4</i> and <i>+2</i> together tell the reader what the last eleven holes have done to his chances on this one.</p>
-<h3>The money beside it is net, and settled</h3>
-<p><i>+$4</i> after six skins: two collected at $6, four paid at $2 each. Both directions, or it is not your position &mdash; a gross figure of skins won reads like a win when you are down.</p>
-<p>Settled only, same rule as Nassau. A provisional pot has not paid anyone, so it is not in there.</p>
-<h3>Pool mode inverts it</h3>
-<p>Per-skin pays a fixed amount per hole won. <b>Pool</b> divides one pot among however many skins get won, which means <b>every new skin makes yours worth less</b>. The card says that out loud: <i>$15 a skin, falling.</i></p>
-<p>Nothing else about the composition changes. The pot slot holds the pool, the carry line holds the count so far.</p>
-<h3>Par is in the header</h3>
-<p><i>HOLE 12 &middot; PAR 4.</i> Skins is the one game where par belongs on the lock screen &mdash; net skins turn on strokes, and whether a 4 is good enough is the question the number is asking.</p>
+<p>It sits <b>next to the mark on every lock-screen state</b>, so a reader never has to infer which game he is looking at from the numbers. The Dynamic Island is the one exception and it has to be: the compact pill has room for the pot and one qualifier, so the name waits for the expanded state. The signal is the presence or absence of <b>MULTI-GROUP</b>; anything starting <i>SKINS &middot;</i> is the game in front of you. The word does the work, not a badge and not a group number. <b>Which</b> group you are in is not on the player card at all &mdash; you know it, and every closure it reports belongs to the field rather than to any one group. A group number appears nowhere: the player card reports the field, and a watcher gets that same card.</p>
+<h3>Three ways the single-group game is played</h3>
+<p>Single group is the common case, so it leads the sheet. It comes in three shapes, and they change what the number on the card means:</p>
+<div class="own"><table>
+<tr><td>Carryovers</td><td><b>$2 a player, a skin a hole.</b> A tied hole carries into the next one, so the pot in the headline is <i>this hole&rsquo;s money</i> and it grows every time nobody wins. Six holes of ties makes the 17th worth $36.</td></tr>
+<tr><td>Pool</td><td><b>One ante, one pot.</b> The headline is how many skins have been won and what one is worth right now. The pot itself is a footer stat.</td></tr>
+<tr><td>Pool + junk</td><td><b>One pot, two ways to earn from it.</b> Junk &mdash; birdies, sandies, greenies &mdash; is worth exactly what a skin is worth, and divides the same pot. Four skins and two junk is six shares.</td></tr>
+</table></div>
+<p>Multi-group is a fourth shape and gets its own composition further down, because it is the only one where a hole is not decided in front of you.</p>
+<h3>Carryovers: the pot is the headline until it is won</h3>
+<p>While the carry is alive the number is the money on this hole &mdash; <b>$36</b> on the 17th, six skins deep. That is the figure that changes how the tee shot gets played, and it belongs at 36px.</p>
+<p>The moment somebody takes it, the news is not the next pot. It is <b>who just got paid</b>: <i>S. Reid &mdash; won $36 on the 17th.</i> A six-hole carry is six skins to whoever takes it, so the footer turns over in the same instant &mdash; <i>5 skins &middot; S. Reid leads &mdash; 6</i>. The name takes the headline, the amount sits beside it, and the 18th drops to the sub-line where it belongs &mdash; <i>$6 on the line on the 18th, no carry.</i> Six dollars after thirty-six is a footnote, and treating it as the headline would misread the moment badly.</p>
+<p>The same slots, reordered by what just happened. A running card leads with money at stake; a card one minute after a payout leads with the golfer who took it.</p>
+<h3>What a non-leader sees</h3>
+<p>The slot is the same shape for everybody, and only the second line changes. The leader gets <b>YOU LEAD</b>; everyone else gets <b>the name in front of them and the gap</b> &mdash; <i>2 SKINS &middot; M. ALVAREZ +3</i>.</p>
+<p>A gap, not a placing. Third of four is a rank and tells a golfer nothing he can act on, whereas <b>+3</b> is the number of holes he has to take to draw level, and with a $36 carry sitting on the 17th it can close in one swing.</p>
+<p>The leader is named because in a four-man group he is a person, not a position. When two are level the most recent winner holds the line, so the chaser reads <i>M. ALVAREZ +3</i> and not a tie he has to unpick.</p>
+<p>A <b>watcher</b> has no count of his own, so the slot names the leader outright &mdash; <i>M. ALVAREZ &middot; LEADS &middot; 5</i> &mdash; and the footer trades the gross and the money for <i>par 5 &middot; 11 settled</i> and the field size. Three readings of one slot: your lead, your gap, or the leader.</p>
+<p>This is where single group differs from multi-group, where the watcher card and the player card are identical. Here the player card is personal, so the watcher version has something to strip.</p>
+<h3>Pool leads with the divisor and the price</h3>
+<p>Per-skin pays out every time a hole is won. <b>Pool</b> antes once and divides that single pot among however many skins get won by the end, so the two figures that matter are <b>how many have gone</b> and <b>what one is worth now</b>: <i>4 SKINS &middot; $15 a skin now</i>.</p>
+<p>The word <b>now</b> carries what a longer phrase used to. An earlier draft read <i>each, and falling</i>, which spent the slot explaining a mechanism the reader already understands &mdash; four skins into a $60 pot is $15 apiece and a fifth makes it $12. <i>Now</i> says the same thing in three letters and lets the counts do the rest.</p>
+<p>The <b>pot moves to the footer</b>, where it belongs: $60 is fixed at the ante and never changes, which makes it a stat rather than news. What changes is the divisor above it.</p>
+<p><b>Sam Reid took the 6th</b> gets a line to itself. In pool a skin is everybody else&rsquo;s share dropping, so the golfer responsible is named, and crowding that onto the end of a count line buried the one human fact on the card.</p>
+<p>It <b>persists</b>. The line still reads <i>Sam Reid took the 6th</i> on the 7th, the 8th and the 9th if nobody wins in between &mdash; the last skin taken is the standing state of the game, not a flash that expires. A card that blanked the line on the next tee would be hiding the answer to the question it raises.</p>
+<p>The footer reads across the whole game &mdash; <b>$60 pot &middot; 1 skin &middot; $15 ante</b> &mdash; and the money slot nets it: one skin of four is $15 back against a $15 ante, so <b>$0</b>. Pool does not pay as it goes, so that figure moves every time anyone wins a hole.</p>
+<p>The <b>watcher</b> keeps both headline figures, since neither is personal, and trades the reader&rsquo;s skin count and money for <i>par</i> and the field size. It is drawn on the next hole to show the persistence: <i>HOLE 8</i>, and Sam Reid still holds the 6th.</p>
+<h3>Junk is a skin by another name</h3>
+<p>It is one pot, not two. A junk point &mdash; a birdie, a sandy, a greenie &mdash; is worth <b>exactly what a skin is worth</b>, and both divide the same money. <i>4 skins and 2 junk is six shares</i>, no different from six skins.</p>
+<p>So both counts take the headline, side by side: <b>4 SKINS &middot; 2 JUNK</b>, with the price underneath &mdash; <i>$10 each now</i>. A $60 pot over six shares is $10, and it falls the same way for either kind of earning. Burying junk in the sub-line, as an earlier draft did, made it look like a side pot and understated what the round is dividing.</p>
+<p>The named line carries both: <i>Sam Reid took the 6th &mdash; 1 skin, 1 junk.</i> One hole can produce two shares, which is the thing about this variation a reader has to see once to understand.</p>
+<p>The footer holds the pot and the reader&rsquo;s own holdings across both kinds &mdash; <b>$60 pot &middot; 1 skin &middot; 1 junk</b> &mdash; and the money slot nets them: two shares at $10 against a $15 ante, <b>+$5</b>.</p>
+<h3>The multi-group card shows settled holes, not the hole you are on</h3>
+<p>A multi-group skin is not decided until <b>every group has played that hole</b>, and there are <b>no carries</b> &mdash; a hole nobody wins is simply halved and produces no skin.</p>
+<p>An earlier draft put the hole you were standing on in the headline and marked it PROVISIONAL. That solved the wrong problem. <b>A scorer knows what hole he is on</b>, and his own position is on the leaderboard and on the entry screen he opens at least once a hole. What he cannot see is a hole finally closing out behind him.</p>
+<p>So the card leads with <b>the event</b> and files the counts underneath it:</p>
+<div class="own"><table>
+<tr><td>SAM REID<br>HOLE 9</td><td><b>The headline.</b> A golfer beat fifteen cards on a hole and the money moved. That is news; a running total never is.</td></tr>
+<tr><td>4 awarded<br>5 halved</td><td><b>The stat line.</b> Under the headline, at stat-line size. Most holes in a sixteen-golfer field get tied, so the awarded count stays small all afternoon and reads badly as a headline.</td></tr>
+<tr><td>FULL FIELD THRU 9</td><td><b>The boundary.</b> In the header, because it is context rather than news. Four awarded plus five halved is the nine the field is through.</td></tr>
+<tr><td>5 leaders</td><td><b>Bottom left.</b> Open holes where one golfer already holds the low score outright &mdash; the skins about to happen.</td></tr>
+</table></div>
+<p>Nothing here is a forecast, which is why the number is mint on every state and the word PROVISIONAL has left the design. <b>5 leaders</b> comes closest, but it states a fact about scores already posted &mdash; five open holes currently have a sole low score standing &mdash; not a prediction about who will win them.</p>
+<p>Groups go out in order, so settled holes are <b>a contiguous block behind the last group on the course</b> &mdash; not a scatter. That is why the header reads <b>FULL FIELD THRU 9</b> rather than a bare count: it names the boundary, and the reader subtracts his own hole number from it to see how far ahead of the settlement he is standing. On the 12th with the field through 9, three of his own holes are still open.</p>
+<p>Ties are the normal case. Sixteen net cards on a par 4 produce a lot of shared low scores, so <b>halved holes outnumber skins</b> most of the day &mdash; five to four here. That is the strongest argument for demoting the awarded count: a number that spends the round in single figures, moving one at a time, cannot carry a lock screen.</p>
+<p>The single-group game keeps the older composition, because it does not have the problem: four players, one card each, the hole settles when they hole out. It shows <b>the pot in front of them</b>, carries and all.</p>
+<h3>The multi-group card is not about you</h3>
+<p>This is the decision that shapes the whole composition. In a sixteen-golfer game <b>a golfer already knows his own round</b> &mdash; the leaderboard has it, and the entry screen is open at least once a hole. Repeating gross, standing and money on the lock screen spends the best surface in the app on the one thing the reader cannot fail to know.</p>
+<p>What he cannot see is <b>the rest of the course</b>. Fifteen other cards are being posted somewhere he is not, and holes are closing out behind him all afternoon. So the card reports those closures:</p>
+<div class="own"><table>
+<tr><td>Headline</td><td>The golfer who just won a hole, and which hole. No score: it is over.</td></tr>
+<tr><td>Stat line</td><td>Skins awarded and holes halved. The state of the game, not the state of you.</td></tr>
+<tr><td>Footer</td><td>Open holes with a leader, and who leads on skins.</td></tr>
+</table></div>
+<p><i>4 skins awarded &middot; 5 halved</i> completes the arithmetic against the header: the two add to the nine holes the field is through. Halves make the surviving skins worth more, so a reader holding one wants the halved count high and the awarded count low.</p>
+<p>The single-group card keeps the personal read, because there is no field to report &mdash; three opponents, all of them within earshot. It says <b>YOU LEAD</b> rather than a placing: <i>1st of 4</i> reads like a finishing position in a stroke-play field, when all it ever meant was that nobody in the group has more skins. Its state slot holds <b>5 SKINS &middot; YOU LEAD</b> and its footer keeps the stake and the count.</p>
+<p>The round-complete card is not personal either. It reports the result of the game, which is what the whole field and every watcher are waiting for at the same moment.</p>
+<h3>No dollar figure on a hole, and no score</h3>
+<p>The pot is one pot, divided at the end among however many skins get won, so <b>what a hole paid cannot be stated while the round is running</b>. Four skins into $192 is $48 apiece; six makes it $32. Printing a number against hole 9 would be a guess dressed as a receipt.</p>
+<p>So the headline names the winner and not a figure. The <b>awarded count is the divisor</b> &mdash; the one number that moves everybody&rsquo;s money at once &mdash; and it belongs in the stat line where it can be read against the halved count beside it.</p>
+<p>The <b>winning score is gone too</b>. A net 3 on the 9th tells the reader nothing he can use: the hole is closed, and nobody is chasing it. The name and the hole are the news; everything else was padding.</p>
+<h3>The winner is named, and that is new</h3>
+<p>Every earlier draft kept names off the card: in skins the field is the opponent, and naming it would be a list. <b>One settled hole has exactly one name</b>, so the objection disappears. It <b>is</b> the headline now, with the hole beside it: <i>SAM REID &middot; HOLE 9 &middot; WON THE SKIN</i>.</p>
+<p>The footer names one more, and only one: <b>D. Kerr leads &middot; 2 skins</b>. A count, no score beside it, and the word <i>skins</i> spelled out because two of anything is ambiguous on a lock screen. Ties resolve to the most recent winner &mdash; a second skin for M. Alvarez and the slot reads <b>M. Alvarez leads &middot; 2 skins</b>.</p>
+<p>The single-group card still names nobody. Three opponents standing next to you do not need announcing.</p>
+<h3>A hole closing out is the news</h3>
+<p><i>Hole 9 goes to Sam Reid.</i> The trigger is <b>the last group coming through</b>, which is the only moment anything in this game becomes true. It fires wherever the reader is on the course, and it is the event the card is built around.</p>
+<p>The second line places it in the golfer&rsquo;s day: <i>His 1st of the day. Nobody matched it.</i> At most eighteen of these a round, far fewer once halved holes are counted, and every one is a share of the pot moving in a group the reader cannot see.</p>
+<p><b>Halved holes are announced too</b>, in the same slot and without ceremony &mdash; <i>Hole 10 was halved. No skin, three golfers tied at net 4.</i> With no carries that is a real result, and in a pool it is good news for everyone holding a skin: one fewer way to divide the money. The card takes the same shape with the name slot greyed to <b>HALVED</b>, so the two outcomes read as one series rather than an event and an absence.</p>
+<div class="own"><table>
+<tr><td>Activity</td><td>Ambient. The last hole to close, always current.</td></tr>
+<tr><td>Notification</td><td>Punctual. Fires when the last group clears a hole.</td></tr>
+<tr><td>Your own</td><td>Same event, different voice &mdash; <i>Hole 11 is yours.</i></td></tr>
+<tr><td>Never both</td><td>The activity does not flash. It is already showing the hole the push announced.</td></tr>
+</table></div>
+<h3>Multi-group watchers get the same card</h3>
+<p>A watcher is following a round they are not playing &mdash; a spouse, a TD, a golfer waiting on the tee. In the multi-group game they get <b>the player card unchanged</b>, and there is no separate design for them. That is the strongest evidence the framing is right: once the personal figures came off, there was nothing left to strip.</p>
+<p>The round-complete card is the same for both, for the same reason. A watcher wants the result, and so does everybody who played.</p>
+<h3>Gross leads the single-group footer</h3>
+<p>Single-group only: <i>+6 &middot; $2 a player &middot; 11 settled.</i> Gross is the number a golfer checks without meaning to, and it earns its place because <b>par is in that card&rsquo;s header</b> &mdash; net skins turn on strokes, so <i>par 5</i> and <i>+6</i> together say what the round has done to his chances on this one.</p>
+<p><b>Settled</b> counts skins, not holes: with the 12th onward still in the pot, sixteen holes are behind him and only <b>eleven</b> have paid anybody.</p>
+<p>The multi-group footer gives that space to the field instead &mdash; <i>5 leaders on open holes</i>, and who leads on skins.</p>
+<h3>Money is settled, and only where it belongs</h3>
+<p>It sits on the <b>single-group</b> cards and nowhere else &mdash; not on multi-group, and not on round complete, which resolves the pool&rsquo;s per-skin value rather than anybody&rsquo;s balance. <i>+$18</i> after five skins: five collected at $6, six settled skins costing $2 each. Both directions, or it is not your position &mdash; a gross figure of skins won reads like a win when you are down.</p>
+<p>The multi-group card carries no running total, and in a pool it could not: a skin is worth $48 or $32 depending on holes nobody has played yet. That is what the stat line and the leaders count are for &mdash; the direction the divisor is moving. The <b>round-complete card is where it resolves</b>.</p>
+<h3>Round complete is the result, not a receipt</h3>
+<p>It is the one card everybody wants at the same time &mdash; every golfer in the field, and every watcher &mdash; so it reports <b>the game</b>, not the reader.</p>
+<p>Two things become true only at the last hole, and the card gives both real weight. <b>Round complete</b> leads, in the display face at 21px &mdash; the only card in the set that opens with a sentence rather than a value, because the fact that it is over is the news. Under it, <b>what a skin was worth</b>: <i>$32 a skin, 6 won from a $192 pot.</i> That figure was a moving target all afternoon; here it is finally a number.</p>
+<p>The header slot gives up its hole context, since there is no hole any more, and holds the shape of the game instead: <b>18 HOLES &middot; 16 GOLFERS</b>.</p>
+<p>Then the winners, on a row of their own so no name is ever split from its count: <i>Winners: D. Kerr 2 &middot; M. Alvarez 2 &middot; S. Reid 1 &middot; T. Ochoa 1.</i> Six skins between four golfers, and two of them tied on two. <b>No ranking and no tiebreak</b> &mdash; in a pool there is no overall winner, only golfers holding skins.</p>
+<p>The label is the plain word <b>Winners:</b> and every golfer is named the same way, the reader included. <b>Nothing on this card says <i>you</i></b> &mdash; it is the group&rsquo;s result and the watchers&rsquo;, and a card that personalises one line of it reads differently to each person looking at it, which is the opposite of what a shared result should do.</p>
+<p>The footer takes the round&rsquo;s dimensions, which no longer need to be inferred from anywhere else: <b>16 golfers &middot; $192 pot &middot; 12 halved</b>. Those three give the whole arithmetic &mdash; the ante, the divisor, and why the divisor stayed small.</p>
+<p>Twelve holes nobody took is why the six that landed were worth $32 instead of $11, which is the fact the whole afternoon turned on.</p>
+<h3>Par, and what replaced it</h3>
+<p><i>HOLE 17 &middot; PAR 5</i> on the single-group card. Skins is the one game where par belongs on a lock screen &mdash; net skins turn on strokes, and whether a 5 is good enough is the question the pot is asking.</p>
+<p>The multi-group header has no par and no hole, because it is not describing a hole anybody is about to play. It names the boundary instead: <b>FULL FIELD THRU 9</b>.</p>
 <h3>Always-on and the eight hours</h3>
-<p>One 36px number holds up under the brightness pull better than anything else drawn for this system. Skins is the easiest of the three to read at arm&rsquo;s length in sun.</p>
+<p>One 36px number holds up under the brightness pull better than anything else drawn for this system. The <b>pool + junk</b> card is the one shown always-on, because it is the busiest of the set: if two counts and a price survive the dimming, everything simpler will.</p>
 <p>Starts on the <b>first score posted</b>, ends on round sign with the final state, dismisses after ~5 minutes.</p>
 </div>
 
 <div class="wrap"><div class="lock">
 <div class="island"></div>
-<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">11:48</div></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">1:09</div></div>
 <div class="la">
-<div class="lah"><span class="mark">H</span><span class="g">SKINS</span><span class="seg">HOLE 12 &middot; PAR 4</span></div>
-<div class="big"><span class="st prov">$18</span><span class="state"><b class="prv">PROVISIONAL</b><u>2 GROUPS OUT</u></span><span class="sub">3 skins, carried from the 10th</span></div>
-<div class="foot"><span>+2 &middot; $2 a player &middot; 6 settled</span><span class="r">+$4</span></div>
+<div class="lah"><span class="mark">H</span><span class="g">SKINS &middot; CARRYOVERS</span><span class="seg">HOLE 17 &middot; PAR 5</span></div>
+<div class="big"><span class="st">$36</span><span class="state"><b>5 SKINS</b><u>YOU LEAD</u></span><span class="sub">6 skins, carried from the 12th</span></div>
+<div class="foot"><span>+6 &middot; $2 a player &middot; 11 settled</span><span class="r">+$18</span></div>
+</div>
+<div class="la" style="margin-top:14px">
+<div class="lah"><span class="mark">H</span><span class="g">SKINS &middot; CARRYOVERS</span><span class="seg">HOLE 17 &middot; PAR 5</span></div>
+<div class="big"><span class="st">$36</span><span class="state"><b>2 SKINS</b><u>M. ALVAREZ +3</u></span><span class="sub">6 skins, carried from the 12th</span></div>
+<div class="foot"><span>+9 &middot; $2 a player &middot; 11 settled</span><span class="r">&minus;$6</span></div>
+</div>
+<div class="la watch" style="margin-top:14px">
+<div class="lah"><span class="mark">H</span><span class="g">SKINS &middot; CARRYOVERS</span><span class="eye">WATCHING</span><span class="seg">HOLE 17</span></div>
+<div class="big"><span class="st">$36</span><span class="state"><b>M. ALVAREZ</b><u>LEADS &middot; 5</u></span><span class="sub">6 skins, carried from the 12th</span></div>
+<div class="foot"><span>Par 5 &middot; 11 settled</span><span class="r">4 playing</span></div>
+</div>
+<div class="bar"></div>
+</div><div class="cap">CARRYOVERS &mdash; leader (top) &middot; chaser (middle) &middot; watcher (below)</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">1:26</div></div>
+<div class="notif">
+<div class="ic">H</div>
+<div class="tx"><div class="t1">HALVED<span>now</span></div>
+<div class="t2">S. Reid won $36 on the 17th</div>
+<div class="t3">Six holes of carry, gone in one. $6 on the 18th.</div></div>
+</div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SKINS &middot; CARRYOVERS</span><span class="seg">HOLE 18 &middot; PAR 4</span></div>
+<div class="big"><span class="st">S. REID</span><span class="state"><b>WON $36</b><u>ON THE 17TH</u></span><span class="sub">$6 on the line on the 18th &mdash; no carry</span></div>
+<div class="foot"><span>5 skins &middot; S. Reid leads &mdash; 6</span><span class="r">+$6</span></div>
 </div>
 <div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
 <div class="bar"></div>
-</div><div class="cap">A live carry &mdash; the pot is a forecast</div></div>
+</div><div class="cap">CARRYOVERS &mdash; the carry breaks, and the 18th starts clean</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">10:26</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SKINS &middot; POOL</span><span class="seg">HOLE 7 &middot; PAR 3</span></div>
+<div class="big"><span class="st">4 SKINS</span><span class="state"><b>$15</b><u>A SKIN NOW</u></span><span class="sub">Sam Reid took the 6th</span></div>
+<div class="foot"><span>$60 pot &middot; 1 skin &middot; $15 ante</span><span class="r">$0</span></div>
+</div>
+<div class="la watch" style="margin-top:14px">
+<div class="lah"><span class="mark">H</span><span class="g">SKINS &middot; POOL</span><span class="eye">WATCHING</span><span class="seg">HOLE 8</span></div>
+<div class="big"><span class="st">4 SKINS</span><span class="state"><b>$15</b><u>A SKIN NOW</u></span><span class="sub">Sam Reid took the 6th</span></div>
+<div class="foot"><span>$60 pot &middot; par 4</span><span class="r">4 playing</span></div>
+</div>
+<div class="bar"></div>
+</div><div class="cap">POOL &mdash; player (top) &middot; watcher on the next hole (below)</div></div>
+
+<div class="wrap"><div class="lock aod">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">11:04</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SKINS &middot; POOL + JUNK</span><span class="seg">HOLE 12 &middot; PAR 4</span></div>
+<div class="big"><span class="st">4 SKINS</span><span class="state"><b>2 JUNK</b><u>$10 EACH NOW</u></span><span class="sub">Sam Reid took the 6th &mdash; 1 skin, 1 junk</span></div>
+<div class="foot"><span>$60 pot &middot; 1 skin &middot; 1 junk</span><span class="r">+$5</span></div>
+</div>
+<div class="bar"></div>
+</div><div class="cap">POOL + JUNK &mdash; junk and skins split the same pot (always-on)</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">11:48</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">MULTI-GROUP SKINS</span><span class="seg">FULL FIELD THRU 9</span></div>
+<div class="big"><span class="st">SAM REID</span><span class="state"><b>HOLE 9</b><u>WON THE SKIN</u></span><span class="sub">4 skins awarded &middot; 5 halved</span></div>
+<div class="foot"><span>5 leaders on open holes</span><span class="r">D. Kerr leads &middot; 2 skins</span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">MULTI-GROUP &mdash; the winner is the headline, the counts are the stat line</div></div>
 
 <div class="wrap"><div class="lock">
 <div class="island"></div>
@@ -133,70 +275,49 @@ a{color:var(--pine)}a:hover{color:var(--deepPine)}
 <div class="notif">
 <div class="ic">H</div>
 <div class="tx"><div class="t1">HALVED<span>now</span></div>
-<div class="t2">The 10th went to Sam Reid</div>
-<div class="t3">The carry breaks. This hole is $12, not $18.</div></div>
+<div class="t2">Hole 10 was halved</div>
+<div class="t3">No skin. Three golfers tied at net 4.</div></div>
 </div>
 <div class="la">
-<div class="lah"><span class="mark">H</span><span class="g">SKINS</span><span class="seg">HOLE 12 &middot; PAR 4</span></div>
-<div class="big"><span class="st prov">$12</span><span class="state"><b class="prv">PROVISIONAL</b><u>1 GROUP OUT</u></span><span class="sub">2 skins, carried from the 11th &nbsp;<s>&mdash; was 3</s></span></div>
-<div class="foot"><span>+2 &middot; $2 a player &middot; 7 settled</span><span class="r">+$2</span></div>
+<div class="lah"><span class="mark">H</span><span class="g">MULTI-GROUP SKINS</span><span class="seg">FULL FIELD THRU 10</span></div>
+<div class="big"><span class="st" style="color:#fff;opacity:.5">HALVED</span><span class="state"><b>HOLE 10</b><u>NO SKIN</u></span><span class="sub">4 skins awarded &middot; 6 halved</span></div>
+<div class="foot"><span>4 leaders on open holes</span><span class="r">D. Kerr leads &middot; 2 skins</span></div>
 </div>
 <div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
 <div class="bar"></div>
-</div><div class="cap">A skin settles behind you &mdash; the pot in front of you shrinks</div></div>
-
-<div class="wrap"><div class="lock">
-<div class="island"></div>
-<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">10:26</div></div>
-<div class="la">
-<div class="lah"><span class="mark">H</span><span class="g">SKINS &middot; POOL</span><span class="seg">HOLE 7 &middot; PAR 3</span></div>
-<div class="big"><span class="st">$60</span><span class="state"><b>$15</b><u>A SKIN, FALLING</u></span><span class="sub">4 skins won so far &middot; 12 in the pool</span></div>
-<div class="foot"><span>+1 &middot; $5 ante &middot; 1 won</span><span class="r">+$10</span></div>
-</div>
-<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
-<div class="bar"></div>
-</div><div class="cap">Pool mode &mdash; every new skin dilutes yours</div></div>
-
-<div class="wrap"><div class="lock aod">
-<div class="island"></div>
-<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">1:09</div></div>
-<div class="la">
-<div class="lah"><span class="mark">H</span><span class="g">SKINS</span><span class="seg">HOLE 17 &middot; PAR 5</span></div>
-<div class="big"><span class="st">$36</span><span class="state"><b>ALL IN</b><u>FIELD IS THROUGH</u></span><span class="sub">6 skins, carried from the 12th</span></div>
-<div class="foot"><span>+6 &middot; $2 a player &middot; 11 settled</span><span class="r">+$10</span></div>
-</div>
-<div class="bar"></div>
-</div><div class="cap">Always-on &mdash; nothing outstanding, so the pot is mint</div></div>
+</div><div class="cap">MULTI-GROUP &mdash; a halved hole is a result too</div></div>
 
 <div class="wrap"><div class="lock">
 <div class="island"></div>
 <div class="clock"><div class="d">Saturday, 12 September</div><div class="t">1:31</div></div>
 <div class="la quiet">
-<div class="lah"><span class="mark" style="background:rgba(255,255,255,.22);color:#fff">H</span><span class="g" style="opacity:.72">SKINS</span><span class="seg">HOLE 14 &middot; PAR 4</span></div>
-<div class="big"><span class="st">$6</span><span class="state"><b>ALL IN</b><u>NO CARRY</u></span><span class="sub">1 skin &middot; the 13th was won</span></div>
+<div class="lah"><span class="mark" style="background:rgba(255,255,255,.22);color:#fff">H</span><span class="g" style="opacity:.72">MULTI-GROUP SKINS</span><span class="seg">FULL FIELD THRU 12</span></div>
+<div class="big"><span class="st">T. OCHOA</span><span class="state"><b>HOLE 12</b><u>WON THE SKIN</u></span><span class="sub">6 skins awarded &middot; 6 halved</span></div>
 </div>
 <div class="la" style="margin-top:14px">
-<div class="lah"><span class="mark">H</span><span class="g">SKINS</span><span class="seg">ROUND COMPLETE</span></div>
-<div class="fin"><b>+$4</b><span>Won 5 of 18 skins<br>Lost the 17th &mdash; it was worth <b>$36</b></span></div>
-<div class="foot"><span>+7 gross &middot; nothing outstanding</span><span class="r">Dismisses in 5 min</span></div>
+<div class="lah"><span class="mark">H</span><span class="g">MULTI-GROUP SKINS</span><span class="seg">18 HOLES &middot; 16 GOLFERS</span></div>
+<div class="done">Round complete</div>
+<div class="fin"><b>$32</b><span>per skin &mdash; <b>6 won</b></span></div>
+<div class="wins">Winners: <span style="white-space:nowrap">D.&nbsp;Kerr&nbsp;<b>2</b></span> &middot; <span style="white-space:nowrap">M.&nbsp;Alvarez&nbsp;<b>2</b></span> &middot; <span style="white-space:nowrap">S.&nbsp;Reid&nbsp;<b>1</b></span> &middot; <span style="white-space:nowrap">T.&nbsp;Ochoa&nbsp;<b>1</b></span></div>
+<div class="foot"><span>16 golfers &middot; $192 pot &middot; 12 halved</span><span class="r">Dismisses in 5 min</span></div>
 </div>
 <div class="bar"></div>
-</div><div class="cap">Quiet treatment (top) &middot; final state (below)</div></div>
+</div><div class="cap">MULTI-GROUP &mdash; quiet treatment (top) &middot; round complete (below)</div></div>
 
 <div class="di">
 <h4>Dynamic Island</h4>
-<p>The pot is the one number, so compact is easy here &mdash; easier than either of the others. It keeps the provisional/settled colour split.</p>
+<p>One thing, so compact is easy here &mdash; easier than either of the others. Single group leads with the pot and the skins count; multi-group leads with <b>the golfer who just won a hole</b>. The game name itself only appears on the expanded pill.</p>
 <div class="dr"><span>MINIMAL &mdash; ANOTHER APP IS ACTIVE</span>
 <div class="pill min"><span class="mk">H</span><span class="mn">&#9679;</span></div></div>
-<div class="dr"><span>COMPACT &mdash; SETTLED, NOTHING OUTSTANDING</span>
-<div class="pill"><span class="mk">H</span><span class="mn">$36</span><span style="opacity:.55;font-weight:600">hole 17</span></div></div>
-<div class="dr"><span>COMPACT &mdash; PROVISIONAL</span>
-<div class="pill"><span class="mk">H</span><span style="color:#fff">$18</span><span style="color:var(--amber);font-weight:700">prov</span></div></div>
+<div class="dr"><span>COMPACT &mdash; SINGLE GROUP, ALWAYS SETTLED</span>
+<div class="pill"><span class="mk">H</span><span class="mn">$36</span><span style="opacity:.55;font-weight:600">5 skins</span></div></div>
+<div class="dr"><span>COMPACT &mdash; MULTI-GROUP, LAST HOLE WON</span>
+<div class="pill"><span class="mk">H</span><span class="mn">Reid</span><span style="opacity:.55;font-weight:600">hole 9</span></div></div>
 <div class="dr" style="margin-bottom:0"><span>EXPANDED &mdash; LONG PRESS</span>
 <div class="exp">
-<div class="top"><span style="width:14px;height:14px;border-radius:4px;background:var(--mint);display:inline-flex;align-items:center;justify-content:center;font:700 9px/1 'Schibsted Grotesk',sans-serif;color:#06231A">H</span><span>SKINS</span><span class="rr">HOLE 12 &middot; PAR 4</span></div>
-<div class="big" style="margin-top:9px"><span class="st prov">$18</span><span class="state"><b class="prv">PROVISIONAL</b><u>2 GROUPS OUT</u></span><span class="sub">3 skins, carried from the 10th</span></div>
-<div class="foot"><span>+2 &middot; $2 a player &middot; 6 settled</span><span class="r">+$4</span></div>
+<div class="top"><span style="width:14px;height:14px;border-radius:4px;background:var(--mint);display:inline-flex;align-items:center;justify-content:center;font:700 9px/1 'Schibsted Grotesk',sans-serif;color:#06231A">H</span><span>MULTI-GROUP SKINS</span><span class="rr">FULL FIELD THRU 9</span></div>
+<div class="big" style="margin-top:9px"><span class="st">SAM REID</span><span class="state"><b>HOLE 9</b><u>WON THE SKIN</u></span><span class="sub">4 skins awarded &middot; 5 halved</span></div>
+<div class="foot"><span>5 leaders on open holes</span><span class="r">D. Kerr leads &middot; 2 skins</span></div>
 </div></div>
 </div>
 </body></html>

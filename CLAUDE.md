@@ -2048,3 +2048,73 @@ inviter's name and spaces make a key invalid under memcached.
 
 Tests: `InviteCardTests`, `TitleWrapTests`, `FinishedRoundCopyTests`
 (`api/test_share_card.py`).
+
+## Match play Live Activity — singles + fourball, the first casual-round card
+
+Built from `docs/design-review/handoff-live-activities/match-HANDOFF.md`.
+`services/live_activity_match.py`, registered for BOTH `match_18` and
+`fourball`.
+
+**One card, two games.** Both are a single match between two sides over
+eighteen holes, decided by holes won; the only difference is how many names sit
+on a side. Two builders differing by a conjunction would drift apart within a
+release, so there is one — `_normalise_nassau` / `_normalise_fourball` reduce
+the two engines to the same small vocabulary and the composition never asks
+which game it is drawing.
+
+`match_18` and `fourball` were the games the registry's own comment said were
+"not drawn". They are now.
+
+- **The state declares the CARD, not the slug.** `activity_state` changed from
+  `state['kind'] = slug` to `setdefault`, so a builder serving several games
+  names the layout (`kind = 'match'`) and the Swift never has to learn that two
+  slugs mean one card. Single-game builders are unaffected.
+- **No Swift layout was added.** The match card IS the shared composition, so
+  it draws with the existing `BoardView`; `"match"` joins `LockScreenView.known`
+  and nothing else branches. Two shared views gained an empty case: `PipsView`
+  renders nothing for `[]` (match has no segments, and an empty HStack still
+  spent the stack's spacing), and `FooterView` hides entirely when both fields
+  are empty — **a no-stake round removes the footer, not the score**, with gross
+  and thru moved into the header by the server. Staleness still claims the row;
+  a fault report outranks a layout rule.
+- **This card never pushes.** In a two-side match inside one group the reader
+  was within earshot of every putt — not a hole won, not dormie, not the
+  close-out. A deliberate zero, pinned by a test asserting the module exposes no
+  push builder at all.
+- **The money slot is empty from the 1st to the 17th.** A single match settles
+  exactly once. `$0` would read as a match played for nothing.
+- **A match that closes early keeps the activity.** The number becomes the
+  result (`4 & 3`), the state says `CLOSED` / `ON THE 15TH`, the money finally
+  fills — and the **header keeps advancing**, because the group is still
+  playing golf and the reader's gross is still moving. Both engines already
+  model the close-out (`overall.decided_remaining`; `finished_on_hole`), so
+  neither is re-derived here.
+
+### The bug this found: Nassau's gross was always blank
+The umbrella packet's new rule is that gross against par appears on every state
+of every card. There were **three** `_gross_to_par` implementations, each
+guessing at the key its summary uses for per-hole scores — and Nassau's guessed
+`players`, where `nassau_summary` emits `scores`. So the shipped Nassau card
+silently dropped the gross figure from its footer, for every reader, on every
+hole. A helper that returns `None` on a shape mismatch fails invisibly, which
+is exactly why there is now one: `live_activity_registry.gross_to_par`, checking
+`scores` / `players` / `entries` in order. Confirmed against the real database
+before and after; no test had asserted gross was present, which is how it
+shipped.
+
+Fourball keeps its per-hole scores under `scorecard`, so it hands the list over
+rather than the summary — and the footer's gross is the **reader's own**, never
+the team's better ball, because a team figure on a neutral board is a number
+nobody can check against their own card.
+
+### Not built
+- **Dynamic Island extras.** Compact shows the number for every card; the
+  handoff wants the leading side's surname beside it on this one. Expanded wants
+  an 18-hole run strip (blue/orange per hole won, blank for halved), which needs
+  data the state does not carry. Both are per-card changes to a shared island.
+- **The final state is written but unexercised** — `match_final_state` composes
+  `−$20 / Lost 4 & 3 / Pay Paul Kelly`, and the registry calls it, but no round
+  in the local database plays either game, so it has only ever run against
+  fixtures.
+- The packet's open questions stand: concession, halved-stake voiding, presses
+  in singles, extra holes, three-sided groups.

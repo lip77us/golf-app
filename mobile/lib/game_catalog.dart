@@ -297,6 +297,9 @@ const List<GameMeta> kGameCatalog = [
     displayName  : 'Fourball',
     casual       : true,
     exactPlayers : 4,
+    // Shares the match-play card with Singles Match — one match between two
+    // sides, differing only in how many names sit on a side.
+    hasLiveActivity: true,
     // Individual-ball (each player posts their own gross) → can host
     // leaderboard-only overlays (Skins / Stroke Play / Stableford). This is the
     // documented "Fourball + Skins + Stableford" combo (docs/parallel-games.md).
@@ -364,6 +367,7 @@ const List<GameMeta> kGameCatalog = [
     id          : GameIds.match18,
     displayName : 'Singles Match',
     casual      : true,
+    hasLiveActivity: true,
     // A heads-up 18-hole match (Overall-only Nassau).  Always 1-v-1: in a 3-4
     // player foursome the setup picks which two duel, so it's offerable across
     // sizes and can coexist with a team Nassau (the "Larry case").

@@ -77,7 +77,14 @@ struct SixesActivityLiveActivity: Widget {
 private struct LockScreenView: View {
     /// The cards this build can draw
     /// (docs/design-review/handoff-live-activities/SPEC.md).
-    static let known: Set<String> = ["sixes", "rabbit", "nassau", "skins"]
+    /// `match` (singles + fourball) is deliberately absent from the branches
+    /// below: it IS the shared composition — header, one number in the leading
+    /// side's colour, both sides named, the match word, footer — so it draws
+    /// with `BoardView` rather than a layout of its own. Singles and fourball
+    /// differ only in how many names sit on a side, which the server has
+    /// already joined with an ampersand.
+    static let known: Set<String> = ["sixes", "rabbit", "nassau", "skins",
+                                     "match"]
 
     let state: SixesActivityAttributes.ContentState
     var isStale: Bool = false
@@ -470,11 +477,16 @@ private struct PipsView: View {
     let pips: [String]
 
     var body: some View {
-        HStack(spacing: 5) {
-            ForEach(Array(pips.enumerated()), id: \.offset) { _, pip in
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(Sixes.pip(pip))
-                    .frame(height: 4)
+        // Match play has no pips — there are no segments to shape. An empty
+        // HStack still spends the stack's spacing, which reads as a gap the
+        // card did not ask for.
+        if !pips.isEmpty {
+            HStack(spacing: 5) {
+                ForEach(Array(pips.enumerated()), id: \.offset) { _, pip in
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(Sixes.pip(pip))
+                        .frame(height: 4)
+                }
             }
         }
     }
@@ -487,15 +499,24 @@ private struct FooterView: View {
     var isStale: Bool = false
 
     var body: some View {
-        HStack {
-            Text(isStale ? "No scores in a while" : footer.context)
-                .font(Sixes.body(11))
-                .foregroundStyle(.white.opacity(0.66))
-                .lineLimit(1)
-            Spacer(minLength: 8)
-            Text(footer.money)
-                .font(Sixes.body(11, .semibold))
-                .foregroundStyle(.white.opacity(0.66))
+        // **A no-stake round removes the footer, not the score.** Gross and
+        // thru ride in the header instead (the server moves them), because a
+        // row built to end in money whose right edge is permanently blank
+        // looks like a failed fetch for eighteen holes.
+        //
+        // Staleness still claims the row: "no scores in a while" is a fault
+        // report, and it outranks a layout rule.
+        if isStale || !footer.context.isEmpty || !footer.money.isEmpty {
+            HStack {
+                Text(isStale ? "No scores in a while" : footer.context)
+                    .font(Sixes.body(11))
+                    .foregroundStyle(.white.opacity(0.66))
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Text(footer.money)
+                    .font(Sixes.body(11, .semibold))
+                    .foregroundStyle(.white.opacity(0.66))
+            }
         }
     }
 }

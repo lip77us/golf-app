@@ -209,21 +209,10 @@ def _money(low, high) -> str:
 
 
 def _gross_to_par(summary, player_id):
-    """The reader's own gross against par."""
-    if player_id is None:
-        return None
-    total, played = 0, 0
-    for hole in (summary.get('holes') or []):
-        par = hole.get('par')
-        for e in (hole.get('players') or []):
-            if e.get('player_id') != player_id:
-                continue
-            gross = e.get('gross')
-            if gross is not None and par:
-                total  += gross - par
-                played += 1
-    return total if played else None
-
+    """The reader's own gross against par — one implementation,
+    in the registry, because three of these drifted apart once."""
+    from services.live_activity_registry import gross_to_par
+    return gross_to_par(summary, player_id)
 
 def nassau_activity_state(foursome, *, player_id=None, thru=None,
                           game_type=None) -> dict:

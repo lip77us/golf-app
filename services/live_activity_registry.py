@@ -72,6 +72,42 @@ def holes_played(foursome) -> int:
     return max(done) if done else 0
 
 
+def gross_to_par(summary, player_id):
+    """The reader's own gross against par, from any game's summary.
+
+    **The umbrella packet puts this on every state of every card** — it is the
+    number a golfer checks without meaning to and the only personal figure a
+    neutral board can afford. `None` when the reader is not playing (a watcher)
+    or has no scores yet.
+
+    One implementation on purpose. There were three, each guessing at the key
+    a summary uses for its per-hole scores, and Nassau's guessed a key its own
+    summary does not have (`players`, where it emits `scores`) — so the Nassau
+    card silently dropped the gross figure from its footer for every reader,
+    on every hole. A helper that returns None on a shape mismatch fails
+    invisibly, which is exactly why there must only be one of it.
+
+    The key varies by game and the alternatives are checked in order rather
+    than normalised at the source, because these summaries are the app's own
+    long-standing API shapes and are read by screens well outside this module.
+    """
+    if player_id is None:
+        return None
+    total, played = 0, 0
+    for hole in (summary.get('holes') or []):
+        par = hole.get('par')
+        entries = (hole.get('scores') or hole.get('players')
+                   or hole.get('entries') or [])
+        for e in entries:
+            if e.get('player_id') != player_id:
+                continue
+            gross = e.get('gross')
+            if gross is not None and par:
+                total  += gross - par
+                played += 1
+    return total if played else None
+
+
 # ---------------------------------------------------------------------------
 # The registry
 # ---------------------------------------------------------------------------
@@ -113,16 +149,35 @@ def _skins(foursome, player_id, *, final):
                                 thru=holes_played(foursome))
 
 
+def _match(foursome, player_id, *, final, slug):
+    from services.live_activity_match import (match_activity_state,
+                                              match_final_state)
+    if final:
+        return match_final_state(foursome, slug=slug, player_id=player_id)
+    return match_activity_state(foursome, slug=slug, player_id=player_id,
+                                thru=holes_played(foursome))
+
+
 BUILDERS = {
-    'sixes' : _sixes,
-    'rabbit': _rabbit,
-    'nassau': _nassau,
-    'skins' : _skins,
-    # nassau_nine and match_18 ride the same NassauGame model but are one match,
-    # not three — they need the single-number composition, not two rows, and are
-    # not drawn. Triple Nassau is explicitly not designed: three simultaneous
-    # pairings will not fit two rows.
+    'sixes'   : _sixes,
+    'rabbit'  : _rabbit,
+    'nassau'  : _nassau,
+    'skins'   : _skins,
+    # Singles and fourball are ONE card — a single match between two sides over
+    # eighteen holes, differing only in how many names sit on a side. Two
+    # builders differing by a conjunction would drift apart within a release,
+    # so both slugs land on the same one and it declares `kind = 'match'`.
+    'match_18': _match,
+    'fourball': _match,
+    # nassau_nine still rides the NassauGame model as one match but is a
+    # PARTIAL round — its holes-remaining is not 18 minus played, so it does
+    # not fit this card's state slot and is not drawn. Triple Nassau is
+    # explicitly not designed: three simultaneous pairings will not fit.
 }
+
+# Builders that need to know which slug selected them, because one card serves
+# more than one game.
+_SLUG_AWARE = {'match_18', 'fourball'}
 
 
 def board_recipients(rnd) -> set:
@@ -203,10 +258,17 @@ def activity_state(rnd, user, *, final=False) -> dict:
     if foursome is None:
         return {}
 
-    state = build(foursome, player_id, final=final)
+    if slug in _SLUG_AWARE:
+        state = build(foursome, player_id, final=final, slug=slug)
+    else:
+        state = build(foursome, player_id, final=final)
     if not state:
         return {}
     # The discriminator rides on every state, so the Swift never has to infer
     # the layout from a string meant for a human.
-    state['kind'] = slug
+    #
+    # `setdefault`, not assignment: a builder serving several games declares
+    # the CARD it draws, and the Swift should switch on that rather than learn
+    # that two slugs mean one layout.
+    state.setdefault('kind', slug)
     return state

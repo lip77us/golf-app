@@ -217,20 +217,10 @@ def _shares(summary) -> int:
 
 
 def _gross_to_par(summary, player_id):
-    if player_id is None:
-        return None
-    total, played = 0, 0
-    for hole in (summary.get('holes') or []):
-        par = hole.get('par')
-        for sc in (hole.get('scores') or []):
-            if sc.get('player_id') != player_id:
-                continue
-            gross = sc.get('gross')
-            if gross is not None and par:
-                total  += gross - par
-                played += 1
-    return total if played else None
-
+    """The reader's own gross against par — one implementation,
+    in the registry, because three of these drifted apart once."""
+    from services.live_activity_registry import gross_to_par
+    return gross_to_par(summary, player_id)
 
 def _money_line(summary, player_id) -> str:
     """Net settled money, **both directions**.

@@ -1,0 +1,212 @@
+<!-- @dsCard group="Live Activities" name="Match play — lock screen" subtitle="MatchLiveActivity — singles and fourball on one card: the closed-out match, the no-stake round, always-on" viewport="1560x1320" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Match Play Live Activity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--mint:#3BD89A;--muted:#5C6B62;--blue:#5AA7F5;--orange:#F3A059}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:28px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.home{position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 "Spline Sans",system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.own{background:#fff;border:1px solid #DCE5DD;border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:100px;color:var(--deepPine);font-weight:600}
+.wrap{position:relative;margin-bottom:36px}
+.cap{position:absolute;left:0;right:0;bottom:-30px;text-align:center;font-size:11.5px;font-weight:600;color:var(--muted)}
+.lock{width:352px;height:762px;border:10px solid #0B1F1A;border-radius:44px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);background:radial-gradient(120% 90% at 50% 0%,#1E4038 0%,#0C1F1B 45%,#050D0B 100%);flex:none;color:#fff}
+.lock.aod{filter:brightness(.74) saturate(.82)}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:112px;height:31px;border-radius:20px;background:#000}
+.clock{text-align:center;padding:58px 0 0}
+.clock .d{font-size:14px;font-weight:600;opacity:.72}
+.clock .t{font-family:"Schibsted Grotesk",sans-serif;font-size:74px;font-weight:600;line-height:1.02;letter-spacing:-2px;margin-top:2px}
+.la{margin:26px 14px 0;border-radius:24px;background:rgba(255,255,255,.13);backdrop-filter:blur(20px);padding:13px 15px 14px;border:.5px solid rgba(255,255,255,.14)}
+.lah{display:flex;align-items:center;gap:7px;margin-bottom:11px}
+.lah .mark{width:17px;height:17px;border-radius:5px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 10px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.lah .g{font-size:11.5px;font-weight:700;letter-spacing:.3px}
+.lah .seg{margin-left:auto;font-size:10.5px;font-weight:600;opacity:.62}
+.big{display:flex;flex-wrap:wrap;align-items:flex-end;column-gap:11px;row-gap:0}
+.big .st{font-family:"Schibsted Grotesk",sans-serif;font-size:36px;font-weight:700;line-height:.94;letter-spacing:-1px;color:var(--mint);order:1;flex:none;white-space:nowrap}
+.big .sub{order:3;flex:0 0 100%;min-width:0;margin-top:10px;font-size:12.5px;line-height:1.55;opacity:.8;white-space:nowrap}
+.big .sub .lead{font-weight:700;opacity:1}
+.big .sub .dim{opacity:.6}
+.big .st.blue{color:var(--blue)}
+.big .st.orange{color:var(--orange)}
+.big .sub .lead.blue{color:var(--blue)}
+.big .sub .lead.orange{color:var(--orange)}
+.big .state{order:2;flex:none;white-space:nowrap}
+.dotb,.doto{display:inline-block;width:7px;height:7px;border-radius:2px;vertical-align:1px;margin-right:5px}
+.dotb{background:var(--blue)}.doto{background:var(--orange)}
+.state{margin-left:auto;text-align:right;padding-bottom:2px}
+.state b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;line-height:1;letter-spacing:.2px}
+.state u{text-decoration:none;display:block;font-size:9px;font-weight:700;letter-spacing:.4px;opacity:.55;margin-top:4px}
+.state b.blue{color:var(--blue)}.state b.orange{color:var(--orange)}.state b.mint{color:var(--mint)}
+.foot{display:flex;align-items:center;gap:8px;margin-top:11px;font-size:11px;opacity:.66}
+.foot .r{margin-left:auto;opacity:1;font-weight:600}
+.bar{position:absolute;left:50%;bottom:9px;transform:translateX(-50%);width:126px;height:5px;border-radius:3px;background:rgba(255,255,255,.5)}
+.torch{position:absolute;bottom:38px;left:0;right:0;display:flex;justify-content:space-between;padding:0 34px;opacity:.5;font-size:17px}
+.torch span{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center}
+.la.quiet{background:rgba(10,22,18,.55);border-color:rgba(255,255,255,.1);padding:12px 15px}
+.la.quiet .lah{margin-bottom:9px}
+.la.quiet .st{font-size:22px}
+.la.quiet .sub{font-size:12px;opacity:.6;margin-top:8px}
+.di{background:#0B1F1A;border-radius:22px;padding:22px 20px;width:372px;flex:none;color:#fff;margin-bottom:36px}
+.di h4{font-family:"Schibsted Grotesk",sans-serif;font-size:13px;font-weight:700;margin:0 0 4px}
+.di p{font-size:11px;line-height:1.5;opacity:.6;margin:0 0 13px}
+.dr{margin-bottom:16px}
+.dr>span{display:block;font-size:9.5px;font-weight:700;letter-spacing:.4px;opacity:.5;margin-bottom:6px}
+.pill{background:#000;border-radius:20px;height:37px;display:inline-flex;align-items:center;gap:9px;padding:0 13px;font-size:13px;font-weight:700}
+.pill .mk{flex:none;width:15px;height:15px;border-radius:4px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 9px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.pill .mint{color:var(--mint)}.pill .bl{color:var(--blue)}
+.pill.min{width:52px;gap:0;justify-content:space-between;padding:0 11px}
+.exp{background:#000;border-radius:26px;padding:14px 16px 15px}
+.exp .top{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;opacity:.6;letter-spacing:.3px}
+.exp .mid{display:flex;align-items:flex-end;gap:10px;margin-top:9px}
+.exp .mid b{font-family:"Schibsted Grotesk",sans-serif;font-size:29px;font-weight:700;line-height:.95;color:var(--blue)}
+.exp .mid span{font-size:11.5px;opacity:.72;padding-bottom:3px;line-height:1.4}
+.exp .mid .m{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;padding-bottom:2px}
+.exp .run{display:flex;gap:4px;margin-top:12px}
+.exp .run i{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.2)}
+.exp .run i.b{background:var(--blue)}.exp .run i.o{background:var(--orange)}
+</style></head>
+<body>
+<a class="home" href="../index-contents.html">&#8592; Contents</a>
+<div class="notes">
+<h1>Match play on the lock screen</h1>
+<p><b>Singles and fourball are one card.</b> Both are a single match between two sides over eighteen holes, decided by holes won, and every slot answers the same question in both. The only difference is how many names sit on a side &mdash; one, or two joined by an ampersand.</p>
+<p>That is why they were not drawn separately. Two cards that differ by a conjunction would drift apart within a release, and there is nothing in fourball&rsquo;s shape that singles does not have.</p>
+<h3>This card never pushes</h3>
+<p>The push test is <b>could the reader have known this from the hole they are standing on</b>, and in a two-side match played inside one group the answer is always yes. Both sides are within earshot of every putt. A hole won, a match going dormie, a match closing out on the 15th &mdash; the reader watched all of it happen.</p>
+<p>So <b>match play earns an activity and no notifications at all.</b> Sixes pushes because the pairing is drawn; Nassau pushes because a press is a decision somebody else made. Neither exists here. A card with nothing unknowable on it is the honest case for ambient-only, and it is worth stating plainly so nobody adds <i>Dave won the 7th</i> later.</p>
+<div class="own"><table>
+<tr><td>Activity</td><td>Yes. It is the running state of one match.</td></tr>
+<tr><td>Notification</td><td>None, all round. Nothing in a one-group match is news.</td></tr>
+<tr><td>Consequence</td><td>The card must be correct at a glance without ever having announced itself.</td></tr>
+</table></div>
+<h3>Sides are fixed for the round, so colour can be too</h3>
+<p><b>Blue and orange are assigned once</b> and hold to the 18th. Sixes has to re-assign them every match because the pairings are redrawn; a single match never changes sides, which makes the colour a reliable handle for the whole round &mdash; the blue number belongs to the blue name, hole 1 to hole 18.</p>
+<p>The leading side takes the colour on both the number and the name; the trailing side is dimmed. <b>ALL SQ is white at 90%</b>, the same as Sixes and Nassau: mint is the app&rsquo;s colour and cannot name a side.</p>
+<h3>The state slot holds the match word</h3>
+<p><b>DORMIE</b> when the lead equals the holes left, <b>n TO PLAY</b> the rest of the time. Holes remaining is counted against the eighteen, not a segment &mdash; there are no segments here, which makes it simpler than Sixes and removes the nominal-range problem entirely.</p>
+<p>Handicap is <b>not on the card</b>. Strokes given are fixed at the first tee and never change, which makes them a setup fact rather than news, and <i>gets 4</i> beside a running match state invites subtracting it again. The hole-by-hole allocation is already in the app on a card that can afford it.</p>
+<h3>A match that closes early keeps the activity</h3>
+<p>This is the state the format actually needs and the one a naive card gets wrong. A match won <b>4 &amp; 3</b> ends on the 15th, and the group has three holes left to play.</p>
+<p>The card does not dismiss and does not freeze. The big number becomes the <b>result</b> &mdash; <i>4 &amp; 3</i> in the winner&rsquo;s colour &mdash; the state slot says <b>CLOSED</b> and names the hole it happened on, and the money slot finally has something in it, because <b>a match pays when it closes</b> and this one just did.</p>
+<p>Then it <b>holds that state and goes quiet</b> for the remaining holes. The header keeps advancing, because the group is still playing golf and the reader&rsquo;s gross is still moving, but nothing about the match changes again. A settled result is the correct thing for a card to be showing when the thing it reports is over.</p>
+<p><b>Nothing takes over the live line.</b> There is no second bet on the leftover holes in this format &mdash; a press is Nassau&rsquo;s object, and it presses a nine that is still running rather than opening a new match on the tail of a finished one.</p>
+<h3>Money is empty for most of the round</h3>
+<p>Settled money only, and a single match settles exactly once. So on a straight singles match the money slot is <b>empty from the 1st to the 17th</b> and holds one figure at the end. That is correct rather than broken: an in-progress match is worth nothing yet, and <i>$0</i> would read as a match played for nothing.</p>
+<p>It is also the argument for the footer&rsquo;s other two slots. <b>Gross leads</b> &mdash; the number a golfer checks without meaning to &mdash; then <i>thru</i>, then the stake, which never goes stale.</p>
+<h3>A no-stake round has no footer</h3>
+<p>Casual match play is often played for nothing. When there is no stake the footer is <b>removed, not emptied</b>: gross and thru would be left rattling around a row built to end in money, and a footer whose right edge is permanently blank looks like a bug for eighteen holes.</p>
+<p>The card is three slots then &mdash; header, number, state &mdash; and it is better for it. <b>Gross and thru move up beside the hole</b> in the header, which had room: <i>HOLE 5 &middot; +2 THRU 4</i>.</p>
+<p>The score does not go with the footer. <b>Gross against par is on every state of every card in this set</b>, stake or no stake, because it is the number a golfer checks without meaning to and the only personal figure a neutral board carries. What the no-stake round removes is the money and the row built to end in it &mdash; not the reader&rsquo;s round.</p>
+<p>The one reader with no gross is a <b>watcher</b>, who is not playing. Skins is the card that has watchers today, and it trades the slot for <i>par</i> and the field size rather than leaving it blank.</p>
+<p>The <b>quiet treatment</b> follows the same rule by the same route. It drops the footer to pull the card back, so gross and thru ride in the header beside the hole &mdash; <i>HOLE 16 &middot; +9 THRU 15</i>. What the quiet version gives up is the stake and the money, which is the loud part; the score stays, because a state a golfer cannot read his own round off is not worth leaving running.</p>
+<h3>Fourball names four golfers and reports one ball</h3>
+<p>The sides line carries <b>both pairings in full</b>, the same as Sixes: <i>Paul Kelly &amp; Dave Moran</i> against <i>Sam Reid &amp; Lee Naylor</i>. Two Pauls in a group is common and initials do not settle it.</p>
+<p><b>Whose ball counted is not on the card.</b> It is the most tempting line here and it fails the push test twice over &mdash; the reader saw the hole, and it is history rather than state. The footer&rsquo;s gross stays the <b>reader&rsquo;s own</b> score, not the team&rsquo;s better ball, because gross is the one personal figure the neutral board carries and a team figure under a neutral board is a number nobody can check against their card.</p>
+<h3>Always-on, and the final state</h3>
+<p>Same composition held back &mdash; the big number is the only thing that has to survive it. On the round signing, the neutral board becomes the one personal thing: <b>what you won and who to see</b>, held about five minutes, then dismissed.</p>
+<h3>Open questions</h3>
+<p><b>Concession.</b> A conceded match is a result nobody scored, so it has no hole to attach to. Drawn as an ordinary close &mdash; <i>2 &amp; 1</i>, <b>CLOSED</b> &mdash; which loses the fact that it was given. If a concession should read differently, it is the one thing on this card that might earn a push, since a golfer in the group behind cannot see it.</p>
+<p><b>Halved matches.</b> Drawn as <i>ALL SQ</i> / <b>HALVED</b> with the money slot left empty. Confirm the stake is voided rather than banked at zero.</p>
+<p><b>Presses in singles.</b> Nassau owns the press today, and there is no code for one on a straight eighteen-hole match. If a casual singles match can be pressed, this card needs Nassau&rsquo;s orange chip and its push, and the two cards start to converge.</p>
+<p><b>Extra holes.</b> A match all square after 18 that plays on has no hole number left in the header. <i>HOLE 19</i> is drawn nowhere yet.</p>
+</div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">10:24</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SINGLES MATCH</span><span class="seg">HOLE 7</span></div>
+<div class="big"><span class="st blue">2 UP</span><span class="sub"><span class="lead blue"><span class="dotb"></span>Paul Kelly</span><br><span class="dim"><span class="doto"></span>Sam Reid</span></span><span class="state"><b>&mdash;</b><u>12 TO PLAY</u></span></div>
+<div class="foot"><span>+2 &middot; Thru 6 &middot; $20 match</span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Singles &mdash; the ordinary state, money empty until it closes</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">11:46</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">FOURBALL</span><span class="seg">HOLE 13</span></div>
+<div class="big"><span class="st orange">1 UP</span><span class="sub"><span class="lead orange"><span class="doto"></span>Sam Reid &amp; Lee Naylor</span><br><span class="dim"><span class="dotb"></span>Paul Kelly &amp; Dave Moran</span></span><span class="state"><b>&mdash;</b><u>6 TO PLAY</u></span></div>
+<div class="foot"><span>+7 &middot; Thru 12 &middot; $20 match</span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Fourball &mdash; four names, one match, the reader&rsquo;s own gross</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">12:38</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SINGLES MATCH</span><span class="seg">HOLE 16</span></div>
+<div class="big"><span class="st blue">4 &amp; 3</span><span class="sub"><span class="lead blue"><span class="dotb"></span>Paul Kelly</span> beat <span class="dim"><span class="doto"></span>Sam Reid</span></span><span class="state"><b class="blue">CLOSED</b><u>ON THE 15TH</u></span></div>
+<div class="foot"><span>+8 &middot; Thru 15 &middot; $20 match</span><span class="r">+$20</span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Closed on the 15th &mdash; the result holds, the header keeps advancing</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">9:52</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">FOURBALL</span><span class="seg">HOLE 5 &middot; +2 THRU 4</span></div>
+<div class="big"><span class="st" style="color:#fff;opacity:.9">ALL SQ</span><span class="sub"><span class="dotb"></span>Paul Kelly &amp; Dave Moran<br><span class="doto"></span>Sam Reid &amp; Lee Naylor</span><span class="state"><b>&mdash;</b><u>14 TO PLAY</u></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">No stake &mdash; the footer is removed, gross and thru move to the header</div></div>
+
+<div class="wrap"><div class="lock aod">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">12:41</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SINGLES MATCH</span><span class="seg">HOLE 14</span></div>
+<div class="big"><span class="st blue">5 UP</span><span class="sub"><span class="lead blue"><span class="dotb"></span>Paul Kelly</span><br><span class="dim"><span class="doto"></span>Sam Reid</span></span><span class="state"><b class="blue">DORMIE</b><u>5 TO PLAY</u></span></div>
+<div class="foot"><span>+8 &middot; Thru 13 &middot; $20 match</span></div>
+</div>
+<div class="bar"></div>
+</div><div class="cap">Always-on &mdash; same view, held back</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">1:22</div></div>
+<div class="la quiet">
+<div class="lah"><span class="mark" style="background:rgba(255,255,255,.22);color:#fff">H</span><span class="g" style="opacity:.72">FOURBALL</span><span class="seg">HOLE 16 &middot; +9 THRU 15</span></div>
+<div class="big"><span class="st orange">2 UP</span><span class="sub"><span class="lead orange"><span class="doto"></span>Sam Reid &amp; Lee Naylor</span><br><span class="dim"><span class="dotb"></span>Paul Kelly &amp; Dave Moran</span></span><span class="state"><b class="orange">DORMIE</b><u>2 TO PLAY</u></span></div>
+</div>
+<div class="la" style="margin-top:14px">
+<div class="lah"><span class="mark">H</span><span class="g">FOURBALL</span><span class="seg">MATCH COMPLETE</span></div>
+<div class="big"><span class="st" style="font-size:42px">&minus;$20</span><span class="sub">Lost 3 &amp; 2<br>Pay <b>Sam</b></span></div>
+<div class="foot"><span>The one personal state</span><span class="r">Dismisses in 5 min</span></div>
+</div>
+<div class="bar"></div>
+</div><div class="cap">Quiet treatment (top) &middot; final state (below)</div></div>
+
+<div class="di">
+<h4>Dynamic Island</h4>
+<p>Compact holds one number and the side that owns it. A match has one live figure all round, so this is the easiest of the set.</p>
+<div class="dr"><span>MINIMAL &mdash; ANOTHER APP IS ACTIVE</span>
+<div class="pill min"><span class="mk">H</span><span class="mint">&#9679;</span></div></div>
+<div class="dr"><span>COMPACT &mdash; THE DEFAULT</span>
+<div class="pill"><span class="mk">H</span><span class="bl">2 UP</span><span style="opacity:.55;font-weight:600">Kelly</span></div></div>
+<div class="dr"><span>COMPACT &mdash; CLOSED OUT</span>
+<div class="pill"><span class="mk">H</span><span class="bl">4 &amp; 3</span><span style="opacity:.55;font-weight:600">Kelly</span></div></div>
+<div class="dr" style="margin-bottom:0"><span>EXPANDED &mdash; LONG PRESS</span>
+<div class="exp">
+<div class="top"><span style="width:14px;height:14px;border-radius:4px;background:var(--mint);display:inline-flex;align-items:center;justify-content:center;font:700 9px/1 'Schibsted Grotesk',sans-serif;color:#06231A">H</span><span>FOURBALL &middot; HOLE 13</span></div>
+<div class="mid"><b style="color:var(--orange)">1 UP</b><span><span class="doto"></span><span style="color:var(--orange);font-weight:700">Reid &amp; Naylor</span><br><span style="opacity:.6"><span class="dotb"></span>Kelly &amp; Moran</span></span><span class="m" style="font-size:13px;opacity:.7">6 TO PLAY</span></div>
+<div class="run"><i class="b"></i><i></i><i class="o"></i><i class="o"></i><i></i><i class="b"></i><i></i><i class="o"></i><i></i><i class="b"></i><i></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+</div></div>
+</div>
+</body></html>
