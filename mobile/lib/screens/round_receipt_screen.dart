@@ -67,14 +67,36 @@ class _RoundReceiptScreenState extends State<RoundReceiptScreen> {
     return d < 0 ? '−\$$body' : '+\$$body';
   }
 
-  Future<void> _share(String message) async {
-    if (message.isEmpty) return;
+  /// Share one golfer's own receipt, then record that it went to HIM.
+  ///
+  /// Gated on the same `can_send` as the group message. The gate is not about
+  /// which button is pressed, it is about whether the money is final — a
+  /// provisional receipt texted one golfer at a time is exactly as wrong as
+  /// one texted to four, and this button used to skip the gate entirely.
+  Future<void> _sendPersonal(Map<String, dynamic> g) async {
+    final message = g['message']?.toString() ?? '';
+    final pid = g['player_id'] as int?;
+    if (message.isEmpty || pid == null) return;
+
     final box = context.findRenderObject() as RenderBox?;
-    await Share.share(
+    final result = await Share.share(
       message,
       sharePositionOrigin:
           box == null ? null : box.localToGlobal(Offset.zero) & box.size,
     );
+    if (!mounted || result.status != ShareResultStatus.success) return;
+    try {
+      await context.read<AuthProvider>().client.recordRoundSettlementSend(
+            widget.roundId,
+            mode: 'personal',
+            recipients: 1,
+            playerId: pid,
+          );
+    } catch (_) {
+      // The text is already gone; failing to record it must not read as a
+      // failed send.
+    }
+    if (mounted) await _load();
   }
 
   /// Share the group message, then record that it went — but only if it did.
@@ -104,15 +126,19 @@ class _RoundReceiptScreenState extends State<RoundReceiptScreen> {
     if (mounted) await _load();
   }
 
-  String? _stamp() {
-    final last = _data?['last_send'] as Map?;
-    if (last == null) return null;
-    final when = DateTime.tryParse(last['sent_at']?.toString() ?? '')?.toLocal();
+  /// One send, in words. `to` names who got it — the group, or one golfer.
+  ///
+  /// Read from the send it describes rather than from "the last send of any
+  /// kind": texting Ben his own receipt says nothing about whether the group
+  /// thread has had one, and a stamp that conflates them tells the sender he
+  /// has done something he has not.
+  String? _stamp(Map? send, String to) {
+    if (send == null) return null;
+    final when = DateTime.tryParse(send['sent_at']?.toString() ?? '')?.toLocal();
     final t = when == null
         ? '' : ' ${TimeOfDay.fromDateTime(when).format(context)}';
-    return 'Texted$t to the group'
-        '${(last['sent_by']?.toString() ?? '').isEmpty
-            ? '' : ' by ${last['sent_by']}'}.';
+    final by = send['sent_by']?.toString() ?? '';
+    return 'Texted$t to $to${by.isEmpty ? '' : ' by $by'}.';
   }
 
   @override
@@ -147,7 +173,7 @@ class _RoundReceiptScreenState extends State<RoundReceiptScreen> {
     final blocking = (data['blocking'] as List? ?? const []).cast<String>();
     final canSend = data['can_send'] == true;
     final segments = ((summary['segments'] as Map?)?['segments'] as int?) ?? 0;
-    final stamp = _stamp();
+    final stamp = _stamp(summary['last_send'] as Map?, 'the group');
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -167,7 +193,7 @@ class _RoundReceiptScreenState extends State<RoundReceiptScreen> {
           // ── Each golfer: net, the games that made it, and who he settles
           //    with. Expanded in place — for a four-ball you want all four at
           //    once, not four pushes and four backs.
-          for (final g in golfers) _golferCard(g),
+          for (final g in golfers) _golferCard(g, canSend: canSend),
 
           const SizedBox(height: 14),
           Card(
@@ -242,7 +268,7 @@ class _RoundReceiptScreenState extends State<RoundReceiptScreen> {
     );
   }
 
-  Widget _golferCard(Map<String, dynamic> g) {
+  Widget _golferCard(Map<String, dynamic> g, {required bool canSend}) {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
     final pid = g['player_id'] as int? ?? -1;
@@ -251,6 +277,9 @@ class _RoundReceiptScreenState extends State<RoundReceiptScreen> {
     final collects = net >= 0;
     final games = (g['games'] as List? ?? const []);
     final transfers = (g['transfers'] as List? ?? const []);
+    final firstName = (g['name']?.toString() ?? '').split(' ').first;
+    final hisStamp = _stamp(g['last_send'] as Map?,
+                            firstName.isEmpty ? 'him' : firstName);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 6),
@@ -314,12 +343,18 @@ class _RoundReceiptScreenState extends State<RoundReceiptScreen> {
                 const SizedBox(height: 10),
                 _preview(g['message']?.toString() ?? ''),
                 const SizedBox(height: 8),
+                if (hisStamp != null) ...[
+                  Text(hisStamp, style: theme.textTheme.bodySmall),
+                  const SizedBox(height: 6),
+                ],
                 Align(
                   alignment: Alignment.centerLeft,
                   child: OutlinedButton.icon(
-                    onPressed: () => _share(g['message']?.toString() ?? ''),
+                    onPressed: canSend ? () => _sendPersonal(g) : null,
                     icon: const Icon(Icons.ios_share, size: 16),
-                    label: const Text('Send his receipt'),
+                    label: Text(hisStamp == null
+                        ? 'Send his receipt'
+                        : 'Resend his receipt'),
                   ),
                 ),
               ],

@@ -258,6 +258,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     RoundProvider rp, {
     required String? watchToken,
     required bool isFinal,
+    required bool hasReceipt,
   }) {
     return PopupMenuButton<String>(
       tooltip: 'More',
@@ -284,6 +285,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
           case 'copy_link':
             if (watchToken != null) _copyRoundLink(context, watchToken);
             break;
+          case 'receipt':
+            Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => RoundReceiptScreen(roundId: widget.roundId),
+            ));
+            break;
           case 'help':
             showLeaderboardHelp(context);
             break;
@@ -293,6 +299,15 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
         }
       },
       itemBuilder: (_) => [
+        if (hasReceipt)
+          const PopupMenuItem(
+            value: 'receipt',
+            child: ListTile(
+              leading: Icon(Icons.receipt_long),
+              title: Text('Receipts & text the group'),
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
         const PopupMenuItem(
           value: 'invite',
           child: ListTile(
@@ -402,6 +417,18 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     final lb      = rp.leaderboard;
     final isFinal = lb?.status == 'complete';
 
+    // Whether this round has a receipt at all. The SERVER decides — it is the
+    // only side that knows what netted — and it says no for a tournament round
+    // (settled one level up) and for a round that squared to nothing.
+    //
+    // Deliberately not tied to the Settlement tab. That tab needs 2+ games,
+    // the receipt needs 1, and hanging the only entry point off the tab is
+    // what made every one-game casual round's receipt unreachable.
+    // `games` holds parsed LeaderboardGame objects, not raw JSON — the map
+    // the server sent is on `.data`.
+    final hasReceipt =
+        ((lb?.games['receipt']?.data as Map?)?['available'] as bool?) ?? false;
+
     final watchToken = rp.round?.watchToken;
     final courseName = rp.round?.course.name;
 
@@ -436,7 +463,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
             ),
           if (!isSupportView)
             _buildOverflowMenu(context, rp,
-                watchToken: watchToken, isFinal: isFinal),
+                watchToken: watchToken, isFinal: isFinal,
+                hasReceipt: hasReceipt),
         ],
         bottom: (_tabController != null && _gameTabs.isNotEmpty)
             ? TabBar(

@@ -598,14 +598,22 @@ class ApiClient {
     }
   }
 
+  /// Record that a receipt left the app. [playerId] names the golfer a
+  /// `personal` send went to — the server requires it for that mode, so the
+  /// stamp can say "sent to Ben" rather than only "a send happened".
   Future<Map<String, dynamic>> recordRoundSettlementSend(
     int roundId, {
     required String mode,
     required int recipients,
+    int? playerId,
   }) async =>
       Map<String, dynamic>.from(await _post(
         '/rounds/$roundId/settlement/receipt/',
-        {'mode': mode, 'recipients': recipients},
+        {
+          'mode': mode,
+          'recipients': recipients,
+          if (playerId != null) 'player_id': playerId,
+        },
       ) as Map);
 
   Future<void> deleteTournament(int id) async {

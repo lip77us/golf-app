@@ -1660,6 +1660,13 @@ class SettlementSend(models.Model):
                                    on_delete=models.CASCADE,
                                    related_name='settlement_sends')
     mode       = models.CharField(max_length=10, choices=MODE_CHOICES)
+    # WHICH golfer a personal send went to.  Null for a field summary, which
+    # goes to the thread rather than to a person.  Recorded because the useful
+    # question about a personal send is not "did one happen" but "have I sent
+    # Ben his yet" — a per-golfer stamp cannot be derived from a count.
+    player     = models.ForeignKey('core.Player', null=True, blank=True,
+                                   on_delete=models.SET_NULL,
+                                   related_name='settlement_sends')
     # How many golfers it went to.  The design insists a count of 14 out of 16
     # be explainable, so the number is recorded rather than re-derived later
     # from a roster that may since have changed.

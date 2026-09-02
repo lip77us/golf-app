@@ -94,6 +94,28 @@ def _surname(full: str) -> str:
     return parts[-1] if parts else ''
 
 
+def _field_labels(players: list) -> dict:
+    """Names for the field summary — surnames, unless surnames don't separate.
+
+    A surname is the right label for a group thread: "Wu +$5" reads the way
+    the group talks. But a family four-ball is a real casual round, and four
+    Lipkins produce four identical lines, which is not a shorter receipt, it
+    is an unreadable one. Where a surname is shared, everyone sharing it falls
+    back to the full name — only the ambiguous ones, so one repeated surname
+    does not make the whole message longer.
+    """
+    counts: dict = {}
+    for p in players:
+        counts[_surname(p.get('name', ''))] = \
+            counts.get(_surname(p.get('name', '')), 0) + 1
+    return {
+        p.get('player_id'): (p.get('name', '').strip()
+                             if counts.get(_surname(p.get('name', ''))) > 1
+                             else _surname(p.get('name', '')))
+        for p in players
+    }
+
+
 def compose_personal(*, event_name: str, golfer_name: str, entries: list,
                      prizes: list, net, note: str = '') -> str:
     """
@@ -212,13 +234,7 @@ def receipt_payload(tournament, *, note: str = '') -> dict:
             'collected': settled['total_collected'],
             'paid'     : settled['total_paid'],
         },
-        'last_send'    : None if last is None else {
-            'mode'      : last.mode,
-            'recipients': last.recipients,
-            'sent_at'   : last.sent_at.isoformat(),
-            'sent_by'   : (last.sent_by.get_full_name()
-                           or last.sent_by.username) if last.sent_by else '',
-        },
+        'last_send'    : _send_stamp(last),
     }
 
 
@@ -279,10 +295,12 @@ def compose_casual_field(*, event_name: str, players: list, transfers: list,
     """
     rows = sorted(players, key=lambda p: Decimal(str(p.get('net') or 0)),
                   reverse=True)
+    labels = _field_labels(rows)
     out = [f'{event_name} - settled.']
     if rows:
         out.append('')
-        out += [f'{_surname(p.get("name", ""))} {money(p.get("net"), plain=True)}'
+        out += [f'{labels.get(p.get("player_id")) or _surname(p.get("name", ""))} '
+                f'{money(p.get("net"), plain=True)}'
                 for p in rows]
     if transfers:
         out += ['', 'Settle up']
@@ -296,6 +314,19 @@ def compose_casual_field(*, event_name: str, players: list, transfers: list,
     return '\n'.join(out)
 
 
+def _send_stamp(send) -> dict | None:
+    """One send, serialised the same way everywhere it is reported."""
+    if send is None:
+        return None
+    return {
+        'mode'      : send.mode,
+        'recipients': send.recipients,
+        'sent_at'   : send.sent_at.isoformat(),
+        'sent_by'   : (send.sent_by.get_full_name()
+                       or send.sent_by.username) if send.sent_by else '',
+    }
+
+
 def casual_receipt_payload(round_obj, *, note: str = '') -> dict:
     """The casual equivalent of `receipt_payload`.
 
@@ -304,11 +335,19 @@ def casual_receipt_payload(round_obj, *, note: str = '') -> dict:
     and inventing an empty one would be worse than saying so.
     """
     from services.settlement import round_settlement
+    from tournament.models import SettlementSend
 
     # min_games=1: the 2+ rule is the Settlement TAB's, and a one-game round
     # still owes somebody money.
     settled = round_settlement(round_obj, min_games=1)
     if settled is None:
+        return None
+
+    # A round can settle cleanly to nothing — everyone squared, or a game that
+    # ran but paid nobody. There is no receipt for that. Texting four people
+    # "+$0 to collect" is not a smaller receipt, it is a wrong one, and the
+    # same rule that refuses an invented empty receipt refuses this.
+    if all(round(float(p.get('net') or 0), 2) == 0 for p in settled['players']):
         return None
 
     players   = settled['players']
@@ -357,7 +396,22 @@ def casual_receipt_payload(round_obj, *, note: str = '') -> dict:
     # because the omission would otherwise read as a bug.
     uncovered = settled.get('uncovered_games') or []
 
-    last = round_obj.settlement_sends.first()
+    # "The last send" is not one fact.  A field summary going out says nothing
+    # about whether Ben has had his own, and a stamp that conflates them tells
+    # the sender he has done something he has not — which is exactly the
+    # double-send the record exists to prevent (rule 8).
+    sends = list(round_obj.settlement_sends.all())
+    last  = sends[0] if sends else None
+    last_field = next((x for x in sends if x.mode == SettlementSend.MODE_FIELD),
+                      None)
+    last_personal: dict = {}
+    for x in sends:
+        if x.mode == SettlementSend.MODE_PERSONAL and x.player_id is not None:
+            last_personal.setdefault(x.player_id, x)
+
+    for g in golfers:
+        g['last_send'] = _send_stamp(last_personal.get(g['player_id']))
+
     return {
         'event_name'   : event,
         'note'         : note,
@@ -367,6 +421,7 @@ def casual_receipt_payload(round_obj, *, note: str = '') -> dict:
             'message'   : field_message,
             'segments'  : sms_segments(field_message),
             'recipients': len(players),
+            'last_send' : _send_stamp(last_field),
         },
         'can_send'     : not blocking,
         'blocking'     : blocking,
@@ -374,13 +429,11 @@ def casual_receipt_payload(round_obj, *, note: str = '') -> dict:
             'Not netted here: ' + ', '.join(uncovered) +
             ' — settle those among yourselves.'
         ) if uncovered else '',
-        'last_send'    : None if last is None else {
-            'mode'      : last.mode,
-            'recipients': last.recipients,
-            'sent_at'   : last.sent_at.isoformat(),
-            'sent_by'   : (last.sent_by.get_full_name()
-                           or last.sent_by.username) if last.sent_by else '',
-        },
+        # "The most recent send of any kind", for the timeline. The screen
+        # renders the two stamps above instead — the field one and each
+        # golfer's own — because those are the ones that answer "have I
+        # already sent this".
+        'last_send'    : _send_stamp(last),
     }
 
 

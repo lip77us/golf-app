@@ -982,9 +982,34 @@ def _build_leaderboard(round_obj: Round) -> dict:
     # Settlement tab and log instead.
     from services.settlement import round_settlement
     try:
-        settlement = round_settlement(round_obj)
+        # Netted at min_games=1 and the 2+ rule applied here, rather than
+        # asking twice.  The two questions are genuinely different:
+        #
+        #   the TAB  — worth showing only when 2+ games settled, since a single
+        #              game's payouts already live on its own tab;
+        #   the RECEIPT — exists whenever any money moved, because "Ben owes
+        #              you $12" is as true of a skins-only round as of five
+        #              games, and a skins-only round is the commonest casual
+        #              round there is.
+        #
+        # Deriving the tab from the receipt's own call is what keeps them from
+        # drifting apart: the receipt used to be reachable ONLY from the tab,
+        # so every one-game round had a receipt that nothing could open.
+        settlement = round_settlement(round_obj, min_games=1)
         if settlement is not None:
-            games['settlement'] = {'label': 'Settlement', **settlement}
+            if len(settlement['per_game']) >= 2:
+                games['settlement'] = {'label': 'Settlement', **settlement}
+            # A round that settles to nothing has no receipt — see
+            # casual_receipt_payload, which refuses the same case.
+            #
+            # Casual only.  A tournament round's money is settled one level up,
+            # by the TD, and offering a per-round receipt there would hand out
+            # a second, smaller answer to the same question.
+            games['receipt'] = {'available': bool(
+                round_obj.tournament_id is None
+                and any(round(float(p.get('net') or 0), 2) != 0
+                        for p in settlement['players'])
+            )}
     except Exception:
         import logging
         logging.getLogger(__name__).exception(
@@ -1054,7 +1079,10 @@ def _leaderboard_active_games(round_obj, games_dict: dict) -> list:
         # don't know the key) don't render it as a raw-JSON junk tab. New
         # clients pin the Settlement tab explicitly from games['settlement'],
         # exactly like low_net_round.
-        if key == 'settlement':
+        # 'receipt' is a capability flag, not a game either — it tells the
+        # client whether to offer the casual receipt at all. Same reasoning,
+        # same skip: a client that doesn't know the key must not render it.
+        if key in ('settlement', 'receipt'):
             continue
         if key not in active:
             active.append(key)
@@ -2381,6 +2409,7 @@ class RoundReceiptView(APIView):
 
     def post(self, request, pk):
         from tournament.models import SettlementSend
+        from core.models import Player
         from services.settlement_receipt import casual_receipt_payload
         round_obj = account_get_or_404(Round, request.user.account, pk=pk)
 
@@ -2403,10 +2432,31 @@ class RoundReceiptView(APIView):
             recipients = max(0, int(request.data.get('recipients') or 0))
         except (TypeError, ValueError):
             recipients = 0
+
+        # A personal send names its golfer, so the stamp can answer "have I
+        # sent Ben his yet" rather than only "did a send happen".  He has to be
+        # ON the receipt: a send recorded against someone who is not in the
+        # round would stamp a card that never renders.
+        player = None
+        if mode == SettlementSend.MODE_PERSONAL:
+            try:
+                player_id = int(request.data.get('player_id'))
+            except (TypeError, ValueError):
+                return Response(
+                    {'detail': 'A personal send must name the golfer it '
+                               'went to.'},
+                    status=status.HTTP_400_BAD_REQUEST)
+            if player_id not in {g['player_id'] for g in payload['golfers']}:
+                return Response(
+                    {'detail': 'That golfer is not on this receipt.'},
+                    status=status.HTTP_400_BAD_REQUEST)
+            player = Player.objects.filter(pk=player_id).first()
+
         send = SettlementSend.objects.create(
             round=round_obj, mode=mode, recipients=recipients,
-            sent_by=request.user)
+            player=player, sent_by=request.user)
         return Response({'mode': send.mode, 'recipients': send.recipients,
+                         'player_id': send.player_id,
                          'sent_at': send.sent_at.isoformat()},
                         status=status.HTTP_201_CREATED)
 

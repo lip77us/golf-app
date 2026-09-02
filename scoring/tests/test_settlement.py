@@ -346,6 +346,70 @@ class CasualReceiptTests(TestCase):
         note = self._payload()['excluded_note']
         self.assertIn('nassau', note)
 
+    def test_a_round_that_settles_to_nothing_has_no_receipt(self):
+        """A game can run and pay nobody. "+$0 to collect" is not a smaller
+        receipt, it is a wrong one — and four of them is a wrong group text."""
+        square = make_round(self.tee.course, active_games=['skins'])
+        square.bet_unit = Decimal('1.00')
+        square.save(update_fields=['bet_unit'])
+        fs = make_foursome(square, [('P', 0), ('Q', 0)], tee=self.tee)
+        pid = {m.player.name: m.player_id
+               for m in fs.memberships.select_related('player')}
+        setup_skins(fs)
+        # Every hole halved: skins runs, carries to the end, pays nobody.
+        submit_round(fs, {h: [(pid['P'], 4), (pid['Q'], 4)]
+                          for h in range(1, 19)})
+        calculate_skins(fs)
+        self.assertIsNone(self._payload_for(square))
+
+    # -- the sends, which are not one fact -----------------------------------
+
+    def test_the_group_stamp_and_a_golfers_own_stamp_are_separate(self):
+        """Texting Ben his receipt says nothing about the group thread, and a
+        stamp that conflates them tells the sender he has done something he
+        has not."""
+        from tournament.models import SettlementSend
+        self._close()
+        ben = self.pid['Ben']
+        SettlementSend.objects.create(round=self.round, recipients=1,
+                                      mode=SettlementSend.MODE_PERSONAL,
+                                      player_id=ben)
+        p = self._payload()
+        self.assertIsNone(p['field_summary']['last_send'],
+                          'the group has not been texted')
+        stamped = {g['player_id']: g['last_send'] for g in p['golfers']}
+        self.assertIsNotNone(stamped[ben])
+        self.assertIsNone(stamped[self.pid['Ann']],
+                          "Ann's receipt has not gone")
+
+    def test_a_field_send_does_not_stamp_any_golfer(self):
+        from tournament.models import SettlementSend
+        self._close()
+        SettlementSend.objects.create(round=self.round, recipients=3,
+                                      mode=SettlementSend.MODE_FIELD)
+        p = self._payload()
+        self.assertIsNotNone(p['field_summary']['last_send'])
+        self.assertTrue(all(g['last_send'] is None for g in p['golfers']))
+
+    # -- the field summary has to name people apart --------------------------
+
+    def test_a_shared_surname_falls_back_to_the_full_name(self):
+        """A family four-ball is a real casual round, and four identical
+        surnames is not a shorter receipt, it is an unreadable one."""
+        from services.settlement_receipt import compose_casual_field
+        msg = compose_casual_field(
+            event_name='Tilden', transfers=[], players=[
+                {'player_id': 1, 'name': 'Paul Lipkin', 'net': 12.0},
+                {'player_id': 2, 'name': 'Ryan Lipkin', 'net': -4.0},
+                {'player_id': 3, 'name': 'Dana Wu',     'net': -8.0},
+            ])
+        self.assertIn('Paul Lipkin +$12', msg)
+        self.assertIn('Ryan Lipkin -$4', msg)
+        # The unambiguous one keeps the short label — one repeated surname
+        # must not lengthen every line.
+        self.assertIn('Wu -$8', msg)
+        self.assertNotIn('Dana Wu', msg)
+
 
 class MinGamesTests(TestCase):
     """The 2+ games rule belongs to the Settlement TAB, not to the money.

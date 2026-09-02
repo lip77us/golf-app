@@ -31,7 +31,7 @@ NETTABLE = {
 
 _LABELS = {
     'skins': 'Skins', 'spots': 'Spots', 'points_531': 'Points 5-3-1',
-    'wolf': 'Wolf', 'sixes': "Six's", 'fourball': 'Fourball',
+    'wolf': 'Wolf', 'sixes': 'Sixes', 'fourball': 'Fourball',
     'low_net_round': 'Stroke Play', 'stableford': 'Stableford',
     'match_play': 'Singles Bracket', 'triple_nassau': 'Triple Nassau',
 }

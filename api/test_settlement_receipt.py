@@ -255,3 +255,146 @@ class ReceiptEndpointTests(TestCase):
         resp = self.client.post(self._url(),
                                 {'mode': 'field', 'recipients': 4}, format='json')
         self.assertEqual(resp.status_code, 404)
+
+
+# ---------------------------------------------------------------------------
+# The CASUAL receipt, over the wire — and the reachability it depends on.
+# ---------------------------------------------------------------------------
+
+from services.skins import setup_skins, calculate_skins           # noqa: E402
+from scoring.tests._helpers import submit_round                   # noqa: E402
+
+
+class CasualReceiptEndpointTests(TestCase):
+    """A one-game casual round: the commonest casual round there is.
+
+    It is deliberately a SKINS-ONLY round, because that is the shape that was
+    broken — the receipt exists at min_games=1 while the Settlement tab needs
+    2, and the tab used to own the only button.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['skins'])
+        self.round.bet_unit = Decimal('1.00')
+        self.round.save(update_fields=['bet_unit'])
+        self.fs = make_foursome(
+            self.round, [('Ann', 0), ('Ben', 0), ('Cal', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        setup_skins(self.fs)
+        submit_round(self.fs, {
+            h: [(self.pid['Ann'], 4), (self.pid['Ben'], 5), (self.pid['Cal'], 6)]
+            for h in range(1, 19)})
+        calculate_skins(self.fs)
+
+        acct = Account.objects.get(name='Test Account')
+        self.user = get_user_model().objects.create_user(
+            username='casual', account=acct, is_account_admin=True)
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def _url(self):
+        return reverse('api-round-receipt', args=[self.round.id])
+
+    def _close(self):
+        self.round.status = RoundStatus.COMPLETE
+        self.round.save(update_fields=['status'])
+
+    # -- reachability: the bug that made all of this dead code ---------------
+
+    def test_a_one_game_round_offers_the_receipt_without_a_settlement_tab(self):
+        """The regression that hid every casual receipt in the app.
+
+        The tab needs 2+ games and the receipt needs 1, so a skins-only round
+        has a receipt and no tab. When the tab owned the only button, that
+        receipt could not be opened by anybody.
+        """
+        from api.views import _build_leaderboard, _leaderboard_active_games
+        self._close()
+        games = _build_leaderboard(self.round)
+        self.assertNotIn('settlement', games, 'one game earns no tab')
+        self.assertTrue(games['receipt']['available'],
+                        'but it still has a receipt, and a way in')
+        # The flag is a capability, not a game — an older client that tabs off
+        # active_games must not render it as a junk tab.
+        self.assertNotIn('receipt', _leaderboard_active_games(self.round, games))
+
+    def test_the_flag_and_the_payload_never_disagree(self):
+        """Offering a button that opens a 404 is worse than no button."""
+        from api.views import _build_leaderboard
+        for close in (False, True):
+            if close:
+                self._close()
+            offered = _build_leaderboard(self.round)['receipt']['available']
+            self.assertEqual(offered, self.client.get(self._url()).status_code == 200)
+
+    def test_a_tournament_round_is_settled_one_level_up(self):
+        """A per-round receipt there would be a second, smaller answer."""
+        from api.views import _build_leaderboard
+        self._close()
+        self.round.tournament = make_tournament(total_rounds=1)
+        self.round.save(update_fields=['tournament'])
+        self.assertFalse(_build_leaderboard(self.round)['receipt']['available'])
+
+    # -- reading it ----------------------------------------------------------
+
+    def test_it_names_who_pays_whom_from_each_golfers_own_side(self):
+        self._close()
+        resp = self.client.get(self._url())
+        self.assertEqual(resp.status_code, 200, resp.data)
+        ann = next(g for g in resp.data['golfers']
+                   if g['player_id'] == self.pid['Ann'])
+        self.assertTrue(ann['transfers'])
+        self.assertTrue(all(t['owes_me'] for t in ann['transfers']),
+                        'Ann won the skins; everyone pays her')
+        self.assertIn('pays you', ann['message'])
+
+    # -- recording a personal send -------------------------------------------
+
+    def test_a_personal_send_stamps_only_that_golfer(self):
+        self._close()
+        resp = self.client.post(
+            self._url(),
+            {'mode': 'personal', 'recipients': 1, 'player_id': self.pid['Ben']},
+            format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+
+        again = self.client.get(self._url()).data
+        self.assertIsNone(again['field_summary']['last_send'],
+                          'the group thread has had nothing')
+        stamped = {g['player_id']: g['last_send'] for g in again['golfers']}
+        self.assertIsNotNone(stamped[self.pid['Ben']])
+        self.assertIsNone(stamped[self.pid['Ann']])
+
+    def test_a_personal_send_must_name_its_golfer(self):
+        """Otherwise the stamp can only say a send happened, not to whom."""
+        self._close()
+        resp = self.client.post(self._url(),
+                                {'mode': 'personal', 'recipients': 1},
+                                format='json')
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.assertFalse(SettlementSend.objects.exists())
+
+    def test_a_golfer_who_is_not_on_the_receipt_is_refused(self):
+        """A send stamped against him would mark a card that never renders."""
+        self._close()
+        stranger = make_player('Zed', 0)
+        resp = self.client.post(
+            self._url(),
+            {'mode': 'personal', 'recipients': 1, 'player_id': stranger.id},
+            format='json')
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.assertFalse(SettlementSend.objects.exists())
+
+    def test_a_personal_send_is_gated_exactly_like_the_group_one(self):
+        """The gate is about whether the money is final, not which button was
+        pressed. A provisional receipt texted one golfer at a time is exactly
+        as wrong as one texted to four."""
+        resp = self.client.post(
+            self._url(),
+            {'mode': 'personal', 'recipients': 1, 'player_id': self.pid['Ben']},
+            format='json')
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.assertTrue(resp.data['blocking'])
+        self.assertFalse(SettlementSend.objects.exists())

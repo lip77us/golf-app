@@ -1927,6 +1927,56 @@ disputes — not "why did I stake that" but "I thought I won the skin on 7".
   three), the gate, and Send/Resend. Records only on
   `ShareResultStatus.success`; a dismissed sheet is not a send.
 
+#### The receipt nothing could open — one gate, asked at two thresholds
+Shipped, tested, and **unreachable**: 0 of 38 completed casual rounds in the
+local database could open a receipt. 25 had one.
+
+The receipt calls `round_settlement(round, min_games=1)` on purpose — a
+skins-only round is the commonest casual round there is. Its only entry point
+was a button inside `_SettlementView`, and the Settlement TAB is built from
+`round_settlement(round_obj)` at the default `min_games=2`. One game, no tab,
+no button. Every unreachable round was single-game: skins, sixes,
+low_net_round, points_531 — exactly the case `min_games=1` was chosen for.
+
+Two questions, one call, asked once in `_build_leaderboard`:
+- the **tab** needs 2+ games (a one-game tab just restates that game's own
+  payouts);
+- the **receipt** needs money to have moved.
+
+`games['receipt'] = {'available': bool}` now carries the second answer.
+`_leaderboard_active_games` skips it exactly as it skips `settlement` — it is a
+capability, not a game, and an older client that tabs off `active_games` must
+not render it as a junk tab. The entry point is a **leaderboard overflow item**,
+not a tab button: GolfAppBar's own guidance is 0–2 direct actions, and the board
+already spends both on chat and the overflow.
+
+Deriving the tab from the receipt's own call is what stops them drifting apart
+again. `test_a_one_game_round_offers_the_receipt_without_a_settlement_tab`
+pins it.
+
+#### Three more, found the same way — against the database, not fixtures
+- **The personal send skipped the gate.** "Send his receipt" called `Share`
+  directly while the group button respected `can_send`. The gate is about
+  whether the money is FINAL, not about which button was pressed: a provisional
+  receipt texted one golfer at a time is exactly as wrong as one texted to
+  four. Gated on both sides now, client and server.
+- **`last_send` is not one fact.** It was the most recent send of any mode,
+  and `_stamp()` hard-coded "to the group" — so recording a personal send
+  would have made the group card claim a group text that never happened.
+  Split into `field_summary.last_send` and a per-golfer `last_send`, which
+  needs `SettlementSend.player` (`tournament/0064`) because the useful question
+  is "have I sent Ben his yet", not "did a send happen". A personal POST must
+  name a golfer who is ON the receipt.
+- **A round that settles to nothing had a receipt.** 7 of 38. Everyone square,
+  or a game that ran and paid nobody, produced four "+$0 to collect" lines and
+  a group text saying nothing. `casual_receipt_payload` returns None, same rule
+  that already refused an invented empty one.
+
+Also: `_field_labels` falls back to full names where a surname is shared — a
+family four-ball rendered `Lipkin +$0` four times — and only for the ambiguous
+ones, so one repeated surname does not lengthen every line. And `_LABELS` said
+`Six's`; the app says Sixes everywhere else, and that string goes out in the SMS.
+
 #### `'completed'` is not a round status — three gates were wedged shut
 `RoundStatus` is `pending` / `in_progress` / **`complete`**. Three places
 compared against the literal **`'completed'`**, which matches nothing, so each
