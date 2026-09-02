@@ -309,11 +309,16 @@ class InviterNameAgreementTests(TestCase):
             user=self.user)
         self.code = self.user.ensure_invite_code()
 
-    def test_the_page_uses_the_full_name_the_card_uses(self):
+    def test_the_card_the_og_title_and_the_page_all_say_the_same_sentence(self):
+        """Three surfaces, one sentence. iMessage renders the card and then
+        repeats og:title underneath it, so the reader sees two of them before
+        tapping and the third on landing — any drift shows up immediately."""
         from services.share_card import build_invite_context
+        sentence = 'Paul Lipkin invited you to Halved'
         body = self.client.get(f'/i/{self.code}/').content.decode()
-        self.assertIn('Paul Lipkin invited you', body)
-        self.assertIn('Paul Lipkin', build_invite_context(self.user)['title'])
+        self.assertEqual(build_invite_context(self.user)['title'], sentence)
+        self.assertIn(f'<meta property="og:title" content="{sentence}">', body)
+        self.assertIn(f'<h1>{sentence}</h1>', body)
 
     def test_a_nameless_inviter_gets_a_stand_in_not_an_empty_sentence(self):
         bare = User.objects.create_user(username='ghost', account=self.acct)

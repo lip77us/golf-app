@@ -126,7 +126,7 @@ def invite_landing(request, code: str):
 <body>
   <div class="card">
     <div class="logo">Halved</div>
-    <h1>{who} invited you to play</h1>
+    <h1>{who} invited you to Halved</h1>
     <p>Halved is the easiest way to track golf bets — skins, nassau, points and
        more — with your group, right from your phone.</p>
     <a class="btn" href="{download_url}">Get the app</a>
