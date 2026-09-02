@@ -1,4 +1,4 @@
-# App Store listing copy — Halved (v2.7.0)
+# App Store listing copy — Halved (v2.7.1)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
@@ -94,6 +94,37 @@ seconds, with no spreadsheets and no napkin math.
 
 Halved is built for friendly play among friends. It tracks informal stakes for
 scoring purposes only and does not process payments.
+
+## What's New (v2.7.1)
+Your lock screen keeps the match now.
+
+• **The match on your lock screen** — Sixes, Skins, Nassau and Rabbit put a live
+  board on your lock screen and Dynamic Island: the number that matters, who is
+  up, and what the hole is worth. It updates as the group scores.
+
+• **It reaches the whole group, not just the scorer.** Whoever is keeping the
+  card already knows the state — everyone else was the one who needed it. The
+  board now appears for every golfer in the round, and for anyone you have
+  invited to watch, without them opening anything.
+
+• **A rebuilt Skins board** — it names who is winning and how far back you are,
+  in skins rather than a placing. When a carry finally breaks it leads with the
+  golfer who took it. Pool games show what a skin is worth right now, and junk
+  points count as what they are: an equal share of the same pot.
+
+• **Sixes score entry is tidier** — shorter match cards, and the scorecard now
+  sits under them so you can read the holes you just played without leaving the
+  screen.
+
+• **The draw stays a draw** — the leaderboard no longer shows the pairings for
+  matches 2 and 3 before the group has spun for them.
+
+• **Inviting a watcher is quicker** — search your golfers by name or number, and
+  filter to the ones already on Halved.
+
+Fixes
+
+• Lock-screen boards could fail to register on some phones and never appear.
 
 ## What's New (v2.7.0)
 Team tournaments, and a rebuilt tournament for individual play:
