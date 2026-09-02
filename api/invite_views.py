@@ -116,8 +116,6 @@ def invite_landing(request, code: str):
     .card {{ max-width:420px; padding:40px 28px; }}
     h1 {{ font-size:1.6rem; margin:0 0 8px; }}
     p {{ font-size:1.05rem; line-height:1.5; opacity:.92; }}
-    .logo {{ font-size:2.4rem; font-weight:800; letter-spacing:.5px;
-             margin-bottom:24px; }}
     a.btn {{ display:inline-block; margin-top:24px; padding:14px 28px;
              background:#fff; color:#0b5a2b; font-weight:700; border-radius:999px;
              text-decoration:none; }}
@@ -125,7 +123,6 @@ def invite_landing(request, code: str):
 </head>
 <body>
   <div class="card">
-    <div class="logo">Halved</div>
     <h1>{who} invited you to Halved</h1>
     <p>Halved is the easiest way to track golf bets — skins, nassau, points and
        more — with your group, right from your phone.</p>
