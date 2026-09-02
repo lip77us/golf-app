@@ -50,6 +50,7 @@ from games.models import (
 )
 from scoring.handicap import build_score_index
 from scoring.models import HoleScore
+from core.handicap_math import round_half_up
 from scoring.phantom import (
     CROSS_FOURSOME_ALGORITHM_ID,
     setup_cross_foursome_phantom,
@@ -196,7 +197,7 @@ def _whs_so_net_index(
                 hcp = base_hcp
             so = max(0, hcp - low)
             if game.net_percent != 100:
-                so = int(round(so * game.net_percent / 100.0))
+                so = int(round_half_up(so * game.net_percent / 100.0))
             si = m.tee.hole(hole).get('stroke_index', 18)
             strokes = 0
             if si <= so:
@@ -290,7 +291,7 @@ def _singles_pair_so_index(
         m_b.player_id: max(0, (m_b.playing_handicap or 0) - low_hcp),
     }
     if net_percent != 100:
-        pair_so = {pid: int(round(so * net_percent / 100.0))
+        pair_so = {pid: int(round_half_up(so * net_percent / 100.0))
                    for pid, so in pair_so.items()}
 
     out: dict = {}
@@ -952,7 +953,7 @@ def _fourball_donor_so_by_hole(
                 hcp = donor_hcp if is_ph else (m.playing_handicap or 0)
             so = max(0, hcp - low)
             if game.net_percent != 100:
-                so = int(round(so * game.net_percent / 100.0))
+                so = int(round_half_up(so * game.net_percent / 100.0))
             out.setdefault(pid, {})[h] = so
     return out
 
@@ -1039,7 +1040,7 @@ def _expected_strokes_per_match(
                         hcp = donor_hcp if is_ph else (m.playing_handicap or 0)
                     so = max(0, hcp - low)
                     if game.net_percent != 100:
-                        so = int(round(so * game.net_percent / 100.0))
+                        so = int(round_half_up(so * game.net_percent / 100.0))
                     si = m.tee.hole(h).get('stroke_index', 18)
                     result[pid][h] = (
                         1 + (1 if si + 18 <= so else 0) if si <= so else 0
@@ -1078,7 +1079,7 @@ def _expected_strokes_per_match(
             continue
         eff = max(0, (m.playing_handicap or 0) - baseline)
         if game.net_percent != 100:
-            eff = int(round(eff * game.net_percent / 100.0))
+            eff = int(round_half_up(eff * game.net_percent / 100.0))
         result[pid] = _allocate_whs(eff, seg_range, m.tee)
     return result
 

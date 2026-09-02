@@ -58,6 +58,7 @@ from scoring.handicap import build_score_index, _effective_hcp, _strokes_on_hole
 from scoring.models import HoleScore
 from services.hole_plan import play_order
 from services.points_531 import _build_so_score_index
+from core.handicap_math import round_half_up
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +127,7 @@ def _alloc_by_hole(game, foursome, order) -> dict:
 
     for m in memberships:
         if game.handicap_mode == HandicapMode.STROKES_OFF:
-            hcp = round(max(0, (m.playing_handicap or 0) - low) * npct / 100)
+            hcp = round_half_up(max(0, (m.playing_handicap or 0) - low) * npct / 100)
         else:
             hcp = _effective_hcp(m.playing_handicap or 0, npct)
         if hcp <= 0:
@@ -376,8 +377,8 @@ def _phcp_in_play(mode, npct, phcp, low_phcp) -> int:
     if mode == HandicapMode.GROSS:
         return 0
     if mode == HandicapMode.STROKES_OFF:
-        return round(max(0, phcp - low_phcp) * npct / 100)
-    return round(phcp * npct / 100)
+        return round_half_up(max(0, phcp - low_phcp) * npct / 100)
+    return round_half_up(phcp * npct / 100)
 
 
 def _empty_summary(bet_unit) -> dict:

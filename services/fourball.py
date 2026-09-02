@@ -36,6 +36,7 @@ from core.models import HandicapMode, MatchStatus
 from games.models import FourballGame, FourballTeam, FourballHoleResult
 from scoring.handicap import build_score_index, _strokes_on_hole
 from scoring.models import HoleScore
+from core.handicap_math import round_half_up
 
 
 # ---------------------------------------------------------------------------
@@ -133,7 +134,7 @@ def _fourball_score_index(foursome, handicap_mode: str, net_percent: int) -> dic
              if m.playing_handicap is not None]
     low = min(phcps) if phcps else 0
     player_so = {
-        m.player_id: round(max(0, (m.playing_handicap or 0) - low)
+        m.player_id: round_half_up(max(0, (m.playing_handicap or 0) - low)
                            * net_percent / 100)
         for m in memberships
     }

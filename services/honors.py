@@ -46,6 +46,7 @@ from scoring.handicap import build_score_index
 from scoring.models import HoleScore
 from services.hole_plan import play_order
 from services.points_531 import _build_so_score_index
+from core.handicap_math import round_half_up
 from services.wager import (
     PER_POINT, POOL, PROPORTIONAL, VS_AVERAGE, PAY_ABOVE, PAY_WINNER,
     WagerConfig, settle,
@@ -181,8 +182,8 @@ def _phcp_in_play(mode, npct, phcp, low_phcp) -> int:
     if mode == HandicapMode.GROSS:
         return 0
     if mode == HandicapMode.STROKES_OFF:
-        return round(max(0, phcp - low_phcp) * npct / 100)
-    return round(phcp * npct / 100)
+        return round_half_up(max(0, phcp - low_phcp) * npct / 100)
+    return round_half_up(phcp * npct / 100)
 
 
 # ---------------------------------------------------------------------------

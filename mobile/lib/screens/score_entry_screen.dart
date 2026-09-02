@@ -16,6 +16,7 @@
 ///       – Skins per-hole winner strip
 ///       – Hole ← Prev | Next → navigation / Done button
 
+import '../utils/handicap_rounding.dart';
 import 'dart:async';
 import 'dart:math' show Random;
 
@@ -68,11 +69,11 @@ int _effectiveHandicap({
       if (off <= 0) return 0;
       // Apply the same net_percent scaling the backend uses:
       // so = round(diff * net_percent / 100)
-      return (off * netPercent / 100.0).round();
+      return roundHalfUp(off * netPercent / 100.0);
     case 'net':
     default:
       if (netPercent == 100) return playingHandicap;
-      return (playingHandicap * netPercent / 100.0).round();
+      return roundHalfUp(playingHandicap * netPercent / 100.0);
   }
 }
 
@@ -2745,7 +2746,7 @@ class _HoleScoreCard extends StatelessWidget {
       // @100% the backend already stored/predicted the (partial-aware) strokes.
       if (netPercent == 100 && entry != null) return entry.handicapStrokes;
       // Custom % → derive locally, partial-round aware (scale + re-rank).
-      final effective = (m.playingHandicap * netPercent / 100.0).round();
+      final effective = roundHalfUp(m.playingHandicap * netPercent / 100.0);
       final universe = scorecard.holes.isEmpty
           ? 18
           : scorecard.holes.map((x) => x.holeNumber).reduce((a, b) => a > b ? a : b);
@@ -2770,7 +2771,7 @@ class _HoleScoreCard extends StatelessWidget {
       final rawSo = m.playingHandicap - low;
       if (rawSo <= 0) return 0;
       // Apply the same net_percent scaling the backend uses.
-      final so = (rawSo * netPercent / 100.0).round();
+      final so = roundHalfUp(rawSo * netPercent / 100.0);
       if (so <= 0) return 0;
       // Sixes: use the exact per-segment allocation so colors match the
       // backend calculation exactly (segment boundaries, dying strokes, etc).
@@ -2859,7 +2860,7 @@ class _HoleScoreCard extends StatelessWidget {
     final so = _matchPlaySo(playerId, hole);
     if (so == null) return null;
     if (so == 0) return 0;
-    final scaled = (so * netPercent / 100.0).round();
+    final scaled = roundHalfUp(so * netPercent / 100.0);
     if (scaled <= 0) return 0;
     return strokesOnHole(scaled, si);
   }
@@ -5288,7 +5289,7 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
 
     if (nassau.handicapMode == 'net') {
       if (nassau.netPercent == 100 && entry != null) return entry.handicapStrokes;
-      final effective = (m.playingHandicap * nassau.netPercent / 100.0).round();
+      final effective = roundHalfUp(m.playingHandicap * nassau.netPercent / 100.0);
       return strokesOnHole(effective, mySi);
     }
     if (nassau.handicapMode == 'strokes_off') {
@@ -5298,7 +5299,7 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
           .reduce((a, b) => a < b ? a : b);
       final rawSo = m.playingHandicap - low;
       if (rawSo <= 0) return 0;
-      final so = (rawSo * nassau.netPercent / 100.0).round();
+      final so = roundHalfUp(rawSo * nassau.netPercent / 100.0);
       if (so <= 0) return 0;
       return strokesOnHole(so, mySi);
     }
@@ -5868,7 +5869,7 @@ class _FourballProgressGridState extends State<_FourballProgressGrid> {
 
     if (s.isNet) {
       if (s.netPercent == 100 && entry != null) return entry.handicapStrokes;
-      final effective = (m.playingHandicap * s.netPercent / 100.0).round();
+      final effective = roundHalfUp(m.playingHandicap * s.netPercent / 100.0);
       return partialStrokesOnHole(
           effective, h, widget.holesInPlay, universe, siFor);
     }
@@ -5879,7 +5880,7 @@ class _FourballProgressGridState extends State<_FourballProgressGrid> {
         .reduce((a, b) => a < b ? a : b);
     final rawSo = m.playingHandicap - low;
     if (rawSo <= 0) return 0;
-    final so = (rawSo * s.netPercent / 100.0).round();
+    final so = roundHalfUp(rawSo * s.netPercent / 100.0);
     if (so <= 0) return 0;
     return partialStrokesOnHole(so, h, widget.holesInPlay, universe, siFor);
   }
@@ -6187,7 +6188,7 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
         return entry.handicapStrokes;
       }
       final effective =
-          (m.playingHandicap * widget.netPercent / 100.0).round();
+          roundHalfUp(m.playingHandicap * widget.netPercent / 100.0);
       return partialStrokesOnHole(
           effective, h, widget.holesInPlay, universe, siFor);
     }
@@ -6198,7 +6199,7 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
         .reduce((a, b) => a < b ? a : b);
     final rawSo = m.playingHandicap - low;
     if (rawSo <= 0) return 0;
-    final so = (rawSo * widget.netPercent / 100.0).round();
+    final so = roundHalfUp(rawSo * widget.netPercent / 100.0);
     if (so <= 0) return 0;
     return partialStrokesOnHole(so, h, widget.holesInPlay, universe, siFor);
   }
@@ -8873,7 +8874,7 @@ class _P531SummaryGridState extends State<_P531SummaryGrid> {
       if (summary.netPercent == 100 && entry != null) {
         return entry.handicapStrokes;
       }
-      final effective = (m.playingHandicap * summary.netPercent / 100.0).round();
+      final effective = roundHalfUp(m.playingHandicap * summary.netPercent / 100.0);
       return strokesOnHole(effective, mySi);
     }
     if (summary.handicapMode == 'strokes_off') {
@@ -8881,7 +8882,7 @@ class _P531SummaryGridState extends State<_P531SummaryGrid> {
       final low   = players.map((p) => p.playingHandicap).reduce((a, b) => a < b ? a : b);
       final rawSo = m.playingHandicap - low;
       if (rawSo <= 0) return 0;
-      final so = (rawSo * summary.netPercent / 100.0).round();
+      final so = roundHalfUp(rawSo * summary.netPercent / 100.0);
       if (so <= 0) return 0;
       return strokesOnHole(so, mySi);
     }

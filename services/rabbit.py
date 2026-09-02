@@ -44,6 +44,7 @@ from services.points_531 import _build_so_score_index
 from services.hole_plan import play_order, segment as _hole_segment
 from scoring.handicap import build_score_index, _effective_hcp, _strokes_on_hole
 from scoring.models import HoleScore
+from core.handicap_math import round_half_up
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +126,7 @@ def _build_rabbit_so_seg_index(foursome, seg_lists, net_percent: int = 100) -> d
     for m in memberships:
         if m.tee_id is None:
             continue
-        so = round(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
+        so = round_half_up(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
         if so <= 0:
             continue
         per_player = score_index.get(m.player_id)
@@ -205,7 +206,7 @@ def _alloc_by_hole(game, foursome, seg_lists, order) -> dict:
     nseg    = max(1, len(seg_lists))
 
     for m in memberships:
-        so = round(max(0, (m.playing_handicap or 0) - low) * npct / 100)
+        so = round_half_up(max(0, (m.playing_handicap or 0) - low) * npct / 100)
         if so <= 0:
             continue
         per = alloc[m.player_id]
@@ -404,7 +405,7 @@ def _run_rabbit(game, foursome, score_index, real_ids, bet_unit):
              if m.playing_handicap is not None]
     low   = min(phcps) if phcps else 0
     player_so = {
-        m.player_id: round(max(0, (m.playing_handicap or 0) - low) * npct / 100)
+        m.player_id: round_half_up(max(0, (m.playing_handicap or 0) - low) * npct / 100)
         for m in memberships
     }
 
@@ -595,8 +596,8 @@ def _phcp_in_play(mode, npct, phcp, low_phcp) -> int:
     if mode == HandicapMode.GROSS:
         return 0
     if mode == HandicapMode.STROKES_OFF:
-        return round(max(0, phcp - low_phcp) * npct / 100)
-    return round(phcp * npct / 100)
+        return round_half_up(max(0, phcp - low_phcp) * npct / 100)
+    return round_half_up(phcp * npct / 100)
 
 
 def rabbit_summary(foursome) -> dict:

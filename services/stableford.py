@@ -24,6 +24,7 @@ from django.db import transaction
 
 from scoring.models import HoleScore, StablefordResult
 from tournament.models import FoursomeMembership
+from core.handicap_math import round_half_up
 
 
 @transaction.atomic
@@ -163,7 +164,7 @@ def _build_stableford_totals(round_obj, *, mode=None, net_pct=None,
                 adjusted = hs['net_score']
                 strokes_this = hs['gross_score'] - hs['net_score']
             else:
-                eff = round((m.playing_handicap or 0) * net_pct / 100)
+                eff = round_half_up((m.playing_handicap or 0) * net_pct / 100)
                 strokes_this = strokes_fns[m.foursome_id](eff, m.tee, hole)
                 adjusted = hs['gross_score'] - strokes_this
         if par is None:

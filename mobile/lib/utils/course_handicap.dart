@@ -15,9 +15,10 @@
 library;
 
 import '../api/models.dart';
+import 'handicap_rounding.dart';
 
 int courseHandicapFor(PlayerProfile player, TeeInfo tee) {
   final index = double.tryParse(player.handicapIndex) ?? 0;
   final ch = index * (tee.slope / 113.0) + (tee.courseRating - tee.par);
-  return ch.round();
+  return roundHalfUp(ch);
 }

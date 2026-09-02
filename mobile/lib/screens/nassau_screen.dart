@@ -12,6 +12,7 @@
 ///   • Presses strip (active/completed presses)
 ///   • F9 / B9 / Overall match status chips + Call Press button
 
+import '../utils/handicap_rounding.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -832,14 +833,16 @@ class _NassauHoleScoreCard extends StatelessWidget {
 
     if (_mode == 'net') {
       if (_netPercent == 100 && entry != null) return entry.handicapStrokes;
-      final effective = (m.playingHandicap * _netPercent / 100.0).round();
+      final effective = roundHalfUp(m.playingHandicap * _netPercent / 100.0);
       return strokesOnHole(effective, mySi);
     }
 
     if (_mode == 'strokes_off') {
       final low = _lowPlayingHandicap;
       if (low == null) return 0;
-      final so = m.playingHandicap - low;
+      // Scale the strokes-off differential by Net %, matching the backend
+      // (nassau.py / sixes.py / rabbit.py) and the "SO {n}%" chip.
+      final so = roundHalfUp((m.playingHandicap - low) * _netPercent / 100.0);
       if (so <= 0) return 0;
       return strokesOnHole(so, mySi);
     }
@@ -1433,7 +1436,7 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
         return entry.handicapStrokes;
       }
       final effective =
-          (m.playingHandicap * nassau.netPercent / 100.0).round();
+          roundHalfUp(m.playingHandicap * nassau.netPercent / 100.0);
       return strokesOnHole(effective, mySi);
     }
 
@@ -1442,7 +1445,9 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
       final low = players
           .map((p) => p.playingHandicap)
           .reduce((a, b) => a < b ? a : b);
-      final so = m.playingHandicap - low;
+      // Scale the strokes-off differential by Net %, matching the backend
+      // (nassau.py / sixes.py / rabbit.py) and the "SO {n}%" chip.
+      final so = roundHalfUp((m.playingHandicap - low) * nassau.netPercent / 100.0);
       if (so <= 0) return 0;
       return strokesOnHole(so, mySi);
     }

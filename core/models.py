@@ -3,6 +3,7 @@ from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 
 from accounts.scoping import AccountScopedManager
+from core.handicap_math import round_half_up
 
 
 # ---------------------------------------------------------------------------
@@ -321,7 +322,7 @@ class Player(models.Model):
         index (kept current for connected golfers via index propagation).
         """
         ch = float(self.effective_handicap_index()) * (float(tee.slope) / 113.0) + (float(tee.course_rating) - float(tee.par))
-        return round(ch)
+        return round_half_up(ch)
 
     @staticmethod
     def default_short_name_for(name: str) -> str:

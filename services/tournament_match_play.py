@@ -84,6 +84,7 @@ from scoring.handicap import (
 )
 from scoring.models import HoleScore
 from tournament.models import FoursomeMembership
+from core.handicap_math import round_half_up
 
 
 # ---------------------------------------------------------------------------
@@ -791,7 +792,7 @@ def tournament_match_play_summary(foursome) -> dict | None:
                 m = member_by_pid.get(pid)
                 if m is None or m.tee_id is None:
                     return 0
-                eff = round((m.playing_handicap or 0) * mp_npct / 100)
+                eff = round_half_up((m.playing_handicap or 0) * mp_npct / 100)
                 return strokes_fn(eff, m.tee, hole)
 
         base = list(range(match.start_hole, match.start_hole + 9))

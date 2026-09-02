@@ -4,14 +4,17 @@
 /// each screen carried its own private `_effectiveMatchHandicap` /
 /// `_strokesOnHole` copy; this is the single source of truth.
 
+import 'handicap_rounding.dart';
+
 /// Compute a player's *effective* playing handicap for a match, given the
 /// match's handicap mode and net percentage.
 ///
 ///   Net   : round(playingHandicap × netPercent / 100)
 ///   Gross : 0 (no strokes — raw scores used)
-///   SO    : playingHandicap − lowestPlayingHandicap (low plays to 0).
-///           `lowestPlayingHandicap` must be provided; if null we fall back to
-///           full net (safe until Strokes-Off is wired end-to-end).
+///   SO    : round((playingHandicap − lowestPlayingHandicap) × netPercent / 100)
+///           — the low player plays to 0.  `lowestPlayingHandicap` must be
+///           provided; if null we fall back to full net (safe until
+///           Strokes-Off is wired end-to-end).
 ///
 /// Returns a non-negative integer.
 int effectiveMatchHandicap({
@@ -26,11 +29,15 @@ int effectiveMatchHandicap({
     case 'strokes_off':
       if (lowestPlayingHandicap == null) return playingHandicap;
       final off = playingHandicap - lowestPlayingHandicap;
-      return off < 0 ? 0 : off;
+      if (off <= 0) return 0;
+      // Scale by netPercent exactly as the backend does
+      // (so = round_half_up((own - low) * net_percent / 100)) — see
+      // services/nassau.py, sixes.py, rabbit.py, survivor.py, multi_skins.py.
+      return roundHalfUp(off * netPercent / 100.0);
     case 'net':
     default:
       if (netPercent == 100) return playingHandicap;
-      return (playingHandicap * netPercent / 100.0).round();
+      return roundHalfUp(playingHandicap * netPercent / 100.0);
   }
 }
 
@@ -61,7 +68,7 @@ int partialStrokesOnHole(
   if (n == 0 || n >= universe) {
     return strokesOnHole(effectiveHandicap, siFor(hole));
   }
-  final hcpN = (effectiveHandicap * n / universe).round();
+  final hcpN = roundHalfUp(effectiveHandicap * n / universe);
   if (hcpN <= 0) return 0;
   final ranked = [...holesInPlay]..sort((a, b) => siFor(a).compareTo(siFor(b)));
   final idx = ranked.indexOf(hole);          // 0 = hardest played

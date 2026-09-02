@@ -25,6 +25,7 @@ from scoring.handicap import (
     make_strokes_fn, _effective_hcp,
 )
 from services import wager
+from core.handicap_math import round_half_up
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +99,7 @@ def _net_index(foursome, game) -> dict:
     for m in members:
         if m.tee_id is None:
             continue
-        so = round(max(0, (m.playing_handicap or 0) - low) * game.net_percent / 100)
+        so = round_half_up(max(0, (m.playing_handicap or 0) - low) * game.net_percent / 100)
         per_player = index.get(m.player_id)
         if not per_player:
             continue
@@ -167,7 +168,7 @@ def vegas_player_hole_strokes(foursome, game) -> dict:
     for m in members:
         if m.tee_id is None:
             continue
-        so = round(max(0, (m.playing_handicap or 0) - low) * game.net_percent / 100)
+        so = round_half_up(max(0, (m.playing_handicap or 0) - low) * game.net_percent / 100)
         if so <= 0:
             continue
         full, rem = so // 18, so % 18

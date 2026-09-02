@@ -14,6 +14,7 @@
 /// Scores post through the shared RoundProvider; the TripleNassauSummary is
 /// refreshed after every save.
 
+import '../utils/handicap_rounding.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -136,7 +137,7 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
     if (mode == 'gross') return 0;
     final diff = higher.playingHandicap - lower.playingHandicap;
     if (diff <= 0) return 0;
-    final so = (diff * netPct / 100).round();
+    final so = roundHalfUp(diff * netPct / 100);
     return (so ~/ 18) + (si <= (so % 18) ? 1 : 0);
   }
 

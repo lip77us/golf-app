@@ -1,3 +1,4 @@
+import '../utils/handicap_rounding.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api/models.dart';
@@ -38,11 +39,11 @@ int _effectiveHandicap({
       if (lowestPlayingHandicap == null) return playingHandicap;
       final off = playingHandicap - lowestPlayingHandicap;
       if (off <= 0) return 0;
-      return (off * netPercent / 100.0).round();
+      return roundHalfUp(off * netPercent / 100.0);
     case 'net':
     default:
       if (netPercent == 100) return playingHandicap;
-      return (playingHandicap * netPercent / 100.0).round();
+      return roundHalfUp(playingHandicap * netPercent / 100.0);
   }
 }
 

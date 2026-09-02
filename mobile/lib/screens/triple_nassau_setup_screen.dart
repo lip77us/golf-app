@@ -8,6 +8,7 @@
 ///
 /// Requires exactly three real (non-phantom) players.
 
+import '../utils/handicap_rounding.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -170,11 +171,11 @@ class _TripleNassauSetupScreenState extends State<TripleNassauSetupScreen> {
     if (_mode == 'gross') return 0;
     final diff = (hcpA - hcpB).abs();
     if (_mode == 'strokes_off') {
-      return (diff * _netPercent / 100).round();
+      return roundHalfUp(diff * _netPercent / 100);
     }
     // Net: each plays their own allowance; the pair difference is what matters
     // to the head-to-head, so preview the netted difference.
-    return ((hcpA - hcpB).abs() * _netPercent / 100).round();
+    return roundHalfUp((hcpA - hcpB).abs() * _netPercent / 100);
   }
 
   @override

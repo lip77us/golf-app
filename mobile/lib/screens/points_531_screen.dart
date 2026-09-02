@@ -19,6 +19,7 @@
 ///     5-3-1 points row — showing at-a-glance progress through the round.
 ///   • Bottom nav:  ← Hole N-1  |  Hole N+1 →   (Done on hole 18)
 
+import '../utils/handicap_rounding.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -695,7 +696,7 @@ class _P531HoleScoreCard extends StatelessWidget {
         return entry.handicapStrokes;
       }
       // Custom percentage: re-derive with scaled handicap.
-      final effective = (m.playingHandicap * _netPercent / 100.0).round();
+      final effective = roundHalfUp(m.playingHandicap * _netPercent / 100.0);
       return strokesOnHole(effective, mySi);
     }
 
@@ -706,7 +707,9 @@ class _P531HoleScoreCard extends StatelessWidget {
     if (_mode == 'strokes_off') {
       final low = _lowPlayingHandicap;
       if (low == null) return 0;
-      final so = m.playingHandicap - low;
+      // Scale the strokes-off differential by Net %, matching the backend
+      // (nassau.py / sixes.py / rabbit.py) and the "SO {n}%" chip.
+      final so = roundHalfUp((m.playingHandicap - low) * _netPercent / 100.0);
       if (so <= 0) return 0;
       return strokesOnHole(so, mySi);
     }
@@ -1254,14 +1257,16 @@ class _P531SummaryGridState extends State<_P531SummaryGrid> {
       if (summary.netPercent == 100 && entry != null) {
         return entry.handicapStrokes;
       }
-      final effective = (m.playingHandicap * summary.netPercent / 100.0).round();
+      final effective = roundHalfUp(m.playingHandicap * summary.netPercent / 100.0);
       return strokesOnHole(effective, mySi);
     }
 
     if (summary.handicapMode == 'strokes_off') {
       if (players.isEmpty) return 0;
       final low = players.map((p) => p.playingHandicap).reduce((a, b) => a < b ? a : b);
-      final so  = m.playingHandicap - low;
+      // Scale the strokes-off differential by Net %, matching the backend
+      // (nassau.py / sixes.py / rabbit.py) and the "SO {n}%" chip.
+      final so  = roundHalfUp((m.playingHandicap - low) * summary.netPercent / 100.0);
       if (so <= 0) return 0;
       return strokesOnHole(so, mySi);
     }

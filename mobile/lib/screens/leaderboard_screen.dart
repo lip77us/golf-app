@@ -1,3 +1,4 @@
+import '../utils/handicap_rounding.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:provider/provider.dart';
@@ -8865,7 +8866,7 @@ class _TripleNassauGroupCard extends StatelessWidget {
     int getsVs(TripleNassauPlayer p, TripleNassauPlayer opp) {
       if (s.handicapMode == 'gross') return 0;
       final d = (p.playingHandicap ?? 0) - (opp.playingHandicap ?? 0);
-      return d <= 0 ? 0 : (d * s.netPercent / 100).round();
+      return d <= 0 ? 0 : roundHalfUp(d * s.netPercent / 100);
     }
 
     // Per-player "gets" summary vs each opponent, e.g. "gets 5 v JS · 10 v DP".

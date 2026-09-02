@@ -61,6 +61,7 @@ Design notes
 
 from core.models import HandicapMode
 from scoring.models import HoleScore
+from core.handicap_math import round_half_up
 
 
 def par_adjusted_playing_handicap(course_handicap: int, tee_par: int,
@@ -75,15 +76,17 @@ def par_adjusted_playing_handicap(course_handicap: int, tee_par: int,
     with a single par (all men or all women) gets a 0 adjustment. `min_group_par`
     is the lowest par among the tees in play in the group.
     """
-    return round(course_handicap * allowance) + (tee_par - min_group_par)
+    return round_half_up(course_handicap * allowance) + (tee_par - min_group_par)
 
 
 def _effective_hcp(playing_handicap: int, net_percent: int) -> int:
     """Scale playing_handicap by net_percent (%) and round to an int."""
     if net_percent == 100:
         return playing_handicap
-    # Round-half-up to keep things predictable (e.g. 90% of 19 = 17.1 → 17).
-    return int(round(playing_handicap * (net_percent / 100.0)))
+    # Round half UP per WHS (e.g. 90% of 19 = 17.1 → 17, 90% of 25 = 22.5 → 23).
+    # The builtin round() is banker's rounding and would give 22 for that second
+    # case, so every handicap site goes through core.handicap_math.round_half_up.
+    return int(round_half_up(playing_handicap * (net_percent / 100.0)))
 
 
 def _strokes_on_hole(effective_hcp: int, stroke_index: int) -> int:
@@ -133,7 +136,7 @@ def make_strokes_fn(foursome):
         key = (effective_hcp, getattr(tee, 'pk', None))
         plan = cache.get(key)
         if plan is None:
-            hcp_n = int(round(effective_hcp * n / universe))
+            hcp_n = int(round_half_up(effective_hcp * n / universe))
             if hcp_n <= 0:
                 plan = {}
             else:

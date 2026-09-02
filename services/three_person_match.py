@@ -43,6 +43,7 @@ from games.models import (
 )
 from scoring.handicap import build_score_index
 from tournament.models import Foursome
+from core.handicap_math import round_half_up
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +73,7 @@ def _build_so_score_index(foursome: Foursome, net_percent: int = 100) -> dict:
     for m in memberships:
         if m.tee_id is None:
             continue
-        so = round(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
+        so = round_half_up(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
         if so <= 0:
             continue
         per_player = score_index.get(m.player_id)

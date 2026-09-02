@@ -40,6 +40,7 @@ cross_foursome_rotation    — rotation over donor players from OTHER foursomes 
 
 import random
 from abc import ABC, abstractmethod
+from core.handicap_math import round_half_up
 
 
 # ---------------------------------------------------------------------------
@@ -446,7 +447,7 @@ class PhantomScoreProvider:
             donor_hcp = donor_hcaps.get(str(pid), donor_hcaps.get(pid))
             so = 0
             if donor_hcp is not None:
-                so = max(0, round((donor_hcp - real_low) * net_percent / 100))
+                so = max(0, round_half_up((donor_hcp - real_low) * net_percent / 100))
             gross, strokes = rows_by_pair.get((pid, hole), (None, 0))
             status[hole] = {
                 'player_id'  : pid,

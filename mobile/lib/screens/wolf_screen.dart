@@ -15,6 +15,7 @@
 /// server summary (services.wolf.wolf_summary), which is refreshed after
 /// every score submission and decision.
 
+import '../utils/handicap_rounding.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -1322,12 +1323,14 @@ class _HoleScoreCard extends StatelessWidget {
     final mySi  = entry?.strokeIndex ?? h.strokeIndex;
     if (_mode == 'net') {
       if (_netPercent == 100 && entry != null) return entry.handicapStrokes;
-      final eff = (m.playingHandicap * _netPercent / 100.0).round();
+      final eff = roundHalfUp(m.playingHandicap * _netPercent / 100.0);
       return strokesOnHole(eff, mySi);
     }
     final low = _lowPlaying;
     if (low == null) return 0;
-    final so = m.playingHandicap - low;
+    // Scale the strokes-off differential by Net %, matching the backend
+    // (nassau.py / sixes.py / rabbit.py) and the "SO {n}%" chip.
+    final so = roundHalfUp((m.playingHandicap - low) * _netPercent / 100.0);
     if (so <= 0) return 0;
     return strokesOnHole(so, mySi);
   }

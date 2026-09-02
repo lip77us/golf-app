@@ -32,6 +32,7 @@ from core.models import HandicapMode
 from scoring.models import HoleScore
 from scoring.handicap import _effective_hcp, _strokes_on_hole, make_strokes_fn
 from tournament.models import Foursome
+from core.handicap_math import round_half_up
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +161,7 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
                         s = strokes_fns[fs.pk](eff, m.tee, hole)
                     else:  # STROKES_OFF
                         si = m.tee.hole(hole).get('stroke_index', 18)
-                        so_diff = round(
+                        so_diff = round_half_up(
                             max(0, m.playing_handicap
                                 - low_hcp_by_pid.get(m.player_id, 0))
                             * net_percent / 100)
@@ -208,7 +209,7 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
             si       = membership.tee.hole(hole).get('stroke_index', 18)
             # Scale the strokes-off differential by net_percent, matching the
             # app-wide SO allowance (nassau.py / multi_skins.py / points_531.py).
-            so       = round(
+            so       = round_half_up(
                 max(0, membership.playing_handicap
                     - low_hcp_by_pid.get(pid, 0))
                 * net_percent / 100)

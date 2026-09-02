@@ -77,6 +77,7 @@ from services.wager import (
     WagerConfig, settle,
 )
 from tournament.models import Foursome
+from core.handicap_math import round_half_up
 
 
 # ---------------------------------------------------------------------------
@@ -170,7 +171,7 @@ def _build_so_score_index(foursome, net_percent: int = 100) -> dict:
     for m in memberships:
         if m.tee_id is None:
             continue
-        so = round(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
+        so = round_half_up(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
         if so <= 0:
             continue
 
@@ -483,8 +484,8 @@ def points_531_summary(foursome) -> dict:
         if mode == HandicapMode.GROSS:
             return 0
         if mode == HandicapMode.STROKES_OFF:
-            return round(max(0, phcp - low_phcp) * npct / 100)
-        return round(phcp * npct / 100)
+            return round_half_up(max(0, phcp - low_phcp) * npct / 100)
+        return round_half_up(phcp * npct / 100)
     phcp_by_pid = {
         m.player_id: _phcp_in_play(m.playing_handicap or 0)
         for m in real_members

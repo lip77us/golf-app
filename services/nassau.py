@@ -60,6 +60,7 @@ from core.models import HandicapMode, MatchStatus, GameType
 from games.models import NassauGame, NassauTeam, NassauHoleScore, NassauPress
 from scoring.handicap import build_score_index, _strokes_on_hole
 from scoring.models import HoleScore
+from core.handicap_math import round_half_up
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +168,7 @@ def _build_so_score_index(foursome, net_percent: int = 100) -> dict:
     for m in real_memberships:
         if m.tee_id is None:
             continue
-        so = round(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
+        so = round_half_up(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
         if so <= 0:
             continue
 
@@ -207,7 +208,7 @@ def _apply_per_hole_donor_so(score_index, real_memberships, phantom_m,
     low_real = min(real_hcps) if real_hcps else 0
 
     def _strokes(eff_hcp, low, si):
-        so = round(max(0, eff_hcp - low) * net_percent / 100)
+        so = round_half_up(max(0, eff_hcp - low) * net_percent / 100)
         if si <= so:
             return 1 + (1 if si + 18 <= so else 0)
         return 0
@@ -293,7 +294,7 @@ def _build_pair_so_index(foursome, game) -> dict:
     for m in memberships:
         if m.tee_id is None:
             continue
-        so = round(max(0, (m.playing_handicap or 0) - low) * game.net_percent / 100)
+        so = round_half_up(max(0, (m.playing_handicap or 0) - low) * game.net_percent / 100)
         if so <= 0:
             continue
         per_player = score_index.get(m.player_id)
@@ -1402,9 +1403,9 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
         if effective_hcp_mode == 'gross':
             in_play = 0
         elif effective_hcp_mode == 'strokes_off':
-            in_play = round(max(0, phcp - low_phcp) * npct / 100)
+            in_play = round_half_up(max(0, phcp - low_phcp) * npct / 100)
         else:   # net
-            in_play = round(phcp * npct / 100)
+            in_play = round_half_up(phcp * npct / 100)
         phcp_by_pid[m.player_id] = in_play
 
     def _team_players(team_num):

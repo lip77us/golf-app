@@ -82,6 +82,7 @@ from scoring.handicap import (
     _strokes_on_hole,
 )
 from tournament.models import Foursome
+from core.handicap_math import round_half_up
 
 
 def _short(player) -> str:
@@ -666,7 +667,7 @@ def calculate_sixes(foursome) -> list:
                  if m.playing_handicap is not None]
         low = min(phcps) if phcps else 0
         player_so = {
-            m.player_id: round(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
+            m.player_id: round_half_up(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
             for m in memberships
         }
         member_by_pid = {m.player_id: m for m in memberships}
@@ -930,7 +931,7 @@ def sixes_player_hole_strokes(foursome) -> dict:
         for m in memberships:
             if m.tee_id is None:
                 continue
-            eff = round((m.playing_handicap or 0) * net_percent / 100)
+            eff = round_half_up((m.playing_handicap or 0) * net_percent / 100)
             if eff <= 0:
                 continue
             for h in order:
@@ -945,7 +946,7 @@ def sixes_player_hole_strokes(foursome) -> dict:
              if m.playing_handicap is not None]
     low = min(phcps) if phcps else 0
     player_so = {
-        m.player_id: round(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
+        m.player_id: round_half_up(max(0, (m.playing_handicap or 0) - low) * net_percent / 100)
         for m in memberships
     }
 

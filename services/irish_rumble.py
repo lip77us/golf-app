@@ -40,6 +40,7 @@ Public API
 
 from django.db import transaction
 
+from core.handicap_math import round_half_up
 from core.models import HandicapMode
 from games.models import IrishRumbleConfig, IrishRumbleSegmentResult
 from scoring.models import HoleScore
@@ -411,7 +412,12 @@ def _build_ir_score_index(round_obj, handicap_mode, net_percent):
             if membership.tee_id is None:
                 continue
             si       = membership.tee.hole(hole).get('stroke_index', 18)
-            so       = max(0, membership.playing_handicap - low_hcp)
+            # Scale the strokes-off differential by net_percent, matching every
+            # other game (nassau.py / sixes.py / rabbit.py / low_net_round.py)
+            # and the 'Strokes Off Low (90%)' chip the setup screen renders.
+            so       = round_half_up(
+                max(0, membership.playing_handicap - low_hcp)
+                * net_percent / 100)
             adjusted = hs['gross_score'] - _strokes_on_hole(so, si)
 
         # ── Net-double-bogey cap (round-level toggle) ───────────────────────
