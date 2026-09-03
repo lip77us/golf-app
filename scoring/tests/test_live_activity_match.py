@@ -311,16 +311,25 @@ class MatchRegistryTests(TestCase):
 
     def test_the_state_declares_the_card_not_the_slug(self):
         """One card serves two games, so the Swift switches on `match` rather
-        than learning that two slugs mean one layout."""
-        from django.contrib.auth import get_user_model
-        user = get_user_model().objects.create_user(
-            username='reader', account=self.round.account)
+        than learning that two slugs mean one layout.
+
+        Asserted on the BUILDER, not through `activity_state`: the card is in
+        `UNSHIPPED_KINDS` until a build carrying its Swift goes out, so the
+        edge deliberately returns `{}`. The property under test is what the
+        builder declares, which is unaffected by the gate — see
+        `UnshippedCardTests` for the gate itself.
+        """
         self.assertEqual(primary_game(self.round), 'match_18')
-        state = activity_state(self.round, user)
+        state = match_activity_state(self.fs, slug='match_18',
+                                     player_id=self.pid['Paul Kelly'])
         self.assertEqual(state['kind'], 'match')
 
     def test_other_cards_still_declare_their_own_slug(self):
-        """`setdefault` must not stop a single-game builder naming itself."""
+        """`setdefault` must not stop a single-game builder naming itself.
+
+        Goes through `activity_state` on purpose — skins is shipped, so the
+        gate lets it past, which is half of what that test is worth.
+        """
         from django.contrib.auth import get_user_model
         from services.live_activity_registry import activity_state as st
         self.round.active_games = ['skins']
@@ -331,3 +340,63 @@ class MatchRegistryTests(TestCase):
         state = st(self.round, user)
         if state:
             self.assertEqual(state['kind'], 'skins')
+
+
+class UnshippedCardTests(TestCase):
+    """A card the installed app cannot draw must not reach a lock screen.
+
+    `match` shipped server-side while the newest build's known set was
+    sixes/rabbit/nassau/skins, so every fourball raised the Swift's
+    "Update Halved to follow this round here" card — a nag pointing at an
+    update that did not exist, in place of the nothing it replaced.
+    """
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course)
+        self.round.bet_unit     = Decimal('20.00')
+        self.round.active_games = ['match_18']
+        self.round.primary_game = 'match_18'
+        self.round.save(update_fields=['bet_unit', 'active_games',
+                                       'primary_game'])
+        self.fs = make_foursome(self.round, [('Paul Kelly', 0), ('Sam Reid', 0)],
+                                tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        setup_nassau(self.fs, [self.pid['Paul Kelly']], [self.pid['Sam Reid']],
+                     handicap_mode=HandicapMode.GROSS, game_type='match_18')
+        submit_hole(self.fs, 1, [(self.pid['Paul Kelly'], 4),
+                                 (self.pid['Sam Reid'], 5)])
+        calculate_nassau(self.fs, game_type='match_18')
+        self.user = get_user_model().objects.create_user(
+            username='reader3', account=self.round.account)
+
+    def test_an_unshipped_card_is_withheld_from_the_wire(self):
+        from services.live_activity_registry import (UNSHIPPED_KINDS,
+                                                     round_has_board)
+        self.assertIn('match', UNSHIPPED_KINDS,
+                      'flip this in the SAME commit that bumps the build')
+        self.assertEqual(activity_state(self.round, self.user), {})
+        self.assertFalse(round_has_board(self.round))
+
+    def test_the_builder_still_works_and_is_only_gated_at_the_edge(self):
+        """The card is finished; it is waiting on a client, not on code."""
+        st = match_activity_state(self.fs, slug='match_18',
+                                  player_id=self.pid['Paul Kelly'])
+        self.assertEqual(st['kind'], 'match')
+        self.assertEqual(st['number']['text'], '1 UP')
+
+    def test_a_shipped_card_is_unaffected(self):
+        from services.live_activity_registry import round_has_board
+        self.round.active_games = ['skins']
+        self.round.primary_game = 'skins'
+        self.round.save(update_fields=['active_games', 'primary_game'])
+        self.assertTrue(round_has_board(self.round))
+
+    def test_both_match_slugs_map_to_the_one_card(self):
+        """Gating by `kind` and not by slug is what makes one flip enough."""
+        from services.live_activity_registry import card_kind
+        self.assertEqual(card_kind('match_18'), 'match')
+        self.assertEqual(card_kind('fourball'), 'match')
+        self.assertEqual(card_kind('skins'), 'skins')

@@ -179,6 +179,34 @@ BUILDERS = {
 # more than one game.
 _SLUG_AWARE = {'match_18', 'fourball'}
 
+# slug -> the card `kind` its builder declares, where that differs from the
+# slug. Only needed for a builder serving several games.
+CARD_KIND = {'match_18': 'match', 'fourball': 'match'}
+
+# Cards no client in the wild can draw yet.
+#
+# The Swift switches on `kind` and falls back to "Update Halved to follow this
+# round here" for anything it does not know. That fallback is right for an
+# activity ALREADY on a lock screen when a new card ships — it is NOT a licence
+# to START one the installed app cannot render. Doing that turns "this game has
+# no board" into a lock-screen nag pointing at an update that does not exist,
+# which is strictly worse than the nothing it replaced.
+#
+# `match` shipped server-side on 2026-09-02 while the newest build was 2.7.1+26,
+# whose known set is sixes/rabbit/nassau/skins — so every fourball and singles
+# match raised the unsupported card on the current TestFlight.
+#
+# **A kind leaves this set in the same commit that bumps the build carrying its
+# layout, and not before.** Until the client declares what it can draw (the
+# durable fix — neither token model records a version today), this list is the
+# only thing standing between a server deploy and every installed phone.
+UNSHIPPED_KINDS = {'match'}
+
+
+def card_kind(slug: str) -> str:
+    """The card a slug draws — usually itself."""
+    return CARD_KIND.get(slug, slug)
+
 
 def board_recipients(rnd) -> set:
     """User ids that should carry this round's board on their lock screen.
@@ -239,7 +267,8 @@ def round_has_board(rnd) -> bool:
     `hasLiveActivity` flag on the client's catalog entry — nothing else needs
     to learn the list.
     """
-    return primary_game(rnd) in BUILDERS
+    slug = primary_game(rnd)
+    return slug in BUILDERS and card_kind(slug) not in UNSHIPPED_KINDS
 
 
 def activity_state(rnd, user, *, final=False) -> dict:
@@ -252,6 +281,9 @@ def activity_state(rnd, user, *, final=False) -> dict:
     slug = primary_game(rnd)
     build = BUILDERS.get(slug)
     if build is None:
+        return {}
+    # Withheld rather than drawn badly — see UNSHIPPED_KINDS.
+    if card_kind(slug) in UNSHIPPED_KINDS:
         return {}
 
     foursome, player_id = foursome_for(rnd, user, slug)
