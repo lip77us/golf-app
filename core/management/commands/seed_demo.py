@@ -47,6 +47,7 @@ from tournament.models import (
 from scoring.models import HoleScore
 from rest_framework.authtoken.models import Token
 
+from games.models import LowNetChampionshipConfig
 from services.skins import setup_skins, calculate_skins
 from services.points_531 import setup_points_531, calculate_points_531
 from services.nassau import setup_nassau, calculate_nassau
@@ -195,10 +196,33 @@ class Command(BaseCommand):
 
         self.stdout.write("Building tournaments...")
         # A. Completed tournament — 2 foursomes (8 players), Skins per group.
+        #
+        # It carries a REAL championship pool, because settlement is a headline
+        # feature and this is the only completed tournament in the demo — the
+        # one screen a reviewer reaches to see it. Without a tournament-level
+        # game it showed "Staked $0" against every golfer and "By game · 0",
+        # which is a truthful rendering of an event with nothing in it and an
+        # unrecognisable rendering of the feature.
+        #
+        # A foursome's own games are deliberately NOT enough: skins belongs to
+        # the group that played it and never reaches tournament settlement, so
+        # a tournament whose only game is per-foursome skins has nothing to
+        # settle by design.
         tourn_a = Tournament.objects.create(
             account=account, name='Spring Member-Member',
             start_date=timezone.now().date(), total_rounds=1,
             active_games=['low_net'],
+        )
+        # 8 golfers x $20 = $160 in; $80 / $50 / $30 out. The pot must balance
+        # exactly or `tournament_settlement` blocks Settle and names the game —
+        # which is the right behaviour and the wrong demo.
+        LowNetChampionshipConfig.objects.create(
+            tournament=tourn_a,
+            handicap_mode=HandicapMode.NET, net_percent=100,
+            entry_fee=Decimal('20.00'),
+            payouts=[{'place': 1, 'amount': 80.00},
+                     {'place': 2, 'amount': 50.00},
+                     {'place': 3, 'amount': 30.00}],
         )
         rnd_a = self._make_round(
             account, course, 'complete', ['skins'],
@@ -222,6 +246,17 @@ class Command(BaseCommand):
             account=account, name='Club Championship',
             start_date=timezone.now().date(), total_rounds=1,
             active_games=['low_net'],
+        )
+        # Staked too, so the in-progress case reads as "this event has money in
+        # it and is not finished yet" rather than as an empty screen. Settle
+        # stays correctly blocked on the round being open — that gate is real
+        # and should be seen working, but against real stakes.
+        LowNetChampionshipConfig.objects.create(
+            tournament=tourn_b,
+            handicap_mode=HandicapMode.NET, net_percent=100,
+            entry_fee=Decimal('10.00'),
+            payouts=[{'place': 1, 'amount': 25.00},
+                     {'place': 2, 'amount': 15.00}],
         )
         rnd_b = self._make_round(
             account, course, 'in_progress', ['skins'],

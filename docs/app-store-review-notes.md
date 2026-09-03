@@ -101,7 +101,41 @@ that lookup). Privacy policy: https://halved.golf/privacy
 
 ---
 
+## Age Rating — Gambling = YES (2.3.6, rejected once for this)
+
+**2026-09-02: rejected under Guideline 2.3.6, Accurate Metadata.** The reviewer
+screenshotted the tournament **Settle up** screen. The finding:
+
+> Since the app includes tips, tools, predictions or other information related
+> to real money gambling, real money betting, or real money skill-based gaming,
+> you must select "Yes" for "Gambling" in App Store Connect.
+
+**App Store Connect → the app → App Information → Age Rating → Edit → set
+Gambling = Yes.** It is metadata only — **no code change and no new build**, so
+a rejection for this is resubmitted from the existing binary.
+
+Do not try to argue the app out of this. It tracks who owes whom real money;
+that the app never PROCESSES a payment is what keeps it out of Guideline 5.3
+(real-money gaming, which needs licensing and geo-restriction), not out of the
+gambling AGE RATING. The two are separate questions and only the second one was
+ever in doubt.
+
+Expect the rating to become **18+**, and expect that to carry consequences worth
+knowing before it happens: some storefronts restrict or refuse gambling-rated
+apps, and the rating is visible on the listing.
+
+**The listing's keyword strategy is unaffected but should not be mistaken for a
+rating strategy.** `docs/app-store-listing.md` deliberately keeps
+bet/wager/gambling out of the description and keywords, which is a
+discoverability choice. It has no bearing on the questionnaire, and answering
+the questionnaire honestly does not oblige the description to change.
+
+---
+
 ## Pre-submit reminders
+- [ ] **Age Rating: Gambling = Yes** (App Information page). Rejected 2026-09-02
+      for having it unset; it does not carry over on its own if the rating is
+      ever re-answered.
 - [ ] `REVIEW_BYPASS_PHONE=+13105550101,+13105550102` + `REVIEW_BYPASS_CODE` set
       on Railway (deployed).
 - [ ] `seed_demo --reset` run against **prod** (so the two numbers map to users).
