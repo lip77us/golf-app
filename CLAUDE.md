@@ -2118,3 +2118,56 @@ nobody can check against their own card.
   fixtures.
 - The packet's open questions stand: concession, halved-stake voiding, presses
   in singles, extra holes, three-sided groups.
+
+## Forced playing handicap — matching an externally-managed card
+
+A round scored in Halved but MANAGED elsewhere (Golf Genius, a club sheet)
+hands each golfer a **playing handicap** off that system's card. Until now the
+only way to hit those numbers was to edit each golfer's index — which changes
+them in every other round and every future one — and restart the round to see
+whether the guess landed.
+
+`FoursomeMembership.playing_handicap_override` (`tournament/0065`), null =
+computed. Per membership, so it dies with the round and never touches the
+roster.
+
+**It is the FINAL number, and no allowance is applied on top.** The external
+system already applied one; applying Halved's as well double-counts it. That is
+enforced in exactly one place — `scoring.handicap.effective_hcp_for(membership,
+net_percent)` — which every game now calls instead of `_effective_hcp`. Eight
+call sites moved (survivor, irish_rumble, low_net_round ×2, rabbit, vegas, wolf,
+and `build_score_index`). The one remaining `_effective_hcp` caller is Irish
+Rumble's PHANTOM handicap, which has no membership and no external card behind
+it.
+
+- **Set through `PATCH /api/foursomes/{id}/tees/`**, which gained an optional
+  `handicaps` list beside `tees`. Both lists are now independent — forcing a
+  handicap is not a tee change and no longer requires a redundant tee
+  assignment. `playing_handicap_override: null` clears it.
+- **That endpoint is the only writer**, because it is also the one place that
+  recomputes handicaps from the index — i.e. the one place an override could be
+  silently undone. It is applied AFTER the tee loop and re-read in the
+  recompute, so a tee change in the same request (or a later one) cannot
+  replace a forced number with a freshly computed one. Both cases are pinned.
+- **Clearing it rebuilds `course_handicap` from the tee.** Setting an override
+  overwrites CH and PH with the forced figure so the hub cannot display one
+  number while the golfer plays off another; without the rebuild, clearing left
+  the stale forced figure in CH. Found by the test, not by reading.
+- **Refused once any hole is scored** — the same threshold as a tee change and
+  for the same reason: it re-nets every hole already played.
+- **Zero is a real value.** `if override:` would silently drop scratch, so
+  every check is `is not None`.
+
+**Mobile:** `confirm_tees_screen.dart` is now **Tees & Handicaps** (hub button
+renamed to match), with a `Playing hcp` field per golfer. Blank means "compute
+it" and the field is never pre-filled with the computed number — showing it
+there would make a computed handicap indistinguishable from a forced one that
+happens to match, and every golfer would read as overridden.
+`TeeAssignmentList` gained an optional `trailing` builder rather than being
+forked; it is null in round setup, which keeps the plain picker there.
+
+Tests: `scoring/tests/test_handicap_override.py` (the helper — override wins,
+no allowance on top at any percentage, zero honoured, per-golfer, index never
+touched, and that it actually moves the stroke dots) and
+`api/test_handicap_override.py` (the endpoint, the two ways a tee change could
+wipe it, the scored-hole gate, cross-account 404).

@@ -44,7 +44,7 @@ from core.handicap_math import round_half_up
 from core.models import HandicapMode
 from games.models import IrishRumbleConfig, IrishRumbleSegmentResult
 from scoring.models import HoleScore
-from scoring.handicap import _effective_hcp, _strokes_on_hole
+from scoring.handicap import _effective_hcp, _strokes_on_hole, effective_hcp_for
 from tournament.models import Foursome
 
 
@@ -405,7 +405,7 @@ def _build_ir_score_index(round_obj, handicap_mode, net_percent):
                 if membership.tee_id is None:
                     continue
                 si  = membership.tee.hole(hole).get('stroke_index', 18)
-                eff = _effective_hcp(membership.playing_handicap, net_percent)
+                eff = effective_hcp_for(membership, net_percent)
                 adjusted = hs['gross_score'] - _strokes_on_hole(eff, si)
 
         else:  # STROKES_OFF

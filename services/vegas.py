@@ -22,7 +22,7 @@ from core.models import HandicapMode, MatchStatus
 from games.models import VegasGame, VegasTeam, VegasHoleResult
 from scoring.handicap import (
     build_score_index, _par_by_hole, _cap_value,
-    make_strokes_fn, _effective_hcp,
+    make_strokes_fn, effective_hcp_for,
 )
 from services import wager
 from core.handicap_math import round_half_up
@@ -153,7 +153,7 @@ def vegas_player_hole_strokes(foursome, game) -> dict:
         for m in members:
             if m.tee_id is None:
                 continue
-            eff = _effective_hcp(m.playing_handicap or 0, game.net_percent)
+            eff = effective_hcp_for(m, game.net_percent)
             if eff <= 0:
                 continue
             for h in order:

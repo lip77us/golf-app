@@ -34,6 +34,17 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
   List<Membership>  _members = [];
   /// Working state: player id → currently-selected tee id.
   final Map<int, int> _picks = {};
+  /// player id → the forced playing handicap being typed. Empty string means
+  /// "computed" — the field is blank and the golfer plays off his index.
+  final Map<int, TextEditingController> _hcaps = {};
+
+  @override
+  void dispose() {
+    for (final c in _hcaps.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -56,6 +67,10 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
         throw Exception('Foursome not found on the loaded round.');
       }
       _members = fs.realPlayers.toList();
+      for (final m in _members) {
+        _hcaps[m.player.id] = TextEditingController(
+            text: m.playingHandicapOverride?.toString() ?? '');
+      }
       // Fetch the tees at THIS foursome's course (scorer-accessible — sourced
       // from the round's course, not the viewer's account, so a cross-account
       // scorer doesn't get an empty dropdown).
@@ -96,7 +111,24 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
         if (pick == m.tee?.id) continue;
         payload.add({'player_id': m.player.id, 'tee_id': pick});
       }
-      if (payload.isEmpty) {
+
+      // Forced handicaps — only the ones that actually moved. A blank field
+      // clears the override, which is a real change and must be sent as an
+      // explicit null rather than skipped.
+      final hcaps = <Map<String, dynamic>>[];
+      for (final m in _members) {
+        final typed = (_hcaps[m.player.id]?.text ?? '').trim();
+        final now   = typed.isEmpty ? null : int.tryParse(typed);
+        if (typed.isNotEmpty && now == null) {
+          throw Exception('"$typed" is not a whole number — '
+                          '${m.player.name}\'s handicap.');
+        }
+        if (now == m.playingHandicapOverride) continue;
+        hcaps.add({'player_id': m.player.id,
+                   'playing_handicap_override': now});
+      }
+
+      if (payload.isEmpty && hcaps.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('No changes.')),
@@ -104,7 +136,8 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
         Navigator.of(context).pop(false);
         return;
       }
-      await client.patchFoursomeTees(widget.foursomeId, tees: payload);
+      await client.patchFoursomeTees(widget.foursomeId,
+                                     tees: payload, handicaps: hcaps);
       // Re-fetch the round so the foursome's memberships pick up the
       // new tees + handicaps the server just recomputed.
       final rp = context.read<RoundProvider>();
@@ -112,10 +145,11 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
         await rp.loadRound(rp.round!.id);
       }
       if (!mounted) return;
+      final touched = {...payload.map((e) => e['player_id']),
+                       ...hcaps.map((e) => e['player_id'])}.length;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(
-            'Updated ${payload.length} player'
-            '${payload.length == 1 ? '' : 's'}.')),
+            'Updated $touched player${touched == 1 ? '' : 's'}.')),
       );
       Navigator.of(context).pop(true);
     } catch (e) {
@@ -129,7 +163,7 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Edit Tee Boxes')),
+      appBar: AppBar(title: const Text('Tees & Handicaps')),
       body: _buildBody(),
       bottomNavigationBar: (_loading || _error != null)
           ? null
@@ -149,7 +183,7 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
                             child: CircularProgressIndicator(
                                 strokeWidth: 2, color: Colors.white),
                           )
-                        : const Text('Save Tees',
+                        : const Text('Save',
                             style: TextStyle(
                                 fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
@@ -176,10 +210,26 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
       children: [
         Text(
           'Pick the tee each player will play.  Course handicaps and '
-          'stroke allocations recompute automatically.  Tees can\'t be '
-          'changed once any hole is scored.',
+          'stroke allocations recompute automatically.',
           style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Playing a card someone else manages — Golf Genius, a club sheet? '
+          'Type that card\'s playing handicap beside a golfer and Halved uses '
+          'it exactly, ignoring their index and applying no allowance on top. '
+          'Leave it blank to compute it.',
+          style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Neither can change once a hole is scored — both re-net every hole '
+          'already played.',
+          style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontStyle: FontStyle.italic),
         ),
         const SizedBox(height: 16),
         TeeAssignmentList(
@@ -192,8 +242,55 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
             return 'Course Hcp ${m.courseHandicap}'
                 '  ·  Playing ${m.playingHandicap}';
           },
+          trailing:  _handicapField,
         ),
       ],
     );
+  }
+
+  /// The forced-handicap field for one golfer.
+  ///
+  /// Blank is a meaningful value — it means "compute it" — so the field is
+  /// never pre-filled with the computed number. Showing it there would make a
+  /// computed handicap indistinguishable from a forced one that happens to
+  /// match, and every golfer would look overridden.
+  Widget _handicapField(PlayerProfile p) {
+    final theme = Theme.of(context);
+    final ctrl  = _hcaps[p.id];
+    if (ctrl == null) return const SizedBox.shrink();
+    final forced = ctrl.text.trim().isNotEmpty;
+    return Row(children: [
+      SizedBox(
+        // Wide enough for the floating label — at 96 it clipped to "Playin…",
+        // which reads as a broken field rather than a narrow one.
+        width: 124,
+        child: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          textAlign: TextAlign.center,
+          decoration: const InputDecoration(
+            labelText: 'Playing hcp',
+            hintText:  'auto',
+            isDense: true,
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Text(
+          forced
+              ? 'Forced — index ignored, no allowance applied'
+              : 'From ${p.name.split(' ').first}\'s index',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: forced
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurfaceVariant,
+            fontWeight: forced ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+      ),
+    ]);
   }
 }

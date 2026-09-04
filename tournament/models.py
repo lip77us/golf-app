@@ -387,6 +387,22 @@ class FoursomeMembership(models.Model):
     playing_handicap    = models.SmallIntegerField(
                             help_text="course_handicap adjusted by any local allowance (e.g. 90%)."
                         )
+    # An externally-managed event (Golf Genius, a club card) hands the golfer a
+    # PLAYING handicap that is already post-allowance.  Set this and it is the
+    # final number of strokes for the round: the golfer's index is ignored, and
+    # the game's own allowance is NOT applied on top — doing so would
+    # double-count the allowance the other system already applied.
+    #
+    # Null means "compute it", which is every round that Halved manages itself.
+    # Per membership, so it dies with the round and never touches the roster —
+    # the alternative people reach for is editing the index, which changes that
+    # golfer everywhere and in every future round.
+    playing_handicap_override = models.SmallIntegerField(
+                            null=True, blank=True,
+                            help_text=("Forced playing handicap from an "
+                                       "external card. Final — no allowance "
+                                       "is applied on top. Null = computed."),
+                        )
     phantom_algorithm   = models.CharField(
                             max_length=50,
                             default='rotating_player_scores',

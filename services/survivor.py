@@ -54,7 +54,7 @@ from django.db import transaction
 
 from core.models import HandicapMode, MatchStatus
 from games.models import SurvivorGame, SurvivorHoleResult
-from scoring.handicap import build_score_index, _effective_hcp, _strokes_on_hole
+from scoring.handicap import build_score_index, _strokes_on_hole, effective_hcp_for
 from scoring.models import HoleScore
 from services.hole_plan import play_order
 from services.points_531 import _build_so_score_index
@@ -129,7 +129,7 @@ def _alloc_by_hole(game, foursome, order) -> dict:
         if game.handicap_mode == HandicapMode.STROKES_OFF:
             hcp = round_half_up(max(0, (m.playing_handicap or 0) - low) * npct / 100)
         else:
-            hcp = _effective_hcp(m.playing_handicap or 0, npct)
+            hcp = effective_hcp_for(m, npct)
         if hcp <= 0:
             continue
         per = alloc[m.player_id]

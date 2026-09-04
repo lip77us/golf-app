@@ -2034,10 +2034,12 @@ class _FoursomeCard extends StatelessWidget {
                 ),
               ),
             ),
-            // Confirm Tee Boxes — only meaningful before any hole is
-            // scored.  Server-side the endpoint refuses tee changes
-            // once scoring starts; we hide the button at the same
-            // threshold so the user doesn't tap into a dead-end.
+            // Tees & Handicaps — the tee each golfer plays, and a forced
+            // playing handicap for a card someone else manages (Golf Genius,
+            // a club sheet).  Both are only meaningful before any hole is
+            // scored: each re-nets every hole already played, so the server
+            // refuses them once scoring starts and the button is hidden at the
+            // same threshold rather than tapping into a dead-end.
             if (canEdit && !isComplete && !foursome.hasAnyScore) ...[
               const SizedBox(height: 6),
               SizedBox(
@@ -2048,7 +2050,7 @@ class _FoursomeCard extends StatelessWidget {
                     arguments: foursome.id,
                   ),
                   icon: const Icon(Icons.golf_course_outlined, size: 18),
-                  label: const Text('Edit Tee Boxes'),
+                  label: const Text('Tees & Handicaps'),
                 ),
               ),
             ],

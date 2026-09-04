@@ -3989,7 +3989,13 @@ class FoursomeActiveGamesView(APIView):
 class FoursomeTeesView(APIView):
     """
     PATCH /api/foursomes/{id}/tees/
-    Body: { "tees": [{"player_id": int, "tee_id": int}, ...] }
+    Body: { "tees":      [{"player_id": int, "tee_id": int}, ...],
+            "handicaps": [{"player_id": int,
+                           "playing_handicap_override": int|null}, ...] }
+
+    Both lists are optional and independent — a request may set tees, forced
+    handicaps, or both.  `playing_handicap_override: null` clears a forced
+    handicap and returns that golfer to a computed one.
 
     Reassigns each player's tee for this foursome and recomputes their
     course_handicap + playing_handicap from the new tee's slope and
@@ -4044,11 +4050,20 @@ class FoursomeTeesView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        tees_data = request.data.get('tees', [])
-        if not isinstance(tees_data, list) or not tees_data:
+        tees_data  = request.data.get('tees', []) or []
+        hcaps_data = request.data.get('handicaps', []) or []
+        if not isinstance(tees_data, list) or not isinstance(hcaps_data, list):
             return Response(
-                {'detail': 'tees must be a non-empty list of '
-                           '{player_id, tee_id} entries.'},
+                {'detail': 'tees and handicaps must be lists.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Either list on its own is a complete request — forcing a handicap is
+        # not a tee change and must not require a redundant tee assignment.
+        if not tees_data and not hcaps_data:
+            return Response(
+                {'detail': 'Send tees, handicaps, or both — '
+                           'tees as {player_id, tee_id} entries, handicaps as '
+                           '{player_id, playing_handicap_override} entries.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -4087,6 +4102,39 @@ class FoursomeTeesView(APIView):
             m.course_handicap = m.player.course_handicap(m.tee)
             updated.append(m.player_id)
 
+        # Forced playing handicaps, from an externally-managed card.
+        #
+        # Applied AFTER the tee loop and read again in the recompute below, so
+        # a golfer whose tee changed in the same request does not have his
+        # override quietly replaced by a freshly computed number — which is the
+        # exact way an override dies unnoticed.
+        for item in hcaps_data:
+            if not isinstance(item, dict):
+                continue
+            pid = item.get('player_id')
+            m   = memberships.get(pid)
+            if m is None:
+                continue
+            raw = item.get('playing_handicap_override')
+            if raw in (None, ''):
+                # Back to computed. `course_handicap` was overwritten with the
+                # forced number when it was set, so it has to be rebuilt from
+                # the tee here — otherwise clearing an override leaves the old
+                # forced figure sitting in the CH the hub displays.
+                if m.playing_handicap_override is not None and m.tee_id:
+                    m.course_handicap = m.player.course_handicap(m.tee)
+                m.playing_handicap_override = None
+            else:
+                try:
+                    m.playing_handicap_override = int(raw)
+                except (TypeError, ValueError):
+                    return Response(
+                        {'detail': f'Playing handicap for player {pid} must be '
+                                   f'a whole number.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+            if pid not in updated:
+                updated.append(pid)
+
         # Recompute par-adjusted playing handicaps across the WHOLE foursome —
         # a tee change can shift the group's lowest par, so every real member's
         # adjustment is re-derived and saved.
@@ -4094,10 +4142,18 @@ class FoursomeTeesView(APIView):
                 if not m.player.is_phantom and m.tee]
         new_min_par = min((m.tee.par for m in real), default=0)
         for m in real:
-            m.playing_handicap = par_adjusted_playing_handicap(
-                m.course_handicap, m.tee.par, new_min_par,
-                allowance_by_pid.get(m.player_id, 1.0))
-            m.save(update_fields=['tee', 'course_handicap', 'playing_handicap'])
+            if m.playing_handicap_override is not None:
+                # The override IS the playing handicap. Recomputing it from the
+                # index is what the golfer asked us to stop doing, and a tee
+                # change must not undo that.
+                m.playing_handicap = m.playing_handicap_override
+                m.course_handicap  = m.playing_handicap_override
+            else:
+                m.playing_handicap = par_adjusted_playing_handicap(
+                    m.course_handicap, m.tee.par, new_min_par,
+                    allowance_by_pid.get(m.player_id, 1.0))
+            m.save(update_fields=['tee', 'course_handicap', 'playing_handicap',
+                                  'playing_handicap_override'])
 
         return Response({
             'foursome_id'      : foursome.id,

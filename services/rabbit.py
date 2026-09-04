@@ -42,7 +42,7 @@ from core.models import HandicapMode, MatchStatus
 from games.models import RabbitGame, RabbitHoleResult
 from services.points_531 import _build_so_score_index
 from services.hole_plan import play_order, segment as _hole_segment
-from scoring.handicap import build_score_index, _effective_hcp, _strokes_on_hole
+from scoring.handicap import build_score_index, _strokes_on_hole, effective_hcp_for
 from scoring.models import HoleScore
 from core.handicap_math import round_half_up
 
@@ -187,7 +187,7 @@ def _alloc_by_hole(game, foursome, seg_lists, order) -> dict:
 
     if mode == HandicapMode.NET:
         for m in memberships:
-            eff = _effective_hcp(m.playing_handicap or 0, npct)
+            eff = effective_hcp_for(m, npct)
             if eff <= 0:
                 continue
             per = alloc[m.player_id]

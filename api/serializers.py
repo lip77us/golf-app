@@ -397,11 +397,15 @@ class MembershipSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'player', 'player_id', 'tee',
             'course_handicap', 'playing_handicap',
+            'playing_handicap_override',
             'cup_team_colour', 'cup_team_name', 'is_scorer',
             'withdrew_after_hole', 'withdrew_killed_next_hole',
         ]
         read_only_fields = [
             'id', 'tee', 'course_handicap', 'playing_handicap',
+            # Written through the tees endpoint, which is the one place that
+            # also keeps course/playing handicap consistent with it.
+            'playing_handicap_override',
             'cup_team_colour', 'cup_team_name', 'is_scorer',
             'withdrew_after_hole', 'withdrew_killed_next_hole',
         ]

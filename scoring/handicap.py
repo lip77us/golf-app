@@ -89,6 +89,28 @@ def _effective_hcp(playing_handicap: int, net_percent: int) -> int:
     return int(round_half_up(playing_handicap * (net_percent / 100.0)))
 
 
+def effective_hcp_for(membership, net_percent: int) -> int:
+    """The strokes this golfer actually gets — the ONE place the override wins.
+
+    A membership carrying `playing_handicap_override` already holds the final
+    number: it came off an externally-managed card (Golf Genius, a club sheet)
+    where the allowance was applied by that system. Scaling it again here would
+    apply the allowance twice, which is the whole failure the override exists to
+    avoid.
+
+    Everything else is the ordinary chain — playing handicap scaled by the
+    game's own allowance.
+
+    Call this rather than `_effective_hcp` wherever a membership is in hand. The
+    exception is a PHANTOM's synthetic handicap, which has no membership and no
+    external card behind it.
+    """
+    override = getattr(membership, 'playing_handicap_override', None)
+    if override is not None:
+        return override
+    return _effective_hcp(membership.playing_handicap or 0, net_percent)
+
+
 def _strokes_on_hole(effective_hcp: int, stroke_index: int) -> int:
     """Allocate effective_hcp strokes using the hole's stroke index."""
     if effective_hcp <= 0:
@@ -446,7 +468,7 @@ def build_score_index(
         if m is None or m.tee_id is None:
             # Shouldn't normally happen, but don't crash if it does.
             continue
-        effective = _effective_hcp(m.playing_handicap, net_percent)
+        effective = effective_hcp_for(m, net_percent)
         strokes = strokes_fn(effective, m.tee, r['hole_number'])
         adjusted = r['gross_score'] - strokes
         adjusted = _cap_value(

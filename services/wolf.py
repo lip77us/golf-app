@@ -69,7 +69,7 @@ from games.models import (
 )
 from services.points_531 import _build_so_score_index
 from services.hole_plan import play_order as _play_order
-from scoring.handicap import build_score_index, make_strokes_fn, _effective_hcp
+from scoring.handicap import build_score_index, make_strokes_fn, effective_hcp_for
 from scoring.models import HoleScore
 
 _CENT = Decimal('0.01')
@@ -281,7 +281,7 @@ def wolf_player_hole_strokes(foursome, game) -> dict:
         for m in members:
             if m.tee_id is None:
                 continue
-            eff = _effective_hcp(m.playing_handicap or 0, game.net_percent or 100)
+            eff = effective_hcp_for(m, game.net_percent or 100)
             if eff <= 0:
                 continue
             for h in order:

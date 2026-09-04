@@ -914,6 +914,10 @@ class Membership {
   final TeeInfo? tee;
   final int courseHandicap;
   final int playingHandicap;
+  /// A playing handicap forced from an externally-managed card (Golf Genius,
+  /// a club sheet). When set it IS the strokes for the round — the golfer's
+  /// index is ignored and no game allowance is applied on top. Null = computed.
+  final int? playingHandicapOverride;
   /// Cup TournamentTeam colour name (e.g. "Red", "Tilden Blue", "Green")
   /// when the player is assigned to a team in the round's tournament.
   /// Null on casual rounds or for unaffiliated players.  Mobile resolves
@@ -940,6 +944,7 @@ class Membership {
     this.tee,
     required this.courseHandicap,
     required this.playingHandicap,
+    this.playingHandicapOverride,
     this.cupTeamColour,
     this.cupTeamName,
     this.isScorer = false,
@@ -957,6 +962,7 @@ class Membership {
         tee: j['tee'] != null ? TeeInfo.fromJson(j['tee'] as Map<String, dynamic>) : null,
         courseHandicap: j['course_handicap'] as int? ?? 0,
         playingHandicap: j['playing_handicap'] as int? ?? 0,
+        playingHandicapOverride: j['playing_handicap_override'] as int?,
         cupTeamColour: j['cup_team_colour'] as String?,
         cupTeamName:   j['cup_team_name']   as String?,
         isScorer:      j['is_scorer'] as bool? ?? false,

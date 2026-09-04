@@ -2085,12 +2085,20 @@ class ApiClient {
   /// Returns the updated scorecard payload.  Throws ApiException(400)
   /// when any hole has already been scored — tees can only change
   /// before the first score is entered.
+  /// Reassign tees and/or force playing handicaps for one foursome.
+  ///
+  /// Both lists are optional and independent — forcing a handicap is not a tee
+  /// change and does not require a redundant tee assignment. A `handicaps`
+  /// entry of `{'player_id': n, 'playing_handicap_override': null}` clears a
+  /// forced handicap and returns that golfer to a computed one.
   Future<Map<String, dynamic>> patchFoursomeTees(
     int foursomeId, {
-    required List<Map<String, int>> tees,
+    List<Map<String, int>> tees = const [],
+    List<Map<String, dynamic>> handicaps = const [],
   }) async {
     final data = await _patch('/foursomes/$foursomeId/tees/', {
-      'tees': tees,
+      if (tees.isNotEmpty) 'tees': tees,
+      if (handicaps.isNotEmpty) 'handicaps': handicaps,
     });
     return data as Map<String, dynamic>;
   }

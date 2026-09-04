@@ -30,7 +30,7 @@ Public API
 
 from core.models import HandicapMode
 from scoring.models import HoleScore
-from scoring.handicap import _effective_hcp, _strokes_on_hole, make_strokes_fn
+from scoring.handicap import _strokes_on_hole, make_strokes_fn, effective_hcp_for
 from tournament.models import Foursome
 from core.handicap_math import round_half_up
 
@@ -157,7 +157,7 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
             if handicap_mode != HandicapMode.GROSS and m.tee_id is not None:
                 for hole in holes_fs:
                     if handicap_mode == HandicapMode.NET:
-                        eff = _effective_hcp(m.playing_handicap, net_percent)
+                        eff = effective_hcp_for(m, net_percent)
                         s = strokes_fns[fs.pk](eff, m.tee, hole)
                     else:  # STROKES_OFF
                         si = m.tee.hole(hole).get('stroke_index', 18)
@@ -199,7 +199,7 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
             else:
                 if membership.tee_id is None:
                     continue
-                eff = _effective_hcp(membership.playing_handicap, net_percent)
+                eff = effective_hcp_for(membership, net_percent)
                 adjusted = hs['gross_score'] - strokes_fns[fid](
                     eff, membership.tee, hole)
 

@@ -31,6 +31,10 @@ class TeeAssignmentList extends StatelessWidget {
   final Map<int, int>                  picks;
   final void Function(int playerId, int teeId) onChanged;
   final String Function(PlayerProfile)? subtitle;
+  /// Optional extra control under each player's row — used by the round's
+  /// Tees & Handicaps screen for the forced playing handicap. Null everywhere
+  /// else, so round SETUP keeps the plain tee picker it has always had.
+  final Widget? Function(PlayerProfile)? trailing;
 
   const TeeAssignmentList({
     super.key,
@@ -39,6 +43,7 @@ class TeeAssignmentList extends StatelessWidget {
     required this.picks,
     required this.onChanged,
     this.subtitle,
+    this.trailing,
   });
 
   @override
@@ -65,29 +70,39 @@ class TeeAssignmentList extends StatelessWidget {
       final pt    = teesForPlayer(tees, p);
       final teeId = picks[p.id];
       final value = pt.any((t) => t.id == teeId) ? teeId : null;
+      final extra = trailing?.call(p);
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(p.name,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w600)),
-                if (subtitle != null)
-                  Text(subtitle!(p),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant)),
-              ],
-            ),
-          ),
-          TeePicker(
-            tees: pt,
-            value: value,
-            onChanged: (id) => onChanged(p.id, id),
-          ),
-        ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(p.name,
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w600)),
+                    if (subtitle != null)
+                      Text(subtitle!(p),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+              TeePicker(
+                tees: pt,
+                value: value,
+                onChanged: (id) => onChanged(p.id, id),
+              ),
+            ]),
+            if (extra != null) ...[
+              const SizedBox(height: 6),
+              extra,
+            ],
+          ],
+        ),
       );
     }
 
