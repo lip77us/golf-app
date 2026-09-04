@@ -84,7 +84,7 @@ private struct LockScreenView: View {
     /// differ only in how many names sit on a side, which the server has
     /// already joined with an ampersand.
     static let known: Set<String> = ["sixes", "rabbit", "nassau", "skins",
-                                     "match"]
+                                     "match", "survivor"]
 
     let state: SixesActivityAttributes.ContentState
     var isStale: Bool = false
@@ -106,6 +106,8 @@ private struct LockScreenView: View {
                 NassauBoardView(state: state, rows: rows, isStale: isStale)
             } else if state.kind == "skins" {
                 SkinsBoardView(state: state, isStale: isStale)
+            } else if state.kind == "survivor" {
+                SurvivorBoardView(state: state, isStale: isStale)
             } else {
                 BoardView(state: state, isStale: isStale)
             }
@@ -150,6 +152,195 @@ private struct BoardView: View {
 
 
 
+
+/// Survivor — the headline is a WORD
+/// (docs/design-review/handoff-survivor-zombie/README.md, screen 3).
+///
+/// Every other card opens with a value, because every other game is measured
+/// in something: holes, points, skins, dollars. Survivor is measured in
+/// whether you are still in it, and that is a word — `ALIVE`, `OUT`, `ZOMBIE`,
+/// `BACK IN`. A count of survivors is a GROUP fact and sits in the state slot.
+///
+/// The strongest case for an activity in the app: you can be knocked out by a
+/// shot you did not see. Elimination is a NET comparison, so watching a man
+/// hole out does not tell you whether it was you.
+private struct SurvivorBoardView: View {
+    let state: SixesActivityAttributes.ContentState
+    var isStale: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            // The gold band rides ABOVE the header, pulled over the card's top
+            // edge by a negative margin, so it reads as a band across the card
+            // rather than a row inside it.
+            if let ribbon = state.ribbon, !ribbon.isEmpty {
+                StrokeRibbon(text: ribbon)
+            }
+            HeaderView(header: state.header)
+
+            if let who = state.who, !who.isEmpty {
+                Text(who.uppercased())
+                    .font(Sixes.body(9.5, .bold))
+                    .tracking(0.5)
+                    .foregroundStyle(.white.opacity(0.52))
+            }
+
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(state.number.text)
+                        .font(Sixes.display(36, .bold))
+                        .tracking(-1)
+                        .foregroundStyle(Sixes.side(state.number.colour))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    SidesView(sides: state.sides)
+                }
+                Spacer(minLength: 0)
+                StateView(state: state.state)
+            }
+
+            if let track = state.track, !track.isEmpty {
+                TrackView(rows: track, ruler: state.ruler ?? [])
+            }
+
+            SurvivorFooterView(footer: state.footer, thru: state.thru,
+                               isStale: isStale)
+        }
+    }
+}
+
+/// `POPPING ON HOLE 13`. Gold is used nowhere else in the system, which is what
+/// stops the band being read as a state.
+private struct StrokeRibbon: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(Sixes.body(9.5, .bold))
+            .tracking(0.5)
+            .foregroundStyle(Color(hex: 0x3A2703))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 15)
+            .padding(.top, 5)
+            .padding(.bottom, 6)
+            // Pulled over the card's own padding so it meets the top edge.
+            .padding(.horizontal, -15)
+            .padding(.top, -13)
+            .background(
+                LinearGradient(colors: [Color(hex: 0xE9C063),
+                                        Color(hex: 0xD9A63F)],
+                               startPoint: .top, endPoint: .bottom)
+                    .padding(.horizontal, -15)
+                    .padding(.top, -13)
+            )
+    }
+}
+
+/// The Survivor being played — a row per golfer, a cell per hole.
+///
+/// Scoped to one Survivor rather than the round: on a lock screen the only
+/// Survivor that can still cost you money is the one you are in, and a
+/// round-length track is the leaderboard's job.
+///
+/// The reader's row is marked by the brighter NAME, not by a colour — the
+/// accent belongs to the headline.
+private struct TrackView: View {
+    let rows: [SixesActivityAttributes.ContentState.TrackRow]
+    let ruler: [Int]
+
+    /// A return is WHITE, not mint. Mint is the reader's colour on this card,
+    /// and a return lands on whichever row it happened to — mint would mean
+    /// his good fortune on one row and his opponent's on the next. White says
+    /// *the round turned here* and leaves who it turned for to the row.
+    private func fill(_ cell: String) -> Color {
+        switch cell {
+        case "now":   return .white.opacity(0.34)
+        case "out":   return Sixes.orange
+        case "zom":   return Sixes.plum
+        case "back":  return .white
+        case "gone", "fut", "zplay": return .clear
+        default:      return .white.opacity(0.17)
+        }
+    }
+
+    private func stroke(_ cell: String) -> Color {
+        switch cell {
+        case "now":   return .white.opacity(0.55)
+        case "fut":   return .white.opacity(0.12)
+        case "zplay": return Sixes.plum
+        case "back":  return .white.opacity(0.9)
+        default:      return .clear
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            if !ruler.isEmpty {
+                HStack(spacing: 3) {
+                    Text("").frame(width: 34)
+                    ForEach(ruler, id: \.self) { h in
+                        Text("\(h)")
+                            .font(Sixes.body(9.5, .bold))
+                            .foregroundStyle(.white.opacity(0.55))
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+            ForEach(rows, id: \.label) { row in
+                HStack(spacing: 3) {
+                    Text(row.label)
+                        .font(Sixes.body(9.5, .bold))
+                        .foregroundStyle(.white.opacity(row.isReader ? 0.95 : 0.55))
+                        .lineLimit(1)
+                        .frame(width: 34, alignment: .leading)
+                    ForEach(Array(row.cells.enumerated()), id: \.offset) { _, cell in
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(fill(cell))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                    .strokeBorder(stroke(cell), lineWidth: 1)
+                            )
+                            .frame(height: 11)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Stake terms and money left, the locked corner right.
+///
+/// The fade is on the stake terms ONLY — nesting the money inside it would
+/// multiply the opacity and dim the one figure that is the reader's own.
+private struct SurvivorFooterView: View {
+    let footer: SixesActivityAttributes.ContentState.Footer
+    var thru: String? = nil
+    var isStale: Bool = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(isStale ? "No scores in a while" : footer.context)
+                .font(Sixes.body(11))
+                .foregroundStyle(.white.opacity(0.6))
+                .lineLimit(1)
+            if !footer.money.isEmpty {
+                Text(footer.money)
+                    .font(Sixes.body(11, .semibold))
+                    .foregroundStyle(.white)
+            }
+            Spacer(minLength: 8)
+            if let thru, !thru.isEmpty {
+                // Locked: never wraps, never yields to anything on its left.
+                Text(thru)
+                    .font(Sixes.body(11, .semibold))
+                    .foregroundStyle(.white.opacity(0.72))
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+        }
+    }
+}
 
 /// Skins — one number, nobody named
 /// (docs/design-review/handoff-live-activities/skins-HANDOFF.md).

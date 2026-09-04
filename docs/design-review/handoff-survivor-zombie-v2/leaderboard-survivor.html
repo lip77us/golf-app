@@ -1,0 +1,203 @@
+<!-- @dsCard group="Scorecards & leaderboards" name="Leaderboard — Survivor" subtitle="LeaderboardScreen, Survivor tab — trophies + money standings, Survivors strip, by-hole scorecard" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Leaderboard (Survivor)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--cream:#F3F1EA;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--under:#D32F2F;--win:#388E3C;--warn:#B24225;--out:#C62828;--zombie:#6E4B8E}
+  *{box-sizing:border-box}
+  body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:24px;display:flex;justify-content:center}
+  .phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+  .status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+  .appbar{display:flex;align-items:center;gap:12px;padding:6px 16px 8px}
+  .appbar .ic{font-size:17px}
+  .appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:20px;flex:1;text-align:center}
+  .tabs{display:flex;gap:16px;padding:2px 16px 0;border-bottom:1px solid var(--cardBorder);font-size:13px;font-weight:600;color:var(--muted);overflow-x:auto}
+  .tabs span{padding:8px 0;white-space:nowrap}
+  .tabs .on{color:var(--pine);border-bottom:2px solid var(--pine)}
+  .body{padding:14px 16px;overflow-y:auto;height:618px}
+  .card{background:var(--card);border:1.5px solid var(--cardBorder);border-radius:16px;overflow:hidden;margin-bottom:14px}
+  .ch{display:flex;align-items:center;gap:8px;padding:12px 14px 10px}
+  .ch .t{flex:1;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15px}
+  .pill{font-size:10.5px;font-weight:700;color:var(--muted);background:var(--surface);border:1px solid var(--cardBorder);border-radius:999px;padding:3px 9px;white-space:nowrap;flex:none}
+  .pill.zom{color:var(--zombie);background:rgba(110,75,142,.10);border-color:rgba(110,75,142,.4)}
+  .tr{display:flex;align-items:center;padding:9px 14px;border-top:1px solid var(--cardBorder);font-size:14px}
+  .tr .pl{flex:1;font-weight:600}
+  .tr .pl small{color:var(--muted);font-size:11px;font-weight:500;margin-left:5px}
+  .cups{width:52px;text-align:right;font-variant-numeric:tabular-nums;color:var(--pine);font-weight:700;font-size:13px}
+  .pay{width:66px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:var(--win)}
+  .pay.neg{color:var(--warn)}
+  .pay.z{color:var(--muted);font-weight:500}
+  .gseg{display:flex;border:1.5px solid var(--pine);border-radius:999px;overflow:hidden;margin:0 14px 10px}
+  .gseg div{flex:1;text-align:center;padding:8px 0;font-size:12.5px;font-weight:600;color:var(--pine);cursor:pointer}
+  .gseg div.on{background:var(--pine);color:#fff}
+  .pane{display:none}
+  .pane.on{display:block}
+  .gap{height:10px;background:var(--surface);border-top:1px solid var(--cardBorder)}
+  .sub{padding:10px 14px 12px;border-top:1px solid var(--cardBorder)}
+  .sub.first{border-top:0;padding-top:0}
+  .sub .h{font-size:11.5px;font-weight:700;color:var(--pine);text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px}
+  .sub .lg{font-size:10px;color:var(--muted);font-weight:500;text-transform:none;letter-spacing:0;margin-left:7px}
+  .srow{display:flex;align-items:baseline;padding:3px 0;font-size:13px}
+  .srow .r{width:74px;color:var(--muted);font-size:12px}
+  .srow .who{flex:1;font-weight:600;color:var(--pine)}
+  .srow .who.quiet{color:var(--muted);font-weight:500}
+  .srow .amt{color:var(--win);font-weight:700;font-size:12px;font-variant-numeric:tabular-nums}
+  .srow .amt.q{color:var(--muted);font-weight:500}
+  /* R5 — winner rail + survival lanes */
+  .g9{display:grid;grid-template-columns:26px repeat(9,1fr);gap:2px;align-items:center}
+  .g9 .hd{font-size:9px;color:var(--muted);font-weight:600;text-align:center}
+  .seg{height:24px;border-radius:6px;background:#DFF0E2;border:1px solid #7CC48A;color:#1B5E20;display:flex;align-items:center;justify-content:center;gap:4px;font-size:11px;font-weight:700}
+  .seg .pot{font-size:9px;font-weight:600;color:var(--win);opacity:.85;font-variant-numeric:tabular-nums}
+  .seg.idle{background:#F1F5F1;border:1px dashed #C3D0C6;color:var(--muted);font-weight:600;font-size:9.5px;letter-spacing:.03em}
+  .seg.blank{background:transparent;border:0}
+  .lane{height:14px;border-radius:3px;background:#EDF1EE}
+  .lane.alive{background:#E4EDE6}
+  .lane.won{background:#DFF0E2;border:1px solid #7CC48A}
+  .lane.gone{background:transparent}
+  .lane.knock{background:#FADBDB;border:1px solid #E39494}
+  .lane.zomb{background:color-mix(in srgb,var(--zombie) 20%,#fff);border:1px solid var(--zombie)}
+  .lane.zback{background:color-mix(in srgb,var(--zombie) 9%,#fff);border:1px solid color-mix(in srgb,var(--zombie) 45%,#fff)}
+  .lane.np{background:repeating-linear-gradient(135deg,#F4F7F4 0 3px,#EAEFEB 3px 6px)}
+  .lname{font-size:10px;font-weight:700;color:var(--deepPine)}
+  .lname.zn{color:var(--zombie)}
+  .swatch{display:inline-block;width:9px;height:9px;border-radius:2px;vertical-align:-1px;margin-right:3px}
+  /* by-hole block — same cell vocabulary as the stroke-play strip */
+  .gscroll{overflow-x:auto;margin-top:7px}
+  .block{display:inline-block;border-top:1px solid var(--cardBorder);border-left:1px solid var(--cardBorder)}
+  .brow{display:flex}
+  .cell{width:25px;height:18px;border-right:1px solid var(--cardBorder);border-bottom:1px solid var(--cardBorder);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-variant-numeric:tabular-nums}
+  .cell.nm{width:44px;justify-content:flex-start;padding-left:6px;font-weight:700;font-size:10.5px}
+  .cell.hd{background:#E7EEE9;font-weight:700;color:var(--muted);height:16px;font-size:9.5px}
+  .cell.pr{background:#F3F6F4;color:var(--muted);height:15px;font-style:italic}
+  .cell.ix{background:#F8FAF8;color:var(--muted);height:15px;font-size:9.5px}
+  .cell.sc{height:26px;flex-direction:column;font-weight:600}
+  .cell.win{background:rgba(56,142,60,.14);color:var(--win);font-weight:700}
+  .cell.out{background:rgba(198,40,40,.13);color:var(--out);font-weight:700}
+  .cell.zom{background:rgba(110,75,142,.15);color:var(--zombie);font-weight:700}
+  .cell.z1{background:rgba(110,75,142,.28);color:var(--zombie);font-weight:700;box-shadow:inset 0 0 0 1px var(--zombie)}
+  .cell.sv{height:15px;background:#F3F6F4;color:var(--pine);font-weight:700;font-size:9px;font-style:italic}
+  .dots{height:5px;display:flex;gap:2px;align-items:center;justify-content:center}
+  .dot{width:3.5px;height:3.5px;border-radius:50%;background:var(--pine)}
+  .digit{line-height:1}
+  .note{font-size:10px;color:var(--muted);line-height:1.45;padding:7px 2px 0}
+  .note b{color:var(--deepPine)}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+  <div class="phone">
+    <div class="status"><span>3:50</span><span>●●● ▮</span></div>
+    <div class="appbar"><span class="ic">‹</span><span class="ttl">Leaderboard</span><span class="ic">💬</span><span class="ic">⋮</span></div>
+    <div class="tabs"><span class="on">Survivor</span><span>Stroke Play</span><span>Settlement</span></div>
+    <div class="body">
+      <div class="card">
+        <div class="ch"><span class="t" style="white-space:nowrap">Survivor</span><span class="pill zom">🧟 Zombie</span><span class="pill">Strokes Off</span><span class="pill">Through 8</span></div>
+        <div class="gseg"><div class="on" data-p="game">Survivors</div><div data-p="stand">Standings</div></div>
+
+        <div class="pane on" id="p-game">
+        <div class="sub first">
+          <div class="h">Survivors <span class="lg">bar = who took it &middot; lanes = who was still in</span></div>
+          <div class="g9" style="margin:7px 0 3px"><span></span><span class="hd">1</span><span class="hd">2</span><span class="hd">3</span><span class="hd">4</span><span class="hd">5</span><span class="hd">6</span><span class="hd">7</span><span class="hd">8</span><span class="hd">9</span></div>
+          <div class="g9" style="margin-bottom:5px"><span></span>
+            <span class="seg" style="grid-column:span 2">Paul<span class="pot">$6</span></span>
+            <span class="seg" style="grid-column:span 3">AP<span class="pot">$6</span></span>
+            <span class="seg idle" style="grid-column:span 3">IN PLAY</span>
+            <span class="seg blank" style="grid-column:span 1"></span></div>
+          <div class="g9" style="row-gap:3px">
+            <span class="lname">P</span>
+            <span class="lane alive"></span><span class="lane won"></span>
+            <span class="lane alive"></span><span class="lane alive"></span><span class="lane alive"></span>
+            <span class="lane knock"></span><span class="lane zback"></span><span class="lane alive"></span>
+            <span class="lane np"></span>
+            <span class="lname zn">AP</span>
+            <span class="lane zomb"></span><span class="lane gone"></span>
+            <span class="lane alive"></span><span class="lane alive"></span><span class="lane won"></span>
+            <span class="lane alive"></span><span class="lane alive"></span><span class="lane alive"></span>
+            <span class="lane np"></span>
+            <span class="lname">R</span>
+            <span class="lane alive"></span><span class="lane alive"></span>
+            <span class="lane knock"></span><span class="lane gone"></span><span class="lane gone"></span>
+            <span class="lane alive"></span><span class="lane knock"></span><span class="lane gone"></span>
+            <span class="lane np"></span></div>
+          <div class="note" style="padding:8px 0 0"><span class="swatch" style="background:#DFF0E2;border:1px solid #7CC48A"></span>took the hole &nbsp;<span class="swatch" style="background:#FADBDB;border:1px solid #E39494"></span>out &nbsp;<span class="swatch" style="background:color-mix(in srgb,var(--zombie) 20%,#fff);border:1px solid var(--zombie)"></span>first out &mdash; Zombieville &nbsp;<span class="swatch" style="background:color-mix(in srgb,var(--zombie) 9%,#fff);border:1px solid color-mix(in srgb,var(--zombie) 45%,#fff)"></span>back in</div>
+        </div>
+
+        <div class="gap"></div>
+
+        <div class="sub">
+          <div class="h">Scorecard <span class="lg">green = won it · red = out · solid plum = first out, Zombieville opens &middot; pale plum = back in</span></div>
+          <div class="gscroll">
+            <div class="block">
+              <div class="brow"><div class="cell nm hd">Hole</div><div class="cell hd">1</div><div class="cell hd">2</div><div class="cell hd">3</div><div class="cell hd">4</div><div class="cell hd">5</div><div class="cell hd">6</div><div class="cell hd">7</div><div class="cell hd">8</div><div class="cell hd">9</div></div>
+              <div class="brow"><div class="cell nm pr">Par</div><div class="cell pr">4</div><div class="cell pr">4</div><div class="cell pr">4</div><div class="cell pr">3</div><div class="cell pr">4</div><div class="cell pr">4</div><div class="cell pr">3</div><div class="cell pr">5</div><div class="cell pr">4</div></div>
+              <div class="brow"><div class="cell nm ix">Index</div><div class="cell ix">1</div><div class="cell ix">7</div><div class="cell ix">3</div><div class="cell ix">11</div><div class="cell ix">9</div><div class="cell ix">17</div><div class="cell ix">5</div><div class="cell ix">13</div><div class="cell ix">15</div></div>
+              <div class="brow">
+                <div class="cell nm">Paul</div>
+                <div class="cell sc"><span class="dots"></span><span class="digit">5</span></div>
+                <div class="cell sc win"><span class="dots"></span><span class="digit">4</span></div>
+                <div class="cell sc"><span class="dots"></span><span class="digit">4</span></div>
+                <div class="cell sc"><span class="dots"></span><span class="digit">4</span></div>
+                <div class="cell sc"><span class="dots"></span><span class="digit">5</span></div>
+                <div class="cell sc out"><span class="dots"></span><span class="digit">6</span></div>
+                <div class="cell sc zom"><span class="dots"></span><span class="digit">3</span></div>
+                <div class="cell sc"><span class="dots"></span><span class="digit">5</span></div>
+                <div class="cell sc"><span class="dots"></span><span class="digit">–</span></div>
+              </div>
+              <div class="brow">
+                <div class="cell nm">AP</div>
+                <div class="cell sc z1"><span class="dots"><span class="dot"></span></span><span class="digit">7</span></div>
+                <div class="cell sc"><span class="dots"></span><span class="digit">5</span></div>
+                <div class="cell sc"><span class="dots"><span class="dot"></span></span><span class="digit">5</span></div>
+                <div class="cell sc"><span class="dots"></span><span class="digit">4</span></div>
+                <div class="cell sc win"><span class="dots"></span><span class="digit">4</span></div>
+                <div class="cell sc"><span class="dots"></span><span class="digit">5</span></div>
+                <div class="cell sc"><span class="dots"><span class="dot"></span></span><span class="digit">5</span></div>
+                <div class="cell sc"><span class="dots"></span><span class="digit">5</span></div>
+                <div class="cell sc"><span class="dots"></span><span class="digit">–</span></div>
+              </div>
+              <div class="brow">
+                <div class="cell nm">RyanL</div>
+                <div class="cell sc"><span class="dots"><span class="dot"></span></span><span class="digit">4</span></div>
+                <div class="cell sc"><span class="dots"></span><span class="digit">5</span></div>
+                <div class="cell sc out"><span class="dots"></span><span class="digit">6</span></div>
+                <div class="cell sc"><span class="dots"></span><span class="digit">4</span></div>
+                <div class="cell sc"><span class="dots"></span><span class="digit">5</span></div>
+                <div class="cell sc"><span class="dots"></span><span class="digit">5</span></div>
+                <div class="cell sc out"><span class="dots"></span><span class="digit">6</span></div>
+                <div class="cell sc"><span class="dots"></span><span class="digit">5</span></div>
+                <div class="cell sc"><span class="dots"></span><span class="digit">–</span></div>
+              </div>
+              <div class="brow"><div class="cell nm sv">Survivor</div><div class="cell sv">1</div><div class="cell sv">1</div><div class="cell sv">2</div><div class="cell sv">2</div><div class="cell sv">2</div><div class="cell sv">3</div><div class="cell sv">3</div><div class="cell sv">3</div><div class="cell sv">–</div></div>
+            </div>
+          </div>
+          <div class="note">Dot = stroke received · swipe for the back 9. Everyone antes <b>$2.00</b> per Survivor and the winner takes the pot — up to <b>$18.00</b> at risk over nine of them. <b>AP was the first man out</b>, on the 1st &mdash; that is what opened Zombieville, and it is the solid plum on both blocks above. With the <b>Zombie Option</b> on, a knocked-out player who goes low outright is alive again and the higher decider takes his place — on hole 7 Paul came back and Ryan went to Zombieville. Ties for low carry the decider forward, so a Survivor can run long or reach 18 with no blood.</div>
+        </div>
+        </div>
+
+        </div>
+
+        <div class="pane" id="p-stand">
+        <div class="sub first" style="padding-bottom:2px"><div class="h">Standings <span class="lg">trophies won &middot; money to date</span></div></div>
+        <div class="tr"><span class="pl">Paul Lipkin <small>scratch</small></span><span class="cups">&#127942; 1</span><span class="pay">+$2.00</span></div>
+        <div class="tr"><span class="pl">Alan Petersen <small>gets 6</small></span><span class="cups">&#127942; 1</span><span class="pay">+$2.00</span></div>
+        <div class="tr"><span class="pl">Ryan Lipkin <small>gets 2</small></span><span class="cups">&#127942; 0</span><span class="pay neg">&minus;$4.00</span></div>
+        <div class="sub"><div class="note" style="padding:0">Two Survivors decided, one in play. Nobody is paid until a Survivor closes, so these are settled figures rather than a projection.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+<script>
+document.querySelectorAll('.gseg div').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('.gseg div').forEach(function(x){x.classList.toggle('on',x===b)});
+    document.querySelectorAll('.pane').forEach(function(p){p.classList.toggle('on',p.id==='p-'+b.dataset.p)});
+  });
+});
+</script>
+</body>
+</html>

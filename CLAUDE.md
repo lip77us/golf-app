@@ -2171,3 +2171,73 @@ no allowance on top at any percentage, zero honoured, per-golfer, index never
 touched, and that it actually moves the stroke dots) and
 `api/test_handicap_override.py` (the endpoint, the two ways a tee change could
 wipe it, the scored-hole gate, cross-account 404).
+
+## Survivor lock screen — the headline is a word
+
+Built from `docs/design-review/handoff-survivor-zombie-v2/` (screen 3).
+`services/live_activity_survivor.py`, registered for `survivor` and **held in
+`UNSHIPPED_KINDS` from the day it was written** — a card enters that set with
+its builder and leaves with its build.
+
+**Survivor is the strongest case for an activity in the app: you can be knocked
+out by a shot you did not see.** Elimination is a NET comparison, so watching a
+man hole out does not tell you whether it was you — it depends on strokes. That
+is what separates it from match play, which pushes nothing because the reader
+sees the result directly. (I had this wrong first: I argued from "single group"
+that Survivor could not push either. Single group is not the test; visibility of
+the RESULT is.)
+
+Three departures from every card before it:
+
+- **The headline is a WORD** — `ALIVE` / `OUT` / `ZOMBIE` / `BACK IN`. Every
+  other game is measured in something; Survivor is measured in whether you are
+  still in it. A count of survivors is a GROUP fact and lives in the state slot.
+  `Number.isWord` already detected this shape, so nothing needed teaching.
+- **The track is two-dimensional** — a row per golfer, a cell per hole, scoped
+  to the Survivor being played (five cells is the width ceiling). `pips` is 1-D
+  and cannot carry it, so `track` + `ruler` are new.
+- **In a Zombie round nobody is `OUT`** while the Survivor runs — they are in
+  the seat. Orange never appears; plum replaces it. A Zombie's row cannot empty
+  the way a plain eliminated golfer's does, because he is still hitting shots:
+  `zom` is the hole that sent him there, `zplay` every hole he plays from it.
+
+### The shared frame grew, not Survivor's
+Paul confirmed the two locked corners are going onto **every** card, so they
+were built shared from the start rather than moved later:
+`live_activity_registry.hole_facts()` (upper right — `HOLE 13 · PAR 4 · 412`,
+**yardage from THAT golfer's tee**, so two players in one group legitimately see
+different numbers) and `thru_line()` (lower right — `THRU 12 · +7`, against
+GROSS par). Swift gained `who`, `ribbon`, `thru`, `track`, `ruler`, all optional
+and all frame-level. The sweep onto the other four cards is wiring, not rework.
+
+`ruler`, not `track_holes`: a one-word key keeps the top-level `ContentState`
+free of a `CodingKeys` enum, where one missed case silently stops the WHOLE
+state decoding.
+
+### The gold band
+`POPPING ON HOLE 13` when the reader gets a stroke on the hole in play. Gold
+appears nowhere else in the system, so it cannot be read as a state.
+
+**It is built from the game's own allocator (`_alloc_by_hole`), not from the
+summary.** The summary reports strokes as part of a SCORED hole, and the hole in
+play is by definition not one — the first version read the summary and could
+never have fired. A watcher never gets one.
+
+### Two bugs the real database caught
+- **`HOLE 19`.** A finished round has no hole in play, and inventing one gave a
+  locked corner with no par and no yardage — reading as a failed fetch. The
+  packet's one exception to that corner is exactly this: `ROUND COMPLETE`.
+- **A `now` cell on an eliminated golfer.** He is not standing on the next hole
+  in this Survivor's sense; his row stays `gone` (or `zplay` for a Zombie).
+
+### Not built
+The **pushes**. The packet lists six push events, and a round runs up to nine
+Survivors — plausibly 15–20 pushes, against the umbrella packet's "three to four
+a round, anything more and the activity is doing the notification's job badly".
+Design to rank them. The card and its state are complete without any of it,
+which is why that was a clean seam to stop at.
+
+The **round-complete frame** (money becomes the headline at 42px) — `_survivor`
+returns `{}` for `final`, like Rabbit and Nassau.
+
+Tests: `scoring/tests/test_live_activity_survivor.py` (22).

@@ -108,6 +108,64 @@ def gross_to_par(summary, player_id):
     return total if played else None
 
 
+def fmt_to_par(v) -> str:
+    """`+7` / `E` / `−2`, the way a scoreboard writes it."""
+    if v is None:
+        return ''
+    if v == 0:
+        return 'E'
+    return f'+{v}' if v > 0 else f'−{abs(v)}'
+
+
+def hole_facts(foursome, player_id, hole) -> str:
+    """The locked UPPER-RIGHT corner: `HOLE 13 · PAR 4 · 412`.
+
+    **The yardage is from the tee THAT golfer is playing**, not the card's
+    scratch tee, so two players in the same group legitimately see different
+    numbers on the same hole. It is always the reader's own hole, never one
+    being watched.
+
+    Shared because this corner is going onto every card in the set, not just
+    Survivor's — one implementation now is a sweep avoided later.
+    """
+    if not hole:
+        return ''
+    bits = [f'HOLE {hole}']
+    tee = None
+    for m in foursome.memberships.select_related('tee').all():
+        if m.player_id == player_id:
+            tee = m.tee
+            break
+    if tee is not None:
+        try:
+            info = tee.hole(hole)
+        except Exception:
+            info = {}
+        if info.get('par'):
+            bits.append(f'PAR {info["par"]}')
+        if info.get('yards'):
+            bits.append(str(info['yards']))
+    return ' · '.join(bits)
+
+
+def thru_line(holes_played, to_par) -> str:
+    """The locked LOWER-RIGHT corner: `THRU 12 · +7`.
+
+    Thru is the last hole FINISHED, which is why it trails the hole in play in
+    the upper corner by one. The figure beside it is the round against GROSS
+    par — not net, and not the game's own unit.
+
+    The two corners read as a pair: upper right is the hole you are standing
+    on, lower right is the round behind you. This half survives the always-on
+    state, where the stake half of the footer is dropped.
+
+    Also shared ahead of the sweep onto the other cards.
+    """
+    if not holes_played or to_par is None:
+        return ''
+    return f'THRU {holes_played} · {fmt_to_par(to_par)}'
+
+
 # ---------------------------------------------------------------------------
 # The registry
 # ---------------------------------------------------------------------------
@@ -158,8 +216,17 @@ def _match(foursome, player_id, *, final, slug):
                                 thru=holes_played(foursome))
 
 
+def _survivor(foursome, player_id, *, final):
+    from services.live_activity_survivor import survivor_activity_state
+    if final:
+        return {}   # TODO: the closing frame — money becomes the headline
+    return survivor_activity_state(foursome, player_id=player_id,
+                                   thru=holes_played(foursome))
+
+
 BUILDERS = {
     'sixes'   : _sixes,
+    'survivor': _survivor,
     'rabbit'  : _rabbit,
     'nassau'  : _nassau,
     'skins'   : _skins,
@@ -192,6 +259,9 @@ CARD_KIND = {'match_18': 'match', 'fourball': 'match'}
 # no board" into a lock-screen nag pointing at an update that does not exist,
 # which is strictly worse than the nothing it replaced.
 #
+# `survivor` is here from the day it was written, which is the intended shape:
+# a card enters this set with its builder and leaves with its build.
+#
 # `match` shipped server-side on 2026-09-02 while the newest build was 2.7.1+26,
 # whose known set is sixes/rabbit/nassau/skins — so every fourball and singles
 # match raised the unsupported card on the current TestFlight.
@@ -200,7 +270,7 @@ CARD_KIND = {'match_18': 'match', 'fourball': 'match'}
 # layout, and not before.** Until the client declares what it can draw (the
 # durable fix — neither token model records a version today), this list is the
 # only thing standing between a server deploy and every installed phone.
-UNSHIPPED_KINDS = {'match'}
+UNSHIPPED_KINDS = {'match', 'survivor'}
 
 
 def card_kind(slug: str) -> str:

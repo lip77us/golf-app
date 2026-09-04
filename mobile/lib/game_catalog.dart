@@ -479,6 +479,7 @@ const List<GameMeta> kGameCatalog = [
     displayName : 'Survivor',
     casual      : true,
     exactPlayers: 3,
+    hasLiveActivity: true,
     // Owns its own per-hole entry screen (who's alive changes hole to hole),
     // so it can't share a foursome's entry flow. Individual-ball, so it can
     // still host leaderboard-only overlays over each player's gross.

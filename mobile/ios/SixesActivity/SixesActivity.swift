@@ -110,11 +110,49 @@ struct SixesActivityAttributes: ActivityAttributes {
             var chip: String? = nil
         }
 
+        /// One row of the Survivor track — a golfer, and what happened to him
+        /// on each hole of the Survivor being played.
+        ///
+        /// Two-dimensional, which is why it is not `pips`: Sixes' three bars
+        /// are a 1-D shape and cannot carry a grid.
+        struct TrackRow: Codable, Hashable {
+            let label: String
+            /// `played` | `now` | `fut` | `out` | `gone` | `zom` | `zplay` | `back`
+            let cells: [String]
+            let isReader: Bool
+
+            enum CodingKeys: String, CodingKey {
+                case label, cells
+                case isReader = "is_reader"
+            }
+        }
+
         let header: Header
         let number: Number
         var rows: [Row]? = nil
         let sides: [Side]
         let state: MatchState
+
+        // ── The shared frame's newer slots ──────────────────────────────────
+        // All four are OPTIONAL and belong to the frame, not to one game: the
+        // two locked corners are going onto every card in the set, and the
+        // ribbon and the who-line with them. Optional so a card that has not
+        // adopted them yet simply omits them, and so an activity started by an
+        // older build still decodes.
+
+        /// The reader, named — a micro label above the headline.
+        var who: String? = nil
+        /// `POPPING ON HOLE 13` — the gold band, when the reader gets a stroke
+        /// on the hole in play. Gold appears nowhere else in the system, so it
+        /// cannot be mistaken for a state. Running states only.
+        var ribbon: String? = nil
+        /// The locked LOWER-RIGHT corner: `THRU 12 · +7`. Survives the
+        /// always-on state, where the stake half of the footer is dropped.
+        /// (The locked UPPER-RIGHT rides in `header.segment`.)
+        var thru: String? = nil
+        /// The Survivor track, and the hole numbers above it.
+        var track: [TrackRow]? = nil
+        var ruler: [Int]? = nil
         /// Three, always — the shape of the round.
         let pips: [String]
         let footer: Footer
@@ -141,6 +179,7 @@ enum Sixes {
     static let cream    = Color(hex: 0xF3F1EA)
     static let blue     = Color(hex: 0x5AA7F5)
     static let orange   = Color(hex: 0xF3A059)
+    static let plum     = Color(hex: 0xC9A6E8)
 
     /// A side's colour by the server's name for it. `neutral` is all square —
     /// white, so it belongs to neither side.
@@ -151,6 +190,10 @@ enum Sixes {
         // Rabbit has one distinguished party rather than two sides, so mint is
         // free to mean "holds it" — the thing Sixes could never let it mean.
         case "mint":   return mint
+        // Zombieville. #6E4B8E on every light surface, but that is too dark to
+        // read against lock-screen glass, so the card uses the lifted plum —
+        // one semantic colour with two renderings.
+        case "plum":   return plum
         case "dim":    return .white.opacity(0.55)
         default:       return .white.opacity(0.90)
         }
