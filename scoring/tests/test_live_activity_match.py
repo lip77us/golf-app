@@ -342,7 +342,7 @@ class MatchRegistryTests(TestCase):
             self.assertEqual(state['kind'], 'skins')
 
 
-class UnshippedCardTests(TestCase):
+class CardReleaseGateTests(TestCase):
     """A card the installed app cannot draw must not reach a lock screen.
 
     `match` shipped server-side while the newest build's known set was
@@ -372,22 +372,33 @@ class UnshippedCardTests(TestCase):
         self.user = get_user_model().objects.create_user(
             username='reader3', account=self.round.account)
 
-    def test_an_unshipped_card_is_withheld_from_the_wire(self):
+    def test_the_card_now_reaches_the_wire(self):
+        """Released in 2.8.0+27, the build carrying its Swift."""
         from services.live_activity_registry import (UNSHIPPED_KINDS,
                                                      round_has_board)
-        self.assertIn('match', UNSHIPPED_KINDS,
-                      'flip this in the SAME commit that bumps the build')
-        self.assertEqual(activity_state(self.round, self.user), {})
-        self.assertFalse(round_has_board(self.round))
+        self.assertNotIn('match', UNSHIPPED_KINDS)
+        self.assertTrue(round_has_board(self.round))
+        self.assertEqual(activity_state(self.round, self.user)['kind'], 'match')
 
-    def test_the_builder_still_works_and_is_only_gated_at_the_edge(self):
-        """The card is finished; it is waiting on a client, not on code."""
+    def test_the_gate_still_works_for_the_next_card(self):
+        """The set is empty, not gone. This is the mechanism that stops a
+        server deploy raising a card no installed app can draw — which is
+        exactly what `match` did on 2026-09-02."""
+        from unittest.mock import patch
+        import services.live_activity_registry as reg
+        from services.live_activity_registry import round_has_board
+        with patch.object(reg, 'UNSHIPPED_KINDS', {'match'}):
+            self.assertEqual(activity_state(self.round, self.user), {})
+            self.assertFalse(round_has_board(self.round))
+
+    def test_the_builder_is_only_ever_gated_at_the_edge(self):
+        """Whatever the gate says, the card itself is complete."""
         st = match_activity_state(self.fs, slug='match_18',
                                   player_id=self.pid['Paul Kelly'])
         self.assertEqual(st['kind'], 'match')
         self.assertEqual(st['number']['text'], '1 UP')
 
-    def test_a_shipped_card_is_unaffected(self):
+    def test_a_card_that_was_never_gated_is_unaffected(self):
         from services.live_activity_registry import round_has_board
         self.round.active_games = ['skins']
         self.round.primary_game = 'skins'

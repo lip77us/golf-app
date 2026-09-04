@@ -270,7 +270,12 @@ CARD_KIND = {'match_18': 'match', 'fourball': 'match'}
 # layout, and not before.** Until the client declares what it can draw (the
 # durable fix — neither token model records a version today), this list is the
 # only thing standing between a server deploy and every installed phone.
-UNSHIPPED_KINDS = {'match', 'survivor'}
+#
+# **Empty as of 2.8.0+27**, the build that carries both layouts. Both cards
+# went in with their builders and came out with their build, which is the
+# intended shape — `match` is the one that ever reached a phone early, and this
+# comment is why the set still exists rather than being deleted.
+UNSHIPPED_KINDS: set = set()
 
 
 def card_kind(slug: str) -> str:
