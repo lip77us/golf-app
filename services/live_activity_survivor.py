@@ -281,9 +281,17 @@ def survivor_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         return {}
 
     zombie_on = bool(summary.get('zombie_option'))
-    players   = summary.get('players') or []
+    # PLAY order, not standings order.
+    #
+    # `summary['players']` is sorted by money for the standings table, so the
+    # track's rows reordered themselves as the money moved — and disagreed with
+    # the score-entry screen, the boxes grid and the by-hole grid, which all use
+    # the scorecard's play order. Anything drawn as a grid of golfers uses this
+    # one, so a reader can scan the same row across every surface.
+    players   = ((summary.get('scorecard') or {}).get('players')
+                 or summary.get('players') or [])
     names     = {p['player_id']: (p.get('short_name') or p.get('name') or '')
-                 for p in players}
+                 for p in (summary.get('players') or []) + list(players)}
 
     holes_all = [h for h in (summary.get('holes') or []) if h.get('entries')]
     cur_idx   = (summary.get('current') or {}).get('survivor')

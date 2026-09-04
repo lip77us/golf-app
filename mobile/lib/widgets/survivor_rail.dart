@@ -71,11 +71,14 @@ class SurvivorRail extends StatelessWidget {
         key: key,
         holesInPlay: holesInPlay,
         zombieOn: summary.zombieOption,
+        // PLAY order — the scorecard's — so the lanes line up with the score
+        // entry screen and both grids. `summary.players` is sorted by money for
+        // the standings table and reorders itself as the money moves.
         players: [
-          for (final p in summary.players)
-            {'player_id': p.playerId,
-             'name': p.name,
-             'short_name': p.shortName},
+          for (final p in ((summary.scorecard['players'] as List?) ?? const []))
+            {'player_id': (p as Map)['player_id'],
+             'name': p['name'],
+             'short_name': p['short_name']},
         ],
         holes: [
           for (final h in summary.holes)

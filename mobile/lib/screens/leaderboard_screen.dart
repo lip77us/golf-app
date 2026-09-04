@@ -5173,7 +5173,10 @@ class _SurvivorGroupCardState extends State<_SurvivorGroupCard> {
             const SizedBox(height: 6),
             SurvivorRail(
               holesInPlay: scHolesInPlay,
-              players: (summary['players'] as List? ?? const [])
+              // Play order, matching the grids below — not the money order
+              // the standings pane uses.
+              players: (((summary['scorecard'] as Map?)?['players'] as List?)
+                      ?? summary['players'] as List? ?? const [])
                   .cast<Map<String, dynamic>>(),
               holes: (summary['holes'] as List? ?? const [])
                   .cast<Map<String, dynamic>>(),

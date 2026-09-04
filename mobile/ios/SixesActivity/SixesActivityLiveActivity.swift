@@ -169,14 +169,16 @@ private struct SurvivorBoardView: View {
     var isStale: Bool = false
 
     var body: some View {
-        // Spacing 5, not 7. This card carries two rows more than any other in
-        // the set — the who-line and a four-row track — and the lock screen's
-        // presentation has a fixed height. Over it, SwiftUI compresses, and
-        // what it compresses first are the single-line rows: the header and
-        // the footer vanished on a real phone while the number and the track
-        // kept their space. The two LOCKED corners live in exactly those rows,
-        // so they were the first thing lost.
-        VStack(alignment: .leading, spacing: 5) {
+        // Spacing 3, and every size below trimmed. The lock screen's
+        // presentation has a FIXED height, and this card carries two rows
+        // more than any other in the set. Over that height iOS clips rather
+        // than redistributes — layoutPriority does not save a row that is
+        // simply past the bottom edge, which is why the footer and the gold
+        // band were still missing after the first attempt.
+        //
+        // The design's card is taller than iOS allows. Shrinking type keeps
+        // every slot; dropping one would have been the alternative.
+        VStack(alignment: .leading, spacing: 3) {
             // The gold band rides ABOVE the header, pulled over the card's top
             // edge by a negative margin, so it reads as a band across the card
             // rather than a row inside it.

@@ -324,3 +324,58 @@ class FreshSurvivorTrackTests(TestCase):
         st = survivor_activity_state(self.fs, player_id=self.pid['Ann'])
         self.assertNotIn(1, st['ruler'])
         self.assertNotIn(2, st['ruler'])
+
+
+class TrackOrderTests(TestCase):
+    """The track's rows are in PLAY order, not standings order.
+
+    `summary['players']` is sorted by money for the standings table, so the
+    lock-screen track reordered itself as the money moved and disagreed with
+    the score-entry screen and both grids — reported from the course.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['survivor'])
+        self.round.bet_unit     = 5
+        self.round.primary_game = 'survivor'
+        self.round.save(update_fields=['bet_unit', 'primary_game'])
+        self.fs = make_foursome(
+            self.round, [('Ann', 0), ('Ben', 0), ('Cal', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        setup_survivor(self.fs, handicap_mode='gross', zombie_option=False)
+
+    def _play(self, hole, a, b, c):
+        submit_hole(self.fs, hole, [(self.pid['Ann'], a),
+                                    (self.pid['Ben'], b),
+                                    (self.pid['Cal'], c)])
+        calculate_survivor(self.fs)
+
+    def test_rows_follow_the_scorecard_not_the_money(self):
+        from services.survivor import survivor_summary
+        # Ann out, Ben takes it — the money now separates them.
+        self._play(1, 6, 4, 5)
+        self._play(2, 5, 4, 5)
+        self._play(3, 4, 4, 4)
+
+        summary = survivor_summary(self.fs)
+        play_order = [p['player_id'] for p in summary['scorecard']['players']]
+        money_order = [p['player_id'] for p in summary['players']]
+        self.assertNotEqual(play_order, money_order,
+                            'fixture no longer separates the two orders')
+
+        st = survivor_activity_state(self.fs, player_id=self.pid['Ann'])
+        labels = [r['label'] for r in st['track']]
+        expected = [p['short_name'] for p in summary['scorecard']['players']]
+        self.assertEqual(labels, expected)
+
+    def test_the_order_does_not_move_as_money_moves(self):
+        self._play(1, 6, 4, 5)
+        before = [r['label'] for r in survivor_activity_state(
+            self.fs, player_id=self.pid['Ann'])['track']]
+        self._play(2, 5, 4, 5)
+        self._play(3, 4, 5, 6)
+        after = [r['label'] for r in survivor_activity_state(
+            self.fs, player_id=self.pid['Ann'])['track']]
+        self.assertEqual(before, after)
