@@ -21,6 +21,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../api/models.dart';
 import '../theme/halved_brand.dart';
 
 /// Solid plum marks **whoever is in the seat now**, not whoever opened it.
@@ -53,6 +54,52 @@ class SurvivorRail extends StatelessWidget {
   final List<Map<String, dynamic>> survivors;
 
   final bool zombieOn;
+
+  /// The same rail, from the typed summary the play screen already holds.
+  ///
+  /// Two constructors rather than one shape, because the two callers genuinely
+  /// differ: the leaderboard reads a raw `games['survivor'].by_group[n].summary`
+  /// map, the play screen holds a decoded `SurvivorSummary`. Converting either
+  /// way at the call site would put the mapping in two places, which is how the
+  /// rail becomes two rails.
+  factory SurvivorRail.fromSummary({
+    Key? key,
+    required SurvivorSummary summary,
+    required List<int> holesInPlay,
+  }) =>
+      SurvivorRail(
+        key: key,
+        holesInPlay: holesInPlay,
+        zombieOn: summary.zombieOption,
+        players: [
+          for (final p in summary.players)
+            {'player_id': p.playerId,
+             'name': p.name,
+             'short_name': p.shortName},
+        ],
+        holes: [
+          for (final h in summary.holes)
+            {'hole': h.hole,
+             'survivor': h.survivor,
+             'eliminated_id': h.eliminatedId,
+             'resurrected_id': h.resurrectedId,
+             'winner_id': h.winnerId,
+             'entries': [
+               for (final e in h.entries)
+                 {'player_id': e.playerId, 'gross': e.gross},
+             ]},
+        ],
+        survivors: [
+          for (final sv in summary.survivors)
+            {'holes': sv.holes,
+             'start_hole': sv.startHole,
+             'end_hole': sv.endHole,
+             'winner_id': sv.winnerId,
+             'winner_short': sv.winnerShort,
+             'outcome': sv.outcome,
+             'payout': sv.payout},
+        ],
+      );
 
   static const double _labelW = 34;
   static const double _gap    = 2;

@@ -2286,3 +2286,35 @@ String-matching edits kept hitting the wrong card or aborting mid-script and
 silently discarding earlier replacements. Anchor on line numbers within the
 card's own range, replace the LATER range first so earlier indices stay valid,
 and write once at the end.
+
+## Survivor score entry — the rail, and the chip that was stating the wrong fact
+
+Screen 1 of `docs/design-review/handoff-survivor-zombie-v2/`. Most of this
+screen already matched: the phase banner, the hole header, the OUT / ZOMBIE
+badges and the plum row treatment all shipped with Zombie phase 3.
+
+Two things did not.
+
+**`gets 3` was the wrong fact.** The player row carried a running allocation
+total. The packet calls the chip a LOCKED rule and forbids exactly that: it
+reads **`stroking`**, in amber, and appears **only on the holes where that
+golfer actually gets a stroke**. A total belongs on the setup screen; beside a
+live Survivor state it invites subtracting it a second time. The row already
+had this hole's `strokes` — the total was simply the easier thing to reach for.
+The chip and the red stroke dots above the score box are one fact stated twice,
+and neither appears anywhere else.
+
+**The rail was missing.** The packet says it appears on both surfaces, so
+`SurvivorRail` gained a `fromSummary` constructor and the play screen renders
+the SAME widget as the leaderboard. Two constructors rather than one shape,
+because the callers genuinely differ — the leaderboard holds a raw
+`by_group[n].summary` map and the play screen a decoded `SurvivorSummary`.
+Converting at either call site would put the mapping in two places, which is
+how one rail becomes two.
+
+### Not done — a shared-component decision, not a Survivor one
+The design's score picker captions (`BIRD` / `PAR` / `BOG` / `DBL` under each
+option) are not built. `widgets/inline_score_picker.dart` is shared by roughly
+eight score screens, so adding them restyles every game in the app. That is a
+system-wide visual change and wants deciding as one, not smuggled in under
+Survivor.

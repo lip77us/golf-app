@@ -27,6 +27,7 @@ import '../widgets/golf_app_bar.dart';
 import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/inline_score_picker.dart';
+import '../widgets/survivor_rail.dart';
 import '../widgets/net_score_button.dart' show scoreCellWithDots;
 import '../widgets/round_chat_button.dart';
 import '../widgets/spots_capture.dart';
@@ -556,7 +557,26 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
               _OutcomeLine(hole: holeInfo),
             ],
             const SizedBox(height: 12),
+            // The R5 rail. The packet's primary artefact, and it belongs on
+            // BOTH surfaces — same widget as the leaderboard's, so the two can
+            // never drift into two different pictures of one Survivor.
             if (summary != null && summary.survivors.isNotEmpty) ...[
+              Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: BorderSide(
+                      color: Theme.of(ctx).colorScheme.outline),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: SurvivorRail.fromSummary(
+                    summary: summary,
+                    holesInPlay: [for (final h in sc.holes) h.holeNumber],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
               _SurvivorStrip(summary: summary),
               const SizedBox(height: 12),
             ],
@@ -1022,20 +1042,29 @@ class _PlayerRow extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                       color: isZombie ? Halved.zombie : null)),
             ),
-            if (showHcap && hcap > 0) ...[
+            // `stroking` — a LOCKED rule from the packet: the chip appears only
+            // on the holes where this golfer actually gets a stroke, never as a
+            // running allocation total. This row used to read `gets 3`, which
+            // is the total and belongs on the setup screen; beside a live
+            // Survivor state it invites subtracting it a second time.
+            //
+            // The chip and the red stroke dots above the score box are one fact
+            // stated twice, and neither appears anywhere else.
+            if (showHcap && strokes > 0) ...[
               const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.secondaryContainer.withOpacity(0.4),
+                  color: const Color(0xFFB07A22).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: theme.colorScheme.outlineVariant),
+                  border: Border.all(
+                      color: const Color(0xFFB07A22).withValues(alpha: 0.34)),
                 ),
                 child: Text(
-                  'gets $hcap',
+                  'stroking',
                   style: theme.textTheme.labelSmall?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.onSecondaryContainer),
+                      color: const Color(0xFFB07A22)),
                 ),
               ),
             ],
