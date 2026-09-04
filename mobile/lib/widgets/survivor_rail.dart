@@ -134,16 +134,23 @@ class SurvivorRail extends StatelessWidget {
       if (sv['end_hole'] == hole && sv['winner_id'] == pid) return 'won';
     }
 
-    // Eliminated earlier in this Survivor and not yet back.
+    // Is he out of this Survivor as of this hole?
+    //
+    // Walk EVERY earlier hole and let the last event win. Returning on the
+    // first elimination made the resurrection check below it unreachable, so a
+    // golfer who went to Zombieville and came back was drawn `gone` for the
+    // rest of the Survivor — while the lock screen counted him among the
+    // living. Two surfaces disagreeing about who is still in it.
     final svIdx = h['survivor'];
+    var out = false;
     for (final e in holes) {
       if (e['survivor'] != svIdx) continue;
       final eh = e['hole'] as int? ?? 0;
       if (eh >= hole) break;
-      if (e['eliminated_id'] == pid) return 'gone';
-      if (e['resurrected_id'] == pid) break;
+      if (e['eliminated_id'] == pid) out = true;
+      if (e['resurrected_id'] == pid) out = false;
     }
-    return 'alive';
+    return out ? 'gone' : 'alive';
   }
 
   BoxDecoration _laneStyle(String cell) {

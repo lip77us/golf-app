@@ -182,11 +182,28 @@ def _track(summary, holes, hole_in_play, players, player_id, zombie_on):
     """
     played = [h for h in holes if h.get('hole')]
     if not played:
-        return [], []
+        # A Survivor that starts on the hole in play has no history to draw.
+        # One cell is the honest picture — "this one starts here" — where the
+        # round's other holes would be a different Survivor's story.
+        return ([hole_in_play], [
+            {'label': p.get('short_name') or p.get('name') or '',
+             'cells': ['now'],
+             'is_reader': p['player_id'] == player_id}
+            for p in players
+        ]) if hole_in_play else ([], [])
 
+    # The window ENDS at the hole in play.
+    #
+    # `survivor_summary` emits a row for every hole a Survivor covers, played or
+    # not, so a Survivor running from the 1st gave a hole list of 1..18 and the
+    # last five of that is 14-18 — a track showing holes nobody has reached
+    # while the group stands on the 8th. Third bug from this same shape; the
+    # rule is that a row's existence says nothing about whether it was played.
     ruler = [h['hole'] for h in played]
     if hole_in_play and hole_in_play not in ruler:
         ruler.append(hole_in_play)
+    if hole_in_play:
+        ruler = [h for h in ruler if h <= hole_in_play]
     ruler = ruler[-MAX_TRACK_HOLES:]
 
     by_hole = {h['hole']: h for h in played}
@@ -270,7 +287,12 @@ def survivor_activity_state(foursome, *, player_id=None, thru=None) -> dict:
 
     holes_all = [h for h in (summary.get('holes') or []) if h.get('entries')]
     cur_idx   = (summary.get('current') or {}).get('survivor')
-    holes     = _holes_of(summary, cur_idx) or holes_all
+    # ONLY this Survivor's holes. The previous fallback to the whole round
+    # meant a Survivor that has not reached its first hole yet — the common
+    # case the moment one closes — drew the last five holes of the ROUND,
+    # spanning three different Survivors, and let the state slot name an
+    # elimination from a Survivor that is already settled.
+    holes     = _holes_of(summary, cur_idx)
 
     to_par, played = _gross_to_par(summary, player_id)
     played_holes   = thru if thru is not None else played

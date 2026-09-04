@@ -169,14 +169,25 @@ private struct SurvivorBoardView: View {
     var isStale: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        // Spacing 5, not 7. This card carries two rows more than any other in
+        // the set — the who-line and a four-row track — and the lock screen's
+        // presentation has a fixed height. Over it, SwiftUI compresses, and
+        // what it compresses first are the single-line rows: the header and
+        // the footer vanished on a real phone while the number and the track
+        // kept their space. The two LOCKED corners live in exactly those rows,
+        // so they were the first thing lost.
+        VStack(alignment: .leading, spacing: 5) {
             // The gold band rides ABOVE the header, pulled over the card's top
             // edge by a negative margin, so it reads as a band across the card
             // rather than a row inside it.
             if let ribbon = state.ribbon, !ribbon.isEmpty {
                 StrokeRibbon(text: ribbon)
             }
+            // Pinned: the locked corners may not yield to anything, so they
+            // keep their intrinsic height and the track gives way instead.
             HeaderView(header: state.header)
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(2)
 
             if let who = state.who, !who.isEmpty {
                 Text(who.uppercased())
@@ -200,11 +211,18 @@ private struct SurvivorBoardView: View {
             }
 
             if let track = state.track, !track.isEmpty {
+                // Lowest priority: of everything on the card the track is the
+                // one thing a reader can do without, and the packet already
+                // says a long Survivor should say how many holes rather than
+                // draw them.
                 TrackView(rows: track, ruler: state.ruler ?? [])
+                    .layoutPriority(0)
             }
 
             SurvivorFooterView(footer: state.footer, thru: state.thru,
                                isStale: isStale)
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(2)
         }
     }
 }
@@ -215,23 +233,30 @@ private struct StrokeRibbon: View {
     let text: String
 
     var body: some View {
+        // Drawn INSIDE the content, not bled over the card's edge.
+        //
+        // The first version chased the design's edge-to-edge band with negative
+        // padding: `.padding(.horizontal, 15)` then `-15` cancelled out, and
+        // `.padding(.top, -13)` lifted the whole band above the card's content
+        // area — where the lock screen's container clips. The server was
+        // sending POPPING ON HOLE 8 and nothing appeared on the phone.
+        //
+        // Escaping a clipping parent needs the shared LockScreenView's padding
+        // restructured, which every card would feel. A gold band that is
+        // visible beats a perfectly specified one that is not; the bleed can
+        // come back with that refactor.
         Text(text)
             .font(Sixes.body(9.5, .bold))
             .tracking(0.5)
             .foregroundStyle(Color(hex: 0x3A2703))
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 15)
-            .padding(.top, 5)
-            .padding(.bottom, 6)
-            // Pulled over the card's own padding so it meets the top edge.
-            .padding(.horizontal, -15)
-            .padding(.top, -13)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
             .background(
-                LinearGradient(colors: [Color(hex: 0xE9C063),
-                                        Color(hex: 0xD9A63F)],
-                               startPoint: .top, endPoint: .bottom)
-                    .padding(.horizontal, -15)
-                    .padding(.top, -13)
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(LinearGradient(
+                        colors: [Color(hex: 0xE9C063), Color(hex: 0xD9A63F)],
+                        startPoint: .top, endPoint: .bottom))
             )
     }
 }

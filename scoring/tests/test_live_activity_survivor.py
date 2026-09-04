@@ -231,3 +231,96 @@ class SurvivorZombieCardTests(TestCase):
         st = self._state(who='Ben')
         self.assertNotIn('out', str(st['track']))
         self.assertNotEqual(st['number']['colour'], 'orange')
+
+
+class TrackWindowTests(TestCase):
+    """The track ends at the hole in play, never ahead of it.
+
+    `survivor_summary` emits a row for every hole a Survivor covers, played or
+    not. Taking the last five of that list drew holes 14-18 while the group
+    stood on the 8th — reported from the course.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['survivor'])
+        self.round.bet_unit     = 5
+        self.round.primary_game = 'survivor'
+        self.round.save(update_fields=['bet_unit', 'primary_game'])
+        self.fs = make_foursome(
+            self.round, [('Ann', 0), ('Ben', 0), ('Cal', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        setup_survivor(self.fs, handicap_mode='gross', zombie_option=True)
+
+    def _play(self, hole, a, b, c):
+        submit_hole(self.fs, hole, [(self.pid['Ann'], a),
+                                    (self.pid['Ben'], b),
+                                    (self.pid['Cal'], c)])
+        calculate_survivor(self.fs)
+
+    def test_the_ruler_never_runs_past_the_hole_in_play(self):
+        for h in range(1, 8):           # through 7, standing on the 8th
+            self._play(h, 4, 4, 4)
+        st = survivor_activity_state(self.fs, player_id=self.pid['Ann'])
+        self.assertTrue(st['ruler'], 'a running Survivor draws a track')
+        self.assertLessEqual(max(st['ruler']), 8,
+                             f'track ran ahead of the group: {st["ruler"]}')
+        self.assertEqual(max(st['ruler']), 8, 'the hole in play is the last cell')
+
+    def test_the_window_holds_at_five_and_ends_on_the_hole_in_play(self):
+        for h in range(1, 8):
+            self._play(h, 4, 4, 4)
+        st = survivor_activity_state(self.fs, player_id=self.pid['Ann'])
+        self.assertEqual(st['ruler'], [4, 5, 6, 7, 8])
+
+    def test_every_row_is_as_wide_as_the_ruler(self):
+        for h in range(1, 8):
+            self._play(h, 4, 4, 4)
+        st = survivor_activity_state(self.fs, player_id=self.pid['Ann'])
+        for row in st['track']:
+            self.assertEqual(len(row['cells']), len(st['ruler']))
+
+
+class FreshSurvivorTrackTests(TestCase):
+    """A Survivor that has not reached its first hole yet.
+
+    The commonest state on the tee after one closes, and it was drawing the
+    last five holes of the ROUND — three different Survivors' worth of story on
+    a card that is supposed to show one.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['survivor'])
+        self.round.bet_unit     = 5
+        self.round.primary_game = 'survivor'
+        self.round.save(update_fields=['bet_unit', 'primary_game'])
+        self.fs = make_foursome(
+            self.round, [('Ann', 0), ('Ben', 0), ('Cal', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        setup_survivor(self.fs, handicap_mode='gross', zombie_option=False)
+
+    def _play(self, hole, a, b, c):
+        submit_hole(self.fs, hole, [(self.pid['Ann'], a),
+                                    (self.pid['Ben'], b),
+                                    (self.pid['Cal'], c)])
+        calculate_survivor(self.fs)
+
+    def test_a_survivor_that_starts_on_the_next_hole_draws_one_cell(self):
+        # Ann out on 1, Ben takes the decider on 2 — Survivor 1 closes and
+        # Survivor 2 starts on the 3rd, which nobody has played.
+        self._play(1, 6, 4, 4)
+        self._play(2, 5, 4, 5)
+        st = survivor_activity_state(self.fs, player_id=self.pid['Ann'])
+        self.assertEqual(st['ruler'], [3], st['ruler'])
+        for row in st['track']:
+            self.assertEqual(row['cells'], ['now'])
+
+    def test_it_does_not_borrow_the_previous_survivors_holes(self):
+        self._play(1, 6, 4, 4)
+        self._play(2, 5, 4, 5)
+        st = survivor_activity_state(self.fs, player_id=self.pid['Ann'])
+        self.assertNotIn(1, st['ruler'])
+        self.assertNotIn(2, st['ruler'])
