@@ -402,3 +402,16 @@ No image assets. The Halved mark is rendered as a rounded square containing the 
 | `survivor-setup.html` | Context: handicap allocation, stake, Zombie toggle |
 
 Each file opens standalone in a browser. The written notes beside the phones are the behavioural spec — read them alongside this README.
+
+## Screenshots
+
+In `screenshots/`, for the two surfaces where the scroll position matters:
+
+| File | Shows |
+|---|---|
+| `01-survivor-score-entry.png` | Top of the score-entry screen — phase banner, hole header, player rows, active row with picker |
+| `02-survivor-score-entry.png` | Scrolled — outcome strip, R5 rail, by-hole grid, money row |
+| `01-survivor-leaderboard.png` | Survivors pane — rail, gap band, by-hole grid |
+| `02-survivor-leaderboard.png` | Standings pane — the second tab |
+
+The live-activity states are all visible at once in their own HTML files, so they are not captured separately.

@@ -2241,3 +2241,48 @@ The **round-complete frame** (money becomes the headline at 42px) — `_survivor
 returns `{}` for `final`, like Rabbit and Nassau.
 
 Tests: `scoring/tests/test_live_activity_survivor.py` (22).
+
+## Survivor leaderboard — the R5 rail
+
+Built from `docs/design-review/handoff-survivor-zombie-v2/` (screen 2), whose
+`screenshots/` are far more precise than its prose and settled three things the
+text left open.
+
+`widgets/survivor_rail.dart`, in `widgets/` because the packet says the rail
+serves the leaderboard AND the play screen — building it into either would have
+guaranteed two of them.
+
+**Two stacked parts over one shared ruler.** The winner bar's LENGTH answers how
+long a Survivor ran and its LABEL answers who took it; the lanes answer how long
+each golfer lasted. The card gained a `HalvedSegmented` (the project's own
+control, which is what the packet asked be reused) splitting **Survivors** from
+**Standings** — Survivors default, because the rail carries the story and the
+money is one tap away.
+
+**Solid plum marks whoever is in the seat NOW**, not whoever opened it. The
+packet flags this as a live tension and offers both; following the occupant
+makes every handover visible (the opener reading draws nothing when the seat
+changes hands) and matches the lock-screen track, so plum means one thing on
+every surface — the packet's own rule 5.
+
+### Four bugs, all found by looking at it rather than reading it
+- **The IN PLAY bar spanned all eighteen holes.** With one Survivor the bars
+  divided the full width between themselves, so a Survivor covering two holes
+  drew a bar across the card — and the bar's length is the entire point of that
+  row. Fixed with a trailing `Spacer` for holes no Survivor has reached.
+- **`Through 18` on a round two holes old**, and, from the same root cause,
+  **no hatching anywhere**: `survivor_summary` emits a row for EVERY hole in
+  play, scored or not, so counting rows (or testing that a row exists) marks
+  all eighteen as played. Both now require every entry to carry a gross.
+- **`IN PLAY` wrapped** inside a two-hole bar.
+- **Unplayed cells were a flat tint** a shade off `alive`, which at 15px tall
+  reads as the same cell. They are drawn as diagonal hatching now
+  (`_HatchPainter`), which is what the design does and why.
+
+### Editing this file
+`leaderboard_screen.dart` is ~10k lines and several cards share identical
+blocks (`if (players.isEmpty)`, the status `Container`, `HoleGridScorecard`).
+String-matching edits kept hitting the wrong card or aborting mid-script and
+silently discarding earlier replacements. Anchor on line numbers within the
+card's own range, replace the LATER range first so earlier indices stay valid,
+and write once at the end.

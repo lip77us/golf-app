@@ -26,6 +26,7 @@ import 'share_scorecard_screen.dart';
 import 'round_receipt_screen.dart';
 import 'match_play_screen.dart' show MatchPlayDetailView;
 import 'tournament_leaderboard_screen.dart' show ChampionshipTabView;
+import '../widgets/survivor_rail.dart';
 import 'tournament_settlement_screen.dart';
 
 class LeaderboardScreen extends StatefulWidget {
@@ -4984,9 +4985,67 @@ class _RabbitGroupCard extends StatelessWidget {
 /// Leaderboard card for a Survivor foursome.  Shows the standings (Survivors
 /// won + money), one row per Survivor with its range / winner / payout, and
 /// the shared scorecard grid with each hole's winner tinted.
-class _SurvivorGroupCard extends StatelessWidget {
+/// A pane heading — pine caps, with the reading instruction beside it rather
+/// than under it. Both panes carry one, which is what makes the segmented
+/// control feel like two views of one card rather than two cards.
+/// A header fact — handicap mode, how far the group is through. Chips because
+/// each one changes how every figure below it should be read.
+Widget _factChip(ThemeData theme, String label) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(label,
+          style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant)),
+    );
+
+
+class _SurvivorHeading extends StatelessWidget {
+  const _SurvivorHeading({required this.title, required this.note});
+  final String title;
+  final String note;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic, children: [
+      Text(title,
+          style: theme.textTheme.labelSmall?.copyWith(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.3,
+              color: theme.colorScheme.primary)),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(note,
+            style: theme.textTheme.labelSmall?.copyWith(
+                fontSize: 10.5,
+                color: theme.colorScheme.onSurfaceVariant)),
+      ),
+    ]);
+  }
+}
+
+
+class _SurvivorGroupCard extends StatefulWidget {
   final Map<String, dynamic> group;
   const _SurvivorGroupCard({required this.group});
+
+  @override
+  State<_SurvivorGroupCard> createState() => _SurvivorGroupCardState();
+}
+
+/// Survivors is the default pane: the rail carries the story, and the money is
+/// one tap away.
+enum _SurvivorPane { survivors, standings }
+
+class _SurvivorGroupCardState extends State<_SurvivorGroupCard> {
+  _SurvivorPane _pane = _SurvivorPane.survivors;
+
+  Map<String, dynamic> get group => widget.group;
 
   static String _hcapLabel(Map hcap) {
     final mode = hcap['mode']?.toString() ?? 'net';
@@ -5040,6 +5099,16 @@ class _SurvivorGroupCard extends StatelessWidget {
     }
     final decided = svs.where((s) =>
         (s as Map)['outcome'] != 'live').length;
+    // Holes every golfer has FINISHED — what "Through 8" means. The summary
+    // emits a row for every hole in play, scored or not, so counting rows
+    // reported "Through 18" on a round two holes old.
+    final thruHoles = (summary['holes'] as List? ?? const [])
+        .where((h) {
+          final es = ((h as Map)['entries'] as List? ?? const []);
+          return es.isNotEmpty &&
+              es.every((e) => (e as Map)['gross'] != null);
+        })
+        .length;
     final zombieOn = summary['zombie_option'] == true;
 
     return Card(
@@ -5053,9 +5122,9 @@ class _SurvivorGroupCard extends StatelessWidget {
           ],
           Row(children: [
             Expanded(
-              child: Text('Survivor — ${_hcapLabel(hcap)}'
-                  '${decided > 0 ? ' · $decided decided' : ''}',
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text('Survivor',
+                  style: TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold)),
             ),
             // Whether the Zombie Option is running changes how every result
             // below should be read, so it is stated on the header.
@@ -5074,20 +5143,52 @@ class _SurvivorGroupCard extends StatelessWidget {
               ),
               const SizedBox(width: 6),
             ],
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(statusLabel,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant)),
-            ),
+            _factChip(theme, _hcapLabel(hcap)),
+            const SizedBox(width: 6),
+            _factChip(theme,
+                thruHoles > 0 ? 'Through $thruHoles' : statusLabel),
           ]),
           const SizedBox(height: 10),
 
-          if (players.isEmpty)
+
+          // Survivors / Standings — the project's own segmented control, which
+          // is what the packet asks be reused. The game first, the money one
+          // tap away.
+          HalvedSegmented<_SurvivorPane>(
+            selected: _pane,
+            onChanged: (v) => setState(() => _pane = v),
+            segments: const [
+              (value: _SurvivorPane.survivors,
+               label: 'Survivors', icon: null),
+              (value: _SurvivorPane.standings,
+               label: 'Standings', icon: null),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          if (_pane == _SurvivorPane.survivors) ...[
+            _SurvivorHeading(
+              title: 'SURVIVORS',
+              note: 'bar = who took it · lanes = who was still in'),
+            const SizedBox(height: 6),
+            SurvivorRail(
+              holesInPlay: scHolesInPlay,
+              players: (summary['players'] as List? ?? const [])
+                  .cast<Map<String, dynamic>>(),
+              holes: (summary['holes'] as List? ?? const [])
+                  .cast<Map<String, dynamic>>(),
+              survivors: svs.cast<Map<String, dynamic>>(),
+              zombieOn: zombieOn,
+            ),
+          ]
+          else ...[
+            _SurvivorHeading(
+              title: 'STANDINGS', note: 'trophies won · money to date'),
+            const SizedBox(height: 6),
+          ],
+
+          if (_pane == _SurvivorPane.standings)
+            if (players.isEmpty)
             Text('No players yet.',
                 style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant))
@@ -5101,8 +5202,25 @@ class _SurvivorGroupCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Row(children: [
                   Expanded(
-                      child: Text(name,
-                          style: const TextStyle(fontWeight: FontWeight.w600))),
+                    child: Row(crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic, children: [
+                      Flexible(
+                        child: Text(name,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600)),
+                      ),
+                      const SizedBox(width: 6),
+                      // What he plays off, in his own words. `scratch` rather
+                      // than `gets 0`, which reads like a missing value.
+                      Text(
+                        ((r['phcp_in_play'] as num?)?.toInt() ?? 0) == 0
+                            ? 'scratch'
+                            : 'gets ${(r['phcp_in_play'] as num).toInt()}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant)),
+                    ]),
+                  ),
                   Icon(Icons.emoji_events_outlined, size: 14,
                       color: theme.colorScheme.onSurfaceVariant),
                   const SizedBox(width: 2),
@@ -5126,7 +5244,7 @@ class _SurvivorGroupCard extends StatelessWidget {
               );
             }),
 
-          if (svs.isNotEmpty) ...[
+          if (_pane == _SurvivorPane.survivors && svs.isNotEmpty) ...[
             const Divider(height: 20),
             Text('Survivors',
                 style: theme.textTheme.labelMedium?.copyWith(
@@ -5192,7 +5310,7 @@ class _SurvivorGroupCard extends StatelessWidget {
             }),
           ],
 
-          if (scHoles.isNotEmpty) ...[
+          if (_pane == _SurvivorPane.survivors && scHoles.isNotEmpty) ...[
             const Divider(height: 20),
             HoleGridScorecard(
               holes:        scHoles,
@@ -5204,13 +5322,16 @@ class _SurvivorGroupCard extends StatelessWidget {
             ),
           ],
 
-          if (betUnit > 0)
+          if (_pane == _SurvivorPane.standings && betUnit > 0)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                  'Everyone antes \$${betUnit.formatBet()} per Survivor — the '
-                  'winner takes the pot'
-                  '${maxLia > 0 ? '  •  up to \$${maxLia.formatBet()} at risk' : ''}.',
+                  '$decided Survivor${decided == 1 ? '' : 's'} decided'
+                  '${svs.length - decided > 0 ? ', ${svs.length - decided} in play' : ''}.'
+                  '  Nobody is paid until a Survivor closes, so these are '
+                  'settled figures rather than a projection.'
+                  '  Everyone antes \$${betUnit.formatBet()} per Survivor'
+                  '${maxLia > 0 ? ' — up to \$${maxLia.formatBet()} at risk' : ''}.',
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant)),
             ),
