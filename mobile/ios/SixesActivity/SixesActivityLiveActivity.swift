@@ -169,40 +169,49 @@ private struct SurvivorBoardView: View {
     var isStale: Bool = false
 
     var body: some View {
-        // Spacing 3, and every size below trimmed. The lock screen's
-        // presentation has a FIXED height, and this card carries two rows
-        // more than any other in the set. Over that height iOS clips rather
-        // than redistributes — layoutPriority does not save a row that is
-        // simply past the bottom edge, which is why the footer and the gold
-        // band were still missing after the first attempt.
+        // **ViewThatFits, not another guess at the type scale.**
         //
-        // The design's card is taller than iOS allows. Shrinking type keeps
-        // every slot; dropping one would have been the alternative.
+        // The lock screen's presentation has a fixed height and iOS CLIPS past
+        // it — it does not scale or reflow, and layoutPriority cannot rescue a
+        // row that is simply past the bottom edge. Three builds were spent
+        // shrinking fonts and hoping; twice the footer was still gone.
+        //
+        // So the card now offers iOS two compositions and lets it pick the one
+        // that actually fits. The track is what gives way, which is the
+        // packet's own concession: a long Survivor should say how many holes
+        // rather than draw them. What can never give way is the footer — the
+        // money and the locked THRU corner.
+        ViewThatFits(in: .vertical) {
+            card(showTrack: true)
+            card(showTrack: false)
+        }
+    }
+
+    @ViewBuilder
+    private func card(showTrack: Bool) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            // The gold band rides ABOVE the header, pulled over the card's top
-            // edge by a negative margin, so it reads as a band across the card
-            // rather than a row inside it.
             if let ribbon = state.ribbon, !ribbon.isEmpty {
                 StrokeRibbon(text: ribbon)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            // Pinned: the locked corners may not yield to anything, so they
-            // keep their intrinsic height and the track gives way instead.
             HeaderView(header: state.header)
                 .fixedSize(horizontal: false, vertical: true)
-                .layoutPriority(2)
 
             if let who = state.who, !who.isEmpty {
                 Text(who.uppercased())
-                    .font(Sixes.body(9.5, .bold))
+                    .font(Sixes.body(9, .bold))
                     .tracking(0.5)
                     .foregroundStyle(.white.opacity(0.52))
             }
 
             HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: 3) {
+                    // 22. Below the design's 36, and deliberately: every slot
+                    // on screen beats a bigger word with the money missing
+                    // under it. Flagged to design as a decision they own.
                     Text(state.number.text)
-                        .font(Sixes.display(36, .bold))
-                        .tracking(-1)
+                        .font(Sixes.display(22, .bold))
+                        .tracking(-0.3)
                         .foregroundStyle(Sixes.side(state.number.colour))
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -212,19 +221,13 @@ private struct SurvivorBoardView: View {
                 StateView(state: state.state)
             }
 
-            if let track = state.track, !track.isEmpty {
-                // Lowest priority: of everything on the card the track is the
-                // one thing a reader can do without, and the packet already
-                // says a long Survivor should say how many holes rather than
-                // draw them.
+            if showTrack, let track = state.track, !track.isEmpty {
                 TrackView(rows: track, ruler: state.ruler ?? [])
-                    .layoutPriority(0)
             }
 
             SurvivorFooterView(footer: state.footer, thru: state.thru,
                                isStale: isStale)
                 .fixedSize(horizontal: false, vertical: true)
-                .layoutPriority(2)
         }
     }
 }
