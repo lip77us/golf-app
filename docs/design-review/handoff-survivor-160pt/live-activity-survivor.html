@@ -1,0 +1,223 @@
+<!-- @dsCard group="Live Activities" name="Survivor — lock screen" subtitle="SurvivorLiveActivity — alive or out, who is left, the Survivor in play; decider, no-stake, always-on and round complete" viewport="1560x1320" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Survivor Live Activity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--mint:#3BD89A;--muted:#5C6B62;--blue:#5AA7F5;--orange:#F3A059}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:28px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.home{position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 "Spline Sans",system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.own{background:#fff;border:1px solid #DCE5DD;border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:88px;color:var(--deepPine);font-weight:600}
+.wrap{position:relative;margin-bottom:36px}
+.cap{position:absolute;left:0;right:0;bottom:-30px;text-align:center;font-size:11.5px;font-weight:600;color:var(--muted)}
+.lock{width:352px;height:762px;border:10px solid #0B1F1A;border-radius:44px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);background:radial-gradient(120% 90% at 50% 0%,#1E4038 0%,#0C1F1B 45%,#050D0B 100%);flex:none;color:#fff}
+.lock.aod{filter:brightness(.74) saturate(.82)}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:112px;height:31px;border-radius:20px;background:#000}
+.clock{text-align:center;padding:58px 0 0}
+.clock .d{font-size:14px;font-weight:600;opacity:.72}
+.clock .t{font-family:"Schibsted Grotesk",sans-serif;font-size:74px;font-weight:600;line-height:1.02;letter-spacing:-2px;margin-top:2px}
+.la{margin:26px 14px 0;border-radius:24px;background:rgba(255,255,255,.13);backdrop-filter:blur(20px);padding:13px 15px 14px;border:.5px solid rgba(255,255,255,.14)}
+.lah{display:flex;align-items:center;gap:7px;margin-bottom:11px}
+.lah .mark{width:17px;height:17px;border-radius:5px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 10px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.lah .g{font-size:11.5px;font-weight:700;letter-spacing:.3px;white-space:nowrap}
+.lah .seg{margin-left:auto;font-size:10.5px;font-weight:600;opacity:.62;white-space:nowrap}
+.big{display:flex;flex-wrap:wrap;align-items:flex-end;column-gap:11px;row-gap:0}
+.big .who{order:0;flex:0 0 100%;font-size:9.5px;font-weight:700;letter-spacing:.5px;opacity:.52;margin-bottom:7px;white-space:nowrap}
+.big .st{font-family:"Schibsted Grotesk",sans-serif;font-size:36px;font-weight:700;line-height:.94;letter-spacing:-1px;color:var(--mint);order:1;flex:none;white-space:nowrap}
+.big .sub{order:3;flex:0 0 100%;min-width:0;margin-top:10px;font-size:12.5px;line-height:1.55;opacity:.8;white-space:nowrap}
+.big .sub .lead{font-weight:700;opacity:1}
+.big .sub .dim{opacity:.6}
+.big .st.orange{color:var(--orange)}
+.big .state{order:2;flex:none;white-space:nowrap}
+.state{margin-left:auto;text-align:right;padding-bottom:2px}
+.state b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;line-height:1;letter-spacing:.2px}
+.state u{text-decoration:none;display:block;font-size:9px;font-weight:700;letter-spacing:.4px;opacity:.55;margin-top:4px}
+.state b.mint{color:var(--mint)}.state b.orange{color:var(--orange)}
+.foot{display:flex;align-items:center;gap:8px;margin-top:11px;font-size:11px}
+.foot>span{opacity:.6}
+.foot .r{margin-left:auto;opacity:1;font-weight:600}
+.foot .par{margin-left:auto;display:flex;align-items:baseline;gap:7px;white-space:nowrap;opacity:1}
+.foot .par .t{opacity:.55;font-weight:600}
+.foot .par b{font-family:"Schibsted Grotesk",sans-serif;font-size:14px;font-weight:700;letter-spacing:-.3px;line-height:1}
+.foot .mny{opacity:1;font-weight:600}
+.trk{margin-top:11px;display:grid;column-gap:3px;row-gap:3px;align-items:center}
+.trk .hd{font-size:9.5px;font-weight:700;opacity:.55;text-align:center;font-variant-numeric:tabular-nums}
+.trk .nm{font-size:9.5px;font-weight:700;opacity:.55;white-space:nowrap}
+.trk .nm.you{opacity:.95}
+.trk i{display:block;height:11px;border-radius:3px;background:rgba(255,255,255,.17)}
+.trk i.now{background:rgba(255,255,255,.34);box-shadow:inset 0 0 0 1px rgba(255,255,255,.55)}
+.trk i.fut{background:transparent;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.trk i.out{background:var(--orange)}
+.trk i.gone{background:transparent}
+.trk i.zom{background:#C9A6E8}
+.trk i.zplay{background:transparent;box-shadow:inset 0 0 0 1px #C9A6E8}
+.trk i.back{background:var(--mint)}
+.bar{position:absolute;left:50%;bottom:9px;transform:translateX(-50%);width:126px;height:5px;border-radius:3px;background:rgba(255,255,255,.5)}
+.torch{position:absolute;bottom:38px;left:0;right:0;display:flex;justify-content:space-between;padding:0 34px;opacity:.5;font-size:17px}
+.torch span{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center}
+.la.quiet{background:rgba(10,22,18,.55);border-color:rgba(255,255,255,.1);padding:12px 15px}
+.la.quiet .lah{margin-bottom:9px}
+.la.quiet .st{font-size:22px}
+.la.quiet .sub{font-size:12px;opacity:.6;margin-top:8px}
+.di{background:#0B1F1A;border-radius:22px;padding:22px 20px;width:372px;flex:none;color:#fff;margin-bottom:36px}
+.di h4{font-family:"Schibsted Grotesk",sans-serif;font-size:13px;font-weight:700;margin:0 0 4px}
+.di p{font-size:11px;line-height:1.5;opacity:.6;margin:0 0 13px}
+.dr{margin-bottom:16px}
+.dr>span{display:block;font-size:9.5px;font-weight:700;letter-spacing:.4px;opacity:.5;margin-bottom:6px}
+.pill{background:#000;border-radius:20px;height:37px;display:inline-flex;align-items:center;gap:9px;padding:0 13px;font-size:13px;font-weight:700}
+.pill .mk{flex:none;width:15px;height:15px;border-radius:4px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 9px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.pill .mint{color:var(--mint)}
+.pill.min{width:52px;gap:0;justify-content:space-between;padding:0 11px}
+.exp{background:#000;border-radius:26px;padding:14px 16px 15px}
+.exp .top{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;opacity:.6;letter-spacing:.3px}
+.exp .mid{display:flex;align-items:flex-end;gap:10px;margin-top:9px}
+.exp .mid b{font-family:"Schibsted Grotesk",sans-serif;font-size:29px;font-weight:700;line-height:.95;color:var(--mint)}
+.exp .mid span{font-size:11.5px;opacity:.72;padding-bottom:3px;line-height:1.4}
+.exp .mid .m{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;padding-bottom:2px}
+
+.dotm,.doto{display:inline-block;width:7px;height:7px;border-radius:2px;vertical-align:1px;margin-right:5px}
+.dotm{background:var(--mint)}.doto{background:rgba(255,255,255,.32)}
+.rib{margin:-13px -15px 11px;padding:5px 15px 6px;border-radius:24px 24px 0 0;background:linear-gradient(180deg,#E9C063 0%,#D9A63F 100%);color:#3A2703;display:flex;align-items:center;gap:6px;font-size:9.5px;font-weight:700;letter-spacing:.5px;white-space:nowrap}
+.rib i{font-style:normal;font-size:11px;line-height:1}
+</style></head>
+<body>
+
+<div class="notes">
+<h1>Survivor on the lock screen</h1>
+<p>Survivor is the purest case for a live activity in the whole set. <b>You can be knocked out by a shot you did not see.</b> Three golfers are playing one hole; the moment the last card is in, one of them is out of the Survivor and out of the money on it. Nothing about that is visible to a man walking to his ball.</p>
+<p>So this card carries <b>news</b> rather than arithmetic. The figures are small and countable &mdash; the reader can hold them in his head. What he cannot hold is the fact that his afternoon just changed while he was reading a putt.</p>
+<h3>The headline is a word, not a number</h3>
+<p><b>ALIVE</b> or <b>OUT</b>. Every other card in the set opens with a value, because every other game is measured in something &mdash; holes, points, skins, dollars. Survivor is measured in <b>whether you are still in it</b>, and that is a word.</p>
+<p>It takes the reader&rsquo;s own state and nothing else. A count of survivors in the headline would be the group&rsquo;s state, and there is a slot for that.</p>
+<h3>The state slot counts the room</h3>
+<p><b>3 IN</b> over <b>SURVIVOR 2</b>. How many are left is the tension, and which Survivor is running says how much of the round is on this one. Both are group facts, which is why they sit opposite the personal word rather than inside it.</p>
+<p>When the reader is out, the count changes person: <b>2 PLAYING</b>. He is no longer one of them, and the card should not imply he is.</p>
+<h3>The track shows this Survivor only</h3>
+<p>One row per golfer, one cell per hole <b>of the Survivor being played</b> &mdash; not the round. A Survivor is two to six holes long, so the whole thing fits at a glance, and the reader can see how long this one has run and who dropped out of it on which hole.</p>
+<p>Scoping it to the current Survivor is the whole point. A round-length track is the <b>leaderboard&rsquo;s</b> job, where all the Survivors sit side by side; on a lock screen the only one that can still cost you money is the one you are in.</p>
+<p>Cells read: <b>filled</b> survived the hole, <b>outlined bright</b> is the hole in play, <b>outlined faint</b> is a hole this Survivor has not reached, <b>orange</b> is the hole a golfer went out on, and <b>empty</b> is after that. The hole numbers across the top tie the track to the locked corner above it.</p>
+<p><b>Three columns minimum.</b> On the first hole of a Survivor there is one cell per lane, so each bar runs the full width and the track reads as three progress bars rather than holes. Holding the grid at three columns puts the cell at a third of the width and the two holes ahead beside it, faint &mdash; already the mark for a hole this Survivor has not reached. It applies to holes 1 and 2 only; from three cells the grid grows normally, and it costs no height either way.</p>
+<p>The reader&rsquo;s own row is the bright name. It is deliberately not a colour &mdash; the accent on this card belongs to the headline word.</p>
+<h3>Names, because three is a small number</h3>
+<p>The sides line lists who is in and who is out, in full. A four-man group is people rather than positions &mdash; the same argument the Sixes and Nassau cards make for naming pairs.</p>
+<p>Out is <b>dimmed rather than coloured</b>. There is one accent per card and it belongs to the headline; a red name would read as an alert on a fact that has already settled.</p>
+<h3>Money settles per Survivor</h3>
+<p>Each Survivor is its own pot &mdash; <i>$5 a Survivor</i> &mdash; so money lands two or three times a round rather than once at the end. The slot fills the moment a Survivor closes and holds its running total after: <b>+$10</b>.</p>
+<p><b>Never a $0.</b> Before the first Survivor closes the slot is empty, not zero.</p>
+<p>Three golfers at five dollars means a win is <b>+$10</b> and a loss is <b>&minus;$5</b>, so the running figure only moves in those steps and <b>never falls back</b>. The cards here are one timeline: Survivor 1 won (+$10), Survivor 2 lost (+$5), Survivor 3 running, and three of five won by the last green (+$20). A reader who adds them up gets the same number the final card shows.</p>
+<h3>What gets a push</h3>
+<div class="own"><table>
+<tr><td>Out</td><td>Yes. The reader lost money on a hole he may not have seen finish.</td></tr>
+<tr><td>Survivor won</td><td>Yes, and it is the good one. A pot closed in his favour.</td></tr>
+<tr><td>Down to two</td><td>Yes. The next hole can end it.</td></tr>
+<tr><td>New Survivor</td><td>No. He is standing on the tee it starts from.</td></tr>
+</table></div>
+<h3>Open questions</h3>
+<p><b>A Survivor that reaches 18 unresolved.</b> No blood, nothing carried. The card has no state for it yet and the final would need to say so plainly rather than reading like a loss.</p>
+<p><b>Groups larger than four.</b> The names line is the ceiling. Five or more wants a count and no names, which changes the card&rsquo;s character.</p>
+</div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">8:12</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SURVIVOR</span><span class="seg">HOLE 1 &middot; PAR 4 &middot; 401</span></div>
+<div class="big"><span class="who">PAUL LIPKIN</span><span class="st">ALIVE</span><span class="state"><b>3 IN</b><u>SURVIVOR 1</u></span><span class="sub"><span class="lead">Survivor 1 starts here</span></span></div>
+<div class="trk" style="grid-template-columns:34px repeat(3,1fr)"><span></span><span class="hd">1</span><span class="hd" style="opacity:.28">2</span><span class="hd" style="opacity:.28">3</span><span class="nm you">Paul</span><i class="now"></i><i class="fut"></i><i class="fut"></i><span class="nm">Dave</span><i class="now"></i><i class="fut"></i><i class="fut"></i><span class="nm">Sam</span><i class="now"></i><i class="fut"></i><i class="fut"></i></div>
+<div class="foot"><span>$5 a Survivor</span><span class="par"><span class="t">TEE OFF</span></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Hole 1 &mdash; the three-column minimum. No money yet, and nothing behind the locked THRU</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">10:38</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SURVIVOR</span><span class="seg">HOLE 4 &middot; PAR 3 &middot; 176</span></div>
+<div class="big"><span class="who">PAUL LIPKIN</span><span class="st">ALIVE</span><span class="state"><b>3 IN</b><u>SURVIVOR 2</u></span><span class="sub"><span class="lead">Nobody out yet</span></span></div>
+<div class="trk" style="grid-template-columns:34px repeat(4,1fr)"><span></span><span class="hd">3</span><span class="hd">4</span><span class="hd">5</span><span class="hd">6</span><span class="nm you">Paul</span><i></i><i class="now"></i><i class="fut"></i><i class="fut"></i><span class="nm">Dave</span><i></i><i class="now"></i><i class="fut"></i><i class="fut"></i><span class="nm">Sam</span><i></i><i class="now"></i><i class="fut"></i><i class="fut"></i></div>
+<div class="foot"><span>$5 a Survivor</span><span class="mny">+$10</span><span class="par"><span class="t">THRU 3</span><b>+1</b></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Running &mdash; the reader is in, and so is everyone else</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">11:52</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SURVIVOR</span><span class="seg">HOLE 6 &middot; PAR 4 &middot; 440</span></div>
+<div class="big"><span class="who">PAUL LIPKIN</span><span class="st orange">OUT</span><span class="state"><b class="orange">2 PLAYING</b><u>FOR SURVIVOR 2</u></span><span class="sub"><span class="dim">You went out on the 5th</span></span></div>
+<div class="trk" style="grid-template-columns:34px repeat(4,1fr)"><span></span><span class="hd">3</span><span class="hd">4</span><span class="hd">5</span><span class="hd">6</span><span class="nm you">Paul</span><i></i><i></i><i class="out"></i><i class="gone"></i><span class="nm">Dave</span><i></i><i></i><i></i><i class="now"></i><span class="nm">Sam</span><i></i><i></i><i></i><i class="now"></i></div>
+<div class="foot"><span>$5 a Survivor</span><span class="mny">+$5</span><span class="par"><span class="t">THRU 5</span><b>+4</b></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Out &mdash; the count names the two still playing for it</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">1:04</div></div>
+<div class="la">
+<div class="rib"><i>&#9679;</i><span>POPPING ON HOLE 9</span></div>
+<div class="lah"><span class="mark">H</span><span class="g">SURVIVOR</span><span class="seg">HOLE 9 &middot; PAR 4 &middot; 384</span></div>
+<div class="big"><span class="who">PAUL LIPKIN</span><span class="st">ALIVE</span><span class="state"><b>2 IN</b><u>SAM IS OUT</u></span><span class="sub"><span class="dim">Sam out on the 8th</span></span></div>
+<div class="trk" style="grid-template-columns:34px repeat(3,1fr)"><span></span><span class="hd">7</span><span class="hd">8</span><span class="hd">9</span><span class="nm you">Paul</span><i></i><i></i><i class="now"></i><span class="nm">Dave</span><i></i><i></i><i class="now"></i><span class="nm">Sam</span><i></i><i class="out"></i><i class="gone"></i></div>
+<div class="foot"><span>$5 a Survivor</span><span class="mny">+$5</span><span class="par"><span class="t">THRU 8</span><b>+7</b></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Down to two &mdash; and the reader strokes on the hole</div></div>
+
+<div class="wrap"><div class="lock aod">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">1:31</div></div>
+<div class="la quiet">
+<div class="lah"><span class="mark" style="background:rgba(255,255,255,.22);color:#fff">H</span><span class="g" style="opacity:.72">SURVIVOR</span><span class="seg">HOLE 11 &middot; PAR 3 &middot; 191</span></div>
+<div class="big"><span class="who">PAUL LIPKIN</span><span class="st">ALIVE</span><span class="state"><b>2 IN</b><u>SURVIVOR 4</u></span><span class="sub"><span class="dim">You and Dave &middot; Sam out</span></span></div>
+<div class="foot"><span class="par"><span class="t">THRU 10</span><b>+8</b></span></div>
+</div>
+<div class="la" style="margin-top:14px;background:rgba(255,255,255,.13)">
+<div class="lah"><span class="mark">H</span><span class="g">SURVIVOR</span><span class="seg">HOLE 15 &middot; PAR 4 &middot; 429</span></div>
+<div class="big"><span class="who">PAUL LIPKIN</span><span class="st">ALIVE</span><span class="state"><b>3 IN</b><u>SURVIVOR 5</u></span><span class="sub"><span class="dim">Playing for nothing</span></span></div>
+<div class="foot"><span class="par"><span class="t">THRU 14</span><b>+9</b></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Always-on (top) &middot; no stake (below) &mdash; both keep the locked corner</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">2:58</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SURVIVOR</span><span class="seg">ROUND COMPLETE</span></div>
+<div class="big"><span class="who">PAUL LIPKIN</span><span class="st">+$20</span><span class="state"><b>83</b><u>PAR 72</u></span><span class="sub">Won Survivors 1, 3 and 5 of 5<br>Collect from <b>Sam</b></span></div>
+<div class="foot"><span>Dismisses in 5 min</span><span class="par"><span class="t">THRU 18</span><b>+11</b></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Round complete &mdash; the money leads, the finished gross beside it</div></div>
+
+<div class="di">
+<div class="dr"><span>COMPACT &mdash; ALIVE</span>
+<div class="pill"><span class="mk">H</span><span class="mint">ALIVE</span><span style="opacity:.55;font-weight:600">3 in</span></div></div>
+<div class="dr"><span>COMPACT &mdash; OUT</span>
+<div class="pill"><span class="mk">H</span><span style="color:var(--orange)">OUT</span><span style="opacity:.55;font-weight:600">2 playing</span></div></div>
+<div class="dr" style="margin-bottom:0"><span>EXPANDED &mdash; LONG PRESS</span>
+<div class="exp">
+<div class="top"><span class="mk" style="width:15px;height:15px;border-radius:4px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 9px/1 'Schibsted Grotesk',sans-serif;color:#06231A">H</span><span>SURVIVOR &middot; PAUL LIPKIN</span><span style="margin-left:auto;opacity:.75">HOLE 4 &middot; PAR 3 &middot; 176</span></div>
+<div class="mid"><b>ALIVE</b><span>thru 3 &middot; $5 a Survivor<br><span style="opacity:.6">Paul, Dave and Sam</span></span><span class="m" style="opacity:.75">3 IN</span></div>
+</div></div>
+<p style="margin:13px 0 0">Compact holds the word and the count. It is the one card in the set whose compact state is <b>readable as a sentence</b> &mdash; <i>alive, 3 in</i> &mdash; which is what a glance at Survivor is for.</p>
+</div>
+</body></html>

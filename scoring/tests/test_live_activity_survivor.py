@@ -308,15 +308,20 @@ class FreshSurvivorTrackTests(TestCase):
                                     (self.pid['Cal'], c)])
         calculate_survivor(self.fs)
 
-    def test_a_survivor_that_starts_on_the_next_hole_draws_one_cell(self):
+    def test_a_fresh_survivor_still_draws_three_columns(self):
+        """The three-column minimum. One cell per lane makes each bar run the
+        card's full width, and the track stops reading as a track — it reads as
+        three progress bars."""
         # Ann out on 1, Ben takes the decider on 2 — Survivor 1 closes and
         # Survivor 2 starts on the 3rd, which nobody has played.
         self._play(1, 6, 4, 4)
         self._play(2, 5, 4, 5)
         st = survivor_activity_state(self.fs, player_id=self.pid['Ann'])
-        self.assertEqual(st['ruler'], [3], st['ruler'])
+        self.assertEqual(st['ruler'], [3, 4, 5], st['ruler'])
         for row in st['track']:
-            self.assertEqual(row['cells'], ['now'])
+            # The hole in play, then the holes ahead — existing vocabulary, so
+            # the rule needed no new cell state.
+            self.assertEqual(row['cells'], ['now', 'fut', 'fut'])
 
     def test_it_does_not_borrow_the_previous_survivors_holes(self):
         self._play(1, 6, 4, 4)
@@ -379,3 +384,68 @@ class TrackOrderTests(TestCase):
         after = [r['label'] for r in survivor_activity_state(
             self.fs, player_id=self.pid['Ann'])['track']]
         self.assertEqual(before, after)
+
+
+class FittedCardTests(TestCase):
+    """The 160pt-fitted card
+    (docs/design-review/handoff-survivor-160pt/README.md).
+
+    Design measured the built cards rather than estimating, and two things came
+    out of it: the `who` row is deleted, and the sides row absorbs the group.
+    A third finding is not testable here but shaped the layout — shrinking the
+    headline word recovers ZERO height, because the state slot beside it is the
+    taller item and sets the row.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['survivor'])
+        self.round.bet_unit     = 5
+        self.round.primary_game = 'survivor'
+        self.round.save(update_fields=['bet_unit', 'primary_game'])
+        self.fs = make_foursome(
+            self.round, [('Ann', 0), ('Ben', 0), ('Cal', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        self.short = {m.player.name: m.player.short_name
+                      for m in self.fs.memberships.select_related('player')}
+        setup_survivor(self.fs, handicap_mode='gross', zombie_option=False)
+
+    def _play(self, hole, a, b, c):
+        submit_hole(self.fs, hole, [(self.pid['Ann'], a),
+                                    (self.pid['Ben'], b),
+                                    (self.pid['Cal'], c)])
+        calculate_survivor(self.fs)
+
+    def _state(self, who='Ann'):
+        return survivor_activity_state(self.fs, player_id=self.pid[who])
+
+    def test_the_who_row_is_gone_from_the_payload(self):
+        """It spent 19pt telling a man his own name on his own lock screen."""
+        self._play(1, 4, 4, 4)
+        self.assertNotIn('who', self._state())
+
+    def test_the_sides_row_leads_with_the_phrase_then_the_group(self):
+        self._play(1, 4, 4, 4)
+        sides = self._state()['sides']
+        self.assertEqual(len(sides), 2)
+        self.assertEqual(sides[0]['names'], 'Nobody out yet')
+        self.assertTrue(sides[0]['leading'])
+        # The group, dimmed behind it. Short names, which is what the row has
+        # room for — `Ann` auto-shortens to `A` in this fixture.
+        self.assertEqual(sides[1]['colour'], 'dim')
+        self.assertEqual(sorted(sides[1]['names'].split(', ')),
+                         sorted(self.short.values()))
+
+    def test_the_lead_phrase_names_who_went_out(self):
+        self._play(1, 6, 4, 4)
+        self.assertEqual(self._state()['sides'][0]['names'],
+                         f"{self.short['Ann']} out")
+
+    def test_tee_off_before_a_hole_is_complete(self):
+        """`THRU 0 · E` would assert an even-par round nobody has played."""
+        self.assertEqual(self._state()['thru'], 'TEE OFF')
+
+    def test_the_corner_becomes_a_real_count_once_a_hole_lands(self):
+        self._play(1, 4, 4, 4)
+        self.assertEqual(self._state()['thru'], 'THRU 1 · E')

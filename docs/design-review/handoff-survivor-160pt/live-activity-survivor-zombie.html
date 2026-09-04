@@ -1,0 +1,255 @@
+<!-- @dsCard group="Live Activities" name="Survivor Zombie — lock screen" subtitle="SurvivorZombieLiveActivity — the Zombie seat: sent there, low enough to return, and the handover; plus always-on, no-stake and round complete" viewport="1560x1320" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Survivor Zombie Live Activity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--mint:#3BD89A;--muted:#5C6B62;--blue:#5AA7F5;--orange:#F3A059}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:28px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.home{position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 "Spline Sans",system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.own{background:#fff;border:1px solid #DCE5DD;border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:88px;color:var(--deepPine);font-weight:600}
+.wrap{position:relative;margin-bottom:36px}
+.cap{position:absolute;left:0;right:0;bottom:-30px;text-align:center;font-size:11.5px;font-weight:600;color:var(--muted)}
+.lock{width:352px;height:762px;border:10px solid #0B1F1A;border-radius:44px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);background:radial-gradient(120% 90% at 50% 0%,#1E4038 0%,#0C1F1B 45%,#050D0B 100%);flex:none;color:#fff}
+.lock.aod{filter:brightness(.74) saturate(.82)}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:112px;height:31px;border-radius:20px;background:#000}
+.clock{text-align:center;padding:58px 0 0}
+.clock .d{font-size:14px;font-weight:600;opacity:.72}
+.clock .t{font-family:"Schibsted Grotesk",sans-serif;font-size:74px;font-weight:600;line-height:1.02;letter-spacing:-2px;margin-top:2px}
+.la{margin:26px 14px 0;border-radius:24px;background:rgba(255,255,255,.13);backdrop-filter:blur(20px);padding:13px 15px 14px;border:.5px solid rgba(255,255,255,.14)}
+.lah{display:flex;align-items:center;gap:7px;margin-bottom:11px}
+.lah .mark{width:17px;height:17px;border-radius:5px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 10px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.lah .g{font-size:11.5px;font-weight:700;letter-spacing:.3px;white-space:nowrap}
+.lah .seg{margin-left:auto;font-size:10.5px;font-weight:600;opacity:.62;white-space:nowrap}
+.big{display:flex;flex-wrap:wrap;align-items:flex-end;column-gap:11px;row-gap:0}
+.big .who{order:0;flex:0 0 100%;font-size:9.5px;font-weight:700;letter-spacing:.5px;opacity:.52;margin-bottom:7px;white-space:nowrap}
+.big .st{font-family:"Schibsted Grotesk",sans-serif;font-size:36px;font-weight:700;line-height:.94;letter-spacing:-1px;color:var(--mint);order:1;flex:none;white-space:nowrap}
+.big .sub{order:3;flex:0 0 100%;min-width:0;margin-top:10px;font-size:12.5px;line-height:1.55;opacity:.8;white-space:nowrap}
+.big .sub .lead{font-weight:700;opacity:1}
+.big .sub .dim{opacity:.6}
+.big .st.orange{color:var(--orange)}
+.big .state{order:2;flex:none;white-space:nowrap}
+.state{margin-left:auto;text-align:right;padding-bottom:2px}
+.state b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;line-height:1;letter-spacing:.2px}
+.state u{text-decoration:none;display:block;font-size:9px;font-weight:700;letter-spacing:.4px;opacity:.55;margin-top:4px}
+.state b.mint{color:var(--mint)}.state b.orange{color:var(--orange)}
+.foot{display:flex;align-items:center;gap:8px;margin-top:11px;font-size:11px}
+.foot>span{opacity:.6}
+.foot .r{margin-left:auto;opacity:1;font-weight:600}
+.foot .par{margin-left:auto;display:flex;align-items:baseline;gap:7px;white-space:nowrap;opacity:1}
+.foot .par .t{opacity:.55;font-weight:600}
+.foot .par b{font-family:"Schibsted Grotesk",sans-serif;font-size:14px;font-weight:700;letter-spacing:-.3px;line-height:1}
+.foot .mny{opacity:1;font-weight:600}
+.trk{margin-top:11px;display:grid;column-gap:3px;row-gap:3px;align-items:center}
+.trk .hd{font-size:9.5px;font-weight:700;opacity:.55;text-align:center;font-variant-numeric:tabular-nums}
+.trk .nm{font-size:9.5px;font-weight:700;opacity:.55;white-space:nowrap}
+.trk .nm.you{opacity:.95}
+.trk i{display:block;height:11px;border-radius:3px;background:rgba(255,255,255,.17)}
+.trk i.now{background:rgba(255,255,255,.34);box-shadow:inset 0 0 0 1px rgba(255,255,255,.55)}
+.trk i.fut{background:transparent;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.trk i.gone{background:transparent}
+.trk i.zom{background:#C9A6E8}
+.trk i.zplay{background:transparent;box-shadow:inset 0 0 0 1px #C9A6E8}
+.trk i.back{background:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.9)}
+.bar{position:absolute;left:50%;bottom:9px;transform:translateX(-50%);width:126px;height:5px;border-radius:3px;background:rgba(255,255,255,.5)}
+.torch{position:absolute;bottom:38px;left:0;right:0;display:flex;justify-content:space-between;padding:0 34px;opacity:.5;font-size:17px}
+.torch span{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center}
+.la.quiet{background:rgba(10,22,18,.55);border-color:rgba(255,255,255,.1);padding:12px 15px}
+.la.quiet .lah{margin-bottom:9px}
+.la.quiet .st{font-size:22px}
+.la.quiet .sub{font-size:12px;opacity:.6;margin-top:8px}
+.la.quiet .fld{margin-top:10px}
+.fld{margin-top:12px;display:grid;gap:0}
+.fld .r{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:.5px solid rgba(255,255,255,.13);font-size:12.5px}
+.fld .r:first-child{border-top:0;padding-top:2px}
+.fld .r .p{width:16px;text-align:right;font-size:10px;font-weight:700;opacity:.42}
+.fld .r .n{flex:1;font-weight:600;opacity:.82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fld .r .g{font-size:10.5px;font-weight:600;opacity:.44;font-variant-numeric:tabular-nums}
+.fld .r .v{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:15px;width:30px;text-align:right;font-variant-numeric:tabular-nums}
+.fld .r.you{font-size:13px}
+.fld .r.you .n{opacity:1;font-weight:700}
+.fld .r.you .v{color:var(--mint);font-size:18px}
+.fld .r.you .p{opacity:.7}
+.fld .r.you .tag{font-size:8.5px;font-weight:700;letter-spacing:.5px;background:rgba(59,216,154,.18);color:var(--mint);border-radius:4px;padding:2px 5px}
+.di{background:#0B1F1A;border-radius:22px;padding:22px 20px;width:372px;flex:none;color:#fff;margin-bottom:36px}
+.di h4{font-family:"Schibsted Grotesk",sans-serif;font-size:13px;font-weight:700;margin:0 0 4px}
+.di p{font-size:11px;line-height:1.5;opacity:.6;margin:0 0 13px}
+.dr{margin-bottom:16px}
+.dr>span{display:block;font-size:9.5px;font-weight:700;letter-spacing:.4px;opacity:.5;margin-bottom:6px}
+.pill{background:#000;border-radius:20px;height:37px;display:inline-flex;align-items:center;gap:9px;padding:0 13px;font-size:13px;font-weight:700}
+.pill .mk{flex:none;width:15px;height:15px;border-radius:4px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 9px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.pill .mint{color:var(--mint)}
+.pill.min{width:52px;gap:0;justify-content:space-between;padding:0 11px}
+.exp{background:#000;border-radius:26px;padding:14px 16px 15px}
+.exp .top{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;opacity:.6;letter-spacing:.3px}
+.exp .mid{display:flex;align-items:flex-end;gap:10px;margin-top:9px}
+.exp .mid b{font-family:"Schibsted Grotesk",sans-serif;font-size:29px;font-weight:700;line-height:.95;color:var(--mint)}
+.exp .mid span{font-size:11.5px;opacity:.72;padding-bottom:3px;line-height:1.4}
+.exp .mid .m{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;padding-bottom:2px}
+
+.plum{color:#C9A6E8}
+.big .st.plum{color:#C9A6E8}
+.state b.plum{color:#C9A6E8}
+.dotm,.doto,.dotz{display:inline-block;width:7px;height:7px;border-radius:2px;vertical-align:1px;margin-right:5px}
+.dotm{background:var(--mint)}.doto{background:rgba(255,255,255,.32)}.dotz{background:#C9A6E8}
+.rib{margin:-13px -15px 11px;padding:5px 15px 6px;border-radius:24px 24px 0 0;background:linear-gradient(180deg,#E9C063 0%,#D9A63F 100%);color:#3A2703;display:flex;align-items:center;gap:6px;font-size:9.5px;font-weight:700;letter-spacing:.5px;white-space:nowrap}
+.rib i{font-style:normal;font-size:11px;line-height:1}
+</style></head>
+<body>
+
+<div class="notes">
+<h1>The Zombie option on the lock screen</h1>
+<p>Plain Survivor has one direction of travel: you are in until you are out. <b>Zombie makes it reversible.</b> A knocked-out golfer who goes low outright on a later hole is alive again, and whoever loses that hole takes his place in Zombieville.</p>
+<p>That turns the card from a status into a <b>standing offer</b>. A man who is out still has a reason to look at his phone, which is not true of any other card in this set.</p>
+<h3>ZOMBIE is a third headline word</h3>
+<p>Plain Survivor has two: <b>ALIVE</b> and <b>OUT</b>. Here <b>OUT</b> is never used, because nobody is out while the Survivor runs &mdash; they are in the seat. The three words become <b>ALIVE</b>, <b>ZOMBIE</b> and <b>BACK IN</b>.</p>
+<p><b>BACK IN</b> is the only headline in the set that describes something that just happened rather than a standing state. It holds for one hole and then reverts to <b>ALIVE</b>, because after that it is no longer news.</p>
+<h3>The plum is the same colour, lightened for a dark card</h3>
+<p>Zombieville is plum everywhere in Halved &mdash; the setup toggle, the play screen chip, the leaderboard rail. On a lock screen the token itself is too dark to read against the glass, so this card uses a <b>lifted plum</b> and nothing else changes: same meaning, same position in the vocabulary.</p>
+<p>It is the third accent on a card that normally allows one. That is deliberate and bounded: mint for alive, orange never appears, plum for the seat. A reader who sees plum knows exactly one thing is true.</p>
+<h3>The track keeps the Zombie on it</h3>
+<p>One row per golfer, one cell per hole of the Survivor in play. Plain Survivor empties a golfer&rsquo;s row after he goes out; here it cannot, because <b>a Zombie is still hitting shots</b> &mdash; that is the entire mechanic.</p>
+<p>So the seat gets two cells of its own: <b>solid plum</b> is the hole that sent him there, and <b>plum outline</b> is every hole he plays from the seat. A return is a <b>solid white</b> cell &mdash; the brightest mark on the track, and the only one that is not a shade of something else.</p>
+<p>White rather than mint on purpose. Mint is the reader&rsquo;s colour on this card &mdash; <i>ALIVE</i>, <i>BACK IN</i>, his own good news &mdash; and a return lands on whichever row it happened to, so mint would mean the reader&rsquo;s good fortune on one row and his opponent&rsquo;s on the next. White says <b>the round turned here</b> and leaves who it turned for to the row it sits in.</p>
+<p>Read together, the two plum states answer the question the headline cannot: not just that he is in the seat, but <b>how many swings he has had at getting out of it</b>.</p>
+<p><b>Three columns minimum.</b> On the first hole of a Survivor there is one cell per lane, so each bar runs the full width and the track reads as three progress bars rather than holes. Holding the grid at three columns puts the cell at a third of the width and the two holes ahead beside it, faint. It applies to holes 1 and 2 only, and costs no height &mdash; the same three lanes either way.</p>
+<h3>The state slot carries the offer</h3>
+<p><b>LOW GETS YOU IN</b>. Not <i>you are out</i> &mdash; the reader knows that from the headline. The slot says what to do about it, which is the only actionable line on any card in the set.</p>
+<p>It is not a forecast. It states the rule, not a probability of clearing it.</p>
+<h3>A long Survivor is where the track earns its place</h3>
+<p>Two-hole Survivors need no picture &mdash; the headline and the state slot say everything. A <b>five-hole</b> Survivor is the case the track exists for: it has usually changed hands, and the reader cannot reconstruct that from a single sentence.</p>
+<p>Five cells is the practical ceiling at this width. Beyond that the cells fall under 40px and the hole numbers start to crowd, which is the point at which the card should stop drawing holes and say <b>how many</b> instead &mdash; a Survivor that long is a fact about the round rather than about the hole.</p>
+<h3>The handover is named</h3>
+<p>When the reader comes back in, somebody else goes to Zombieville, and the card names him: <b>SAM TO ZOMBIEVILLE</b>. A return that did not say who paid for it would read as a gift.</p>
+<h3>One timeline, and it adds up</h3>
+<p>Three golfers at five dollars: a Survivor won is <b>+$10</b>, one lost is <b>&minus;$5</b>. The cards on this sheet are a single round of six Survivors &mdash; 1 won, 2 lost, 3 won from the seat, 4 and 5 lost, 6 won on the 18th. The slot therefore reads <b>+$5</b> while Survivor 3 is still running, <b>+$10</b> inside Survivor 5, <b>+$5</b> again on the 18th, and <b>+$15</b> once the last one lands.</p>
+<p>The seat history is single-threaded too: <b>one man in Zombieville at a time</b>. When it is somebody else the state slot names him; when it is the reader the headline word does that job and the slot carries the offer instead. Two cards never disagree about who holds it, which is the thing a reader would notice first and trust least.</p>
+<h3>What gets a push</h3>
+<div class="own"><table>
+<tr><td>To Zombieville</td><td>Yes. It is the moment the offer opens.</td></tr>
+<tr><td>Back in</td><td>Yes, and it is the loudest push in the set.</td></tr>
+<tr><td>Zombie wins it</td><td>Yes. A Zombie who takes the Survivor on 18 kills its pot &mdash; everyone needs that.</td></tr>
+<tr><td>Still the Zombie</td><td>No. Nothing changed.</td></tr>
+</table></div>
+<h3>Open questions</h3>
+<p><b>A Zombie win on 18.</b> The rule kills that Survivor&rsquo;s payment. Money going to nobody has no state on this card yet, and it cannot read like a loss for the winner.</p>
+<p><b>Two men in Zombieville.</b> Larger groups can send more than one. The seat is drawn as singular throughout &mdash; the headline word, the handover line and the plum square all assume one occupant.</p>
+</div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">8:12</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SURVIVOR &middot; ZOMBIE</span><span class="seg">HOLE 1 &middot; PAR 4 &middot; 401</span></div>
+<div class="big"><span class="who">PAUL LIPKIN</span><span class="st">ALIVE</span><span class="state"><b>3 IN</b><u>SEAT IS EMPTY</u></span><span class="sub"><span class="lead">Survivor 1 starts here</span></span></div>
+<div class="trk" style="grid-template-columns:34px repeat(3,1fr)"><span></span><span class="hd">1</span><span class="hd" style="opacity:.28">2</span><span class="hd" style="opacity:.28">3</span><span class="nm you">Paul</span><i class="now"></i><i class="fut"></i><i class="fut"></i><span class="nm">Dave</span><i class="now"></i><i class="fut"></i><i class="fut"></i><span class="nm">Sam</span><i class="now"></i><i class="fut"></i><i class="fut"></i></div>
+<div class="foot"><span>$5 a Survivor</span><span class="par"><span class="t">TEE OFF</span></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Hole 1 &mdash; the three-column minimum, and the only state where no plum appears at all</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">12:16</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SURVIVOR &middot; ZOMBIE</span><span class="seg">HOLE 8 &middot; PAR 5 &middot; 528</span></div>
+<div class="big"><span class="who">PAUL LIPKIN</span><span class="st plum">ZOMBIE</span><span class="state"><b class="plum">LOW GETS</b><u>YOU BACK IN</u></span><span class="sub"><span class="dim">You went to the seat on the 7th</span></span></div>
+<div class="trk" style="grid-template-columns:34px repeat(3,1fr)"><span></span><span class="hd">7</span><span class="hd">8</span><span class="hd">9</span><span class="nm you">Paul</span><i class="zom"></i><i class="zplay"></i><i class="fut"></i><span class="nm">Dave</span><i></i><i class="now"></i><i class="fut"></i><span class="nm">Sam</span><i></i><i class="now"></i><i class="fut"></i></div>
+<div class="foot"><span>$5 a Survivor</span><span class="mny">+$5</span><span class="par"><span class="t">THRU 7</span><b>+6</b></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">The seat &mdash; the state slot carries the offer, not the loss</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">12:34</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SURVIVOR &middot; ZOMBIE</span><span class="seg">HOLE 9 &middot; PAR 4 &middot; 384</span></div>
+<div class="big"><span class="who">PAUL LIPKIN</span><span class="st">BACK IN</span><span class="state"><b>2 IN</b><u>SAM TO ZOMBIEVILLE</u></span><span class="sub"><span class="lead">You went low on the 8th</span></span></div>
+<div class="trk" style="grid-template-columns:34px repeat(3,1fr)"><span></span><span class="hd">7</span><span class="hd">8</span><span class="hd">9</span><span class="nm you">Paul</span><i class="zom"></i><i class="back"></i><i class="now"></i><span class="nm">Dave</span><i></i><i></i><i class="now"></i><span class="nm">Sam</span><i></i><i class="zom"></i><i class="zplay"></i></div>
+<div class="foot"><span>$5 a Survivor</span><span class="mny">+$5</span><span class="par"><span class="t">THRU 8</span><b>+6</b></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Back in &mdash; the only headline in the set that reports an event</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">1:47</div></div>
+<div class="la">
+<div class="rib"><i>&#9679;</i><span>POPPING ON HOLE 13</span></div>
+<div class="lah"><span class="mark">H</span><span class="g">SURVIVOR &middot; ZOMBIE</span><span class="seg">HOLE 13 &middot; PAR 4 &middot; 412</span></div>
+<div class="big"><span class="who">PAUL LIPKIN</span><span class="st">ALIVE</span><span class="state"><b>2 IN</b><u>SAM IS THE ZOMBIE</u></span><span class="sub"><span class="dim">Sam &mdash; low takes him back</span></span></div>
+<div class="trk" style="grid-template-columns:34px repeat(3,1fr)"><span></span><span class="hd">12</span><span class="hd">13</span><span class="hd">14</span><span class="nm you">Paul</span><i></i><i class="now"></i><i class="fut"></i><span class="nm">Dave</span><i></i><i class="now"></i><i class="fut"></i><span class="nm">Sam</span><i class="zom"></i><i class="zplay"></i><i class="fut"></i></div>
+<div class="foot"><span>$5 a Survivor</span><span class="mny">+$10</span><span class="par"><span class="t">THRU 12</span><b>+8</b></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Alive, with somebody else in the seat &mdash; and a stroke on the hole</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">2:41</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SURVIVOR &middot; ZOMBIE</span><span class="seg">HOLE 18 &middot; PAR 4 &middot; 452</span></div>
+<div class="big"><span class="who">PAUL LIPKIN</span><span class="st">ALIVE</span><span class="state"><b>2 IN</b><u>DAVE IS THE ZOMBIE</u></span><span class="sub"><span class="dim">Survivor 6 &mdash; five holes and nobody has closed it</span></span></div>
+<div class="trk" style="grid-template-columns:34px repeat(5,1fr)"><span></span><span class="hd">14</span><span class="hd">15</span><span class="hd">16</span><span class="hd">17</span><span class="hd">18</span><span class="nm you">Paul</span><i></i><i></i><i></i><i></i><i class="now"></i><span class="nm">Dave</span><i></i><i></i><i></i><i class="zom"></i><i class="zplay"></i><span class="nm">Sam</span><i></i><i class="zom"></i><i class="zplay"></i><i class="back"></i><i class="now"></i></div>
+<div class="foot"><span>$5 a Survivor</span><span class="mny">+$5</span><span class="par"><span class="t">THRU 17</span><b>+11</b></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">A five-hole Survivor on 18 &mdash; the seat has changed hands once</div></div>
+
+<div class="wrap"><div class="lock aod">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">2:09</div></div>
+<div class="la quiet">
+<div class="lah"><span class="mark" style="background:rgba(255,255,255,.22);color:#fff">H</span><span class="g" style="opacity:.72">SURVIVOR &middot; ZOMBIE</span><span class="seg">HOLE 6 &middot; PAR 4 &middot; 440</span></div>
+<div class="big"><span class="who">PAUL LIPKIN</span><span class="st plum">ZOMBIE</span><span class="state"><b class="plum">LOW GETS</b><u>YOU BACK IN</u></span><span class="sub"><span class="dim">Survivor 2 &mdash; Dave and Sam in, you in the seat</span></span></div>
+<div class="foot"><span class="par"><span class="t">THRU 5</span><b>+4</b></span></div>
+</div>
+<div class="la" style="margin-top:14px;background:rgba(255,255,255,.13)">
+<div class="lah"><span class="mark">H</span><span class="g">SURVIVOR &middot; ZOMBIE</span><span class="seg">HOLE 16 &middot; PAR 3 &middot; 168</span></div>
+<div class="big"><span class="who">PAUL LIPKIN</span><span class="st plum">ZOMBIE</span><span class="state"><b class="plum">LOW GETS</b><u>YOU BACK IN</u></span><span class="sub"><span class="dim">Playing for nothing</span></span></div>
+<div class="foot"><span class="par"><span class="t">THRU 15</span><b>+10</b></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Always-on (top) &middot; no stake (below) &mdash; the offer survives both</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">3:12</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SURVIVOR &middot; ZOMBIE</span><span class="seg">ROUND COMPLETE</span></div>
+<div class="big"><span class="who">PAUL LIPKIN</span><span class="st">+$15</span><span class="state"><b>84</b><u>PAR 72</u></span><span class="sub">Won 1, 3 and 6 of 6 &mdash; 3 from the seat<br>Collect from <b>Sam</b></span></div>
+<div class="foot"><span>Dismisses in 5 min</span><span class="par"><span class="t">THRU 18</span><b>+12</b></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Round complete &mdash; the return is worth naming in the result</div></div>
+
+<div class="di">
+<div class="dr"><span>COMPACT &mdash; THE ZOMBIE</span>
+<div class="pill"><span class="mk">H</span><span class="plum">ZOMBIE</span><span style="opacity:.55;font-weight:600">low gets you in</span></div></div>
+<div class="dr"><span>COMPACT &mdash; BACK IN</span>
+<div class="pill"><span class="mk">H</span><span class="mint">BACK IN</span><span style="opacity:.55;font-weight:600">2 in</span></div></div>
+<div class="dr" style="margin-bottom:0"><span>EXPANDED &mdash; LONG PRESS</span>
+<div class="exp">
+<div class="top"><span class="mk" style="width:15px;height:15px;border-radius:4px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 9px/1 'Schibsted Grotesk',sans-serif;color:#06231A">H</span><span>SURVIVOR &middot; PAUL LIPKIN</span><span style="margin-left:auto;opacity:.75">HOLE 8 &middot; PAR 5 &middot; 528</span></div>
+<div class="mid"><b class="plum" style="color:#C9A6E8">ZOMBIE</b><span>thru 7 &middot; $5 a Survivor<br><span style="opacity:.6">Dave and Sam are in</span></span><span class="m plum" style="font-size:13px;opacity:.85">LOW GETS IN</span></div>
+</div></div>
+<p style="margin:13px 0 0">Compact keeps the offer rather than the count, because for a Zombie the offer <b>is</b> the state. It is the only compact island in the set that carries an instruction.</p>
+</div>
+</body></html>

@@ -1,0 +1,224 @@
+<!-- @dsCard group="Live Activities" name="Survivor — 160pt fit" subtitle="Two ways to bring the Survivor card under the iOS lock-screen ceiling; measured against a drawn 160pt line" viewport="1560x1240" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Survivor at 160pt</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--mint:#3BD89A;--muted:#5C6B62;--orange:#F3A059;--red:#D8543F}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px 26px 60px;display:flex;gap:30px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.home{position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 "Spline Sans",system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)}
+.notes{max-width:352px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px;line-height:1.2}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:16px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.budget{background:#fff;border:1px solid #DCE5DD;border-radius:12px;padding:4px 13px 6px;margin:0 0 12px}
+.budget table{border-collapse:collapse;width:100%;font-size:12px}
+.budget td{padding:3.5px 0;color:var(--muted);border-bottom:1px solid #EEF3EE}
+.budget tr:last-child td{border-bottom:0}
+.budget td:first-child{color:var(--deepPine);font-weight:600}
+.budget td:last-child{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;color:var(--deepPine);width:44px}
+.budget tr.fix td:first-child{color:var(--pine)}
+.budget tr.sum td{border-top:1.5px solid var(--deepPine);border-bottom:0;padding-top:6px;color:var(--red)}
+.budget tr.sum td:last-child{color:var(--red)}
+.col{display:flex;flex-direction:column;gap:34px;flex:none}
+.colh{width:352px;margin-bottom:-14px}
+.colh b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:15px;font-weight:700;margin-bottom:3px}
+.colh span{font-size:12px;line-height:1.5;color:var(--muted);display:block}
+.colh em{font-style:normal;display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;background:var(--pine);color:#fff;border-radius:4px;padding:3px 6px;margin-bottom:7px}
+.colh em.alt{background:#95A69B}
+.wrap{position:relative;width:352px;flex:none}
+.cap{margin-top:11px;font-size:11.5px;font-weight:600;color:var(--muted);line-height:1.45}
+.cap u{text-decoration:none;font-variant-numeric:tabular-nums;color:var(--deepPine)}
+.stage{background:radial-gradient(120% 140% at 50% 0%,#1E4038 0%,#0C1F1B 55%,#050D0B 100%);border-radius:26px;padding:16px 14px 22px;color:#fff;position:relative}
+.ceil{position:absolute;left:0;right:0;height:0;border-top:1.5px dashed var(--red)}
+.ceil span{position:absolute;right:0;bottom:4px;font-size:9px;font-weight:700;letter-spacing:.4px;color:var(--red)}
+.la{border-radius:24px;background:rgba(255,255,255,.13);backdrop-filter:blur(20px);padding:12px 15px;border:.5px solid rgba(255,255,255,.14);position:relative}
+.lah{display:flex;align-items:center;gap:7px;margin-bottom:9px}
+.lah .mark{width:17px;height:17px;border-radius:5px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 10px/1 "Schibsted Grotesk",sans-serif;color:#06231A;flex:none}
+.lah .g{font-size:11.5px;font-weight:700;letter-spacing:.3px;white-space:nowrap}
+.lah .seg{margin-left:auto;font-size:10.5px;font-weight:600;opacity:.62;white-space:nowrap}
+.big{display:flex;flex-wrap:wrap;align-items:flex-end;column-gap:11px}
+.big .st{font-family:"Schibsted Grotesk",sans-serif;font-size:36px;font-weight:700;line-height:.94;letter-spacing:-1px;color:var(--mint);flex:none;white-space:nowrap}
+.big .st.orange{color:var(--orange)}
+.big .st.sm{font-size:26px;line-height:.96;letter-spacing:-.6px}
+.big .sub{flex:0 0 100%;margin-top:8px;font-size:12.5px;line-height:1.5;opacity:.8;white-space:nowrap}
+.big .sub .lead{font-weight:700;opacity:1}
+.big .sub .dim{opacity:.6}
+.state{margin-left:auto;text-align:right;padding-bottom:2px;flex:none;white-space:nowrap}
+.state b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;line-height:1;letter-spacing:.2px}
+.state u{text-decoration:none;display:block;font-size:9px;font-weight:700;letter-spacing:.4px;opacity:.55;margin-top:4px}
+.state b.orange{color:var(--orange)}
+.foot{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:11px}
+.foot>span{opacity:.6}
+.foot .mny{opacity:1;font-weight:600}
+.foot .par{margin-left:auto;display:flex;align-items:baseline;gap:7px;white-space:nowrap;opacity:1}
+.foot .par .t{opacity:.55;font-weight:600}
+.foot .par b{font-family:"Schibsted Grotesk",sans-serif;font-size:14px;font-weight:700;letter-spacing:-.3px;line-height:1}
+.trk{margin-top:9px;display:grid;column-gap:3px;row-gap:2px;align-items:center}
+.trk .hd{font-size:9.5px;font-weight:700;opacity:.55;text-align:center;font-variant-numeric:tabular-nums}
+.trk .nm{font-size:9.5px;font-weight:700;opacity:.55;white-space:nowrap}
+.trk .nm.you{opacity:.95}
+.trk i{display:block;height:9px;border-radius:2.5px;background:rgba(255,255,255,.17)}
+.trk i.now{background:rgba(255,255,255,.34);box-shadow:inset 0 0 0 1px rgba(255,255,255,.55)}
+.trk i.fut{background:transparent;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.trk i.out{background:var(--orange)}
+.trk i.gone{background:transparent}
+.rib{margin:-12px -15px 9px;padding:5px 15px 5px;border-radius:24px 24px 0 0;background:linear-gradient(180deg,#E9C063 0%,#D9A63F 100%);color:#3A2703;display:flex;align-items:center;gap:6px;font-size:9.5px;font-weight:700;letter-spacing:.5px;white-space:nowrap}
+.rib i{font-style:normal;font-size:11px;line-height:1}
+.ovf{position:absolute;left:0;right:0;bottom:0;background:repeating-linear-gradient(135deg,rgba(216,84,63,.34) 0 7px,rgba(216,84,63,.1) 7px 14px);border-radius:0 0 24px 24px;pointer-events:none}
+.di{background:#0B1F1A;border-radius:22px;padding:20px;width:352px;flex:none;color:#fff}
+.di h4{font-family:"Schibsted Grotesk",sans-serif;font-size:13px;font-weight:700;margin:0 0 4px}
+.di p{font-size:11.5px;line-height:1.55;opacity:.62;margin:0 0 13px}
+.exp{background:#000;border-radius:24px;padding:13px 15px 14px}
+.exp .top{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;opacity:.6;letter-spacing:.3px}
+.exp .mid{display:flex;align-items:flex-end;gap:10px;margin-top:9px}
+.exp .mid b{font-family:"Schibsted Grotesk",sans-serif;font-size:29px;font-weight:700;line-height:.95;color:var(--mint)}
+.exp .mid span{font-size:11.5px;opacity:.72;padding-bottom:3px;line-height:1.4}
+.exp .mid .m{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;padding-bottom:2px;opacity:.75}
+.exp .trk{margin-top:12px}
+.ev{background:#fff;border:1px solid #DCE5DD;border-radius:12px;padding:11px;margin:0 0 12px}
+.ev img{display:block;width:100%;border-radius:7px}
+.ev p{margin:9px 2px 0;font-size:11.5px;line-height:1.5}
+.di .mk{width:15px;height:15px;border-radius:4px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 9px/1 "Schibsted Grotesk",sans-serif;color:#06231A;flex:none}
+</style></head>
+<body>
+
+
+<div class="notes">
+<h1>Survivor against the 160pt ceiling</h1>
+<p>The card as drawn measures <b>~227pt</b>, and <b>~247pt</b> on a ribbon state. The ceiling is ~160. This was never a shave &mdash; it is a block over budget, which is why layout priority could not rescue the footer.</p>
+<h3>The device, this morning</h3>
+<div class="ev"><img src="screenshots/survivor-zombie-clipped-on-device.png" alt="Survivor Zombie live activity clipped on an iPhone lock screen">
+<p>Both edges cut at once. The gold ribbon survives as a <b>sliver</b> above the header; <b>Paul&rsquo;s lane is sliced horizontally</b>; the footer &mdash; <i>$5 a Survivor</i> and the locked <i>THRU</i> &mdash; is not there at all. Every field was in the payload.</p></div>
+<h3>Where the 160 goes</h3>
+<div class="budget"><table>
+<tr class="fix"><td>Card padding</td><td>27</td></tr>
+<tr class="fix"><td>Header row</td><td>28</td></tr>
+<tr class="fix"><td>Footer row</td><td>25</td></tr>
+<tr class="fix"><td colspan="2" style="color:var(--muted);font-weight:400;font-size:11.5px;padding-top:0">Locked &mdash; not negotiable &nbsp;<b style="color:var(--pine)">80pt</b></td></tr>
+<tr><td>Who &mdash; the reader</td><td>19</td></tr>
+<tr><td>Headline word</td><td>34</td></tr>
+<tr><td>Sides line</td><td>29</td></tr>
+<tr><td>Track</td><td>65</td></tr>
+<tr><td>Gold ribbon</td><td>20</td></tr>
+<tr class="sum"><td>Drawn total</td><td>247</td></tr>
+</table></div>
+<p>The locked corners take <b>80pt</b> before any Survivor content exists, leaving ~80. The headline block spends <b>82</b> on its own. The track is <b>65</b>. On a ribbon state there are <b>60</b>.</p>
+<p>So the two do not compete for a margin &mdash; <b>either one alone fills the card.</b> The track was never marginally over; it never fit.</p>
+<h3>The recovery nobody has spent yet</h3>
+<p>The <b>who</b> line &mdash; <i>PAUL LIPKIN</i> &mdash; is 19pt telling the reader his own name on his own lock screen. The sides line already names people. Dropping it is the one cut with no cost, and it is what lets the ribbon state fit without touching the word.</p>
+<h3>Shrinking the word recovers nothing</h3>
+<p>Measured on the built cards: the headline row is <b>34pt whether the word is 36 or 26</b>. The state slot beside it &mdash; <i>2 IN</i> over <i>SAM IS OUT</i> &mdash; is 32pt on its own, and it sets the floor of that row.</p>
+<p>So the 36&rarr;26 cut made at midnight <b>bought no height at all.</b> It made the word smaller for free. The height was always in the cells and the spacing; the word was never paying for anything.</p>
+<h3>Which leaves one option, not two</h3>
+<p><b>Protect the word</b> lands at <b>135pt</b>, or 153 with the ribbon, and keeps every slot the packet specifies except the track &mdash; which moves to the expanded island, where there is room for the whole thing at full size.</p>
+<p><b>Protect the track does not fit.</b> Not at 9pt cells, not with the sides line gone, not with the ribbon suppressed. Its smallest honest form measures <b>167</b> &mdash; still 7 over, and the column at right draws it crossing the line.</p>
+<p>The track can only be bought by cutting the <b>state count</b> or a <b>locked corner</b>. Both are worse than moving it.</p>
+<h3>Before the sweep</h3>
+<p>Sixes, Nassau, Skins and Rabbit each gain the same <b>80pt of locked chrome</b>. Worth running this arithmetic on all four on paper first &mdash; the ceiling is a number, and every one of those cards can be checked against it without a phone.</p>
+</div>
+
+<div class="col">
+<div class="colh"><em>Suggested</em><b>Protect the word</b><span>Track moves to the expanded island. 36px headline, sides line and both locked corners all survive.</span></div>
+
+<div class="wrap"><div class="stage">
+<div class="ceil" style="top:176px"><span>160pt CEILING</span></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SURVIVOR</span><span class="seg">HOLE 4 &middot; PAR 3 &middot; 176</span></div>
+<div class="big"><span class="st">ALIVE</span><span class="state"><b>3 IN</b><u>SURVIVOR 2</u></span><span class="sub"><span class="lead">Nobody out yet</span> <span class="dim">&middot; Paul, Dave, Sam</span></span></div>
+<div class="foot"><span>$5 a Survivor</span><span class="mny">+$10</span><span class="par"><span class="t">THRU 3</span><b>+1</b></span></div>
+</div>
+</div><div class="cap">Running &mdash; <u>135pt</u>, 25 under the line</div></div>
+
+<div class="wrap"><div class="stage">
+<div class="ceil" style="top:176px"><span>160pt CEILING</span></div>
+<div class="la">
+<div class="rib"><i>&#9679;</i><span>POPPING ON HOLE 9</span></div>
+<div class="lah"><span class="mark">H</span><span class="g">SURVIVOR</span><span class="seg">HOLE 9 &middot; PAR 4 &middot; 384</span></div>
+<div class="big"><span class="st">ALIVE</span><span class="state"><b>2 IN</b><u>SAM IS OUT</u></span><span class="sub"><span class="dim">Sam out on the 8th &middot; you and Dave</span></span></div>
+<div class="foot"><span>$5 a Survivor</span><span class="mny">+$5</span><span class="par"><span class="t">THRU 8</span><b>+7</b></span></div>
+</div>
+</div><div class="cap">Down to two, with the ribbon &mdash; <u>153pt</u>, the tightest state in the set</div></div>
+
+<div class="wrap"><div class="stage">
+<div class="ceil" style="top:176px"><span>160pt CEILING</span></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SURVIVOR</span><span class="seg">HOLE 6 &middot; PAR 4 &middot; 440</span></div>
+<div class="big"><span class="st orange">OUT</span><span class="state"><b class="orange">2 PLAYING</b><u>FOR SURVIVOR 2</u></span><span class="sub"><span class="dim">You went out on the 5th</span></span></div>
+<div class="foot"><span>$5 a Survivor</span><span class="mny">+$5</span><span class="par"><span class="t">THRU 5</span><b>+4</b></span></div>
+</div>
+</div><div class="cap">Out &mdash; <u>135pt</u></div></div>
+
+<div class="di">
+<h4>Where the track goes</h4>
+<p>The expanded island has no footer competing for the row, so the track arrives at full <b>11pt cells</b> &mdash; larger than what shipped on the lock screen this morning.</p>
+<div class="exp">
+<div class="top"><span class="mk">H</span><span>SURVIVOR 2 &middot; PAUL LIPKIN</span><span style="margin-left:auto;opacity:.75">HOLE 9 &middot; PAR 4</span></div>
+<div class="mid"><b>ALIVE</b><span>thru 8 &middot; $5 a Survivor<br><span style="opacity:.6">+$5 on the round</span></span><span class="m">2 IN</span></div>
+<div class="trk" style="grid-template-columns:36px repeat(3,1fr)"><span></span><span class="hd">7</span><span class="hd">8</span><span class="hd">9</span><span class="nm you">Paul</span><i style="height:11px"></i><i style="height:11px"></i><i class="now" style="height:11px"></i><span class="nm">Dave</span><i style="height:11px"></i><i style="height:11px"></i><i class="now" style="height:11px"></i><span class="nm">Sam</span><i style="height:11px"></i><i class="out" style="height:11px"></i><i class="gone" style="height:11px"></i></div>
+</div>
+</div>
+
+<div class="di">
+<h4>Hole 1 of a Survivor</h4>
+<p>A one-hole Survivor has one cell per lane, so each bar runs the full width and the track stops reading as a track. It reads as three progress bars.</p>
+<div class="exp" style="padding-bottom:15px">
+<div class="top"><span class="mk">H</span><span>AS DRAWN &mdash; ONE CELL</span></div>
+<div class="trk" style="grid-template-columns:36px repeat(1,1fr);margin-top:11px"><span></span><span class="hd">1</span><span class="nm you">Paul</span><i class="now" style="height:11px"></i><span class="nm">Dave</span><i class="now" style="height:11px"></i><span class="nm">Sam</span><i class="now" style="height:11px"></i></div>
+</div>
+<p style="margin:13px 0">With a <b>three-column minimum</b> the cell is a third of the width and the two holes ahead sit faint beside it &mdash; already the vocabulary for a hole this Survivor has not reached.</p>
+<div class="exp" style="padding-bottom:15px">
+<div class="top"><span class="mk">H</span><span>THREE-COLUMN MINIMUM</span></div>
+<div class="trk" style="grid-template-columns:36px repeat(3,1fr);margin-top:11px"><span></span><span class="hd">1</span><span class="hd" style="opacity:.28">2</span><span class="hd" style="opacity:.28">3</span><span class="nm you">Paul</span><i class="now" style="height:11px"></i><i class="fut" style="height:11px"></i><i class="fut" style="height:11px"></i><span class="nm">Dave</span><i class="now" style="height:11px"></i><i class="fut" style="height:11px"></i><i class="fut" style="height:11px"></i><span class="nm">Sam</span><i class="now" style="height:11px"></i><i class="fut" style="height:11px"></i><i class="fut" style="height:11px"></i></div>
+</div>
+<p style="margin:13px 0 0">Hole 2 gets the same grid &mdash; two live cells, one faint. From hole 3 on it grows normally, so the minimum only ever applies to the first two holes of a Survivor, and it costs no height: the same three lanes either way.</p>
+</div>
+</div>
+
+<div class="col">
+<div class="colh"><em class="alt">Does not fit</em><b>Protect the track</b><span>Word at 26 and the sides line dropped &mdash; and it is still over. The word shrink recovers nothing; the state slot holds the row at 34.</span></div>
+
+<div class="wrap"><div class="stage">
+<div class="ceil" style="top:176px"><span>160pt CEILING</span></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SURVIVOR</span><span class="seg">HOLE 4 &middot; PAR 3 &middot; 176</span></div>
+<div class="big"><span class="st sm">ALIVE</span><span class="state"><b>3 IN</b><u>SURVIVOR 2</u></span></div>
+<div class="trk" style="grid-template-columns:34px repeat(4,1fr)"><span></span><span class="hd">3</span><span class="hd">4</span><span class="hd">5</span><span class="hd">6</span><span class="nm you">Paul</span><i></i><i class="now"></i><i class="fut"></i><i class="fut"></i><span class="nm">Dave</span><i></i><i class="now"></i><i class="fut"></i><i class="fut"></i><span class="nm">Sam</span><i></i><i class="now"></i><i class="fut"></i><i class="fut"></i></div>
+<div class="foot"><span>$5 a Survivor</span><span class="mny">+$10</span><span class="par"><span class="t">THRU 3</span><b>+1</b></span></div>
+<div class="ovf" style="height:7px"></div>
+</div>
+</div><div class="cap">Running &mdash; <u>167pt</u>. Over by 7, with the word already at 26 and no sides line. The hatched band is the footer</div></div>
+
+<div class="wrap"><div class="stage">
+<div class="ceil" style="top:176px"><span>160pt CEILING</span></div>
+<div class="la">
+<div class="rib"><i>&#9679;</i><span>POPPING ON HOLE 9</span></div>
+<div class="lah"><span class="mark">H</span><span class="g">SURVIVOR</span><span class="seg">HOLE 9 &middot; PAR 4 &middot; 384</span></div>
+<div class="big"><span class="st sm">ALIVE</span><span class="state"><b>2 IN</b><u>SAM IS OUT</u></span></div>
+<div class="trk" style="grid-template-columns:34px repeat(3,1fr)"><span></span><span class="hd">7</span><span class="hd">8</span><span class="hd">9</span><span class="nm you">Paul</span><i></i><i></i><i class="now"></i><span class="nm">Dave</span><i></i><i></i><i class="now"></i><span class="nm">Sam</span><i></i><i class="out"></i><i class="gone"></i></div>
+<div class="foot"><span>$5 a Survivor</span><span class="mny">+$5</span><span class="par"><span class="t">THRU 8</span><b>+7</b></span></div>
+<div class="ovf" style="height:25px"></div>
+</div>
+</div><div class="cap">With the ribbon &mdash; <u>185pt</u>. Over by 25 &mdash; the footer and the bottom lane both, which is what the phone showed</div></div>
+
+<div class="wrap"><div class="stage">
+<div class="ceil" style="top:176px"><span>160pt CEILING</span></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SURVIVOR</span><span class="seg">HOLE 9 &middot; PAR 4 &middot; 384</span></div>
+<div class="big"><span class="st sm">ALIVE</span><span class="state"><b>2 IN</b><u>SAM IS OUT</u></span></div>
+<div class="trk" style="grid-template-columns:34px repeat(3,1fr)"><span></span><span class="hd">7</span><span class="hd">8</span><span class="hd">9</span><span class="nm you">Paul</span><i></i><i></i><i class="now"></i><span class="nm">Dave</span><i></i><i></i><i class="now"></i><span class="nm">Sam</span><i></i><i class="out"></i><i class="gone"></i></div>
+<div class="foot"><span>$5 a Survivor</span><span class="mny">+$5</span><span class="par"><span class="t">THRU 8</span><b>+7</b></span></div>
+<div class="ovf" style="height:7px"></div>
+</div>
+</div><div class="cap">The same state with the ribbon suppressed &mdash; <u>167pt</u>. Still over. Suppressing the stroke on the state where it matters most buys 18 and needs 25</div></div>
+
+<div class="di">
+<h4>Why the alternative cannot be paid for</h4>
+<p>The word dropping to 26 is not a cost, because it is not a payment &mdash; the row stays 34pt either way. Nothing was bought, and the sides line was spent for nothing.</p>
+<p style="margin-bottom:0">A three-lane track is <b>59pt at 9pt cells</b> and 65 at 11 &mdash; four rows of type, so cell size barely moves it. There is no 59 in a card with 80pt of locked chrome and a 34pt headline row that will not give any back.</p>
+</div>
+</div>
+
+</body></html>

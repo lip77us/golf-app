@@ -161,8 +161,13 @@ def thru_line(holes_played, to_par) -> str:
 
     Also shared ahead of the sweep onto the other cards.
     """
-    if not holes_played or to_par is None:
-        return ''
+    # Before any hole of the round is complete there is no THRU count and no
+    # gross to par. The corner stays occupied without inventing a score:
+    # `THRU 0 · E` would assert an even-par round nobody has played.
+    if not holes_played:
+        return 'TEE OFF'
+    if to_par is None:
+        return f'THRU {holes_played}'
     return f'THRU {holes_played} · {fmt_to_par(to_par)}'
 
 

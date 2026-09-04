@@ -33,6 +33,8 @@ KIND = 'survivor'
 # cells fall under 40px and the ruler crowds, so a longer Survivor says how
 # many holes rather than drawing them.
 MAX_TRACK_HOLES = 5
+# Below three the track reads as progress bars rather than a grid.
+MIN_TRACK_HOLES = 3
 
 
 def _cash(v) -> str:
@@ -149,24 +151,35 @@ def _state_slot(summary, player_id, holes, zombie_on, names):
 
 
 def _sides(summary, holes, zombie_on, names):
-    """Who is in, who is out — one line, the reader's row carried by the
-    `who` label above rather than by a colour here."""
+    """ONE row: a lead phrase, then the group.
+
+    `Nobody out yet · Paul, Dave, Sam` — the lead phrase at full opacity, the
+    names dimmed behind it. Two rows became one when the card was fitted to the
+    160pt ceiling, and the reader's own name is no longer printed above it: the
+    `who` line spent 19pt telling a man his own name on his own lock screen,
+    and this row already names everyone.
+    """
     cur   = summary.get('current') or {}
     alive = list(cur.get('alive_ids') or [])
     zid   = cur.get('zombie_id')
 
-    ins  = ' & '.join(names.get(p, '') for p in alive if p != zid)
-    out  = names.get(zid) if zid else next(
+    out = names.get(zid) if zid else next(
         (h.get('eliminated_short') for h in reversed(holes)
          if h.get('eliminated_id') and h['eliminated_id'] not in alive), None)
 
-    rows = [{'names': ins or '—', 'colour': 'neutral', 'leading': True}]
-    if out:
-        rows.append({'names': (f'{out} in Zombieville' if zombie_on and zid
-                               else f'{out} out'),
-                     'colour': 'plum' if (zombie_on and zid) else 'dim',
-                     'leading': False})
-    return rows
+    if zombie_on and zid:
+        lead = f'{names.get(zid, "")} in Zombieville'
+    elif out:
+        lead = f'{out} out'
+    else:
+        lead = 'Nobody out yet'
+
+    group = ', '.join(names.get(p, '') for p in alive if p != zid)
+    return [
+        {'names': lead,  'colour': 'plum' if (zombie_on and zid) else 'neutral',
+         'leading': True},
+        {'names': group, 'colour': 'dim', 'leading': False},
+    ]
 
 
 def _track(summary, holes, hole_in_play, players, player_id, zombie_on):
@@ -185,12 +198,15 @@ def _track(summary, holes, hole_in_play, players, player_id, zombie_on):
         # A Survivor that starts on the hole in play has no history to draw.
         # One cell is the honest picture — "this one starts here" — where the
         # round's other holes would be a different Survivor's story.
-        return ([hole_in_play], [
+        if not hole_in_play:
+            return [], []
+        ruler = [hole_in_play + i for i in range(MIN_TRACK_HOLES)]
+        return ruler, [
             {'label': p.get('short_name') or p.get('name') or '',
-             'cells': ['now'],
+             'cells': ['now'] + ['fut'] * (MIN_TRACK_HOLES - 1),
              'is_reader': p['player_id'] == player_id}
             for p in players
-        ]) if hole_in_play else ([], [])
+        ]
 
     # The window ENDS at the hole in play.
     #
@@ -205,6 +221,13 @@ def _track(summary, holes, hole_in_play, players, player_id, zombie_on):
     if hole_in_play:
         ruler = [h for h in ruler if h <= hole_in_play]
     ruler = ruler[-MAX_TRACK_HOLES:]
+
+    # Three-column minimum. On the first hole of a Survivor there is one cell
+    # per lane, so each bar runs the card's full width and the track stops
+    # reading as a track — it reads as three progress bars. Holes ahead draw as
+    # `fut`, vocabulary the track already has, so this needs no new cell state.
+    while len(ruler) < MIN_TRACK_HOLES and ruler:
+        ruler.append(ruler[-1] + 1)
 
     by_hole = {h['hole']: h for h in played}
     rows = []
@@ -340,7 +363,9 @@ def survivor_activity_state(foursome, *, player_id=None, thru=None) -> dict:
             'segment': ('ROUND COMPLETE' if finished
                         else hole_facts(foursome, player_id, hole_in_play)),
         },
-        'who'    : names.get(player_id, ''),
+        # `who` is deliberately absent: the fitted card deletes that row and the
+        # sides line names everyone. Kept out of the payload rather than sent
+        # and ignored, so the two cannot drift.
         'number' : {'text': headline, 'colour': colour},
         'sides'  : _sides(summary, holes, zombie_on, names),
         'state'  : _state_slot(summary, player_id, holes, zombie_on, names),

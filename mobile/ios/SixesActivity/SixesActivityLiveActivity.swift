@@ -51,9 +51,21 @@ struct SixesActivityLiveActivity: Widget {
                         .foregroundStyle(.white.opacity(0.55))
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(spacing: 5) {
-                        SidesView(sides: s.sides)
+                    VStack(alignment: .leading, spacing: 6) {
+                        if s.kind == "survivor" {
+                            SurvivorSidesView(sides: s.sides)
+                        } else {
+                            SidesView(sides: s.sides)
+                        }
                         PipsView(pips: s.pips)
+                        // **The track lives here**, not on the lock screen.
+                        // Expanded has no locked footer competing for the row,
+                        // so it gets 11pt cells — larger than it ever had on
+                        // the card it was cut from.
+                        if let track = s.track, !track.isEmpty {
+                            TrackView(rows: track, ruler: s.ruler ?? [],
+                                      cellHeight: 11)
+                        }
                     }
                 }
             } compactLeading: {
@@ -169,65 +181,84 @@ private struct SurvivorBoardView: View {
     var isStale: Bool = false
 
     var body: some View {
-        // **ViewThatFits, not another guess at the type scale.**
+        // The FITTED card — four rows, no track
+        // (docs/design-review/handoff-survivor-160pt/README.md).
         //
-        // The lock screen's presentation has a fixed height and iOS CLIPS past
-        // it — it does not scale or reflow, and layoutPriority cannot rescue a
-        // row that is simply past the bottom edge. Three builds were spent
-        // shrinking fonts and hoping; twice the footer was still gone.
+        // Design measured the built cards rather than estimating, and the
+        // finding that decided this layout is worth keeping in front of
+        // whoever edits it next: **shrinking the headline word recovers zero
+        // height.** The word sits in a row with the state slot, the state slot
+        // is 34pt, and the taller item sets the row. Three builds went on
+        // taking the word 36 -> 26 -> 22 for height it never bought.
         //
-        // So the card now offers iOS two compositions and lets it pick the one
-        // that actually fits. The track is what gives way, which is the
-        // packet's own concession: a long Survivor should say how many holes
-        // rather than draw them. What can never give way is the footer — the
-        // money and the locked THRU corner.
-        ViewThatFits(in: .vertical) {
-            card(showTrack: true)
-            card(showTrack: false)
-        }
-    }
-
-    @ViewBuilder
-    private func card(showTrack: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+        // The height came from deleting the `who` row (19pt spent telling a
+        // man his own name on his own lock screen) and moving the track to the
+        // expanded island, where it gets BIGGER cells than it had here.
+        //
+        // Measured: 135pt running, 153pt with the ribbon, against a ~160 cap.
+        VStack(alignment: .leading, spacing: 0) {
             if let ribbon = state.ribbon, !ribbon.isEmpty {
                 StrokeRibbon(text: ribbon)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 9)
             }
+
             HeaderView(header: state.header)
-                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 9)
 
-            if let who = state.who, !who.isEmpty {
-                Text(who.uppercased())
-                    .font(Sixes.body(9, .bold))
-                    .tracking(0.5)
-                    .foregroundStyle(.white.opacity(0.52))
-            }
-
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    // 22. Below the design's 36, and deliberately: every slot
-                    // on screen beats a bigger word with the money missing
-                    // under it. Flagged to design as a decision they own.
-                    Text(state.number.text)
-                        .font(Sixes.display(22, .bold))
-                        .tracking(-0.3)
-                        .foregroundStyle(Sixes.side(state.number.colour))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    SidesView(sides: state.sides)
-                }
+            HStack(alignment: .bottom, spacing: 11) {
+                // 36. Back to the design's size, and it costs nothing: the
+                // state slot beside it already sets this row's height.
+                Text(state.number.text)
+                    .font(Sixes.display(36, .bold))
+                    .tracking(-1)
+                    .foregroundStyle(Sixes.side(state.number.colour))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
                 Spacer(minLength: 0)
-                StateView(state: state.state)
+                StateView(state: state.state,
+                          colour: Sixes.side(state.number.colour))
             }
 
-            if showTrack, let track = state.track, !track.isEmpty {
-                TrackView(rows: track, ruler: state.ruler ?? [])
-            }
+            SurvivorSidesView(sides: state.sides)
+                .padding(.top, 8)
 
             SurvivorFooterView(footer: state.footer, thru: state.thru,
                                isStale: isStale)
-                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 9)
+        }
+    }
+}
+
+/// The fitted card's sides row — ONE line, not two.
+///
+/// `Nobody out yet · Paul, Dave, Sam`: the lead phrase carries the state at
+/// full weight, the group sits behind it dimmed. The old card spent a row on
+/// each and a `who` row above them naming the reader; all three collapse to
+/// this, which is most of what got the card under the ceiling.
+private struct SurvivorSidesView: View {
+    let sides: [SixesActivityAttributes.ContentState.Side]
+
+    var body: some View {
+        let lead  = sides.first
+        let group = sides.count > 1 ? sides[1].names : ""
+        return HStack(spacing: 5) {
+            if let lead, !lead.names.isEmpty {
+                Text(lead.names)
+                    .font(Sixes.body(12.5, .bold))
+                    .foregroundStyle(Sixes.side(lead.colour).opacity(
+                        lead.colour == "neutral" ? 0.9 : 1))
+            }
+            if !group.isEmpty {
+                Text("·")
+                    .font(Sixes.body(12.5))
+                    .foregroundStyle(.white.opacity(0.35))
+                Text(group)
+                    .font(Sixes.body(12.5))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            Spacer(minLength: 0)
         }
     }
 }
@@ -277,6 +308,9 @@ private struct StrokeRibbon: View {
 private struct TrackView: View {
     let rows: [SixesActivityAttributes.ContentState.TrackRow]
     let ruler: [Int]
+    /// 11 in the expanded island, which has the room. The lock-screen card no
+    /// longer draws a track at all.
+    var cellHeight: CGFloat = 11
 
     /// A return is WHITE, not mint. Mint is the reader's colour on this card,
     /// and a return lands on whichever row it happened to — mint would mean
@@ -678,12 +712,15 @@ private struct SidesView: View {
 /// changes how the next hole gets played, and it is the word golfers say.
 private struct StateView: View {
     let state: SixesActivityAttributes.ContentState.MatchState
+    /// The fitted Survivor card colour-matches the count to its headline word.
+    /// Nil everywhere else, which keeps every other card exactly as it was.
+    var colour: Color? = nil
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 2) {
             Text(state.word)
                 .font(Sixes.display(17, .semibold))
-                .foregroundStyle(.white.opacity(0.92))
+                .foregroundStyle(colour ?? .white.opacity(0.92))
             Text(state.toPlay)
                 .font(Sixes.body(9, .bold))
                 .tracking(0.4)
