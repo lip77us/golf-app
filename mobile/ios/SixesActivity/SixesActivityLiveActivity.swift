@@ -95,8 +95,13 @@ private struct LockScreenView: View {
     /// with `BoardView` rather than a layout of its own. Singles and fourball
     /// differ only in how many names sit on a side, which the server has
     /// already joined with an ampersand.
+    /// Sequoya 3s draws with `BoardView` too, for the same reason: three
+    /// rows, both pairs named, the match word, a footer. What is different
+    /// about it — the pairing rotating every third hole, the press riding in
+    /// the footer beside the stake — the SERVER has already resolved into the
+    /// same five slots, so there is no layout of its own to add.
     static let known: Set<String> = ["sixes", "rabbit", "nassau", "skins",
-                                     "match", "survivor"]
+                                     "match", "survivor", "sequoya"]
 
     let state: SixesActivityAttributes.ContentState
     var isStale: Bool = false

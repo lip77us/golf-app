@@ -484,6 +484,7 @@ const List<GameMeta> kGameCatalog = [
     exactPlayers : 4,
     // Six three-hole matches on fixed 1-3 / 4-6 / … boundaries need all 18.
     requiresFullRound: true,
+    hasLiveActivity: true,
     // Owns the round's team structure and its own score entry.
     allowsSideGames: false,
   ),

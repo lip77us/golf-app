@@ -229,8 +229,18 @@ def _survivor(foursome, player_id, *, final):
                                    thru=holes_played(foursome))
 
 
+def _sequoya(foursome, player_id, *, final):
+    from services.live_activity_sequoya import (sequoya_activity_state,
+                                                sequoya_final_state)
+    if final:
+        return sequoya_final_state(foursome, player_id=player_id)
+    return sequoya_activity_state(foursome, player_id=player_id,
+                                  thru=holes_played(foursome))
+
+
 BUILDERS = {
     'sixes'   : _sixes,
+    'sequoya_threes': _sequoya,
     'survivor': _survivor,
     'rabbit'  : _rabbit,
     'nassau'  : _nassau,
@@ -253,7 +263,8 @@ _SLUG_AWARE = {'match_18', 'fourball'}
 
 # slug -> the card `kind` its builder declares, where that differs from the
 # slug. Only needed for a builder serving several games.
-CARD_KIND = {'match_18': 'match', 'fourball': 'match'}
+CARD_KIND = {'match_18': 'match', 'fourball': 'match',
+             'sequoya_threes': 'sequoya'}
 
 # Cards no client in the wild can draw yet.
 #
@@ -276,11 +287,12 @@ CARD_KIND = {'match_18': 'match', 'fourball': 'match'}
 # durable fix — neither token model records a version today), this list is the
 # only thing standing between a server deploy and every installed phone.
 #
-# **Empty as of 2.8.0+27**, the build that carries both layouts. Both cards
-# went in with their builders and came out with their build, which is the
-# intended shape — `match` is the one that ever reached a phone early, and this
-# comment is why the set still exists rather than being deleted.
-UNSHIPPED_KINDS: set = set()
+# It emptied at 2.8.0+27, the build that carries the sixes/rabbit/nassau/skins/
+# match/survivor layouts. `sequoya` went in on the day its builder was written
+# and leaves in the same commit that bumps the build carrying its layout —
+# which is the intended shape, and the reason this set still exists rather
+# than being deleted.
+UNSHIPPED_KINDS: set = {'sequoya'}
 
 
 def card_kind(slug: str) -> str:
