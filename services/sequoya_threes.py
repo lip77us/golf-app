@@ -95,8 +95,9 @@ def _real_members(foursome):
 
 
 def setup_sequoya_threes(foursome, side1_ids, *,
-                         handicap_mode=HandicapMode.NET, net_percent=100,
-                         bet_amount=5, press_mode=SequoyaThreesGame.PRESS_AUTO):
+                         handicap_mode=HandicapMode.STROKES_OFF,
+                         net_percent=100, bet_amount=5,
+                         press_mode=SequoyaThreesGame.PRESS_AUTO):
     """Create or update the game. Only match 1's pairing is taken."""
     game, _ = SequoyaThreesGame.objects.update_or_create(
         foursome=foursome,
@@ -114,6 +115,24 @@ def setup_sequoya_threes(foursome, side1_ids, *,
     # all — and silently score the round under settings nobody chose.
     foursome._state.fields_cache.pop('sequoya_threes_game', None)
     return game
+
+
+def auto_press_holes(game, net, side1, side2, match_index):
+    """The holes an auto press covers in this match, or None if none opened.
+
+    Derived, never stored — and derived in ONE place, because the rule that
+    a hand-called press cannot sit on top of an auto press is only true if
+    both agree on whether one exists.
+    """
+    if game.press_mode == SequoyaThreesGame.PRESS_NONE:
+        return None
+    lo, hi = MATCH_HOLES[match_index - 1]
+    # The first hole of the match being WON (not halved) opens a second bet
+    # over the holes that remain.
+    if _hole_winner(net, side1, side2, lo) not in (1, 2):
+        return None
+    rest = list(range(lo + 1, hi + 1))
+    return rest or None
 
 
 def press_start_hole(net, side1, side2, match_index, current_hole):
@@ -173,6 +192,13 @@ def call_press(foursome, *, match_index, side, called_by_id, current_hole):
     trailing = 2 if margin > 0 else 1
     if side != trailing:
         raise ValueError('Only the side that is down may press.')
+
+    # An auto press IS the press. Stacking a hand-called one on top would put
+    # a second bet over holes the auto press already covers — two bets that
+    # can only ever settle the same way, which is a double, not a press.
+    if auto_press_holes(game, net, side1, side2, match_index) is not None:
+        raise ValueError('The auto press already covers the rest of this '
+                         'match.')
 
     if game.presses.filter(match_index=match_index).exists():
         raise ValueError('This match already carries a hand-called press.')
@@ -293,24 +319,23 @@ def _bets_for_match(game, net, side1, side2, match_index, manual):
         **_settle_bet(net, side1, side2, holes),
     }]
 
-    if game.press_mode != SequoyaThreesGame.PRESS_NONE:
-        # Auto: the first hole of the match being WON (not halved) opens a
-        # second bet over the holes that remain. Nobody calls it, so nothing
-        # is stored — it is derived here every time.
-        first = _hole_winner(net, side1, side2, lo)
-        if first in (1, 2):
-            rest = holes[1:]
-            if rest:
-                bets.append({
-                    'kind'   : 'auto_press',
-                    'label'  : 'Auto press',
-                    'holes'  : rest,
-                    'amount' : amount,
-                    'opened_by_side': first,
-                    **_settle_bet(net, side1, side2, rest),
-                })
+    auto = auto_press_holes(game, net, side1, side2, match_index)
+    if auto:
+        bets.append({
+            'kind'   : 'auto_press',
+            'label'  : 'Auto press',
+            'holes'  : auto,
+            'amount' : amount,
+            'opened_by_side': _hole_winner(net, side1, side2, lo),
+            **_settle_bet(net, side1, side2, auto),
+        })
 
-    for pr in manual:
+    # A stored hand-called press is IGNORED while an auto press is running.
+    # The rule is that the two never coexist, and this module derives rather
+    # than stores, so it has to hold of the summary however the row got
+    # there — including a round that predates the rule, and a round where an
+    # edited first hole opens the auto press after the fact.
+    for pr in (manual if auto is None else []):
         rest = [h for h in holes if h >= pr.start_hole]
         if not rest:
             continue
@@ -455,9 +480,18 @@ def sequoya_threes_summary(foursome) -> dict | None:
         'transfers'    : _transfers(nets, names),
         'live_bets'    : live_bets,
         # What the round could still cost, printed on setup and in the footer.
+        #
+        # **A match carries at most TWO bets**, never three: an auto press and
+        # a hand-called one cannot coexist — the auto press already covers the
+        # rest of the match, so a second bet over the same holes would be a
+        # double, not a press. So the ceiling with presses on is 2x, whichever
+        # press mode is chosen.
         'exposure'     : {
             'no_presses' : round(MATCH_COUNT * amount, 2),
             'with_auto'  : round(MATCH_COUNT * amount * 2, 2),
-            'ceiling'    : round(MATCH_COUNT * amount * 3, 2),
+            'ceiling'    : round(
+                MATCH_COUNT * amount
+                * (1 if game.press_mode == SequoyaThreesGame.PRESS_NONE else 2),
+                2),
         },
     }

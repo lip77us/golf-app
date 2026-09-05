@@ -763,9 +763,14 @@ class _BetBanner extends StatelessWidget {
 // The press offer — named by the hole it would cover
 // ===========================================================================
 
-/// Amber, and lit only when a hand-called press is actually legal: the reader
-/// is on the TRAILING side, a hole in the match has been decided, a hole is
-/// left to cover, and this match carries no called press yet.
+/// Amber, and lit only when a hand-called press is actually legal: no auto
+/// press is running, a hole in the match has been decided, a hole is left to
+/// cover, and this match carries no called press yet.
+///
+/// **An auto press rules a hand-called one out.** It already covers the rest
+/// of the match, so a second bet over the same holes could only ever settle
+/// the same way. In practice that means a called press exists only in a match
+/// whose first hole was HALVED — which is exactly when a group wants one.
 ///
 /// **A press is called on the tee, so it covers the hole being played.** That
 /// is what makes the LAST hole of a match pressable — two down on the 9th tee
@@ -790,6 +795,7 @@ class _PressOffer extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final already  = match.bets.any((b) => b.kind == 'manual_press');
+    final auto     = match.bets.where((b) => b.kind == 'auto_press').firstOrNull;
     final headBet  = match.bets.isEmpty ? null : match.bets.first;
     final trailing = (headBet == null || headBet.margin == 0)
         ? null
@@ -797,7 +803,8 @@ class _PressOffer extends StatelessWidget {
     final start    = holeScored ? hole + 1 : hole;
     final roomLeft = start <= match.endHole;
     final mine     = mySide != null && mySide == trailing;
-    final legal    = !already && roomLeft && trailing != null && !busy;
+    final legal    = !already && auto == null && roomLeft
+                     && trailing != null && !busy;
     final covers   = start == match.endHole
         ? 'hole $start' : 'holes $start–${match.endHole}';
     final down     = trailing == null
@@ -809,7 +816,15 @@ class _PressOffer extends StatelessWidget {
     final String body;
     if (already) {
       title = 'Press already called in this match';
-      body  = 'One hand-called press per match. The auto press is separate.';
+      body  = 'One hand-called press per match.';
+    } else if (auto != null) {
+      // The auto press already covers the rest of the match, so a second bet
+      // over the same holes could only ever settle the same way — a double,
+      // not a press.
+      title = 'The auto press has it';
+      body  = 'It already covers ${auto.holeRange} at '
+              '\$${auto.amount.toStringAsFixed(0)} a man. A hand-called press '
+              'over the same holes would be a double, not a press.';
     } else if (!roomLeft) {
       title = 'Press';
       body  = 'No holes left in this match for a press to cover.';

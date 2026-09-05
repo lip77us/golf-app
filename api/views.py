@@ -5450,7 +5450,7 @@ class NassauSetupView(APIView):
             foursome,
             team1_ids     = d['team1_player_ids'],
             team2_ids     = d['team2_player_ids'],
-            handicap_mode = d.get('handicap_mode', 'net'),
+            handicap_mode = d.get('handicap_mode', 'strokes_off'),
             net_percent   = d.get('net_percent', 100),
             press_mode    = d.get('press_mode', 'none'),
             press_unit    = d.get('press_unit', '0.00'),

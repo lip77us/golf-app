@@ -3401,9 +3401,12 @@ class SequoyaThreesGame(models.Model):
                         'tournament.Foursome', on_delete=models.CASCADE,
                         related_name='sequoya_threes_game')
     status        = models.CharField(max_length=20, default='in_progress')
+    # Strokes-off-low by default: six 2v2 matches are a MATCH game, and a
+    # match is played off the low ball. Full net would hand the high golfer
+    # his whole allowance in a three-hole match.
     handicap_mode = models.CharField(
                         max_length=20, choices=HandicapMode.choices,
-                        default=HandicapMode.NET)
+                        default=HandicapMode.STROKES_OFF)
     net_percent   = models.PositiveSmallIntegerField(default=100)
     # Per MAN, per bet — not per pair. Lose a $5 match and you are down $5 and
     # so is your partner; the two winners each collect $5.

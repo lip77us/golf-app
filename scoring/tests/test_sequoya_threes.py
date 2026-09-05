@@ -224,32 +224,38 @@ class PressTests(TestCase):
         return [b for b in self._match(n)['bets']
                 if b['kind'] == 'manual_press'][0]
 
-    def test_a_called_press_covers_the_hole_being_played(self):
-        """A press is called on the TEE, so it covers the hole about to be
-        played — not merely the one after it."""
-        self._play(1, 4, 4, 5, 5)
-        call_press(self.fs, match_index=1, side=2,
-                   called_by_id=self.pid['Cal'], current_hole=2)
-        self.assertEqual(self._manual()['holes'], [2, 3])
+    def test_a_hand_called_press_cannot_sit_on_top_of_an_auto_press(self):
+        """The auto press IS the press. A second bet over the holes it already
+        covers can only ever settle the same way — a double, not a press."""
+        self._play(1, 4, 4, 5, 5)          # Ann/Ben win 1 -> auto press on 2-3
+        with self.assertRaises(ValueError):
+            call_press(self.fs, match_index=1, side=2,
+                       called_by_id=self.pid['Cal'], current_hole=2)
 
-    def test_the_last_hole_of_a_match_can_be_pressed(self):
-        """Two down standing on the last tee is the classic press. Starting a
-        press on the NEXT hole made it impossible — that hole belongs to the
-        next match and a different pairing."""
-        self._play(1, 4, 4, 5, 5)
-        self._play(2, 4, 4, 5, 5)          # Ann/Ben 2 up with 1 to play
-        call_press(self.fs, match_index=1, side=2,
-                   called_by_id=self.pid['Cal'], current_hole=3)
+    def test_a_hand_called_press_covers_the_hole_being_played(self):
+        """It is called on the TEE, so it covers the hole about to be played.
+
+        Starting it on the NEXT hole made the last hole of a match unpressable
+        — hole 4 belongs to the next match and a different pairing — which is
+        every hand-called press there is, since one can only exist in a match
+        whose first hole was halved.
+        """
+        self._play(1, 4, 4, 4, 4)          # halved -> no auto press
+        self._play(2, 5, 5, 4, 4)          # Cal/Dee 1 up
+        call_press(self.fs, match_index=1, side=1,
+                   called_by_id=self.pid['Ann'], current_hole=3)
         self.assertEqual(self._manual()['holes'], [3])
 
     def test_a_press_never_covers_a_hole_already_in_the_book(self):
-        """Called while looking BACK at a played hole, it starts on the next
-        one — nobody may press a result they have seen."""
-        self._play(1, 4, 4, 5, 5)
-        self._play(2, 4, 4, 5, 5)
-        call_press(self.fs, match_index=1, side=2,
-                   called_by_id=self.pid['Cal'], current_hole=2)
-        self.assertEqual(self._manual()['holes'], [3])
+        """Called while looking BACK at a played hole it starts on the next
+        one, and here there is no next one — nobody may press a result they
+        have seen."""
+        self._play(1, 4, 4, 4, 4)
+        self._play(2, 5, 5, 4, 4)
+        self._play(3, 5, 5, 4, 4)
+        with self.assertRaises(ValueError):
+            call_press(self.fs, match_index=1, side=1,
+                       called_by_id=self.pid['Ann'], current_hole=3)
 
     def test_it_cannot_be_called_before_a_hole_is_decided(self):
         """On the first tee of a match there is nothing to trail after."""
@@ -258,7 +264,7 @@ class PressTests(TestCase):
                        called_by_id=self.pid['Cal'], current_hole=1)
 
     def test_a_square_match_cannot_be_pressed(self):
-        self._play(1, 4, 4, 4, 4)          # halved
+        self._play(1, 4, 4, 4, 4)          # halved, so no auto press either
         with self.assertRaises(ValueError):
             call_press(self.fs, match_index=1, side=2,
                        called_by_id=self.pid['Cal'], current_hole=2)
@@ -266,43 +272,63 @@ class PressTests(TestCase):
     def test_only_the_side_that_is_down_may_press(self):
         """Enforced in the service, not only in the UI — the offer card states
         it, and a rule enforced only in the UI is not enforced."""
-        self._play(1, 4, 4, 5, 5)          # Ann/Ben 1 up
-        with self.assertRaises(ValueError):
-            call_press(self.fs, match_index=1, side=1,
-                       called_by_id=self.pid['Ann'], current_hole=2)
-
-    def test_the_holes_a_press_covers_do_not_decide_who_may_call_it(self):
-        """The margin is read over the holes ALREADY decided. Counting the
-        covered holes would let a later result pick the caller."""
-        self._play(1, 4, 4, 5, 5)          # Ann/Ben 1 up after one
-        self._play(3, 5, 5, 4, 4)          # a later hole, entered out of order
-        call_press(self.fs, match_index=1, side=2,
-                   called_by_id=self.pid['Cal'], current_hole=2)
-        self.assertEqual(self._manual()['holes'], [2, 3])
-
-    def test_only_one_hand_called_press_per_match(self):
-        self._play(1, 4, 4, 5, 5)
-        call_press(self.fs, match_index=1, side=2,
-                   called_by_id=self.pid['Cal'], current_hole=2)
+        self._play(1, 4, 4, 4, 4)
+        self._play(2, 5, 5, 4, 4)          # Cal/Dee 1 up
         with self.assertRaises(ValueError):
             call_press(self.fs, match_index=1, side=2,
-                       called_by_id=self.pid['Cal'], current_hole=2)
+                       called_by_id=self.pid['Cal'], current_hole=3)
 
-    def test_a_match_carries_at_most_three_bets(self):
-        self._play(1, 4, 4, 5, 5)
-        call_press(self.fs, match_index=1, side=2,
-                   called_by_id=self.pid['Cal'], current_hole=2)
-        self.assertEqual(self._match()['bet_count'], 3)
+    def test_only_one_hand_called_press_per_match(self):
+        self._play(1, 4, 4, 4, 4)
+        self._play(2, 5, 5, 4, 4)
+        call_press(self.fs, match_index=1, side=1,
+                   called_by_id=self.pid['Ann'], current_hole=3)
+        with self.assertRaises(ValueError):
+            call_press(self.fs, match_index=1, side=1,
+                       called_by_id=self.pid['Ann'], current_hole=3)
+
+    def test_an_auto_press_suppresses_a_press_already_on_file(self):
+        """The two never coexist, and this module derives rather than stores —
+        so the rule has to hold of the SUMMARY however the row got there. Here
+        the first hole is re-scored from a halve to a win, which opens the auto
+        press after the hand-called one was already recorded."""
+        self._play(1, 4, 4, 4, 4)          # halved -> a called press is legal
+        self._play(2, 5, 5, 4, 4)
+        call_press(self.fs, match_index=1, side=1,
+                   called_by_id=self.pid['Ann'], current_hole=3)
+        self.assertEqual([b['kind'] for b in self._match()['bets']],
+                         ['match', 'manual_press'])
+
+        self._play(1, 4, 4, 5, 5)          # correction: Ann/Ben won it
+        self.assertEqual([b['kind'] for b in self._match()['bets']],
+                         ['match', 'auto_press'])
+
+        self._play(1, 4, 4, 4, 4)          # and back — the row was never lost
+        self.assertEqual([b['kind'] for b in self._match()['bets']],
+                         ['match', 'manual_press'])
+
+    def test_a_match_carries_at_most_two_bets(self):
+        """The match bet plus ONE press — the auto one or a called one, never
+        both. This is what caps a round's exposure at 2x rather than 3x."""
+        self._play(1, 4, 4, 5, 5)          # auto press opens
+        self.assertEqual(self._match()['bet_count'], 2)
+
+        self._play(1, 4, 4, 4, 4)          # re-score: halve it, auto press gone
+        self._play(2, 5, 5, 4, 4)
+        call_press(self.fs, match_index=1, side=1,
+                   called_by_id=self.pid['Ann'], current_hole=3)
+        self.assertEqual(self._match()['bet_count'], 2)
 
     def test_presses_are_refused_entirely_when_the_round_is_not_playing_them(self):
         setup_sequoya_threes(self.fs, [self.pid['Ann'], self.pid['Ben']],
                              handicap_mode='gross', bet_amount=5,
                              press_mode=SequoyaThreesGame.PRESS_NONE)
-        self._play(1, 4, 4, 5, 5)
+        self._play(1, 4, 4, 4, 4)
+        self._play(2, 5, 5, 4, 4)
         self.assertEqual([b['kind'] for b in self._match()['bets']], ['match'])
         with self.assertRaises(ValueError):
-            call_press(self.fs, match_index=1, side=2,
-                       called_by_id=self.pid['Cal'], current_hole=2)
+            call_press(self.fs, match_index=1, side=1,
+                       called_by_id=self.pid['Ann'], current_hole=3)
 
 
 class SettlementTests(TestCase):
@@ -346,8 +372,17 @@ class SettlementTests(TestCase):
                          sorted((p['money'] for p in s['players']),
                                 reverse=True))
 
-    def test_the_exposure_ceiling_is_printed(self):
+    def test_the_exposure_ceiling_follows_the_press_mode(self):
+        """A match carries at most TWO bets, never three — an auto press and a
+        hand-called one cannot coexist. So the ceiling is 1x with presses off
+        and 2x with them on, whichever press mode is chosen."""
         e = sequoya_threes_summary(self.fs)['exposure']
         self.assertEqual(e['no_presses'], 30)
         self.assertEqual(e['with_auto'],  60)
-        self.assertEqual(e['ceiling'],    90)
+        self.assertEqual(e['ceiling'],    30, 'this round plays no presses')
+
+        setup_sequoya_threes(self.fs, [self.pid['Ann'], self.pid['Ben']],
+                             handicap_mode='gross', bet_amount=5,
+                             press_mode=SequoyaThreesGame.PRESS_MANUAL_AUTO)
+        self.assertEqual(sequoya_threes_summary(self.fs)['exposure']['ceiling'],
+                         60)

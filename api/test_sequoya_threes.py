@@ -96,34 +96,38 @@ class SequoyaThreesEndpointTests(TestCase):
     # -- the press, over the wire -------------------------------------------
 
     def _press(self, **kw):
-        body = {'match_index': 1, 'side': 2}
+        body = {'match_index': 1, 'side': 1}
         body.update(kw)
         return self.client.post(
             reverse('api-sequoya-threes-press', args=[self.fs.id]),
             body, format='json')
 
-    def test_a_press_covers_the_hole_being_played(self):
-        self._setup()
-        self._play(1, 4, 4, 5, 5)
-        resp = self._press(current_hole=2, called_by_id=self.pid['Cal'])
-        self.assertEqual(resp.status_code, 201, resp.data)
-        manual = [b for b in resp.data['matches'][0]['bets']
-                  if b['kind'] == 'manual_press'][0]
-        self.assertEqual(manual['holes'], [2, 3])
-        self.assertEqual(manual['called_by'], 'Cal')
+    def _halve_then_lose_a_hole(self):
+        """Hole 1 halved, so no auto press; hole 2 to Cal/Dee, so Ann/Ben are
+        down. The only shape in which a hand-called press can exist."""
+        self._play(1, 4, 4, 4, 4)
+        self._play(2, 5, 5, 4, 4)
 
-    def test_the_last_hole_of_a_match_can_be_pressed(self):
-        """Reported from the course: two down on the 9th tee, no press on
-        offer. The next hole belongs to the next match, so a press that
-        started there could never be called on a match's last hole."""
+    def test_a_press_covers_the_hole_being_played(self):
+        """Reported from the course: two down on the last tee of a match, no
+        press on offer. A press that opened on the NEXT hole could never be
+        called there — that hole belongs to the next match and a different
+        pairing."""
         self._setup()
-        self._play(1, 4, 4, 5, 5)
-        self._play(2, 4, 4, 5, 5)
-        resp = self._press(current_hole=3, called_by_id=self.pid['Cal'])
+        self._halve_then_lose_a_hole()
+        resp = self._press(current_hole=3, called_by_id=self.pid['Ann'])
         self.assertEqual(resp.status_code, 201, resp.data)
         manual = [b for b in resp.data['matches'][0]['bets']
                   if b['kind'] == 'manual_press'][0]
         self.assertEqual(manual['holes'], [3])
+        self.assertEqual(manual['called_by'], 'Ann')
+
+    def test_a_press_is_refused_while_an_auto_press_is_running(self):
+        """The auto press already covers the rest of the match."""
+        self._setup()
+        self._play(1, 4, 4, 5, 5)          # Ann/Ben win 1 -> auto press
+        resp = self._press(side=2, current_hole=2)
+        self.assertEqual(resp.status_code, 400, resp.data)
 
     def test_the_first_hole_of_a_match_cannot_be_pressed(self):
         self._setup()
@@ -131,20 +135,19 @@ class SequoyaThreesEndpointTests(TestCase):
 
     def test_the_side_that_is_up_cannot_press(self):
         self._setup()
-        self._play(1, 4, 4, 5, 5)          # Ann/Ben 1 up
-        resp = self._press(side=1, current_hole=2)
-        self.assertEqual(resp.status_code, 400, resp.data)
+        self._halve_then_lose_a_hole()     # Ann/Ben are the ones DOWN
+        self.assertEqual(self._press(side=2, current_hole=3).status_code, 400)
 
     def test_a_second_hand_called_press_is_refused(self):
         self._setup()
-        self._play(1, 4, 4, 5, 5)
-        self.assertEqual(self._press(current_hole=2).status_code, 201)
+        self._halve_then_lose_a_hole()
+        self.assertEqual(self._press(current_hole=3).status_code, 201)
         self.assertEqual(self._press(current_hole=3).status_code, 400)
 
     def test_presses_are_refused_when_the_round_is_not_playing_them(self):
         self._setup(press_mode='none')
-        self._play(1, 4, 4, 5, 5)
-        self.assertEqual(self._press(current_hole=2).status_code, 400)
+        self._halve_then_lose_a_hole()
+        self.assertEqual(self._press(current_hole=3).status_code, 400)
 
     # -- the money -----------------------------------------------------------
 

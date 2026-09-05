@@ -44,7 +44,10 @@ class _SequoyaThreesSetupScreenState extends State<SequoyaThreesSetupScreen> {
   static const _orange = Color(0xFFEF6C00);
 
   List<Membership> _ordered = [];
-  String _mode       = 'net';
+  // Strokes-off-low: six 2v2 matches are a MATCH game, and a match is played
+  // off the low ball. Full net hands the high golfer his whole allowance
+  // inside a three-hole match. Server, model and screen all default here.
+  String _mode       = 'strokes_off';
   int    _netPercent = 100;
   String _pressMode  = 'auto';      // the packet's default
   final _betCtrl     = TextEditingController(text: '5.00');
@@ -70,12 +73,13 @@ class _SequoyaThreesSetupScreenState extends State<SequoyaThreesSetupScreen> {
 
   double get _stake => double.tryParse(_betCtrl.text.trim()) ?? 0;
 
-  /// Six matches, and the ceiling depends only on how many bets each can carry.
-  int get _betsPerMatch => switch (_pressMode) {
-        'none'        => 1,
-        'manual_auto' => 3,
-        _             => 2,
-      };
+  /// Six matches, and the ceiling depends only on how many bets each can
+  /// carry. **Two, never three**: an auto press and a hand-called one cannot
+  /// coexist — the auto press already covers the rest of the match, so a
+  /// second bet over those holes would be a double rather than a press. So
+  /// Manual + Auto raises the number of matches that CAN carry a press, not
+  /// the number of bets any one of them carries.
+  int get _betsPerMatch => _pressMode == 'none' ? 1 : 2;
 
   String _money(double v) => '\$${v.toStringAsFixed(2)}';
 
@@ -217,6 +221,16 @@ class _SequoyaThreesSetupScreenState extends State<SequoyaThreesSetupScreen> {
                     onSelected: (_) => setState(() => _pressMode = o.$1),
                   ),
               ]),
+              if (_pressMode == 'manual_auto') ...[
+                const SizedBox(height: 8),
+                Text(
+                  'The two never stack. Win the first hole of a match and the '
+                  'auto press covers the rest of it; halve the first hole and '
+                  'whoever falls behind can call one by hand instead.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant, height: 1.5),
+                ),
+              ],
               const Divider(height: 22),
               Row(children: [
                 Expanded(
@@ -257,8 +271,8 @@ class _SequoyaThreesSetupScreenState extends State<SequoyaThreesSetupScreen> {
               child: Text(
                 'Most you can lose: ${_money(_stake * 6 * _betsPerMatch)} — '
                 'all six matches lost with every bet live. No presses at all '
-                'tops out at ${_money(_stake * 6)}; Manual + Auto raises the '
-                'ceiling to ${_money(_stake * 18)}.',
+                'tops out at ${_money(_stake * 6)}; either press setting '
+                'doubles that to ${_money(_stake * 12)}, and no further.',
                 style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant),
               ),
