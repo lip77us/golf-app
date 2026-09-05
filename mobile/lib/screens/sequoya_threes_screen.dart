@@ -759,8 +759,11 @@ class _BetBanner extends StatelessWidget {
                     fontSize: 13, fontWeight: FontWeight.bold,
                     color: theme.colorScheme.primary)),
           ),
-          Text('\$${match.atRisk.toStringAsFixed(0)} per golfer · '
-               '$n bet${n == 1 ? '' : 's'}',
+          // The COUNT, not a total. A match carrying three bets can be a
+          // win, a loss and a half — $0 — so an at-risk figure beside them
+          // says something the rows below contradict. Each row carries its
+          // own stake.
+          Text('$n bet${n == 1 ? '' : 's'}',
               style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant)),
         ]),

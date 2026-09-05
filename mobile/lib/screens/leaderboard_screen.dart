@@ -11006,6 +11006,25 @@ class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
             style: theme.textTheme.labelSmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant),
           ),
+
+          // **Who is who, once.** Everything below this line — the pairings,
+          // the scorecard rows, the by-hole tints — is short names, because
+          // four full names will not fit beside each other six times over.
+          // Naming the field once in full is what makes the initials safe to
+          // use everywhere else.
+          if (cardPlayers.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              cardPlayers.map((p) {
+                final name  = p['name']?.toString() ?? '';
+                final short = p['short_name']?.toString() ?? '';
+                return (short.isEmpty || short == name)
+                    ? name : '$name ($short)';
+              }).join('  ·  '),
+              style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant, height: 1.4),
+            ),
+          ],
           const SizedBox(height: 10),
 
           HalvedSegmented<_SeqPane>(
@@ -11069,7 +11088,6 @@ class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
     final bets  = (m['bets'] as List? ?? const []).cast<Map<String, dynamic>>();
     final side1 = m['side1'] as List? ?? const [];
     final side2 = m['side2'] as List? ?? const [];
-    final head  = bets.isEmpty ? null : bets.first;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -11079,38 +11097,38 @@ class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // The match label sits BETWEEN the two sides, where the "v" was: it
+        // separates them exactly as well and costs no row of its own.
+        //
+        // No money here. The stake is in the card's first line, and a
+        // per-match total was the wrong number anyway — a match carrying
+        // three bets can be a win, a loss and a half, which is $0.
         Row(children: [
-          Expanded(
-            child: Text(
-                'Match ${m['index']} · '
-                'holes ${m['start_hole']}–${m['end_hole']}',
-                style: TextStyle(
-                    fontSize: 12.5, fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary)),
-          ),
-          Text(
-              '\$${((m['at_risk'] as num?)?.toDouble() ?? 0).formatBet()} '
-              'per golfer',
-              style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant)),
-        ]),
-        const SizedBox(height: 3),
-        Row(children: [
+          // **Always the side's colour, win or lose.** Tinting only the
+          // winner made blue mean "won here" in the match list and "side 1"
+          // in the scorecard below — one colour saying two things on one
+          // page. Who won is in the state column, which is where a result
+          // belongs.
           Expanded(
             child: Text(_names(side1),
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontWeight: FontWeight.w600, fontSize: 13,
-                    color: (head?['result'] == 1) ? _blue : null)),
+                style: const TextStyle(
+                    fontWeight: FontWeight.w600, fontSize: 13, color: _blue)),
           ),
-          Text('v', style: theme.textTheme.labelSmall),
+          const SizedBox(width: 8),
+          Text(
+              'Match ${m['index']} · '
+              'holes ${m['start_hole']}–${m['end_hole']}',
+              style: TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary)),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(_names(side2),
                 textAlign: TextAlign.right,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontWeight: FontWeight.w600, fontSize: 13,
-                    color: (head?['result'] == 2) ? _orange : null)),
+                style: const TextStyle(
+                    fontWeight: FontWeight.w600, fontSize: 13, color: _orange)),
           ),
         ]),
         const SizedBox(height: 5),
