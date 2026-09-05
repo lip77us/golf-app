@@ -339,18 +339,32 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
     setState(() => _pressing = true);
     try {
       final rp     = context.read<RoundProvider>();
+      final me     = context.read<AuthProvider>().player?.id;
       final client = context.read<AuthProvider>().client;
+      // Attribute the call only when the reader is ON the side pressing. One
+      // phone scores the group, so the scorer routinely calls it for the pair
+      // that is down — recording it under his name would be a lie.
+      final onThatSide = me != null &&
+          (side == 1 ? match.side1 : match.side2)
+              .any((p) => p.playerId == me);
       final s = await client.postSequoyaThreesPress(
         widget.foursomeId,
         matchIndex : match.index,
         side       : side,
         currentHole: _selectedHole,
-        calledById : context.read<AuthProvider>().player?.id,
+        calledById : onThatSide ? me : null,
       );
       if (!mounted) return;
       rp.setSequoyaThreesSummary(s);
+      // The SERVER decides which holes the press covers, so the confirmation
+      // reads them back off the bet it just created rather than restating
+      // what the client assumed.
+      final placed = s.matchForHole(_selectedHole)?.bets
+          .where((b) => b.kind == 'manual_press').firstOrNull;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Press on from hole ${_selectedHole + 1}.')));
+        content: Text(placed == null
+            ? 'Press on.'
+            : 'Press on — ${placed.holeRange}.')));
     } catch (e) {
       if (!mounted) return;
       // The service owns the rules, so its refusal IS the message worth
@@ -515,6 +529,10 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
               match: match,
               hole:  _selectedHole,
               busy:  _pressing,
+              // Whether the hole in play is already in the book decides which
+              // hole a press would cover — see _PressOffer.
+              holeScored: [...match.side1, ...match.side2]
+                  .every((p) => scores.containsKey(p.playerId)),
               mySide: _mySide(match, context.read<AuthProvider>().player?.id),
               onCall: (side) => _callPress(match, side),
             ),
@@ -746,20 +764,26 @@ class _BetBanner extends StatelessWidget {
 // ===========================================================================
 
 /// Amber, and lit only when a hand-called press is actually legal: the reader
-/// is on the TRAILING side, the match is past its first hole, a hole is left
-/// to run over, and this match carries no called press yet. The label names
-/// the HOLE it opens on, so it can never be confused with the auto press
-/// already sitting in the banner.
+/// is on the TRAILING side, a hole in the match has been decided, a hole is
+/// left to cover, and this match carries no called press yet.
+///
+/// **A press is called on the tee, so it covers the hole being played.** That
+/// is what makes the LAST hole of a match pressable — two down on the 9th tee
+/// is the classic press, and a press that opened on the NEXT hole could never
+/// be called there, because that hole belongs to the next match and a
+/// different pairing. From a hole already in the book it starts on the next
+/// one instead: nobody may press a result they have seen.
 class _PressOffer extends StatelessWidget {
   final SequoyaMatch match;
   final int  hole;
   final bool busy;
+  final bool holeScored;
   final int? mySide;
   final void Function(int side) onCall;
 
   const _PressOffer({
     required this.match, required this.hole, required this.busy,
-    required this.mySide, required this.onCall,
+    required this.holeScored, required this.mySide, required this.onCall,
   });
 
   @override
@@ -770,9 +794,16 @@ class _PressOffer extends StatelessWidget {
     final trailing = (headBet == null || headBet.margin == 0)
         ? null
         : (headBet.margin > 0 ? 2 : 1);
-    final roomLeft = hole > match.startHole && hole < match.endHole;
+    final start    = holeScored ? hole + 1 : hole;
+    final roomLeft = start <= match.endHole;
     final mine     = mySide != null && mySide == trailing;
-    final legal    = !already && roomLeft && trailing != null && mine && !busy;
+    final legal    = !already && roomLeft && trailing != null && !busy;
+    final covers   = start == match.endHole
+        ? 'hole $start' : 'holes $start–${match.endHole}';
+    final down     = trailing == null
+        ? ''
+        : (trailing == 1 ? match.side1 : match.side2)
+            .map((p) => p.shortName).join(' & ');
 
     final String title;
     final String body;
@@ -781,21 +812,26 @@ class _PressOffer extends StatelessWidget {
       body  = 'One hand-called press per match. The auto press is separate.';
     } else if (!roomLeft) {
       title = 'Press';
-      body  = hole <= match.startHole
-          ? 'Callable from the second hole of a match — there is nothing to '
-            'trail after on the first.'
-          : 'No holes left in this match for a press to cover.';
+      body  = 'No holes left in this match for a press to cover.';
     } else if (trailing == null) {
       title = 'Press';
-      body  = 'The match is all square. Only the side that is DOWN may press.';
-    } else if (!mine) {
-      title = 'Press';
-      body  = 'You are up in this match — the press is theirs to call.';
-    } else {
-      title = 'Call your press — covers hole ${hole + 1}'
-              '${hole + 1 < match.endHole ? '–${match.endHole}' : ''}';
+      body  = hole == match.startHole && !holeScored
+          ? 'Callable once a hole in this match has been decided — there is '
+            'nothing to trail after on the first tee.'
+          : 'The match is all square. Only the side that is DOWN may press.';
+    } else if (mine) {
+      title = 'Call your press — covers $covers';
       body  = 'A new bet at \$${match.bets.first.amount.toStringAsFixed(0)} a '
               'man over the holes left. It settles on its own.';
+    } else {
+      // One phone scores the group, so the button belongs to the TRAILING
+      // side rather than to whoever is holding it. Gating it on the reader
+      // put the press out of reach exactly when it was wanted: the man who is
+      // UP in the match is usually the one keeping the card.
+      title = 'Press for $down — covers $covers';
+      body  = 'They are down, so the press is theirs. Tap to call it for '
+              'them at \$${match.bets.first.amount.toStringAsFixed(0)} a man '
+              'over the holes left.';
     }
 
     return Padding(

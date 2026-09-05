@@ -95,43 +95,56 @@ class SequoyaThreesEndpointTests(TestCase):
 
     # -- the press, over the wire -------------------------------------------
 
-    def test_a_press_can_be_called_and_covers_the_next_hole_on(self):
+    def _press(self, **kw):
+        body = {'match_index': 1, 'side': 2}
+        body.update(kw)
+        return self.client.post(
+            reverse('api-sequoya-threes-press', args=[self.fs.id]),
+            body, format='json')
+
+    def test_a_press_covers_the_hole_being_played(self):
         self._setup()
         self._play(1, 4, 4, 5, 5)
-        resp = self.client.post(
-            reverse('api-sequoya-threes-press', args=[self.fs.id]),
-            {'match_index': 1, 'side': 2, 'current_hole': 2,
-             'called_by_id': self.pid['Cal']}, format='json')
+        resp = self._press(current_hole=2, called_by_id=self.pid['Cal'])
+        self.assertEqual(resp.status_code, 201, resp.data)
+        manual = [b for b in resp.data['matches'][0]['bets']
+                  if b['kind'] == 'manual_press'][0]
+        self.assertEqual(manual['holes'], [2, 3])
+        self.assertEqual(manual['called_by'], 'Cal')
+
+    def test_the_last_hole_of_a_match_can_be_pressed(self):
+        """Reported from the course: two down on the 9th tee, no press on
+        offer. The next hole belongs to the next match, so a press that
+        started there could never be called on a match's last hole."""
+        self._setup()
+        self._play(1, 4, 4, 5, 5)
+        self._play(2, 4, 4, 5, 5)
+        resp = self._press(current_hole=3, called_by_id=self.pid['Cal'])
         self.assertEqual(resp.status_code, 201, resp.data)
         manual = [b for b in resp.data['matches'][0]['bets']
                   if b['kind'] == 'manual_press'][0]
         self.assertEqual(manual['holes'], [3])
-        self.assertEqual(manual['called_by'], 'Cal')
 
     def test_the_first_hole_of_a_match_cannot_be_pressed(self):
         self._setup()
-        resp = self.client.post(
-            reverse('api-sequoya-threes-press', args=[self.fs.id]),
-            {'match_index': 1, 'side': 2, 'current_hole': 1}, format='json')
+        self.assertEqual(self._press(current_hole=1).status_code, 400)
+
+    def test_the_side_that_is_up_cannot_press(self):
+        self._setup()
+        self._play(1, 4, 4, 5, 5)          # Ann/Ben 1 up
+        resp = self._press(side=1, current_hole=2)
         self.assertEqual(resp.status_code, 400, resp.data)
 
     def test_a_second_hand_called_press_is_refused(self):
         self._setup()
-        body = {'match_index': 1, 'side': 2, 'current_hole': 2}
-        self.client.post(
-            reverse('api-sequoya-threes-press', args=[self.fs.id]),
-            body, format='json')
-        again = self.client.post(
-            reverse('api-sequoya-threes-press', args=[self.fs.id]),
-            body, format='json')
-        self.assertEqual(again.status_code, 400, again.data)
+        self._play(1, 4, 4, 5, 5)
+        self.assertEqual(self._press(current_hole=2).status_code, 201)
+        self.assertEqual(self._press(current_hole=3).status_code, 400)
 
     def test_presses_are_refused_when_the_round_is_not_playing_them(self):
         self._setup(press_mode='none')
-        resp = self.client.post(
-            reverse('api-sequoya-threes-press', args=[self.fs.id]),
-            {'match_index': 1, 'side': 2, 'current_hole': 2}, format='json')
-        self.assertEqual(resp.status_code, 400, resp.data)
+        self._play(1, 4, 4, 5, 5)
+        self.assertEqual(self._press(current_hole=2).status_code, 400)
 
     # -- the money -----------------------------------------------------------
 

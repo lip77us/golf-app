@@ -220,22 +220,68 @@ class PressTests(TestCase):
 
     # -- the hand-called press ---------------------------------------------
 
-    def test_a_called_press_starts_on_the_next_hole(self):
-        """Two bets over the same holes with the same label are unreadable at
-        settlement."""
+    def _manual(self, n=1):
+        return [b for b in self._match(n)['bets']
+                if b['kind'] == 'manual_press'][0]
+
+    def test_a_called_press_covers_the_hole_being_played(self):
+        """A press is called on the TEE, so it covers the hole about to be
+        played — not merely the one after it."""
         self._play(1, 4, 4, 5, 5)
         call_press(self.fs, match_index=1, side=2,
                    called_by_id=self.pid['Cal'], current_hole=2)
-        manual = [b for b in self._match()['bets']
-                  if b['kind'] == 'manual_press'][0]
-        self.assertEqual(manual['holes'], [3])
+        self.assertEqual(self._manual()['holes'], [2, 3])
 
-    def test_it_cannot_be_called_on_the_first_hole_of_a_match(self):
+    def test_the_last_hole_of_a_match_can_be_pressed(self):
+        """Two down standing on the last tee is the classic press. Starting a
+        press on the NEXT hole made it impossible — that hole belongs to the
+        next match and a different pairing."""
+        self._play(1, 4, 4, 5, 5)
+        self._play(2, 4, 4, 5, 5)          # Ann/Ben 2 up with 1 to play
+        call_press(self.fs, match_index=1, side=2,
+                   called_by_id=self.pid['Cal'], current_hole=3)
+        self.assertEqual(self._manual()['holes'], [3])
+
+    def test_a_press_never_covers_a_hole_already_in_the_book(self):
+        """Called while looking BACK at a played hole, it starts on the next
+        one — nobody may press a result they have seen."""
+        self._play(1, 4, 4, 5, 5)
+        self._play(2, 4, 4, 5, 5)
+        call_press(self.fs, match_index=1, side=2,
+                   called_by_id=self.pid['Cal'], current_hole=2)
+        self.assertEqual(self._manual()['holes'], [3])
+
+    def test_it_cannot_be_called_before_a_hole_is_decided(self):
+        """On the first tee of a match there is nothing to trail after."""
         with self.assertRaises(ValueError):
             call_press(self.fs, match_index=1, side=2,
                        called_by_id=self.pid['Cal'], current_hole=1)
 
+    def test_a_square_match_cannot_be_pressed(self):
+        self._play(1, 4, 4, 4, 4)          # halved
+        with self.assertRaises(ValueError):
+            call_press(self.fs, match_index=1, side=2,
+                       called_by_id=self.pid['Cal'], current_hole=2)
+
+    def test_only_the_side_that_is_down_may_press(self):
+        """Enforced in the service, not only in the UI — the offer card states
+        it, and a rule enforced only in the UI is not enforced."""
+        self._play(1, 4, 4, 5, 5)          # Ann/Ben 1 up
+        with self.assertRaises(ValueError):
+            call_press(self.fs, match_index=1, side=1,
+                       called_by_id=self.pid['Ann'], current_hole=2)
+
+    def test_the_holes_a_press_covers_do_not_decide_who_may_call_it(self):
+        """The margin is read over the holes ALREADY decided. Counting the
+        covered holes would let a later result pick the caller."""
+        self._play(1, 4, 4, 5, 5)          # Ann/Ben 1 up after one
+        self._play(3, 5, 5, 4, 4)          # a later hole, entered out of order
+        call_press(self.fs, match_index=1, side=2,
+                   called_by_id=self.pid['Cal'], current_hole=2)
+        self.assertEqual(self._manual()['holes'], [2, 3])
+
     def test_only_one_hand_called_press_per_match(self):
+        self._play(1, 4, 4, 5, 5)
         call_press(self.fs, match_index=1, side=2,
                    called_by_id=self.pid['Cal'], current_hole=2)
         with self.assertRaises(ValueError):

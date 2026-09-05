@@ -116,26 +116,63 @@ def setup_sequoya_threes(foursome, side1_ids, *,
     return game
 
 
+def press_start_hole(net, side1, side2, match_index, current_hole):
+    """The first hole a press called from ``current_hole`` would cover.
+
+    **A press is called on the tee, so it covers the hole being played.** That
+    is what lets the LAST hole of a match be pressed — on the 9th tee, two
+    holes down, a press over the 9th alone is the whole point of pressing.
+
+    The exception is a hole already in the book: a press must never be able to
+    cover a result somebody has seen, so from a scored hole it starts on the
+    next one. Returns None when nothing is left in the match.
+    """
+    lo, hi = MATCH_HOLES[match_index - 1]
+    start = max(current_hole, lo)
+    if _hole_winner(net, side1, side2, start) is not None:
+        start += 1                      # that hole is played; press the next
+    return start if start <= hi else None
+
+
 def call_press(foursome, *, match_index, side, called_by_id, current_hole):
     """Record a hand-called press. Raises ValueError with a reason if refused.
 
-    It opens on the hole AFTER the call, and only the trailing side may call —
-    both are rules the offer card states, and both are enforced here rather
-    than only in the UI.
+    It covers the hole being played (see :func:`press_start_hole`), and only
+    the trailing side may call — both are rules the offer card states, and
+    both are enforced here rather than only in the UI, so they hold however
+    the call arrives.
     """
     game = foursome.sequoya_threes_game
     if game.press_mode != SequoyaThreesGame.PRESS_MANUAL_AUTO:
         raise ValueError('This round is not playing hand-called presses.')
 
     lo, hi = MATCH_HOLES[match_index - 1]
-    if not (lo < current_hole <= hi):
-        # From hole 2 of the match onward: there is nothing to trail after on
-        # the first hole, and a press must leave a hole to run over.
-        raise ValueError('A press can be called from the second hole of a '
-                         'match onward.')
-    start = current_hole + 1
-    if start > hi:
+    if not (lo <= current_hole <= hi):
+        raise ValueError('That hole is not in this match.')
+
+    ids = [m.player_id for m in _real_members(foursome)]
+    side1, side2 = pairing_for_match(ids, game.match1_side1, match_index)
+    net = _net_by_hole(game, foursome)
+
+    start = press_start_hole(net, side1, side2, match_index, current_hole)
+    if start is None:
         raise ValueError('No holes left in this match for a press to cover.')
+
+    # Whoever is down over the holes ALREADY decided — the press covers the
+    # rest, so the holes it covers cannot count towards who may call it.
+    margin = 0
+    for h in range(lo, start):
+        w = _hole_winner(net, side1, side2, h)
+        if w == 1:
+            margin += 1
+        elif w == 2:
+            margin -= 1
+    if margin == 0:
+        raise ValueError('The match is all square — only the side that is '
+                         'down may press.')
+    trailing = 2 if margin > 0 else 1
+    if side != trailing:
+        raise ValueError('Only the side that is down may press.')
 
     if game.presses.filter(match_index=match_index).exists():
         raise ValueError('This match already carries a hand-called press.')
