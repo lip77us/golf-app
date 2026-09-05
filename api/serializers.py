@@ -54,6 +54,12 @@ class PlayerSerializer(serializers.ModelSerializer):
     # False for single-player uses (login/me).
     is_on_app = serializers.SerializerMethodField()
 
+    # True when the requesting USER has flagged this golfer as a favorite — the
+    # shortlist behind the picker's Favorites filter.  Private to the owner, so
+    # it is computed only when the view supplies `favorite_ids` in context and
+    # defaults False everywhere else.
+    is_favorite = serializers.SerializerMethodField()
+
     # This golfer's home course.  `home_course_id` is read+write (PATCH an
     # account course id, or null/0 to clear); `home_course_name` is a read-only
     # label so the client can render it without a second fetch.
@@ -68,7 +74,7 @@ class PlayerSerializer(serializers.ModelSerializer):
         model  = Player
         fields = ['id', 'name', 'short_name', 'handicap_index',
                   'is_phantom', 'email', 'phone', 'sex', 'user_id', 'is_on_app',
-                  'home_course_id', 'home_course_name']
+                  'is_favorite', 'home_course_id', 'home_course_name']
         read_only_fields = ['id']
 
     def to_representation(self, instance):
@@ -112,6 +118,9 @@ class PlayerSerializer(serializers.ModelSerializer):
             return False
         n = normalize(obj.phone)
         return bool(n and n in phones)
+
+    def get_is_favorite(self, obj) -> bool:
+        return obj.id in (self.context.get('favorite_ids') or ())
 
     def validate_user_id(self, value):
         """

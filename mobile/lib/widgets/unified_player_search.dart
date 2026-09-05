@@ -59,6 +59,9 @@ class UnifiedPlayerSearch extends StatefulWidget {
     required this.onCreateGuest,
     this.requiredCount,
     this.gameLabel = '',
+    this.onQueryChanged,
+    this.belowField,
+    this.showLocalMatches = true,
   });
 
   /// My Golfers — already loaded by the host screen.
@@ -84,6 +87,26 @@ class UnifiedPlayerSearch extends StatefulWidget {
   /// e.g. "FOURBALL" — the eyebrow above the progress row.
   final String gameLabel;
 
+  /// The debounced query, reported out so the host's roster list can narrow
+  /// with it — search and the roster filters compose.  This widget stays the
+  /// single owner of the text; the host only mirrors it.
+  final ValueChanged<String>? onQueryChanged;
+
+  /// Rendered directly under the field and ABOVE the results ladder.  The
+  /// player picker's filter chips belong there — under the search box and above
+  /// the list — and they must not slide down the screen the moment a query
+  /// produces results.
+  final Widget? belowField;
+
+  /// Whether the ladder's own YOUR GOLFERS rung is drawn.
+  ///
+  /// False where the host's roster list ALSO narrows to the query: your own
+  /// golfers are then already on screen, filtered, with a checkbox and a
+  /// favorites flag, and drawing them again above is the same golfer three
+  /// times.  The two rungs the list cannot serve — a stranger on Halved, and a
+  /// guest who does not exist yet — are always drawn.
+  final bool showLocalMatches;
+
   @override
   State<UnifiedPlayerSearch> createState() => _UnifiedPlayerSearchState();
 }
@@ -107,10 +130,17 @@ class _UnifiedPlayerSearchState extends State<UnifiedPlayerSearch> {
     super.dispose();
   }
 
+  /// Set the live query and tell the host, so both narrow the same list.
+  void _setQuery(String v) {
+    if (_query == v) return;
+    setState(() => _query = v);
+    widget.onQueryChanged?.call(v);
+  }
+
   void _onChanged(String v) {
     _localTimer?.cancel();
     _localTimer = Timer(_localDebounce, () {
-      if (mounted) setState(() => _query = v.trim());
+      if (mounted) _setQuery(v.trim());
     });
 
     _halvedTimer?.cancel();
@@ -147,10 +177,10 @@ class _UnifiedPlayerSearchState extends State<UnifiedPlayerSearch> {
     _halvedTimer?.cancel();
     _ctrl.clear();
     setState(() {
-      _query = '';
       _halved = const [];
       _searchingHalved = false;
     });
+    _setQuery('');
   }
 
   Future<void> _searchHalved(String q) async {
@@ -302,14 +332,18 @@ class _UnifiedPlayerSearchState extends State<UnifiedPlayerSearch> {
                     onPressed: () {
                       _ctrl.clear();
                       _onChanged('');
-                      setState(() => _query = '');
+                      _setQuery('');
                     },
                   ),
           ),
         ),
+        if (widget.belowField != null) ...[
+          const SizedBox(height: GolfTokens.s12),
+          widget.belowField!,
+        ],
         if (showResults) ...[
           const SizedBox(height: GolfTokens.s12),
-          _localGroup(),
+          if (widget.showLocalMatches) _localGroup(),
           _halvedGroup(),
           _newGolferGroup(),
         ],

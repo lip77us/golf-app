@@ -12,6 +12,8 @@ Auth
 
 Reference data
   GET    /api/players/                     PlayerListView
+  POST   /api/players/{id}/favorite/       PlayerFavoriteView
+  DELETE /api/players/{id}/favorite/       PlayerFavoriteView
   GET    /api/tees/                        TeeListView
 
 Tournaments
@@ -73,7 +75,8 @@ from accounts.scoping import (
     IsAccountMember,
     IsAccountAdmin,
 )
-from core.models import Player, Tee, Course, HandicapMode, GameType
+from core.models import (Player, Tee, Course, HandicapMode, GameType,
+                         FavoriteGolfer)
 from tournament.models import Tournament, Round, Foursome, FoursomeMembership
 from scoring.models import HoleScore
 from scoring.phantom import PhantomScoreProvider, get_algorithm, DEFAULT_ALGORITHM_ID
@@ -1557,7 +1560,8 @@ class PlayerListView(APIView):
         # golfer's normalized phone; that user's profile also carries the
         # authoritative handicap index for connected golfers.
         data = PlayerSerializer(
-            players, many=True, context=_on_app_context(players),
+            players, many=True,
+            context=_on_app_context(players, request.user),
         ).data
         return Response(data)
 
@@ -1579,7 +1583,7 @@ class PlayerListView(APIView):
         # "Add Halved golfer" is flagged immediately, not only after the
         # next My Golfers reload.
         return Response(
-            PlayerSerializer(player, context=_on_app_context([player])).data,
+            PlayerSerializer(player, context=_on_app_context([player], request.user)).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -1590,7 +1594,7 @@ class PlayerDetailView(APIView):
             Player, request.user.account, pk=pk, is_phantom=False,
         )
         return Response(
-            PlayerSerializer(player, context=_on_app_context([player])).data)
+            PlayerSerializer(player, context=_on_app_context([player], request.user)).data)
 
     def patch(self, request, pk):
         player = account_get_or_404(
@@ -1616,7 +1620,7 @@ class PlayerDetailView(APIView):
                 and player.handicap_index != before_index):
             propagate_canonical_index(player)
         return Response(
-            PlayerSerializer(player, context=_on_app_context([player])).data)
+            PlayerSerializer(player, context=_on_app_context([player], request.user)).data)
 
     def delete(self, request, pk):
         """
@@ -1650,6 +1654,41 @@ class PlayerDetailView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PlayerFavoriteView(APIView):
+    """
+    POST   /api/players/{id}/favorite/  — plant the flag.
+    DELETE /api/players/{id}/favorite/  — pull it.
+
+    A favorite is a private shortlist entry, not roster management, so this is
+    open to every member of the account rather than admins only: a non-admin
+    picking players for a casual round is exactly who the filter is for.  Both
+    verbs are idempotent — the picker writes optimistically and an Undo tap can
+    arrive after a retry, so a second set (or a second unset) is a no-op, not a
+    409.
+
+    Guests count.  A regular fourth who never signs up is the case the filter
+    exists for, so there is no is_on_app gate here.
+    """
+
+    def post(self, request, pk):
+        player = account_get_or_404(
+            Player, request.user.account, pk=pk, is_phantom=False,
+        )
+        FavoriteGolfer.objects.get_or_create(owner=request.user, player=player)
+        return Response(
+            PlayerSerializer(
+                player, context=_on_app_context([player], request.user)).data)
+
+    def delete(self, request, pk):
+        player = account_get_or_404(
+            Player, request.user.account, pk=pk, is_phantom=False,
+        )
+        FavoriteGolfer.objects.filter(owner=request.user, player=player).delete()
+        return Response(
+            PlayerSerializer(
+                player, context=_on_app_context([player], request.user)).data)
 
 
 class CourseListView(APIView):
@@ -3422,9 +3461,13 @@ def _round_participant_keys(rnd):
     return ids, phones
 
 
-def _on_app_context(players):
+def _on_app_context(players, user=None):
     """Serializer context for a set of golfers: which are On Halved (their
-    normalized phone matches a registered user's verified phone)."""
+    normalized phone matches a registered user's verified phone), and — when a
+    `user` is given — which of them are on that user's favorites shortlist.
+
+    Both are batched into one query each so a 128-golfer roster costs two
+    lookups rather than 128."""
     from accounts.phone import normalize
     from django.contrib.auth import get_user_model
 
@@ -3437,7 +3480,14 @@ def _on_app_context(players):
             .filter(phone__in=normalized)
             .values_list('phone', flat=True)
         )
-    return {'on_app_phones': on_app_phones}
+    ctx = {'on_app_phones': on_app_phones}
+    if user is not None and getattr(user, 'is_authenticated', False):
+        ctx['favorite_ids'] = set(
+            FavoriteGolfer.objects
+            .filter(owner=user, player_id__in=[p.id for p in players])
+            .values_list('player_id', flat=True)
+        )
+    return ctx
 
 
 def propagate_canonical_index(canonical):
@@ -3485,7 +3535,7 @@ def _watcher_candidates_response(request, exclude_ids, exclude_phones):
         and not (p.phone and normalize(p.phone) in exclude_phones)
     ]
     data = PlayerSerializer(candidates, many=True,
-                            context=_on_app_context(candidates)).data
+                            context=_on_app_context(candidates, request.user)).data
     return Response(data)
 
 
@@ -3715,7 +3765,7 @@ class AddHalvedGolferToRosterView(APIView):
             None)
         if existing is not None:
             return Response(PlayerSerializer(
-                existing, context=_on_app_context([existing])).data)
+                existing, context=_on_app_context([existing], request.user)).data)
 
         prof = getattr(u, 'player_profile', None)
         player = Player.objects.create(
@@ -3731,7 +3781,7 @@ class AddHalvedGolferToRosterView(APIView):
         # Same reasoning as PlayerListView.post: compute is_on_app now so the
         # golfer carries the Halved badge immediately, not after a reload.
         return Response(
-            PlayerSerializer(player, context=_on_app_context([player])).data,
+            PlayerSerializer(player, context=_on_app_context([player], request.user)).data,
             status=status.HTTP_201_CREATED)
 
 

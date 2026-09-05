@@ -6,11 +6,14 @@ import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../theme/halved_brand.dart';
 import '../utils/create_casual_round.dart';
+import '../utils/roster_sections.dart';
 import '../widgets/error_view.dart';
+import '../widgets/favorite_flag.dart';
 import '../widgets/game_chip.dart';
 import '../utils/golfer_invite.dart';
 import '../widgets/halved_mark.dart';
 import '../widgets/inline_message.dart';
+import '../widgets/roster_filter.dart';
 import '../widgets/tee_assignment.dart';
 import '../widgets/unified_player_search.dart';
 import '../widgets/course_search_field.dart';
@@ -34,8 +37,23 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   /// Wizard step: 0 = course + game, 1 = players + tees.
   int _step = 0;
   /// Search text for the player picker (keeps it usable with a big roster).
+  /// Owned by UnifiedPlayerSearch's field and mirrored here so the roster list
+  /// below narrows with it — search and filter compose.
   String _playerSearch = '';
-  final TextEditingController _playerSearchCtrl = TextEditingController();
+
+  /// Which cut of the roster the list is showing.  Always [RosterFilter.all]
+  /// on entry: a filter does not survive into the next round's setup.
+  RosterFilter _rosterFilter = RosterFilter.all;
+
+  /// The golfers on this user's shortlist.  Seeded from the roster's
+  /// `is_favorite` and then owned here, so a tap can fill the flag before the
+  /// round trip comes back.
+  final Set<int> _favoriteIds = {};
+
+  /// Favorites unset inside the Favorites filter that are still within their
+  /// Undo window.  The row would otherwise vanish from under the thumb that
+  /// tapped it, so it keeps drawing (flag empty) until the toast expires.
+  final Set<int> _undoPending = {};
 
   CourseInfo? _selectedCourse;
   // Map of Player ID to Tee ID
@@ -158,11 +176,6 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     _loadData();
   }
 
-  @override
-  void dispose() {
-    _playerSearchCtrl.dispose();
-    super.dispose();
-  }
 
   Future<void> _loadData() async {
     setState(() { _loading = true; _error = null; });
@@ -185,6 +198,9 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             .where((p) => !p.isPhantom)
             .toList()
           ..sort((a, b) => a.name.compareTo(b.name));
+        _favoriteIds
+          ..clear()
+          ..addAll(_players.where((p) => p.isFavorite).map((p) => p.id));
 
         // Automatically select the logged-in user if available.
         if (authPlayer != null) {
@@ -316,39 +332,404 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         _players = [..._players, created]
           ..sort((a, b) => a.name.compareTo(b.name));
       }
+      // A golfer pulled back off Halved may already be on the shortlist.
+      if (created.isFavorite) _favoriteIds.add(created.id);
     });
     if (_selectedCourse != null) {
       _onPlayerToggle(created.id, true);
     }
   }
 
-  /// Players to show in the picker: filtered by the search box, with selected
-  /// golfers (and You) floated to the top, then alphabetical — so the screen
-  /// stays usable even with a large roster.
-  List<PlayerProfile> _playersForDisplay() {
+  /// Roster order, as shipped: selected golfers (and You) floated to the top,
+  /// then alphabetical — applied inside each section rather than across them.
+  List<PlayerProfile> _sorted(Iterable<PlayerProfile> players) {
     final myId = context.read<AuthProvider>().player?.id;
-    final q = _playerSearch.trim().toLowerCase();
-    final list = _players
-        .where((p) => q.isEmpty || p.name.toLowerCase().contains(q))
-        .toList();
-    list.sort((a, b) {
-      final aSel = _playerTees.containsKey(a.id);
-      final bSel = _playerTees.containsKey(b.id);
-      if (aSel != bSel) return aSel ? -1 : 1;
-      if (a.id == myId) return -1;
-      if (b.id == myId) return 1;
-      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    return players.toList()
+      ..sort((a, b) {
+        final aSel = _playerTees.containsKey(a.id);
+        final bSel = _playerTees.containsKey(b.id);
+        if (aSel != bSel) return aSel ? -1 : 1;
+        if (a.id == myId) return -1;
+        if (b.id == myId) return 1;
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
+  }
+
+  /// Whether the flag on this golfer's row is planted.  A golfer inside his
+  /// Undo window reads as UNSET here even though the row is still held on
+  /// screen — the flag empties on the tap, which is what the toast is undoing.
+  bool _isFavorite(int id) => _favoriteIds.contains(id);
+
+  /// The picker's list, cut by the active filter and split into sections.
+  ///
+  /// Filtering never touches the SELECTION — a golfer already added stays added
+  /// and stays checked when he is filtered out of view; the seat chips above
+  /// are the record of who is in.
+  List<RosterSection> _rosterSections() => rosterSections(
+        filter: _rosterFilter,
+        roster: _sorted(_players),
+        // A golfer inside his Undo window still draws in the Favorites list —
+        // the row does not go until the toast does.
+        shortlist: {..._favoriteIds, ..._undoPending},
+        query: _playerSearch,
+      );
+
+  /// Plant or pull the flag.
+  ///
+  /// The write is optimistic — the flag fills on tap, before the round trip —
+  /// because a shortlist is not worth a spinner.  On failure the flag reverts
+  /// and says so; the picker is never blocked.
+  Future<void> _toggleFavorite(PlayerProfile player) async {
+    final wasFavorite = _isFavorite(player.id);
+    final undoable = wasFavorite && _rosterFilter == RosterFilter.favorites;
+
+    setState(() {
+      if (wasFavorite) {
+        _favoriteIds.remove(player.id);
+        // Inside the Favorites filter the row is about to disappear from under
+        // the thumb that tapped it, so hold it on screen for the Undo window.
+        if (undoable) _undoPending.add(player.id);
+      } else {
+        _favoriteIds.add(player.id);
+        _undoPending.remove(player.id);
+      }
     });
-    return list;
+
+    if (undoable) _offerUndo(player);
+    await _writeFavorite(player, !wasFavorite);
+  }
+
+  /// "<Name> removed from Favorites · Undo", five seconds, above the Back /
+  /// Next bar.  No confirmation dialog: this is a shortlist, not a deletion.
+  ///
+  /// The packet writes the line as "<Name> removed", which on a screen whose
+  /// whole job is adding golfers TO a round reads as though he has been taken
+  /// out of it.  Naming the list says which of the two things just happened.
+  void _offerUndo(PlayerProfile player) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger
+        .showSnackBar(SnackBar(
+          content: Text('${player.name} removed from Favorites'),
+          duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () {
+              if (!mounted) return;
+              setState(() {
+                _favoriteIds.add(player.id);
+                _undoPending.remove(player.id);
+              });
+              _writeFavorite(player, true);
+            },
+          ),
+        ))
+        .closed
+        .then((_) {
+      // Whether it expired or was undone, the row stops being held: by now it
+      // is either a favorite again or genuinely gone.
+      if (mounted && _undoPending.contains(player.id)) {
+        setState(() => _undoPending.remove(player.id));
+      }
+    });
+  }
+
+  Future<void> _writeFavorite(PlayerProfile player, bool favorite) async {
+    final client = context.read<AuthProvider>().client;
+    try {
+      await client.setPlayerFavorite(player.id, favorite);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        // Put the flag back the way it was.
+        if (favorite) {
+          _favoriteIds.remove(player.id);
+        } else {
+          _favoriteIds.add(player.id);
+        }
+        _undoPending.remove(player.id);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Couldn't save that favorite.")),
+      );
+    }
+  }
+
+  /// Section header: the label on the left, whatever belongs on the trailing
+  /// edge on the right — a count, "A – Z", or the hint that a flag comes off
+  /// with a tap.
+  Widget _sectionHeader(RosterSection section) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 2, 2, 7),
+      child: Row(children: [
+        Text(section.label.toUpperCase(),
+            style: const TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+                color: Halved.muted)),
+        const Spacer(),
+        Text(section.trailing,
+            style: const TextStyle(fontSize: 11, color: Halved.muted)),
+      ]),
+    );
+  }
+
+  /// Filtering to Halved accounts hides the majority of most rosters, so the
+  /// golfers it takes away are accounted for in one line rather than silently
+  /// dropped.  They can still play — they just cannot post their own scores or
+  /// see the money — and Invite still sits on every one of their rows under
+  /// All.
+  Widget _hiddenGolfersNote() {
+    final hidden = _players.where((p) => !p.isOnApp).length;
+    if (hidden == 0) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: Halved.card,
+        border: Border.all(color: Halved.cardBorder),
+        borderRadius: BorderRadius.circular(Halved.rChip),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const HalvedMark(size: 16),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Text.rich(
+            TextSpan(children: [
+              TextSpan(
+                  text: '$hidden golfer${hidden == 1 ? '' : 's'} hidden. ',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, color: Halved.deepPine)),
+              const TextSpan(
+                  text: 'They can still play — they just cannot post their '
+                      'own scores or see the money. Invite sits on every '
+                      'hidden row.'),
+            ]),
+            style: const TextStyle(
+                fontSize: 12, height: 1.5, color: Halved.muted),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  /// Why the list is empty — said in the filter's own terms, since "no golfers
+  /// match your search" is wrong for a filter nobody has typed into.
+  String _emptyRosterMessage(bool searching) {
+    if (searching) return 'No golfers match your search.';
+    switch (_rosterFilter) {
+      case RosterFilter.all:
+        return 'No golfers yet — search above to add one.';
+      case RosterFilter.favorites:
+        return 'No favorites yet — tap a flag to start your shortlist.';
+      case RosterFilter.onHalved:
+        return 'Nobody on your roster is on Halved yet.';
+    }
+  }
+
+  /// The picker's list: section headers and rows, or — when a search has come
+  /// up empty inside a filter — the way back out to the whole roster.
+  List<Widget> _buildRosterSections() {
+    final sections = _rosterSections();
+    final isEmpty = sections.every((s) => s.players.isEmpty);
+
+    if (isEmpty) {
+      final searching = _playerSearch.trim().isNotEmpty;
+      return [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(_emptyRosterMessage(searching)),
+            // A filter that has emptied the list has to offer the way out of
+            // itself.
+            if (_rosterFilter != RosterFilter.all) ...[
+              const SizedBox(height: 4),
+              TextButton(
+                onPressed: () =>
+                    setState(() => _rosterFilter = RosterFilter.all),
+                child: const Text('Search all golfers'),
+              ),
+            ],
+          ]),
+        ),
+      ];
+    }
+
+    return [
+      for (final section in sections) ...[
+        _sectionHeader(section),
+        for (final player in section.players) _playerRow(player),
+        const SizedBox(height: 6),
+      ],
+      // Under On Halved the list ends with the two ways to reach somebody it
+      // does not contain, since the filter itself hides the roster they would
+      // otherwise be found in.
+      if (_rosterFilter == RosterFilter.onHalved)
+        Container(
+          margin: const EdgeInsets.only(top: 4),
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+          decoration: BoxDecoration(
+            color: Halved.card,
+            border: Border.all(
+                color: Halved.cardBorder, style: BorderStyle.solid),
+            borderRadius: BorderRadius.circular(Halved.rCard),
+          ),
+          child: Column(children: [
+            Text('Looking for somebody not here?',
+                textAlign: TextAlign.center,
+                style: Halved.body(weight: FontWeight.w600)
+                    .copyWith(fontSize: 14.5)),
+            const SizedBox(height: 4),
+            const Text(
+              'Search by phone to find a Halved account, or add him as a '
+              'guest and invite him after the round.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 13, height: 1.55, color: Halved.muted),
+            ),
+          ]),
+        ),
+    ];
+  }
+
+  /// One golfer in the picker: the round checkbox at the leading edge, the
+  /// name / badge / index in the middle, the favorites flag at the trailing
+  /// edge.
+  Widget _playerRow(PlayerProfile player) {
+    final isSelected = _playerTees.containsKey(player.id);
+    // The logged-in player is always locked in as a participant.
+    final authPlayer = context.read<AuthProvider>().player;
+    final isLockedIn = authPlayer != null && player.id == authPlayer.id;
+    // Multi-Group Skins is Halved-only — a login-less golfer can't
+    // join (they'd have no way to be matched / to score). Grey them
+    // out; the invite button stays so they can be brought on.
+    final blockedNonHalved =
+        _multiGroup && !player.isOnApp && !isLockedIn;
+
+    final scheme = Theme.of(context).colorScheme;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Per D-06: the logged-in user's checkbox is
+            // *locked*, not disabled.  Use the active brand-
+            // green fill (not the default disabled gray) so
+            // the row reads "you're in" — and tag the You
+            // chip with a lock icon to show why it can't be
+            // toggled off.
+            Checkbox(
+              value:    isSelected,
+              // Blocked golfers can't be ADDED, but one that was
+              // already selected before switching to skins can still
+              // be unchecked.
+              onChanged:
+                  (isLockedIn || (blockedNonHalved && !isSelected))
+                      ? null
+                      : (v) => _onPlayerToggle(player.id, v ?? false),
+              fillColor: isLockedIn
+                  ? WidgetStateProperty.all(scheme.primary)
+                  : null,
+              checkColor: isLockedIn ? Colors.white : null,
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Line 1: name + badge.  The name gets the full
+                  // row width (selectors live on line 2) so it never
+                  // overflows on a narrow phone.
+                  Row(children: [
+                    Flexible(
+                      child: Text(
+                        player.name,
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: blockedNonHalved
+                                ? scheme.onSurfaceVariant
+                                : null),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (player.isOnApp) ...[
+                      const SizedBox(width: 6),
+                      const HalvedMark(size: 18),
+                    ] else if (!isLockedIn) ...[
+                      const SizedBox(width: 6),
+                      // Invite a golfer who isn't on the app yet.
+                      // Plain tappable icon (not IconButton) so its
+                      // footprint matches the Halved mark and rows
+                      // stay the same height.
+                      Builder(
+                        builder: (btnCtx) => Tooltip(
+                          message: 'Invite ${player.name}',
+                          child: InkResponse(
+                            onTap: () =>
+                                inviteGolfer(btnCtx, player),
+                            child: Icon(
+                                Icons.person_add_alt_1_outlined,
+                                size: 18,
+                                color: scheme.primary),
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (isLockedIn) ...[
+                      const SizedBox(width: 6),
+                      Chip(
+                        avatar: Icon(Icons.lock_outline,
+                            size: 12,
+                            color: scheme.onSecondaryContainer),
+                        label: const Text('You',
+                            style: TextStyle(fontSize: 11)),
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        materialTapTargetSize:
+                            MaterialTapTargetSize.shrinkWrap,
+                        backgroundColor: scheme.secondaryContainer,
+                      ),
+                    ],
+                  ]),
+                  // Line 2: handicap index — or, for a login-less
+                  // golfer in a Halved-only skins round, why they're
+                  // greyed out. (Tees are set on their own step;
+                  // Multi-Group Skins auto-seats each player in their
+                  // own group, so there's no group picker here.)
+                  Text(
+                      blockedNonHalved
+                          ? 'Not on Halved — invite to add'
+                          : 'Index ${player.handicapIndex}',
+                      style: Theme.of(context)
+                          .textTheme.bodySmall),
+                ],
+              ),
+            ),
+          // The flag sits at the trailing edge with its own 44pt target, so
+          // adding a golfer to the ROUND (leading checkbox) and adding him to
+          // your SHORTLIST can never be confused.  Tapping it does not select
+          // the row — it is its own button, not part of the row's gesture.
+          FavoriteFlag(
+            isFavorite: _isFavorite(player.id),
+            golferName: player.name,
+            onPressed: () => _toggleFavorite(player),
+          ),
+        ],
+      ),
+    ),
+  );
   }
 
   void _onPlayerToggle(int playerId, bool selected) {
     setState(() {
       if (selected) {
-        // Clear the search after a pick so the checked golfers (floated to the
-        // top) are visible again, ready for the next selection.
-        _playerSearch = '';
-        _playerSearchCtrl.clear();
+        // The search field owns the query and clears itself after a pick, so
+        // the checked golfers (floated to the top) come back into view.
         // Tees are chosen on the dedicated tee step (after selection), so a
         // player is added with NO tee yet (0 = unassigned) — no silent
         // default that's easy to miss.  Suggestions are filled in on the tee
@@ -805,8 +1186,8 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             )
           else ...[
             // One field instead of three entry points: your golfers, then
-            // Halved, then a guest.  The roster list below stays put — it is
-            // where tees get assigned once someone is in the round.
+            // Halved, then a guest.  The query is reported back out so the
+            // roster list below narrows with it.
             UnifiedPlayerSearch(
               roster: _players,
               selectedIds: _playerTees.keys.toSet(),
@@ -817,140 +1198,25 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               gameLabel: _primaryGame == null
                   ? ''
                   : gameDisplayName(_primaryGame!),
+              onQueryChanged: (q) => setState(() => _playerSearch = q),
+              // The chips belong under the search box, not below whatever the
+              // ladder happens to be showing — otherwise they slide down the
+              // screen the moment a query returns a result.
+              belowField: RosterFilterChips(
+                value: _rosterFilter,
+                onChanged: (f) => setState(() => _rosterFilter = f),
+                allCount: _players.length,
+                favoriteCount: _favoriteIds.length,
+                onHalvedCount: _players.where((p) => p.isOnApp).length,
+              ),
+              // The list below narrows to the same query and draws each golfer
+              // with a checkbox and a flag, so the ladder's own YOUR GOLFERS
+              // rung would be the same man a second time.
+              showLocalMatches: false,
             ),
-            const SizedBox(height: 8),
-            Builder(builder: (context) {
-              final shown = _playersForDisplay();
-              if (shown.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Text('No golfers match your search.'),
-                );
-              }
-              return ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: shown.length,
-              itemBuilder: (context, i) {
-                final player = shown[i];
-                final isSelected = _playerTees.containsKey(player.id);
-                // The logged-in player is always locked in as a participant.
-                final authPlayer = context.read<AuthProvider>().player;
-                final isLockedIn = authPlayer != null && player.id == authPlayer.id;
-                // Multi-Group Skins is Halved-only — a login-less golfer can't
-                // join (they'd have no way to be matched / to score). Grey them
-                // out; the invite button stays so they can be brought on.
-                final blockedNonHalved =
-                    _multiGroup && !player.isOnApp && !isLockedIn;
-
-                final scheme = Theme.of(context).colorScheme;
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 4, 12, 4),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // Per D-06: the logged-in user's checkbox is
-                        // *locked*, not disabled.  Use the active brand-
-                        // green fill (not the default disabled gray) so
-                        // the row reads "you're in" — and tag the You
-                        // chip with a lock icon to show why it can't be
-                        // toggled off.
-                        Checkbox(
-                          value:    isSelected,
-                          // Blocked golfers can't be ADDED, but one that was
-                          // already selected before switching to skins can still
-                          // be unchecked.
-                          onChanged:
-                              (isLockedIn || (blockedNonHalved && !isSelected))
-                                  ? null
-                                  : (v) => _onPlayerToggle(player.id, v ?? false),
-                          fillColor: isLockedIn
-                              ? WidgetStateProperty.all(scheme.primary)
-                              : null,
-                          checkColor: isLockedIn ? Colors.white : null,
-                        ),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Line 1: name + badge.  The name gets the full
-                              // row width (selectors live on line 2) so it never
-                              // overflows on a narrow phone.
-                              Row(children: [
-                                Flexible(
-                                  child: Text(
-                                    player.name,
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                        color: blockedNonHalved
-                                            ? scheme.onSurfaceVariant
-                                            : null),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                if (player.isOnApp) ...[
-                                  const SizedBox(width: 6),
-                                  const HalvedMark(size: 18),
-                                ] else if (!isLockedIn) ...[
-                                  const SizedBox(width: 6),
-                                  // Invite a golfer who isn't on the app yet.
-                                  // Plain tappable icon (not IconButton) so its
-                                  // footprint matches the Halved mark and rows
-                                  // stay the same height.
-                                  Builder(
-                                    builder: (btnCtx) => Tooltip(
-                                      message: 'Invite ${player.name}',
-                                      child: InkResponse(
-                                        onTap: () =>
-                                            inviteGolfer(btnCtx, player),
-                                        child: Icon(
-                                            Icons.person_add_alt_1_outlined,
-                                            size: 18,
-                                            color: scheme.primary),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                                if (isLockedIn) ...[
-                                  const SizedBox(width: 6),
-                                  Chip(
-                                    avatar: Icon(Icons.lock_outline,
-                                        size: 12,
-                                        color: scheme.onSecondaryContainer),
-                                    label: const Text('You',
-                                        style: TextStyle(fontSize: 11)),
-                                    padding: EdgeInsets.zero,
-                                    visualDensity: VisualDensity.compact,
-                                    materialTapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                    backgroundColor: scheme.secondaryContainer,
-                                  ),
-                                ],
-                              ]),
-                              // Line 2: handicap index — or, for a login-less
-                              // golfer in a Halved-only skins round, why they're
-                              // greyed out. (Tees are set on their own step;
-                              // Multi-Group Skins auto-seats each player in their
-                              // own group, so there's no group picker here.)
-                              Text(
-                                  blockedNonHalved
-                                      ? 'Not on Halved — invite to add'
-                                      : 'Index ${player.handicapIndex}',
-                                  style: Theme.of(context)
-                                      .textTheme.bodySmall),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            );
-            }),
+            const SizedBox(height: 12),
+            if (_rosterFilter == RosterFilter.onHalved) _hiddenGolfersNote(),
+            ..._buildRosterSections(),
           ],
             const SizedBox(height: 80),
           ], // ── end step 2

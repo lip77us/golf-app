@@ -368,6 +368,17 @@ class ApiClient {
     await _delete('/players/$id/');
   }
 
+  /// Plant or pull the flag on a golfer — the private shortlist behind the
+  /// player picker's Favorites filter.  Both verbs are idempotent server-side,
+  /// so an Undo tap arriving after a retry is a no-op rather than an error.
+  Future<void> setPlayerFavorite(int id, bool favorite) async {
+    if (favorite) {
+      await _post('/players/$id/favorite/', const {});
+    } else {
+      await _delete('/players/$id/favorite/');
+    }
+  }
+
   Future<PlayerProfile> updatePlayer(
     int id, {
     String? name,

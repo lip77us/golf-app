@@ -357,6 +357,47 @@ class Player(models.Model):
         return f"{self.name}{suffix}"
 
 
+class FavoriteGolfer(models.Model):
+    """
+    One golfer's shortlist of the people they actually play with.
+
+    The roster is every golfer you have ever played with, which by the second
+    season is a scroll; a favorite is the mark that cuts it back to the nine
+    names that turn up most weeks.  Owned by the USER, not the account: two
+    members of the same account keep separate shortlists, and being favorited
+    is never visible to the golfer favorited — it appears on no leaderboard,
+    receipt or share card.
+
+    The player still lives in the owner's account, so a favorite is only ever
+    a pointer inside the tenant boundary; there is nothing cross-account here.
+    """
+    owner       = models.ForeignKey(
+                    settings.AUTH_USER_MODEL,
+                    on_delete=models.CASCADE,
+                    related_name='favorite_golfers',
+                    help_text="The user whose shortlist this is.",
+                  )
+    player      = models.ForeignKey(
+                    'core.Player',
+                    on_delete=models.CASCADE,
+                    related_name='favorited_by',
+                    help_text="The golfer on the shortlist.",
+                  )
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['owner', 'player'],
+                name='core_favoritegolfer_owner_player_unique',
+            ),
+        ]
+        ordering = ['id']
+
+    def __str__(self):
+        return f"{self.owner} ★ {self.player}"
+
+
 class Course(models.Model):
     """
     A golf course that has multiple tees.

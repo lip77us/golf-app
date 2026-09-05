@@ -1341,6 +1341,81 @@ Two test suites relied on the OLD implicit default and now say what they mean �
 (`test_messaging_events.py`) pass `zombie_option=False` in setUp, because their
 whole subject is the classic game: knocked out is knocked out.
 
+## Select Players — roster filters and favorites (`handoff-select-players`)
+
+The shipped picker is one alphabetical list of everybody you have ever played
+with; by the second season that is a scroll, and the fourth man is usually one
+of the same nine people. Two filters and the mark that makes the second one
+possible.
+
+**Favorites are per USER, not per account.** `core.FavoriteGolfer(owner, player,
+created_at)` with a unique constraint on the pair (`core/0016`). Two members of
+one account keep separate shortlists, and being favorited is never visible to
+the golfer favorited — it appears on no leaderboard, receipt or share card. The
+player is always inside the owner's own account, so a favorite never crosses the
+tenant boundary. **Guests count**: a regular fourth who never signs up is the
+case the filter exists for, so there is no on-Halved gate.
+
+- `POST` / `DELETE /api/players/{id}/favorite/` (`PlayerFavoriteView`). **Both
+  verbs are idempotent** — the picker writes optimistically and an Undo tap can
+  land after a retry, so a second set (or unset) is a no-op, not a 409. Open to
+  every account member, not admins only: it is a private shortlist entry, not
+  roster management.
+- `PlayerSerializer.is_favorite` reads `context['favorite_ids']`, which
+  `_on_app_context(players, user)` fills with ONE batched query — a 128-golfer
+  roster costs two lookups, not 128. The `user` argument is optional so the
+  field defaults False anywhere that does not pass one.
+
+**Mobile.** `PlayerProfile.isFavorite`; `client.setPlayerFavorite`.
+- `widgets/favorite_flag.dart` — **a pin flag, not a heart or a star.** A heart
+  is a social-app gesture applied to a playing partner; a star reads as a rating
+  of the man and collides with course ratings elsewhere. Drawn as a
+  `CustomPainter` (`PinFlagGlyph`) rather than pulled from Material, because
+  Material has no pin flag and the outline / filled pair has to be the SAME
+  shape — if the mark is ever changed it is one swap, in that file. 44pt target
+  at the **trailing** edge, hard clear of the checkbox at the leading edge, and
+  **tapping it never selects the row**. Light haptic on set, none on unset (the
+  Undo toast carries that one).
+- `widgets/roster_filter.dart` — `RosterFilter` + the chip row. One at a time,
+  **`all` on every entry**: a filter must not survive into the next round's
+  setup. **The count is part of the label** — a filter that could empty the list
+  has to say so before it is tapped — and it counts the whole roster, not what a
+  search has narrowed it to.
+- `utils/roster_sections.dart` `rosterSections()` — pure, so the rules are
+  testable and reusable. **Under `All` favorites appear TWICE**, pinned above
+  and again in their alphabetical place: somebody scrolling to M for Dave Moran
+  should find him under M, not discover he has been moved. Roster order in is
+  order out; the screen still owns the shipped sort (selected + You floated to
+  the top, then alphabetical), applied per section.
+- `casual_round_screen.dart` owns the state: `_favoriteIds` seeded from the
+  roster, `_undoPending` for the one case that needs an Undo. **Unsetting inside
+  the Favorites filter** takes the row out from under the thumb that tapped it,
+  so it gets a five-second `<Name> removed from Favorites · Undo` and the row
+  keeps drawing until the toast closes. (The packet writes that line as
+  `<Name> removed`, which on a screen for adding golfers to a round reads as
+  though he has been taken out of it — the list is named on purpose.) Everywhere else the flag just empties and the row does
+  not move. No confirmation dialog either way — this is a shortlist, not a
+  deletion. **Filtering never touches the selection**: a golfer already added
+  stays added and stays checked when he is filtered out of view; the seat chips
+  are the record of who is in.
+- **Search and filter compose.** `UnifiedPlayerSearch` gained `onQueryChanged`
+  and stays the single owner of the text; the host mirrors it so the roster list
+  narrows with it. (`_playerSearch` existed but was vestigial — nothing set it,
+  so the list below the search box was always the full roster.) A search that
+  empties a filter offers **Search all golfers**, which drops back to `All`.
+- **On Halved** accounts for what it hides in one line above the list
+  (`_hiddenGolfersNote`), and ends with the search fallback, because the filter
+  itself hides the roster somebody would otherwise be found in.
+
+Tests: `api/test_favorites.py` (8 — per-user not per-account, cross-account 404,
+idempotence, guests, the batched query) and `mobile/test/roster_filter_test.dart`
+(11 — the pinning, the compose rules, order preservation, the 44pt target).
+
+**Not wired yet:** the design says favorites are read on every screen that picks
+golfers (tournament player select, group builder) — this screen is the first
+consumer. The backend and both widgets are general; the other pickers still
+draw the plain list.
+
 ## Release tags
 
 Every marketing version is tagged `v<version>` (annotated), pointing at the
