@@ -889,12 +889,15 @@ class _PressOffer extends StatelessWidget {
     final String title;
     final String body;
     if (already) {
-      title = 'Press already called in this match';
+      // A press in play is a STATE, not a refusal. "Press already called in
+      // this match" read like an error for something the group had just
+      // deliberately done.
+      final who = manual.calledBy == null ? '' : 'Called by ${manual.calledBy}. ';
+      title = 'Press in play on ${manual.holeRange}';
       body  = removable
-          ? 'One hand-called press per match. Nothing has been played on it '
-            'yet, so a mis-tap can still be taken back.'
-          : 'It is running over ${manual.holeRange} now. A bet the group has '
-            'played cannot be taken back.';
+          ? '${who}Nothing has been played on it yet, so a mis-tap can still '
+            'be taken back.'
+          : '${who}A bet the group has played cannot be taken back.';
     } else if (!roomLeft) {
       title = 'Press';
       body  = 'No holes left in this match for a press to cover.';
@@ -905,11 +908,12 @@ class _PressOffer extends StatelessWidget {
       body  = 'Callable once a hole in this match has been decided — there is '
               'nobody to trail until one is.';
     } else if (twin != null && twin.isPress) {
-      // The auto press is already the bet over these holes. Nothing more to
-      // explain than that it is on.
-      title = 'Auto press on';
-      body  = 'You cannot hand-call one while a press is already in play over '
-              '$where.';
+      // Same as a called press: a state, not a refusal. "You cannot
+      // hand-call one" told the group off for something the game did by
+      // itself.
+      title = 'Auto press in play on ${twin.holeRange}';
+      body  = 'It opened when the first hole of the match was won. One press '
+              'runs over these holes, not two.';
     } else if (twin != null) {
       title = 'A press would double the match';
       body  = '${twin.label} is level with $where left, so a press over '
@@ -938,14 +942,19 @@ class _PressOffer extends StatelessWidget {
               'over the holes left, settling on its own.';
     }
 
-    // Blue or orange — the colour of whoever may call it, so the card can be
-    // matched against the score rows without reading a word.
-    final side = trailing == 1 ? _kBlue : _kOrange;
+    // Blue or orange — the colour of whoever the card is ABOUT, so it can be
+    // matched against the score rows without reading a word: the side that
+    // may call a press, or the side whose press is already running.
+    final owner = already ? manual.calledSide : trailing;
+    final side  = owner == 2 ? _kOrange : _kBlue;
+    // Colour it for a live press as well as for an offer — both belong to a
+    // side. The other refusals belong to nobody, and stay grey.
+    final owned = legal || (already && owner != null);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: legal
+        color: owned
             ? side.withOpacity(0.10)
             : theme.colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(10),
@@ -956,7 +965,7 @@ class _PressOffer extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(0, 10, 12, 10),
             decoration: BoxDecoration(
               border: Border.all(
-                  color: legal ? side : theme.colorScheme.outlineVariant,
+                  color: owned ? side : theme.colorScheme.outlineVariant,
                   width: 1.5),
               borderRadius: BorderRadius.circular(10),
             ),
@@ -966,7 +975,7 @@ class _PressOffer extends StatelessWidget {
                 width: 5, height: 40,
                 margin: const EdgeInsets.only(right: 10),
                 decoration: BoxDecoration(
-                  color: legal ? side : Colors.transparent,
+                  color: owned ? side : Colors.transparent,
                   borderRadius: const BorderRadius.horizontal(
                       right: Radius.circular(3)),
                 ),
@@ -974,7 +983,7 @@ class _PressOffer extends StatelessWidget {
               Container(
                 width: 24, height: 24,
                 decoration: BoxDecoration(
-                  color: legal ? side : theme.colorScheme.outlineVariant,
+                  color: owned ? side : theme.colorScheme.outlineVariant,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: busy
@@ -992,7 +1001,7 @@ class _PressOffer extends StatelessWidget {
                   Text(title,
                       style: TextStyle(
                           fontSize: 13, fontWeight: FontWeight.bold,
-                          color: legal
+                          color: owned
                               ? side
                               : theme.colorScheme.onSurfaceVariant)),
                   const SizedBox(height: 1),

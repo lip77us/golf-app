@@ -6448,11 +6448,14 @@ class SequoyaBet {
   final int?      closedOn;
   final int       toPlay;
   final String?   calledBy;
+  /// Which side called it — 1 or 2 — so a press can be shown in the colour of
+  /// whoever it belongs to. Null on the match bet and the auto press.
+  final int?      calledSide;
 
   const SequoyaBet({
     required this.kind, required this.label, required this.holes,
     required this.amount, this.result, this.margin = 0, this.closedOn,
-    this.toPlay = 0, this.calledBy,
+    this.toPlay = 0, this.calledBy, this.calledSide,
   });
 
   bool get isPress => kind != 'match';
@@ -6474,7 +6477,8 @@ class SequoyaBet {
         margin:   (j['margin'] as num?)?.toInt() ?? 0,
         closedOn: j['closed_on'] as int?,
         toPlay:   (j['to_play'] as num?)?.toInt() ?? 0,
-        calledBy: j['called_by']?.toString(),
+        calledBy:   j['called_by']?.toString(),
+        calledSide: (j['called_side'] as num?)?.toInt(),
       );
 }
 
