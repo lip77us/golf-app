@@ -194,12 +194,14 @@ def call_press(foursome, *, match_index, side, called_by_id, current_hole):
     if side != trailing:
         raise ValueError('Only the side that is down may press.')
 
-    # An auto press IS the press. Stacking a hand-called one on top would put
-    # a second bet over holes the auto press already covers — two bets that
-    # can only ever settle the same way, which is a double, not a press.
+    # A match carries ONE press. Which bet a second one would merely repeat
+    # changes as the match runs — on the second hole it is the auto press,
+    # on the last hole of a level match it is the match bet itself — so the
+    # refusal states the rule rather than guessing at the twin. The screen,
+    # which knows the margins, names it.
     if auto_press_holes(game, net, side1, side2, match_index) is not None:
-        raise ValueError('The auto press already covers the rest of this '
-                         'match.')
+        raise ValueError('This match already carries its press — the auto '
+                         'press. A match carries one, not two.')
 
     if game.presses.filter(match_index=match_index).exists():
         raise ValueError('This match already carries a hand-called press.')
@@ -212,6 +214,42 @@ def call_press(foursome, *, match_index, side, called_by_id, current_hole):
 # ---------------------------------------------------------------------------
 # Scoring — one net table, every bet computed from it
 # ---------------------------------------------------------------------------
+
+def _effective_hcps(game, members):
+    """``{pid: effective handicap}`` under the game's own handicap setting."""
+    npct  = game.net_percent or 100
+    phcps = [m.playing_handicap for m in members
+             if m.playing_handicap is not None]
+    low   = min(phcps) if phcps else 0
+
+    out = {}
+    for m in members:
+        if game.handicap_mode == HandicapMode.STROKES_OFF:
+            from core.handicap_math import round_half_up
+            out[m.player_id] = int(round_half_up(
+                max(0, (m.playing_handicap or 0) - low) * npct / 100))
+        else:
+            out[m.player_id] = effective_hcp_for(m, npct)
+    return out
+
+
+def strokes_by_hole(game, foursome, holes):
+    """``{pid: {hole: strokes}}`` over EVERY hole, played or not.
+
+    The allocation is a fact about the card and the handicap, so it is known
+    before a ball is struck — which is what lets the scorecard show the whole
+    stroke plan up front rather than revealing it one played hole at a time.
+    """
+    members = [m for m in _real_members(foursome) if m.tee_id is not None]
+    if game.handicap_mode == HandicapMode.GROSS:
+        return {m.player_id: {} for m in members}
+    strokes = make_strokes_fn(foursome)
+    eff     = _effective_hcps(game, members)
+    return {
+        m.player_id: {h: strokes(eff[m.player_id], m.tee, h) for h in holes}
+        for m in members
+    }
+
 
 def _net_by_hole(game, foursome):
     """``{pid: {hole: net}}`` under the game's own handicap setting.
@@ -230,23 +268,14 @@ def _net_by_hole(game, foursome):
     if game.handicap_mode == HandicapMode.GROSS:
         return {m.player_id: dict(gross.get(m.player_id, {})) for m in members}
 
-    npct    = game.net_percent or 100
     strokes = make_strokes_fn(foursome)
-    phcps   = [m.playing_handicap for m in members
-               if m.playing_handicap is not None]
-    low     = min(phcps) if phcps else 0
+    eff     = _effective_hcps(game, members)
 
     out = {}
     for m in members:
-        if game.handicap_mode == HandicapMode.STROKES_OFF:
-            from core.handicap_math import round_half_up
-            eff = int(round_half_up(
-                max(0, (m.playing_handicap or 0) - low) * npct / 100))
-        else:
-            eff = effective_hcp_for(m, npct)
         per = {}
         for hole, g in (gross.get(m.player_id) or {}).items():
-            per[hole] = g - strokes(eff, m.tee, hole)
+            per[hole] = g - strokes(eff[m.player_id], m.tee, hole)
         out[m.player_id] = per
     return out
 
@@ -380,6 +409,12 @@ def _scorecard(foursome, game, net, ids, members, match1_side1):
             foursome=foursome, gross_score__isnull=False):
         gross.setdefault(hs.player_id, {})[hs.hole_number] = hs.gross_score
 
+    # The whole stroke plan, including holes nobody has played. Inferring it
+    # from gross - net would show a stroke only once the hole was in the book,
+    # so a golfer could not see where his strokes fall until he no longer
+    # needed to know.
+    alloc = strokes_by_hole(game, foursome, order)
+
     holes_out = []
     for hole in order:
         idx = match_of_hole(hole)
@@ -390,12 +425,10 @@ def _scorecard(foursome, game, net, ids, members, match1_side1):
         winner  = _hole_winner(net, side1, side2, hole)
         scores  = []
         for pid in ids:
-            g = gross.get(pid, {}).get(hole)
-            n = net.get(pid, {}).get(hole)
             scores.append({
                 'player_id': pid,
-                'gross'    : g,
-                'strokes'  : (g - n) if (g is not None and n is not None) else 0,
+                'gross'    : gross.get(pid, {}).get(hole),
+                'strokes'  : alloc.get(pid, {}).get(hole, 0),
                 # Which side this golfer is on FOR THIS HOLE.
                 'team'     : side_of.get(pid),
             })

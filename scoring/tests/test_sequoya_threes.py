@@ -399,6 +399,28 @@ class SettlementTests(TestCase):
         self.assertEqual(h1['par'], 4)
         self.assertIsNotNone(h1['stroke_index'])
 
+    def test_the_scorecard_shows_strokes_on_holes_nobody_has_played(self):
+        """The allocation is a fact about the card and the handicap, so it is
+        known before a ball is struck. Inferring it from gross - net showed a
+        stroke only once the hole was in the book — by which point the golfer
+        no longer needed to know."""
+        setup_sequoya_threes(
+            self.fs, [self.pid['Ann'], self.pid['Ben']],
+            handicap_mode='net', bet_amount=5,
+            press_mode=SequoyaThreesGame.PRESS_MANUAL_AUTO)
+        # Cal is off the stick and Dee is not, so Dee has strokes to show.
+        for name, idx in (('Ann', 0), ('Ben', 0), ('Cal', 0), ('Dee', 18)):
+            m = self.fs.memberships.get(player_id=self.pid[name])
+            m.playing_handicap = idx
+            m.save(update_fields=['playing_handicap'])
+
+        sc = sequoya_threes_summary(self.fs)['scorecard']
+        last = sc['holes'][-1]                     # hole 18, unplayed
+        dee  = next(e for e in last['scores']
+                    if e['player_id'] == self.pid['Dee'])
+        self.assertIsNone(dee['gross'], 'nobody has played it')
+        self.assertEqual(dee['strokes'], 1, 'but the stroke is already known')
+
     def test_a_halved_or_unplayed_hole_tints_nobody(self):
         sc = sequoya_threes_summary(self.fs)['scorecard']
         self.assertIsNone(sc['holes'][2]['winner_team'], 'hole 3 unplayed')

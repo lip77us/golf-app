@@ -132,9 +132,6 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
     return fs.memberships.where((m) => !m.player.isPhantom).toList();
   }
 
-  Membership? _memberFor(int playerId, List<Membership> players) =>
-      players.where((m) => m.player.id == playerId).firstOrNull;
-
   // --- pending scores ----------------------------------------------------
 
   Map<int, int> _effectiveScores(Scorecard sc, int hole) {
@@ -163,15 +160,22 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
     return fs?.hasAnyScore ?? false;
   }
 
-  /// The next golfer to score, in the order the screen DRAWS them — side 1's
-  /// pair then side 2's, not roster order. Following the roster made the hot
-  /// spot jump across the card (Paul, then his opponent, then his partner).
+  /// The next golfer to score, in the order the screen draws them.
   int? _hotSpotId(List<int> displayOrder, Map<int, int> scores) {
     for (final pid in displayOrder) {
       if (!scores.containsKey(pid)) return pid;
     }
     return null;
   }
+
+  /// player id → which side he is on FOR THIS MATCH. The rows stay in one
+  /// order all round and the SIDE moves under them, which is the whole point:
+  /// re-sorting four golfers every third hole means hunting for your own name
+  /// on every fourth green.
+  Map<int, int> _sideOf(SequoyaMatch match) => {
+        for (final p in match.side1) p.playerId: 1,
+        for (final p in match.side2) p.playerId: 2,
+      };
 
   bool _allScored(List<Membership> players, Map<int, int> scores) =>
       players.every((m) => scores.containsKey(m.player.id));
@@ -509,9 +513,9 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
     final scores   = _effectiveScores(sc, _selectedHole);
     final par      = holeData?.par ?? 4;
     final match    = summary?.matchForHole(_selectedHole);
-    final displayOrder = match == null
-        ? players.map((m) => m.player.id).toList()
-        : [...match.side1, ...match.side2].map((s) => s.playerId).toList();
+    // Roster order, the same order the scorecard grid draws — score entry and
+    // the card must never disagree about who is who.
+    final displayOrder = players.map((m) => m.player.id).toList();
     final hotSpotId = isComplete ? null : _hotSpotId(displayOrder, scores);
 
     return RefreshIndicator(
@@ -534,6 +538,11 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
               // hole a press would cover — see _PressOffer.
               holeScored: [...match.side1, ...match.side2]
                   .every((p) => scores.containsKey(p.playerId)),
+              // Whether anything in this match has been DECIDED. A halved
+              // hole leaves the match level exactly as an uncontested one
+              // does, and the margin alone cannot tell the two apart.
+              anyHoleWon: summary!.cardHoles.any((h) =>
+                  h['match'] == match.index && h['winner_team'] != null),
               mySide: _mySide(match, context.read<AuthProvider>().player?.id),
               onCall: (side) => _callPress(match, side),
             ),
@@ -544,38 +553,27 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
               kind: InlineMessageKind.info,
               text: 'Set the game up to see this hole’s match.',
             )
-          else ...[
-            for (final pair in [
-              (match.side1, _kBlue,   'Side 1'),
-              (match.side2, _kOrange, 'Side 2'),
-            ])
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _PairCard(
-                  label:      pair.$3,
-                  colour:     pair.$2,
-                  side:       pair.$1,
-                  players:    players,
-                  holeData:   holeData,
-                  scores:     scores,
-                  par:        par,
-                  summary:    summary,
-                  hotSpotId:  hotSpotId,
-                  editingPlayerId: _editingPlayerId,
-                  memberFor:  (pid) => _memberFor(pid, players),
-                  onScoreSelected: (m, s) => _handleScore(ctx, m, s, players),
-                  onEditTap: (m) => setState(() => _editingPlayerId =
-                      _editingPlayerId == m.player.id ? null : m.player.id),
-                  spotsActive:   spotsActive(rp),
-                  spotsCountFor: (pid) =>
-                      spotsCount(pid, _selectedHole, rp.spotsSummary),
-                  onSpotsAdd: (pid) =>
-                      adjustSpots(widget.foursomeId, pid, _selectedHole, 1),
-                  onSpotsRemove: (pid) =>
-                      adjustSpots(widget.foursomeId, pid, _selectedHole, -1),
-                ),
-              ),
-          ],
+          else
+            _HoleScoreCard(
+              players:    players,
+              sideOf:     _sideOf(match),
+              holeData:   holeData,
+              scores:     scores,
+              par:        par,
+              summary:    summary,
+              hotSpotId:  hotSpotId,
+              editingPlayerId: _editingPlayerId,
+              onScoreSelected: (m, s) => _handleScore(ctx, m, s, players),
+              onEditTap: (m) => setState(() => _editingPlayerId =
+                  _editingPlayerId == m.player.id ? null : m.player.id),
+              spotsActive:   spotsActive(rp),
+              spotsCountFor: (pid) =>
+                  spotsCount(pid, _selectedHole, rp.spotsSummary),
+              onSpotsAdd: (pid) =>
+                  adjustSpots(widget.foursomeId, pid, _selectedHole, 1),
+              onSpotsRemove: (pid) =>
+                  adjustSpots(widget.foursomeId, pid, _selectedHole, -1),
+            ),
           const SizedBox(height: 6),
           // The Sixes card. Above the match list on purpose: it answers what
           // was SHOT, which is the question the group asks while the hole is
@@ -809,12 +807,14 @@ class _PressOffer extends StatelessWidget {
   final int  hole;
   final bool busy;
   final bool holeScored;
+  final bool anyHoleWon;
   final int? mySide;
   final void Function(int side) onCall;
 
   const _PressOffer({
     required this.match, required this.hole, required this.busy,
-    required this.holeScored, required this.mySide, required this.onCall,
+    required this.holeScored, required this.anyHoleWon,
+    required this.mySide, required this.onCall,
   });
 
   @override
@@ -838,32 +838,57 @@ class _PressOffer extends StatelessWidget {
         : (trailing == 1 ? match.side1 : match.side2)
             .map((p) => p.shortName).join(' & ');
 
+    // A live bet a press would merely REPEAT: level, with exactly the holes
+    // the press would cover still to play. Two level bets over one set of
+    // holes settle identically, which is a double rather than a press.
+    //
+    // Which bet that is changes as the match runs, and saying the wrong one
+    // is worse than saying nothing. On the second hole of a match it is the
+    // auto press (it opened over the same holes and is level). On the LAST
+    // hole of a level match it is the match bet — the auto press is NOT a
+    // twin there, because it carries a margin and so settles differently on
+    // a halved hole.
+    final covered = match.endHole - start + 1;
+    final twin = match.bets
+        .where((b) => b.isLive && b.margin == 0 && b.toPlay == covered)
+        .firstOrNull;
+
+    final where = covered == 1
+        ? 'hole $start' : 'holes $start–${match.endHole}';
+
     final String title;
     final String body;
     if (already) {
       title = 'Press already called in this match';
       body  = 'One hand-called press per match.';
-    } else if (auto != null) {
-      // The auto press already covers the rest of the match, so a second bet
-      // over the same holes could only ever settle the same way — a double,
-      // not a press.
-      title = 'The auto press has it';
-      body  = 'It already covers ${auto.holeRange} at '
-              '\$${auto.amount.toStringAsFixed(0)} per golfer. A hand-called press '
-              'over the same holes would be a double, not a press.';
     } else if (!roomLeft) {
       title = 'Press';
       body  = 'No holes left in this match for a press to cover.';
+    } else if (!anyHoleWon) {
+      // Nothing has been won yet — the first tee, or holes that halved. That
+      // is the plain reason, and it outranks any talk of doubling.
+      title = 'Press';
+      body  = 'Callable once a hole in this match has been decided — there is '
+              'nobody to trail until one is.';
+    } else if (twin != null) {
+      title = 'A press would double '
+              '${twin.isPress ? 'the auto press' : 'the match'}';
+      body  = '${twin.label} is level with $where left, so a press over '
+              '$where settles on exactly the same golf.';
+    } else if (auto != null) {
+      // No twin, but the match already carries its press. The auto press is
+      // the press here; a hand-called one is what a match gets INSTEAD, when
+      // its first hole is halved and no auto press ever opens.
+      title = 'The auto press has it';
+      body  = 'A match carries one press, not two. A hand-called press is '
+              'what you get when the first hole of a match is halved.';
     } else if (trailing == null) {
       title = 'Press';
-      body  = hole == match.startHole && !holeScored
-          ? 'Callable once a hole in this match has been decided — there is '
-            'nothing to trail after on the first tee.'
-          : 'The match is all square. Only the side that is DOWN may press.';
+      body  = 'The match is all square. Only the side that is DOWN may press.';
     } else if (mine) {
       title = 'Call your press — covers $covers';
-      body  = 'A new bet at \$${match.bets.first.amount.toStringAsFixed(0)} a '
-              'man over the holes left. It settles on its own.';
+      body  = 'A new bet at \$${match.bets.first.amount.toStringAsFixed(0)} per '
+              'golfer over the holes left. It settles on its own.';
     } else {
       // One phone scores the group, so the button belongs to the TRAILING
       // side rather than to whoever is holding it. Gating it on the reader
@@ -970,18 +995,22 @@ class _HoleHeader extends StatelessWidget {
 // One side of the match — its two golfers and their score boxes
 // ===========================================================================
 
-class _PairCard extends StatelessWidget {
-  final String            label;
-  final Color             colour;
-  final List<SequoyaSide> side;
+/// The four golfers in ONE stable order, each row carrying the colour of the
+/// side he is on for this match.
+///
+/// **The rows never re-sort.** The pairing rotates every third hole, and
+/// re-grouping the card to match it means hunting for your own name on every
+/// fourth green — Sixes doesn't do it either. The colour moves instead: a bar
+/// down the left of each row, so partners are the two rows sharing a colour.
+class _HoleScoreCard extends StatelessWidget {
   final List<Membership>  players;
+  final Map<int, int>     sideOf;
   final ScorecardHole?    holeData;
   final Map<int, int>     scores;
   final int               par;
   final SequoyaThreesSummary? summary;
   final int?              hotSpotId;
   final int?              editingPlayerId;
-  final Membership? Function(int playerId) memberFor;
   final void Function(Membership, int) onScoreSelected;
   final void Function(Membership) onEditTap;
   final bool                 spotsActive;
@@ -989,11 +1018,10 @@ class _PairCard extends StatelessWidget {
   final void Function(int)   onSpotsAdd;
   final void Function(int)   onSpotsRemove;
 
-  const _PairCard({
-    required this.label, required this.colour, required this.side,
-    required this.players, required this.holeData, required this.scores,
-    required this.par, required this.summary, required this.hotSpotId,
-    required this.editingPlayerId, required this.memberFor,
+  const _HoleScoreCard({
+    required this.players, required this.sideOf, required this.holeData,
+    required this.scores, required this.par, required this.summary,
+    required this.hotSpotId, required this.editingPlayerId,
     required this.onScoreSelected, required this.onEditTap,
     required this.spotsActive, required this.spotsCountFor,
     required this.onSpotsAdd, required this.onSpotsRemove,
@@ -1001,6 +1029,9 @@ class _PairCard extends StatelessWidget {
 
   String get _mode       => summary?.handicapMode ?? 'net';
   int    get _netPercent => summary?.netPercent   ?? 100;
+
+  Color _colourFor(int playerId) =>
+      sideOf[playerId] == 2 ? _kOrange : _kBlue;
 
   int? get _lowPlaying {
     if (_mode != 'strokes_off' || players.isEmpty) return null;
@@ -1027,6 +1058,34 @@ class _PairCard extends StatelessWidget {
     return strokesOnHole(so, mySi);
   }
 
+  /// `Paul & AB  v  Aldo & AP`, each pair in its own colour — the pairing
+  /// stated once, in words, so the bars below have something to mean.
+  Widget _pairingLine(ThemeData theme) {
+    String names(int side) => players
+        .where((m) => sideOf[m.player.id] == side)
+        .map((m) => m.player.displayShort)
+        .join(' & ');
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: Row(children: [
+        Expanded(
+          child: Text(names(1),
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.bold, color: _kBlue)),
+        ),
+        Text('v', style: theme.textTheme.labelSmall),
+        Expanded(
+          child: Text(names(2),
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.bold, color: _kOrange)),
+        ),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1036,33 +1095,19 @@ class _PairCard extends StatelessWidget {
         border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: colour.withOpacity(0.10),
-            border: Border(left: BorderSide(color: colour, width: 4)),
-            borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(7), topRight: Radius.circular(7)),
-          ),
-          child: Text(
-            '${label.toUpperCase()}  ·  '
-            '${side.map((s) => s.shortName).join(' & ')}',
-            style: TextStyle(
-                fontSize: 10.5, fontWeight: FontWeight.bold,
-                letterSpacing: 0.4, color: colour),
-          ),
-        ),
-        for (final s in side) ..._rows(context, s),
+        _pairingLine(theme),
+        const Divider(height: 1),
+        for (final m in players) ..._rows(context, m),
       ]),
     );
   }
 
-  List<Widget> _rows(BuildContext context, SequoyaSide s) {
-    final m = memberFor(s.playerId);
-    if (m == null) return const [];
-    final gross   = scores[s.playerId];
-    final isHot   = hotSpotId == s.playerId;
-    final editing = editingPlayerId == s.playerId;
+  List<Widget> _rows(BuildContext context, Membership m) {
+    final pid     = m.player.id;
+    final colour  = _colourFor(pid);
+    final gross   = scores[pid];
+    final isHot   = hotSpotId == pid;
+    final editing = editingPlayerId == pid;
     final strokes = _strokesForHole(m);
     final row = _ScoreRow(
       member:   m,
@@ -1077,21 +1122,21 @@ class _PairCard extends StatelessWidget {
       colour:   colour,
       onTap: (gross != null && !isHot) ? () => onEditTap(m) : null,
       spotsActive:   spotsActive,
-      spotsCount:    spotsActive ? spotsCountFor(s.playerId) : 0,
-      onSpotsAdd:    spotsActive ? () => onSpotsAdd(s.playerId) : null,
-      onSpotsRemove: spotsActive ? () => onSpotsRemove(s.playerId) : null,
+      spotsCount:    spotsActive ? spotsCountFor(pid) : 0,
+      onSpotsAdd:    spotsActive ? () => onSpotsAdd(pid) : null,
+      onSpotsRemove: spotsActive ? () => onSpotsRemove(pid) : null,
     );
     if (!isHot && !editing) return [row];
     return [
       Container(
-        margin: const EdgeInsets.fromLTRB(0, 6, 8, 6),
+        margin: const EdgeInsets.fromLTRB(0, 4, 8, 4),
         decoration: BoxDecoration(
           color: colour.withOpacity(0.08),
           border: Border(
             top:    BorderSide(color: colour, width: 1.5),
             bottom: BorderSide(color: colour, width: 1.5),
             right:  BorderSide(color: colour, width: 1.5),
-            left:   BorderSide(color: colour, width: 4.0),
+            left:   BorderSide(color: colour, width: 5.0),
           ),
         ),
         child: Column(
@@ -1137,8 +1182,20 @@ class _ScoreRow extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
+        padding: const EdgeInsets.fromLTRB(0, 9, 12, 9),
         child: Row(children: [
+          // The side bar. Not a label — a label would have to be read, and
+          // this only has to be matched against the row above or below.
+          // Suppressed inside the active row's box, which is already ruled in
+          // the same colour on all four sides.
+          Container(
+            width: 5, height: 34,
+            margin: const EdgeInsets.only(right: 10),
+            decoration: BoxDecoration(
+              color: isHot ? Colors.transparent : colour,
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
           Expanded(
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start, children: [
