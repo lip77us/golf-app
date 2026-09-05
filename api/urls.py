@@ -167,6 +167,11 @@ urlpatterns = [
     path('foursomes/<int:pk>/survivor/setup/', views.SurvivorSetupView.as_view(),  name='api-survivor-setup'),
 
     # Sequoya 3s — six three-hole 2v2 matches, presses as separate bets.
+    path('foursomes/<int:pk>/banker/',            views.BankerResultView.as_view(),     name='api-banker'),
+    path('foursomes/<int:pk>/banker/setup/',      views.BankerSetupView.as_view(),      name='api-banker-setup'),
+    path('foursomes/<int:pk>/banker/hole/',       views.BankerHoleView.as_view(),       name='api-banker-hole'),
+    path('foursomes/<int:pk>/banker/advance/',    views.BankerAdvanceView.as_view(),    name='api-banker-advance'),
+    path('foursomes/<int:pk>/banker/settlement/', views.BankerSettlementView.as_view(), name='api-banker-settlement'),
     path('foursomes/<int:pk>/sequoya-threes/',       views.SequoyaThreesResultView.as_view(), name='api-sequoya-threes'),
     path('foursomes/<int:pk>/sequoya-threes/setup/', views.SequoyaThreesSetupView.as_view(),  name='api-sequoya-threes-setup'),
     path('foursomes/<int:pk>/sequoya-threes/press/', views.SequoyaThreesPressView.as_view(),  name='api-sequoya-threes-press'),

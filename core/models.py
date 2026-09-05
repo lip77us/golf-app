@@ -164,6 +164,7 @@ class GameType(models.TextChoices):
     # Presses are separate BETS at the same amount, never a doubling.
     # Engine in services/sequoya_threes.py.
     SEQUOYA_THREES  = 'sequoya_threes',  'Sequoya 3s'
+    BANKER          = 'banker',          'Banker'
 
 
 class RoundStatus(models.TextChoices):

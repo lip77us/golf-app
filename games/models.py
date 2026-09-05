@@ -3457,3 +3457,143 @@ class SequoyaThreesPress(models.Model):
 
     def __str__(self):
         return f'press m{self.match_index} from hole {self.start_hole}'
+
+
+class BankerGame(models.Model):
+    """Banker — one golfer against three, every hole, each bet on its own.
+
+    The only game in the app where **the money is fixed before anybody
+    swings**, and the order in which it is fixed IS the game: the banker names
+    a maximum, each opponent picks his own number inside it, the bets lock, and
+    only then does the banker tee off. A banker who can still see bets moving
+    after his tee shot is playing something else, which is why the lock is a
+    stored moment rather than a screen state.
+
+    **Handicap is net or gross, never strokes-off-low.** Strokes-off is a MATCH
+    mechanism — it zeroes the low golfer and gives everyone else the
+    difference — and Banker is three separate one-on-ones in which the low man
+    is on both sides of the table across a round. Full net by stroke index is
+    the rule the game is actually played on.
+
+    `hole_cap_amount` is one ceiling on what a single hole can cost the banker,
+    all bets and multipliers included. It is NOT a traditional rule, which is
+    why it is off by default: a safety rail switched on without being asked
+    reads as the app setting the stakes.
+    """
+
+    ROTATION_ASK   = 'ask'
+    ROTATION_DRAW  = 'draw'
+    ROTATION_KEEP  = 'keep'
+    ROTATION_CHOICES = [
+        (ROTATION_ASK,  'The group says who holed out first'),
+        (ROTATION_DRAW, 'Tied low scores are drawn'),
+        (ROTATION_KEEP, 'The current banker keeps it'),
+    ]
+
+    foursome      = models.OneToOneField(
+                        'tournament.Foursome', on_delete=models.CASCADE,
+                        related_name='banker_game')
+    status        = models.CharField(max_length=20, default='in_progress')
+    handicap_mode = models.CharField(
+                        max_length=20, choices=HandicapMode.choices,
+                        default=HandicapMode.NET)
+    net_percent   = models.PositiveSmallIntegerField(default=100)
+    # The band. `min_bet` is the floor every opponent must have on the hole;
+    # `max_bet` is the ceiling the banker cannot raise his hole maximum past.
+    # The WIDTH of the band is the decision the group is really making.
+    min_bet       = models.DecimalField(max_digits=8, decimal_places=2,
+                                        default=5)
+    max_bet       = models.DecimalField(max_digits=8, decimal_places=2,
+                                        default=50)
+    rotation_rule = models.CharField(max_length=10, choices=ROTATION_CHOICES,
+                                     default=ROTATION_ASK)
+    hole_cap_enabled = models.BooleanField(default=False)
+    hole_cap_amount  = models.DecimalField(max_digits=9, decimal_places=2,
+                                           null=True, blank=True)
+    first_banker  = models.ForeignKey('core.Player', null=True, blank=True,
+                                      on_delete=models.SET_NULL,
+                                      related_name='banker_games_opened')
+    created_at    = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'Banker — foursome {self.foursome_id}'
+
+
+class BankerHole(models.Model):
+    """One hole's declared state: who banks it, his maximum, and the lock.
+
+    **Who banked a hole is STORED, not derived from the previous hole's low
+    net.** Every bet on this hole was agreed against a named man, so a later
+    score correction must not be able to hand the role to somebody else and
+    silently re-point three wagers. The rotation computes the SUGGESTION for
+    the next hole; this row records what the group actually played.
+
+    `tie_reason` answers the question a phone cannot: the traditional tiebreak
+    for the bank is low score, holed out FIRST, and nothing on the device saw
+    the balls drop. So the reason travels with the outcome all the way to the
+    receipt — a role that changed hands unexplained means two golfers both
+    think they are banking the 8th.
+    """
+
+    TIE_HOLED_FIRST = 'holed_first'
+    TIE_DRAWN       = 'drawn'
+    TIE_KEPT        = 'kept'
+    TIE_CHOICES = [
+        (TIE_HOLED_FIRST, 'The group said who holed out first'),
+        (TIE_DRAWN,       'Drawn at random'),
+        (TIE_KEPT,        'The banker kept it'),
+    ]
+
+    game        = models.ForeignKey(BankerGame, on_delete=models.CASCADE,
+                                    related_name='holes')
+    hole_number = models.PositiveSmallIntegerField()
+    banker      = models.ForeignKey('core.Player', on_delete=models.CASCADE,
+                                    related_name='banker_holes_banked')
+    # The maximum HE named for this hole, at or under the round ceiling. Null
+    # until he announces it — an opponent cannot pick a bet without it.
+    max_bet     = models.DecimalField(max_digits=8, decimal_places=2,
+                                      null=True, blank=True)
+    # The moment nothing above it is editable without a visible correction.
+    locked_at   = models.DateTimeField(null=True, blank=True)
+    # One decision landing on all three bets, never a per-opponent choice.
+    countered   = models.BooleanField(default=False)
+    # How the bank passed OUT of this hole, when low net was tied.
+    tie_reason  = models.CharField(max_length=20, choices=TIE_CHOICES,
+                                   blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['game', 'hole_number'],
+                                    name='banker_one_row_per_hole'),
+        ]
+        ordering = ['hole_number']
+
+    def __str__(self):
+        return f'banker hole {self.hole_number}'
+
+
+class BankerBet(models.Model):
+    """One opponent's wager against the banker on one hole.
+
+    `own_multiplier` is 1, 2 (doubled on his own shot) or 3 (tripled — par 3s
+    only, where the triple REPLACES the double rather than joining it). The
+    banker's counter is not here: it lands on every standing bet at once and
+    lives on the hole.
+    """
+
+    hole      = models.ForeignKey(BankerHole, on_delete=models.CASCADE,
+                                  related_name='bets')
+    player    = models.ForeignKey('core.Player', on_delete=models.CASCADE,
+                                  related_name='banker_bets')
+    amount    = models.DecimalField(max_digits=8, decimal_places=2)
+    own_multiplier = models.PositiveSmallIntegerField(default=1)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['hole', 'player'],
+                                    name='banker_one_bet_per_opponent'),
+        ]
+        ordering = ['id']
+
+    def __str__(self):
+        return f'{self.player_id} ${self.amount} x{self.own_multiplier}'

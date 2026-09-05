@@ -571,6 +571,7 @@ class FoursomeSerializer(serializers.ModelSerializer):
             ('honors_game',        'honors'),
             ('survivor_game',      'survivor'),
             ('sequoya_threes_game','sequoya_threes'),
+            ('banker_game',        'banker'),
             ('triple_cup_game',    'triple_cup'),
         ]:
             try:
@@ -1739,6 +1740,67 @@ class SequoyaThreesPressSerializer(serializers.Serializer):
     side         = serializers.IntegerField(min_value=1, max_value=2)
     current_hole = serializers.IntegerField(min_value=1, max_value=18)
     called_by_id = serializers.IntegerField(required=False, allow_null=True)
+
+
+class BankerSetupSerializer(serializers.Serializer):
+    """Set up Banker for a foursome.
+
+    The wager BAND is the decision — a floor every opponent must have on the
+    hole and a ceiling the banker cannot raise past — which is why the
+    prototype draws it as one two-handle track rather than two boxes.
+
+    No strokes-off: it is a match mechanism, and Banker is three separate
+    one-on-ones settled on net.
+
+    `hole_cap_amount` is a ceiling on what one hole can cost the banker, all
+    bets and multipliers included. Off unless asked for: a safety rail switched
+    on by the app reads as the app setting the stakes.
+    """
+    first_banker_id  = serializers.IntegerField()
+    min_bet          = serializers.DecimalField(max_digits=8, decimal_places=2,
+                                                required=False)
+    max_bet          = serializers.DecimalField(max_digits=8, decimal_places=2,
+                                                required=False)
+    handicap_mode    = serializers.ChoiceField(choices=['net', 'gross'],
+                                               required=False)
+    net_percent      = serializers.IntegerField(min_value=0, max_value=200,
+                                                required=False)
+    rotation_rule    = serializers.ChoiceField(choices=['ask', 'draw', 'keep'],
+                                               required=False)
+    hole_cap_enabled = serializers.BooleanField(required=False)
+    hole_cap_amount  = serializers.DecimalField(max_digits=9, decimal_places=2,
+                                                required=False, allow_null=True)
+
+
+class BankerHoleSerializer(serializers.Serializer):
+    """One declaration on the hole in play.
+
+    Every field is optional because the hole is declared in steps and the
+    screen posts whichever step just happened: the maximum, then the three
+    bets, then the lock, then whatever was shouted at a ball in the air.
+    """
+    hole_number = serializers.IntegerField(min_value=1, max_value=18)
+    max_bet     = serializers.DecimalField(max_digits=8, decimal_places=2,
+                                           required=False)
+    bets        = serializers.ListField(required=False, child=serializers.DictField())
+    lock        = serializers.BooleanField(required=False)
+    double      = serializers.IntegerField(required=False, allow_null=True)
+    undouble    = serializers.IntegerField(required=False, allow_null=True)
+    counter     = serializers.BooleanField(required=False, allow_null=True)
+
+
+class BankerAdvanceSerializer(serializers.Serializer):
+    """Open the next hole once the bank is settled.
+
+    `banker_id` answers the tie a phone cannot see — low score, holed out
+    first — and `tie_reason` records WHY, because a role that changed hands
+    unexplained means two golfers both think they are banking the 8th.
+    """
+    after_hole = serializers.IntegerField(min_value=1, max_value=18)
+    banker_id  = serializers.IntegerField(required=False, allow_null=True)
+    tie_reason = serializers.ChoiceField(
+        choices=['holed_first', 'drawn', 'kept'], required=False,
+        allow_blank=True)
 
 
 class SurvivorSetupSerializer(serializers.Serializer):

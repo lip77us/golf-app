@@ -28,6 +28,12 @@ labelled it.
 offer with no way to accept it is worse than one that stays quiet; the push
 does that job and the card stays a glance.
 
+**The stroke ribbon is the frame's, not Survivor's.** A golfer wants to know
+he is popping on the hole in front of him whatever game is being scored, and
+this format makes the question sharper rather than softer: the stroke falls by
+full course stroke index, so it lands wherever the card says — in a match his
+side is already three up in, or in the one bet that is still live.
+
 Six pips would be honest here — this round has exactly six matches, unlike
 Sixes — but they stay off the lock card because it has no room for a fourth
 row. They belong in the expanded island, where there is no footer and where
@@ -53,7 +59,7 @@ def _cash(v) -> str:
 def _stake(v) -> str:
     v = float(v or 0)
     body = f'{v:.2f}'.rstrip('0').rstrip('.')
-    return f'${body} a man'
+    return f'${body} a golfer'
 
 
 def _close_out(bet):
@@ -85,6 +91,38 @@ def _played_holes(summary) -> int:
         if all(e.get('gross') is not None for e in h['scores']):
             n += 1
     return n
+
+
+def _stroke_ribbon(foursome, player_id, hole) -> str:
+    """`POPPING ON HOLE 13` — the gold band, when the reader gets a stroke on
+    the hole he is about to play.
+
+    Survivor's ribbon, unchanged, because the reader's question is unchanged:
+    the band belongs to the shared frame rather than to one game, and a golfer
+    who is told he is stroking in one card and left to work it out in the next
+    learns to distrust both.
+
+    Read from the game's own allocator, never from the played holes. Sequoya
+    allocates over the FULL course by stroke index, so the plan is known before
+    a ball is struck — and the hole in play is by definition unscored, so a
+    ribbon built from the scorecard could never fire.
+    """
+    from services.hole_plan import play_order
+    from services.sequoya_threes import _real_members, strokes_by_hole
+    from games.models import SequoyaThreesGame
+
+    if player_id is None or not hole:
+        return ''
+    try:
+        game = foursome.sequoya_threes_game
+    except SequoyaThreesGame.DoesNotExist:
+        return ''
+    if not any(m.player_id == player_id for m in _real_members(foursome)):
+        return ''          # a watcher is not playing, so nothing pops for him
+
+    alloc = strokes_by_hole(game, foursome, play_order(foursome.round, foursome))
+    return (f'POPPING ON HOLE {hole}'
+            if alloc.get(player_id, {}).get(hole) else '')
 
 
 def sequoya_activity_state(foursome, *, player_id=None, thru=None) -> dict:
@@ -157,6 +195,11 @@ def sequoya_activity_state(foursome, *, player_id=None, thru=None) -> dict:
                  if p['player_id'] == player_id), None)
     to_par = gross_to_par(summary, player_id)
 
+    # Running states only. `hole` is clamped to 18 once the round is over, so
+    # without this the last hole's stroke would keep popping on a card whose
+    # header already says ROUND COMPLETE.
+    ribbon = '' if finished else _stroke_ribbon(foursome, player_id, hole)
+
     return {
         'kind'  : KIND,
         'header': {
@@ -167,6 +210,7 @@ def sequoya_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         'number': number,
         'sides' : sides,
         'state' : state,
+        'ribbon': ribbon,
         # Six pips would be true — there are always six matches — but the lock
         # card has no room for a fourth row. They belong to expanded.
         'pips'  : [],

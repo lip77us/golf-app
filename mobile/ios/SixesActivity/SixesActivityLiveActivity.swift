@@ -142,6 +142,16 @@ private struct BoardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
+            // The ribbon belongs to the shared frame, so it hangs off the
+            // payload rather than off the kind: Survivor was simply the first
+            // card to send one, and Sequoya 3s — where the stroke falls by
+            // full course stroke index and can land in the one bet still live
+            // — is the second. Cards that never send it are untouched: the row
+            // is not drawn at all when the string is absent or empty, so it
+            // costs them not even the stack's spacing.
+            if let ribbon = state.ribbon, !ribbon.isEmpty {
+                StrokeRibbon(text: ribbon)
+            }
             HeaderView(header: state.header)
 
             HStack(alignment: .top, spacing: 12) {

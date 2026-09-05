@@ -966,6 +966,16 @@ def _build_leaderboard(round_obj: Round) -> dict:
             ],
         }
 
+    if 'banker' in active_games:
+        from services.banker import banker_summary
+        games['banker'] = {
+            'label'   : 'Banker',
+            'by_group': [
+                {'foursome_id': fs.id, 'group_number': fs.group_number,
+                 'summary': banker_summary(fs)}
+                for fs in foursomes
+            ],
+        }
     if 'sequoya_threes' in active_games:
         from services.sequoya_threes import sequoya_threes_summary
         games['sequoya_threes'] = {
@@ -6329,6 +6339,160 @@ class RabbitResultView(APIView):
 # ---------------------------------------------------------------------------
 # Survivor
 # ---------------------------------------------------------------------------
+
+class BankerSetupView(APIView):
+    """
+    POST /api/foursomes/{id}/banker/setup/
+
+    Creates or reconfigures the game and opens the first hole. Idempotent —
+    nothing about a RESULT is stored, so a re-setup re-scores rather than
+    double-counting.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from api.serializers import BankerSetupSerializer
+        ser = BankerSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        real = [m for m in foursome.memberships.select_related('player').all()
+                if not m.player.is_phantom]
+        if len(real) < 3:
+            return Response(
+                {'detail': 'Banker needs at least three golfers — one banking '
+                           'and somebody to bet against him.'},
+                status=status.HTTP_400_BAD_REQUEST)
+        if d['first_banker_id'] not in {m.player_id for m in real}:
+            return Response({'detail': 'The first banker has to be in this '
+                                       'group.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        from services.banker import setup_banker, banker_summary
+        try:
+            setup_banker(
+                foursome,
+                first_banker_id  = d['first_banker_id'],
+                min_bet          = d.get('min_bet', 5),
+                max_bet          = d.get('max_bet', 50),
+                handicap_mode    = d.get('handicap_mode', 'net'),
+                net_percent      = d.get('net_percent', 100),
+                rotation_rule    = d.get('rotation_rule', 'ask'),
+                hole_cap_enabled = d.get('hole_cap_enabled', False),
+                hole_cap_amount  = d.get('hole_cap_amount'),
+            )
+        except ValueError as e:
+            return Response({'detail': str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return Response(banker_summary(foursome),
+                        status=status.HTTP_201_CREATED)
+
+
+class BankerResultView(APIView):
+    """GET /api/foursomes/{id}/banker/ — the hole in play, the ledger, the
+    money."""
+    def get(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.banker import banker_summary
+        summary = banker_summary(foursome)
+        if summary is None:
+            return Response({'detail': 'No Banker game set up.'},
+                            status=status.HTTP_404_NOT_FOUND)
+        return Response(summary)
+
+
+class BankerHoleView(APIView):
+    """
+    POST /api/foursomes/{id}/banker/hole/
+
+    One declaration on the hole in play — the maximum, the bets, the lock, a
+    double, the counter. **The service owns the sequence**, so the rules hold
+    however the call arrives and not only when the UI behaves: no bet before a
+    maximum, no bet outside the band, nothing above the lock moving afterwards,
+    and no double once the first score is in.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from api.serializers import BankerHoleSerializer
+        ser = BankerHoleSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+        hole = d['hole_number']
+
+        from services.banker import (BankerLocked, banker_summary, lock_bets,
+                                     place_bet, set_counter, set_double,
+                                     set_hole_max)
+        try:
+            if d.get('max_bet') is not None:
+                set_hole_max(foursome, hole, d['max_bet'])
+            for row in d.get('bets') or []:
+                place_bet(foursome, hole, int(row['player_id']),
+                          row['amount'])
+            if d.get('double') is not None:
+                set_double(foursome, hole, d['double'], True)
+            if d.get('undouble') is not None:
+                set_double(foursome, hole, d['undouble'], False)
+            if d.get('counter') is not None:
+                set_counter(foursome, hole, d['counter'])
+            if d.get('lock'):
+                lock_bets(foursome, hole)
+        except BankerLocked as e:
+            # 409, not 400: the request was well formed and arrived too late.
+            return Response({'detail': str(e)},
+                            status=status.HTTP_409_CONFLICT)
+        except (ValueError, KeyError, TypeError) as e:
+            return Response({'detail': str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        except ObjectDoesNotExist:
+            return Response({'detail': 'No Banker game set up.'},
+                            status=status.HTTP_404_NOT_FOUND)
+        return Response(banker_summary(foursome))
+
+
+class BankerAdvanceView(APIView):
+    """
+    POST /api/foursomes/{id}/banker/advance/
+
+    Opens the next hole. On a tie for the low net this is where the group's
+    answer arrives — the app asks rather than guessing, because the traditional
+    tiebreak is who holed out first and no phone saw the balls drop.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from api.serializers import BankerAdvanceSerializer
+        ser = BankerAdvanceSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        from services.banker import banker_summary, open_next_hole
+        try:
+            open_next_hole(foursome, d['after_hole'],
+                           banker_id  = d.get('banker_id'),
+                           tie_reason = d.get('tie_reason') or '')
+        except ValueError as e:
+            return Response({'detail': str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        except ObjectDoesNotExist:
+            return Response({'detail': 'No Banker game set up.'},
+                            status=status.HTTP_404_NOT_FOUND)
+        return Response(banker_summary(foursome), status=status.HTTP_201_CREATED)
+
+
+class BankerSettlementView(APIView):
+    """GET /api/foursomes/{id}/banker/settlement/ — the receipts.
+
+    Unlike every other game in the set, Banker's debts really ARE pairwise:
+    every bet was one named golfer against one named golfer for an agreed
+    number, so the app can honestly itemise rather than only netting.
+    """
+    def get(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.banker import banker_settlement
+        out = banker_settlement(foursome)
+        if out is None:
+            return Response({'detail': 'No Banker game set up.'},
+                            status=status.HTTP_404_NOT_FOUND)
+        return Response(out)
+
 
 class SequoyaThreesSetupView(APIView):
     """

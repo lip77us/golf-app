@@ -16,6 +16,7 @@ from pathlib import Path
 from django.conf import settings
 from django.test import TestCase
 
+from core.models import HandicapMode
 from games.models import SequoyaThreesGame
 from services.live_activity_registry import (UNSHIPPED_KINDS, card_kind,
                                              round_has_board)
@@ -26,7 +27,7 @@ from ._helpers import make_foursome, make_round, make_tee, submit_hole
 
 
 class SequoyaCardTests(TestCase):
-    """Four golfers, gross, $5 a man. Ann is the reader unless said."""
+    """Four golfers, gross, $5 a golfer. Ann is the reader unless said."""
 
     def setUp(self):
         self.tee   = make_tee()
@@ -111,7 +112,7 @@ class SequoyaCardTests(TestCase):
         the cause is printed with the effect."""
         self._play(1, 4, 4, 5, 5)          # opens the auto press over 2-3
         self.assertEqual(self._card()['footer']['context'],
-                         '$10 a man · + AUTO PRESS')
+                         '$10 a golfer · + AUTO PRESS')
 
     def test_a_hand_called_press_shows_in_the_footer_too(self):
         self._play(1, 4, 4, 4, 4)          # halved, so no auto press
@@ -121,7 +122,7 @@ class SequoyaCardTests(TestCase):
         self.assertIn('+ PRESS', self._card()['footer']['context'])
 
     def test_the_stake_counts_every_bet_in_the_match(self):
-        self.assertEqual(self._card()['footer']['context'], '$5 a man')
+        self.assertEqual(self._card()['footer']['context'], '$5 a golfer')
 
     def test_money_is_the_readers_own_and_empty_until_it_settles(self):
         self.assertEqual(self._card()['footer']['money'], '')
@@ -179,3 +180,102 @@ class SequoyaCardTests(TestCase):
         """The gate's whole effect was that this game answered "no board" to
         every caller; with it off, a Sequoya round has one."""
         self.assertTrue(round_has_board(self.round))
+
+
+class SequoyaStrokeRibbonTests(TestCase):
+    """The gold band, and the reader it belongs to.
+
+    Ann plays off 4 in Strokes Off against three scratch golfers, so she pops
+    on stroke indexes 1–4 — holes 5, 14, 2 and 11 on the test card. Two of
+    those matter here: hole 2 falls inside match 1, hole 11 inside match 4, so
+    the ribbon has to keep firing after the pairings have rotated twice.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course,
+                                active_games=['sequoya_threes'])
+        self.round.bet_unit     = Decimal('5.00')
+        self.round.primary_game = 'sequoya_threes'
+        self.round.save(update_fields=['bet_unit', 'primary_game'])
+        self.fs = make_foursome(
+            self.round,
+            [('Ann', 4), ('Ben', 0), ('Cal', 0), ('Dee', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        setup_sequoya_threes(
+            self.fs, [self.pid['Ann'], self.pid['Ben']],
+            handicap_mode=HandicapMode.STROKES_OFF, bet_amount=5,
+            press_mode=SequoyaThreesGame.PRESS_AUTO)
+
+    def _play(self, hole, a=4, b=4, c=4, d=4):
+        submit_hole(self.fs, hole, [(self.pid['Ann'], a), (self.pid['Ben'], b),
+                                    (self.pid['Cal'], c), (self.pid['Dee'], d)])
+
+    def _ribbon(self, who='Ann'):
+        return sequoya_activity_state(
+            self.fs, player_id=self.pid[who])['ribbon']
+
+    def test_the_ribbon_fires_on_the_hole_about_to_be_played(self):
+        """Hole 2 is stroke index 3, so Ann is told BEFORE she plays it — which
+        is the only moment the news is worth anything."""
+        self._play(1)
+        self.assertEqual(self._ribbon(), 'POPPING ON HOLE 2')
+
+    def test_the_hole_in_play_is_unscored_so_the_plan_is_read_not_derived(self):
+        """Hole 1 is the hole in play before a ball is struck and it carries no
+        stroke for Ann. A ribbon derived from played holes could not answer
+        either way, which is why it comes off the allocator."""
+        self.assertEqual(self._ribbon(), '')
+
+    def test_it_keeps_firing_after_the_pairings_have_rotated(self):
+        """Hole 11 is stroke index 4 and sits in match 4 — the ribbon belongs
+        to the golfer and the card, not to the match being played."""
+        for h in range(1, 11):
+            self._play(h)
+        self.assertEqual(self._ribbon(), 'POPPING ON HOLE 11')
+
+    def test_a_scratch_partner_is_told_nothing(self):
+        self._play(1)
+        self.assertEqual(self._ribbon('Ben'), '')
+
+    def test_a_watcher_never_pops(self):
+        """A watcher is not playing, so no hole strokes for him — and the card
+        he reads is otherwise the same one."""
+        self._play(1)
+        self.assertEqual(
+            sequoya_activity_state(self.fs, player_id=None)['ribbon'], '')
+
+    def test_it_goes_quiet_once_the_round_is_over(self):
+        """Running states only. The hole number is clamped at 18, so a stroke
+        on 18 would keep popping under a header that already says ROUND
+        COMPLETE — Ann is moved to 6 here precisely so that hole (index 6)
+        carries one and the guard has something to suppress."""
+        m = self.fs.memberships.get(player_id=self.pid['Ann'])
+        m.playing_handicap = 6
+        m.save(update_fields=['playing_handicap'])
+        for h in range(1, 19):
+            self._play(h)
+        card = sequoya_activity_state(self.fs, player_id=self.pid['Ann'])
+        self.assertEqual(card['header']['segment'], 'ROUND COMPLETE')
+        self.assertEqual(card['ribbon'], '')
+
+    def test_the_shared_board_draws_the_ribbon_the_server_now_sends(self):
+        """The half no Python test would otherwise reach, and the failure it
+        guards is silent: Sequoya renders with `BoardView`, and only
+        `SurvivorBoardView` drew the band. The server would send POPPING ON
+        HOLE 11 and the phone would show nothing — exactly the bug the
+        Survivor ribbon already shipped once."""
+        swift = (Path(settings.BASE_DIR) / 'mobile' / 'ios' / 'SixesActivity'
+                 / 'SixesActivityLiveActivity.swift').read_text()
+        board = swift.split('private struct BoardView')[1]
+        board = board.split('private struct')[0]
+        self.assertIn('StrokeRibbon(text: ribbon)', board)
+
+    def test_gross_scoring_has_no_strokes_to_announce(self):
+        setup_sequoya_threes(
+            self.fs, [self.pid['Ann'], self.pid['Ben']],
+            handicap_mode=HandicapMode.GROSS, bet_amount=5,
+            press_mode=SequoyaThreesGame.PRESS_AUTO)
+        self._play(1)
+        self.assertEqual(self._ribbon(), '')
