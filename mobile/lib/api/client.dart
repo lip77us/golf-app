@@ -668,6 +668,11 @@ class ApiClient {
             'match_index': matchIndex,
           }) as Map));
 
+  Future<SequoyaSettlement> getSequoyaThreesSettlement(int foursomeId) async =>
+      SequoyaSettlement.fromJson(Map<String, dynamic>.from(
+          await _get('/foursomes/$foursomeId/sequoya-threes/settlement/')
+              as Map));
+
   Future<void> deleteTournament(int id) async {
     await _delete('/tournaments/$id/');
   }

@@ -170,6 +170,7 @@ urlpatterns = [
     path('foursomes/<int:pk>/sequoya-threes/setup/', views.SequoyaThreesSetupView.as_view(),  name='api-sequoya-threes-setup'),
     path('foursomes/<int:pk>/sequoya-threes/press/', views.SequoyaThreesPressView.as_view(),  name='api-sequoya-threes-press'),
     path('foursomes/<int:pk>/sequoya-threes/press/remove/', views.SequoyaThreesPressRemoveView.as_view(), name='api-sequoya-threes-press-remove'),
+    path('foursomes/<int:pk>/sequoya-threes/settlement/', views.SequoyaThreesSettlementView.as_view(), name='api-sequoya-threes-settlement'),
 
     # ---- Triple Cup (One-Round Ryder Cup) ----
     path('foursomes/<int:pk>/triple-cup/',                  views.TripleCupResultView.as_view(),         name='api-triple-cup-result'),

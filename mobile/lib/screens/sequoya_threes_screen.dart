@@ -476,6 +476,10 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
             onSelected: (v) {
               if (v == 'end') _finishRound(context, _realMembers(rp.round));
               if (v == 'help') _showRotationSheet(context);
+              if (v == 'settle') {
+                Navigator.of(context).pushNamed('/sequoya-threes-settlement',
+                    arguments: widget.foursomeId);
+              }
             },
             itemBuilder: (_) => [
               if (!isComplete)
@@ -488,6 +492,15 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
                     title: Text('End round'),
                   ),
                 ),
+              const PopupMenuItem(
+                value: 'settle',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.receipt_long_outlined),
+                  title: Text('Settle up'),
+                ),
+              ),
               const PopupMenuItem(
                 value: 'help',
                 child: ListTile(

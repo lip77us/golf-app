@@ -6648,3 +6648,158 @@ class SequoyaThreesSummary {
     );
   }
 }
+
+// ===========================================================================
+// Sequoya 3s — settling up
+// ===========================================================================
+
+/// One golfer's line in the nets block.
+class SequoyaNet {
+  final int     playerId;
+  final String  name;
+  final String  shortName;
+  final double  money;
+  final String  recordLabel;
+  final int?    gross;
+  final String? bestPartner;
+
+  const SequoyaNet({
+    required this.playerId, required this.name, required this.shortName,
+    required this.money, required this.recordLabel, this.gross,
+    this.bestPartner,
+  });
+
+  factory SequoyaNet.fromJson(Map<String, dynamic> j) => SequoyaNet(
+        playerId:    j['player_id'] as int,
+        name:        j['name']?.toString() ?? '',
+        shortName:   j['short_name']?.toString() ?? '',
+        money:       (j['money'] as num?)?.toDouble() ?? 0,
+        recordLabel: j['record_label']?.toString() ?? '',
+        gross:       (j['gross'] as num?)?.toInt(),
+        bestPartner: j['best_partner']?.toString(),
+      );
+}
+
+/// One match on one golfer's receipt.
+class SequoyaReceiptMatch {
+  final int    index;
+  final String holes;
+  final String partner;
+  final String opponents;
+  final String line;
+  final int    betCount;
+  final double money;
+
+  const SequoyaReceiptMatch({
+    required this.index, required this.holes, required this.partner,
+    required this.opponents, required this.line, required this.betCount,
+    required this.money,
+  });
+
+  factory SequoyaReceiptMatch.fromJson(Map<String, dynamic> j) =>
+      SequoyaReceiptMatch(
+        index:     j['index'] as int,
+        holes:     j['holes']?.toString() ?? '',
+        partner:   j['partner']?.toString() ?? '',
+        opponents: j['opponents']?.toString() ?? '',
+        line:      j['line']?.toString() ?? '',
+        betCount:  (j['bet_count'] as num?)?.toInt() ?? 1,
+        money:     (j['money'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+/// A press somebody CALLED — the only object in the game with an author.
+class SequoyaCalledPress {
+  final int     matchIndex;
+  final int?    hole;
+  final String? calledBy;
+  final String  line;
+
+  const SequoyaCalledPress({
+    required this.matchIndex, this.hole, this.calledBy, required this.line,
+  });
+
+  factory SequoyaCalledPress.fromJson(Map<String, dynamic> j) =>
+      SequoyaCalledPress(
+        matchIndex: (j['match_index'] as num?)?.toInt() ?? 0,
+        hole:       (j['hole'] as num?)?.toInt(),
+        calledBy:   j['called_by']?.toString(),
+        line:       j['line']?.toString() ?? '',
+      );
+}
+
+class SequoyaReceipt {
+  final int    playerId;
+  final String name;
+  final String shortName;
+  final double money;
+  final String owedLine;
+  final List<SequoyaReceiptMatch> matches;
+  final List<SequoyaCalledPress>  calledPresses;
+  final String text;
+
+  const SequoyaReceipt({
+    required this.playerId, required this.name, required this.shortName,
+    required this.money, required this.owedLine, required this.matches,
+    required this.calledPresses, required this.text,
+  });
+
+  factory SequoyaReceipt.fromJson(Map<String, dynamic> j) => SequoyaReceipt(
+        playerId:  j['player_id'] as int,
+        name:      j['name']?.toString() ?? '',
+        shortName: j['short_name']?.toString() ?? '',
+        money:     (j['money'] as num?)?.toDouble() ?? 0,
+        owedLine:  j['owed_line']?.toString() ?? '',
+        matches: ((j['matches'] as List?) ?? const [])
+            .map((e) => SequoyaReceiptMatch.fromJson(
+                Map<String, dynamic>.from(e as Map)))
+            .toList(),
+        calledPresses: ((j['manual_presses'] as List?) ?? const [])
+            .map((e) => SequoyaCalledPress.fromJson(
+                Map<String, dynamic>.from(e as Map)))
+            .toList(),
+        text: j['text']?.toString() ?? '',
+      );
+}
+
+class SequoyaSettlement {
+  final String  status;
+  final double  betAmount;
+  final String  headline;
+  final List<SequoyaNet>      players;
+  final List<SequoyaTransfer> transfers;
+  /// Four numbers summing to zero is the whole assertion. If they ever did
+  /// not, nothing below them is worth showing.
+  final bool    balances;
+  final List<SequoyaReceipt>  receipts;
+  final String  groupText;
+
+  const SequoyaSettlement({
+    required this.status, required this.betAmount, required this.headline,
+    required this.players, required this.transfers, required this.balances,
+    required this.receipts, required this.groupText,
+  });
+
+  SequoyaReceipt? receiptFor(int playerId) =>
+      receipts.where((r) => r.playerId == playerId).firstOrNull;
+
+  factory SequoyaSettlement.fromJson(Map<String, dynamic> j) =>
+      SequoyaSettlement(
+        status:    j['status']?.toString() ?? 'in_progress',
+        betAmount: (j['bet_amount'] as num?)?.toDouble() ?? 0,
+        headline:  j['headline']?.toString() ?? '',
+        players: ((j['players'] as List?) ?? const [])
+            .map((e) => SequoyaNet.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList(),
+        transfers: ((j['transfers'] as List?) ?? const [])
+            .map((e) => SequoyaTransfer.fromJson(
+                Map<String, dynamic>.from(e as Map)))
+            .toList(),
+        balances: j['balances'] == true,
+        receipts: ((j['receipts'] as List?) ?? const [])
+            .map((e) => SequoyaReceipt.fromJson(
+                Map<String, dynamic>.from(e as Map)))
+            .toList(),
+        groupText: j['group_text']?.toString() ?? '',
+      );
+}

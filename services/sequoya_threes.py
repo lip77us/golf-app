@@ -642,3 +642,244 @@ def sequoya_threes_summary(foursome) -> dict | None:
             }.get(game.press_mode, 2), 2),
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Settlement — the nets, the fewest handovers, and one golfer's receipt
+# ---------------------------------------------------------------------------
+#
+# **Nets are real; pairwise debts are not.** The stake is a man a match, so
+# two losers owe twenty and two winners are owed ten each — and nothing in the
+# format says WHICH winner a given ten dollars belongs to. So the payments
+# below the nets are presented as what they are: the shortest way to make four
+# numbers true, never a record of who beat whom.
+#
+# This reads `sequoya_threes_summary` and recomputes no money, for the same
+# reason the tournament receipt reads settlement: the screen and the message
+# must not be able to disagree with the board.
+
+def _close_out(bet):
+    """`2 & 1` when a bet was decided early, else None.
+
+    Read off the hole it CLOSED ON. In this game the holes after a close-out
+    are usually still played — a press is running over them — so the margin
+    keeps moving and `to_play` falls to zero.
+    """
+    closed = bet.get('closed_on')
+    if closed is None:
+        return None
+    holes = bet.get('holes') or []
+    try:
+        left = len(holes) - holes.index(closed) - 1
+    except ValueError:
+        return None
+    # The margin crosses the holes left by exactly one.
+    return f'{left + 1} & {left}' if left > 0 else None
+
+
+def _bet_phrase(bet, my_side):
+    """One bet from a given golfer's side: `won 2 & 1`, `your press halved`."""
+    kind   = bet['kind']
+    result = bet.get('result')
+    noun = {'match': '', 'auto_press': 'auto press ',
+            'manual_press': 'press '}.get(kind, '')
+    if result is None:
+        return f'{noun}in play'.strip()
+    if result == 0:
+        return f'{noun}halved'.strip() if noun else 'halved'
+    won = (result == my_side)
+    margin = abs(bet.get('margin') or 0)
+    if kind == 'match':
+        shape = _close_out(bet) or (f'{margin} up' if won else f'{margin} down')
+        return f"{'won' if won else 'lost'} {shape}"
+    return f"{noun}{'won' if won else 'lost'}".strip()
+
+
+def _fmt_money(v):
+    if not v:
+        return '$0'
+    return f"{'+' if v > 0 else '−'}${abs(v):,.0f}"
+
+
+def sequoya_threes_settlement(foursome) -> dict | None:
+    """Everything the settle-up screen and the receipts need."""
+    summary = sequoya_threes_summary(foursome)
+    if not summary:
+        return None
+
+    matches = summary['matches']
+    amount  = summary['bet_amount']
+    card    = summary['scorecard']
+    names   = {p['player_id']: p['name']       for p in card['players']}
+    short   = {p['player_id']: p['short_name'] for p in card['players']}
+    ids     = [p['player_id'] for p in card['players']]
+
+    gross = {p: 0 for p in ids}
+    for h in card['holes']:
+        for e in h['scores']:
+            if e['gross'] is not None:
+                gross[e['player_id']] += e['gross']
+
+    # Per golfer, per match: what the match did to him and who he had.
+    per_match  = {p: [] for p in ids}
+    partner_money = {p: {} for p in ids}
+    manual_out = {p: [] for p in ids}
+    n_auto = n_manual = n_halved = n_bets = 0
+
+    for m in matches:
+        s1 = [e['player_id'] for e in m['side1']]
+        s2 = [e['player_id'] for e in m['side2']]
+        for b in m['bets']:
+            n_bets += 1
+            if b['kind'] == 'auto_press':
+                n_auto += 1
+            elif b['kind'] == 'manual_press':
+                n_manual += 1
+            if b.get('result') == 0:
+                n_halved += 1
+
+        for pid in ids:
+            my_side = 1 if pid in s1 else 2
+            mine, theirs = (s1, s2) if my_side == 1 else (s2, s1)
+            partner = next(q for q in mine if q != pid)
+            money = 0.0
+            for b in m['bets']:
+                if b.get('result') in (1, 2):
+                    money += amount if b['result'] == my_side else -amount
+            money = round(money, 2)
+            partner_money[pid][partner] = round(
+                partner_money[pid].get(partner, 0.0) + money, 2)
+            per_match[pid].append({
+                'index'      : m['index'],
+                'holes'      : f"holes {m['start_hole']}–{m['end_hole']}",
+                'partner'    : short[partner],
+                'opponents'  : ' & '.join(short[q] for q in theirs),
+                'line'       : ', '.join(_bet_phrase(b, my_side)
+                                         for b in m['bets']),
+                'bet_count'  : len(m['bets']),
+                'money'      : money,
+            })
+
+            # Hand-called presses are itemised: they are a DECISION, and the
+            # dispute in this format is nearly always about one. An auto press
+            # has no author and no decision in it, so it stays a second bet on
+            # the match line.
+            for b in m['bets']:
+                if b['kind'] != 'manual_press':
+                    continue
+                caller = b.get('called_by')
+                if caller and caller == names[pid]:
+                    by = 'you'
+                elif caller:
+                    by = caller
+                else:
+                    # No author recorded — the scorer called it for the pair
+                    # that was down, which is the usual case on one phone.
+                    # Name the PAIR rather than "the trailing side": a press
+                    # nobody is named on defeats the point of listing it.
+                    pressing = s1 if b.get('called_side') == 1 else s2
+                    by = ' & '.join(short[q] for q in pressing)
+                lo = (b.get('holes') or [None])[0]
+                manual_out[pid].append({
+                    'match_index': m['index'],
+                    'hole'       : lo,
+                    'called_by'  : caller,
+                    'line'       : f"Called by {by} — ${amount:,.0f} on "
+                                   f"{'hole ' + str(lo) if len(b['holes']) == 1 else 'holes %s–%s' % (b['holes'][0], b['holes'][-1])}"
+                                   f", {_bet_phrase(b, 1 if pid in s1 else 2)}",
+                })
+
+    by_pid = {p['player_id']: p for p in summary['players']}
+    players = []
+    for pid in ids:
+        best = max(partner_money[pid].items(), key=lambda kv: kv[1], default=None)
+        players.append({
+            'player_id'   : pid,
+            'name'        : names[pid],
+            'short_name'  : short[pid],
+            'money'       : by_pid[pid]['money'],
+            'record_label': by_pid[pid]['bet_record_label'],
+            'gross'       : gross[pid] or None,
+            'best_partner': short[best[0]] if best else None,
+        })
+
+    transfers = summary['transfers']
+
+    def owed_line(pid):
+        me = by_pid[pid]['money']
+        if me > 0:
+            payers = [t for t in transfers if t['to_name'] == names[pid]]
+            if not payers:
+                return 'Nobody owes you anything.'
+            return ' '.join(
+                f"{t['from_name']} owes you ${t['amount']:,.0f}." for t in payers)
+        if me < 0:
+            owed = [t for t in transfers if t['from_name'] == names[pid]]
+            return ' '.join(
+                f"You owe {t['to_name']} ${t['amount']:,.0f}." for t in owed) \
+                or 'You owe nothing.'
+        return 'You are square.'
+
+    receipts = [{
+        'player_id'     : pid,
+        'name'          : names[pid],
+        'short_name'    : short[pid],
+        'money'         : by_pid[pid]['money'],
+        'owed_line'     : owed_line(pid),
+        'matches'       : per_match[pid],
+        'manual_presses': manual_out[pid],
+        'text'          : _receipt_text(names[pid], by_pid[pid]['money'],
+                                        owed_line(pid), amount),
+    } for pid in ids]
+
+    return {
+        'status'    : summary['status'],
+        'bet_amount': amount,
+        'handicap'  : summary['handicap'],
+        'press_mode': summary['press_mode'],
+        'headline'  : _headline(n_bets, n_auto, n_manual, n_halved),
+        'players'   : players,
+        'transfers' : transfers,
+        # Four numbers that sum to zero is the whole assertion; if they ever
+        # did not, nothing below is worth showing.
+        'balances'  : abs(sum(p['money'] for p in players)) < 0.005,
+        'receipts'  : receipts,
+        'group_text': _group_text(names, players, transfers, amount),
+    }
+
+
+def _headline(n_bets, n_auto, n_manual, n_halved):
+    bits = [f'{n_bets} bet{"" if n_bets == 1 else "s"}']
+    if n_auto:
+        bits.append(f'{n_auto} auto press{"" if n_auto == 1 else "es"}')
+    if n_manual:
+        bits.append(f'{n_manual} called by hand')
+    if n_halved:
+        bits.append(f'{n_halved} halved')
+    return ('Six matches of three holes, best ball. '
+            + ', '.join(bits) + '.')
+
+
+def _group_text(names, players, transfers, amount):
+    """Plain text for the group thread: the nets, then the shortest clear.
+
+    Label, en dash, amount — no columns and no six match lines. Nobody needs
+    a scorecard in a text message; they need what they owe.
+    """
+    lines = [f'Sequoya 3s — ${amount:,.0f} a man, every bet', '']
+    lines += [f"{p['name']} — {_fmt_money(p['money'])}" for p in players]
+    if transfers:
+        lines.append('')
+        lines += [f"{t['from_name']} pays {t['to_name']} ${t['amount']:,.0f}"
+                  for t in transfers]
+    return '\n'.join(lines)
+
+
+def _receipt_text(name, money, owed, amount):
+    return '\n'.join([
+        f'Sequoya 3s — {name}',
+        f'Net {_fmt_money(money)}',
+        owed,
+        f'${amount:,.0f} a man, every bet. Presses are separate bets, '
+        'never a doubling.',
+    ])

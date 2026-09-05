@@ -198,3 +198,23 @@ class SequoyaThreesEndpointTests(TestCase):
             username='them', account=other, is_account_admin=True)
         self.client.force_authenticate(intruder)
         self.assertEqual(self._setup().status_code, 404)
+
+    # -- settlement, over the wire -------------------------------------------
+
+    def _settlement(self):
+        return self.client.get(
+            reverse('api-sequoya-threes-settlement', args=[self.fs.id]))
+
+    def test_settlement_before_setup_is_404(self):
+        self.assertEqual(self._settlement().status_code, 404)
+
+    def test_settlement_returns_balancing_nets_and_a_receipt_each(self):
+        self._setup()
+        self._play(1, 4, 4, 5, 5)
+        self._play(2, 4, 4, 5, 5)
+        resp = self._settlement()
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertTrue(resp.data['balances'])
+        self.assertEqual(len(resp.data['receipts']), 4)
+        self.assertEqual(len(resp.data['receipts'][0]['matches']), 6,
+                         'a halved match stays on the receipt at zero')

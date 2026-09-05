@@ -11075,6 +11075,20 @@ class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
             ],
           ],
 
+          if (_pane == _SeqPane.standings) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).pushNamed(
+                    '/sequoya-threes-settlement',
+                    arguments: group['foursome_id']),
+                icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                label: const Text('Settle up · receipts'),
+              ),
+            ),
+          ],
+
           // The scorecard sits UNDER both panes rather than behind a third
           // tab: it is the shared reference the other two argue about, and
           // the same grid the play screen draws.

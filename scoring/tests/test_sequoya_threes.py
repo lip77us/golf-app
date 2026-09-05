@@ -14,7 +14,7 @@ from django.test import TestCase
 
 from games.models import SequoyaThreesGame
 from services.sequoya_threes import (MATCH_HOLES, call_press, pairing_for_match,
-                                     remove_press,
+                                     remove_press, sequoya_threes_settlement,
                                      pairings, sequoya_threes_summary,
                                      setup_sequoya_threes)
 from ._helpers import make_foursome, make_round, make_tee, submit_hole
@@ -449,3 +449,118 @@ class SettlementTests(TestCase):
                              press_mode=SequoyaThreesGame.PRESS_MANUAL_AUTO)
         self.assertEqual(sequoya_threes_summary(self.fs)['exposure']['ceiling'],
                          90)
+
+
+class SettlementTests(TestCase):
+    """Nets are real; pairwise debts are not."""
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course,
+                                active_games=['sequoya_threes'])
+        self.round.bet_unit     = Decimal('5.00')
+        self.round.primary_game = 'sequoya_threes'
+        self.round.save(update_fields=['bet_unit', 'primary_game'])
+        self.fs = make_foursome(
+            self.round,
+            [('Ann', 0), ('Ben', 0), ('Cal', 0), ('Dee', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        setup_sequoya_threes(
+            self.fs, [self.pid['Ann'], self.pid['Ben']],
+            handicap_mode='gross', bet_amount=5,
+            press_mode=SequoyaThreesGame.PRESS_MANUAL_AUTO)
+        self._play(1, 4, 4, 5, 5)          # Ann/Ben win 1 -> auto press on 2-3
+        self._play(2, 4, 4, 5, 5)          # and 2 -> match closed 2 & 1
+        self._play(3, 5, 5, 4, 4)          # Cal/Dee take 3, so the press halves
+
+    def _play(self, hole, a, b, c, d):
+        submit_hole(self.fs, hole, [(self.pid['Ann'], a), (self.pid['Ben'], b),
+                                    (self.pid['Cal'], c), (self.pid['Dee'], d)])
+
+    def _me(self, name):
+        s = sequoya_threes_settlement(self.fs)
+        return next(r for r in s['receipts'] if r['name'] == name)
+
+    def test_the_nets_balance_to_zero(self):
+        s = sequoya_threes_settlement(self.fs)
+        self.assertTrue(s['balances'])
+        self.assertEqual(round(sum(p['money'] for p in s['players']), 2), 0)
+
+    def test_four_golfers_clear_in_two_handovers(self):
+        self.assertEqual(len(sequoya_threes_settlement(self.fs)['transfers']), 2)
+
+    def test_the_receipt_keeps_a_halved_match_at_zero(self):
+        """Six matches were played; a receipt showing five invites the very
+        question it exists to prevent."""
+        r = self._me('Ann')
+        self.assertEqual(len(r['matches']), 6)
+
+    def test_a_closed_out_match_reads_as_the_margin_it_closed_on(self):
+        r = self._me('Ann')
+        self.assertIn('won 2 & 1', r['matches'][0]['line'])
+        self.assertIn('auto press halved', r['matches'][0]['line'])
+        self.assertEqual(r['matches'][0]['bet_count'], 2)
+
+    def test_the_same_match_reads_from_the_other_side(self):
+        self.assertIn('lost 2 & 1', self._me('Cal')['matches'][0]['line'])
+
+    def test_an_auto_press_is_never_itemised(self):
+        """It has no author and no decision in it, so it is counted in the
+        match line as a second bet rather than listed."""
+        self.assertEqual(self._me('Ann')['manual_presses'], [])
+
+    def test_a_hand_called_press_is_named_with_who_and_where(self):
+        # Decide hole 4 so match 2 has a trailing side, then let that side
+        # press hole 5 onward. Who that is falls out of the rotation, so the
+        # test reads it rather than assuming it.
+        # Halve the first hole of match 2 so no auto press opens — that is
+        # the only shape in which a hand-called press can exist — then let Ann
+        # win the second. Whichever way match 2 splits the four, the side
+        # without her is the one that may press hole 6.
+        self._play(4, 5, 5, 5, 5)
+        self._play(5, 3, 5, 5, 5)
+        m2 = sequoya_threes_summary(self.fs)['matches'][1]
+        trailing = 2 if m2['bets'][0]['margin'] > 0 else 1
+        caller = m2['side1' if trailing == 1 else 'side2'][0]
+        call_press(self.fs, match_index=2, side=trailing,
+                   called_by_id=caller['player_id'], current_hole=6)
+
+        # The caller sees it as his own ...
+        mine = self._me(caller['name'])['manual_presses'][0]
+        self.assertIn('Called by you', mine['line'])
+        self.assertEqual(mine['match_index'], 2)
+        self.assertEqual(mine['hole'], 6)
+
+        # ... and everyone else sees it under his name.
+        other = next(p for p in ('Ann', 'Ben', 'Cal', 'Dee')
+                     if p != caller['name'])
+        self.assertIn(f"Called by {caller['name']}",
+                      self._me(other)['manual_presses'][0]['line'])
+
+    def test_an_unattributed_press_names_the_pair_that_pressed(self):
+        """One phone scores the group, so the scorer routinely calls a press
+        for the pair that is down and no author is recorded. Naming nobody
+        would defeat the point of listing it at all."""
+        self._play(4, 5, 5, 5, 5)
+        self._play(5, 3, 5, 5, 5)
+        m2 = sequoya_threes_summary(self.fs)['matches'][1]
+        trailing = 2 if m2['bets'][0]['margin'] > 0 else 1
+        side = m2['side1' if trailing == 1 else 'side2']
+        call_press(self.fs, match_index=2, side=trailing,
+                   called_by_id=None, current_hole=6)
+        line = self._me('Ann')['manual_presses'][0]['line']
+        pair = ' & '.join(p['short_name'] for p in side)
+        self.assertIn(f'Called by {pair}', line)
+
+    def test_the_group_text_carries_the_nets_and_the_payments_only(self):
+        """Nobody needs six match lines in a text message."""
+        t = sequoya_threes_settlement(self.fs)['group_text']
+        self.assertIn('Ann —', t)
+        self.assertIn('pays', t)
+        self.assertNotIn('holes 1–3', t)
+
+    def test_the_headline_counts_the_bets(self):
+        h = sequoya_threes_settlement(self.fs)['headline']
+        self.assertIn('bets', h)
+        self.assertIn('auto press', h)

@@ -34,6 +34,7 @@ _LABELS = {
     'wolf': 'Wolf', 'sixes': 'Sixes', 'fourball': 'Fourball',
     'low_net_round': 'Stroke Play', 'stableford': 'Stableford',
     'match_play': 'Singles Bracket', 'triple_nassau': 'Triple Nassau',
+    'sequoya_threes': 'Sequoya 3s',
 }
 
 
@@ -116,6 +117,17 @@ def _pid_nets_for_game(game_key, round_obj, foursomes):
                 pid = po.get('player_id')
                 if pid is not None:
                     out[pid] += po.get('amount', 0) or 0
+
+    elif game_key == 'sequoya_threes':
+        # Six three-hole matches plus their presses, already netted per golfer
+        # and zero-sum across the four.
+        from services.sequoya_threes import sequoya_threes_summary
+        for fs in foursomes:
+            s = sequoya_threes_summary(fs)
+            if not s:
+                continue
+            for p in s.get('players', []):
+                out[p['player_id']] += p.get('money', 0) or 0
 
     elif game_key == 'triple_nassau':
         # Round-robin of three 1v1 Nassaus — each match is zero-sum between its

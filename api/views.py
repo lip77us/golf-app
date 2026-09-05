@@ -6367,6 +6367,24 @@ class SequoyaThreesPressView(APIView):
                         status=status.HTTP_201_CREATED)
 
 
+class SequoyaThreesSettlementView(APIView):
+    """
+    GET /api/foursomes/{id}/sequoya-threes/settlement/
+
+    The four nets, the fewest handovers that clear them, and one receipt per
+    golfer. 404 when the game is not set up — an invented empty settlement is
+    worse than saying there is nothing to settle.
+    """
+    def get(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.sequoya_threes import sequoya_threes_settlement
+        payload = sequoya_threes_settlement(foursome)
+        if payload is None:
+            return Response({'detail': 'No Sequoya 3s game set up.'},
+                            status=status.HTTP_404_NOT_FOUND)
+        return Response(payload)
+
+
 class SequoyaThreesPressRemoveView(APIView):
     """
     POST /api/foursomes/{id}/sequoya-threes/press/remove/
