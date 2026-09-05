@@ -58,6 +58,7 @@ class GameIds {
   /// next hole.  Owns its own per-hole score-entry screen, so mutually
   /// exclusive with the other entry-owning games.
   static const String survivor   = 'survivor';
+  static const String sequoyaThrees = 'sequoya_threes';
   /// Match Play single-elimination bracket — 4-person foursome plays
   /// two 9-hole semi-finals on holes 1–9, then Final + 3rd-place
   /// consolation on holes 10–18.  Casual + tournament side game.
@@ -473,6 +474,18 @@ const List<GameMeta> kGameCatalog = [
                    GameIds.skins, GameIds.wolf, GameIds.strokePlay,
                    GameIds.stableford, GameIds.tripleCup, GameIds.matchPlay,
                    GameIds.threePersonMatch},
+  ),
+  GameMeta(
+    id           : GameIds.sequoyaThrees,
+    displayName  : 'Sequoya 3s',
+    casual       : true,
+    // Six 2v2 matches have no other shape — four golfers split 2v2 in exactly
+    // three ways, and the format's whole point is that those three repeat.
+    exactPlayers : 4,
+    // Six three-hole matches on fixed 1-3 / 4-6 / … boundaries need all 18.
+    requiresFullRound: true,
+    // Owns the round's team structure and its own score entry.
+    allowsSideGames: false,
   ),
   GameMeta(
     id          : GameIds.survivor,

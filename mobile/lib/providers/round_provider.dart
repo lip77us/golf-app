@@ -137,6 +137,8 @@ class RoundProvider extends ChangeNotifier {
   RabbitSummary?   _rabbitSummary;
   SurvivorSummary? _survivorSummary;
   bool             _loadingSurvivor = false;
+  SequoyaThreesSummary? _sequoyaThreesSummary;
+  bool                  _loadingSequoyaThrees = false;
   TripleCupSummary? _tripleCupSummary;
   MultiSkinsSummary? _multiSkinsSummary;
   NassauSummary?         _nassauSummary;
@@ -199,6 +201,8 @@ class RoundProvider extends ChangeNotifier {
   RabbitSummary?    get rabbitSummary      => _rabbitSummary;
   SurvivorSummary?  get survivorSummary    => _survivorSummary;
   bool              get loadingSurvivor    => _loadingSurvivor;
+  SequoyaThreesSummary? get sequoyaThreesSummary => _sequoyaThreesSummary;
+  bool              get loadingSequoyaThrees => _loadingSequoyaThrees;
   TripleCupSummary? get tripleCupSummary   => _tripleCupSummary;
   MultiSkinsSummary? get multiSkinsSummary  => _multiSkinsSummary;
   NassauSummary?        get nassauSummary      => _nassauSummary;
@@ -264,6 +268,7 @@ class RoundProvider extends ChangeNotifier {
     _wolfSummary             = null;
     _rabbitSummary           = null;
     _survivorSummary         = null;
+    _sequoyaThreesSummary    = null;
     _tripleCupSummary        = null;
     _multiSkinsSummary       = null;
     _nassauSummary           = null;
@@ -920,6 +925,28 @@ class RoundProvider extends ChangeNotifier {
   /// returns a fresh one) so the screen repaints without a round-trip.
   void setSurvivorSummary(SurvivorSummary summary) {
     _survivorSummary = summary;
+    notifyListeners();
+  }
+
+  Future<void> loadSequoyaThrees(int foursomeId) async {
+    _loadingSequoyaThrees = true;
+    notifyListeners();
+    try {
+      _sequoyaThreesSummary = await _client.getSequoyaThrees(foursomeId);
+    } on NetworkException {
+      // Offline — keep the previous summary around if we had one.
+    } catch (e) {
+      debugPrint('loadSequoyaThrees error: $e');
+    } finally {
+      _loadingSequoyaThrees = false;
+      notifyListeners();
+    }
+  }
+
+  /// Replace the cached Sequoya 3s summary directly — a setup or press POST
+  /// returns a fresh one, and a press has to show on the banner immediately.
+  void setSequoyaThreesSummary(SequoyaThreesSummary summary) {
+    _sequoyaThreesSummary = summary;
     notifyListeners();
   }
 

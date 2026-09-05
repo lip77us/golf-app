@@ -904,6 +904,8 @@ class _GameView extends StatelessWidget {
         return _ByGroupView(data: data, builder: _RabbitGroupCard.new);
       case 'survivor':
         return _ByGroupView(data: data, builder: _SurvivorGroupCard.new);
+      case 'sequoya_threes':
+        return _ByGroupView(data: data, builder: _SequoyaThreesGroupCard.new);
       case 'settlement':
         return _SettlementView(data: data, roundId: roundId);
       case 'singles_nassau':
@@ -10846,6 +10848,307 @@ class _VegasHoleGridState extends State<_VegasHoleGrid> {
                       fontFeatures: const [FontFeature.tabularFigures()])),
             ]),
           ),
+      ]),
+    );
+  }
+}
+
+
+// ===========================================================================
+// Sequoya 3s — six three-hole matches, and every bet inside them
+// ===========================================================================
+
+/// Matches first, money one tap away — same split as Survivor, for the same
+/// reason: the rotation is the story and the nets are the consequence.
+enum _SeqPane { matches, standings }
+
+class _SequoyaThreesGroupCard extends StatefulWidget {
+  final Map<String, dynamic> group;
+  const _SequoyaThreesGroupCard({required this.group});
+
+  @override
+  State<_SequoyaThreesGroupCard> createState() =>
+      _SequoyaThreesGroupCardState();
+}
+
+class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
+  static const Color _blue   = Color(0xFF1976D2);
+  static const Color _orange = Color(0xFFEF6C00);
+
+  _SeqPane _pane = _SeqPane.matches;
+
+  Map<String, dynamic> get group => widget.group;
+
+  static String _hcapLabel(Map hcap) {
+    final mode = hcap['mode']?.toString() ?? 'net';
+    if (mode == 'gross') return 'Gross';
+    if (mode == 'strokes_off') return 'SO';
+    final pct = (hcap['net_percent'] as num?)?.toInt() ?? 100;
+    return pct == 100 ? 'Net' : 'Net ($pct%)';
+  }
+
+  static String _pressLabel(String mode) => switch (mode) {
+        'none'        => 'No presses',
+        'manual_auto' => 'Manual + auto presses',
+        _             => 'Auto presses',
+      };
+
+  static String _fmtMoney(double v) {
+    if (v == 0) return '—';
+    final sign = v > 0 ? '+' : '−';
+    return '$sign\$${v.abs().formatBet()}';
+  }
+
+  /// The state of ONE bet. Deliberately per bet and never rolled up: a press
+  /// can be halved while the match is won, or won by the side that lost it,
+  /// so a single figure for a match would be untrue about all three.
+  ///
+  /// A close-out is read off the hole it CLOSED ON, never off `to_play`: the
+  /// holes after a close-out are usually still played here (the press runs
+  /// over them), so the match bet's margin keeps moving and `to_play` falls to
+  /// zero. Either would turn a 2 & 1 into "1 up".
+  static String _betState(Map<String, dynamic> b) {
+    final result = b['result'] as int?;
+    final margin = (b['margin'] as num?)?.toInt() ?? 0;
+    final toPlay = (b['to_play'] as num?)?.toInt() ?? 0;
+    if (result == 0) return 'Halved';
+    if (result != null) {
+      final holes  = (b['holes'] as List? ?? const []).cast<int>();
+      final closed = b['closed_on'] as int?;
+      if (closed != null) {
+        final left = holes.length - holes.indexOf(closed) - 1;
+        // The margin crosses the holes left by exactly one, so the winning
+        // margin at the close-out is always `left + 1`.
+        if (left > 0) return '${left + 1} & $left';
+      }
+      return '${margin.abs()} up · final';
+    }
+    if (margin == 0) return 'All square';
+    // Dormie only when the lead EQUALS the holes left — 1 up with 2 to play
+    // is not it.
+    if (margin.abs() == toPlay) return 'Dormie';
+    return '${margin.abs()} up';
+  }
+
+  static String _holeRange(List holes) {
+    if (holes.isEmpty) return '';
+    if (holes.length == 1) return 'hole ${holes.first}';
+    return 'holes ${holes.first}–${holes.last}';
+  }
+
+  static String _names(List side) => side
+      .map((e) => (e as Map)['short_name']?.toString() ?? '?')
+      .join(' & ');
+
+  @override
+  Widget build(BuildContext context) {
+    final theme   = Theme.of(context);
+    final summary = group['summary'] as Map<String, dynamic>? ?? const {};
+    if (summary.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(12),
+          child: Text('Sequoya 3s is not set up for this group yet.'),
+        ),
+      );
+    }
+    final hcap      = summary['handicap'] as Map<String, dynamic>? ?? const {};
+    final status    = summary['status']?.toString() ?? 'pending';
+    final matches   = (summary['matches'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final players   = (summary['players'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final transfers = (summary['transfers'] as List? ?? const [])
+        .cast<Map<String, dynamic>>();
+    final bet       = (summary['bet_amount'] as num?)?.toDouble() ?? 0.0;
+    final pressMode = summary['press_mode']?.toString() ?? 'auto';
+    final liveBets  = (summary['live_bets'] as num?)?.toInt() ?? 0;
+
+    final singleGroup = group['_single_group'] == true;
+    final statusLabel = switch (status) {
+      'complete'    => 'Final',
+      'in_progress' => 'In progress',
+      _             => 'Pending',
+    };
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (!singleGroup) ...[
+            Text('Group ${group['group_number']}',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            const Divider(height: 12),
+          ],
+          Row(children: [
+            Expanded(
+              child: Text(
+                  'Sequoya 3s — ${_hcapLabel(hcap)} · '
+                  '\$${bet.formatBet()} a man',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            Text(statusLabel, style: theme.textTheme.labelSmall),
+          ]),
+          const SizedBox(height: 2),
+          Text(
+            '${_pressLabel(pressMode)}'
+            '${liveBets > 0 ? '  ·  $liveBets bet'
+                              '${liveBets == 1 ? '' : 's'} still live' : ''}',
+            style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 10),
+
+          HalvedSegmented<_SeqPane>(
+            selected: _pane,
+            onChanged: (v) => setState(() => _pane = v),
+            segments: const [
+              (value: _SeqPane.matches,   label: 'Matches',   icon: null),
+              (value: _SeqPane.standings, label: 'Standings', icon: null),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          if (_pane == _SeqPane.matches)
+            ...matches.map((m) => _match(theme, m))
+          else ...[
+            if (players.isEmpty)
+              Text('No players yet.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant))
+            else
+              ...players.map((p) => _standing(theme, p)),
+            if (transfers.isNotEmpty) ...[
+              const Divider(height: 20),
+              Text('WHO PAYS WHO',
+                  style: TextStyle(
+                      fontSize: 10.5, fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5, color: theme.colorScheme.primary)),
+              const SizedBox(height: 4),
+              // Nothing in the format assigns a loser's money to a particular
+              // winner — only the four nets are real, so these are the fewest
+              // handovers that clear them, not a record of who beat whom.
+              ...transfers.map((t) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 1.5),
+                    child: Text(
+                      '${t['from_name']} pays ${t['to_name']} '
+                      '\$${((t['amount'] as num?)?.toDouble() ?? 0).formatBet()}',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  )),
+            ],
+          ],
+        ]),
+      ),
+    );
+  }
+
+  Widget _match(ThemeData theme, Map<String, dynamic> m) {
+    final bets  = (m['bets'] as List? ?? const []).cast<Map<String, dynamic>>();
+    final side1 = m['side1'] as List? ?? const [];
+    final side2 = m['side2'] as List? ?? const [];
+    final head  = bets.isEmpty ? null : bets.first;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(
+            child: Text(
+                'MATCH ${m['index']}  ·  '
+                'HOLES ${m['start_hole']}–${m['end_hole']}',
+                style: TextStyle(
+                    fontSize: 10, fontWeight: FontWeight.bold,
+                    letterSpacing: 0.4, color: theme.colorScheme.primary)),
+          ),
+          Text(
+              '\$${((m['at_risk'] as num?)?.toDouble() ?? 0).formatBet()} '
+              'a man',
+              style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant)),
+        ]),
+        const SizedBox(height: 3),
+        Row(children: [
+          Expanded(
+            child: Text(_names(side1),
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontWeight: FontWeight.w600, fontSize: 13,
+                    color: (head?['result'] == 1) ? _blue : null)),
+          ),
+          Text('v', style: theme.textTheme.labelSmall),
+          Expanded(
+            child: Text(_names(side2),
+                textAlign: TextAlign.right,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontWeight: FontWeight.w600, fontSize: 13,
+                    color: (head?['result'] == 2) ? _orange : null)),
+          ),
+        ]),
+        const SizedBox(height: 5),
+        for (final b in bets)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 1.5),
+            child: Row(children: [
+              Expanded(
+                child: Text(
+                    '${b['label']} · ${_holeRange(b['holes'] as List? ?? const [])}'
+                    '${b['called_by'] != null ? '  (${b['called_by']})' : ''}',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 11.5,
+                        fontStyle: b['kind'] == 'match'
+                            ? FontStyle.normal : FontStyle.italic,
+                        color: theme.colorScheme.onSurfaceVariant)),
+              ),
+              const SizedBox(width: 8),
+              Text(_betState(b),
+                  style: TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.bold,
+                    color: ((b['margin'] as num?)?.toInt() ?? 0) == 0
+                        ? theme.colorScheme.onSurfaceVariant
+                        : (((b['margin'] as num).toInt()) > 0
+                            ? _blue : _orange),
+                  )),
+            ]),
+          ),
+      ]),
+    );
+  }
+
+  Widget _standing(ThemeData theme, Map<String, dynamic> p) {
+    final money = (p['money'] as num?)?.toDouble() ?? 0.0;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(children: [
+        Expanded(
+          child: Text(p['name']?.toString() ?? '',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w600)),
+        ),
+        Text(p['record_label']?.toString() ?? '',
+            style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant)),
+        const SizedBox(width: 14),
+        SizedBox(
+          width: 76,
+          child: Text(_fmtMoney(money),
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: money > 0
+                    ? Colors.green.shade700
+                    : money < 0
+                        ? Colors.red.shade700
+                        : theme.colorScheme.onSurfaceVariant,
+              )),
+        ),
       ]),
     );
   }

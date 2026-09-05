@@ -616,6 +616,47 @@ class ApiClient {
         },
       ) as Map);
 
+  // ---- Sequoya 3s ----
+
+  Future<SequoyaThreesSummary> getSequoyaThrees(int foursomeId) async =>
+      SequoyaThreesSummary.fromJson(Map<String, dynamic>.from(
+          await _get('/foursomes/$foursomeId/sequoya-threes/') as Map));
+
+  /// Only MATCH 1's pairing is sent — matches 2 and 3 are the other two splits
+  /// and 4-6 repeat them, so there is nothing else to choose.
+  Future<SequoyaThreesSummary> postSequoyaThreesSetup(
+    int foursomeId, {
+    required List<int> side1PlayerIds,
+    required String handicapMode,
+    int netPercent = 100,
+    required String betAmount,
+    required String pressMode,
+  }) async =>
+      SequoyaThreesSummary.fromJson(Map<String, dynamic>.from(
+          await _post('/foursomes/$foursomeId/sequoya-threes/setup/', {
+            'side1_player_ids': side1PlayerIds,
+            'handicap_mode'   : handicapMode,
+            'net_percent'     : netPercent,
+            'bet_amount'      : betAmount,
+            'press_mode'      : pressMode,
+          }) as Map));
+
+  /// Call a press by hand. It opens on the hole AFTER the call.
+  Future<SequoyaThreesSummary> postSequoyaThreesPress(
+    int foursomeId, {
+    required int matchIndex,
+    required int side,
+    required int currentHole,
+    int? calledById,
+  }) async =>
+      SequoyaThreesSummary.fromJson(Map<String, dynamic>.from(
+          await _post('/foursomes/$foursomeId/sequoya-threes/press/', {
+            'match_index' : matchIndex,
+            'side'        : side,
+            'current_hole': currentHole,
+            if (calledById != null) 'called_by_id': calledById,
+          }) as Map));
+
   Future<void> deleteTournament(int id) async {
     await _delete('/tournaments/$id/');
   }

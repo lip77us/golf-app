@@ -42,6 +42,8 @@ import 'screens/wolf_setup_screen.dart';
 import 'screens/wolf_screen.dart';
 import 'screens/rabbit_setup_screen.dart';
 import 'screens/rabbit_screen.dart';
+import 'screens/sequoya_threes_setup_screen.dart';
+import 'screens/sequoya_threes_screen.dart';
 import 'screens/survivor_setup_screen.dart';
 import 'screens/survivor_screen.dart';
 import 'screens/triple_cup_setup_screen.dart';
@@ -655,6 +657,15 @@ class _GolfAppState extends State<GolfApp> {
         return page((_) => RoundLandscapeScorecard(
               foursomeId: foursomeId,
               child: RabbitScreen(foursomeId: foursomeId)));
+      case '/sequoya-threes-setup':
+        return page((_) => SequoyaThreesSetupScreen(
+              foursomeId: _routeId(settings.arguments),
+              returnToHub: _routeReturnToHub(settings.arguments)));
+      case '/sequoya-threes':
+        final foursomeId = settings.arguments as int;
+        return page((_) => RoundLandscapeScorecard(
+              foursomeId: foursomeId,
+              child: SequoyaThreesScreen(foursomeId: foursomeId)));
       case '/survivor-setup':
         return page((_) => SurvivorSetupScreen(
               foursomeId: _routeId(settings.arguments),

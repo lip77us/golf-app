@@ -561,6 +561,7 @@ class FoursomeSerializer(serializers.ModelSerializer):
             ('rabbit_game',        'rabbit'),
             ('honors_game',        'honors'),
             ('survivor_game',      'survivor'),
+            ('sequoya_threes_game','sequoya_threes'),
             ('triple_cup_game',    'triple_cup'),
         ]:
             try:

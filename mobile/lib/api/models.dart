@@ -6426,3 +6426,196 @@ class TeamPlaySettlement {
             .map((e) => e as String).toList(),
       );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sequoya 3s — six three-hole 2v2 matches
+// (docs/design-review/handoff-sequoya-threes/README.md)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// One bet. A match bet, an auto press, or a press called by hand.
+///
+/// Presses are separate BETS at the same amount, never a doubling, so each
+/// carries its own holes, its own result and its own money. Never fold a press
+/// result into a match total.
+class SequoyaBet {
+  final String    kind;        // match | auto_press | manual_press
+  final String    label;
+  final List<int> holes;
+  final double    amount;
+  /// 1 / 2 / 0 (halved) / null (still live).
+  final int?      result;
+  final int       margin;
+  final int?      closedOn;
+  final int       toPlay;
+  final String?   calledBy;
+
+  const SequoyaBet({
+    required this.kind, required this.label, required this.holes,
+    required this.amount, this.result, this.margin = 0, this.closedOn,
+    this.toPlay = 0, this.calledBy,
+  });
+
+  bool get isPress => kind != 'match';
+  bool get isLive  => result == null;
+
+  /// `holes 4–6`, the way the banner names a bet's range.
+  String get holeRange => holes.isEmpty
+      ? ''
+      : (holes.length == 1
+          ? 'hole ${holes.first}'
+          : 'holes ${holes.first}–${holes.last}');
+
+  factory SequoyaBet.fromJson(Map<String, dynamic> j) => SequoyaBet(
+        kind:     j['kind']?.toString() ?? 'match',
+        label:    j['label']?.toString() ?? '',
+        holes:    ((j['holes'] as List?) ?? const []).cast<int>(),
+        amount:   (j['amount'] as num?)?.toDouble() ?? 0,
+        result:   j['result'] as int?,
+        margin:   (j['margin'] as num?)?.toInt() ?? 0,
+        closedOn: j['closed_on'] as int?,
+        toPlay:   (j['to_play'] as num?)?.toInt() ?? 0,
+        calledBy: j['called_by']?.toString(),
+      );
+}
+
+class SequoyaSide {
+  final int    playerId;
+  final String name;
+  final String shortName;
+  const SequoyaSide({required this.playerId, required this.name,
+                     required this.shortName});
+  factory SequoyaSide.fromJson(Map<String, dynamic> j) => SequoyaSide(
+        playerId:  j['player_id'] as int,
+        name:      j['name']?.toString() ?? '',
+        shortName: j['short_name']?.toString() ?? '',
+      );
+}
+
+class SequoyaMatch {
+  final int               index;
+  final int               startHole;
+  final int               endHole;
+  final List<SequoyaSide> side1;
+  final List<SequoyaSide> side2;
+  final List<SequoyaBet>  bets;
+  final double            atRisk;
+
+  const SequoyaMatch({
+    required this.index, required this.startHole, required this.endHole,
+    required this.side1, required this.side2, required this.bets,
+    required this.atRisk,
+  });
+
+  bool get coversHole => false;
+  bool covers(int hole) => hole >= startHole && hole <= endHole;
+
+  factory SequoyaMatch.fromJson(Map<String, dynamic> j) => SequoyaMatch(
+        index:     j['index'] as int,
+        startHole: j['start_hole'] as int,
+        endHole:   j['end_hole'] as int,
+        side1: ((j['side1'] as List?) ?? const [])
+            .map((e) => SequoyaSide.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        side2: ((j['side2'] as List?) ?? const [])
+            .map((e) => SequoyaSide.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        bets: ((j['bets'] as List?) ?? const [])
+            .map((e) => SequoyaBet.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        atRisk: (j['at_risk'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+class SequoyaPlayerTotal {
+  final int    playerId;
+  final String name;
+  final String shortName;
+  final double money;
+  /// `3–2–1` — won, lost, halved. Shown, but never the sort.
+  final String recordLabel;
+
+  const SequoyaPlayerTotal({
+    required this.playerId, required this.name, required this.shortName,
+    required this.money, required this.recordLabel,
+  });
+
+  factory SequoyaPlayerTotal.fromJson(Map<String, dynamic> j) =>
+      SequoyaPlayerTotal(
+        playerId:    j['player_id'] as int,
+        name:        j['name']?.toString() ?? '',
+        shortName:   j['short_name']?.toString() ?? '',
+        money:       (j['money'] as num?)?.toDouble() ?? 0,
+        recordLabel: j['record_label']?.toString() ?? '',
+      );
+}
+
+class SequoyaTransfer {
+  final String fromName;
+  final String toName;
+  final double amount;
+  const SequoyaTransfer({required this.fromName, required this.toName,
+                         required this.amount});
+  factory SequoyaTransfer.fromJson(Map<String, dynamic> j) => SequoyaTransfer(
+        fromName: j['from_name']?.toString() ?? '',
+        toName:   j['to_name']?.toString() ?? '',
+        amount:   (j['amount'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+class SequoyaThreesSummary {
+  final String                   status;
+  final String                   handicapMode;
+  final int                      netPercent;
+  final String                   pressMode;
+  final double                   betAmount;
+  final List<SequoyaMatch>       matches;
+  final List<SequoyaPlayerTotal> players;
+  final List<SequoyaTransfer>    transfers;
+  final double                   exposureNoPresses;
+  final double                   exposureWithAuto;
+  final double                   exposureCeiling;
+
+  const SequoyaThreesSummary({
+    required this.status, required this.handicapMode, required this.netPercent,
+    required this.pressMode, required this.betAmount, required this.matches,
+    required this.players, required this.transfers,
+    required this.exposureNoPresses, required this.exposureWithAuto,
+    required this.exposureCeiling,
+  });
+
+  bool get pressesOn      => pressMode != 'none';
+  bool get manualPresses  => pressMode == 'manual_auto';
+
+  /// The match covering a hole — the play screen shows this one only; the
+  /// other five are a money list, not a grid.
+  SequoyaMatch? matchForHole(int hole) {
+    for (final m in matches) {
+      if (m.covers(hole)) return m;
+    }
+    return null;
+  }
+
+  factory SequoyaThreesSummary.fromJson(Map<String, dynamic> j) {
+    final hcap = (j['handicap'] as Map?) ?? const {};
+    final exp  = (j['exposure'] as Map?) ?? const {};
+    return SequoyaThreesSummary(
+      status:       j['status']?.toString() ?? 'in_progress',
+      handicapMode: hcap['mode']?.toString() ?? 'net',
+      netPercent:   (hcap['net_percent'] as num?)?.toInt() ?? 100,
+      pressMode:    j['press_mode']?.toString() ?? 'auto',
+      betAmount:    (j['bet_amount'] as num?)?.toDouble() ?? 0,
+      matches: ((j['matches'] as List?) ?? const [])
+          .map((e) => SequoyaMatch.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      players: ((j['players'] as List?) ?? const [])
+          .map((e) => SequoyaPlayerTotal.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      transfers: ((j['transfers'] as List?) ?? const [])
+          .map((e) => SequoyaTransfer.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      exposureNoPresses: (exp['no_presses'] as num?)?.toDouble() ?? 0,
+      exposureWithAuto:  (exp['with_auto'] as num?)?.toDouble() ?? 0,
+      exposureCeiling:   (exp['ceiling'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}

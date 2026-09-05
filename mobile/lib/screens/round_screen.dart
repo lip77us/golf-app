@@ -459,6 +459,15 @@ class _RoundScreenState extends State<RoundScreen> {
                     } else if (fsGames.contains('survivor')) {
                       // Configured Survivor owns its own score-entry screen.
                       route = '/survivor';
+                    } else if (fsGames.contains('sequoya_threes') &&
+                        !fs.configuredGames.contains('sequoya_threes')) {
+                      // Sequoya 3s needs match 1's pairing before play — the
+                      // other five matches derive from it.
+                      route = '/sequoya-threes-setup';
+                    } else if (fsGames.contains('sequoya_threes')) {
+                      // The pairing rotates every third hole, so it owns its
+                      // own entry screen.
+                      route = '/sequoya-threes';
                     } else if (fsGames.contains('triple_cup') &&
                         !fs.configuredGames.contains('triple_cup')) {
                       // Triple Cup needs team assignment + handicap config.
@@ -1000,6 +1009,7 @@ Future<void> _showAddSideGameSheet(
     'wolf':       '/wolf-setup',
     'rabbit':     '/rabbit-setup',
     'survivor':   '/survivor-setup',
+    'sequoya_threes': '/sequoya-threes-setup',
     'triple_cup': '/triple-cup-setup',
     'sixes':      '/sixes-setup',
   };
@@ -1109,7 +1119,7 @@ class _FoursomeCard extends StatelessWidget {
   // Games that make sense to toggle per-foursome (excludes round-level-only games)
   static const _perFoursomeGames = {
     'skins', 'sixes', 'nassau', 'match_play', 'points_531', 'wolf', 'rabbit',
-    'survivor',
+    'survivor', 'sequoya_threes',
     'irish_rumble', 'pink_ball',
   };
 
