@@ -289,10 +289,10 @@ CARD_KIND = {'match_18': 'match', 'fourball': 'match',
 #
 # It emptied at 2.8.0+27, the build that carries the sixes/rabbit/nassau/skins/
 # match/survivor layouts. `sequoya` went in on the day its builder was written
-# and leaves in the same commit that bumps the build carrying its layout —
-# which is the intended shape, and the reason this set still exists rather
-# than being deleted.
-UNSHIPPED_KINDS: set = {'sequoya'}
+# and left in the same commit that bumped the build carrying its layout —
+# 2.8.1+32 — which is the intended shape, and the reason this set still exists
+# rather than being deleted: the next card written before its build goes here.
+UNSHIPPED_KINDS: set = set()
 
 
 def card_kind(slug: str) -> str:

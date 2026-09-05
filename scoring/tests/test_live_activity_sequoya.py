@@ -9,12 +9,16 @@ does not: **the header names the match being played**, **the press rides in the
 footer with the money**, and **the state word is only ever true of the
 position**.
 """
+import re
 from decimal import Decimal
+from pathlib import Path
 
+from django.conf import settings
 from django.test import TestCase
 
 from games.models import SequoyaThreesGame
-from services.live_activity_registry import UNSHIPPED_KINDS, card_kind
+from services.live_activity_registry import (UNSHIPPED_KINDS, card_kind,
+                                             round_has_board)
 from services.live_activity_sequoya import (sequoya_activity_state,
                                             sequoya_final_state)
 from services.sequoya_threes import call_press, setup_sequoya_threes
@@ -148,10 +152,30 @@ class SequoyaCardTests(TestCase):
         f = sequoya_final_state(self.fs, player_id=self.pid['Ann'])['final']
         self.assertIn('best with', f['detail'])
 
-    # -- and it does not reach a phone that cannot draw it --------------------
+    # -- and it reaches a phone that can draw it ------------------------------
 
-    def test_the_card_is_held_until_a_build_can_draw_it(self):
-        """A kind enters this set with its builder and leaves with its build.
-        Starting an activity the installed app cannot render turns `no board`
-        into a lock-screen nag pointing at an update that does not exist."""
-        self.assertIn(card_kind('sequoya_threes'), UNSHIPPED_KINDS)
+    def test_the_card_ships_now_that_a_build_draws_it(self):
+        """A kind enters `UNSHIPPED_KINDS` with its builder and leaves with its
+        build — 2.8.1+32 is the one carrying this layout, so the gate is off.
+        The assertion is kept rather than deleted because the failure it guards
+        against is silent: starting an activity the installed app cannot render
+        turns `no board` into a lock-screen nag pointing at an update that does
+        not exist."""
+        self.assertNotIn(card_kind('sequoya_threes'), UNSHIPPED_KINDS)
+
+    def test_the_ios_build_declares_the_kind_the_server_now_sends(self):
+        """The other half of that gate, and the half no Python test would
+        otherwise reach: the server may only send a kind the Swift knows how to
+        draw. `sequoya` has no layout of its own — it renders with `BoardView`
+        — so the client side of shipping it is one string in `known`, which is
+        exactly the kind of thing that gets forgotten."""
+        swift = (Path(settings.BASE_DIR) / 'mobile' / 'ios' / 'SixesActivity'
+                 / 'SixesActivityLiveActivity.swift').read_text()
+        known = re.search(r'static let known: Set<String> = \[(.*?)\]',
+                          swift, re.S).group(1)
+        self.assertIn('"sequoya"', known)
+
+    def test_the_round_now_reports_that_it_has_a_board(self):
+        """The gate's whole effect was that this game answered "no board" to
+        every caller; with it off, a Sequoya round has one."""
+        self.assertTrue(round_has_board(self.round))
