@@ -37,6 +37,14 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
   /// player id → the forced playing handicap being typed. Empty string means
   /// "computed" — the field is blank and the golfer plays off his index.
   final Map<int, TextEditingController> _hcaps = {};
+  /// Whether the forced-handicap fields are showing.
+  ///
+  /// Off by default: matching an externally-managed card is the exception,
+  /// and a per-golfer handicap box on every round setup is both noise and an
+  /// invitation to type in one by accident. It comes up ON whenever a golfer
+  /// already carries one, because a forced handicap that cannot be seen is
+  /// the reason nobody can explain a golfer's strokes.
+  bool _forceHcaps = false;
 
   @override
   void dispose() {
@@ -71,6 +79,7 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
         _hcaps[m.player.id] = TextEditingController(
             text: m.playingHandicapOverride?.toString() ?? '');
       }
+      _forceHcaps = _members.any((m) => m.playingHandicapOverride != null);
       // Fetch the tees at THIS foursome's course (scorer-accessible — sourced
       // from the round's course, not the viewer's account, so a cross-account
       // scorer doesn't get an empty dropdown).
@@ -216,20 +225,51 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Playing a card someone else manages — Golf Genius, a club sheet? '
-          'Type that card\'s playing handicap beside a golfer and Halved uses '
-          'it exactly, ignoring their index and applying no allowance on top. '
-          'Leave it blank to compute it.',
-          style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Neither can change once a hole is scored — both re-net every hole '
-          'already played.',
+          'Neither tees nor handicaps can change once a hole is scored — both '
+          're-net every hole already played.',
           style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
               fontStyle: FontStyle.italic),
+        ),
+        const SizedBox(height: 8),
+        // The switch, not the fields, is what most rounds see: a forced
+        // handicap is for a card somebody else manages, which is the
+        // exception.
+        Card(
+          elevation: 0,
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: BorderSide(color: theme.colorScheme.outlineVariant),
+          ),
+          child: Column(children: [
+            SwitchListTile(
+              value: _forceHcaps,
+              onChanged: _toggleForceHcaps,
+              dense: true,
+              title: const Text('Set playing handicaps by hand',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: Text(
+                _forceHcaps
+                    ? 'Type a card\'s number beside a golfer. Blank still '
+                      'computes his.'
+                    : 'Every golfer plays off his index.',
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+            if (_forceHcaps)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Text(
+                  'Playing a card someone else manages — Golf Genius, a club '
+                  'sheet? Type that card\'s playing handicap beside a golfer '
+                  'and Halved uses it exactly, ignoring their index and '
+                  'applying no allowance on top.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
+          ]),
         ),
         const SizedBox(height: 16),
         TeeAssignmentList(
@@ -242,10 +282,25 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
             return 'Course Hcp ${m.courseHandicap}'
                 '  ·  Playing ${m.playingHandicap}';
           },
-          trailing:  _handicapField,
+          trailing:  _forceHcaps ? _handicapField : null,
         ),
       ],
     );
+  }
+
+  /// Turning the switch OFF clears every field, and Save then sends those
+  /// clears through. A switch that said "off" while forced handicaps stayed
+  /// in force would be worse than no switch — the numbers empty on screen, so
+  /// what is about to be saved is what is shown.
+  void _toggleForceHcaps(bool on) {
+    setState(() {
+      _forceHcaps = on;
+      if (!on) {
+        for (final c in _hcaps.values) {
+          c.clear();
+        }
+      }
+    });
   }
 
   /// The forced-handicap field for one golfer.
