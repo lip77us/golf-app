@@ -6535,12 +6535,18 @@ class SequoyaPlayerTotal {
   final String name;
   final String shortName;
   final double money;
-  /// `3–2–1` — won, lost, halved. Shown, but never the sort.
+  /// `3–2–1` — matches won, lost, halved.
   final String recordLabel;
+  /// The same tally over EVERY bet, presses included. This is the one the
+  /// board shows, because it is the one the money is made of: net equals
+  /// (won − lost) × the stake. The match record alone left a golfer 2–1 up
+  /// and $0 richer, which reads as an arithmetic error.
+  final String betRecordLabel;
 
   const SequoyaPlayerTotal({
     required this.playerId, required this.name, required this.shortName,
     required this.money, required this.recordLabel,
+    required this.betRecordLabel,
   });
 
   factory SequoyaPlayerTotal.fromJson(Map<String, dynamic> j) =>
@@ -6550,6 +6556,8 @@ class SequoyaPlayerTotal {
         shortName:   j['short_name']?.toString() ?? '',
         money:       (j['money'] as num?)?.toDouble() ?? 0,
         recordLabel: j['record_label']?.toString() ?? '',
+        betRecordLabel: j['bet_record_label']?.toString()
+            ?? j['record_label']?.toString() ?? '',
       );
 }
 

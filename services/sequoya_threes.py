@@ -536,6 +536,11 @@ def sequoya_threes_summary(foursome) -> dict | None:
     nets    = {p: 0.0 for p in ids}
     matches = []
     record  = {p: {'won': 0, 'lost': 0, 'halved': 0} for p in ids}
+    # The same tally over EVERY bet, presses included. A press is worth the
+    # same as a match, so this is the record that reconciles with the money:
+    # net = (won - lost) x the stake. Counting matches alone left a golfer
+    # 2-1 up and $0 richer, which reads as an arithmetic error.
+    bet_record = {p: {'won': 0, 'lost': 0, 'halved': 0} for p in ids}
     partners = {p: {} for p in ids}
 
     for idx in range(1, MATCH_COUNT + 1):
@@ -549,8 +554,13 @@ def sequoya_threes_summary(foursome) -> dict | None:
                 win, lose = (side1, side2) if b['result'] == 1 else (side2, side1)
                 for p in win:
                     nets[p] += amount
+                    bet_record[p]['won'] += 1
                 for p in lose:
                     nets[p] -= amount
+                    bet_record[p]['lost'] += 1
+            elif b['result'] == 0:
+                for p in ids:
+                    bet_record[p]['halved'] += 1
 
         head = bets[0]
         if head['result'] in (1, 2):
@@ -590,13 +600,18 @@ def sequoya_threes_summary(foursome) -> dict | None:
           'money': nets[p], 'record': record[p],
           'record_label': f"{record[p]['won']}–{record[p]['lost']}–"
                           f"{record[p]['halved']}",
+          'bet_record': bet_record[p],
+          'bet_record_label':
+              f"{bet_record[p]['won']}–{bet_record[p]['lost']}–"
+              f"{bet_record[p]['halved']}",
           'partners': [{'player_id': q, 'name': names[q], **v}
                        for q, v in partners[p].items()]}
          for p in ids),
         # Money, not matches won: a match carrying three bets is worth three
         # flat ones, and a board that disagrees with settlement is worthless.
-        # Ties break on match record, then name.
-        key=lambda e: (-e['money'], -e['record']['won'], e['name']))
+        # Ties break on the BET record — the one the money is made of — then
+        # name.
+        key=lambda e: (-e['money'], -e['bet_record']['won'], e['name']))
 
     live_bets = sum(1 for m in matches for b in m['bets']
                     if b['result'] is None)

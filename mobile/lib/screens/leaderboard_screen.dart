@@ -11044,8 +11044,16 @@ class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
               Text('No players yet.',
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant))
-            else
+            else ...[
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                    'won–lost–halved over every bet, presses included',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)),
+              ),
               ...players.map((p) => _standing(theme, p)),
+            ],
             if (transfers.isNotEmpty) ...[
               const Divider(height: 20),
               Text('WHO PAYS WHO',
@@ -11168,6 +11176,10 @@ class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
 
   Widget _standing(ThemeData theme, Map<String, dynamic> p) {
     final money = (p['money'] as num?)?.toDouble() ?? 0.0;
+    // The record over EVERY bet, presses included — the one the money is
+    // made of. Matches alone left a golfer 2–1 up and $0 richer.
+    final record = p['bet_record_label']?.toString()
+        ?? p['record_label']?.toString() ?? '';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(children: [
@@ -11176,7 +11188,7 @@ class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.w600)),
         ),
-        Text(p['record_label']?.toString() ?? '',
+        Text(record,
             style: theme.textTheme.labelSmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant)),
         const SizedBox(width: 14),

@@ -912,8 +912,7 @@ class _PressOffer extends StatelessWidget {
       // hand-call one" told the group off for something the game did by
       // itself.
       title = 'Auto press in play on ${twin.holeRange}';
-      body  = 'It opened when the first hole of the match was won. One press '
-              'runs over these holes, not two.';
+      body  = 'It opened when the first hole of the match was won.';
     } else if (twin != null) {
       title = 'A press would double the match';
       body  = '${twin.label} is level with $where left, so a press over '
@@ -1431,6 +1430,9 @@ class _MoneyCard extends StatelessWidget {
               style: TextStyle(
                   fontSize: 10.5, fontWeight: FontWeight.bold,
                   letterSpacing: 0.5, color: theme.colorScheme.primary)),
+          Text('won–lost–halved over every bet, presses included',
+              style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant)),
           const SizedBox(height: 6),
           for (final p in summary.players)
             Padding(
@@ -1441,7 +1443,7 @@ class _MoneyCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w600)),
                 ),
-                Text(p.recordLabel,
+                Text(p.betRecordLabel,
                     style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant)),
                 const SizedBox(width: 14),

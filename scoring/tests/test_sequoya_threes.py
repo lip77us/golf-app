@@ -366,6 +366,17 @@ class SettlementTests(TestCase):
         for p in s['players']:
             self.assertAlmostEqual(moved[p['player_id']], p['money'], places=2)
 
+    def test_the_record_counts_every_bet_so_it_reconciles_with_the_money(self):
+        """A press is worth the same as a match, so the standings record has
+        to count both — otherwise a golfer reads 2-1 up and $0 richer, which
+        looks like an arithmetic error rather than a press that went the other
+        way."""
+        s = sequoya_threes_summary(self.fs)
+        for p in s['players']:
+            r = p['bet_record']
+            self.assertEqual(round((r['won'] - r['lost']) * 5.0, 2), p['money'],
+                             '${money} is exactly (won - lost) x the stake')
+
     def test_the_board_ranks_by_money_not_matches_won(self):
         s = sequoya_threes_summary(self.fs)
         self.assertEqual([p['money'] for p in s['players']],
