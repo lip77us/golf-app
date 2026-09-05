@@ -458,6 +458,12 @@ class FoursomeMembership(models.Model):
 
     class Meta:
         unique_together = ('foursome', 'player')
+        # **Creation order, always.** There was no ordering at all, so every
+        # query returned whatever the database felt like — and two unordered
+        # queries genuinely disagree. That is how a game's own scorecard came
+        # to list the four golfers in one order while its score entry, reading
+        # the same foursome through the serializer, listed them in another.
+        ordering = ['id']
 
     def handicap_strokes_on_hole(self, stroke_index, hole_number=None):
         """

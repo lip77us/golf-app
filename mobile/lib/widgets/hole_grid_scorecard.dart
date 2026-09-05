@@ -90,7 +90,9 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
     if (pos < 0) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_ctrl.hasClients) return;
-      final target = (_labelColW + (pos - 7) * _cellW)
+      // The scroll view holds the HOLE columns only — the label column is
+      // pinned outside it — so the offset is measured in cells alone.
+      final target = ((pos - 7) * _cellW)
           .clamp(0.0, _ctrl.position.maxScrollExtent);
       _ctrl.animateTo(target,
           duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
@@ -344,127 +346,134 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
               ),
           ]),
         ),
-        SingleChildScrollView(
-          controller: _ctrl,
-          scrollDirection: Axis.horizontal,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Banded header rows, matching the full ScorecardGrid: the
-              // hole numbers on surfaceContainerHighest, par and index a
-              // step lighter on surfaceContainerLow. Every scorecard in
-              // the app should read as the same object, and the bands do
-              // the real work outdoors -- they separate the fixed course
-              // information from the scores underneath without adding a
-              // single word of text.
-              Container(
-                color: theme.colorScheme.surfaceContainerHighest,
-                child: Row(children: [
-                  SizedBox(
-                    width: _labelColW, height: _rowH,
-                    child: const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('Hole',
-                          style: TextStyle(
-                              fontSize: 11, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                  for (final h in visibleHoles) headerCell(h),
-                ]),
-              ),
-              // Par row
-              Container(
-                color: theme.colorScheme.surfaceContainerLow,
-                child: Row(children: [
-                  SizedBox(
-                    width: _labelColW, height: _rowH,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('Par',
-                          style: theme.textTheme.bodySmall
-                              ?.copyWith(fontStyle: FontStyle.italic)),
-                    ),
-                  ),
-                  for (final h in visibleHoles) parCell(h),
-                ]),
-              ),
-              // Stroke-index (hole handicap) row
-              if (hasStrokeIndex)
-                Container(
-                  color: theme.colorScheme.surfaceContainerLow,
-                  child: Row(children: [
-                    SizedBox(
-                      width: _labelColW, height: _rowH,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('Index',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant)),
-                      ),
-                    ),
-                    for (final h in visibleHoles) siCell(h),
-                  ]),
-                ),
-              Container(
-                height: 1,
-                width: _labelColW + _cellW * visibleHoles.length,
-                color: theme.colorScheme.outlineVariant,
-                margin: const EdgeInsets.symmetric(vertical: 2),
-              ),
-              // One row per participant — name plus "(N)" net strokes
-              // in play so an observer can see who is shooting net what.
-              for (final p in widget.participants)
-                Row(children: [
-                  SizedBox(
-                    width: _labelColW, height: _rowH,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: RichText(
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                        softWrap: false,
-                        text: TextSpan(
-                          style: theme.textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.w600),
-                          children: [
-                            TextSpan(text:
-                              (p['short_name'] as String?)?.isNotEmpty == true
-                                  ? p['short_name'] as String
-                                  : (p['name'] as String? ?? '')),
-                            if (p['phcp_in_play'] != null)
-                              TextSpan(
-                                text: ' (${p['phcp_in_play']})',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w400),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  for (final h in visibleHoles)
-                    scoreCell(p['player_id'] as int, h),
-                ]),
+        // **The label column is pinned; only the holes scroll.** One
+        // horizontal scroll view over the whole grid took the names away with
+        // the holes, so by hole 12 the rows were anonymous. The two halves are
+        // built as matched lists — same length, same row heights, same order —
+        // because a grid whose columns disagree by one row is worse than one
+        // that scrolls.
+        Builder(builder: (context) {
+          final labelCol = <Widget>[];
+          final cellCol  = <Widget>[];
 
-              // Second block: per-player points won on each hole.
-              if (widget.showPoints) ...[
-                Container(
-                  height: 1,
-                  width: _labelColW + _cellW * visibleHoles.length,
-                  color: theme.colorScheme.outlineVariant,
-                  margin: const EdgeInsets.symmetric(vertical: 2),
+          void band(Color? colour, Widget label, List<Widget> cells) {
+            labelCol.add(Container(color: colour, child: label));
+            cellCol.add(Container(color: colour, child: Row(children: cells)));
+          }
+
+          void rule() {
+            labelCol.add(Container(
+                height: 1, width: _labelColW,
+                color: theme.colorScheme.outlineVariant,
+                margin: const EdgeInsets.symmetric(vertical: 2)));
+            cellCol.add(Container(
+                height: 1, width: _cellW * visibleHoles.length,
+                color: theme.colorScheme.outlineVariant,
+                margin: const EdgeInsets.symmetric(vertical: 2)));
+          }
+
+          Widget textLabel(String text, TextStyle? style) => SizedBox(
+                width: _labelColW, height: _rowH,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(text, style: style),
                 ),
-                for (final p in widget.participants)
-                  Row(children: [
-                    participantLabel(p, suffix: ' pts'),
-                    for (final h in visibleHoles)
-                      pointsCell(p['player_id'] as int, h),
-                  ]),
-              ],
-            ],
-          ),
-        ),
+              );
+
+          // Banded header rows, matching the full ScorecardGrid: the hole
+          // numbers on surfaceContainerHighest, par and index a step lighter
+          // on surfaceContainerLow. Every scorecard in the app should read as
+          // the same object, and the bands do the real work outdoors — they
+          // separate the fixed course information from the scores underneath
+          // without adding a single word of text.
+          band(
+            theme.colorScheme.surfaceContainerHighest,
+            textLabel('Hole',
+                const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            [for (final h in visibleHoles) headerCell(h)],
+          );
+          band(
+            theme.colorScheme.surfaceContainerLow,
+            textLabel('Par',
+                theme.textTheme.bodySmall?.copyWith(
+                    fontStyle: FontStyle.italic)),
+            [for (final h in visibleHoles) parCell(h)],
+          );
+          if (hasStrokeIndex) {
+            band(
+              theme.colorScheme.surfaceContainerLow,
+              textLabel('Index',
+                  theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+              [for (final h in visibleHoles) siCell(h)],
+            );
+          }
+          rule();
+
+          // One row per participant — name plus "(N)" net strokes in play so
+          // an observer can see who is shooting net what.
+          for (final p in widget.participants) {
+            labelCol.add(SizedBox(
+              width: _labelColW, height: _rowH,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: RichText(
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  softWrap: false,
+                  text: TextSpan(
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                    children: [
+                      TextSpan(text:
+                        (p['short_name'] as String?)?.isNotEmpty == true
+                            ? p['short_name'] as String
+                            : (p['name'] as String? ?? '')),
+                      if (p['phcp_in_play'] != null)
+                        TextSpan(
+                          text: ' (${p['phcp_in_play']})',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w400),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ));
+            cellCol.add(Row(children: [
+              for (final h in visibleHoles)
+                scoreCell(p['player_id'] as int, h),
+            ]));
+          }
+
+          // Second block: per-player points won on each hole.
+          if (widget.showPoints) {
+            rule();
+            for (final p in widget.participants) {
+              labelCol.add(participantLabel(p, suffix: ' pts'));
+              cellCol.add(Row(children: [
+                for (final h in visibleHoles)
+                  pointsCell(p['player_id'] as int, h),
+              ]));
+            }
+          }
+
+          return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: labelCol),
+            Expanded(
+              child: SingleChildScrollView(
+                controller: _ctrl,
+                scrollDirection: Axis.horizontal,
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: cellCol),
+              ),
+            ),
+          ]);
+        }),
       ],
     );
   }

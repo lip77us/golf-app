@@ -74,12 +74,14 @@ class _SequoyaThreesSetupScreenState extends State<SequoyaThreesSetupScreen> {
   double get _stake => double.tryParse(_betCtrl.text.trim()) ?? 0;
 
   /// Six matches, and the ceiling depends only on how many bets each can
-  /// carry. **Two, never three**: an auto press and a hand-called one cannot
-  /// coexist — the auto press already covers the rest of the match, so a
-  /// second bet over those holes would be a double rather than a press. So
-  /// Manual + Auto raises the number of matches that CAN carry a press, not
-  /// the number of bets any one of them carries.
-  int get _betsPerMatch => _pressMode == 'none' ? 1 : 2;
+  /// carry: the match, an auto press, and one called by hand. What is refused
+  /// is a press that merely REPEATS a bet already running — level over the
+  /// same holes — so three is reachable but never three of the same bet.
+  int get _betsPerMatch => switch (_pressMode) {
+        'none'        => 1,
+        'manual_auto' => 3,
+        _             => 2,
+      };
 
   String _money(double v) => '\$${v.toStringAsFixed(2)}';
 
@@ -224,9 +226,10 @@ class _SequoyaThreesSetupScreenState extends State<SequoyaThreesSetupScreen> {
               if (_pressMode == 'manual_auto') ...[
                 const SizedBox(height: 8),
                 Text(
-                  'The two never stack. Win the first hole of a match and the '
-                  'auto press covers the rest of it; halve the first hole and '
-                  'whoever falls behind can call one by hand instead.',
+                  'The two can both be running: an auto press over the tail of '
+                  'a match and a hand-called one over its last hole are '
+                  'different bets. What you cannot do is call one that merely '
+                  'repeats a bet already level over the same holes.',
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant, height: 1.5),
                 ),
@@ -271,8 +274,9 @@ class _SequoyaThreesSetupScreenState extends State<SequoyaThreesSetupScreen> {
               child: Text(
                 'Most you can lose: ${_money(_stake * 6 * _betsPerMatch)} per golfer — '
                 'all six matches lost with every bet live. No presses at all '
-                'tops out at ${_money(_stake * 6)}; either press setting '
-                'doubles that to ${_money(_stake * 12)}, and no further.',
+                'tops out at ${_money(_stake * 6)}; Auto doubles that to '
+                '${_money(_stake * 12)} and Manual + Auto reaches '
+                '${_money(_stake * 18)}.',
                 style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant),
               ),

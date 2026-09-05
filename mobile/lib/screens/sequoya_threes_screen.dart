@@ -850,7 +850,6 @@ class _PressOffer extends StatelessWidget {
     // so equal to its whole range means it has not started.)
     final removable = manual != null &&
         manual.isLive && manual.toPlay == manual.holes.length && !busy;
-    final auto     = match.bets.where((b) => b.kind == 'auto_press').firstOrNull;
     final headBet  = match.bets.isEmpty ? null : match.bets.first;
     final trailing = (headBet == null || headBet.margin == 0)
         ? null
@@ -858,8 +857,6 @@ class _PressOffer extends StatelessWidget {
     final start    = holeScored ? hole + 1 : hole;
     final roomLeft = start <= match.endHole;
     final mine     = mySide != null && mySide == trailing;
-    final legal    = !already && auto == null && roomLeft
-                     && trailing != null && !busy;
     final covers   = start == match.endHole
         ? 'hole $start' : 'holes $start–${match.endHole}';
     final down     = trailing == null
@@ -869,18 +866,19 @@ class _PressOffer extends StatelessWidget {
 
     // A live bet a press would merely REPEAT: level, with exactly the holes
     // the press would cover still to play. Two level bets over one set of
-    // holes settle identically, which is a double rather than a press.
+    // holes settle identically, which is a double rather than a press — and
+    // that, not the mere existence of an auto press, is what a press is
+    // refused for. A bet carrying a MARGIN is not a twin, which is why the
+    // last hole of a match can be pressed after losing the first two.
     //
-    // Which bet that is changes as the match runs, and saying the wrong one
-    // is worse than saying nothing. On the second hole of a match it is the
-    // auto press (it opened over the same holes and is level). On the LAST
-    // hole of a level match it is the match bet — the auto press is NOT a
-    // twin there, because it carries a margin and so settles differently on
-    // a halved hole.
+    // Which bet it is changes as the match runs: on the second hole it is the
+    // auto press, on the last hole of a level match the match bet itself.
     final covered = match.endHole - start + 1;
     final twin = match.bets
         .where((b) => b.isLive && b.margin == 0 && b.toPlay == covered)
         .firstOrNull;
+    final legal    = !already && twin == null && roomLeft
+                     && trailing != null && !busy;
 
     final where = covered == 1
         ? 'hole $start' : 'holes $start–${match.endHole}';
@@ -903,18 +901,16 @@ class _PressOffer extends StatelessWidget {
       title = 'Press';
       body  = 'Callable once a hole in this match has been decided — there is '
               'nobody to trail until one is.';
+    } else if (twin != null && twin.isPress) {
+      // The auto press is already the bet over these holes. Nothing more to
+      // explain than that it is on.
+      title = 'Auto press on';
+      body  = 'You cannot hand-call one while a press is already in play over '
+              '$where.';
     } else if (twin != null) {
-      title = 'A press would double '
-              '${twin.isPress ? 'the auto press' : 'the match'}';
+      title = 'A press would double the match';
       body  = '${twin.label} is level with $where left, so a press over '
               '$where settles on exactly the same golf.';
-    } else if (auto != null) {
-      // No twin, but the match already carries its press. The auto press is
-      // the press here; a hand-called one is what a match gets INSTEAD, when
-      // its first hole is halved and no auto press ever opens.
-      title = 'The auto press has it';
-      body  = 'A match carries one press, not two. A hand-called press is '
-              'what you get when the first hole of a match is halved.';
     } else if (trailing == null) {
       title = 'Press';
       body  = 'The match is all square. Only the side that is DOWN may press.';

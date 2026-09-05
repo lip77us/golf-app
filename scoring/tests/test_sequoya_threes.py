@@ -288,63 +288,36 @@ class PressTests(TestCase):
             call_press(self.fs, match_index=1, side=1,
                        called_by_id=self.pid['Ann'], current_hole=3)
 
-    def test_an_auto_press_suppresses_a_press_already_on_file(self):
-        """The two never coexist, and this module derives rather than stores —
-        so the rule has to hold of the SUMMARY however the row got there. Here
-        the first hole is re-scored from a halve to a win, which opens the auto
-        press after the hand-called one was already recorded."""
-        self._play(1, 4, 4, 4, 4)          # halved -> a called press is legal
-        self._play(2, 5, 5, 4, 4)
+    def test_the_last_hole_can_be_pressed_after_losing_the_first_two(self):
+        """Two down with one to play, an auto press already running: the match
+        bet is closed out and the auto press is dormie, so a fresh level bet
+        over the last hole repeats neither. Refusing it merely because an auto
+        press existed locked out the classic press."""
+        self._play(1, 5, 5, 4, 4)          # Cal/Dee win 1 -> auto press on 2-3
+        self._play(2, 5, 5, 4, 4)          # and 2 -> match closed out 2 & 1
         call_press(self.fs, match_index=1, side=1,
                    called_by_id=self.pid['Ann'], current_hole=3)
+        self.assertEqual(self._manual()['holes'], [3])
         self.assertEqual([b['kind'] for b in self._match()['bets']],
-                         ['match', 'manual_press'])
+                         ['match', 'auto_press', 'manual_press'],
+                         'all three are real, and none repeats another')
 
-        self._play(1, 4, 4, 5, 5)          # correction: Ann/Ben won it
-        self.assertEqual([b['kind'] for b in self._match()['bets']],
-                         ['match', 'auto_press'])
-
-        self._play(1, 4, 4, 4, 4)          # and back — the row was never lost
-        self.assertEqual([b['kind'] for b in self._match()['bets']],
-                         ['match', 'manual_press'])
-
-    def test_a_press_can_be_taken_back_before_it_is_played(self):
-        """A fat-fingered tap should cost nothing."""
-        self._play(1, 4, 4, 4, 4)
-        self._play(2, 5, 5, 4, 4)
-        call_press(self.fs, match_index=1, side=1,
-                   called_by_id=self.pid['Ann'], current_hole=3)
-        self.assertEqual(self._match()['bet_count'], 2)
-        remove_press(self.fs, match_index=1)
-        self.assertEqual([b['kind'] for b in self._match()['bets']], ['match'])
-
-    def test_a_press_cannot_be_taken_back_once_it_is_running(self):
-        """It is a bet, and a bet the group has played is a settlement
-        question rather than an undo."""
-        self._play(1, 4, 4, 4, 4)
-        self._play(2, 5, 5, 4, 4)
-        call_press(self.fs, match_index=1, side=1,
-                   called_by_id=self.pid['Ann'], current_hole=3)
-        self._play(3, 4, 4, 5, 5)          # the press's only hole
+    def test_a_press_that_would_repeat_a_live_level_bet_is_refused(self):
+        """The auto press opened over 2-3 and is level, so a hand-called press
+        over 2-3 is the same bet twice."""
+        self._play(1, 4, 4, 5, 5)          # Ann/Ben win 1 -> auto press on 2-3
         with self.assertRaises(ValueError):
-            remove_press(self.fs, match_index=1)
-        self.assertEqual(self._match()['bet_count'], 2, 'still there')
+            call_press(self.fs, match_index=1, side=2,
+                       called_by_id=self.pid['Cal'], current_hole=2)
 
-    def test_taking_back_a_press_that_was_never_called_is_refused(self):
-        with self.assertRaises(ValueError):
-            remove_press(self.fs, match_index=1)
-
-    def test_a_match_carries_at_most_two_bets(self):
-        """The match bet plus ONE press — the auto one or a called one, never
-        both. This is what caps a round's exposure at 2x rather than 3x."""
-        self._play(1, 4, 4, 5, 5)          # auto press opens
-        self.assertEqual(self._match()['bet_count'], 2)
-
-        self._play(1, 4, 4, 4, 4)          # re-score: halve it, auto press gone
+    def test_a_match_carries_at_most_three_bets(self):
+        """The match, the auto press and one called by hand — the ceiling the
+        setup screen prints."""
+        self._play(1, 5, 5, 4, 4)
         self._play(2, 5, 5, 4, 4)
         call_press(self.fs, match_index=1, side=1,
                    called_by_id=self.pid['Ann'], current_hole=3)
-        self.assertEqual(self._match()['bet_count'], 2)
+        self.assertEqual(self._match()['bet_count'], 3)
 
     def test_presses_are_refused_entirely_when_the_round_is_not_playing_them(self):
         setup_sequoya_threes(self.fs, [self.pid['Ann'], self.pid['Ben']],
@@ -405,10 +378,10 @@ class SettlementTests(TestCase):
         from hole 4 onward."""
         sc = sequoya_threes_summary(self.fs)['scorecard']
         self.assertEqual(len(sc['holes']), 18)
-        # Row order is the group's, and STABLE — it deliberately does not
-        # follow the score-entry rows, which regroup by side every third hole.
-        self.assertEqual({p['name'] for p in sc['players']},
-                         {'Ann', 'Ben', 'Cal', 'Dee'})
+        # The order score entry draws: the foursome's own, oldest membership
+        # first. The two used to run unordered queries and could disagree.
+        self.assertEqual([p['name'] for p in sc['players']],
+                         ['Ann', 'Ben', 'Cal', 'Dee'])
 
         def side(hole, name):
             h = sc['holes'][hole - 1]
@@ -453,9 +426,8 @@ class SettlementTests(TestCase):
         self.assertIsNone(sc['holes'][2]['winner_team'], 'hole 3 unplayed')
 
     def test_the_exposure_ceiling_follows_the_press_mode(self):
-        """A match carries at most TWO bets, never three — an auto press and a
-        hand-called one cannot coexist. So the ceiling is 1x with presses off
-        and 2x with them on, whichever press mode is chosen."""
+        """No presses is 1x, Auto is 2x, and Manual + Auto is 3x — a match can
+        carry the match bet, an auto press and one called by hand."""
         e = sequoya_threes_summary(self.fs)['exposure']
         self.assertEqual(e['no_presses'], 30)
         self.assertEqual(e['with_auto'],  60)
@@ -465,4 +437,4 @@ class SettlementTests(TestCase):
                              handicap_mode='gross', bet_amount=5,
                              press_mode=SequoyaThreesGame.PRESS_MANUAL_AUTO)
         self.assertEqual(sequoya_threes_summary(self.fs)['exposure']['ceiling'],
-                         60)
+                         90)

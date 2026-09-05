@@ -194,17 +194,24 @@ def call_press(foursome, *, match_index, side, called_by_id, current_hole):
     if side != trailing:
         raise ValueError('Only the side that is down may press.')
 
-    # A match carries ONE press. Which bet a second one would merely repeat
-    # changes as the match runs — on the second hole it is the auto press,
-    # on the last hole of a level match it is the match bet itself — so the
-    # refusal states the rule rather than guessing at the twin. The screen,
-    # which knows the margins, names it.
-    if auto_press_holes(game, net, side1, side2, match_index) is not None:
-        raise ValueError('This match already carries its press — the auto '
-                         'press. A match carries one, not two.')
-
     if game.presses.filter(match_index=match_index).exists():
         raise ValueError('This match already carries a hand-called press.')
+
+    # **A press must be a NEW bet, not a repeat of one already running.** The
+    # test is duplication, not the mere existence of an auto press: a live bet
+    # that is LEVEL with exactly the holes this press would cover still to
+    # play settles identically to it, and two identical bets are a double.
+    #
+    # A bet carrying a margin is not a twin, which is what lets the last hole
+    # of a match be pressed after losing the first two — the match bet is
+    # closed out and the auto press is dormie, so a fresh level bet over that
+    # hole is genuinely different from both.
+    covered = hi - start + 1
+    for b in _bets_for_match(game, net, side1, side2, match_index, []):
+        if b['result'] is None and b['margin'] == 0 and b['to_play'] == covered:
+            raise ValueError(
+                f"{b['label']} is level with the same holes left — a press "
+                'over them would settle on exactly the same golf.')
 
     return SequoyaThreesPress.objects.create(
         game=game, match_index=match_index, side=side,
@@ -387,12 +394,11 @@ def _bets_for_match(game, net, side1, side2, match_index, manual):
             **_settle_bet(net, side1, side2, auto),
         })
 
-    # A stored hand-called press is IGNORED while an auto press is running.
-    # The rule is that the two never coexist, and this module derives rather
-    # than stores, so it has to hold of the summary however the row got
-    # there — including a round that predates the rule, and a round where an
-    # edited first hole opens the auto press after the fact.
-    for pr in (manual if auto is None else []):
+    # Both presses can be live at once: an auto press over the tail of a
+    # match and a hand-called one over the last hole of it are different
+    # bets. What is refused is a DUPLICATE, and that is enforced where the
+    # press is called — here every stored press is drawn.
+    for pr in manual:
         rest = [h for h in holes if h >= pr.start_hole]
         if not rest:
             continue
@@ -608,17 +614,16 @@ def sequoya_threes_summary(foursome) -> dict | None:
         'live_bets'    : live_bets,
         # What the round could still cost, printed on setup and in the footer.
         #
-        # **A match carries at most TWO bets**, never three: an auto press and
-        # a hand-called one cannot coexist — the auto press already covers the
-        # rest of the match, so a second bet over the same holes would be a
-        # double, not a press. So the ceiling with presses on is 2x, whichever
-        # press mode is chosen.
+        # A match can carry the match bet, an auto press and one called by
+        # hand — three, but only because none of them repeats another. Two
+        # level bets over one set of holes are refused at the call.
         'exposure'     : {
             'no_presses' : round(MATCH_COUNT * amount, 2),
             'with_auto'  : round(MATCH_COUNT * amount * 2, 2),
-            'ceiling'    : round(
-                MATCH_COUNT * amount
-                * (1 if game.press_mode == SequoyaThreesGame.PRESS_NONE else 2),
-                2),
+            'ceiling'    : round(MATCH_COUNT * amount * {
+                SequoyaThreesGame.PRESS_NONE       : 1,
+                SequoyaThreesGame.PRESS_AUTO       : 2,
+                SequoyaThreesGame.PRESS_MANUAL_AUTO: 3,
+            }.get(game.press_mode, 2), 2),
         },
     }
