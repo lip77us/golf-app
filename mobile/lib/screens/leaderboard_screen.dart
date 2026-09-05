@@ -10960,6 +10960,15 @@ class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
         .cast<Map<String, dynamic>>();
     final transfers = (summary['transfers'] as List? ?? const [])
         .cast<Map<String, dynamic>>();
+    final card      = summary['scorecard'] as Map<String, dynamic>? ?? const {};
+    final cardHoles = ((card['holes'] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final cardPlayers = ((card['players'] as List?) ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final cardHolesInPlay =
+        ((card['holes_in_play'] as List?) ?? const []).cast<int>();
     final bet       = (summary['bet_amount'] as num?)?.toDouble() ?? 0.0;
     final pressMode = summary['press_mode']?.toString() ?? 'auto';
     final liveBets  = (summary['live_bets'] as num?)?.toInt() ?? 0;
@@ -11037,6 +11046,19 @@ class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
                     ),
                   )),
             ],
+          ],
+
+          // The scorecard sits UNDER both panes rather than behind a third
+          // tab: it is the shared reference the other two argue about, and
+          // the same grid the play screen draws.
+          if (cardHoles.isNotEmpty) ...[
+            const Divider(height: 22),
+            HoleGridScorecard(
+              holes:        cardHoles,
+              participants: cardPlayers,
+              holesInPlay:  cardHolesInPlay,
+              legend: 'blue / orange = the side that won the hole',
+            ),
           ],
         ]),
       ),

@@ -6367,6 +6367,35 @@ class SequoyaThreesPressView(APIView):
                         status=status.HTTP_201_CREATED)
 
 
+class SequoyaThreesPressRemoveView(APIView):
+    """
+    POST /api/foursomes/{id}/sequoya-threes/press/remove/
+
+    Take back a hand-called press. A POST rather than a DELETE because the
+    caller needs the recomputed summary back — the banner has to stop showing
+    a bet that no longer exists.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        try:
+            match_index = int(request.data.get('match_index'))
+        except (TypeError, ValueError):
+            return Response({'detail': 'match_index is required.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        from services.sequoya_threes import (remove_press,
+                                             sequoya_threes_summary)
+        try:
+            remove_press(foursome, match_index=match_index)
+        except ValueError as e:
+            return Response({'detail': str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        except ObjectDoesNotExist:
+            return Response({'detail': 'No Sequoya 3s game set up.'},
+                            status=status.HTTP_404_NOT_FOUND)
+        return Response(sequoya_threes_summary(foursome))
+
+
 class SurvivorSetupView(APIView):
     """
     POST /api/foursomes/{id}/survivor/setup/

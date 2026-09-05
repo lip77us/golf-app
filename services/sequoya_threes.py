@@ -211,6 +211,33 @@ def call_press(foursome, *, match_index, side, called_by_id, current_hole):
         called_by_id=called_by_id, start_hole=start)
 
 
+def remove_press(foursome, *, match_index):
+    """Take back a hand-called press. Raises ValueError with a reason.
+
+    **Only before it has been played over.** A press is a bet: once a hole it
+    covers is in the book the group has played it, and a bet that has been
+    played cannot be taken back — that is a settlement question, not an undo.
+    Before then it is a fat-fingered tap and should cost nothing.
+    """
+    game = foursome.sequoya_threes_game
+    pr = game.presses.filter(match_index=match_index).first()
+    if pr is None:
+        raise ValueError('There is no hand-called press in this match.')
+
+    lo, hi = MATCH_HOLES[match_index - 1]
+    ids = [m.player_id for m in _real_members(foursome)]
+    side1, side2 = pairing_for_match(ids, game.match1_side1, match_index)
+    net = _net_by_hole(game, foursome)
+    played = [h for h in range(pr.start_hole, hi + 1)
+              if _hole_winner(net, side1, side2, h) is not None]
+    if played:
+        raise ValueError(
+            f'This press is already running — hole {played[0]} has been '
+            'played on it.')
+
+    pr.delete()
+
+
 # ---------------------------------------------------------------------------
 # Scoring — one net table, every bet computed from it
 # ---------------------------------------------------------------------------

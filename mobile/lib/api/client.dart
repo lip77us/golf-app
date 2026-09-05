@@ -657,6 +657,17 @@ class ApiClient {
             if (calledById != null) 'called_by_id': calledById,
           }) as Map));
 
+  /// Take back a hand-called press. A POST, not a DELETE, because the caller
+  /// needs the recomputed summary back.
+  Future<SequoyaThreesSummary> postSequoyaThreesPressRemove(
+    int foursomeId, {
+    required int matchIndex,
+  }) async =>
+      SequoyaThreesSummary.fromJson(Map<String, dynamic>.from(
+          await _post('/foursomes/$foursomeId/sequoya-threes/press/remove/', {
+            'match_index': matchIndex,
+          }) as Map));
+
   Future<void> deleteTournament(int id) async {
     await _delete('/tournaments/$id/');
   }

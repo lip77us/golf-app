@@ -144,6 +144,28 @@ class SequoyaThreesEndpointTests(TestCase):
         self.assertEqual(self._press(current_hole=3).status_code, 201)
         self.assertEqual(self._press(current_hole=3).status_code, 400)
 
+    def _unpress(self):
+        return self.client.post(
+            reverse('api-sequoya-threes-press-remove', args=[self.fs.id]),
+            {'match_index': 1}, format='json')
+
+    def test_a_press_can_be_taken_back_over_the_wire(self):
+        self._setup()
+        self._halve_then_lose_a_hole()
+        self.assertEqual(self._press(current_hole=3).status_code, 201)
+        resp = self._unpress()
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(
+            [b['kind'] for b in resp.data['matches'][0]['bets']], ['match'],
+            'the summary comes back without it')
+
+    def test_a_running_press_cannot_be_taken_back(self):
+        self._setup()
+        self._halve_then_lose_a_hole()
+        self._press(current_hole=3)
+        self._play(3, 4, 4, 5, 5)
+        self.assertEqual(self._unpress().status_code, 400)
+
     def test_presses_are_refused_when_the_round_is_not_playing_them(self):
         self._setup(press_mode='none')
         self._halve_then_lose_a_hole()

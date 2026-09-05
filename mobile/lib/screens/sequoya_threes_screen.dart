@@ -35,9 +35,6 @@ import '../utils/round_complete.dart';
 
 const Color _kBlue   = Color(0xFF1976D2);   // side 1 of match 1 — "Team A"
 const Color _kOrange = Color(0xFFEF6C00);   // side 2
-const Color _kAmberBg     = Color(0xFFFDF3E7);
-const Color _kAmberBorder = Color(0xFFE0C79C);
-const Color _kAmberInk    = Color(0xFF8A5216);
 
 String _fmtMoney(double v) {
   if (v == 0) return '—';
@@ -381,6 +378,28 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
     }
   }
 
+  /// Take back a press called by mistake. Refused server-side once a hole it
+  /// covers has been played — the tap was free, the bet is not.
+  Future<void> _removePress(SequoyaMatch match) async {
+    setState(() => _pressing = true);
+    try {
+      final rp     = context.read<RoundProvider>();
+      final client = context.read<AuthProvider>().client;
+      final s = await client.postSequoyaThreesPressRemove(
+          widget.foursomeId, matchIndex: match.index);
+      if (!mounted) return;
+      rp.setSequoyaThreesSummary(s);
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Press taken back.')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyError(e))));
+    } finally {
+      if (mounted) setState(() => _pressing = false);
+    }
+  }
+
   // --- build -------------------------------------------------------------
 
   @override
@@ -545,6 +564,7 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
                   h['match'] == match.index && h['winner_team'] != null),
               mySide: _mySide(match, context.read<AuthProvider>().player?.id),
               onCall: (side) => _callPress(match, side),
+              onUndo: () => _removePress(match),
             ),
           _HoleHeader(holeNumber: _selectedHole, holeData: holeData),
           const SizedBox(height: 12),
@@ -810,17 +830,26 @@ class _PressOffer extends StatelessWidget {
   final bool anyHoleWon;
   final int? mySide;
   final void Function(int side) onCall;
+  final VoidCallback onUndo;
 
   const _PressOffer({
     required this.match, required this.hole, required this.busy,
     required this.holeScored, required this.anyHoleWon,
-    required this.mySide, required this.onCall,
+    required this.mySide, required this.onCall, required this.onUndo,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final already  = match.bets.any((b) => b.kind == 'manual_press');
+    final manual   = match.bets
+        .where((b) => b.kind == 'manual_press').firstOrNull;
+    final already  = manual != null;
+    // Undoable only while NOTHING it covers has been played. The tap was
+    // free; the bet is not, and a bet the group has played is a settlement
+    // question rather than an undo. (`toPlay` counts the holes still to come,
+    // so equal to its whole range means it has not started.)
+    final removable = manual != null &&
+        manual.isLive && manual.toPlay == manual.holes.length && !busy;
     final auto     = match.bets.where((b) => b.kind == 'auto_press').firstOrNull;
     final headBet  = match.bets.isEmpty ? null : match.bets.first;
     final trailing = (headBet == null || headBet.margin == 0)
@@ -860,7 +889,11 @@ class _PressOffer extends StatelessWidget {
     final String body;
     if (already) {
       title = 'Press already called in this match';
-      body  = 'One hand-called press per match.';
+      body  = removable
+          ? 'One hand-called press per match. Nothing has been played on it '
+            'yet, so a mis-tap can still be taken back.'
+          : 'It is running over ${manual.holeRange} now. A bet the group has '
+            'played cannot be taken back.';
     } else if (!roomLeft) {
       title = 'Press';
       body  = 'No holes left in this match for a press to cover.';
@@ -885,43 +918,64 @@ class _PressOffer extends StatelessWidget {
     } else if (trailing == null) {
       title = 'Press';
       body  = 'The match is all square. Only the side that is DOWN may press.';
-    } else if (mine) {
-      title = 'Call your press — covers $covers';
-      body  = 'A new bet at \$${match.bets.first.amount.toStringAsFixed(0)} per '
-              'golfer over the holes left. It settles on its own.';
     } else {
-      // One phone scores the group, so the button belongs to the TRAILING
-      // side rather than to whoever is holding it. Gating it on the reader
-      // put the press out of reach exactly when it was wanted: the man who is
-      // UP in the match is usually the one keeping the card.
-      title = 'Press for $down — covers $covers';
-      body  = 'They are down, so the press is theirs. Tap to call it for '
-              'them at \$${match.bets.first.amount.toStringAsFixed(0)} per golfer '
-              'over the holes left.';
+      // **The card names the side and wears its colour.** Amber said only
+      // "something is on offer" — and being orange-ish, it read as the ORANGE
+      // side's, which is a coin-flip lie. A press belongs to exactly one pair
+      // and the card should be unmistakable about which.
+      //
+      // One phone scores the group, so the button is the trailing side's
+      // rather than the holder's: the man who is UP in the match is usually
+      // the one keeping the card.
+      final lead = headBet!.margin.abs();
+      final left = headBet.toPlay;
+      final state = lead == left
+          ? 'Dormie — down $lead with $left to play'
+          : 'Down $lead with $left to play';
+      title = '$down can press — covers $covers';
+      body  = '$state. '
+              '${mine ? 'Yours to call' : 'Tap to call it for them'}: a new bet '
+              'at \$${match.bets.first.amount.toStringAsFixed(0)} per golfer '
+              'over the holes left, settling on its own.';
     }
+
+    // Blue or orange — the colour of whoever may call it, so the card can be
+    // matched against the score rows without reading a word.
+    final side = trailing == 1 ? _kBlue : _kOrange;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: legal ? _kAmberBg : theme.colorScheme.surfaceContainerHighest,
+        color: legal
+            ? side.withOpacity(0.10)
+            : theme.colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(10),
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
           onTap: legal ? () => onCall(trailing) : null,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.fromLTRB(0, 10, 12, 10),
             decoration: BoxDecoration(
               border: Border.all(
-                  color: legal
-                      ? _kAmberBorder : theme.colorScheme.outlineVariant,
+                  color: legal ? side : theme.colorScheme.outlineVariant,
                   width: 1.5),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(children: [
+              // The same side bar the score rows carry.
+              Container(
+                width: 5, height: 40,
+                margin: const EdgeInsets.only(right: 10),
+                decoration: BoxDecoration(
+                  color: legal ? side : Colors.transparent,
+                  borderRadius: const BorderRadius.horizontal(
+                      right: Radius.circular(3)),
+                ),
+              ),
               Container(
                 width: 24, height: 24,
                 decoration: BoxDecoration(
-                  color: legal ? _kAmberInk : theme.colorScheme.outlineVariant,
+                  color: legal ? side : theme.colorScheme.outlineVariant,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: busy
@@ -940,7 +994,7 @@ class _PressOffer extends StatelessWidget {
                       style: TextStyle(
                           fontSize: 13, fontWeight: FontWeight.bold,
                           color: legal
-                              ? _kAmberInk
+                              ? side
                               : theme.colorScheme.onSurfaceVariant)),
                   const SizedBox(height: 1),
                   Text(body,
@@ -949,6 +1003,19 @@ class _PressOffer extends StatelessWidget {
                           height: 1.35)),
                 ]),
               ),
+              if (removable) ...[
+                const SizedBox(width: 6),
+                TextButton(
+                  onPressed: onUndo,
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    foregroundColor: theme.colorScheme.error,
+                  ),
+                  child: const Text('Take it back'),
+                ),
+              ],
             ]),
           ),
         ),

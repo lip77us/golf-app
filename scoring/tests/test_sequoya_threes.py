@@ -14,6 +14,7 @@ from django.test import TestCase
 
 from games.models import SequoyaThreesGame
 from services.sequoya_threes import (MATCH_HOLES, call_press, pairing_for_match,
+                                     remove_press,
                                      pairings, sequoya_threes_summary,
                                      setup_sequoya_threes)
 from ._helpers import make_foursome, make_round, make_tee, submit_hole
@@ -306,6 +307,32 @@ class PressTests(TestCase):
         self._play(1, 4, 4, 4, 4)          # and back — the row was never lost
         self.assertEqual([b['kind'] for b in self._match()['bets']],
                          ['match', 'manual_press'])
+
+    def test_a_press_can_be_taken_back_before_it_is_played(self):
+        """A fat-fingered tap should cost nothing."""
+        self._play(1, 4, 4, 4, 4)
+        self._play(2, 5, 5, 4, 4)
+        call_press(self.fs, match_index=1, side=1,
+                   called_by_id=self.pid['Ann'], current_hole=3)
+        self.assertEqual(self._match()['bet_count'], 2)
+        remove_press(self.fs, match_index=1)
+        self.assertEqual([b['kind'] for b in self._match()['bets']], ['match'])
+
+    def test_a_press_cannot_be_taken_back_once_it_is_running(self):
+        """It is a bet, and a bet the group has played is a settlement
+        question rather than an undo."""
+        self._play(1, 4, 4, 4, 4)
+        self._play(2, 5, 5, 4, 4)
+        call_press(self.fs, match_index=1, side=1,
+                   called_by_id=self.pid['Ann'], current_hole=3)
+        self._play(3, 4, 4, 5, 5)          # the press's only hole
+        with self.assertRaises(ValueError):
+            remove_press(self.fs, match_index=1)
+        self.assertEqual(self._match()['bet_count'], 2, 'still there')
+
+    def test_taking_back_a_press_that_was_never_called_is_refused(self):
+        with self.assertRaises(ValueError):
+            remove_press(self.fs, match_index=1)
 
     def test_a_match_carries_at_most_two_bets(self):
         """The match bet plus ONE press — the auto one or a called one, never
