@@ -250,7 +250,7 @@ class _SequoyaThreesSetupScreenState extends State<SequoyaThreesSetupScreen> {
             title: 'Stake',
             child: Column(crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-              Text('A man a match, not a pair. Lose a match and you are down '
+              Text('A golfer a match, not a pair. Lose a match and you are down '
                    'the stake and so is your partner.',
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant)),
@@ -258,7 +258,7 @@ class _SequoyaThreesSetupScreenState extends State<SequoyaThreesSetupScreen> {
               StakeField(
                 controller: _betCtrl,
                 onChanged: (ok) => setState(() => _stakeOk = ok),
-                label: 'Stake (\$ per man, per bet)',
+                label: 'Stake (\$ per golfer, per bet)',
               ),
             ]),
           ),
@@ -269,7 +269,7 @@ class _SequoyaThreesSetupScreenState extends State<SequoyaThreesSetupScreen> {
             const Text('🛡  '),
             Expanded(
               child: Text(
-                'Most you can lose: ${_money(_stake * 6 * _betsPerMatch)} — '
+                'Most you can lose: ${_money(_stake * 6 * _betsPerMatch)} per golfer — '
                 'all six matches lost with every bet live. No presses at all '
                 'tops out at ${_money(_stake * 6)}; either press setting '
                 'doubles that to ${_money(_stake * 12)}, and no further.',

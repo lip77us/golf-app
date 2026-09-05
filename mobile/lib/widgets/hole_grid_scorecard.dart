@@ -206,7 +206,10 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
       final isBack = mine['resurrected'] == true;
       // Nassau: the whole winning TEAM's cells get tinted in their colour.
       final winnerTeam = entry['winner_team'] as int?;
-      final myTeam     = teamOf[playerId];
+      // A side carried on the SCORE wins over the per-player map: Sequoya 3s
+      // rotates the pairing every third hole, so which side a golfer is on is
+      // a fact about the hole, not about him. Every other game omits it.
+      final myTeam     = (mine['team'] as int?) ?? teamOf[playerId];
       final teamWin    = winnerTeam != null && myTeam != null && myTeam == winnerTeam;
 
       Color? cellBg;

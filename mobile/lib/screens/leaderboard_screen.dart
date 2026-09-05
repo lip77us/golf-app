@@ -10984,7 +10984,7 @@ class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
             Expanded(
               child: Text(
                   'Sequoya 3s — ${_hcapLabel(hcap)} · '
-                  '\$${bet.formatBet()} a man',
+                  '\$${bet.formatBet()} per golfer',
                   style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
             Text(statusLabel, style: theme.textTheme.labelSmall),
@@ -11060,15 +11060,15 @@ class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
         Row(children: [
           Expanded(
             child: Text(
-                'MATCH ${m['index']}  ·  '
-                'HOLES ${m['start_hole']}–${m['end_hole']}',
+                'Match ${m['index']} · '
+                'holes ${m['start_hole']}–${m['end_hole']}',
                 style: TextStyle(
-                    fontSize: 10, fontWeight: FontWeight.bold,
-                    letterSpacing: 0.4, color: theme.colorScheme.primary)),
+                    fontSize: 12.5, fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary)),
           ),
           Text(
               '\$${((m['at_risk'] as num?)?.toDouble() ?? 0).formatBet()} '
-              'a man',
+              'per golfer',
               style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant)),
         ]),
@@ -11098,8 +11098,12 @@ class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
             child: Row(children: [
               Expanded(
                 child: Text(
-                    '${b['label']} · ${_holeRange(b['holes'] as List? ?? const [])}'
-                    '${b['called_by'] != null ? '  (${b['called_by']})' : ''}',
+                    (b['kind'] == 'match'
+                            ? '${b['label']}'
+                            : '${b['label']} · '
+                              '${_holeRange(b['holes'] as List? ?? const [])}')
+                        + (b['called_by'] != null
+                            ? '  (${b['called_by']})' : ''),
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                         fontSize: 11.5,

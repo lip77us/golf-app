@@ -23,6 +23,7 @@ import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/error_view.dart' show friendlyError;
 import '../widgets/golf_app_bar.dart';
+import '../widgets/hole_grid_scorecard.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart' show scoreCellWithDots;
@@ -52,7 +53,7 @@ String _fmtMoney(double v) {
 /// running over them — so the match bet's margin keeps moving and `to_play`
 /// falls to zero. Reading either would turn a 2 & 1 into "1 up".
 String betState(SequoyaBet b) {
-  if (b.result == 0) return 'HALVED';
+  if (b.result == 0) return 'Halved';
   if (b.result != null) {
     final closed = b.closedOn;
     if (closed != null) {
@@ -61,11 +62,11 @@ String betState(SequoyaBet b) {
       // margin at the close-out is always `left + 1`.
       if (left > 0) return '${left + 1} & $left';
     }
-    return '${b.margin.abs()} UP · FINAL';
+    return '${b.margin.abs()} up · final';
   }
-  if (b.margin == 0) return 'ALL SQUARE';
-  if (b.margin.abs() == b.toPlay) return 'DORMIE';
-  return '${b.margin.abs()} UP';
+  if (b.margin == 0) return 'All square';
+  if (b.margin.abs() == b.toPlay) return 'Dormie';
+  return '${b.margin.abs()} up';
 }
 
 // ---------------------------------------------------------------------------
@@ -576,6 +577,28 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
               ),
           ],
           const SizedBox(height: 6),
+          // The Sixes card. Above the match list on purpose: it answers what
+          // was SHOT, which is the question the group asks while the hole is
+          // still fresh; the match list answers what that did to the money.
+          if (summary != null && summary.cardHoles.isNotEmpty) ...[
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(color: Theme.of(ctx).colorScheme.outlineVariant),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
+                child: HoleGridScorecard(
+                  holes:        summary.cardHoles,
+                  participants: summary.cardPlayers,
+                  holesInPlay:  summary.cardHolesInPlay,
+                  legend: 'blue / orange = the side that won the hole',
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           if (summary != null) ...[
             _MatchStrip(
               summary: summary,
@@ -712,13 +735,13 @@ class _BetBanner extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Expanded(
-            child: Text('MATCH ${match.index} OF 6  ·  '
-                'HOLES ${match.startHole}–${match.endHole}',
+            child: Text('Match ${match.index} · '
+                'holes ${match.startHole}–${match.endHole}',
                 style: TextStyle(
-                    fontSize: 10.5, fontWeight: FontWeight.bold,
-                    letterSpacing: 0.4, color: theme.colorScheme.primary)),
+                    fontSize: 13, fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary)),
           ),
-          Text('\$${match.atRisk.toStringAsFixed(0)} a man · '
+          Text('\$${match.atRisk.toStringAsFixed(0)} per golfer · '
                '$n bet${n == 1 ? '' : 's'}',
               style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant)),
@@ -729,7 +752,10 @@ class _BetBanner extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 2.5),
             child: Row(children: [
               Expanded(
-                child: Text('${b.label} · ${b.holeRange}',
+                // The match bet covers the whole match, which the header just
+                // said — so only a PRESS names its holes, because a press's
+                // are the thing that differs.
+                child: Text(b.isPress ? '${b.label} · ${b.holeRange}' : b.label,
                     style: TextStyle(
                         fontSize: 12,
                         fontWeight: b.isPress
@@ -823,7 +849,7 @@ class _PressOffer extends StatelessWidget {
       // not a press.
       title = 'The auto press has it';
       body  = 'It already covers ${auto.holeRange} at '
-              '\$${auto.amount.toStringAsFixed(0)} a man. A hand-called press '
+              '\$${auto.amount.toStringAsFixed(0)} per golfer. A hand-called press '
               'over the same holes would be a double, not a press.';
     } else if (!roomLeft) {
       title = 'Press';
@@ -845,7 +871,7 @@ class _PressOffer extends StatelessWidget {
       // UP in the match is usually the one keeping the card.
       title = 'Press for $down — covers $covers';
       body  = 'They are down, so the press is theirs. Tap to call it for '
-              'them at \$${match.bets.first.amount.toStringAsFixed(0)} a man '
+              'them at \$${match.bets.first.amount.toStringAsFixed(0)} per golfer '
               'over the holes left.';
     }
 
@@ -1316,7 +1342,7 @@ class _MoneyCard extends StatelessWidget {
           ],
           const SizedBox(height: 8),
           Text(
-            'Ceiling: \$${summary.exposureCeiling.toStringAsFixed(0)} a man — '
+            'Ceiling: \$${summary.exposureCeiling.toStringAsFixed(0)} per golfer — '
             'all six matches lost with every bet live.',
             style: theme.textTheme.labelSmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant),

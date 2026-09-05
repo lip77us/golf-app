@@ -372,6 +372,37 @@ class SettlementTests(TestCase):
                          sorted((p['money'] for p in s['players']),
                                 reverse=True))
 
+    def test_the_scorecard_carries_the_side_on_every_score(self):
+        """The pairing rotates every third hole, so the side rides on each
+        SCORE rather than on the golfer — a per-player side would be wrong
+        from hole 4 onward."""
+        sc = sequoya_threes_summary(self.fs)['scorecard']
+        self.assertEqual(len(sc['holes']), 18)
+        # Row order is the group's, and STABLE — it deliberately does not
+        # follow the score-entry rows, which regroup by side every third hole.
+        self.assertEqual({p['name'] for p in sc['players']},
+                         {'Ann', 'Ben', 'Cal', 'Dee'})
+
+        def side(hole, name):
+            h = sc['holes'][hole - 1]
+            return next(e['team'] for e in h['scores']
+                        if e['player_id'] == self.pid[name])
+
+        # Ann & Ben are side 1 of match 1 ...
+        self.assertEqual(side(1, 'Ann'), side(1, 'Ben'))
+        # ... and split up in match 2, which the grid has to say.
+        self.assertNotEqual(side(4, 'Ann'), side(4, 'Ben'))
+
+    def test_the_scorecard_tints_the_winning_side_not_a_golfer(self):
+        h1 = sequoya_threes_summary(self.fs)['scorecard']['holes'][0]
+        self.assertEqual(h1['winner_team'], 1, 'Ann & Ben won hole 1')
+        self.assertEqual(h1['par'], 4)
+        self.assertIsNotNone(h1['stroke_index'])
+
+    def test_a_halved_or_unplayed_hole_tints_nobody(self):
+        sc = sequoya_threes_summary(self.fs)['scorecard']
+        self.assertIsNone(sc['holes'][2]['winner_team'], 'hole 3 unplayed')
+
     def test_the_exposure_ceiling_follows_the_press_mode(self):
         """A match carries at most TWO bets, never three — an auto press and a
         hand-called one cannot coexist. So the ceiling is 1x with presses off

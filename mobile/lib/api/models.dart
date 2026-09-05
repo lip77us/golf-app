@@ -6571,6 +6571,12 @@ class SequoyaThreesSummary {
   final List<SequoyaMatch>       matches;
   final List<SequoyaPlayerTotal> players;
   final List<SequoyaTransfer>    transfers;
+  /// The Sixes-style grid, passed through to `HoleGridScorecard` untouched.
+  /// Raw maps rather than typed rows because that widget takes raw maps and
+  /// a typed hop would only have to be unwrapped again.
+  final List<Map<String, dynamic>> cardPlayers;
+  final List<Map<String, dynamic>> cardHoles;
+  final List<int>                  cardHolesInPlay;
   final double                   exposureNoPresses;
   final double                   exposureWithAuto;
   final double                   exposureCeiling;
@@ -6579,6 +6585,8 @@ class SequoyaThreesSummary {
     required this.status, required this.handicapMode, required this.netPercent,
     required this.pressMode, required this.betAmount, required this.matches,
     required this.players, required this.transfers,
+    required this.cardPlayers, required this.cardHoles,
+    required this.cardHolesInPlay,
     required this.exposureNoPresses, required this.exposureWithAuto,
     required this.exposureCeiling,
   });
@@ -6598,6 +6606,7 @@ class SequoyaThreesSummary {
   factory SequoyaThreesSummary.fromJson(Map<String, dynamic> j) {
     final hcap = (j['handicap'] as Map?) ?? const {};
     final exp  = (j['exposure'] as Map?) ?? const {};
+    final card = (j['scorecard'] as Map?) ?? const {};
     return SequoyaThreesSummary(
       status:       j['status']?.toString() ?? 'in_progress',
       handicapMode: hcap['mode']?.toString() ?? 'net',
@@ -6613,6 +6622,14 @@ class SequoyaThreesSummary {
       transfers: ((j['transfers'] as List?) ?? const [])
           .map((e) => SequoyaTransfer.fromJson(e as Map<String, dynamic>))
           .toList(),
+      cardPlayers: ((card['players'] as List?) ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList(),
+      cardHoles: ((card['holes'] as List?) ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList(),
+      cardHolesInPlay: ((card['holes_in_play'] as List?) ?? const [])
+          .cast<int>(),
       exposureNoPresses: (exp['no_presses'] as num?)?.toDouble() ?? 0,
       exposureWithAuto:  (exp['with_auto'] as num?)?.toDouble() ?? 0,
       exposureCeiling:   (exp['ceiling'] as num?)?.toDouble() ?? 0,

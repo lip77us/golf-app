@@ -28,6 +28,7 @@ from decimal import Decimal
 from core.models import HandicapMode
 from games.models import SequoyaThreesGame, SequoyaThreesPress
 from scoring.handicap import effective_hcp_for, make_strokes_fn
+from services.hole_plan import play_order
 from scoring.models import HoleScore
 
 # Six matches, three holes each, fixed. The boundaries are what the whole
@@ -355,6 +356,70 @@ def _bets_for_match(game, net, side1, side2, match_index, manual):
 # The summary
 # ---------------------------------------------------------------------------
 
+def _scorecard(foursome, game, net, ids, members, match1_side1):
+    """The Sixes-style grid: gross + stroke dots per golfer per hole.
+
+    **The side tint is per HOLE, not per golfer.** In every other team game a
+    golfer is on one side all round, so the grid reads the side off the player
+    row. Here the pairing rotates every third hole, so the side rides on each
+    SCORE — `team` beside the gross — and the shared widget prefers it when
+    it is there.
+    """
+    order  = play_order(foursome.round, foursome)
+    by_pid = {m.player_id: m.player for m in members}
+
+    sample_tee = next((m.tee for m in members if m.tee_id is not None), None)
+    par_by_hole, si_by_hole = {}, {}
+    if sample_tee is not None:
+        for h in order:
+            par_by_hole[h] = sample_tee.hole(h).get('par')
+            si_by_hole[h]  = sample_tee.hole(h).get('stroke_index')
+
+    gross = {}
+    for hs in HoleScore.objects.filter(
+            foursome=foursome, gross_score__isnull=False):
+        gross.setdefault(hs.player_id, {})[hs.hole_number] = hs.gross_score
+
+    holes_out = []
+    for hole in order:
+        idx = match_of_hole(hole)
+        if idx is None:
+            continue                       # outside the six matches
+        side1, side2 = pairing_for_match(ids, match1_side1, idx)
+        side_of = {p: 1 for p in side1} | {p: 2 for p in side2}
+        winner  = _hole_winner(net, side1, side2, hole)
+        scores  = []
+        for pid in ids:
+            g = gross.get(pid, {}).get(hole)
+            n = net.get(pid, {}).get(hole)
+            scores.append({
+                'player_id': pid,
+                'gross'    : g,
+                'strokes'  : (g - n) if (g is not None and n is not None) else 0,
+                # Which side this golfer is on FOR THIS HOLE.
+                'team'     : side_of.get(pid),
+            })
+        holes_out.append({
+            'hole'        : hole,
+            'match'       : idx,
+            'par'         : par_by_hole.get(hole),
+            'stroke_index': si_by_hole.get(hole),
+            # 0 (halved) and None (unplayed) both mean nobody is tinted.
+            'winner_team' : winner if winner in (1, 2) else None,
+            'scores'      : scores,
+        })
+
+    return {
+        'players': [
+            {'player_id': pid, 'name': by_pid[pid].name,
+             'short_name': by_pid[pid].short_name}
+            for pid in ids
+        ],
+        'holes'        : holes_out,
+        'holes_in_play': [h for h in order if match_of_hole(h) is not None],
+    }
+
+
 def _transfers(nets, names):
     """The fewest handovers that clear four nets.
 
@@ -477,6 +542,8 @@ def sequoya_threes_summary(foursome) -> dict | None:
         'bet_amount'   : amount,
         'matches'      : matches,
         'players'      : players,
+        'scorecard'    : _scorecard(foursome, game, net, ids, members,
+                                    game.match1_side1),
         'transfers'    : _transfers(nets, names),
         'live_bets'    : live_bets,
         # What the round could still cost, printed on setup and in the footer.
