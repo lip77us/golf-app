@@ -1,0 +1,194 @@
+<!-- @dsCard group="Games" name="Sequoya 3s — leaderboard" subtitle="SequoyaThreesLeaderboard — the six matches and their presses in order, then the four-column money table" viewport="900x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Sequoya 3s — leaderboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--warn:#8A5216;--win:#388E3C;--blue:#1976D2;--orange:#EF6C00}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.own{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:92px;color:var(--deepPine);font-weight:600}
+.phone{width:390px;height:844px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:10px;padding:4px 16px 8px}
+.appbar .bk{font-size:23px;line-height:1}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px}
+.appbar .ic{margin-left:auto;font-size:13px;color:var(--muted)}
+.tabs{display:flex;gap:7px;padding:0 14px 9px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:none;border:1.5px solid var(--cardBorder);background:#fff;border-radius:999px;padding:7px 13px;font:600 12.5px/1 "Spline Sans",system-ui,sans-serif;color:var(--muted);cursor:pointer}
+.tabs button.on{border-color:var(--pine);background:#E4F2EA;color:var(--pine)}
+.body{padding:0 12px 26px;overflow-y:auto;height:735px}
+.chips{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);padding:2px 2px 10px}
+.chips b{color:var(--deepPine);font-weight:700}
+.chips .r{margin-left:auto;font-weight:600}
+.sec{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 2px 7px;display:flex;align-items:baseline}
+.sec em{margin-left:auto;font-style:normal;letter-spacing:0;text-transform:none;font-size:11px;font-weight:600}
+/* match ledger */
+.mt{background:#fff;border:1px solid var(--cardBorder);border-radius:10px;margin-bottom:6px;overflow:hidden}
+.mth{display:flex;align-items:baseline;gap:8px;padding:9px 11px 8px;background:#F3F7F4}
+.mth .n{font-family:"Schibsted Grotesk",sans-serif;font-size:12.5px;font-weight:700}
+.mth .h{font-size:10.5px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+.mth .res{margin-left:auto;font-size:11px;font-weight:700}
+.mth .res.b{color:var(--blue)}.mth .res.o{color:var(--orange)}.mth .res.h{color:var(--muted)}
+.sides{display:flex;align-items:center;gap:7px;padding:8px 11px 2px;font-size:12.5px;line-height:1.4}
+.sides .s{flex:1;min-width:0}
+.sides .v{flex:none;font-size:10.5px;color:#8B9990;font-weight:600}
+.dotb,.doto{display:inline-block;width:7px;height:7px;border-radius:2px;vertical-align:1px;margin-right:5px}
+.dotb{background:var(--blue)}.doto{background:var(--orange)}
+.bl{color:var(--blue);font-weight:600}.or{color:var(--orange);font-weight:600}
+.bets{padding:3px 11px 4px}
+.bt{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:11.5px;border-top:1px solid #F2F6F3}
+.bt:first-child{border-top:none}
+.bt .lb{flex:1;min-width:0;color:var(--muted);line-height:1.35}
+.bt .lb b{color:var(--deepPine);font-weight:600}
+.bt .lb u{text-decoration:none;display:block;font-size:10px;color:#8B9990;margin-top:1px}
+.bt .amt{flex:none;font-weight:700;font-variant-numeric:tabular-nums;font-size:11.5px}
+.bt .to{flex:none;width:66px;text-align:right;font-size:10.5px;font-weight:700}
+.bt .to.b{color:var(--blue)}.bt .to.o{color:var(--orange)}.bt .to.h{color:#B6C4BB}
+.bt.press{background:#FDF9F2;margin:0 -11px;padding:6px 11px}
+/* money table */
+.tbl{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:9px 10px 10px;margin-bottom:10px}
+.tr{display:grid;grid-template-columns:56px repeat(4,1fr);align-items:center;gap:2px;font-size:12px;padding:5px 0;border-top:1px solid #F2F6F3}
+.tr:first-child{border-top:none}
+.tr .rl{font-size:10.5px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.tr i{font-style:normal;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;padding-right:2px}
+.tr.head{padding-bottom:7px}
+.tr.head i{font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--muted)}
+.tr.head .rl{font-size:9.5px;letter-spacing:.3px}
+.tr .pos{color:var(--win)}.tr .neg{color:var(--warn)}.tr .zero{color:#C3CFC6;font-weight:600}
+.tr.total{border-top:1.5px solid var(--cardBorder);margin-top:4px;padding-top:9px}
+.tr.total .rl{color:var(--deepPine);font-size:11px}
+.tr.total i{font-family:"Schibsted Grotesk",sans-serif;font-size:16px}
+.zsum{display:flex;align-items:baseline;font-size:10.5px;color:var(--muted);padding:8px 2px 0}
+.zsum b{margin-left:auto;color:var(--deepPine);font-weight:700}
+.foot{font-size:11px;color:var(--muted);line-height:1.5;margin:11px 2px 0}
+.foot b{color:var(--deepPine)}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Sequoya 3s, leaderboard</h1>
+<p>Four golfers, six matches, every pairing twice. There is no team standing to show because the teams do not persist, and no useful individual ranking either &mdash; so this board is <b>the round as it happened, in order, then one table of money.</b></p>
+<h3>A ledger, not a standing</h3>
+<p>The earlier draft opened as four golfer rows you tapped to expand. It answered <i>how did I do</i> six times over and never once answered <b>what happened in this round</b>, which is the question a foursome actually asks at the bar. Every golfer&rsquo;s card repeated the same six matches from a different side.</p>
+<p>So the board reads chronologically. <b>Match 1 through match 6, one line per bet, then the table.</b> A match without a press is a single line; a match with one is two. Nothing is per-viewer; four phones show the same screen.</p>
+<div class="own"><table>
+<tr><td>Match block</td><td><b>One line per bet, nothing else.</b> No match header, no pairing row &mdash; the bet line already names the match, its holes, its margin and the pair that won it.</td></tr>
+<tr><td>Press lines</td><td>Tinted, and labelled with cause on the same line: <b>auto</b> has no author, <b>called by Paul</b> does.</td></tr>
+<tr><td>Table</td><td>Six match rows &times; four golfers, signed, then the total. Every column sums; the rows sum to zero across.</td></tr>
+</table></div>
+<h3>The press is the dispute surface, so it gets its own line</h3>
+<p>A press is a new bet at the same amount, never a doubling, so it settles on its own holes and can go the other way. All three cases are in this round: <b>match 2 is lost 2 &amp; 1 by Paul and Sam, who then take the hole-6 press off Dave and Lee</b>; match 6 is won with its press halved; match 5 is won and Dave&rsquo;s closing press is halved too. A board that folded presses into a match total would report each of those as one number and make the difference impossible to see.</p>
+<p>The card underneath is where that comes from. <b>Gross scores are the source of truth</b> &mdash; strokes come off by index, and every bet result on this screen is computed from them. Nothing about a bet is entered by hand.</p>
+<p><b>The boxed cell is the score that won the hole for its side.</b> A halved hole boxes nothing and the losing side&rsquo;s counting net is never boxed &mdash; one box a hole, or none. That is what makes the bet lines above countable rather than merely asserted: a golfer disputing a press can count boxes across its two holes.</p>
+<p>It scrolls sideways rather than shrinking to fit. Eighteen columns at a legible size do not fit a phone, and a card you cannot read is worse than one you have to push.</p>
+<p>Every bet result here is derived from the hole scores, not entered. A press over holes 5&ndash;6 and a match over 4&ndash;6 are decided by the same three holes, so <b>the app must not let a press result contradict the match it sits inside</b> &mdash; that is a validation rule, not a display rule.</p>
+<h3>One table, four columns, sums to zero</h3>
+<p>The money table is the settlement in miniature. Each row is a match net per golfer; the bottom row is what each man collects or pays. <b>The row totals sum to zero and the app says so</b> &mdash; a foursome will check, and an assertion that fails that check is worse than no table.</p>
+<p>Partners are visible without being labelled: in any row two columns carry the same number. That is the format, and printing <i>with Dave</i> on every cell would triple the ink to say it.</p>
+<h3>Mid-round it shows the same thing, shorter</h3>
+<p>Closed matches only. A match in progress appears as its block with live bet states and no money, and its table row is dashes. <b>The match number is the position in the round</b> &mdash; match 5 of 6 says more than thru 14.</p>
+<h3>Still open</h3>
+<ul>
+<li>Whether the <b>partner record</b> (every golfer partners every other exactly twice) belongs here at all now that the board is chronological. It is the format&rsquo;s own interesting question but it is not money. Drawn as <b>not here</b> &mdash; it lives on the settlement receipt.</li>
+<li>Whether the table should be sortable by column. Drawn as <b>no</b>: four columns, and sorting a ledger destroys the only order it has.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>2:41</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Leaderboard</span><span class="ic">&#9679;&#9679;&#9679;</span></div>
+<div class="tabs"><button class="on">Sequoya 3s</button><button>Skins</button><button>Scorecard</button></div>
+<div class="body">
+<div class="chips"><span>Stake</span><b>$5 a man, every bet</b><span class="r">Round complete</span></div>
+<div class="sec"><span>The six matches</span><em id="betcount"></em></div>
+<div id="ledger"></div>
+<div class="sec" style="margin-top:14px"><span>Money</span><em>net, per man</em></div>
+<div class="tbl" id="tbl"></div>
+<div class="sec" style="margin-top:14px"><span>The card</span><em>18 holes, all four</em></div>
+<div id="sc"></div>
+<p class="foot">Six matches of three holes &mdash; <b>1, 2 and 3 replayed as 4, 5 and 6</b> in the same order, so every golfer partners every other twice. Best ball, net. Win the first hole of a match and an <b>auto press</b> opens a second bet at the same amount over the holes that remain; with Manual + Auto the trailing side may call one more. <b>A press is a new bet, never a doubling.</b> A halved bet pays nothing and does not carry.</p>
+</div>
+</div>
+<script src="sequoya-threes-scorecard.js"></script>
+<script>
+var SH={'Paul Kelly':'Paul','Dave Moran':'Dave','Sam Reid':'Sam','Lee Naylor':'Lee'};
+var P=['Paul Kelly','Dave Moran','Sam Reid','Lee Naylor'];
+var UNIT=5;
+// a,b = pairings. bets: each {lb,holes,w:'a'|'b'|null,note}
+var M=[
+ {n:1,h:'1\u20133',a:['Paul Kelly','Dave Moran'],b:['Sam Reid','Lee Naylor'],
+  bets:[{lb:'Match 1',holes:'1\u20133',w:'a',tail:'won 2 & 1'},
+        {lb:'Press 1',holes:'2\u20133',w:'a',tail:'auto \u00b7 won 1 up'}]},
+ {n:2,h:'4\u20136',a:['Paul Kelly','Sam Reid'],b:['Dave Moran','Lee Naylor'],
+  bets:[{lb:'Match 2',holes:'4\u20136',w:'b',tail:'won 2 & 1'},
+        {lb:'Press 1',holes:'5\u20136',w:null,tail:'auto \u00b7 halved'},
+        {lb:'Press 2',holes:'6',w:'a',tail:'called by Paul \u00b7 won the hole'}]},
+ {n:3,h:'7\u20139',a:['Paul Kelly','Lee Naylor'],b:['Dave Moran','Sam Reid'],
+  bets:[{lb:'Match 3',holes:'7\u20139',w:null,tail:'halved \u00b7 no press'}]},
+ {n:4,h:'10\u201312',a:['Paul Kelly','Dave Moran'],b:['Sam Reid','Lee Naylor'],
+  bets:[{lb:'Match 4',holes:'10\u201312',w:'b',tail:'won 2 & 1'},
+        {lb:'Press 1',holes:'11\u201312',w:'b',tail:'auto \u00b7 won 1 up'}]},
+ {n:5,h:'13\u201315',a:['Paul Kelly','Sam Reid'],b:['Dave Moran','Lee Naylor'],
+  bets:[{lb:'Match 5',holes:'13\u201315',w:'a',tail:'won 2 & 1'},
+        {lb:'Press 1',holes:'14\u201315',w:'a',tail:'auto \u00b7 won 1 up'},
+        {lb:'Press 2',holes:'15',w:null,tail:'called by Dave \u00b7 halved'}]},
+ {n:6,h:'16\u201318',a:['Paul Kelly','Lee Naylor'],b:['Dave Moran','Sam Reid'],
+  bets:[{lb:'Match 6',holes:'16\u201318',w:'a',tail:'won 1 up'},
+        {lb:'Press 1',holes:'17\u201318',w:null,tail:'auto \u00b7 halved'}]}
+];
+function money(v){return (v<0?'\u2212$':'+$')+Math.abs(v)}
+function pair(m,s){return (s==='a'?m.a:m.b).map(function(x){return SH[x]}).join(' & ')}
+function side(m,p){return m.a.indexOf(p)>=0?'a':'b'}
+function netOf(m,p){
+  var s=side(m,p),v=0;
+  m.bets.forEach(function(b){if(b.w)v+=(b.w===s?UNIT:-UNIT)});
+  return v;
+}
+// ledger
+var nbets=0;
+document.getElementById('ledger').innerHTML=M.map(function(m){
+  nbets+=m.bets.length;
+  var betrows=m.bets.map(function(b){
+    var wc=b.w==='a'?'b':b.w==='b'?'o':'h';
+    var to=b.w?pair(m,b.w):'Halved';
+    return '<div class="bt'+(b.lb.indexOf('Press')===0?' press':'')+'">'+
+      '<span class="lb"><b>'+b.lb+'</b> &middot; '+b.holes+' &middot; '+b.tail+'</span>'+
+      '<span class="amt">$'+UNIT+'</span>'+
+      '<span class="to '+wc+'">'+to+'</span></div>';
+  }).join('');
+  return '<div class="mt"><div class="bets">'+betrows+'</div></div>';
+}).join('');
+document.getElementById('betcount').textContent=nbets+' bets \u00b7 $'+(nbets*UNIT)+' a man on the line';
+// table
+var head='<div class="tr head"><span class="rl">Match</span>'+P.map(function(p){return '<i>'+SH[p]+'</i>'}).join('')+'</div>';
+var rows=M.map(function(m){
+  return '<div class="tr"><span class="rl">Match '+m.n+'</span>'+
+    P.map(function(p){var v=netOf(m,p);
+      return '<i class="'+(v>0?'pos':v<0?'neg':'zero')+'">'+(v?money(v):'\u2013')+'</i>'}).join('')+'</div>';
+}).join('');
+var tot=P.map(function(p){return M.reduce(function(a,m){return a+netOf(m,p)},0)});
+var totrow='<div class="tr total"><span class="rl">Net</span>'+
+  tot.map(function(v){return '<i class="'+(v>0?'pos':v<0?'neg':'zero')+'">'+(v?money(v):'\u2014')+'</i>'}).join('')+'</div>';
+document.getElementById('tbl').innerHTML=head+rows+totrow+
+  '<div class="zsum"><span>Sums to zero</span><b>'+(tot.reduce(function(a,b){return a+b},0)===0?'\u2713':'\u2715')+'</b></div>';
+SequoyaScorecard.render(document.getElementById('sc'),{played:18});
+</script>
+</body>
+</html>

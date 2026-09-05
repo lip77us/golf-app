@@ -3371,3 +3371,86 @@ class SurvivorHoleResult(models.Model):
     def __str__(self):
         return (f"Hole {self.hole_number} — Survivor {self.survivor_index} "
                 f"({self.event})")
+
+
+class SequoyaThreesGame(models.Model):
+    """Sequoya 3s — six three-hole 2v2 best-ball matches over one round.
+
+    **Only match 1's pairing is stored.** Four golfers split 2v2 in exactly
+    three ways; matches 2 and 3 are the other two, and 4-6 repeat 1-3 in order.
+    Storing six pairings would let them disagree with each other, and the
+    repeat is the point of the format — it is what makes every golfer partner
+    every other exactly twice.
+
+    **Nothing about a bet's RESULT is stored.** A press over holes 5-6 and the
+    match over 4-6 are decided by the same three holes, so both are computed
+    from one net-score table every time. A stored result could contradict the
+    match it sits inside.
+    """
+
+    PRESS_NONE        = 'none'
+    PRESS_AUTO        = 'auto'
+    PRESS_MANUAL_AUTO = 'manual_auto'
+    PRESS_CHOICES = [
+        (PRESS_NONE,        'No presses'),
+        (PRESS_AUTO,        'Auto after the first hole won'),
+        (PRESS_MANUAL_AUTO, 'Auto, plus one press called by hand'),
+    ]
+
+    foursome      = models.OneToOneField(
+                        'tournament.Foursome', on_delete=models.CASCADE,
+                        related_name='sequoya_threes_game')
+    status        = models.CharField(max_length=20, default='in_progress')
+    handicap_mode = models.CharField(
+                        max_length=20, choices=HandicapMode.choices,
+                        default=HandicapMode.NET)
+    net_percent   = models.PositiveSmallIntegerField(default=100)
+    # Per MAN, per bet — not per pair. Lose a $5 match and you are down $5 and
+    # so is your partner; the two winners each collect $5.
+    bet_amount    = models.DecimalField(max_digits=8, decimal_places=2,
+                                        default=5)
+    press_mode    = models.CharField(max_length=20, choices=PRESS_CHOICES,
+                                     default=PRESS_AUTO)
+    # The two player ids on side 1 of MATCH 1. The other two are side 2, and
+    # every later pairing derives from this.
+    match1_side1  = models.JSONField(default=list)
+    created_at    = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'Sequoya 3s — foursome {self.foursome_id}'
+
+
+class SequoyaThreesPress(models.Model):
+    """A press called BY HAND.
+
+    Auto presses are not stored: they fire deterministically off the scores,
+    so recording them would be a second copy of something already derivable.
+    A hand-called press cannot be derived — it has an author, a moment, and a
+    side that chose it, and those are exactly what settlement has to name.
+
+    It opens on the hole AFTER the call: two bets over the same holes with the
+    same label are unreadable on a settlement sheet.
+    """
+
+    game        = models.ForeignKey(SequoyaThreesGame, on_delete=models.CASCADE,
+                                    related_name='presses')
+    match_index = models.PositiveSmallIntegerField(help_text='1-6.')
+    # Which side of THAT match called it (1 or 2), as the pairing had them.
+    side        = models.PositiveSmallIntegerField()
+    called_by   = models.ForeignKey('core.Player', null=True, blank=True,
+                                    on_delete=models.SET_NULL,
+                                    related_name='sequoya_threes_presses')
+    start_hole  = models.PositiveSmallIntegerField(
+                    help_text='First hole the press covers — after the call.')
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # The cap is one hand-called press per match, on top of the auto.
+        constraints = [
+            models.UniqueConstraint(fields=['game', 'match_index'],
+                                    name='sequoya_one_manual_press_per_match'),
+        ]
+        ordering = ['match_index', 'start_hole']
+
+    def __str__(self):
+        return f'press m{self.match_index} from hole {self.start_hole}'

@@ -157,6 +157,13 @@ class GameType(models.TextChoices):
     # length isn't known until it ends).  Engine in services/survivor.py and
     # games/models.py SurvivorGame/SurvivorHoleResult.  See docs/survivor.md.
     SURVIVOR        = 'survivor',        'Survivor'
+    # Sequoya 3s: four golfers, SIX three-hole matches, 2v2 best ball net.
+    # Four golfers split 2v2 in exactly three ways and there is no fourth, so
+    # only match 1's pairing is chosen — 2 and 3 are the rotation and 4-6
+    # repeat them, which is what makes every golfer partner every other twice.
+    # Presses are separate BETS at the same amount, never a doubling.
+    # Engine in services/sequoya_threes.py.
+    SEQUOYA_THREES  = 'sequoya_threes',  'Sequoya 3s'
 
 
 class RoundStatus(models.TextChoices):

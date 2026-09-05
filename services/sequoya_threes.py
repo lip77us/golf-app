@@ -1,0 +1,426 @@
+"""
+services/sequoya_threes.py
+--------------------------
+Sequoya 3s — six three-hole 2v2 best-ball matches
+(docs/design-review/handoff-sequoya-threes/README.md).
+
+Four golfers, holes 1-3, 4-6, 7-9, 10-12, 13-15, 16-18. Each match is its own
+bet at the same stake, and each may carry presses.
+
+**The rotation is derived, not chosen.** Four golfers split 2v2 in exactly
+three ways and there is no fourth, so the group sets match 1 and everything
+after it follows: matches 2 and 3 are the other two pairings, and 4-6 repeat
+1-3 in order. That repeat is the format — it is what makes every golfer partner
+every other exactly twice.
+
+**A press is a NEW BET at the same amount, never a doubling.** It runs over the
+holes remaining and settles on its own, which is why a press can be halved
+while the match is won, or won by the side that lost the match. Doubling a
+wager already lost is a donation nobody would tap.
+
+**Nothing is stored but the config, match 1's pairing and hand-called
+presses.** Every bet's result is computed from one net-score table, because a
+press over holes 5-6 and the match over 4-6 are decided by the same three holes
+and must never be able to contradict each other.
+"""
+from decimal import Decimal
+
+from core.models import HandicapMode
+from games.models import SequoyaThreesGame, SequoyaThreesPress
+from scoring.handicap import effective_hcp_for, make_strokes_fn
+from scoring.models import HoleScore
+
+# Six matches, three holes each, fixed. The boundaries are what the whole
+# format hangs off — a sudden-death extra hole would break them.
+MATCH_HOLES = [(1, 3), (4, 6), (7, 9), (10, 12), (13, 15), (16, 18)]
+MATCH_COUNT = len(MATCH_HOLES)
+
+
+# ---------------------------------------------------------------------------
+# The rotation
+# ---------------------------------------------------------------------------
+
+def pairings(player_ids, match1_side1) -> list:
+    """The three pairings, in rotation order, as ``[(side1, side2), …]``.
+
+    Anchored on one golfer: he partners each of the other three once, which
+    enumerates all three splits and fixes their order. Match 1 is whichever of
+    those the group chose; the remaining two follow in the roster's own order,
+    so the rotation is stable across recalculation.
+    """
+    ids = list(player_ids)
+    if len(ids) != 4:
+        return []
+
+    chosen = [p for p in ids if p in set(match1_side1 or [])]
+    if len(chosen) != 2:
+        chosen = ids[:2]                      # ungathered setup — take the first pair
+
+    anchor = chosen[0]
+    partner_first = chosen[1]
+    others = [p for p in ids if p not in (anchor, partner_first)]
+
+    order = [partner_first] + others          # who the anchor is with, per match
+    out = []
+    for mate in order:
+        side1 = [anchor, mate]
+        side2 = [p for p in ids if p not in side1]
+        out.append((side1, side2))
+    return out
+
+
+def pairing_for_match(player_ids, match1_side1, match_index):
+    """Match 1-6 -> ``(side1, side2)``. 4-6 repeat 1-3, hence the modulo."""
+    rot = pairings(player_ids, match1_side1)
+    if not rot:
+        return [], []
+    return rot[(match_index - 1) % len(rot)]
+
+
+def match_of_hole(hole: int):
+    """1-6, or None for a hole outside the six matches."""
+    for i, (lo, hi) in enumerate(MATCH_HOLES, start=1):
+        if lo <= hole <= hi:
+            return i
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Setup
+# ---------------------------------------------------------------------------
+
+def _real_members(foursome):
+    return [m for m in foursome.memberships.select_related('player', 'tee').all()
+            if not m.player.is_phantom]
+
+
+def setup_sequoya_threes(foursome, side1_ids, *,
+                         handicap_mode=HandicapMode.NET, net_percent=100,
+                         bet_amount=5, press_mode=SequoyaThreesGame.PRESS_AUTO):
+    """Create or update the game. Only match 1's pairing is taken."""
+    game, _ = SequoyaThreesGame.objects.update_or_create(
+        foursome=foursome,
+        defaults={
+            'handicap_mode': handicap_mode,
+            'net_percent'  : net_percent,
+            'bet_amount'   : Decimal(str(bet_amount)),
+            'press_mode'   : press_mode,
+            'match1_side1' : list(side1_ids or []),
+        },
+    )
+    # Drop the caller's cached relation. Django caches a reverse OneToOne on
+    # the instance, so a summary taken from the SAME foursome object right
+    # after a re-setup would read the previous configuration — press mode and
+    # all — and silently score the round under settings nobody chose.
+    foursome._state.fields_cache.pop('sequoya_threes_game', None)
+    return game
+
+
+def call_press(foursome, *, match_index, side, called_by_id, current_hole):
+    """Record a hand-called press. Raises ValueError with a reason if refused.
+
+    It opens on the hole AFTER the call, and only the trailing side may call —
+    both are rules the offer card states, and both are enforced here rather
+    than only in the UI.
+    """
+    game = foursome.sequoya_threes_game
+    if game.press_mode != SequoyaThreesGame.PRESS_MANUAL_AUTO:
+        raise ValueError('This round is not playing hand-called presses.')
+
+    lo, hi = MATCH_HOLES[match_index - 1]
+    if not (lo < current_hole <= hi):
+        # From hole 2 of the match onward: there is nothing to trail after on
+        # the first hole, and a press must leave a hole to run over.
+        raise ValueError('A press can be called from the second hole of a '
+                         'match onward.')
+    start = current_hole + 1
+    if start > hi:
+        raise ValueError('No holes left in this match for a press to cover.')
+
+    if game.presses.filter(match_index=match_index).exists():
+        raise ValueError('This match already carries a hand-called press.')
+
+    return SequoyaThreesPress.objects.create(
+        game=game, match_index=match_index, side=side,
+        called_by_id=called_by_id, start_hole=start)
+
+
+# ---------------------------------------------------------------------------
+# Scoring — one net table, every bet computed from it
+# ---------------------------------------------------------------------------
+
+def _net_by_hole(game, foursome):
+    """``{pid: {hole: net}}`` under the game's own handicap setting.
+
+    **Full course allocation by stroke index**, never spread across the six
+    matches. A stroke falls where the card says it falls, whichever match that
+    lands in — the matches are not equally hard and normalising them would be
+    the larger distortion.
+    """
+    members = [m for m in _real_members(foursome) if m.tee_id is not None]
+    gross = {}
+    for hs in HoleScore.objects.filter(
+            foursome=foursome, gross_score__isnull=False):
+        gross.setdefault(hs.player_id, {})[hs.hole_number] = hs.gross_score
+
+    if game.handicap_mode == HandicapMode.GROSS:
+        return {m.player_id: dict(gross.get(m.player_id, {})) for m in members}
+
+    npct    = game.net_percent or 100
+    strokes = make_strokes_fn(foursome)
+    phcps   = [m.playing_handicap for m in members
+               if m.playing_handicap is not None]
+    low     = min(phcps) if phcps else 0
+
+    out = {}
+    for m in members:
+        if game.handicap_mode == HandicapMode.STROKES_OFF:
+            from core.handicap_math import round_half_up
+            eff = int(round_half_up(
+                max(0, (m.playing_handicap or 0) - low) * npct / 100))
+        else:
+            eff = effective_hcp_for(m, npct)
+        per = {}
+        for hole, g in (gross.get(m.player_id) or {}).items():
+            per[hole] = g - strokes(eff, m.tee, hole)
+        out[m.player_id] = per
+    return out
+
+
+def _hole_winner(net, side1, side2, hole):
+    """Best net per pair; lower wins, equal halves. None when unscored."""
+    a = [net.get(p, {}).get(hole) for p in side1]
+    b = [net.get(p, {}).get(hole) for p in side2]
+    if any(v is None for v in a + b):
+        return None
+    lo_a, lo_b = min(a), min(b)
+    if lo_a < lo_b:
+        return 1
+    if lo_b < lo_a:
+        return 2
+    return 0            # halved
+
+
+def _settle_bet(net, side1, side2, holes):
+    """One bet over ``holes``.
+
+    Returns ``{'result', 'margin', 'closed_on', 'played', 'to_play'}``.
+    `result` is 1 / 2 / 0 (halved) / None (still live).
+
+    A bet closes early the moment a side is up by MORE than the holes left in
+    that bet — which is a per-bet fact, so a press closes on its own holes and
+    not the match's.
+    """
+    margin = 0
+    played = 0
+    closed_on = None
+    for i, h in enumerate(holes):
+        w = _hole_winner(net, side1, side2, h)
+        if w is None:
+            break
+        played += 1
+        if w == 1:
+            margin += 1
+        elif w == 2:
+            margin -= 1
+        if closed_on is None and abs(margin) > len(holes) - (i + 1):
+            closed_on = h
+
+    to_play = len(holes) - played
+    if closed_on is not None:
+        result = 1 if margin > 0 else 2
+    elif played == len(holes):
+        result = 0 if margin == 0 else (1 if margin > 0 else 2)
+    else:
+        result = None
+    return {'result': result, 'margin': margin, 'closed_on': closed_on,
+            'played': played, 'to_play': to_play}
+
+
+def _bets_for_match(game, net, side1, side2, match_index, manual):
+    """Every bet in one match: the match bet, the auto press, the called one.
+
+    Each is settled over its OWN holes. A press can be halved while the match
+    is won, or won by the side that lost it — both normal, and neither may be
+    folded into a match total.
+    """
+    lo, hi = MATCH_HOLES[match_index - 1]
+    holes  = list(range(lo, hi + 1))
+    amount = float(game.bet_amount)
+
+    bets = [{
+        'kind'   : 'match',
+        'label'  : f'Match {match_index}',
+        'holes'  : holes,
+        'amount' : amount,
+        **_settle_bet(net, side1, side2, holes),
+    }]
+
+    if game.press_mode != SequoyaThreesGame.PRESS_NONE:
+        # Auto: the first hole of the match being WON (not halved) opens a
+        # second bet over the holes that remain. Nobody calls it, so nothing
+        # is stored — it is derived here every time.
+        first = _hole_winner(net, side1, side2, lo)
+        if first in (1, 2):
+            rest = holes[1:]
+            if rest:
+                bets.append({
+                    'kind'   : 'auto_press',
+                    'label'  : 'Auto press',
+                    'holes'  : rest,
+                    'amount' : amount,
+                    'opened_by_side': first,
+                    **_settle_bet(net, side1, side2, rest),
+                })
+
+    for pr in manual:
+        rest = [h for h in holes if h >= pr.start_hole]
+        if not rest:
+            continue
+        bets.append({
+            'kind'      : 'manual_press',
+            'label'     : 'Press',
+            'holes'     : rest,
+            'amount'    : amount,
+            'called_by' : pr.called_by.name if pr.called_by else None,
+            'called_side': pr.side,
+            **_settle_bet(net, side1, side2, rest),
+        })
+    return bets
+
+
+# ---------------------------------------------------------------------------
+# The summary
+# ---------------------------------------------------------------------------
+
+def _transfers(nets, names):
+    """The fewest handovers that clear four nets.
+
+    **Nothing in the format assigns a loser's money to a specific winner** —
+    only the four nets are real, so payments are derived here rather than
+    recorded per bet. For four golfers that settles in two handovers.
+    """
+    owe  = sorted(((p, -v) for p, v in nets.items() if v < 0),
+                  key=lambda e: -e[1])
+    due  = sorted(((p, v) for p, v in nets.items() if v > 0),
+                  key=lambda e: -e[1])
+    out, i, j = [], 0, 0
+    while i < len(owe) and j < len(due):
+        (fp, fv), (tp, tv) = owe[i], due[j]
+        amt = round(min(fv, tv), 2)
+        if amt > 0:
+            out.append({'from': fp, 'from_name': names.get(fp, ''),
+                        'to': tp, 'to_name': names.get(tp, ''),
+                        'amount': amt})
+        owe[i] = (fp, round(fv - amt, 2))
+        due[j] = (tp, round(tv - amt, 2))
+        if owe[i][1] <= 0.001:
+            i += 1
+        if due[j][1] <= 0.001:
+            j += 1
+    return out
+
+
+def sequoya_threes_summary(foursome) -> dict | None:
+    """Everything the play screen, leaderboard, settlement and card need."""
+    try:
+        game = foursome.sequoya_threes_game
+    except SequoyaThreesGame.DoesNotExist:
+        return None
+
+    members = _real_members(foursome)
+    if len(members) != 4:
+        return None
+
+    ids   = [m.player_id for m in members]
+    names = {m.player_id: m.player.name for m in members}
+    short = {m.player_id: m.player.short_name for m in members}
+
+    net     = _net_by_hole(game, foursome)
+    manual  = list(game.presses.all())
+    amount  = float(game.bet_amount)
+
+    nets    = {p: 0.0 for p in ids}
+    matches = []
+    record  = {p: {'won': 0, 'lost': 0, 'halved': 0} for p in ids}
+    partners = {p: {} for p in ids}
+
+    for idx in range(1, MATCH_COUNT + 1):
+        side1, side2 = pairing_for_match(ids, game.match1_side1, idx)
+        bets = _bets_for_match(
+            game, net, side1, side2, idx,
+            [pr for pr in manual if pr.match_index == idx])
+
+        for b in bets:
+            if b['result'] in (1, 2):
+                win, lose = (side1, side2) if b['result'] == 1 else (side2, side1)
+                for p in win:
+                    nets[p] += amount
+                for p in lose:
+                    nets[p] -= amount
+
+        head = bets[0]
+        if head['result'] in (1, 2):
+            win, lose = (side1, side2) if head['result'] == 1 else (side2, side1)
+            for p in win:
+                record[p]['won'] += 1
+            for p in lose:
+                record[p]['lost'] += 1
+        elif head['result'] == 0:
+            for p in ids:
+                record[p]['halved'] += 1
+
+        # Every golfer partners every other exactly twice — the one question
+        # this format generates that no other in the app can answer.
+        for a, b_ in ((side1[0], side1[1]), (side2[0], side2[1])):
+            for x, y in ((a, b_), (b_, a)):
+                e = partners[x].setdefault(y, {'with': 0, 'money': 0.0})
+                e['with'] += 1
+
+        lo, hi = MATCH_HOLES[idx - 1]
+        matches.append({
+            'index'      : idx,
+            'start_hole' : lo,
+            'end_hole'   : hi,
+            'side1'      : [{'player_id': p, 'name': names[p],
+                             'short_name': short[p]} for p in side1],
+            'side2'      : [{'player_id': p, 'name': names[p],
+                             'short_name': short[p]} for p in side2],
+            'bets'       : bets,
+            'bet_count'  : len(bets),
+            'at_risk'    : round(len(bets) * amount, 2),
+        })
+
+    nets = {p: round(v, 2) for p, v in nets.items()}
+    players = sorted(
+        ({'player_id': p, 'name': names[p], 'short_name': short[p],
+          'money': nets[p], 'record': record[p],
+          'record_label': f"{record[p]['won']}–{record[p]['lost']}–"
+                          f"{record[p]['halved']}",
+          'partners': [{'player_id': q, 'name': names[q], **v}
+                       for q, v in partners[p].items()]}
+         for p in ids),
+        # Money, not matches won: a match carrying three bets is worth three
+        # flat ones, and a board that disagrees with settlement is worthless.
+        # Ties break on match record, then name.
+        key=lambda e: (-e['money'], -e['record']['won'], e['name']))
+
+    live_bets = sum(1 for m in matches for b in m['bets']
+                    if b['result'] is None)
+    return {
+        'status'       : game.status,
+        'handicap'     : {'mode': game.handicap_mode,
+                          'net_percent': game.net_percent},
+        'press_mode'   : game.press_mode,
+        'bet_amount'   : amount,
+        'matches'      : matches,
+        'players'      : players,
+        'transfers'    : _transfers(nets, names),
+        'live_bets'    : live_bets,
+        # What the round could still cost, printed on setup and in the footer.
+        'exposure'     : {
+            'no_presses' : round(MATCH_COUNT * amount, 2),
+            'with_auto'  : round(MATCH_COUNT * amount * 2, 2),
+            'ceiling'    : round(MATCH_COUNT * amount * 3, 2),
+        },
+    }

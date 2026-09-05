@@ -1,0 +1,137 @@
+<!-- @dsCard group="Games" name="Sequoya 3s (setup)" subtitle="SequoyaThreesSetupScreen — match 1 teams by drag or draw, handicap, Nassau-style presses, stake and exposure" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Sequoya 3s setup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--blue:#1976D2;--orange:#EF6C00;--warn:#8A5216}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:24px;display:flex;justify-content:center}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34)}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:12px;padding:6px 16px 10px}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:20px;flex:1;text-align:center}
+.body{padding:0 14px;overflow-y:auto;height:634px}
+.sc{border:1px solid var(--cardBorder);border-radius:8px;padding:12px 14px;background:var(--card);margin-bottom:16px}
+.sct{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;color:var(--pine);font-size:14px;margin-bottom:3px}
+.scd{font-size:11.5px;color:var(--muted);line-height:1.5;margin:0 0 10px}
+.opt{display:flex;gap:10px;padding:6px 0}
+.radio{width:20px;height:20px;border-radius:50%;border:2px solid var(--cardBorder);flex:none;margin-top:1px}
+.radio.on{border-color:var(--pine);box-shadow:inset 0 0 0 4px var(--pine)}
+.opt .t{font-weight:600;font-size:14px}
+.opt .d{color:var(--muted);font-size:12px;line-height:1.4;margin-top:2px}
+.seg{display:flex;border:1.5px solid var(--pine);border-radius:999px;overflow:hidden;margin-bottom:8px}
+.seg div{flex:1;text-align:center;padding:8px 0;font-size:12.5px;font-weight:600;color:var(--pine)}
+.seg div.on{background:var(--pine);color:#fff}
+.field{display:flex;align-items:center;border:1.5px solid var(--cardBorder);border-radius:12px;padding:11px 14px;font-size:16px;font-weight:600;background:var(--card);margin-bottom:6px}
+.field .pfx{color:var(--muted);margin-right:6px}
+.field small{margin-left:auto;font-size:11.5px;font-weight:500;color:var(--muted)}
+.note{color:var(--muted);font-size:12px;display:flex;align-items:flex-start;gap:6px;margin:-2px 2px 16px;line-height:1.5}
+.note b{color:var(--deepPine)}
+/* pairing draw */
+.draw{border:1px solid var(--cardBorder);border-radius:8px;overflow:hidden;background:var(--card);margin-bottom:8px}
+.dh{background:#E1EAE2;padding:9px 13px;display:flex;align-items:baseline;gap:8px}
+.dh b{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:14px}
+.dh span{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
+.pr{display:flex;align-items:center;gap:9px;padding:10px 13px;border-top:1px solid var(--cardBorder)}
+.pr .ord{flex:none;width:18px;font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:13px;color:var(--muted)}
+.pr .sides{flex:1;min-width:0;font-size:13px;line-height:1.45}
+.pr .sides u{text-decoration:none;display:block;font-size:10.5px;color:var(--muted);margin-top:2px}
+.pr .holes{flex:none;font-size:11px;font-weight:600;color:var(--muted);text-align:right;white-space:nowrap}
+.dotb,.doto{display:inline-block;width:7px;height:7px;border-radius:2px;vertical-align:1px;margin-right:5px}
+.dotb{background:var(--blue)}.doto{background:var(--orange)}
+.bl{color:var(--blue);font-weight:600}.or{color:var(--orange);font-weight:600}
+.pr .re{flex:none;font-size:16px;color:var(--pine)}
+.dact{display:flex;gap:8px;padding:10px 13px;border-top:1px solid var(--cardBorder)}
+.dact div{flex:1;border:1px solid var(--cardBorder);border-radius:8px;padding:9px;text-align:center;color:var(--pine);font-weight:600;font-size:12.5px}
+.dact div.on{border-color:var(--pine);background:#E4F2EA}
+/* repeat strip */
+.rep{display:flex;align-items:center;gap:9px;background:rgba(15,110,86,.08);border:1px solid rgba(15,110,86,.3);border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:12px;line-height:1.5;color:#38564A}
+.rep b{color:var(--deepPine)}
+/* press */
+.prs{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-top:1px solid #F0F4F1}
+.prs:first-of-type{border-top:none}
+.prs .tag{flex:none;font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;border-radius:5px;padding:3px 6px;margin-top:1px}
+.prs .tag.a{background:#DCF2E4;color:#0B5B44}
+.prs .tag.m{background:#EDF1EE;color:var(--muted)}
+.prs .tx{flex:1;min-width:0;font-size:12.5px;line-height:1.45}
+.prs .tx b{display:block;font-weight:600;font-size:13px;margin-bottom:1px}
+.prs .tx span{color:var(--muted)}
+.prs .sw{flex:none;width:38px;height:23px;border-radius:999px;background:var(--pine);position:relative;margin-top:2px}
+.prs .sw:after{content:"";position:absolute;top:2.5px;right:2.5px;width:18px;height:18px;border-radius:50%;background:#fff}
+.prs .sw.off{background:#C8D3CB}
+.prs .sw.off:after{right:auto;left:2.5px}
+.cap{display:flex;align-items:baseline;gap:8px;border-top:1px solid #F0F4F1;padding-top:9px;margin-top:3px;font-size:12px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:9px}
+.chip{border:1.5px solid var(--cardBorder);border-radius:999px;padding:7px 12px;font-size:12.5px;font-weight:600;color:var(--pine);background:var(--card)}
+.chip.on{background:var(--pine);border-color:var(--pine);color:#fff}
+.card{border:1px solid var(--cardBorder);border-radius:8px;overflow:hidden;background:var(--card);margin-bottom:10px}
+.hh{background:#E1EAE2;padding:10px;text-align:center}
+.hh .n{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:18px}
+.hh .sub{font-size:12px;color:var(--muted)}
+.teamlbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin:8px 12px 4px}
+.prow{display:flex;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid var(--cardBorder)}
+.prow.b{border-left:4px solid var(--blue)}.prow.o{border-left:4px solid var(--orange)}
+.grip{color:var(--muted);font-size:15px;letter-spacing:-2px}
+.nm{flex:1;font-weight:600}.hc{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.cap b{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-size:15px;font-weight:700;color:var(--deepPine)}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 18px;background:linear-gradient(transparent,var(--surface) 26%)}
+.start{width:100%;height:52px;border-radius:16px;border:none;background:var(--pine);color:#fff;font-weight:700;font-size:16px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="phone">
+<div class="status"><span>9:41</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span style="font-size:17px">&#8249;</span><span class="ttl">Sequoya 3s</span><span style="width:17px"></span></div>
+<div class="body">
+
+<div class="sc" style="padding-bottom:6px">
+<div class="sct">Six matches, three holes each</div>
+<p class="scd">2 v. 2 best ball, net. You only set the <b>first match</b> here &mdash; holes 1&ndash;3. Partners rotate at the fourth tee and the app carries it from there, so every golfer plays every partner twice over eighteen.</p>
+</div>
+
+<div class="card">
+<div class="hh"><div class="n">Match 1 &middot; Holes 1&ndash;3</div><div class="sub">Par 4, 5, 3 &nbsp;|&nbsp; 1,127 yds.</div></div>
+<div class="teamlbl bl">Team A</div>
+<div class="prow b"><span class="grip">&#10303;</span><span class="nm">Paul</span><span class="hc">8.2</span></div>
+<div class="prow b"><span class="grip">&#10303;</span><span class="nm">Dave</span><span class="hc">12.4</span></div>
+<div class="teamlbl or">Team B</div>
+<div class="prow o"><span class="grip">&#10303;</span><span class="nm">Sam</span><span class="hc">4.1</span></div>
+<div class="prow o"><span class="grip">&#10303;</span><span class="nm">Lee</span><span class="hc">15.9</span></div>
+<a href="../patterns/sixes-segment-draw.html" style="display:flex;margin:2px 10px 12px;border:1px solid #D3DED6;border-radius:8px;padding:10px;align-items:center;justify-content:center;gap:7px;color:#0F6E56;font-weight:600;font-size:13px;text-decoration:none">&#127922; Spin to assign teams</a>
+</div>
+<div class="note" style="margin:0 2px 16px">&#8635; Drag to set the teams yourself. Off the first tee most groups put the two long drives together against the two short ones. Spinning opens the <a href="../patterns/sixes-segment-draw.html">same slot reel Sixes uses</a> &mdash; three pairings, one drawn, re-spinnable.</div>
+
+<div class="sc">
+<div class="sct">Handicap</div>
+<div class="seg"><div class="on">Net</div><div>Gross</div><div>Strokes Off</div></div>
+<p class="scd" style="margin:0">Full course allocation by stroke index. A stroke falls where the card says it falls, whichever three-hole match that lands in &mdash; matches are not equal in difficulty and pretending they are would be the bigger distortion.</p>
+</div>
+
+<div class="sc">
+<div class="sct">Presses</div>
+<p class="scd">A three-hole match is decided fast, so the press is what keeps holes 2 and 3 worth playing. A press is a <b>new bet at the same amount</b>, not a doubling of the first one.</p>
+<div class="chips"><span class="chip">None</span><span class="chip on">Auto after 1st hole win</span><span class="chip">Manual + Auto</span></div>
+<p class="scd" style="margin:0 0 9px">Win hole 1 and a second bet opens automatically on holes 2&ndash;3. Nobody has to call it. With <b>Manual + Auto</b> the trailing side may also press once by hand, opening a bet on the hole after they call it.</p>
+<div class="cap"><span>Bets a single match can carry</span><b>2</b></div>
+</div>
+
+<div class="sc" style="padding-bottom:8px">
+<div class="sct">Stake</div>
+<p class="scd" style="margin-bottom:8px">A man a match. Lose a $5 match and you pay $5 to the man you were beaten by, not to the pair.</p>
+<div class="field" style="margin-bottom:0"><span class="pfx">$</span>5.00<small>per man, per match</small></div>
+</div>
+<div class="note">&#128737; Most you can lose: <b>&nbsp;$60.00</b>&nbsp; &mdash; all six matches lost with the auto press live in each. No presses at all tops out at $30; Manual + Auto raises the ceiling to $90.</div>
+
+<div style="height:8px"></div>
+</div>
+<div class="bottom"><button class="start">Start Match 1</button></div>
+</div>
+</body>
+</html>

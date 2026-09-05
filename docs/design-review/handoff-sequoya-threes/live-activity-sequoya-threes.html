@@ -1,0 +1,218 @@
+<!-- @dsCard group="Live Activities" name="Sequoya 3s — lock screen" subtitle="SequoyaThreesLiveActivity — three-hole match state, press bets in the footer, pairing changes, always-on and final" viewport="1560x1400" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Sequoya 3s Live Activity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--mint:#3BD89A;--muted:#5C6B62;--blue:#5AA7F5;--orange:#F3A059;--amber:#F0C070}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:28px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.home{position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 "Spline Sans",system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.own{background:#fff;border:1px solid #DCE5DD;border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:104px;color:var(--deepPine);font-weight:600}
+.wrap{position:relative;margin-bottom:36px}
+.cap{position:absolute;left:0;right:0;bottom:-30px;text-align:center;font-size:11.5px;font-weight:600;color:var(--muted)}
+.lock{width:352px;height:762px;border:10px solid #0B1F1A;border-radius:44px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);background:radial-gradient(120% 90% at 50% 0%,#1E4038 0%,#0C1F1B 45%,#050D0B 100%);flex:none;color:#fff}
+.lock.aod{filter:brightness(.74) saturate(.82)}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:112px;height:31px;border-radius:20px;background:#000}
+.clock{text-align:center;padding:58px 0 0}
+.clock .d{font-size:14px;font-weight:600;opacity:.72}
+.clock .t{font-family:"Schibsted Grotesk",sans-serif;font-size:74px;font-weight:600;line-height:1.02;letter-spacing:-2px;margin-top:2px}
+.la{margin:26px 14px 0;border-radius:24px;background:rgba(255,255,255,.13);backdrop-filter:blur(20px);padding:12px 15px;border:.5px solid rgba(255,255,255,.14)}
+.lah{display:flex;align-items:center;gap:7px;margin-bottom:9px}
+.lah .mark{width:17px;height:17px;border-radius:5px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 10px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.lah .g{font-size:11.5px;font-weight:700;letter-spacing:.3px;white-space:nowrap}
+.lah .seg{margin-left:auto;font-size:10.5px;font-weight:600;opacity:.62;white-space:nowrap}
+.big{display:flex;flex-wrap:wrap;align-items:flex-end;column-gap:11px;row-gap:0}
+.big .st{order:1;flex:none;white-space:nowrap;font-family:"Schibsted Grotesk",sans-serif;font-size:36px;font-weight:700;line-height:.94;letter-spacing:-1px;color:var(--mint)}
+.big .st.blue{color:var(--blue)}.big .st.orange{color:var(--orange)}
+.big .state{order:2;flex:none;white-space:nowrap;margin-left:auto;text-align:right;padding-bottom:2px}
+.big .state b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;line-height:1;letter-spacing:.2px}
+.big .state b.blue{color:var(--blue)}.big .state b.orange{color:var(--orange)}
+.big .state u{text-decoration:none;display:block;font-size:9px;font-weight:700;letter-spacing:.4px;opacity:.55;margin-top:4px}
+.big .sub{order:3;flex:0 0 100%;min-width:0;margin-top:8px;font-size:12.5px;line-height:1.55;opacity:.8;white-space:nowrap}
+.big .sub .lead{font-weight:700;opacity:1}
+.big .sub .dim{opacity:.6}
+.big .sub .lead.blue{color:var(--blue)}.big .sub .lead.orange{color:var(--orange)}
+.dotb,.doto{display:inline-block;width:7px;height:7px;border-radius:2px;vertical-align:1px;margin-right:5px}
+.dotb{background:var(--blue)}.doto{background:var(--orange)}
+.foot{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:11px}
+.foot>span{opacity:.6}
+.foot .mult{opacity:1;font-weight:700;font-size:9.5px;letter-spacing:.4px;background:rgba(59,216,154,.2);color:var(--mint);border-radius:4px;padding:2px 5px}
+.foot .mult.am{background:rgba(240,192,112,.2);color:var(--amber)}
+.foot .mny{opacity:1;font-weight:600}
+.foot .par{margin-left:auto;display:flex;align-items:baseline;gap:7px;white-space:nowrap;opacity:1}
+.foot .par .t{opacity:.55;font-weight:600}
+.foot .par b{font-family:"Schibsted Grotesk",sans-serif;font-size:14px;font-weight:700;letter-spacing:-.3px;line-height:1}
+.bar{position:absolute;left:50%;bottom:9px;transform:translateX(-50%);width:126px;height:5px;border-radius:3px;background:rgba(255,255,255,.5)}
+.torch{position:absolute;bottom:38px;left:0;right:0;display:flex;justify-content:space-between;padding:0 34px;opacity:.5;font-size:17px}
+.torch span{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center}
+.notif{margin:16px 14px 0;border-radius:22px;background:rgba(255,255,255,.19);backdrop-filter:blur(20px);padding:12px 14px;border:.5px solid rgba(255,255,255,.16);display:flex;gap:11px;align-items:flex-start}
+.notif .ic{flex:none;width:34px;height:34px;border-radius:9px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 16px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.notif .ic.am{background:var(--amber)}
+.notif .tx{flex:1;min-width:0}
+.notif .tx .t1{display:flex;align-items:baseline;gap:7px;font-size:11px;font-weight:700;letter-spacing:.3px;opacity:.7}
+.notif .tx .t1 span{margin-left:auto;font-weight:600;opacity:.8}
+.notif .tx .t2{font-size:14px;font-weight:700;margin-top:3px}
+.notif .tx .t3{font-size:12.5px;opacity:.82;margin-top:2px;line-height:1.4}
+/* island */
+.di{background:#0B1F1A;border-radius:22px;padding:22px 20px;width:372px;flex:none;color:#fff;margin-bottom:36px}
+.di h4{font-family:"Schibsted Grotesk",sans-serif;font-size:13px;font-weight:700;margin:0 0 4px}
+.di p{font-size:11px;line-height:1.5;opacity:.6;margin:0 0 13px}
+.dr{margin-bottom:16px}
+.dr>span{display:block;font-size:9.5px;font-weight:700;letter-spacing:.4px;opacity:.5;margin-bottom:6px}
+.pill{background:#000;border-radius:20px;height:37px;display:inline-flex;align-items:center;gap:9px;padding:0 13px;font-size:13px;font-weight:700}
+.pill .mk{flex:none;width:15px;height:15px;border-radius:4px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 9px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.pill .bl{color:var(--blue)}.pill .or{color:var(--orange)}
+.pill.min{width:52px;gap:0;justify-content:space-between;padding:0 11px}
+.pill .mint{color:var(--mint)}
+.exp{background:#000;border-radius:26px;padding:14px 16px 15px}
+.exp .top{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;opacity:.6;letter-spacing:.3px}
+.exp .mid{display:flex;align-items:flex-end;gap:10px;margin-top:9px}
+.exp .mid b{font-family:"Schibsted Grotesk",sans-serif;font-size:29px;font-weight:700;line-height:.95}
+.exp .mid span{font-size:11.5px;opacity:.72;padding-bottom:3px;line-height:1.4}
+.exp .mid .m{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-size:13px;font-weight:700;padding-bottom:2px}
+.pips{display:flex;gap:5px;margin-top:11px}
+.pips i{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.2)}
+.pips i.b{background:var(--blue)}.pips i.o{background:var(--orange)}
+.pips i.h{background:rgba(255,255,255,.42)}
+.pips i.now{box-shadow:0 0 0 1.5px rgba(255,255,255,.65)}
+</style></head>
+<body>
+<a class="home" href="../index-contents.html">&#8592; Contents</a>
+<div class="notes">
+<h1>Sequoya 3s on the lock screen</h1>
+<p>Structurally this is <a href="live-activity-sixes.html">the Sixes card</a> and deliberately so &mdash; same three rows, same locked corners, same neutral scoreboard. Two things are different, and both come from the three-hole match: <b>the wager moves</b>, and there is far more news.</p>
+<h3>The press rides with the money, not the headline</h3>
+<p>A match that quietly picks up a second bet is the one number on this card the reader cannot derive from anything else. It could not go in the top row &mdash; the right half of that row is locked to <i>hole, par, yardage</i> across the whole set &mdash; and it must not go in the headline, which belongs to the match state.</p>
+<p>So it sits in the footer as a chip beside the total at risk: <b>$10 a man</b>, <b>+ auto press</b>. The cause is printed with the effect, which is the whole reason the chip exists. A press is never a doubling of the match bet &mdash; it is a second bet at the same amount over the holes that are left &mdash; and <b>money that has silently appeared is worse than no money on the card at all.</b></p>
+<h3>Six pushes minimum, and they are not all the same</h3>
+<p>Sixes gets a push when the pairing changes. This format changes pairing five times on a schedule and opens a fresh bet up to six more times, so the discipline has to be tighter or the round becomes a stream.</p>
+<div class="own"><table>
+<tr><td>New pairing</td><td>Five a round, on the 4th, 7th, 10th, 13th and 16th tees. Mint. Names both new sides.</td></tr>
+<tr><td>Press offered</td><td>Amber, and the only push that <b>expires</b>. Sent to all four; says which two can act.</td></tr>
+<tr><td>Auto press</td><td><b>No push.</b> It carries no decision, so it rides the activity update and the footer chip.</td></tr>
+</table></div>
+<p>The auto press is the interesting exclusion. It opens a bet without asking, which sounds like exactly what deserves a push &mdash; but it fires on <b>every</b> won opening hole, which is most matches, and a notification that arrives six times a round to report a rule the group already agreed to is noise. <b>The chip in the footer is the receipt; the push is for decisions.</b></p>
+<h3>The state slot is the match, same as Sixes</h3>
+<p>The slot takes a word only when there is one. <b>DORMIE</b> means up by exactly the holes remaining &mdash; one up with one to play, two up with two &mdash; and over three holes that is the common case rather than the dramatic one, so it reads as ordinary here. When the match closes early the slot says <b>CLOSED</b> and the headline holds the margin: <b>2 &amp; 1</b>. Anything else takes an em dash over the holes left, because <b>a state word that is not true of the position is worse than no word</b>: 1 UP with 2 to play is not dormie and must never be labelled it.</p>
+<p>The press offer does <b>not</b> take this slot. A Live Activity that shows a live offer with no way to accept it is worse than one that stays quiet; the push does that job and the card stays a glance.</p>
+<h3>Six pips are honest here, and still do not ship on the card</h3>
+<p>Sixes cut segment pips because a round has no fixed number of matches. This round has exactly six, always, so six pips would be true &mdash; a real difference between the formats.</p>
+<p>They stay off the lock card anyway, for a different reason: <b>the card has no room for a fourth row.</b> The panel is built to a hard ceiling and the pips would cost more than they return, since the top row already names the match and the footer already carries the money. They ship in the expanded island, where there is no footer &mdash; and there they earn it, because <b>the second half repeats the first</b> and a six-pip strip is where a golfer sees he is about to replay the pairing that beat him.</p>
+<h3>The final state names the format&rsquo;s question</h3>
+<p>Not just the money. <b>Won 3, lost 2, halved 1</b> and the partner who carried you &mdash; the one thing this format produces that no other in the app does, because you played every partner twice and the round has an answer to <i>who</i>.</p>
+<h3>Observers get the same card, minus two slots</h3>
+<p>A golfer who was invited to follow the round but could not play gets the leaderboard and, if they want it, this activity. <b>No new card is needed</b> &mdash; the neutral-scoreboard rule already did the work: the three rows name both pairs and never say <i>you</i>, so an observer reads the identical composition.</p>
+<p>Two slots are personal and come out:</p>
+<div class="own"><table>
+<tr><td>Money</td><td><b>Omitted.</b> The footer keeps the total at risk and the press chip &mdash; what the hole is worth is part of the match &mdash; but the running <i>+$10</i> is the reader&rsquo;s own position and an observer has none.</td></tr>
+<tr><td>Score to par</td><td><b>Omitted.</b> <code>THRU X &middot; &plusmn;Y</code> is the reader&rsquo;s round. An observer keeps <b>THRU X</b> alone, which the locked corner already supports &mdash; it is the round&rsquo;s position, not a personal one.</td></tr>
+<tr><td>Final state</td><td>Reads the match record and who won the round rather than <i>collect from Dave</i>. Same layout, different sentence.</td></tr>
+</table></div>
+<p>Everything else is identical, including the pushes: an observer wants the pairing changes most of all, since they are the one thing that cannot be inferred. <b>The press offer should not push to observers</b> &mdash; it is a decision addressed to two golfers, and buzzing a spectator about a bet they cannot take is noise.</p>
+<p>If this generalises across the set it belongs in <a href="live-activity-pattern.html">the pattern</a> as a rule on the money and par slots, not as a card per game.</p>
+<h3>Still open</h3>
+<ul>
+<li>Whether the press-offered push should be silent for the pair who cannot act. Drawn as <b>the same push to all four</b> &mdash; being pressed without being told is worse than one extra buzz.</li>
+<li>Whether a press taken should itself push a confirmation. Drawn as <b>no</b>: the footer chip and the total at risk both move, and that is the receipt.</li>
+</ul>
+</div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">10:52</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SEQUOYA 3s &middot; MATCH 2</span><span class="seg">HOLE 5 &middot; PAR 3 &middot; 168</span></div>
+<div class="big"><span class="st orange">1 UP</span><span class="state"><b>&mdash;</b><u>2 TO PLAY</u></span><span class="sub"><span class="lead orange"><span class="doto"></span>Dave Moran &amp; Lee Naylor</span><br><span class="dim"><span class="dotb"></span>Paul Kelly &amp; Sam Reid</span></span></div>
+<div class="foot"><span>$10 a man</span><span class="mult">+ AUTO PRESS</span><span class="mny">+$10</span><span class="par"><span class="t">THRU 4</span><b>+3</b></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">The ordinary state &mdash; auto press in the footer</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">11:04</div></div>
+<div class="notif">
+<div class="ic am">H</div>
+<div class="tx"><div class="t1">HALVED<span>now</span></div>
+<div class="t2">Press offered &mdash; hole 6, $5</div>
+<div class="t3">You and Sam are 2 down with 1 to play &mdash; a new $5 bet on hole 6 alone. <b style="font-weight:700">Open before the 6th tee</b> &mdash; Dave and Lee cannot decline it.</div></div>
+</div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SEQUOYA 3s &middot; MATCH 2</span><span class="seg">HOLE 6 &middot; PAR 5 &middot; 528</span></div>
+<div class="big"><span class="st orange">2 &amp; 1</span><span class="state"><b class="orange">CLOSED</b><u>MATCH BET</u></span><span class="sub"><span class="lead orange"><span class="doto"></span>Dave Moran &amp; Lee Naylor</span><br><span class="dim"><span class="dotb"></span>Paul Kelly &amp; Sam Reid</span></span></div>
+<div class="foot"><span>$5 still live</span><span class="mult am">PRESS OFFERED</span><span class="mny">+$10</span><span class="par"><span class="t">THRU 5</span><b>+3</b></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Press offered &mdash; amber, and the only push that expires</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">11:31</div></div>
+<div class="notif">
+<div class="ic">H</div>
+<div class="tx"><div class="t1">HALVED<span>now</span></div>
+<div class="t2">New partners &mdash; holes 7&ndash;9</div>
+<div class="t3"><b style="font-weight:700">Match 3:</b> <span class="dotb"></span>Paul Kelly &amp; Lee Naylor <span style="opacity:.6">v.</span> <span class="doto"></span>Dave Moran &amp; Sam Reid</div></div>
+</div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SEQUOYA 3s &middot; MATCH 3</span><span class="seg">HOLE 7 &middot; PAR 4 &middot; 411</span></div>
+<div class="big"><span class="st" style="color:#fff;opacity:.9">ALL SQ</span><span class="state"><b>&mdash;</b><u>3 TO PLAY</u></span><span class="sub"><span class="dotb"></span>Paul Kelly &amp; Lee Naylor<br><span class="doto"></span>Dave Moran &amp; Sam Reid</span></div>
+<div class="foot"><span>$5 a man</span><span class="mny">+$10</span><span class="par"><span class="t">THRU 6</span><b>+3</b></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">A new pairing &mdash; wager back to base, no chip</div></div>
+
+<div class="wrap"><div class="lock aod">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">2:11</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SEQUOYA 3s &middot; MATCH 6</span><span class="seg">HOLE 18 &middot; PAR 4 &middot; 461</span></div>
+<div class="big"><span class="st blue">1 UP</span><span class="state"><b class="blue">DORMIE</b><u>1 TO PLAY</u></span><span class="sub"><span class="lead blue"><span class="dotb"></span>Paul Kelly &amp; Lee Naylor</span><br><span class="dim"><span class="doto"></span>Dave Moran &amp; Sam Reid</span></span></div>
+<div class="foot"><span>$10 a man</span><span class="mult">+ AUTO PRESS</span><span class="mny">+$10</span><span class="par"><span class="t">THRU 17</span><b>+13</b></span></div>
+</div>
+<div class="bar"></div>
+</div><div class="cap">Always-on &mdash; the auto press running</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">2:38</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">SEQUOYA 3s</span><span class="seg">ROUND COMPLETE</span></div>
+<div class="big"><span class="st" style="font-size:42px">+$15</span><span class="state"><b style="font-size:34px;letter-spacing:-1px">85</b><u>GROSS, 18 HOLES</u></span><span class="sub">Won 3, lost 2, halved 1 &middot; best with <b>Lee</b><br>Collect from <b>Dave</b></span></div>
+<div class="foot"><span>Dismisses in 5 min</span><span class="par"><span class="t">THRU 18</span><b>+14</b></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Final &mdash; the money, and which partner</div></div>
+
+<div class="di">
+<h4>Dynamic Island</h4>
+<p>The compact pair is what people see all round. The money goes here rather than the score, because the score is on the lock card and the money is the thing that changed.</p>
+<div class="dr"><span>MINIMAL &mdash; ANOTHER APP IS ACTIVE</span>
+<div class="pill min"><span class="mk">H</span><span class="mint">&#9679;</span></div></div>
+<div class="dr"><span>COMPACT &mdash; THE DEFAULT</span>
+<div class="pill"><span class="mk">H</span><span class="bl">1 UP</span><span style="opacity:.55;font-weight:600">$10</span></div></div>
+<div class="dr"><span>COMPACT &mdash; PRESS OPEN</span>
+<div class="pill"><span class="mk">H</span><span style="color:var(--amber)">PRESS?</span><span style="opacity:.55;font-weight:600">$5</span></div></div>
+<div class="dr" style="margin-bottom:0"><span>EXPANDED &mdash; LONG PRESS</span>
+<div class="exp">
+<div class="top"><span style="width:14px;height:14px;border-radius:4px;background:var(--mint);display:inline-flex;align-items:center;justify-content:center;font:700 9px/1 'Schibsted Grotesk',sans-serif;color:#06231A">H</span><span>SEQUOYA 3s &middot; MATCH 6 OF 6</span></div>
+<div class="mid"><b style="color:var(--blue)">1 UP</b><span><span class="dotb"></span><span style="color:var(--blue);font-weight:700">Paul Kelly &amp; Lee Naylor</span><br><span style="opacity:.6"><span class="doto"></span>Dave Moran &amp; Sam Reid</span></span><span class="m" style="color:var(--blue)">DORMIE</span></div>
+<div class="pips"><i class="b"></i><i class="o"></i><i class="h"></i><i class="o"></i><i class="b"></i><i class="b now"></i></div>
+</div></div>
+</div>
+</body></html>

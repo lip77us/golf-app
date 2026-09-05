@@ -1,0 +1,296 @@
+<!-- @dsCard group="Games" name="Sequoya 3s (play)" subtitle="SequoyaThreesScreen — three-hole match, best-ball net entry, the auto press bet and the offered press" viewport="1500x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Sequoya 3s (play)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--blue:#1976D2;--orange:#EF6C00;--under:#D32F2F;--win:#388E3C;--warn:#8A5216}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:30px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.own{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:94px;color:var(--deepPine);font-weight:600}
+.wrap{position:relative;margin-bottom:34px}
+.cap{position:absolute;left:0;right:0;bottom:-30px;text-align:center;font-size:11.5px;font-weight:600;color:var(--muted)}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:12px;padding:6px 14px 10px}
+.appbar .ic{font-size:17px}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:18px;flex:1;text-align:center}
+.body{padding:0 12px;overflow-y:auto;height:636px}
+/* match banner */
+.mb{border:1px solid rgba(15,110,86,.4);background:rgba(15,110,86,.08);border-radius:8px;padding:10px 12px;margin:2px 0 12px}
+.mb .t1{display:flex;align-items:baseline;gap:8px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--pine)}
+.mb .t1 em{margin-left:auto;font-style:normal;color:var(--muted)}
+.mb .t2{display:flex;align-items:flex-end;gap:10px;margin-top:7px}
+.mb .t2 .sides{flex:1;min-width:0;font-size:12.5px;line-height:1.5}
+.mb .t2 .st{flex:none;text-align:right;white-space:nowrap}
+.mb .t2 .st b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;line-height:1}
+.mb .t2 .st u{text-decoration:none;display:block;font-size:9px;font-weight:700;letter-spacing:.4px;color:var(--muted);margin-top:3px}
+.dotb,.doto{display:inline-block;width:7px;height:7px;border-radius:2px;vertical-align:1px;margin-right:5px}
+.dotb{background:var(--blue)}.doto{background:var(--orange)}
+.bl{color:var(--blue)}.or{color:var(--orange)}
+.lead{font-weight:700}.dim{opacity:.55}
+.wag{display:flex;align-items:center;gap:7px;border-top:1px solid rgba(15,110,86,.22);margin-top:9px;padding-top:8px;font-size:11.5px;color:var(--muted)}
+.wag b{color:var(--deepPine);font-weight:700}
+.mult{background:#DCF2E4;color:#0B5B44;border-radius:5px;padding:2px 6px;font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+.bets{border-top:1px solid rgba(15,110,86,.22);margin-top:9px;padding-top:8px}
+.bet{display:flex;align-items:center;gap:8px;font-size:11.5px;padding:2px 0}
+.bet .lb{flex:1;min-width:0;color:var(--muted)}
+.bet .lb b{color:var(--deepPine);font-weight:700}
+.bet .amt{flex:none;font-weight:700;font-variant-numeric:tabular-nums}
+.bet .sta{flex:none;width:74px;text-align:right;font-size:10.5px;font-weight:700;letter-spacing:.2px}
+/* press button */
+.pbtn{display:flex;align-items:center;gap:9px;width:100%;border:1.5px solid #E0C79C;background:#FDF3E7;border-radius:10px;padding:9px 12px;margin:0 0 12px;text-align:left}
+.pbtn .ic{flex:none;width:22px;height:22px;border-radius:7px;background:#8A5216;color:#fff;display:flex;align-items:center;justify-content:center;font:700 12px/1 "Schibsted Grotesk",sans-serif}
+.pbtn .lb{flex:1;min-width:0;font-size:13px;font-weight:700;color:#8A5216;line-height:1.3}
+.pbtn .lb u{text-decoration:none;display:block;font-size:10.5px;font-weight:500;color:#8A5216;opacity:.8;margin-top:1px}
+.pbtn .amt{flex:none;font-size:13px;font-weight:700;color:#8A5216}
+.pbtn.off{border-color:var(--cardBorder);background:#F4F7F5}
+.pbtn.off .ic{background:#C8D3CB;color:#fff}
+.pbtn.off .lb,.pbtn.off .amt{color:#8B9990}
+/* compact three-hole strip */
+.ms2{display:flex;align-items:center;gap:8px;border:1px solid var(--cardBorder);border-radius:8px;background:var(--card);padding:7px 10px;margin:11px 0}
+.ms2 .lb{flex:1;min-width:0;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--pine)}
+.ms2 .lb u{text-decoration:none;display:block;font-size:10px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--muted);margin-top:1px}
+.ms2 .cells{flex:none;display:flex;gap:4px}
+.ms2 .c{width:44px;border:1px solid var(--cardBorder);border-radius:6px;padding:3px 0 4px;text-align:center}
+.ms2 .c i{font-style:normal;display:block;font-size:8.5px;font-weight:700;color:#8B9990;letter-spacing:.2px}
+.ms2 .c b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:12px;font-weight:700;line-height:1.1;color:var(--muted)}
+.ms2 .c.wb{border-color:var(--blue);background:rgba(25,118,210,.07)}.ms2 .c.wb b{color:var(--blue)}
+.ms2 .c.wo{border-color:var(--orange);background:rgba(239,108,0,.07)}.ms2 .c.wo b{color:var(--orange)}
+.ms2 .c.now{border-color:var(--pine);border-width:2px;padding:2px 0 3px}.ms2 .c.now b{color:var(--pine)}
+/* press offer */
+.po{border:1px solid #E8D6BC;background:#FDF3E7;border-radius:8px;padding:11px 12px;margin:2px 0 12px}
+.po .h{display:flex;align-items:baseline;gap:8px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#8A5216}
+.po .h em{margin-left:auto;font-style:normal}
+.po .q{font-family:"Schibsted Grotesk",sans-serif;font-size:15px;font-weight:700;margin:6px 0 3px}
+.po p{margin:0;font-size:11.5px;line-height:1.5;color:#6B5330}
+.po .btns{display:flex;gap:8px;margin-top:10px}
+.po .btns div{flex:1;border-radius:9px;padding:10px;text-align:center;font-weight:700;font-size:13px}
+.po .btns .yes{background:#8A5216;color:#fff}
+.po .btns .no{border:1.5px solid #DCC9A9;color:#8A5216}
+.po .only{font-size:10.5px;color:#8A5216;margin-top:8px;line-height:1.45}
+/* hole header */
+.hh{position:relative;background:#E1EAE2;border-radius:8px;padding:10px 44px;text-align:center;margin-bottom:10px}
+.hh .n{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:18px}
+.hh .sub{font-size:12px;color:var(--muted)}
+.hh .help{position:absolute;top:6px;right:8px;color:var(--pine);font-size:16px}
+/* score card */
+.teamlbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin:10px 4px 4px;display:flex;align-items:baseline;gap:7px}
+.teamlbl em{margin-left:auto;font-style:normal;font-size:11px;letter-spacing:0;text-transform:none;color:var(--muted);font-weight:600}
+.teamlbl em b{color:var(--deepPine)}
+.card{border:1px solid var(--cardBorder);border-radius:8px;overflow:hidden;background:var(--card)}
+.card.b{border-left:4px solid var(--blue)}.card.o{border-left:4px solid var(--orange)}
+.prow{display:flex;align-items:center;gap:8px;padding:9px 12px;border-top:1px solid var(--cardBorder)}
+.prow:first-child{border-top:none}
+.nm{flex:1;font-weight:600;font-size:14px}
+.gets{font-size:10px;color:var(--muted);font-weight:600;background:rgba(29,158,117,.12);border:1px solid var(--cardBorder);border-radius:8px;padding:1px 6px}
+.net{font-size:11px;color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums;width:40px;text-align:right}
+.net b{color:var(--pine)}
+.box{width:40px;height:36px;border-radius:6px;border:1px solid var(--cardBorder);display:flex;align-items:center;justify-content:center;font-weight:700;font-variant-numeric:tabular-nums}
+.box.cnt{background:#DCF2E4;border-color:#B6DEC7;color:#0B5B44}
+.dots{display:flex;gap:2px;justify-content:center;height:6px;margin-bottom:2px}
+.dot{width:4px;height:4px;border-radius:50%;background:var(--under)}
+.scorecell{display:flex;flex-direction:column;align-items:center}
+.active{margin:0;background:rgba(15,110,86,.08);border-top:1.5px solid var(--pine)}
+.active .prow{border-top:none;background:transparent}
+.picker{display:flex;gap:6px;justify-content:center;padding:6px 6px 10px}
+.opt{min-width:40px;height:46px;border-radius:9px;border:1px solid var(--cardBorder);background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;font-size:17px}
+.opt small{font-size:8px;color:var(--muted);text-transform:uppercase;margin-top:1px}
+.opt.sel{border:2px solid var(--pine)}
+.opt.u{color:var(--under)}
+/* outcome */
+.outcome{border-radius:6px;padding:8px 10px;margin:11px 0;font-size:13px;font-weight:600;background:rgba(56,142,60,.08);border:1px solid rgba(56,142,60,.4);color:var(--win)}
+.outcome.o{background:rgba(239,108,0,.08);border-color:rgba(239,108,0,.42);color:#B24225}
+.outcome.gone{background:#FDF3E7;border-color:#E8D6BC;color:#8A5216}
+/* this match strip */
+.ms{border:1px solid var(--cardBorder);border-radius:8px;padding:10px 12px;background:var(--card);margin:12px 0}
+.ms .h{font-size:10px;font-weight:700;color:var(--pine);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;display:flex;align-items:baseline}
+.ms .h em{margin-left:auto;font-style:normal;color:var(--muted);letter-spacing:0;text-transform:none;font-size:11px}
+.h3{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.h3 div{border:1px solid var(--cardBorder);border-radius:7px;padding:7px 4px;text-align:center}
+.h3 div .hn{font-size:9.5px;font-weight:700;letter-spacing:.3px;color:var(--muted)}
+.h3 div .rs{font-family:"Schibsted Grotesk",sans-serif;font-size:14px;font-weight:700;margin-top:3px;line-height:1}
+.h3 div.wb{border-color:var(--blue);background:rgba(25,118,210,.07)}
+.h3 div.wb .rs{color:var(--blue)}
+.h3 div.wo{border-color:var(--orange);background:rgba(239,108,0,.07)}
+.h3 div.wo .rs{color:var(--orange)}
+.h3 div.now{border-color:var(--pine);border-width:2px}
+.h3 div.now .rs{color:var(--pine)}
+.h3 div.tie .rs{color:var(--muted)}
+/* six matches */
+.six{border:1px solid var(--cardBorder);border-radius:8px;padding:10px 12px;background:var(--card);margin-bottom:12px}
+.six .h{font-size:10px;font-weight:700;color:var(--pine);text-transform:uppercase;letter-spacing:.4px;margin-bottom:7px}
+.mr{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px;border-top:1px solid #F2F6F3}
+.mr:first-of-type{border-top:none}
+.mr .n{flex:none;width:52px;font-weight:700;font-size:11px;color:var(--muted)}
+.mr .p{flex:1;min-width:0;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mr .p b{color:var(--deepPine)}
+.mr .x{flex:none;font-size:10px;font-weight:700;color:#0B5B44;background:#DCF2E4;border-radius:4px;padding:1px 5px}
+.mr .v{flex:none;width:46px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.mr .v.pos{color:var(--win)}.mr .v.neg{color:var(--warn)}.mr .v.pend{color:#B6C4BB;font-weight:600}
+.tally{display:flex;align-items:baseline;border-top:1.5px solid var(--cardBorder);margin-top:6px;padding-top:8px;font-size:12px;font-weight:600}
+.tally b{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-size:16px;color:var(--win)}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:10px 12px 16px;display:flex;gap:8px;background:linear-gradient(transparent,var(--surface) 26%)}
+.prev{flex:1;height:48px;border-radius:12px;border:1.5px solid var(--pine);background:transparent;color:var(--pine);font-weight:700;font-size:14px}
+.next{flex:1;height:48px;border-radius:12px;border:none;background:var(--pine);color:#fff;font-weight:700;font-size:14px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+
+<div class="notes">
+<h1>Sequoya 3s, playing it</h1>
+<p>A three-hole match is over almost as soon as it starts. Two holes decide it, which means <b>the press is not a garnish here &mdash; it is the mechanism that keeps the third hole worth playing</b>. Everything on this screen is arranged around that.</p>
+<h3>The banner carries the wager, because the wager moves</h3>
+<p>Sixes can put the stake in a quiet corner: it never changes. Here a second bet opens mid-match without anyone touching the phone, so the banner is <b>a list of the live bets and nothing else</b> &mdash; one line each: name, hole range, amount, state. The pairings are named on the score cards immediately below, so carrying them in the banner too was two lines of nothing.</p>
+<h3>The auto press announces itself and asks nothing</h3>
+<p>It fires on a won first hole and there is no decision in it, so it gets a row and no dialogue. A press here is not a doubling &mdash; it is <b>a new bet at the same amount, running over the holes that are left</b>, which is why it gets its own line with its own state rather than a multiplier on the match. The one thing it must not do is arrive silently: <b>money that appears without a visible cause is the fastest way to lose a group&rsquo;s trust in the app.</b></p>
+<h3>The press is a button before it is a card</h3>
+<p>The trailing side has to be able to press without waiting to be asked, so the button is the permanent home of the action &mdash; it sits above the hole header and <b>lights amber the moment a press is legal</b>: after a halved first hole, or from the second hole of the match onward. Unlit the rest of the time, with the reason on the second line.</p>
+<p>It names <b>the hole it would cover, not the match</b>, and it is called <i>your press</i>. Both exist to keep it separable from the auto press already in the banner &mdash; two $5 bets over the same holes with the same label would be unreadable at settlement, so a hand-called press starts on the next hole and carries the caller&rsquo;s name.</p>
+<p>The full amber card only appears when the app is the one asking &mdash; a match that has just closed with a hole still to play. The button dims and points at it, because the same decision must not have two live controls.</p>
+<h3>The offered press is a different object and gets a different colour</h3>
+<p>Amber, not green. It is the only thing on this screen that <b>expires</b> &mdash; it is live until the third tee and then it is gone &mdash; and the only thing addressed to two of the four golfers rather than all of them. Both facts are printed on it.</p>
+<div class="own"><table>
+<tr><td>Availability</td><td>Manual presses only exist if the group chose <b>Manual + Auto</b> at setup. The default is auto alone.</td></tr>
+<tr><td>Who sees it</td><td>All four. Only the trailing pair can act. The other two get the same card, greyed, so nobody is surprised by a wager they did not agree to.</td></tr>
+<tr><td>Window</td><td>Until a score is posted on the third hole. Stated on the card as the tee, not as a timer.</td></tr>
+<tr><td>Halved first hole</td><td>No auto press, either side may call it, and the card is offered to both.</td></tr>
+</table></div>
+<h3>Why a press is a bet and not a multiplier</h3>
+<p>A pair that loses holes 1 and 2 has lost the match &mdash; two down with one to play cannot be recovered. Doubling a wager you have already lost is not a press, it is a donation, and no golfer would ever tap it.</p>
+<p>So a press is <b>a fresh bet at the same amount over the holes that remain</b>, settled on its own. The auto press covers holes 2 and 3; a hand-called press covers whatever is left when it is called. The match bet closes and pays on its own schedule, which is why this screen shows two live lines rather than one line with a multiplier on it.</p>
+<h3>Best ball, marked in the cell</h3>
+<p>Each pair&rsquo;s counting net is filled green. Two rows, one highlight, and the comparison the match runs on is readable without arithmetic &mdash; which matters more in this game than most, because <b>the net that counts changes hands hole to hole and a partner who thinks he carried the match will say so at settlement.</b></p>
+<h3>The card at the bottom, holes played only</h3>
+<p>Under the entry cards sits <b>the same scorecard the leaderboard shows</b>, cut to the holes that have scores. It is the answer to <i>what did he make on 4</i>, which is asked on every tee, and it is where the boxed net makes the best-ball comparison checkable rather than asserted.</p>
+<p>It is last on the screen deliberately. Scoring happens at the top, in the thumb zone; the card is reference and can be scrolled to.</p>
+<h3>Three cells, not eighteen &mdash; and one row, not a card</h3>
+<p>The by-hole strip is <b>only this match</b>, and three holes do not earn a card with a heading. It collapses to a single row: label on the left, three small cells on the right. The round&rsquo;s other five matches are a list of results underneath, not a scorecard &mdash; they are settled money, and money reads better as a column than as a grid.</p>
+<h3>Every partner twice</h3>
+<p>Matches 4, 5 and 6 repeat 1, 2 and 3 in order, so the match list is a natural pair of columns &mdash; the same pairing on two lines, nine holes apart. A golfer checking whether he has had a bad day or a bad partner can read it off the list, which is a question this format invites and no other format in the app does.</p>
+<h3>Still open</h3>
+<ul>
+<li>Whether a halved three-hole match should roll into the next one or simply pay nothing. Drawn as <b>pays nothing</b> &mdash; carryover across a pairing change means a wager owed by a pair that no longer exists.</li>
+<li>Whether the group can re-draw the order at the turn. Drawn as <b>no</b>: the repeat is the point of the format.</li>
+</ul>
+</div>
+
+<div class="wrap"><div class="phone">
+<div class="status"><span>10:52</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="ic">&#10005;</span><span class="ttl">Sequoya 3s</span><span class="ic">&#128172;</span><span class="ic">&#128202;</span><span class="ic">&#8942;</span></div>
+<div class="body">
+
+<div class="mb">
+<div class="t1"><span>Match 2 of 6</span><em>$10 a man &middot; 2 bets</em></div>
+<div class="bets" style="border:none;margin:7px 0 0;padding:0">
+<div class="bet"><span class="lb">Match 2 &middot; <b>holes 4&ndash;6</b></span><span class="amt">$5</span><span class="sta or">D/L 1 UP</span></div>
+<div class="bet"><span class="lb">Press 1 &middot; <b>holes 5&ndash;6</b></span><span class="amt">$5</span><span class="sta" style="color:var(--muted)">AS</span></div>
+</div>
+</div>
+
+<button class="pbtn"><span class="ic">&#8593;</span><span class="lb">Call your press &mdash; hole 6<u>You and Sam are 1 down. Yours until the 6th tee.</u></span><span class="amt">$5</span></button>
+
+<div class="hh"><div class="n">Hole 5</div><div class="sub">Par 3 &middot; 168 yds &middot; SI 9</div><div class="help">&#65311;</div></div>
+
+<div class="teamlbl bl"><span>Paul &amp; Sam</span><em>best ball <b>4</b></em></div>
+<div class="card b">
+<div class="prow"><span class="nm">Paul</span><span class="net">net <b>4</b></span><span class="scorecell"><span class="dots"></span><span class="box cnt">4</span></span></div>
+<div class="prow"><span class="nm">Sam</span><span class="net">net 4</span><span class="scorecell"><span class="dots"></span><span class="box">4</span></span></div>
+</div>
+
+<div class="teamlbl or"><span>Dave &amp; Lee</span><em>best ball <b>3</b></em></div>
+<div class="card o">
+<div class="prow"><span class="nm">Dave</span><span class="gets">gets 1</span><span class="net">net <b>3</b></span><span class="scorecell"><span class="dots"><span class="dot"></span></span><span class="box cnt">4</span></span></div>
+<div class="active">
+<div class="prow"><span class="nm">Lee</span><span class="gets">gets 1</span><span class="net">net 4</span><span class="scorecell"><span class="dots"><span class="dot"></span></span><span class="box" style="border-color:var(--pine);border-width:2px">5</span></span></div>
+<div class="picker"><span class="opt u">3<small>bird</small></span><span class="opt">4<small>par</small></span><span class="opt sel">5<small>bog</small></span><span class="opt">6<small>dbl</small></span></div>
+</div>
+</div>
+
+<div class="ms2"><span class="lb">Match 2<u>best ball, net</u></span><span class="cells"><span class="c wo"><i>4</i><b>D/L</b></span><span class="c now"><i>5</i><b>&ndash;</b></span><span class="c"><i>6</i><b>&ndash;</b></span></span></div>
+
+<div class="six">
+<div class="h">The six matches</div>
+<div class="mr"><span class="n">1 &middot; 1&ndash;3</span><span class="p"><b>Paul &amp; Dave</b> v. Sam &amp; Lee</span><span class="x">2 bets</span><span class="v pos">+$10</span></div>
+<div class="mr"><span class="n">2 &middot; 4&ndash;6</span><span class="p">Paul &amp; Sam v. <b>Dave &amp; Lee</b></span><span class="x">2 bets</span><span class="v neg">&minus;$10</span></div>
+<div class="mr"><span class="n">3 &middot; 7&ndash;9</span><span class="p">Paul &amp; Lee v. Dave &amp; Sam</span><span class="v pend">&ndash;</span></div>
+<div class="mr"><span class="n">4 &middot; 10&ndash;12</span><span class="p">Paul &amp; Dave v. Sam &amp; Lee</span><span class="v pend">&ndash;</span></div>
+<div class="mr"><span class="n">5 &middot; 13&ndash;15</span><span class="p">Paul &amp; Sam v. Dave &amp; Lee</span><span class="v pend">&ndash;</span></div>
+<div class="mr"><span class="n">6 &middot; 16&ndash;18</span><span class="p">Paul &amp; Lee v. Dave &amp; Sam</span><span class="v pend">&ndash;</span></div>
+<div class="tally"><span>Yours, settled</span><b>&mdash;</b></div>
+</div>
+<div class="scmount"></div>
+<div style="height:10px"></div>
+</div>
+<div class="bottom"><button class="prev">&#8249; Hole 4</button><button class="next">Hole 6 &#8250;</button></div>
+</div><div class="cap">Hole 5, mid-entry &mdash; two live bets, nothing resolved</div></div>
+
+<div class="wrap"><div class="phone">
+<div class="status"><span>11:04</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="ic">&#10005;</span><span class="ttl">Sequoya 3s</span><span class="ic">&#128172;</span><span class="ic">&#128202;</span><span class="ic">&#8942;</span></div>
+<div class="body">
+
+<div class="po">
+<div class="h"><span>Press offered</span><em>until the 6th tee</em></div>
+<div class="q">Your press on hole 6 &mdash; $5?</div>
+<p>You and Sam are two down with one to play &mdash; the match bet is gone and pays $5. A press here is <b>a third bet, on hole 6 alone</b>, at the same $5 a man.</p>
+<div class="btns"><div class="yes">Press hole 6</div><div class="no">Let it go</div></div>
+<div class="only">Only you and Sam can call this one. Dave and Lee see the offer and cannot decline it. Available because the group chose <b>Manual + Auto</b>.</div>
+</div>
+
+<div class="mb">
+<div class="t1"><span>Match 2 of 6</span><em>Match 2 paid &middot; press live</em></div>
+<div class="bets" style="border:none;margin:7px 0 0;padding:0">
+<div class="bet"><span class="lb">Match 2 &middot; <b>holes 4&ndash;6</b></span><span class="amt">$5</span><span class="sta or">D/L 2 &amp; 1</span></div>
+<div class="bet"><span class="lb">Press 1 &middot; <b>holes 5&ndash;6</b></span><span class="amt">$5</span><span class="sta or">D/L 1 UP</span></div>
+</div>
+</div>
+
+<button class="pbtn off"><span class="ic">&#8593;</span><span class="lb">Call your press &mdash; hole 6<u>Already offered on the card above.</u></span><span class="amt">$5</span></button>
+
+<div class="hh"><div class="n">Hole 6</div><div class="sub">Par 5 &middot; 528 yds &middot; SI 1</div><div class="help">&#65311;</div></div>
+
+<div class="teamlbl bl"><span>Paul &amp; Sam</span><em>no scores yet</em></div>
+<div class="card b">
+<div class="prow"><span class="nm">Paul</span><span class="gets">gets 1</span><span class="net">&mdash;</span><span class="scorecell"><span class="dots"><span class="dot"></span></span><span class="box" style="color:#C3CFC6">&ndash;</span></span></div>
+<div class="prow"><span class="nm">Sam</span><span class="gets">gets 1</span><span class="net">&mdash;</span><span class="scorecell"><span class="dots"><span class="dot"></span></span><span class="box" style="color:#C3CFC6">&ndash;</span></span></div>
+</div>
+
+<div class="teamlbl or"><span>Dave &amp; Lee</span><em>no scores yet</em></div>
+<div class="card o">
+<div class="prow"><span class="nm">Dave</span><span class="gets">gets 1</span><span class="net">&mdash;</span><span class="scorecell"><span class="dots"><span class="dot"></span></span><span class="box" style="color:#C3CFC6">&ndash;</span></span></div>
+<div class="prow"><span class="nm">Lee</span><span class="gets">gets 1</span><span class="net">&mdash;</span><span class="scorecell"><span class="dots"><span class="dot"></span></span><span class="box" style="color:#C3CFC6">&ndash;</span></span></div>
+</div>
+
+<div class="outcome gone">Hole 6 decides the press bet. The match bet is already paid.</div>
+
+<div class="ms2"><span class="lb">Match 2<u>best ball, net</u></span><span class="cells"><span class="c wo"><i>4</i><b>D/L</b></span><span class="c wo"><i>5</i><b>D/L</b></span><span class="c now"><i>6</i><b>&ndash;</b></span></span></div>
+<div class="scmount"></div>
+<div style="height:10px"></div>
+</div>
+<div class="bottom"><button class="prev">&#8249; Hole 5</button><button class="next">Hole 7 &#8250;</button></div>
+</div><div class="cap">The hand-called press &mdash; expires on the tee, addressed to two of four</div></div>
+<script src="sequoya-threes-scorecard.js"></script>
+<script>
+Array.prototype.forEach.call(document.querySelectorAll('.scmount'),function(el){
+  SequoyaScorecard.render(el,{played:4,colour:{Paul:'#1976D2',Sam:'#1976D2',Dave:'#EF6C00',Lee:'#EF6C00'}});
+});
+</script>
+</body>
+</html>

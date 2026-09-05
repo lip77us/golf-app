@@ -49,6 +49,7 @@ import logging
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.http import Http404, JsonResponse
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
@@ -958,6 +959,17 @@ def _build_leaderboard(round_obj: Round) -> dict:
             'by_group': [
                 {'foursome_id': fs.id, 'group_number': fs.group_number,
                  'summary': rabbit_summary(fs)}
+                for fs in foursomes
+            ],
+        }
+
+    if 'sequoya_threes' in active_games:
+        from services.sequoya_threes import sequoya_threes_summary
+        games['sequoya_threes'] = {
+            'label'   : 'Sequoya 3s',
+            'by_group': [
+                {'foursome_id': fs.id, 'group_number': fs.group_number,
+                 'summary': sequoya_threes_summary(fs)}
                 for fs in foursomes
             ],
         }
@@ -6267,6 +6279,93 @@ class RabbitResultView(APIView):
 # ---------------------------------------------------------------------------
 # Survivor
 # ---------------------------------------------------------------------------
+
+class SequoyaThreesSetupView(APIView):
+    """
+    POST /api/foursomes/{id}/sequoya-threes/setup/
+    Body: { "side1_player_ids": [id, id], "handicap_mode", "net_percent",
+            "bet_amount", "press_mode" }
+
+    Creates or replaces the game. Idempotent — every bet result is derived from
+    the scores on file, so a re-setup re-scores rather than double-counting.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from api.serializers import SequoyaThreesSetupSerializer
+        ser = SequoyaThreesSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        real = [m for m in foursome.memberships.select_related('player').all()
+                if not m.player.is_phantom]
+        if len(real) != 4:
+            return Response(
+                {'detail': 'Sequoya 3s needs exactly four golfers — six 2v2 '
+                           'matches have no other shape.'},
+                status=status.HTTP_400_BAD_REQUEST)
+        ids = {m.player_id for m in real}
+        if not set(d['side1_player_ids']) <= ids:
+            return Response(
+                {'detail': 'Match 1 must pair two golfers from this group.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        from services.sequoya_threes import (setup_sequoya_threes,
+                                             sequoya_threes_summary)
+        setup_sequoya_threes(
+            foursome, d['side1_player_ids'],
+            handicap_mode = d.get('handicap_mode', 'net'),
+            net_percent   = d.get('net_percent', 100),
+            bet_amount    = d.get('bet_amount', 5),
+            press_mode    = d.get('press_mode', 'auto'),
+        )
+        return Response(sequoya_threes_summary(foursome),
+                        status=status.HTTP_201_CREATED)
+
+
+class SequoyaThreesResultView(APIView):
+    """GET /api/foursomes/{id}/sequoya-threes/ — the six matches and the money."""
+    def get(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.sequoya_threes import sequoya_threes_summary
+        summary = sequoya_threes_summary(foursome)
+        if summary is None:
+            return Response({'detail': 'No Sequoya 3s game set up.'},
+                            status=status.HTTP_404_NOT_FOUND)
+        return Response(summary)
+
+
+class SequoyaThreesPressView(APIView):
+    """
+    POST /api/foursomes/{id}/sequoya-threes/press/
+
+    A press called by hand. The service owns the rules — trailing side only,
+    from the second hole of a match, one per match, opening on the NEXT hole —
+    so they hold however the call arrives, not only when the UI behaves.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from api.serializers import SequoyaThreesPressSerializer
+        ser = SequoyaThreesPressSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        from services.sequoya_threes import (call_press,
+                                             sequoya_threes_summary)
+        try:
+            call_press(foursome,
+                       match_index  = d['match_index'],
+                       side         = d['side'],
+                       called_by_id = d.get('called_by_id'),
+                       current_hole = d['current_hole'])
+        except ValueError as e:
+            return Response({'detail': str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        except ObjectDoesNotExist:
+            return Response({'detail': 'No Sequoya 3s game set up.'},
+                            status=status.HTTP_404_NOT_FOUND)
+        return Response(sequoya_threes_summary(foursome),
+                        status=status.HTTP_201_CREATED)
+
 
 class SurvivorSetupView(APIView):
     """

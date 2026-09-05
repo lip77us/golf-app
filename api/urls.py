@@ -165,6 +165,11 @@ urlpatterns = [
     path('foursomes/<int:pk>/survivor/',       views.SurvivorResultView.as_view(), name='api-survivor-result'),
     path('foursomes/<int:pk>/survivor/setup/', views.SurvivorSetupView.as_view(),  name='api-survivor-setup'),
 
+    # Sequoya 3s — six three-hole 2v2 matches, presses as separate bets.
+    path('foursomes/<int:pk>/sequoya-threes/',       views.SequoyaThreesResultView.as_view(), name='api-sequoya-threes'),
+    path('foursomes/<int:pk>/sequoya-threes/setup/', views.SequoyaThreesSetupView.as_view(),  name='api-sequoya-threes-setup'),
+    path('foursomes/<int:pk>/sequoya-threes/press/', views.SequoyaThreesPressView.as_view(),  name='api-sequoya-threes-press'),
+
     # ---- Triple Cup (One-Round Ryder Cup) ----
     path('foursomes/<int:pk>/triple-cup/',                  views.TripleCupResultView.as_view(),         name='api-triple-cup-result'),
     path('foursomes/<int:pk>/triple-cup/setup/',            views.TripleCupSetupView.as_view(),          name='api-triple-cup-setup'),

@@ -1701,6 +1701,36 @@ class RabbitSetupSerializer(serializers.Serializer):
     extra_rabbits = serializers.BooleanField(default=False)
 
 
+class SequoyaThreesSetupSerializer(serializers.Serializer):
+    """Set up Sequoya 3s for a foursome (4 real players).
+
+    `side1_player_ids` is MATCH 1's pairing and the only pairing there is to
+    choose — matches 2 and 3 are the other two splits and 4-6 repeat them, so
+    accepting six would let them contradict each other.
+
+    There are no format options beyond the handicap: no Classic vs High-Low, no
+    handicap-allocation choice. Strokes fall by full course stroke index.
+    """
+    side1_player_ids = serializers.ListField(
+        child=serializers.IntegerField(), min_length=2, max_length=2)
+    handicap_mode    = serializers.ChoiceField(
+        choices=['net', 'gross', 'strokes_off'], required=False)
+    net_percent      = serializers.IntegerField(min_value=0, max_value=200,
+                                                required=False)
+    bet_amount       = serializers.DecimalField(max_digits=8, decimal_places=2,
+                                                required=False)
+    press_mode       = serializers.ChoiceField(
+        choices=['none', 'auto', 'manual_auto'], required=False)
+
+
+class SequoyaThreesPressSerializer(serializers.Serializer):
+    """Call a press by hand. It opens on the hole AFTER the call."""
+    match_index  = serializers.IntegerField(min_value=1, max_value=6)
+    side         = serializers.IntegerField(min_value=1, max_value=2)
+    current_hole = serializers.IntegerField(min_value=1, max_value=18)
+    called_by_id = serializers.IntegerField(required=False, allow_null=True)
+
+
 class SurvivorSetupSerializer(serializers.Serializer):
     """
     Set up (or replace) the Survivor game for a foursome (3 real players).
