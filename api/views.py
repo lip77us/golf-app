@@ -6377,6 +6377,10 @@ class BankerSetupView(APIView):
                 handicap_mode    = d.get('handicap_mode', 'strokes_off'),
                 net_percent      = d.get('net_percent', 100),
                 rotation_rule    = d.get('rotation_rule', 'ask'),
+                allow_player_double = d.get('allow_player_double', True),
+                allow_counter       = d.get('allow_counter', True),
+                par3_triples        = d.get('par3_triples', True),
+                birdie_bonus        = d.get('birdie_bonus', True),
                 hole_cap_enabled = d.get('hole_cap_enabled', False),
                 hole_cap_amount  = d.get('hole_cap_amount'),
             )

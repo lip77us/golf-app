@@ -379,6 +379,91 @@ class ApiClient {
     }
   }
 
+  // ---- Banker ------------------------------------------------------------
+
+  Future<BankerSummary> getBanker(int foursomeId) async {
+    final data = await _get('/foursomes/$foursomeId/banker/');
+    return BankerSummary.fromJson((data as Map).cast<String, dynamic>());
+  }
+
+  Future<BankerSummary> postBankerSetup(
+    int foursomeId, {
+    required int firstBankerId,
+    required double minBet,
+    required double maxBet,
+    String handicapMode = 'strokes_off',
+    int netPercent = 100,
+    String rotationRule = 'ask',
+    bool allowPlayerDouble = true,
+    bool allowCounter = true,
+    bool par3Triples = true,
+    bool birdieBonus = true,
+    bool holeCapEnabled = false,
+    double? holeCapAmount,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/banker/setup/', {
+      'first_banker_id'    : firstBankerId,
+      'min_bet'            : minBet,
+      'max_bet'            : maxBet,
+      'handicap_mode'      : handicapMode,
+      'net_percent'        : netPercent,
+      'rotation_rule'      : rotationRule,
+      'allow_player_double': allowPlayerDouble,
+      'allow_counter'      : allowCounter,
+      'par3_triples'       : par3Triples,
+      'birdie_bonus'       : birdieBonus,
+      'hole_cap_enabled'   : holeCapEnabled,
+      if (holeCapAmount != null) 'hole_cap_amount': holeCapAmount,
+    });
+    return BankerSummary.fromJson((data as Map).cast<String, dynamic>());
+  }
+
+  /// One declaration on the hole in play — the maximum, the bets, the lock, a
+  /// double, the counter. The server owns the sequence, so a late call comes
+  /// back 409 rather than quietly moving money after the banker teed off.
+  Future<BankerSummary> postBankerHole(
+    int foursomeId, {
+    required int holeNumber,
+    double? maxBet,
+    List<Map<String, dynamic>>? bets,
+    bool? lock,
+    int? double_,
+    int? undouble,
+    bool? counter,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/banker/hole/', {
+      'hole_number': holeNumber,
+      if (maxBet != null)   'max_bet' : maxBet,
+      if (bets != null)     'bets'    : bets,
+      if (lock != null)     'lock'    : lock,
+      if (double_ != null)  'double'  : double_,
+      if (undouble != null) 'undouble': undouble,
+      if (counter != null)  'counter' : counter,
+    });
+    return BankerSummary.fromJson((data as Map).cast<String, dynamic>());
+  }
+
+  /// Open the next hole. `bankerId` answers a tie for the bank; `tieReason`
+  /// records why, and travels all the way to the receipt.
+  Future<BankerSummary> postBankerAdvance(
+    int foursomeId, {
+    required int afterHole,
+    int? bankerId,
+    String? tieReason,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/banker/advance/', {
+      'after_hole': afterHole,
+      if (bankerId != null)  'banker_id' : bankerId,
+      if (tieReason != null) 'tie_reason': tieReason,
+    });
+    return BankerSummary.fromJson((data as Map).cast<String, dynamic>());
+  }
+
+  Future<Map<String, dynamic>> getBankerSettlement(int foursomeId) async {
+    final data = await _get('/foursomes/$foursomeId/banker/settlement/');
+    return (data as Map).cast<String, dynamic>();
+  }
+
   Future<PlayerProfile> updatePlayer(
     int id, {
     String? name,

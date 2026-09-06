@@ -42,6 +42,8 @@ import 'screens/wolf_setup_screen.dart';
 import 'screens/wolf_screen.dart';
 import 'screens/rabbit_setup_screen.dart';
 import 'screens/rabbit_screen.dart';
+import 'screens/banker_setup_screen.dart';
+import 'screens/banker_screen.dart';
 import 'screens/sequoya_threes_setup_screen.dart';
 import 'screens/sequoya_threes_screen.dart';
 import 'screens/sequoya_threes_settlement_screen.dart';
@@ -658,6 +660,15 @@ class _GolfAppState extends State<GolfApp> {
         return page((_) => RoundLandscapeScorecard(
               foursomeId: foursomeId,
               child: RabbitScreen(foursomeId: foursomeId)));
+      case '/banker-setup':
+        return page((_) => BankerSetupScreen(
+              foursomeId: _routeId(settings.arguments),
+              returnToHub: _routeReturnToHub(settings.arguments)));
+      case '/banker':
+        final foursomeId = settings.arguments as int;
+        return page((_) => RoundLandscapeScorecard(
+              foursomeId: foursomeId,
+              child: BankerScreen(foursomeId: foursomeId)));
       case '/sequoya-threes-setup':
         return page((_) => SequoyaThreesSetupScreen(
               foursomeId: _routeId(settings.arguments),

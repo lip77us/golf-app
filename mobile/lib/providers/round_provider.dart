@@ -138,6 +138,8 @@ class RoundProvider extends ChangeNotifier {
   SurvivorSummary? _survivorSummary;
   bool             _loadingSurvivor = false;
   SequoyaThreesSummary? _sequoyaThreesSummary;
+  BankerSummary?        _bankerSummary;
+  bool                  _loadingBanker = false;
   bool                  _loadingSequoyaThrees = false;
   TripleCupSummary? _tripleCupSummary;
   MultiSkinsSummary? _multiSkinsSummary;
@@ -202,6 +204,8 @@ class RoundProvider extends ChangeNotifier {
   SurvivorSummary?  get survivorSummary    => _survivorSummary;
   bool              get loadingSurvivor    => _loadingSurvivor;
   SequoyaThreesSummary? get sequoyaThreesSummary => _sequoyaThreesSummary;
+  BankerSummary? get bankerSummary => _bankerSummary;
+  bool get loadingBanker => _loadingBanker;
   bool              get loadingSequoyaThrees => _loadingSequoyaThrees;
   TripleCupSummary? get tripleCupSummary   => _tripleCupSummary;
   MultiSkinsSummary? get multiSkinsSummary  => _multiSkinsSummary;
@@ -269,6 +273,7 @@ class RoundProvider extends ChangeNotifier {
     _rabbitSummary           = null;
     _survivorSummary         = null;
     _sequoyaThreesSummary    = null;
+    _bankerSummary           = null;
     _tripleCupSummary        = null;
     _multiSkinsSummary       = null;
     _nassauSummary           = null;
@@ -925,6 +930,30 @@ class RoundProvider extends ChangeNotifier {
   /// returns a fresh one) so the screen repaints without a round-trip.
   void setSurvivorSummary(SurvivorSummary summary) {
     _survivorSummary = summary;
+    notifyListeners();
+  }
+
+  Future<void> loadBanker(int foursomeId) async {
+    _loadingBanker = true;
+    notifyListeners();
+    try {
+      _bankerSummary = await _client.getBanker(foursomeId);
+    } on NetworkException {
+      // Offline — keep the previous summary around if we had one.
+    } catch (e) {
+      debugPrint('loadBanker error: $e');
+    } finally {
+      _loadingBanker = false;
+      notifyListeners();
+    }
+  }
+
+  /// Replace the cached Banker summary directly. Every declaration on the hole
+  /// POSTs and returns a fresh summary, and a double has to show on the banner
+  /// the instant it is tapped — a control that lags at a ball in flight is a
+  /// control nobody trusts.
+  void setBankerSummary(BankerSummary summary) {
+    _bankerSummary = summary;
     notifyListeners();
   }
 

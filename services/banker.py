@@ -180,6 +180,8 @@ class BankerLocked(Exception):
 def setup_banker(foursome, *, first_banker_id, min_bet=5, max_bet=50,
                  handicap_mode=HandicapMode.STROKES_OFF, net_percent=100,
                  rotation_rule=BankerGame.ROTATION_ASK,
+                 allow_player_double=True, allow_counter=True,
+                 par3_triples=True, birdie_bonus=True,
                  hole_cap_enabled=False, hole_cap_amount=None):
     """Create or reconfigure the game and open its first hole."""
     lo, hi = Decimal(str(min_bet)), Decimal(str(max_bet))
@@ -192,6 +194,10 @@ def setup_banker(foursome, *, first_banker_id, min_bet=5, max_bet=50,
         defaults=dict(
             handicap_mode=handicap_mode, net_percent=net_percent,
             min_bet=lo, max_bet=hi, rotation_rule=rotation_rule,
+            allow_player_double=bool(allow_player_double),
+            allow_counter=bool(allow_counter),
+            par3_triples=bool(par3_triples),
+            birdie_bonus=bool(birdie_bonus),
             hole_cap_enabled=bool(hole_cap_enabled),
             hole_cap_amount=(Decimal(str(hole_cap_amount))
                              if hole_cap_amount not in (None, '') else None),
@@ -289,20 +295,26 @@ def set_double(foursome, hole_number, player_id, on=True) -> BankerBet:
     """A player doubling on his own shot — a triple on a par 3, where the
     triple REPLACES the double rather than joining it."""
     game = foursome.banker_game
+    if on and not game.allow_player_double:
+        raise ValueError('This group is playing without the player double.')
     row = _hole_row(game, hole_number)
     if _first_score_in(foursome, hole_number):
         raise BankerLocked('The doubles closed when the first score went in.')
     bet = row.bets.filter(player_id=player_id).first()
     if bet is None:
         raise ValueError('That golfer has no bet on this hole.')
-    bet.own_multiplier = (3 if is_par_3(foursome, hole_number) else 2) if on else 1
+    par3 = is_par_3(foursome, hole_number) and game.par3_triples
+    bet.own_multiplier = (3 if par3 else 2) if on else 1
     bet.save(update_fields=['own_multiplier'])
     return bet
 
 
 def set_counter(foursome, hole_number, on=True) -> BankerHole:
     """The banker's counter — one decision landing on every standing bet."""
-    row = _hole_row(foursome.banker_game, hole_number)
+    game = foursome.banker_game
+    if on and not game.allow_counter:
+        raise ValueError('This group is playing without the counter-double.')
+    row = _hole_row(game, hole_number)
     if _first_score_in(foursome, hole_number):
         raise BankerLocked('The counter closed when the first score went in.')
     row.countered = bool(on)
@@ -350,7 +362,8 @@ def resolve_hole(game, foursome, row, gross) -> dict:
                                 hole)
         b_net = None if b_gross is None else b_gross - s_b
         o_net = None if o_gross is None else o_gross - s_o
-        birdie = bool(par and o_gross is not None and o_gross <= par - 1)
+        birdie = bool(game.birdie_bonus and par and o_gross is not None
+                      and o_gross <= par - 1)
 
         chain = [f'${bet.amount:.0f} bet']
         if bet.own_multiplier > 1:
@@ -434,18 +447,38 @@ def _stroke_note(s_b, s_o, opponent_short, banker_short) -> str:
     return 'scratch hole'
 
 
-def hole_exposure(game, row, *, at_current_multipliers=True) -> Decimal:
-    """What this hole can cost the banker as the multipliers currently stand.
+def hole_exposure(game, row) -> Decimal:
+    """What this hole can cost the banker at the multipliers CURRENTLY STANDING.
 
     The only live worst case anywhere in the app, because it is the only place
-    one exists: three bets at once, both sides able to double them, and a gross
-    birdie doubling the payout on top.
+    one exists: three bets at once and both sides able to double them.
+
+    The birdie bonus is deliberately NOT in here. It doubles a payout, but it
+    is an OUTCOME rather than a multiplier standing on the hole — folding it in
+    would make the banner read as though somebody had already holed a putt, and
+    the number would move for a reason the reader cannot see. The setup
+    screen's ladder is where the birdie belongs, because that is a statement
+    about what the game can reach rather than about this hole.
     """
     total = ZERO
     for bet in row.bets.all():
-        mult = bet.own_multiplier if at_current_multipliers else (1)
-        total += Decimal(bet.amount) * mult * (2 if row.countered else 1) * 2
+        total += _stake(bet, row.countered)
     return _capped(game, total)
+
+
+def hole_exposure_if_max(game, row, opponent_ids) -> Decimal:
+    """The same number with every OUTSTANDING bet taken at the banker's own
+    maximum.
+
+    Before all three numbers are in his exposure is not a figure, it is a
+    range — so the banner projects the top of it and names who is still to
+    bet. A total that grows silently as bets arrive tells him nothing about
+    the decision he is making now.
+    """
+    in_already = {b.player_id for b in row.bets.all()}
+    missing = [p for p in opponent_ids if p not in in_already]
+    top = Decimal(row.max_bet or game.max_bet)
+    return _capped(game, hole_exposure(game, row) + top * len(missing))
 
 
 def _capped(game, amount) -> Decimal:
@@ -455,17 +488,32 @@ def _capped(game, amount) -> Decimal:
 
 
 def exposure_ladder(game, n_opponents=3) -> list:
-    """The setup screen's argument. Not one worst case — the whole ladder, so a
-    golfer who reads the second line sets his ceiling differently."""
+    """The setup screen's argument.
+
+    Not one worst case — the whole ladder, because the point is not that the
+    top number is likely, it is that it EXISTS, and a golfer who reads the
+    second line sets his ceiling differently. Rungs a switched-off rule cannot
+    reach are dropped rather than shown greyed: a ladder that overstates what
+    this group can actually lose is not an argument, it is a scare.
+    """
     top = Decimal(game.max_bet)
     base = top * n_opponents
-    return [
-        {'label': f'{n_opponents} opponents at the max', 'amount': base},
-        {'label': 'All of them double off the tee',      'amount': base * 2},
-        {'label': 'Banker counter-doubles',              'amount': base * 4},
-        {'label': 'On a par 3, tripled instead',         'amount': base * 6},
-        {'label': f'{n_opponents} birdies against him',  'amount': base * 12},
-    ]
+    rungs = [{'label': f'{n_opponents} opponents at the max', 'amount': base}]
+    step = base
+    if game.allow_player_double:
+        step = base * 2
+        rungs.append({'label': 'All of them double off the tee',
+                      'amount': step})
+    if game.allow_counter:
+        step = step * 2
+        rungs.append({'label': 'Banker counter-doubles', 'amount': step})
+    if game.allow_player_double and game.par3_triples:
+        step = base * (3 if not game.allow_counter else 6)
+        rungs.append({'label': 'On a par 3, tripled instead', 'amount': step})
+    if game.birdie_bonus:
+        rungs.append({'label': f'{n_opponents} birdies against him',
+                      'amount': step * 2})
+    return rungs
 
 
 # ---------------------------------------------------------------------------
@@ -651,7 +699,12 @@ def banker_summary(foursome) -> dict | None:
                 swings.append({'hole': h, 'amount': moved,
                                'banker': shorts.get(row.banker_id, ''),
                                'banker_delta': res['banker_delta']})
-        res['exposure'] = hole_exposure(game, row)
+        opp = [p for p in ids if p != row.banker_id]
+        pending = [shorts.get(p, '') for p in opp
+                   if p not in {b.player_id for b in row.bets.all()}]
+        res['exposure']        = hole_exposure(game, row)
+        res['exposure_if_max'] = hole_exposure_if_max(game, row, opp)
+        res['outstanding']     = pending
         holes.append(res)
 
     nets = {p: banking[p] + betting[p] for p in ids}
@@ -683,6 +736,14 @@ def banker_summary(foursome) -> dict | None:
         'min_bet'       : Decimal(game.min_bet),
         'max_bet'       : Decimal(game.max_bet),
         'rotation_rule' : game.rotation_rule,
+        'rules'         : {
+            'player_double': game.allow_player_double,
+            'counter'      : game.allow_counter,
+            'par3_triples' : game.par3_triples,
+            'birdie_bonus' : game.birdie_bonus,
+        },
+        'exposure_ladder': exposure_ladder(
+            game, max(1, len([p for p in ids]) - 1)),
         'hole_cap'      : (Decimal(game.hole_cap_amount)
                            if game.hole_cap_enabled and game.hole_cap_amount
                            else None),

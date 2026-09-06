@@ -80,6 +80,8 @@ class CasualRoundLaunch {
       return ('/rabbit-setup', fsArg());
     case GameIds.survivor:
       return ('/survivor-setup', fsArg());
+    case GameIds.banker:
+      return ('/banker-setup', fsArg());
     case GameIds.sequoyaThrees:
       return ('/sequoya-threes-setup', fsArg());
     case GameIds.tripleCup:

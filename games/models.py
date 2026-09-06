@@ -3509,6 +3509,13 @@ class BankerGame(models.Model):
                                         default=50)
     rotation_rule = models.CharField(max_length=10, choices=ROTATION_CHOICES,
                                      default=ROTATION_ASK)
+    # The four action rules, all on. Turn any off and the game still works —
+    # it just gets quieter. They are stored rather than assumed because a
+    # group that plays without the counter is playing Banker, not a variant.
+    allow_player_double = models.BooleanField(default=True)
+    allow_counter       = models.BooleanField(default=True)
+    par3_triples        = models.BooleanField(default=True)
+    birdie_bonus        = models.BooleanField(default=True)
     hole_cap_enabled = models.BooleanField(default=False)
     hole_cap_amount  = models.DecimalField(max_digits=9, decimal_places=2,
                                            null=True, blank=True)

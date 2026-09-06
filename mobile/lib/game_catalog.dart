@@ -59,6 +59,7 @@ class GameIds {
   /// exclusive with the other entry-owning games.
   static const String survivor   = 'survivor';
   static const String sequoyaThrees = 'sequoya_threes';
+  static const String banker        = 'banker';
   /// Match Play single-elimination bracket — 4-person foursome plays
   /// two 9-hole semi-finals on holes 1–9, then Final + 3rd-place
   /// consolation on holes 10–18.  Casual + tournament side game.
@@ -474,6 +475,23 @@ const List<GameMeta> kGameCatalog = [
                    GameIds.skins, GameIds.wolf, GameIds.strokePlay,
                    GameIds.stableford, GameIds.tripleCup, GameIds.matchPlay,
                    GameIds.threePersonMatch},
+  ),
+  GameMeta(
+    id           : GameIds.banker,
+    displayName  : 'Banker',
+    casual       : true,
+    // One golfer banks and the rest bet against him individually, so the
+    // format works from three golfers up. Four is the usual table.
+    minPlayers   : 3,
+    maxPlayers   : 4,
+    // Every hole is declared before it is played — a maximum, three bets, a
+    // lock, then whatever is shouted at a ball in the air. None of that fits
+    // the shared entry screen, so Banker owns its own.
+    hostsOverlaySideGames: true,
+    excludes    : {GameIds.sixes, GameIds.points531, GameIds.nassau,
+                   GameIds.wolf, GameIds.rabbit, GameIds.survivor,
+                   GameIds.sequoyaThrees, GameIds.tripleCup,
+                   GameIds.matchPlay, GameIds.threePersonMatch},
   ),
   GameMeta(
     id           : GameIds.sequoyaThrees,

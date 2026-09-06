@@ -1770,6 +1770,10 @@ class BankerSetupSerializer(serializers.Serializer):
                                                 required=False)
     rotation_rule    = serializers.ChoiceField(choices=['ask', 'draw', 'keep'],
                                                required=False)
+    allow_player_double = serializers.BooleanField(required=False)
+    allow_counter       = serializers.BooleanField(required=False)
+    par3_triples        = serializers.BooleanField(required=False)
+    birdie_bonus        = serializers.BooleanField(required=False)
     hole_cap_enabled = serializers.BooleanField(required=False)
     hole_cap_amount  = serializers.DecimalField(max_digits=9, decimal_places=2,
                                                 required=False, allow_null=True)

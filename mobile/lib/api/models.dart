@@ -6811,3 +6811,268 @@ class SequoyaSettlement {
         groupText: j['group_text']?.toString() ?? '',
       );
 }
+
+// ---------------------------------------------------------------------------
+// Banker — one golfer against three, every hole, each bet on its own
+// ---------------------------------------------------------------------------
+
+/// One opponent's wager on one hole, and what it did.
+///
+/// [strokes] is signed FROM THIS OPPONENT'S SIDE: positive he receives a shot
+/// from the banker in this match, negative the banker receives one from him.
+/// The direction is the half that matters — Banker settles strokes-off inside
+/// each one-on-one, so the banker can be giving in one bet and taking in
+/// another on the same hole.
+class BankerBetLine {
+  final int    playerId;
+  final String name;
+  final String shortName;
+  final double bet;
+  final int    ownMultiplier;
+  final bool   countered;
+  final bool   birdie;
+  final double stake;
+  /// `$10 bet · ×2 his double · ×2 counter = $40` — the only arithmetic the
+  /// app shows, and it earns it: the argument is always about the chain.
+  final String chain;
+  /// open | tied | won | lost — from the OPPONENT's side.
+  final String outcome;
+  final double amount;
+  final int    strokes;
+  final String strokeNote;
+  final int?   bankerNet;
+  final int?   net;
+  final int?   gross;
+
+  const BankerBetLine({
+    required this.playerId, required this.name, required this.shortName,
+    required this.bet, required this.ownMultiplier, required this.countered,
+    required this.birdie, required this.stake, required this.chain,
+    required this.outcome, required this.amount, required this.strokes,
+    required this.strokeNote, this.bankerNet, this.net, this.gross,
+  });
+
+  factory BankerBetLine.fromJson(Map<String, dynamic> j) => BankerBetLine(
+        playerId     : j['player_id'] as int,
+        name         : j['name'] as String? ?? '',
+        shortName    : j['short_name'] as String? ?? '',
+        bet          : _d(j['bet']),
+        ownMultiplier: j['own_multiplier'] as int? ?? 1,
+        countered    : j['countered'] as bool? ?? false,
+        birdie       : j['birdie'] as bool? ?? false,
+        stake        : _d(j['stake']),
+        chain        : j['chain'] as String? ?? '',
+        outcome      : j['outcome'] as String? ?? 'open',
+        amount       : _d(j['amount']),
+        strokes      : j['strokes'] as int? ?? 0,
+        strokeNote   : j['stroke_note'] as String? ?? '',
+        bankerNet    : j['banker_net'] as int?,
+        net          : j['net'] as int?,
+        gross        : j['gross'] as int?,
+      );
+
+  bool get isTie  => outcome == 'tied';
+  bool get isOpen => outcome == 'open';
+  /// A doubled bet that paid nothing — shown, never omitted.
+  bool get voided => isTie && stake > 0;
+}
+
+/// One hole of Banker.
+///
+/// There is deliberately no `bankerNet`: under strokes-off the banker holds a
+/// different net in each of the three matches, so his single figure is his
+/// GROSS and the three nets live on the three lines.
+class BankerHoleState {
+  final int     hole;
+  final int?    par;
+  final bool    isPar3;
+  final int?    bankerId;
+  final int?    bankerGross;
+  final double? maxBet;
+  final bool    locked;
+  final bool    countered;
+  final String  tieReason;
+  final List<BankerBetLine> lines;
+  final double  bankerDelta;
+  final bool    resolved;
+  /// What this hole can still cost the banker at the multipliers standing —
+  /// the only live worst case in the app, because it is the only place one
+  /// exists. The birdie bonus is NOT in it: that is an outcome, not a
+  /// multiplier standing on the hole.
+  final double  exposure;
+  /// The same figure with every outstanding bet taken at the banker's own
+  /// maximum. Before all three numbers are in his exposure is a range, not a
+  /// total.
+  final double  exposureIfMax;
+  /// Short names of the opponents who have not bet yet.
+  final List<String> outstanding;
+
+  const BankerHoleState({
+    required this.hole, this.par, required this.isPar3, this.bankerId,
+    this.bankerGross, this.maxBet, required this.locked,
+    required this.countered, required this.tieReason, required this.lines,
+    required this.bankerDelta, required this.resolved, required this.exposure,
+    required this.exposureIfMax, required this.outstanding,
+  });
+
+  factory BankerHoleState.fromJson(Map<String, dynamic> j) => BankerHoleState(
+        hole       : j['hole'] as int,
+        par        : j['par'] as int?,
+        isPar3     : j['is_par_3'] as bool? ?? false,
+        bankerId   : j['banker_id'] as int?,
+        bankerGross: j['banker_gross'] as int?,
+        maxBet     : j['max_bet'] == null ? null : _d(j['max_bet']),
+        locked     : j['locked'] as bool? ?? false,
+        countered  : j['countered'] as bool? ?? false,
+        tieReason  : j['tie_reason'] as String? ?? '',
+        lines      : ((j['lines'] as List?) ?? [])
+            .map((e) => BankerBetLine.fromJson(
+                (e as Map).cast<String, dynamic>()))
+            .toList(),
+        bankerDelta: _d(j['banker_delta']),
+        resolved   : j['resolved'] as bool? ?? false,
+        exposure   : _d(j['exposure']),
+        exposureIfMax: _d(j['exposure_if_max']),
+        outstanding: ((j['outstanding'] as List?) ?? [])
+            .map((e) => '$e').toList(),
+      );
+
+  bool get betsIn => lines.isNotEmpty;
+}
+
+class BankerPlayerTotal {
+  final int    playerId;
+  final String name;
+  final String shortName;
+  /// Two numbers, not one — different games played by the same man, and a
+  /// golfer can finish level having been wildly up in one and down in the
+  /// other.
+  final double banking;
+  final double betting;
+  final double total;
+
+  const BankerPlayerTotal({
+    required this.playerId, required this.name, required this.shortName,
+    required this.banking, required this.betting, required this.total,
+  });
+
+  factory BankerPlayerTotal.fromJson(Map<String, dynamic> j) =>
+      BankerPlayerTotal(
+        playerId : j['player_id'] as int,
+        name     : j['name'] as String? ?? '',
+        shortName: j['short_name'] as String? ?? '',
+        banking  : _d(j['banking']),
+        betting  : _d(j['betting']),
+        total    : _d(j['total']),
+      );
+}
+
+class BankerSwing {
+  final int    hole;
+  final double amount;
+  final String banker;
+  final double bankerDelta;
+  const BankerSwing({required this.hole, required this.amount,
+                     required this.banker, required this.bankerDelta});
+  factory BankerSwing.fromJson(Map<String, dynamic> j) => BankerSwing(
+        hole       : j['hole'] as int,
+        amount     : _d(j['amount']),
+        banker     : j['banker'] as String? ?? '',
+        bankerDelta: _d(j['banker_delta']),
+      );
+}
+
+class BankerRules {
+  final bool playerDouble;
+  final bool counter;
+  final bool par3Triples;
+  final bool birdieBonus;
+  const BankerRules({required this.playerDouble, required this.counter,
+                     required this.par3Triples, required this.birdieBonus});
+  factory BankerRules.fromJson(Map<String, dynamic> j) => BankerRules(
+        playerDouble: j['player_double'] as bool? ?? true,
+        counter     : j['counter'] as bool? ?? true,
+        par3Triples : j['par3_triples'] as bool? ?? true,
+        birdieBonus : j['birdie_bonus'] as bool? ?? true,
+      );
+}
+
+class BankerSummary {
+  final String status;
+  final String handicapMode;
+  final int    netPercent;
+  final double minBet;
+  final double maxBet;
+  final String rotationRule;
+  final double? holeCap;
+  final BankerRules rules;
+  final List<Map<String, dynamic>> exposureLadder;
+  final List<BankerPlayerTotal> players;
+  final List<BankerHoleState>   holes;
+  final int?   currentHole;
+  final BankerHoleState? current;
+  /// The hole whose tie for the bank the group still has to settle. While this
+  /// is set the next hole does not open — a phone did not see who holed out
+  /// first and must not pretend it did.
+  final int?   awaitingTie;
+  final List<Map<String, dynamic>> tieCandidates;
+  final List<BankerSwing> biggestSwings;
+  final Map<String, dynamic> scorecard;
+  final List<Map<String, dynamic>> transfers;
+
+  const BankerSummary({
+    required this.status, required this.handicapMode, required this.netPercent,
+    required this.minBet, required this.maxBet, required this.rotationRule,
+    this.holeCap, required this.rules, required this.exposureLadder,
+    required this.players, required this.holes, this.currentHole, this.current,
+    this.awaitingTie, required this.tieCandidates, required this.biggestSwings,
+    required this.scorecard, required this.transfers,
+  });
+
+  factory BankerSummary.fromJson(Map<String, dynamic> j) => BankerSummary(
+        status      : j['status'] as String? ?? 'in_progress',
+        handicapMode: j['handicap_mode'] as String? ?? 'strokes_off',
+        netPercent  : j['net_percent'] as int? ?? 100,
+        minBet      : _d(j['min_bet']),
+        maxBet      : _d(j['max_bet']),
+        rotationRule: j['rotation_rule'] as String? ?? 'ask',
+        holeCap     : j['hole_cap'] == null ? null : _d(j['hole_cap']),
+        rules       : BankerRules.fromJson(
+            ((j['rules'] as Map?) ?? {}).cast<String, dynamic>()),
+        exposureLadder: ((j['exposure_ladder'] as List?) ?? [])
+            .map((e) => (e as Map).cast<String, dynamic>()).toList(),
+        players: ((j['players'] as List?) ?? [])
+            .map((e) => BankerPlayerTotal.fromJson(
+                (e as Map).cast<String, dynamic>()))
+            .toList(),
+        holes: ((j['holes'] as List?) ?? [])
+            .map((e) => BankerHoleState.fromJson(
+                (e as Map).cast<String, dynamic>()))
+            .toList(),
+        currentHole: j['current_hole'] as int?,
+        current: j['current'] == null
+            ? null
+            : BankerHoleState.fromJson(
+                (j['current'] as Map).cast<String, dynamic>()),
+        awaitingTie: j['awaiting_tie'] as int?,
+        tieCandidates: ((j['tie_candidates'] as List?) ?? [])
+            .map((e) => (e as Map).cast<String, dynamic>()).toList(),
+        biggestSwings: ((j['biggest_swings'] as List?) ?? [])
+            .map((e) => BankerSwing.fromJson(
+                (e as Map).cast<String, dynamic>()))
+            .toList(),
+        scorecard: ((j['scorecard'] as Map?) ?? {}).cast<String, dynamic>(),
+        transfers: (((j['money'] as Map?) ?? {})['transfers'] as List? ?? [])
+            .map((e) => (e as Map).cast<String, dynamic>()).toList(),
+      );
+
+  BankerPlayerTotal? totalFor(int playerId) {
+    for (final p in players) {
+      if (p.playerId == playerId) return p;
+    }
+    return null;
+  }
+}
+
+double _d(dynamic v) =>
+    v == null ? 0.0 : (v is num ? v.toDouble() : double.tryParse('$v') ?? 0.0);

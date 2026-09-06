@@ -17,7 +17,8 @@ from django.test import TestCase
 from core.models import HandicapMode
 from games.models import BankerGame, BankerHole
 from services.banker import (BankerLocked, banker_settlement, banker_summary,
-                             exposure_ladder, hole_exposure, lock_bets,
+                             exposure_ladder, hole_exposure,
+                             hole_exposure_if_max, lock_bets,
                              open_next_hole, place_bet, set_counter,
                              set_double, set_hole_max, setup_banker)
 from ._helpers import make_foursome, make_round, make_tee, submit_hole
@@ -263,15 +264,44 @@ class BankerTests(TestCase):
         self._bets(1, Dave=50, Sam=50, Lee=50)
         set_counter(self.fs, 1)
         row = self.game.holes.get(hole_number=1)
+        # $300 standing, capped to $100.
         self.assertEqual(hole_exposure(self.game, row), Decimal('100'))
 
     def test_exposure_moves_when_a_double_lands(self):
         self._bets(1, Dave=10, Sam=10, Lee=10)
         row = self.game.holes.get(hole_number=1)
-        before = hole_exposure(self.game, row)
+        self.assertEqual(hole_exposure(self.game, row), Decimal('30'))
         set_double(self.fs, 1, self.pid['Dave'])
         row.refresh_from_db()
-        self.assertGreater(hole_exposure(self.game, row), before)
+        self.assertEqual(hole_exposure(self.game, row), Decimal('40'))
+
+    def test_the_banner_counts_standing_multipliers_not_outcomes(self):
+        """The birdie bonus doubles a payout, but it is an OUTCOME — folding
+        it in would make the banner read as though somebody had already holed
+        a putt, and move the number for a reason the reader cannot see."""
+        self._bets(1, Dave=10, Sam=10, Lee=10)
+        set_counter(self.fs, 1)
+        row = self.game.holes.get(hole_number=1)
+        self.assertEqual(hole_exposure(self.game, row), Decimal('60'))
+
+    def test_before_every_bet_is_in_the_exposure_is_a_range(self):
+        """A total that grows silently as bets arrive tells the banker nothing
+        about the decision he is making now."""
+        set_hole_max(self.fs, 1, 30)
+        place_bet(self.fs, 1, self.pid['Dave'], 10)
+        row = self.game.holes.get(hole_number=1)
+        opp = [self.pid['Dave'], self.pid['Sam'], self.pid['Lee']]
+        self.assertEqual(hole_exposure(self.game, row), Decimal('10'))
+        # Two still to bet, and the banker's own maximum is the top of each.
+        self.assertEqual(hole_exposure_if_max(self.game, row, opp),
+                         Decimal('70'))
+
+    def test_the_summary_names_who_has_still_to_bet(self):
+        set_hole_max(self.fs, 1, 30)
+        place_bet(self.fs, 1, self.pid['Dave'], 10)
+        h = self._hole(1)
+        self.assertEqual(set(h['outstanding']), {'S', 'L'})
+        self.assertEqual(h['exposure_if_max'], Decimal('70'))
 
     # -- the money -----------------------------------------------------------
 
@@ -502,3 +532,81 @@ class BankerStrokesTests(TestCase):
         self.assertEqual(s['awaiting_tie'], 5)
         self.assertEqual({c['short_name'] for c in s['tie_candidates']},
                          {'P', 'S', 'L'})
+
+
+class BankerActionRulesTests(TestCase):
+    """The four switches. Turn any off and the game still works — it just gets
+    quieter — so each has to be refused at the source rather than merely hidden
+    on a screen."""
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['banker'])
+        self.fs = make_foursome(self.round,
+                                [('Paul', 0), ('Dave', 0), ('Sam', 0),
+                                 ('Lee', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+
+    def _game(self, **rules):
+        return setup_banker(self.fs, first_banker_id=self.pid['Paul'],
+                            min_bet=5, max_bet=50, **rules)
+
+    def _open(self, hole=1):
+        if hole != 1:
+            self.fs.banker_game.holes.all().delete()
+            BankerHole.objects.create(game=self.fs.banker_game,
+                                      hole_number=hole,
+                                      banker_id=self.pid['Paul'])
+        set_hole_max(self.fs, hole, 10)
+        for who in ('Dave', 'Sam', 'Lee'):
+            place_bet(self.fs, hole, self.pid[who], 10)
+        lock_bets(self.fs, hole)
+
+    def test_a_switched_off_double_is_refused_not_just_hidden(self):
+        self._game(allow_player_double=False)
+        self._open()
+        with self.assertRaises(ValueError):
+            set_double(self.fs, 1, self.pid['Dave'])
+
+    def test_a_switched_off_counter_is_refused(self):
+        self._game(allow_counter=False)
+        self._open()
+        with self.assertRaises(ValueError):
+            set_counter(self.fs, 1)
+
+    def test_without_the_par_3_rule_a_par_3_doubles_like_any_hole(self):
+        self._game(par3_triples=False)
+        self._open(3)
+        bet = set_double(self.fs, 3, self.pid['Dave'])
+        self.assertEqual(bet.own_multiplier, 2)
+
+    def test_without_the_birdie_bonus_a_birdie_just_wins(self):
+        self._game(birdie_bonus=False)
+        self._open()
+        submit_hole(self.fs, 1, [(self.pid['Paul'], 5), (self.pid['Dave'], 3),
+                                 (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
+        line = next(l for l in banker_summary(self.fs)['holes'][0]['lines']
+                    if l['player_id'] == self.pid['Dave'])
+        self.assertEqual(line['amount'], Decimal('10'))
+        self.assertFalse(line['birdie'])
+
+    def test_the_ladder_drops_rungs_the_group_cannot_reach(self):
+        """A ladder overstating what THIS group can lose is not an argument,
+        it is a scare."""
+        game = self._game(allow_counter=False, birdie_bonus=False)
+        labels = [r['label'] for r in exposure_ladder(game)]
+        self.assertNotIn('Banker counter-doubles', labels)
+        self.assertEqual(labels[-1], 'On a par 3, tripled instead')
+        self.assertEqual(exposure_ladder(game)[-1]['amount'], Decimal('450'))
+
+    def test_all_four_on_is_the_full_climb(self):
+        game = self._game()
+        self.assertEqual([r['amount'] for r in exposure_ladder(game)],
+                         [Decimal(n) for n in (150, 300, 600, 900, 1800)])
+
+    def test_the_summary_states_which_rules_are_live(self):
+        self._game(allow_counter=False)
+        rules = banker_summary(self.fs)['rules']
+        self.assertFalse(rules['counter'])
+        self.assertTrue(rules['player_double'])
