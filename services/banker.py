@@ -737,10 +737,16 @@ def banker_summary(foursome) -> dict | None:
 
     tie_ids = []
     awaiting = None
+    next_id = None
     if current and current.get('resolved'):
         who, tied = next_banker(game, rows[current['hole']], net, ids)
         if tied and who is None:
             awaiting, tie_ids = current['hole'], tied
+        else:
+            # Outright, so the app can simply SAY who takes it. A role that
+            # changed hands unannounced is the fastest way to have two golfers
+            # both think they are banking the 8th.
+            next_id = who
 
     swings.sort(key=lambda e: -e['amount'])
     return {
@@ -770,6 +776,8 @@ def banker_summary(foursome) -> dict | None:
         'awaiting_tie'  : awaiting,
         'tie_candidates': [{'player_id': p, 'short_name': shorts.get(p, '')}
                            for p in tie_ids],
+        'next_banker_id'   : next_id,
+        'next_banker_name' : names.get(next_id, '') if next_id else '',
         'biggest_swings': swings[:3],
         'bets_settled'  : sum(len(h['lines']) for h in holes
                               if h.get('resolved')),

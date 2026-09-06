@@ -25,7 +25,11 @@ import '../theme/halved_brand.dart';
 const _gold      = Color(0xFFB8860B);
 const _goldFill  = Color(0xFFFBF0D6);
 const _goldLine  = Color(0xFFE4D3A8);
-const _amber     = Color(0xFF8A5216);
+/// Money lost. **Not amber** — amber is the counter-double on the play screen,
+/// and a negative figure in the counter's brown reads as though the counter
+/// caused it. Nothing on this board is a counter: the table shows what each
+/// hole PAID, never what was on it.
+final _owed = Colors.red.shade700;
 
 class BankerGroupCard extends StatelessWidget {
   const BankerGroupCard({super.key, required this.group});
@@ -245,7 +249,7 @@ class BankerGroupCard extends StatelessWidget {
 
   Color _tone(double? v, bool resolved) {
     if (!resolved || v == null || v == 0) return Halved.muted;
-    return v > 0 ? Halved.pine : _amber;
+    return v > 0 ? Halved.pine : _owed;
   }
 
   Widget _totalRow(String label, List<BankerPlayerTotal> cols,
@@ -276,7 +280,7 @@ class BankerGroupCard extends StatelessWidget {
                         ? Halved.muted
                         : pick(p) > 0
                             ? Halved.pine
-                            : pick(p) < 0 ? _amber : Halved.muted)),
+                            : pick(p) < 0 ? _owed : Halved.muted)),
           ),
       ]),
     );
@@ -357,7 +361,7 @@ class BankerGroupCard extends StatelessWidget {
             Text('${_money(w.topAmount)} ${w.topName}',
                 style: TextStyle(
                     fontSize: 14.5, fontWeight: FontWeight.w700,
-                    color: w.topAmount > 0 ? Halved.pine : _amber)),
+                    color: w.topAmount > 0 ? Halved.pine : _owed)),
           ]),
         ),
     ]);
@@ -367,34 +371,71 @@ class BankerGroupCard extends StatelessWidget {
 
   // -- the net card ---------------------------------------------------------
 
-  /// **Net, and with no stroke dot** — the one place Banker departs from every
-  /// other card in the app. A hole here is three net comparisons against the
-  /// banker, and gross would make the reader do the subtraction four times a
-  /// row to check a single bet.
-  ///
-  /// Two marks carry the whole hole: **gold is the banker, a green box beat
-  /// him.** Unmarked lost to him or tied him — and since a tie is no action,
-  /// unmarked does not mean paid. The money table above says who paid.
-  Widget _card(BankerSummary s, List<BankerPlayerTotal> cols) {
-    final rows = (s.scorecard['rows'] as List? ?? [])
+  Widget _card(BankerSummary s, List<BankerPlayerTotal> cols) =>
+      BankerNetCard(summary: s);
+
+  // -- small helpers --------------------------------------------------------
+
+  String _money(double v) =>
+      v == 0 ? '–' : (v > 0 ? '+\$${v.round()}' : '−\$${v.abs().round()}');
+
+  String _given(String name) => name.trim().split(RegExp(r'\s+')).first;
+
+  String _family(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    return parts.length > 1 ? parts.last : '';
+  }
+}
+
+
+/// The net card, drawn identically wherever it appears.
+///
+/// The packet ships it as one file with two consumers — the play surface and
+/// the leaderboard — and that is the point: a card that disagreed with itself
+/// between two screens would be worse than no card.
+///
+/// **Net, and with no stroke dot.** The one place Banker departs from every
+/// other card in the app: a hole here is three net comparisons against the
+/// banker, and gross would make the reader do the subtraction four times a row
+/// to check a single bet.
+///
+/// **The whole handicap of a match is carried on the opponent's side of it**,
+/// because under strokes-off the banker holds a different relationship in each
+/// of the three and there is no single "his net" for his column. Where he
+/// receives the shot it is added to the opponent instead. Identical
+/// arithmetic, one honest column, and every comparison direct.
+///
+/// Two marks and nothing else: **gold is the banker, a green box beat him.**
+/// Unmarked lost to him or tied him — and since a tie is no action, unmarked
+/// does not mean paid.
+class BankerNetCard extends StatelessWidget {
+  const BankerNetCard({super.key, required this.summary, this.title = 'THE CARD'});
+
+  final BankerSummary summary;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = (summary.scorecard['rows'] as List? ?? [])
         .map((e) => (e as Map).cast<String, dynamic>())
         .toList();
     if (rows.isEmpty) return const SizedBox.shrink();
-    final holes = (s.scorecard['holes'] as List? ?? []).cast<int>();
+    final holes = (summary.scorecard['holes'] as List? ?? []).cast<int>();
+    // Cut to the holes already posted, so the hole being entered stays blank
+    // rather than showing a half-finished row.
     final played = holes
-        .where((h) => rows.any((r) => (r['net'] as Map?)?['$h'] != null ||
-                                      (r['net'] as Map?)?[h] != null))
+        .where((h) => rows.any((r) => _at(r['net'], h) != null))
         .toList();
     if (played.isEmpty) return const SizedBox.shrink();
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Row(children: [
-        Text('THE CARD',
-            style: TextStyle(
+      Row(children: [
+        Text(title,
+            style: const TextStyle(
                 fontSize: 10.5, fontWeight: FontWeight.w700,
                 letterSpacing: 0.5, color: Halved.muted)),
-        SizedBox(width: 8),
-        Text('net · gold banked · green beat him',
+        const SizedBox(width: 8),
+        const Text('net · gold banked · green beat him',
             style: TextStyle(fontSize: 10.5, color: Halved.muted)),
       ]),
       const SizedBox(height: 6),
@@ -425,7 +466,7 @@ class BankerGroupCard extends StatelessWidget {
                       style: const TextStyle(
                           fontSize: 12, fontWeight: FontWeight.w600)),
                 ),
-                for (final h in played) _cardCell(r, h),
+                for (final h in played) _cell(r, h),
               ]),
             ),
         ]),
@@ -433,7 +474,7 @@ class BankerGroupCard extends StatelessWidget {
     ]);
   }
 
-  Widget _cardCell(Map<String, dynamic> row, int hole) {
+  Widget _cell(Map<String, dynamic> row, int hole) {
     final v      = _at(row['net'], hole);
     final banked = _at(row['banked'], hole) == true;
     final beat   = _at(row['beat'], hole) == true;
@@ -446,35 +487,20 @@ class BankerGroupCard extends StatelessWidget {
         color: banked ? _goldFill : null,
         border: beat
             ? Border.all(color: Halved.pine, width: 1.4)
-            : banked
-                ? Border.all(color: _goldLine)
-                : null,
+            : banked ? Border.all(color: _goldLine) : null,
         borderRadius: BorderRadius.circular(5),
       ),
       child: Text(v == null ? '' : '$v',
           style: TextStyle(
               fontSize: 12.5,
               fontWeight: (banked || beat) ? FontWeight.w700 : FontWeight.w500,
-              color: banked ? _gold
-                            : beat ? Halved.pine : Halved.deepPine)),
+              color: banked ? _gold : beat ? Halved.pine : Halved.deepPine)),
     );
   }
 
-  /// JSON object keys arrive as strings; a Dart map built locally keys on int.
-  dynamic _at(dynamic map, int hole) {
+  /// JSON object keys arrive as strings; a map built in Dart keys on int.
+  static dynamic _at(dynamic map, int hole) {
     if (map is! Map) return null;
     return map['$hole'] ?? map[hole];
-  }
-
-  // -- small helpers --------------------------------------------------------
-
-  String _money(double v) =>
-      v == 0 ? '–' : (v > 0 ? '+\$${v.round()}' : '−\$${v.abs().round()}');
-
-  String _given(String name) => name.trim().split(RegExp(r'\s+')).first;
-
-  String _family(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    return parts.length > 1 ? parts.last : '';
   }
 }

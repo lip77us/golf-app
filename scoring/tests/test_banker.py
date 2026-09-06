@@ -698,3 +698,43 @@ class BankerBoardTests(TestCase):
         self.assertEqual(s['bets_settled'], 0)
         self.assertEqual(s['biggest_swings'], [])
         self.assertTrue(all(p['total'] == ZERO for p in s['players']))
+
+
+class BankerRotationAnnouncementTests(TestCase):
+    """A role that changed hands unannounced is the fastest way to have two
+    golfers both think they are banking the 8th."""
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['banker'])
+        self.fs = make_foursome(self.round,
+                                [('Paul', 0), ('Dave', 0), ('Sam', 0),
+                                 ('Lee', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        self.game = setup_banker(self.fs, first_banker_id=self.pid['Paul'])
+        set_hole_max(self.fs, 1, 10)
+        for who in ('Dave', 'Sam', 'Lee'):
+            place_bet(self.fs, 1, self.pid[who], 10)
+        lock_bets(self.fs, 1)
+
+    def test_an_outright_winner_is_named_before_the_next_hole_opens(self):
+        submit_hole(self.fs, 1, [(self.pid['Paul'], 5), (self.pid['Dave'], 4),
+                                 (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
+        s = banker_summary(self.fs)
+        self.assertIsNone(s['awaiting_tie'])
+        self.assertEqual(s['next_banker_id'], self.pid['Dave'])
+        self.assertEqual(s['next_banker_name'], 'Dave')
+
+    def test_a_tie_names_nobody_and_asks_instead(self):
+        submit_hole(self.fs, 1, [(self.pid['Paul'], 5), (self.pid['Dave'], 4),
+                                 (self.pid['Sam'], 4), (self.pid['Lee'], 5)])
+        s = banker_summary(self.fs)
+        self.assertIsNone(s['next_banker_id'])
+        self.assertEqual(s['awaiting_tie'], 1)
+
+    def test_an_unfinished_hole_names_nobody(self):
+        submit_hole(self.fs, 1, [(self.pid['Paul'], 5)])
+        s = banker_summary(self.fs)
+        self.assertIsNone(s['next_banker_id'])
+        self.assertIsNone(s['awaiting_tie'])

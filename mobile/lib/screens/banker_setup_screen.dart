@@ -31,6 +31,10 @@ const _gold      = Color(0xFFB8860B);
 const _goldFill  = Color(0xFFFBF0D6);
 const _goldLine  = Color(0xFFE4D3A8);
 const _goldPanel = Color(0xFFFDF8EC);
+/// The one sanctioned non-counter use of amber: the packet's own token note
+/// reads "amber (the counter, and warnings)", and the top rung of the exposure
+/// ladder is exactly a warning — the number nobody pictures when they set up a
+/// "$50 game". It marks no action and appears nowhere else on this screen.
 const _amber     = Color(0xFF8A5216);
 
 class BankerSetupScreen extends StatefulWidget {
@@ -509,17 +513,22 @@ class _BankerSetupScreenState extends State<BankerSetupScreen> {
                           fontSize: 14.5, fontWeight: FontWeight.w600)),
                 ),
                 const SizedBox(width: 8),
+                // Neutral, not amber. These are SCOPE labels — when the call
+                // can be made, which holes it applies to — and amber means the
+                // banker's counter. "Before it lands" sitting in the counter's
+                // brown on the row about a PLAYER's double is the same
+                // collision one screen over.
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFDF3E7),
+                    color: const Color(0xFFEDF1EE),
                     borderRadius: BorderRadius.circular(Halved.rPill),
                   ),
                   child: Text(tag,
                       style: const TextStyle(
                           fontSize: 10, fontWeight: FontWeight.w700,
-                          color: _amber)),
+                          color: Halved.muted)),
                 ),
               ]),
               const SizedBox(height: 3),

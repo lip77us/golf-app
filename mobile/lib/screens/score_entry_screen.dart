@@ -25,6 +25,7 @@ import 'package:provider/provider.dart';
 
 import '../api/models.dart';
 import '../game_catalog.dart';
+import '../widgets/banker_entry_strip.dart';
 import '../game_colors.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
@@ -325,6 +326,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         rp.nassauSummary != null) {
       futures.add(rp.loadNassau(widget.foursomeId));
     }
+    // Banker's strip sits under the entry card and has to be there on first
+    // paint — the hole's three bets were agreed on the tee, and a screen that
+    // shows the scores without them is the one place the money is invisible.
+    if (games.contains(GameIds.banker) ||
+        configured.contains(GameIds.banker) ||
+        rp.bankerSummary != null) {
+      futures.add(rp.loadBanker(widget.foursomeId));
+    }
     if (games.contains('skins') ||
         configured.contains('skins') ||
         rp.skinsSummary != null) {
@@ -560,6 +569,17 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   // ── Player ordering ─────────────────────────────────────────────────────────
 
   /// Real (non-phantom) players.  Nassau-ordered (T2/red then T1/blue) when available.
+  /// Who banks the hole currently on screen — not necessarily the hole in
+  /// play, since the entry screen can be scrolled back over posted holes.
+  int? _bankerForSelectedHole(RoundProvider rp) {
+    final s = rp.bankerSummary;
+    if (s == null) return null;
+    for (final h in s.holes) {
+      if (h.hole == _selectedHole) return h.bankerId;
+    }
+    return null;
+  }
+
   List<Membership> _orderedPlayers(
     Scorecard sc,
     Round? round,
@@ -567,6 +587,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     TripleCupSummary? tripleCup,
     FourballSummary? fourball,
     VegasSummary? vegas,
+    int? bankerId,
   }) {
     final foursome = round?.foursomes
         .where((f) => f.id == widget.foursomeId)
@@ -594,6 +615,24 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 playingHandicap: s.handicapStrokes,
               ))
           .toList();
+    }
+
+    // Banker: the banker on top, then the rest by handicap index.
+    //
+    // The whole card is read against him — his is the number the other three
+    // are compared to — and leaving him in roster order makes every reader
+    // hunt for it. Ordering the opponents by index then puts the strokes in a
+    // gradient rather than scattering them: everyone who GIVES the banker a
+    // shot sits together above everyone who TAKES one, and the flip happens at
+    // his own index. In a game where each opponent's handicap only ever
+    // matters as a difference from the banker's, that is the order the strokes
+    // are actually in.
+    if (bankerId != null && members.any((m) => m.player.id == bankerId)) {
+      final banker = members.firstWhere((m) => m.player.id == bankerId);
+      final rest = members.where((m) => m.player.id != bankerId).toList()
+        ..sort((a, b) => (double.tryParse(a.player.handicapIndex) ?? 0)
+            .compareTo(double.tryParse(b.player.handicapIndex) ?? 0));
+      return [banker, ...rest];
     }
 
     // Triple Cup: Red (team_number 1) on top, Blue on the bottom.
@@ -1217,8 +1256,24 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       if (mounted) _loadGameSummaries(context.read<RoundProvider>());
     });
 
+    if (_bankerRound(rp)) {
+      // Back to the hole's own screen to resolve it and settle the bank.
+      await context.read<SyncService>().waitUntilIdle();
+      if (!mounted) return;
+      await context.read<RoundProvider>().loadBanker(widget.foursomeId);
+      if (!mounted) return;
+      Navigator.of(ctx).pop();
+      return;
+    }
     _advance();
   }
+
+  /// True when Banker owns this round, in which case the hole is not finished
+  /// when the scores are — the three bets still have to resolve and the bank
+  /// still has to pass.
+  bool _bankerRound(RoundProvider rp) =>
+      resolvePrimary(rp.round?.primaryGame, rp.round?.activeGames.toSet() ?? {})
+          == GameIds.banker;
 
   Future<void> _submitJunk(int hole, Map<int, int> edits) async {
     final client  = context.read<AuthProvider>().client;
@@ -1804,6 +1859,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                         ? rp.fourballSummary
                         : null,
                     vegas: games.contains('vegas') ? rp.vegasSummary : null,
+                    bankerId: _bankerForSelectedHole(rp),
                   );
                   final par = sc.holeData(_selectedHole)?.par ?? 4;
                   _completeRound(context, players, par);
@@ -1900,7 +1956,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final players    = _orderedPlayers(sc, rp.round, nas,
         tripleCup: games.contains('triple_cup') ? rp.tripleCupSummary : null,
         fourball: games.contains('fourball') ? rp.fourballSummary : null,
-        vegas: games.contains('vegas') ? rp.vegasSummary : null);
+        vegas: games.contains('vegas') ? rp.vegasSummary : null,
+        bankerId: _bankerForSelectedHole(rp));
     final scores     = _effectiveScores(sc, _selectedHole);
     final allDone    = _allScored(players, scores, _selectedHole);
     final isComplete = rp.round?.status == 'complete';
@@ -2019,6 +2076,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
 
     final nextHole = _nextHoleInOrder(rp);
     if (nextHole != null) {
+      // **A Banker hole does not walk on to the next one.** The next hole
+      // cannot be played until the bank has passed — it has no banker, no
+      // maximum and no bets — so posting the scores hands the round back to
+      // the Banker screen, which resolves the three bets and settles who
+      // banks next. Walking straight into hole N+1 leaves the game with
+      // nowhere to put a wager and the role silently stuck on whoever held it.
+      final banker = _bankerRound(rp);
       return FilledButton.icon(
         onPressed: (allDone && !rp.submitting)
             ? () => _saveAndAdvance(ctx, players, par)
@@ -2028,8 +2092,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 width: 16, height: 16,
                 child: CircularProgressIndicator(
                     strokeWidth: 2, color: Colors.white))
-            : const Icon(Icons.chevron_right, size: 20),
-        label: Text(rp.submitting ? 'Saving…' : 'Hole $nextHole'),
+            : Icon(banker ? Icons.check : Icons.chevron_right, size: 20),
+        label: Text(rp.submitting
+            ? 'Saving…'
+            : banker ? 'Post the hole' : 'Hole $nextHole'),
         iconAlignment: IconAlignment.end,
       );
     }
@@ -2105,7 +2171,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final players  = _orderedPlayers(sc, rp.round, nas,
         tripleCup: games.contains('triple_cup') ? rp.tripleCupSummary : null,
         fourball: games.contains('fourball') ? rp.fourballSummary : null,
-        vegas: games.contains('vegas') ? rp.vegasSummary : null);
+        vegas: games.contains('vegas') ? rp.vegasSummary : null,
+        bankerId: _bankerForSelectedHole(rp));
     final merged   = _mergePending(rp.localPendingByHole, _pending);
     final holeData = sc.holeData(_selectedHole);
     final scores   = _effectiveScores(sc, _selectedHole);
@@ -2301,6 +2368,32 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                   currentHole: _selectedHole,
                 ),
               const SizedBox(height: 12),
+
+              // Banker's surround: the three bets for the hole being entered,
+              // holding their stakes with the word UNRESOLVED until all four
+              // scores are in, then the group's net card. Entry itself stays
+              // the shared card every game uses — only what sits under it is
+              // Banker's.
+              if (resolvePrimary(rp.round?.primaryGame, games) ==
+                      GameIds.banker &&
+                  rp.bankerSummary != null) ...[
+                BankerEntryStrip(
+                  summary: rp.bankerSummary!,
+                  hole: _selectedHole,
+                  // Counts what is on the card OR just typed, so "N to go"
+                  // ticks down as the group enters rather than only after a
+                  // save.
+                  scoredCount: players
+                      .where((m) =>
+                          (_pending[_selectedHole]?[m.player.id] ??
+                              sc.holeData(_selectedHole)
+                                  ?.scoreFor(m.player.id)
+                                  ?.grossScore) != null)
+                      .length,
+                  fieldSize: players.length,
+                ),
+                const SizedBox(height: 4),
+              ],
 
               // Game status cards
               _GameStatusSection(

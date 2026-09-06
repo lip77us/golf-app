@@ -10,10 +10,14 @@
 /// picks his own number, the bets LOCK, and only then does the banker tee off
 /// — last, knowing all three. Then doubles are shouted at balls in the air.
 ///
-/// Step three is the one the app has to ENFORCE rather than record, which is
-/// why the button says what it unlocks rather than what it is: *Lock bets —
-/// Paul tees off*. The server refuses anything above the lock afterwards, so
-/// this screen is the polite half of a rule that holds either way.
+/// Step three is the one the app has to ENFORCE rather than record, so the
+/// button says what it does rather than what it is. The packet words it *Lock
+/// bets — Paul tees off*; this says **doubles only from here**, because the
+/// app cannot know when anybody swings and naming one golfer asserts an order
+/// the format does not have — the banker plays last, but the other three tee
+/// off in whatever order they like and every bet is in before any of them
+/// does. The server refuses anything above the lock afterwards, so this screen
+/// is the polite half of a rule that holds either way.
 library;
 
 import 'package:flutter/material.dart';
@@ -37,6 +41,17 @@ const _blueLine  = Color(0xFFB8CFE8);
 const _amber     = Color(0xFF8A5216);
 const _amberFill = Color(0xFFFDF3E7);
 const _amberLine = Color(0xFFE8D6BC);
+
+/// Money lost, and nothing else — the app's own red, as every other
+/// leaderboard in it uses.
+///
+/// **Not amber.** Amber is the counter-double here, and the packet is explicit
+/// that each of its three action colours maps to exactly one concept. A
+/// negative figure in the counter's brown reads as though the counter caused
+/// it, and the two are unrelated: a bet can be lost with no counter anywhere
+/// near it.
+final _owed     = Colors.red.shade700;
+const _owedFill = Color(0xFFFBECEA);
 
 class BankerScreen extends StatefulWidget {
   const BankerScreen({super.key, required this.foursomeId});
@@ -150,6 +165,9 @@ class _BankerScreenState extends State<BankerScreen> {
                 if (s.awaitingTie != null) ...[
                   const SizedBox(height: 12),
                   _tiePicker(s),
+                ] else if (s.nextBankerId != null) ...[
+                  const SizedBox(height: 12),
+                  _rotationNote(s),
                 ],
                 const SizedBox(height: 16),
                 _standings(s),
@@ -228,10 +246,14 @@ class _BankerScreenState extends State<BankerScreen> {
             ),
             child: Row(children: [
               Text(
-                  h.resolved
-                      ? 'The hole cost him'
-                      : 'Facing ${h.lines.length} '
-                        '${h.lines.length == 1 ? "bet" : "bets"}',
+                  !h.resolved
+                      ? 'Facing ${h.lines.length} '
+                        '${h.lines.length == 1 ? "bet" : "bets"}'
+                      : h.bankerDelta > 0
+                          ? 'The hole made him'
+                          : h.bankerDelta < 0
+                              ? 'The hole cost him'
+                              : 'He came out level',
                   style: const TextStyle(fontSize: 13, color: Halved.muted)),
               const Spacer(),
               Flexible(
@@ -241,7 +263,11 @@ class _BankerScreenState extends State<BankerScreen> {
                     // number labelled "worst case" beside a settled hole reads
                     // as money still at risk.
                     h.resolved
-                        ? _signed(h.bankerDelta)
+                        // Level reads as a word, not "—": on a hole where
+                        // three bets cancelled, nothing moving IS the story.
+                        ? (h.bankerDelta == 0
+                            ? 'the three cancelled'
+                            : _signed(h.bankerDelta))
                         : pending.isEmpty
                             ? '−\$${worst.round()} worst case'
                             : '−\$${worst.round()} if ${_andList(pending)} '
@@ -250,7 +276,7 @@ class _BankerScreenState extends State<BankerScreen> {
                     style: TextStyle(
                         fontSize: 17, fontWeight: FontWeight.w700,
                         color: h.resolved && h.bankerDelta > 0
-                            ? Halved.pine : _amber)),
+                            ? Halved.pine : _owed)),
               ),
             ]),
           ),
@@ -289,8 +315,8 @@ class _BankerScreenState extends State<BankerScreen> {
         h.maxBet == null
             ? 'The banker names his maximum first — nobody can pick a bet '
               'without it.'
-            : 'Bets are open. The banker has not teed off — he goes last, '
-              'once all three numbers are in.',
+            : 'Bets are open. Every opponent names his own number, and the '
+              'banker plays the hole last.',
         fill: _goldPanel, line: _goldLine, icon: '⏱',
       ),
       const SizedBox(height: 12),
@@ -404,8 +430,8 @@ class _BankerScreenState extends State<BankerScreen> {
           scored
               ? 'The hole is posted. Every bet below settled on its own pair '
                 'of strokes.'
-              : 'Bets locked. The banker has teed off. Doubles are open until '
-                'the first score goes in.',
+              : 'Bets are final. Doubles are open until the first score goes '
+                'in.',
           fill: const Color(0xFFEAF4EE),
           line: const Color(0xFFC2DDCD),
           icon: '🔒'),
@@ -427,7 +453,7 @@ class _BankerScreenState extends State<BankerScreen> {
   Widget _resolvedRow(BankerBetLine l, bool scored) {
     final (tag, tone, fill) = switch (l.outcome) {
       'won'  => ('WON', Halved.pine, const Color(0xFFEAF4EE)),
-      'lost' => ('LOST', _amber, _amberFill),
+      'lost' => ('LOST', _owed, _owedFill),
       'tied' => ('TIED — NO ACTION', Halved.muted, const Color(0xFFF2F5F2)),
       _      => ('UNRESOLVED', Halved.muted, Halved.card),
     };
@@ -644,8 +670,43 @@ class _BankerScreenState extends State<BankerScreen> {
         ]),
       );
 
+  /// Low net takes the role, and when it is outright the app simply says so —
+  /// a role that changed hands unannounced is how two golfers end up both
+  /// thinking they are banking the 8th.
+  Widget _rotationNote(BankerSummary s) => Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: BoxDecoration(
+          color: _goldPanel,
+          border: Border.all(color: _goldLine),
+          borderRadius: BorderRadius.circular(Halved.rCard),
+        ),
+        child: Row(children: [
+          const Text('NEXT BANK',
+              style: TextStyle(
+                  fontSize: 10.5, fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5, color: _gold)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text('${s.nextBankerName} had the low net',
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                    fontSize: 14.5, fontWeight: FontWeight.w600,
+                    color: Halved.deepPine)),
+          ),
+        ]),
+      );
+
   // -- the money so far -----------------------------------------------------
 
+  /// Where everybody stands, and nothing else.
+  ///
+  /// This deliberately does NOT carry the banking / betting split the
+  /// leaderboard leads with. That pair is an observation about a whole round —
+  /// a golfer can finish level having been wildly up as banker and wildly down
+  /// as a player — and it is worth reading once the round is done. Standing on
+  /// a tee with a bet to place, the only number anybody can act on is what he
+  /// is up or down, and putting three figures on the row makes the eye hunt
+  /// for the one that matters.
   Widget _standings(BankerSummary s) => Container(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
         decoration: BoxDecoration(
@@ -654,19 +715,10 @@ class _BankerScreenState extends State<BankerScreen> {
           borderRadius: BorderRadius.circular(Halved.rCard),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Row(children: [
-            Text('WHERE IT STANDS',
-                style: TextStyle(
-                    fontSize: 10.5, fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5, color: Halved.muted)),
-            Spacer(),
-            // Two numbers, not one: banking and betting are different games
-            // played by the same man.
-            Text('BANKING · BETTING',
-                style: TextStyle(
-                    fontSize: 10, fontWeight: FontWeight.w600,
-                    color: Halved.muted)),
-          ]),
+          const Text('WHERE IT STANDS',
+              style: TextStyle(
+                  fontSize: 10.5, fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5, color: Halved.muted)),
           const SizedBox(height: 6),
           for (final p in s.players)
             Padding(
@@ -677,20 +729,12 @@ class _BankerScreenState extends State<BankerScreen> {
                       style: const TextStyle(
                           fontSize: 14.5, fontWeight: FontWeight.w600)),
                 ),
-                Text('${_signed(p.banking)} · ${_signed(p.betting)}',
-                    style: const TextStyle(
-                        fontSize: 12, color: Halved.muted)),
-                const SizedBox(width: 10),
-                SizedBox(
-                  width: 62,
-                  child: Text(_signed(p.total),
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w700,
-                          color: p.total > 0
-                              ? Halved.pine
-                              : p.total < 0 ? _amber : Halved.muted)),
-                ),
+                Text(_signed(p.total),
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w700,
+                        color: p.total > 0
+                            ? Halved.pine
+                            : p.total < 0 ? _owed : Halved.muted)),
               ]),
             ),
         ]),
@@ -716,12 +760,15 @@ class _BankerScreenState extends State<BankerScreen> {
           .pushNamed('/score-entry', arguments: widget.foursomeId);
     } else if (!h.locked) {
       final need = _opponentCount(s) - h.lines.length;
-      final banker = s.players
-          .where((p) => p.playerId == h.bankerId).firstOrNull;
-      final first = banker?.name.split(' ').first ?? 'the banker';
+      // NOT "— Paul tees off", which the packet asks for. The app cannot know
+      // when anybody swings and naming one golfer asserts an order the format
+      // does not have: the banker plays last, but the other three tee off in
+      // whatever order they like and every bet has to be in before any of
+      // them does. The button names the CONSEQUENCE instead — and "no changes
+      // after this" would be wrong, because a double still moves a number.
       label = need > 0
           ? '$need ${need == 1 ? "bet" : "bets"} to go'
-          : 'Lock bets — $first tees off';
+          : 'Lock the bets — doubles only from here';
       onTap = (need > 0 || h.maxBet == null || _busy)
           ? null
           : () => _declare(lock: true);
@@ -735,7 +782,10 @@ class _BankerScreenState extends State<BankerScreen> {
         }
       };
     } else {
-      label = 'Next hole';
+      // Naming him on the button too: this is the tap that hands the role
+      // over, and it should say whose it becomes.
+      final who = s.nextBankerName.split(' ').first;
+      label = who.isEmpty ? 'Next hole' : 'Next hole — $who banks it';
       onTap = _busy ? null : () => _advance(s);
     }
 

@@ -7027,6 +7027,10 @@ class BankerSummary {
   /// first and must not pretend it did.
   final int?   awaitingTie;
   final List<Map<String, dynamic>> tieCandidates;
+  /// Who takes the bank next when the low net was outright. Null while the
+  /// hole is unfinished, and null on a tie — that case is asked about instead.
+  final int?   nextBankerId;
+  final String nextBankerName;
   final List<BankerSwing> biggestSwings;
   final Map<String, dynamic> scorecard;
   final List<Map<String, dynamic>> transfers;
@@ -7036,7 +7040,8 @@ class BankerSummary {
     required this.minBet, required this.maxBet, required this.rotationRule,
     this.holeCap, required this.rules, required this.exposureLadder,
     required this.players, required this.holes, this.currentHole, this.current,
-    this.awaitingTie, required this.tieCandidates, required this.biggestSwings,
+    this.awaitingTie, required this.tieCandidates, this.nextBankerId,
+    this.nextBankerName = '', required this.biggestSwings,
     required this.scorecard, required this.transfers,
   });
 
@@ -7068,6 +7073,8 @@ class BankerSummary {
         awaitingTie: j['awaiting_tie'] as int?,
         tieCandidates: ((j['tie_candidates'] as List?) ?? [])
             .map((e) => (e as Map).cast<String, dynamic>()).toList(),
+        nextBankerId  : j['next_banker_id'] as int?,
+        nextBankerName: j['next_banker_name'] as String? ?? '',
         biggestSwings: ((j['biggest_swings'] as List?) ?? [])
             .map((e) => BankerSwing.fromJson(
                 (e as Map).cast<String, dynamic>()))
