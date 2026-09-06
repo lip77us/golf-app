@@ -339,38 +339,166 @@ class BankerTests(TestCase):
         self.assertEqual(len(t), 3)
         self.assertEqual(sum(x['amount'] for x in t), Decimal('30'))
 
-    # -- handicap ------------------------------------------------------------
-
-    def test_strokes_off_low_is_refused(self):
-        """A match mechanism with no meaning in three separate one-on-ones."""
-        with self.assertRaises(ValueError):
-            setup_banker(self.fs, first_banker_id=self.pid['Paul'],
-                         handicap_mode=HandicapMode.STROKES_OFF)
 
 
-class BankerNetTests(TestCase):
-    """The same game off real handicaps — every one-on-one settles on net,
-    the banker's included."""
+class BankerStrokesTests(TestCase):
+    """The handicap, which is the shape of this game rather than a detail of it.
+
+    A Banker hole is three separate matches and a match is played off the
+    DIFFERENCE between two handicaps, so the banker holds three stroke
+    relationships at once while each opponent holds exactly one. Every
+    assertion here is really the same one: a stroke belongs to a pair, not to
+    a man.
+    """
 
     def setUp(self):
         self.tee   = make_tee()
         self.round = make_round(self.tee.course, active_games=['banker'])
+        # Paul banks off 8. Dave is above him, Sam below, Lee level — so one
+        # hole carries a give, a take and a scratch at the same time.
         self.fs = make_foursome(self.round,
-                                [('Paul', 18), ('Dave', 0), ('Sam', 0),
-                                 ('Lee', 0)], tee=self.tee)
+                                [('Paul', 8), ('Dave', 12), ('Sam', 4),
+                                 ('Lee', 8)], tee=self.tee)
         self.pid = {m.player.name: m.player_id
                     for m in self.fs.memberships.select_related('player')}
         self.game = setup_banker(self.fs, first_banker_id=self.pid['Paul'])
 
-    def test_the_bankers_own_stroke_counts(self):
-        """Paul gets a shot on every hole at 18, so a gross tie is a net win
-        for him and the bet pays the banker."""
-        set_hole_max(self.fs, 1, 10)
+    def _open(self, hole):
+        if hole != 1:
+            self.game.holes.all().delete()
+            BankerHole.objects.create(game=self.game, hole_number=hole,
+                                      banker_id=self.pid['Paul'])
+        set_hole_max(self.fs, hole, 10)
         for who in ('Dave', 'Sam', 'Lee'):
-            place_bet(self.fs, 1, self.pid[who], 10)
-        lock_bets(self.fs, 1)
-        submit_hole(self.fs, 1, [(self.pid['Paul'], 4), (self.pid['Dave'], 4),
-                                 (self.pid['Sam'], 4), (self.pid['Lee'], 4)])
-        h = next(x for x in banker_summary(self.fs)['holes'] if x['hole'] == 1)
-        self.assertEqual(h['banker_net'], 3)
-        self.assertEqual(h['banker_delta'], Decimal('30'))
+            place_bet(self.fs, hole, self.pid[who], 10)
+        lock_bets(self.fs, hole)
+
+    def _lines(self, hole):
+        h = next(x for x in banker_summary(self.fs)['holes']
+                 if x['hole'] == hole)
+        return h, {l['short_name']: l for l in h['lines']}
+
+    def test_strokes_off_is_the_default(self):
+        self.assertEqual(self.game.handicap_mode, HandicapMode.STROKES_OFF)
+
+    def test_the_banker_gives_takes_and_plays_level_on_the_same_hole(self):
+        """The whole point: three relationships, one hole. Hole 5 is stroke
+        index 1, so every difference shows there."""
+        self._open(5)
+        submit_hole(self.fs, 5, [(self.pid['Paul'], 5), (self.pid['Dave'], 5),
+                                 (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
+        h, by = self._lines(5)
+        # Dave is 4 above Paul — he receives.
+        self.assertEqual(by['D']['strokes'], 1)
+        # Sam is 4 below — the banker receives in THAT match.
+        self.assertEqual(by['S']['strokes'], -1)
+        # Lee is level.
+        self.assertEqual(by['L']['strokes'], 0)
+
+    def test_the_bankers_net_is_three_numbers_not_one(self):
+        """There is no single "his net" to put on a card, which is a fact of
+        the format rather than a gap in the data."""
+        self._open(5)
+        submit_hole(self.fs, 5, [(self.pid['Paul'], 5), (self.pid['Dave'], 5),
+                                 (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
+        h, by = self._lines(5)
+        self.assertEqual(h['banker_gross'], 5)
+        self.assertNotIn('banker_net', h)
+        self.assertEqual({by['D']['banker_net'], by['S']['banker_net'],
+                          by['L']['banker_net']}, {5, 4})
+        self.assertEqual(by['D']['banker_net'], 5)   # gives, so plays gross
+        self.assertEqual(by['S']['banker_net'], 4)   # receives one from Sam
+
+    def test_each_opponent_has_exactly_one(self):
+        self._open(5)
+        submit_hole(self.fs, 5, [(self.pid['Paul'], 5), (self.pid['Dave'], 5),
+                                 (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
+        _, by = self._lines(5)
+        self.assertEqual(by['D']['net'], 4)          # receives one
+        self.assertEqual(by['S']['net'], 5)          # gives one, plays gross
+        self.assertEqual(by['L']['net'], 5)
+
+    def test_the_same_gross_settles_three_different_ways(self):
+        """Four fives, and the hole is not a wash: Dave beats the banker, the
+        banker beats Sam, Lee halves."""
+        self._open(5)
+        submit_hole(self.fs, 5, [(self.pid['Paul'], 5), (self.pid['Dave'], 5),
+                                 (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
+        h, by = self._lines(5)
+        self.assertEqual(by['D']['outcome'], 'won')
+        self.assertEqual(by['S']['outcome'], 'lost')
+        self.assertEqual(by['L']['outcome'], 'tied')
+        self.assertEqual(h['banker_delta'], Decimal('0'))
+
+    def test_the_line_names_whoever_strokes_rather_than_saying_you(self):
+        """The play screen is the group's phone; the reader is not reliably
+        either man in the bet."""
+        self._open(5)
+        submit_hole(self.fs, 5, [(self.pid['Paul'], 5), (self.pid['Dave'], 5),
+                                 (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
+        _, by = self._lines(5)
+        self.assertEqual(by['D']['stroke_note'], 'D strokes')
+        self.assertEqual(by['S']['stroke_note'], 'P strokes')
+        self.assertEqual(by['L']['stroke_note'], 'scratch hole')
+
+    def test_the_card_draws_the_stroke_on_the_match_not_on_the_man(self):
+        """Signed on the OPPONENT's cell, and nothing at all on the banker's —
+        his three numbers are already the other three rows, read from his
+        side."""
+        self._open(5)
+        submit_hole(self.fs, 5, [(self.pid['Paul'], 5), (self.pid['Dave'], 5),
+                                 (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
+        card = banker_summary(self.fs)['scorecard']
+        rows = {r['short_name']: r for r in card['rows']}
+        self.assertIsNone(rows['P']['strokes'][5])
+        self.assertTrue(rows['P']['banked'][5])
+        self.assertEqual(rows['D']['strokes'][5], 1)
+        self.assertEqual(rows['S']['strokes'][5], -1)
+        self.assertEqual(rows['L']['strokes'][5], 0)
+
+    def test_the_plan_is_known_for_every_golfer_as_banker(self):
+        """A man choosing a bet needs the shots ahead of him, and in this game
+        those depend on who is banking."""
+        plan = banker_summary(self.fs)['stroke_plan']
+        # Paul banking Dave: Dave receives on the four hardest holes.
+        self.assertEqual(sum(1 for v in plan[self.pid['Paul']][self.pid['Dave']]
+                             .values() if v > 0), 4)
+        # Dave banking Paul: the same four holes, pointing the other way.
+        self.assertEqual(sum(1 for v in plan[self.pid['Dave']][self.pid['Paul']]
+                             .values() if v < 0), 4)
+
+    def test_net_mode_still_gives_each_golfer_his_own_full_allocation(self):
+        """Offered for a group that plays it that way — and it is the one mode
+        where the banker really does have a single net."""
+        setup_banker(self.fs, first_banker_id=self.pid['Paul'],
+                     handicap_mode=HandicapMode.NET)
+        self._open(5)
+        submit_hole(self.fs, 5, [(self.pid['Paul'], 5), (self.pid['Dave'], 5),
+                                 (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
+        _, by = self._lines(5)
+        for line in by.values():
+            self.assertEqual(line['banker_net'], 4)   # Paul off 8, SI 1
+
+    def test_gross_mode_strokes_nobody(self):
+        setup_banker(self.fs, first_banker_id=self.pid['Paul'],
+                     handicap_mode=HandicapMode.GROSS)
+        self._open(5)
+        submit_hole(self.fs, 5, [(self.pid['Paul'], 5), (self.pid['Dave'], 5),
+                                 (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
+        h, by = self._lines(5)
+        self.assertEqual(h['banker_delta'], Decimal('0'))
+        self.assertTrue(all(l['strokes'] == 0 for l in by.values()))
+
+    def test_the_rotation_ranks_the_field_on_its_own_scale(self):
+        """Two jobs for one handicap, and they must not be confused: bets
+        settle strokes-off pairwise, which has no common scale, so the bank
+        passes on each golfer's own full allocation."""
+        self._open(5)
+        submit_hole(self.fs, 5, [(self.pid['Paul'], 5), (self.pid['Dave'], 6),
+                                 (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
+        # Full allocation on SI 1: Paul 4, Dave 5, Sam 4, Lee 4 — Sam wins the
+        # tiebreak only by being named, so this is a tie and the group is asked.
+        s = banker_summary(self.fs)
+        self.assertEqual(s['awaiting_tie'], 5)
+        self.assertEqual({c['short_name'] for c in s['tie_candidates']},
+                         {'P', 'S', 'L'})

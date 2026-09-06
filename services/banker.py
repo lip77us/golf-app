@@ -23,6 +23,12 @@ Three asymmetries, all deliberate and all load-bearing:
 * **Par 3s replace the double with a triple.** Not a fourth option — the same
   slot with a different number. The banker's counter still doubles what stands.
 
+**Strokes come off inside each one-on-one, not off the field.** A Banker hole
+is three separate matches, and a match is played off the difference between
+two handicaps — so the banker carries THREE stroke relationships at once while
+each opponent carries exactly one. There is no single "the banker's net";
+there are three, and they live on the three bet lines. See `pair_strokes`.
+
 **What is stored and what is derived.** Everything declared BEFORE a ball is
 struck is stored, because it cannot be recovered from a scorecard: who banked,
 his maximum, each bet, each double, the counter, and how a tie for the bank was
@@ -61,19 +67,14 @@ def _effective_hcps(game, members):
     return {m.player_id: effective_hcp_for(m, npct) for m in members}
 
 
-def strokes_by_hole(game, foursome, holes) -> dict:
-    """``{pid: {hole: strokes}}`` over EVERY hole, played or not.
+def _playing_hcps(game, members) -> dict:
+    """``{pid: playing handicap}`` under the game's own allowance.
 
-    Known before a ball is struck, which is the point: a golfer choosing a bet
-    on the tee needs to see the shots ahead of him, not only the ones spent.
+    The RAW number for each golfer. Under strokes-off it is only an input —
+    what settles a bet is the DIFFERENCE between two of these.
     """
-    members = [m for m in _real_members(foursome) if m.tee_id is not None]
-    if game.handicap_mode == HandicapMode.GROSS:
-        return {m.player_id: {} for m in members}
-    strokes = make_strokes_fn(foursome)
-    eff = _effective_hcps(game, members)
-    return {m.player_id: {h: strokes(eff[m.player_id], m.tee, h) for h in holes}
-            for m in members}
+    npct = game.net_percent or 100
+    return {m.player_id: effective_hcp_for(m, npct) for m in members}
 
 
 def _gross_by_hole(foursome) -> dict:
@@ -84,24 +85,68 @@ def _gross_by_hole(foursome) -> dict:
     return out
 
 
-def _net_by_hole(game, foursome, gross=None) -> dict:
-    """``{pid: {hole: net}}`` — full-course allocation by stroke index.
+def pair_strokes(game, foursome, banker_id, opponent_id, hole) -> tuple:
+    """``(strokes_to_banker, strokes_to_opponent)`` for ONE one-on-one.
 
-    Every one-on-one settles on net, the banker's included.
+    **This is the shape of Banker's handicap and the reason it needed its own
+    function.** Strokes off the low man is a MATCH mechanism, and a Banker hole
+    is three separate matches — so the banker carries three different stroke
+    relationships at once while each opponent carries exactly one. There is no
+    single "his strokes" number for the banker to put on a scorecard, which is
+    a fact about the format rather than a gap in the data.
+
+    One of the two returns is always 0: in a one-on-one the lower playing
+    handicap goes to scratch and the higher receives the difference, allocated
+    by stroke index on the RECEIVER's own card. The direction is the half that
+    matters and the half a single-number model loses — the banker giving four
+    to Dave and receiving two from Sam is an ordinary hole.
     """
-    members = [m for m in _real_members(foursome) if m.tee_id is not None]
-    gross = _gross_by_hole(foursome) if gross is None else gross
-    if game.handicap_mode == HandicapMode.GROSS:
-        return {m.player_id: dict(gross.get(m.player_id, {})) for m in members}
+    members = {m.player_id: m for m in _real_members(foursome)
+               if m.tee_id is not None}
+    b, o = members.get(banker_id), members.get(opponent_id)
+    if b is None or o is None or game.handicap_mode == HandicapMode.GROSS:
+        return 0, 0
 
     strokes = make_strokes_fn(foursome)
-    eff = _effective_hcps(game, members)
+    ph = _playing_hcps(game, [b, o])
+
+    if game.handicap_mode == HandicapMode.NET:
+        # Full allocation, each golfer off his own handicap — offered for a
+        # group that plays it that way, but it is not the game's own rule.
+        return (strokes(ph[banker_id], b.tee, hole),
+                strokes(ph[opponent_id], o.tee, hole))
+
+    diff = ph[opponent_id] - ph[banker_id]
+    if diff > 0:
+        return 0, strokes(diff, o.tee, hole)
+    if diff < 0:
+        return strokes(-diff, b.tee, hole), 0
+    return 0, 0
+
+
+def stroke_plan(game, foursome, holes) -> dict:
+    """``{banker_id: {opponent_id: {hole: signed strokes}}}`` — the whole plan,
+    before a ball is struck.
+
+    Signed FROM THE OPPONENT'S SIDE: positive means he receives in that match,
+    negative means the banker does. A golfer choosing a bet on the tee needs
+    to see the shots ahead of him, and in this game "ahead of him" depends on
+    who is banking — so the plan is computed for every golfer as banker, not
+    only the one who currently is.
+    """
+    ids = [m.player_id for m in _real_members(foursome)
+           if m.tee_id is not None]
     out = {}
-    for m in members:
-        out[m.player_id] = {
-            hole: g - strokes(eff[m.player_id], m.tee, hole)
-            for hole, g in (gross.get(m.player_id) or {}).items()
-        }
+    for b in ids:
+        out[b] = {}
+        for o in ids:
+            if o == b:
+                continue
+            per = {}
+            for h in holes:
+                sb, so = pair_strokes(game, foursome, b, o, h)
+                per[h] = so - sb
+            out[b][o] = per
     return out
 
 
@@ -133,13 +178,10 @@ class BankerLocked(Exception):
 
 
 def setup_banker(foursome, *, first_banker_id, min_bet=5, max_bet=50,
-                 handicap_mode=HandicapMode.NET, net_percent=100,
+                 handicap_mode=HandicapMode.STROKES_OFF, net_percent=100,
                  rotation_rule=BankerGame.ROTATION_ASK,
                  hole_cap_enabled=False, hole_cap_amount=None):
     """Create or reconfigure the game and open its first hole."""
-    if handicap_mode == HandicapMode.STROKES_OFF:
-        raise ValueError('Banker settles every bet on net; strokes-off-low is '
-                         'a match mechanism and has no meaning here.')
     lo, hi = Decimal(str(min_bet)), Decimal(str(max_bet))
     if lo <= 0 or hi < lo:
         raise ValueError('The wager band needs a floor above zero and a '
@@ -157,6 +199,13 @@ def setup_banker(foursome, *, first_banker_id, min_bet=5, max_bet=50,
             status='in_progress',
         ),
     )
+    # Callers read the summary straight afterwards off the SAME instance, and
+    # Django caches a reverse one-to-one in `_state.fields_cache` — so a
+    # reconfigure would otherwise be read back with the OLD handicap mode
+    # still attached, which is a silent wrong answer rather than an error.
+    getattr(foursome, '_state', None) and \
+        foursome._state.fields_cache.pop('banker_game', None)
+
     holes = play_order(foursome.round, foursome)
     if holes:
         BankerHole.objects.get_or_create(
@@ -277,22 +326,30 @@ def _stake(bet, countered) -> Decimal:
             * (2 if countered else 1))
 
 
-def resolve_hole(game, foursome, row, net, gross) -> dict:
-    """One hole's three one-on-ones.
+def resolve_hole(game, foursome, row, gross) -> dict:
+    """One hole's three one-on-ones — each settled on its OWN pair of strokes.
 
-    Returns the row the play screen and the receipt both draw: per opponent the
-    whole chain — bet, his double, the counter, the birdie — and what actually
-    changed hands.
+    There is no field-wide net here and there cannot be one: under strokes-off
+    the banker plays Dave off a four-shot difference and Sam off a two-shot
+    difference in the same breath, so "the banker's net" is three numbers, not
+    one. Every line therefore carries the two nets that decided IT, and the
+    hole reports the banker's GROSS — the one figure of his that is single.
     """
     hole = row.hole_number
-    b_net = net.get(row.banker_id, {}).get(hole)
+    b_gross = gross.get(row.banker_id, {}).get(hole)
     par = _par_for(foursome, hole)
+    b_short = next((m.player.short_name or m.player.name
+                    for m in _real_members(foursome)
+                    if m.player_id == row.banker_id), '')
     lines, banker_delta = [], ZERO
 
     for bet in row.bets.select_related('player').all():
         stake = _stake(bet, row.countered)
-        o_net = net.get(bet.player_id, {}).get(hole)
         o_gross = gross.get(bet.player_id, {}).get(hole)
+        s_b, s_o = pair_strokes(game, foursome, row.banker_id, bet.player_id,
+                                hole)
+        b_net = None if b_gross is None else b_gross - s_b
+        o_net = None if o_gross is None else o_gross - s_o
         birdie = bool(par and o_gross is not None and o_gross <= par - 1)
 
         chain = [f'${bet.amount:.0f} bet']
@@ -321,10 +378,11 @@ def resolve_hole(game, foursome, row, net, gross) -> dict:
         elif outcome == 'lost':
             banker_delta += amount
 
+        o_short = bet.player.short_name or bet.player.name
         lines.append({
             'player_id'  : bet.player_id,
             'name'       : bet.player.name,
-            'short_name' : bet.player.short_name or bet.player.name,
+            'short_name' : o_short,
             'bet'        : Decimal(bet.amount),
             'own_multiplier': bet.own_multiplier,
             'countered'  : row.countered,
@@ -333,25 +391,47 @@ def resolve_hole(game, foursome, row, net, gross) -> dict:
             'chain'      : ' · '.join(chain) + f' = ${stake:.0f}',
             'outcome'    : outcome,
             'amount'     : amount,
+            # The stroke belongs to the MATCH, so it is reported on the match.
+            # Signed from the opponent's side: + he receives, − the banker does.
+            'strokes'    : s_o - s_b,
+            'stroke_note': _stroke_note(s_b, s_o, o_short, b_short),
+            'banker_net' : b_net,
             'net'        : o_net,
             'gross'      : o_gross,
         })
 
     return {
-        'hole'        : hole,
-        'par'         : par,
-        'is_par_3'    : par == 3,
-        'banker_id'   : row.banker_id,
-        'banker_net'  : b_net,
-        'max_bet'     : row.max_bet,
-        'locked'      : row.locked_at is not None,
-        'countered'   : row.countered,
-        'tie_reason'  : row.tie_reason,
-        'lines'       : lines,
-        'banker_delta': banker_delta,
-        'resolved'    : bool(lines) and all(l['outcome'] != 'open'
-                                            for l in lines),
+        'hole'         : hole,
+        'par'          : par,
+        'is_par_3'     : par == 3,
+        'banker_id'    : row.banker_id,
+        # His gross, not "his net" — see the docstring. The three nets live on
+        # the three lines, which is where the three matches are.
+        'banker_gross' : b_gross,
+        'max_bet'      : row.max_bet,
+        'locked'       : row.locked_at is not None,
+        'countered'    : row.countered,
+        'tie_reason'   : row.tie_reason,
+        'lines'        : lines,
+        'banker_delta' : banker_delta,
+        'resolved'     : bool(lines) and all(l['outcome'] != 'open'
+                                             for l in lines),
     }
+
+
+def _stroke_note(s_b, s_o, opponent_short, banker_short) -> str:
+    """The phrase a bet line carries.
+
+    Never the word "gets" and never a round-long quantity — this is one shot,
+    on one hole, in one match. It NAMES whoever is receiving rather than
+    saying "you", because the play screen is the group's phone and the reader
+    is not reliably either man in the bet.
+    """
+    if s_o and not s_b:
+        return f'{opponent_short} strokes'
+    if s_b and not s_o:
+        return f'{banker_short} strokes'
+    return 'scratch hole'
 
 
 def hole_exposure(game, row, *, at_current_multipliers=True) -> Decimal:
@@ -391,6 +471,34 @@ def exposure_ladder(game, n_opponents=3) -> list:
 # ---------------------------------------------------------------------------
 # Rotation
 # ---------------------------------------------------------------------------
+
+def rotation_net(game, foursome, gross=None) -> dict:
+    """``{pid: {hole: net}}`` on a FIELD-WIDE scale, for the rotation only.
+
+    **Two different jobs for the handicap, and they must not be confused.**
+    Bets settle strokes-off inside each one-on-one, which produces no common
+    scale — the banker's net exists three times over. But the bank has to pass
+    to one man, so the rotation ranks the field on each golfer's own full
+    allocation, exactly as every other game in the app ranks a hole.
+
+    The alternative — ranking by margin against the banker — is the only other
+    coherent scale, and it hands the bank back to the banker on every hole he
+    wins outright. That is a different game (the banker keeps it until he is
+    beaten) and it contradicts a role that rotates every hole.
+    """
+    members = [m for m in _real_members(foursome) if m.tee_id is not None]
+    gross = _gross_by_hole(foursome) if gross is None else gross
+    if game.handicap_mode == HandicapMode.GROSS:
+        return {m.player_id: dict(gross.get(m.player_id, {})) for m in members}
+
+    strokes = make_strokes_fn(foursome)
+    ph = _playing_hcps(game, members)
+    return {
+        m.player_id: {hole: g - strokes(ph[m.player_id], m.tee, hole)
+                      for hole, g in (gross.get(m.player_id) or {}).items()}
+        for m in members
+    }
+
 
 def low_net_on(net, hole, player_ids) -> list:
     """Everyone tied for the low net on this hole, or [] while it is unscored."""
@@ -439,7 +547,7 @@ def open_next_hole(foursome, after_hole, *, banker_id=None,
 
     row = _hole_row(game, after_hole)
     ids = [m.player_id for m in _real_members(foursome)]
-    net = _net_by_hole(game, foursome)
+    net = rotation_net(game, foursome)
     who, tied = next_banker(game, row, net, ids)
 
     if banker_id is not None:
@@ -511,8 +619,8 @@ def banker_summary(foursome) -> dict | None:
                for m in members}
     order   = play_order(foursome.round, foursome)
     gross   = _gross_by_hole(foursome)
-    net     = _net_by_hole(game, foursome, gross)
-    strokes = strokes_by_hole(game, foursome, order)
+    net     = rotation_net(game, foursome, gross)
+    plan    = stroke_plan(game, foursome, order)
 
     rows = {r.hole_number: r for r in
             game.holes.prefetch_related('bets__player').all()}
@@ -530,7 +638,7 @@ def banker_summary(foursome) -> dict | None:
             holes.append({'hole': h, 'par': _par_for(foursome, h),
                           'banker_id': None, 'lines': [], 'resolved': False})
             continue
-        res = resolve_hole(game, foursome, row, net, gross)
+        res = resolve_hole(game, foursome, row, gross)
         if res['resolved']:
             banking[row.banker_id] += res['banker_delta']
             for line in res['lines']:
@@ -588,26 +696,52 @@ def banker_summary(foursome) -> dict | None:
         'tie_candidates': [{'player_id': p, 'short_name': shorts.get(p, '')}
                            for p in tie_ids],
         'biggest_swings': swings[:3],
-        'strokes'       : strokes,
-        'scorecard'     : _scorecard(order, ids, shorts, gross, net, strokes,
-                                     rows),
+        # The whole plan, for every golfer AS BANKER — a man choosing a bet
+        # needs the shots ahead of him, and in this game those depend on who
+        # is banking.
+        'stroke_plan'   : plan,
+        'scorecard'     : _scorecard(order, ids, shorts, gross, plan, rows),
         'money'         : {'transfers': _transfers(nets, shorts),
                            'nets': nets},
     }
 
 
-def _scorecard(order, ids, shorts, gross, net, strokes, rows) -> dict:
-    """The net card the play screen and the leaderboard both draw. One shape,
-    two consumers — `banker-scorecard.js` in the packet is the same idea."""
+def _scorecard(order, ids, shorts, gross, plan, rows) -> dict:
+    """The card the play screen and the leaderboard both draw.
+
+    **The stroke is drawn on the match, not on the man.** Every other game in
+    the app treats a stroke as a property of one golfer and dots his own box.
+    That is exactly what Banker cannot do: on any hole the banker holds three
+    different stroke relationships and each opponent holds one — his, with the
+    banker.
+
+    So the dot moves onto the OPPONENT's cell, where it belongs to the match
+    that cell represents, and it is SIGNED: positive he receives from the
+    banker, negative the banker receives from him. The banker's cell carries
+    the bank mark and no dot at all — and it needs none, because his three
+    numbers are exactly the three dots on the other three rows, read from his
+    side. Nothing is missing from the card; it is the same three facts drawn
+    once each instead of twice.
+    """
+    banked = {h: (rows[h].banker_id if h in rows else None) for h in order}
     return {
-        'holes': order,
-        'banked_by': {h: (rows[h].banker_id if h in rows else None)
-                      for h in order},
+        'holes'    : order,
+        'banked_by': banked,
         'rows': [
-            {'player_id': p, 'short_name': shorts.get(p, ''),
-             'gross': {h: gross.get(p, {}).get(h) for h in order},
-             'net'  : {h: net.get(p, {}).get(h) for h in order},
-             'strokes': {h: (strokes.get(p, {}) or {}).get(h, 0) for h in order}}
+            {
+                'player_id' : p,
+                'short_name': shorts.get(p, ''),
+                'gross'     : {h: gross.get(p, {}).get(h) for h in order},
+                # Signed strokes for THIS golfer against whoever banks that
+                # hole; null on a hole he banks himself, because there is no
+                # single number to put there.
+                'strokes'   : {
+                    h: (None if banked.get(h) in (None, p)
+                        else plan.get(banked[h], {}).get(p, {}).get(h, 0))
+                    for h in order
+                },
+                'banked'    : {h: banked.get(h) == p for h in order},
+            }
             for p in ids
         ],
     }

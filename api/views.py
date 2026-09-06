@@ -6374,7 +6374,7 @@ class BankerSetupView(APIView):
                 first_banker_id  = d['first_banker_id'],
                 min_bet          = d.get('min_bet', 5),
                 max_bet          = d.get('max_bet', 50),
-                handicap_mode    = d.get('handicap_mode', 'net'),
+                handicap_mode    = d.get('handicap_mode', 'strokes_off'),
                 net_percent      = d.get('net_percent', 100),
                 rotation_rule    = d.get('rotation_rule', 'ask'),
                 hole_cap_enabled = d.get('hole_cap_enabled', False),

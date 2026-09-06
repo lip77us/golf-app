@@ -3469,11 +3469,13 @@ class BankerGame(models.Model):
     after his tee shot is playing something else, which is why the lock is a
     stored moment rather than a screen state.
 
-    **Handicap is net or gross, never strokes-off-low.** Strokes-off is a MATCH
-    mechanism — it zeroes the low golfer and gives everyone else the
-    difference — and Banker is three separate one-on-ones in which the low man
-    is on both sides of the table across a round. Full net by stroke index is
-    the rule the game is actually played on.
+    **Handicap comes off inside each one-on-one, which is why strokes-off is
+    the default.** A match is played off the difference between two
+    handicaps, and a Banker hole is three matches at once — so the banker
+    holds three different stroke relationships on the same hole while each
+    opponent holds exactly one. There is no single "the banker's net";
+    there are three, and they live on the three bet lines. Full net is
+    offered for a group that plays it that way, gross for a scratch group.
 
     `hole_cap_amount` is one ceiling on what a single hole can cost the banker,
     all bets and multipliers included. It is NOT a traditional rule, which is
@@ -3496,7 +3498,7 @@ class BankerGame(models.Model):
     status        = models.CharField(max_length=20, default='in_progress')
     handicap_mode = models.CharField(
                         max_length=20, choices=HandicapMode.choices,
-                        default=HandicapMode.NET)
+                        default=HandicapMode.STROKES_OFF)
     net_percent   = models.PositiveSmallIntegerField(default=100)
     # The band. `min_bet` is the floor every opponent must have on the hole;
     # `max_bet` is the ceiling the banker cannot raise his hole maximum past.

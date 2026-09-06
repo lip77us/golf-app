@@ -1749,8 +1749,10 @@ class BankerSetupSerializer(serializers.Serializer):
     hole and a ceiling the banker cannot raise past — which is why the
     prototype draws it as one two-handle track rather than two boxes.
 
-    No strokes-off: it is a match mechanism, and Banker is three separate
-    one-on-ones settled on net.
+    Strokes-off is the DEFAULT, not a refusal: a Banker hole is three
+    one-on-ones and a match is played off the difference between two
+    handicaps. Net (each golfer off his own full allocation) and gross are
+    offered for groups that play it those ways.
 
     `hole_cap_amount` is a ceiling on what one hole can cost the banker, all
     bets and multipliers included. Off unless asked for: a safety rail switched
@@ -1761,8 +1763,9 @@ class BankerSetupSerializer(serializers.Serializer):
                                                 required=False)
     max_bet          = serializers.DecimalField(max_digits=8, decimal_places=2,
                                                 required=False)
-    handicap_mode    = serializers.ChoiceField(choices=['net', 'gross'],
-                                               required=False)
+    handicap_mode    = serializers.ChoiceField(
+                           choices=['strokes_off', 'net', 'gross'],
+                           required=False)
     net_percent      = serializers.IntegerField(min_value=0, max_value=200,
                                                 required=False)
     rotation_rule    = serializers.ChoiceField(choices=['ask', 'draw', 'keep'],

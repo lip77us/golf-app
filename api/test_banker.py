@@ -105,8 +105,21 @@ class BankerEndpointTests(TestCase):
         res = self._setup(first_banker_id=stranger.id)
         self.assertEqual(res.status_code, 400)
 
-    def test_strokes_off_is_refused_by_the_serializer(self):
-        res = self._setup(handicap_mode='strokes_off')
+    def test_strokes_off_is_the_default_and_the_only_one_needing_no_argument(self):
+        """A Banker hole is three one-on-ones, and a match is played off the
+        difference between two handicaps."""
+        res = self._setup()
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.data['handicap_mode'], 'strokes_off')
+
+    def test_the_other_two_modes_are_still_offered(self):
+        for mode in ('net', 'gross'):
+            res = self._setup(handicap_mode=mode)
+            self.assertEqual(res.status_code, 201)
+            self.assertEqual(res.data['handicap_mode'], mode)
+
+    def test_a_mode_that_is_not_one_of_the_three_is_refused(self):
+        res = self._setup(handicap_mode='quota')
         self.assertEqual(res.status_code, 400)
 
     # -- the sequence, enforced server-side ----------------------------------
