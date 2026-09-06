@@ -16,7 +16,8 @@ from django.test import TestCase
 
 from core.models import HandicapMode
 from games.models import BankerGame, BankerHole
-from services.banker import (BankerLocked, banker_settlement, banker_summary,
+from services.banker import (ZERO, BankerLocked, banker_settlement,
+                             banker_summary,
                              exposure_ladder, hole_exposure,
                              hole_exposure_if_max, lock_bets,
                              open_next_hole, place_bet, set_counter,
@@ -471,20 +472,36 @@ class BankerStrokesTests(TestCase):
         self.assertEqual(by['S']['stroke_note'], 'P strokes')
         self.assertEqual(by['L']['stroke_note'], 'scratch hole')
 
-    def test_the_card_draws_the_stroke_on_the_match_not_on_the_man(self):
-        """Signed on the OPPONENT's cell, and nothing at all on the banker's —
-        his three numbers are already the other three rows, read from his
-        side."""
+    def test_the_card_carries_each_match_on_the_opponents_side(self):
+        """There is no single "his net" to put in the banker's column, so the
+        whole handicap of a match rides on the OPPONENT's number and the
+        banker's column is his plain gross. The arithmetic is identical and
+        every comparison on the card is direct."""
         self._open(5)
         submit_hole(self.fs, 5, [(self.pid['Paul'], 5), (self.pid['Dave'], 5),
                                  (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
         card = banker_summary(self.fs)['scorecard']
         rows = {r['short_name']: r for r in card['rows']}
-        self.assertIsNone(rows['P']['strokes'][5])
+        self.assertEqual(rows['P']['net'][5], 5)      # his gross, unadorned
         self.assertTrue(rows['P']['banked'][5])
-        self.assertEqual(rows['D']['strokes'][5], 1)
-        self.assertEqual(rows['S']['strokes'][5], -1)
-        self.assertEqual(rows['L']['strokes'][5], 0)
+        self.assertFalse(rows['P']['beat'][5])
+        # Dave receives one, so he is a shot better than the banker's gross.
+        self.assertEqual(rows['D']['net'][5], 4)
+        self.assertTrue(rows['D']['beat'][5])
+        # The banker receives one from Sam — added to SAM rather than taken
+        # off the banker, so the column stays one number.
+        self.assertEqual(rows['S']['net'][5], 6)
+        self.assertFalse(rows['S']['beat'][5])
+        self.assertEqual(rows['L']['net'][5], 5)      # level, and a tie
+        self.assertFalse(rows['L']['beat'][5])
+
+    def test_the_signed_strokes_still_travel_even_though_the_card_hides_them(self):
+        """The card drops the dot — every bet settles on net and gross would
+        make the reader subtract four times a row — but the per-pair strokes
+        stay in the payload for the surfaces that do name them."""
+        plan = banker_summary(self.fs)['stroke_plan']
+        self.assertEqual(plan[self.pid['Paul']][self.pid['Dave']][5], 1)
+        self.assertEqual(plan[self.pid['Paul']][self.pid['Sam']][5], -1)
 
     def test_the_plan_is_known_for_every_golfer_as_banker(self):
         """A man choosing a bet needs the shots ahead of him, and in this game
@@ -610,3 +627,74 @@ class BankerActionRulesTests(TestCase):
         rules = banker_summary(self.fs)['rules']
         self.assertFalse(rules['counter'])
         self.assertTrue(rules['player_double'])
+
+
+class BankerBoardTests(TestCase):
+    """What the leaderboard reads. The board exists because nobody can
+    reconstruct fifty-four one-on-ones from memory, so the invariants that make
+    it trustworthy are worth pinning."""
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['banker'])
+        self.fs = make_foursome(self.round,
+                                [('Paul', 0), ('Dave', 0), ('Sam', 0),
+                                 ('Lee', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        self.game = setup_banker(self.fs, first_banker_id=self.pid['Paul'],
+                                 min_bet=5, max_bet=50)
+
+    def _hole(self, hole, banker, bets, scores, counter=False):
+        row = self.game.holes.filter(hole_number=hole).first()
+        if row is None:
+            row = BankerHole.objects.create(game=self.game, hole_number=hole,
+                                            banker_id=self.pid[banker])
+        set_hole_max(self.fs, hole, max(bets.values()))
+        for n, amt in bets.items():
+            place_bet(self.fs, hole, self.pid[n], amt)
+        lock_bets(self.fs, hole)
+        if counter:
+            set_counter(self.fs, hole)
+        submit_hole(self.fs, hole,
+                    [(self.pid[n], v) for n, v in scores.items()])
+
+    def test_every_hole_row_sums_to_zero(self):
+        """Every bet was one-on-one, so the row has to balance — it is the one
+        check a reader can run on the whole board at a glance."""
+        self._hole(1, 'Paul', {'Dave': 10, 'Sam': 20, 'Lee': 5},
+                   {'Paul': 5, 'Dave': 4, 'Sam': 6, 'Lee': 5}, counter=True)
+        h = banker_summary(self.fs)['holes'][0]
+        moves = {h['banker_id']: h['banker_delta']}
+        for l in h['lines']:
+            moves[l['player_id']] = (l['amount'] if l['outcome'] == 'won'
+                                     else -l['amount'] if l['outcome'] == 'lost'
+                                     else ZERO)
+        self.assertEqual(sum(moves.values()), Decimal('0'))
+
+    def test_the_biggest_hole_is_named_by_its_largest_single_move(self):
+        """Ranking by the banker's own delta would bury the hole where the
+        bets cancelled to nothing for him while the money moved around him."""
+        # Paul collects 20 from Sam and pays 20 to Dave: he ends level, but
+        # forty dollars changed hands.
+        self._hole(1, 'Paul', {'Dave': 20, 'Sam': 20, 'Lee': 5},
+                   {'Paul': 5, 'Dave': 4, 'Sam': 6, 'Lee': 5})
+        w = banker_summary(self.fs)['biggest_swings'][0]
+        self.assertEqual(w['hole'], 1)
+        # He is exactly level, which is the case that would vanish from a
+        # board ranked on the banker's own number.
+        self.assertEqual(w['banker_delta'], Decimal('0'))
+        self.assertEqual(w['amount'], Decimal('40'))
+        self.assertEqual(abs(w['top_amount']), Decimal('20'))
+        self.assertIn(w['top_name'], {'D', 'S'})
+
+    def test_the_settled_count_is_one_on_ones_not_holes(self):
+        self._hole(1, 'Paul', {'Dave': 10, 'Sam': 10, 'Lee': 10},
+                   {'Paul': 5, 'Dave': 4, 'Sam': 6, 'Lee': 5})
+        self.assertEqual(banker_summary(self.fs)['bets_settled'], 3)
+
+    def test_an_unplayed_hole_contributes_nothing(self):
+        s = banker_summary(self.fs)
+        self.assertEqual(s['bets_settled'], 0)
+        self.assertEqual(s['biggest_swings'], [])
+        self.assertTrue(all(p['total'] == ZERO for p in s['players']))

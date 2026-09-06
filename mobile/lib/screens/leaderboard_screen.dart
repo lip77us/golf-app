@@ -7,6 +7,7 @@ import '../config.dart';
 import '../game_catalog.dart';
 import '../game_colors.dart';
 import '../utils/nassau_team_style.dart';
+import '../widgets/banker_board.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/icon_help_sheet.dart';
 import '../widgets/round_chat_button.dart';
@@ -904,6 +905,12 @@ class _GameView extends StatelessWidget {
         return _ByGroupView(data: data, builder: _RabbitGroupCard.new);
       case 'survivor':
         return _ByGroupView(data: data, builder: _SurvivorGroupCard.new);
+      case 'banker':
+        // The card lives in `widgets/banker_board.dart` rather than in this
+        // file — see its own header for why.
+        return _ByGroupView(
+            data: data,
+            builder: ({required group}) => BankerGroupCard(group: group));
       case 'sequoya_threes':
         return _ByGroupView(data: data, builder: _SequoyaThreesGroupCard.new);
       case 'settlement':

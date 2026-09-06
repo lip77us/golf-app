@@ -6972,13 +6972,24 @@ class BankerSwing {
   final double amount;
   final String banker;
   final double bankerDelta;
+  /// The largest single move on the hole, and who made it. ONE named
+  /// quantity — a column that silently alternates between the banker's net
+  /// and one opponent's bet is unreadable, and ranking by the banker's own
+  /// delta buries the hole where three tripled bets cancelled to nothing for
+  /// him while the money moved around him.
+  final String topName;
+  final double topAmount;
+
   const BankerSwing({required this.hole, required this.amount,
-                     required this.banker, required this.bankerDelta});
+                     required this.banker, required this.bankerDelta,
+                     required this.topName, required this.topAmount});
   factory BankerSwing.fromJson(Map<String, dynamic> j) => BankerSwing(
         hole       : j['hole'] as int,
         amount     : _d(j['amount']),
         banker     : j['banker'] as String? ?? '',
         bankerDelta: _d(j['banker_delta']),
+        topName    : j['top_name'] as String? ?? '',
+        topAmount  : _d(j['top_amount']),
       );
 }
 

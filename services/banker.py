@@ -696,9 +696,23 @@ def banker_summary(foursome) -> dict | None:
                     betting[line['player_id']] -= line['amount']
             moved = sum(abs(l['amount']) for l in res['lines'])
             if moved > ZERO:
-                swings.append({'hole': h, 'amount': moved,
-                               'banker': shorts.get(row.banker_id, ''),
-                               'banker_delta': res['banker_delta']})
+                # ONE quantity in the right-hand column, and it is NAMED:
+                # "+$120 Sam", not a bare figure. A column that silently
+                # alternates between the banker's net and one opponent's bet
+                # is unreadable — and ranking by the banker's own delta would
+                # bury the round's biggest hole, the one where three tripled
+                # bets cancelled to nothing for him while the money moved
+                # around him.
+                top = max(res['lines'], key=lambda l: abs(l['amount']))
+                swings.append({
+                    'hole'        : h,
+                    'amount'      : moved,
+                    'banker'      : shorts.get(row.banker_id, ''),
+                    'banker_delta': res['banker_delta'],
+                    'top_name'    : top['short_name'],
+                    'top_amount'  : (top['amount'] if top['outcome'] == 'won'
+                                     else -top['amount']),
+                })
         opp = [p for p in ids if p != row.banker_id]
         pending = [shorts.get(p, '') for p in opp
                    if p not in {b.player_id for b in row.bets.all()}]
@@ -757,55 +771,78 @@ def banker_summary(foursome) -> dict | None:
         'tie_candidates': [{'player_id': p, 'short_name': shorts.get(p, '')}
                            for p in tie_ids],
         'biggest_swings': swings[:3],
+        'bets_settled'  : sum(len(h['lines']) for h in holes
+                              if h.get('resolved')),
         # The whole plan, for every golfer AS BANKER — a man choosing a bet
         # needs the shots ahead of him, and in this game those depend on who
         # is banking.
         'stroke_plan'   : plan,
-        'scorecard'     : _scorecard(order, ids, shorts, gross, plan, rows),
+        'scorecard'     : _scorecard(order, ids, shorts, gross, plan, rows,
+                                     game, foursome),
         'money'         : {'transfers': _transfers(nets, shorts),
                            'nets': nets},
     }
 
 
-def _scorecard(order, ids, shorts, gross, plan, rows) -> dict:
+def _scorecard(order, ids, shorts, gross, plan, rows, game, foursome) -> dict:
     """The card the play screen and the leaderboard both draw.
 
-    **The stroke is drawn on the match, not on the man.** Every other game in
-    the app treats a stroke as a property of one golfer and dots his own box.
-    That is exactly what Banker cannot do: on any hole the banker holds three
-    different stroke relationships and each opponent holds one — his, with the
-    banker.
+    **Net, and with no stroke dot** — the one place Banker departs from every
+    other game in the app. Elsewhere the card shows gross with a dot, the way
+    golfers write it on paper. Here a hole is three net comparisons against the
+    banker, and gross would make the reader do the subtraction four times a row
+    to check a single bet.
 
-    So the dot moves onto the OPPONENT's cell, where it belongs to the match
-    that cell represents, and it is SIGNED: positive he receives from the
-    banker, negative the banker receives from him. The banker's cell carries
-    the bank mark and no dot at all — and it needs none, because his three
-    numbers are exactly the three dots on the other three rows, read from his
-    side. Nothing is missing from the card; it is the same three facts drawn
-    once each instead of twice.
+    **The whole handicap of a match is carried on the OPPONENT's side of it.**
+    Under strokes-off the banker holds a different relationship in each of the
+    three matches, so there is no single "his net" to put in his column — but
+    every match can be expressed as one adjusted opponent number against his
+    plain GROSS, because only the difference between the two ever mattered.
+    Where the banker receives the shot, it is added to the opponent instead of
+    subtracted from the banker. The arithmetic is identical and the column is
+    one honest number.
+
+    That leaves the two marks the packet asks for and nothing else: **gold is
+    the banker, a green box beat him.** Unmarked lost to him or tied him — and
+    since a tie is no action, unmarked does not mean paid. The money table
+    above says who paid.
+
+    The signed per-pair strokes still travel in `stroke_plan`; the card simply
+    does not draw them.
     """
     banked = {h: (rows[h].banker_id if h in rows else None) for h in order}
-    return {
-        'holes'    : order,
-        'banked_by': banked,
-        'rows': [
-            {
-                'player_id' : p,
-                'short_name': shorts.get(p, ''),
-                'gross'     : {h: gross.get(p, {}).get(h) for h in order},
-                # Signed strokes for THIS golfer against whoever banks that
-                # hole; null on a hole he banks himself, because there is no
-                # single number to put there.
-                'strokes'   : {
-                    h: (None if banked.get(h) in (None, p)
-                        else plan.get(banked[h], {}).get(p, {}).get(h, 0))
-                    for h in order
-                },
-                'banked'    : {h: banked.get(h) == p for h in order},
-            }
-            for p in ids
-        ],
-    }
+
+    def cell(pid, hole):
+        b = banked.get(hole)
+        g = gross.get(pid, {}).get(hole)
+        if g is None:
+            return None, False
+        if b is None or b == pid:
+            return g, False
+        s_b, s_o = pair_strokes(game, foursome, b, pid, hole)
+        adjusted = g - s_o + s_b
+        b_gross = gross.get(b, {}).get(hole)
+        beat = b_gross is not None and adjusted < b_gross
+        return adjusted, beat
+
+    out_rows = []
+    for p in ids:
+        values, beats = {}, {}
+        for h in order:
+            v, won = cell(p, h)
+            values[h] = v
+            beats[h] = won
+        out_rows.append({
+            'player_id' : p,
+            'short_name': shorts.get(p, ''),
+            # Gross on a hole he banked, and his own match adjusted to the
+            # banker's gross on every other — see the docstring.
+            'net'       : values,
+            'beat'      : beats,
+            'banked'    : {h: banked.get(h) == p for h in order},
+        })
+
+    return {'holes': order, 'banked_by': banked, 'rows': out_rows}
 
 
 # ---------------------------------------------------------------------------
