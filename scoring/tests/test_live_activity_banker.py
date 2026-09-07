@@ -134,6 +134,72 @@ class BankerCardTests(TestCase):
         self.assertEqual(card['number']['text'], '$20')      # this hole
         self.assertEqual(card['footer']['money'], '−$30')    # the round
 
+    # -- the hole is over ----------------------------------------------------
+
+    def _settle_hole_1(self):
+        """Paul banks, all three beat him, and Dave is the outright low.
+
+        The three scores are DIFFERENT on purpose: level them and the hole
+        ends in a tie for low, which is a different card — see the tie test.
+        And nobody makes a BIRDIE, which would double that golfer's collection
+        and make these assertions about the bonus rather than the state.
+        """
+        self._bets(1, Dave=10, Sam=10, Lee=10)
+        submit_hole(self.fs, 1, [(self.pid['Paul'], 6), (self.pid['Dave'], 4),
+                                 (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
+
+    def test_a_settled_hole_shows_what_moved_not_what_was_at_risk(self):
+        """Reported from the course: the phone showed the result of hole 1
+        while the lock screen still showed what was at risk on it. The card had
+        no settled state at all — it drew the open composition for the whole
+        life of a hole."""
+        self._settle_hole_1()
+        card = self._card('Paul')
+        self.assertEqual(card['number']['text'], '−$30')
+        self.assertNotEqual(card['state']['word'], 'BANKING')
+
+    def test_the_bankers_settled_row_signs_every_bet_from_his_side(self):
+        self._settle_hole_1()
+        names = self._card('Paul')['sides'][0]['names']
+        self.assertIn('−$10', names)
+        self.assertNotIn('+$10', names)
+
+    def test_a_player_sees_his_own_result_and_who_he_beat(self):
+        self._settle_hole_1()
+        card = self._card('Dave')
+        self.assertEqual(card['number']['text'], '+$10')
+        self.assertIn('You won v', card['sides'][0]['names'])
+
+    def test_the_state_slot_names_who_banks_next(self):
+        """The result is already the headline, so the slot beside it owes the
+        reader the one thing that has not happened yet."""
+        self._settle_hole_1()
+        card = self._card('Paul')
+        self.assertEqual(card['state']['to_play'], 'BANKS NEXT')
+        self.assertTrue(card['state']['word'])
+
+    def test_a_tie_for_low_outranks_the_next_banker(self):
+        """Until the group says who holed out first the next hole cannot open,
+        so that is the more useful thing to print."""
+        self._bets(1, Dave=10, Sam=10, Lee=10)
+        submit_hole(self.fs, 1, [(self.pid['Paul'], 5), (self.pid['Dave'], 4),
+                                 (self.pid['Sam'], 4), (self.pid['Lee'], 6)])
+        card = self._card('Paul')
+        self.assertEqual(card['state']['word'], 'TIED')
+        self.assertEqual(card['state']['to_play'], 'GROUP DECIDES')
+
+    def test_the_stroke_ribbon_comes_down_once_the_hole_is_settled(self):
+        """The shots are spent. A band still announcing them reads as a hole
+        that has not been played."""
+        self._settle_hole_1()
+        self.assertEqual(self._card('Dave')['ribbon'], '')
+
+    def test_a_watcher_sees_that_it_is_over_and_not_the_money(self):
+        self._settle_hole_1()
+        card = self._card(None)
+        self.assertEqual(card['number']['text'], '—')
+        self.assertNotIn('$10', repr(card))
+
     # -- the ribbon ----------------------------------------------------------
 
     def test_a_scratch_hole_says_so_rather_than_leaving_the_ribbon_blank(self):

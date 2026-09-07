@@ -175,7 +175,12 @@ def banker_activity_state(foursome, *, player_id=None, thru=None) -> dict:
     max_bet = hole.get('max_bet')
     max_note = f'MAX {_amount(max_bet)}' if max_bet else 'NO MAX YET'
 
-    if player_id == banker_id:
+    settled = bool(hole.get('resolved'))
+
+    if settled:
+        number, sides, state = _settled(summary, hole, player_id, banker_id,
+                                        b_short, n)
+    elif player_id == banker_id:
         # ── His hole. Every bet on it was made against him, so all three are
         #    his business and the card itemises them.
         lines = hole.get('lines') or []
@@ -221,7 +226,9 @@ def banker_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         state = {'word': 'BETS OPEN' if outstanding else 'LOCKED',
                  'to_play': max_note}
 
-    ribbon = '' if finished else _stroke_ribbon(
+    # A settled hole has no stroke to announce — the shots are spent, and a
+    # ribbon left up after the result reads as a hole still to play.
+    ribbon = '' if (finished or settled) else _stroke_ribbon(
         foursome, game, player_id, n, banker_id,
         [(p, s) for p, s in opponents if p != player_id],
         hole.get('stroke_index'))
@@ -250,6 +257,74 @@ def banker_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         'thru'  : thru_line(played, to_par),
         'final' : None,
     }
+
+
+def _settled(summary, hole, player_id, banker_id, b_short, n):
+    """The hole is over. **This is the state the card was missing.**
+
+    It used to draw what was at RISK for the whole life of a hole, so a golfer
+    standing on the green watching the result on his phone had a lock screen
+    still telling him what he might lose. The number a settled hole owes its
+    reader is what actually moved, and the slot beside it owes them the one
+    thing that has not happened yet: who banks the next one.
+    """
+    lines = hole.get('lines') or []
+    awaiting = summary.get('awaiting_tie') == n
+    nxt = summary.get('next_banker_name') or ''
+
+    # The state slot carries what happens NEXT, because the result is already
+    # the headline. A tie the group has to answer outranks it: until somebody
+    # says who holed out first, the next hole cannot open at all.
+    if awaiting:
+        state = {'word': 'TIED', 'to_play': 'GROUP DECIDES'}
+    elif nxt:
+        state = {'word': nxt.upper()[:10], 'to_play': 'BANKS NEXT'}
+    else:
+        state = {'word': 'SETTLED', 'to_play': ''}
+
+    if player_id == banker_id:
+        # Signed from HIS side: an opponent who won took it off him.
+        def mine(line):
+            if line['outcome'] == 'won':
+                return -line['amount']
+            if line['outcome'] == 'lost':
+                return line['amount']
+            return 0
+
+        number = {'text': _cash(hole.get('banker_delta') or 0),
+                  'colour': 'neutral'}
+        note, tone = _multiplier_note(hole)
+        sides = [
+            {'names': ' · '.join(f"{x['short_name']} {_cash(mine(x))}"
+                                 for x in lines) or 'No bets',
+             'colour': 'gold', 'leading': True},
+            {'names': note, 'colour': tone, 'leading': tone != 'dim'},
+        ]
+        return number, sides, state
+
+    line = _line_for(hole, player_id)
+    if line is not None:
+        got = (line['amount'] if line['outcome'] == 'won'
+               else -line['amount'] if line['outcome'] == 'lost' else 0)
+        number = {'text': _cash(got), 'colour': 'neutral'}
+        note, tone = _multiplier_note(hole, line)
+        word = ('Halved' if line['outcome'] == 'tied'
+                else 'You won' if line['outcome'] == 'won' else 'You lost')
+        sides = [
+            {'names': f"{word} v {b_short}", 'colour': 'gold', 'leading': True},
+            {'names': note, 'colour': tone, 'leading': tone != 'dim'},
+        ]
+        return number, sides, state
+
+    # A watcher sees that the hole is done and who has it next — never the
+    # money, which was none of his business while it was live either.
+    number = {'text': '—', 'colour': 'gold'}
+    sides = [
+        {'names': f'{b_short} banked the {_ordinal(n)}', 'colour': 'gold',
+         'leading': True},
+        {'names': 'Hole settled', 'colour': 'dim', 'leading': False},
+    ]
+    return number, sides, state
 
 
 def _ordinal(n) -> str:

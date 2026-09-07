@@ -271,6 +271,21 @@ def _recalculate_games(foursome: Foursome) -> None:
     # Skins boards all along, so those rounds could raise a card and then never
     # receive a single update — a board frozen on hole 1, which reads as broken
     # rather than absent.
+    _push_lock_screen(round_obj)
+
+
+def _push_lock_screen(round_obj) -> None:
+    """Send the round's Live Activity, if it has one.
+
+    Extracted from `_recalculate_games` because **not every change a card must
+    show is a score.** Banker's hole is declared before it is played — a
+    maximum, three bets, a lock, a double, the banker's counter — and every one
+    of those moves the money on the card. Riding only on the scoring path left
+    the lock screen showing what was at risk while the phone already knew the
+    result, and left a counter-double (the one event in that game where a
+    golfer's money changes without his knowledge) invisible until somebody
+    posted a score.
+    """
     from services.live_activity_registry import round_has_board
     if round_has_board(round_obj):
         def _push():
@@ -6450,6 +6465,9 @@ class BankerHoleView(APIView):
         except ObjectDoesNotExist:
             return Response({'detail': 'No Banker game set up.'},
                             status=status.HTTP_404_NOT_FOUND)
+        # The money on this hole just moved without a score being posted, so
+        # the lock screen has to hear about it here — see `_push_lock_screen`.
+        _push_lock_screen(foursome.round)
         return Response(banker_summary(foursome))
 
 
@@ -6479,6 +6497,8 @@ class BankerAdvanceView(APIView):
         except ObjectDoesNotExist:
             return Response({'detail': 'No Banker game set up.'},
                             status=status.HTTP_404_NOT_FOUND)
+        # A new hole means a new banker, which is the card's headline fact.
+        _push_lock_screen(foursome.round)
         return Response(banker_summary(foursome), status=status.HTTP_201_CREATED)
 
 
