@@ -1,0 +1,191 @@
+<!-- @dsCard group="Games" name="Banker (setup)" subtitle="BankerSetupScreen — wager band, first banker, rotation, the four action rules and the exposure ceiling" viewport="1480x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Banker setup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--warn:#8A5216;--gold:#B8860B}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:30px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.own{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:104px;color:var(--deepPine);font-weight:600}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:12px;padding:6px 16px 10px}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:20px;flex:1;text-align:center}
+.body{padding:0 14px;overflow-y:auto;height:634px}
+.sc{border:1px solid var(--cardBorder);border-radius:8px;padding:12px 14px;background:var(--card);margin-bottom:16px}
+.sct{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;color:var(--pine);font-size:14px;margin-bottom:3px}
+.scd{font-size:11.5px;color:var(--muted);line-height:1.5;margin:0 0 10px}
+.opt{display:flex;gap:10px;padding:6px 0}
+.radio{width:20px;height:20px;border-radius:50%;border:2px solid var(--cardBorder);flex:none;margin-top:1px}
+.radio.on{border-color:var(--pine);box-shadow:inset 0 0 0 4px var(--pine)}
+.opt .t{font-weight:600;font-size:14px}
+.opt .d{color:var(--muted);font-size:12px;line-height:1.4;margin-top:2px}
+.seg{display:flex;border:1.5px solid var(--pine);border-radius:999px;overflow:hidden;margin-bottom:8px}
+.seg div{flex:1;text-align:center;padding:8px 0;font-size:12.5px;font-weight:600;color:var(--pine)}
+.seg div.on{background:var(--pine);color:#fff}
+/* wager band */
+.band{display:flex;gap:10px;margin-bottom:10px}
+.band .f{flex:1}
+.band .f span{display:block;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.band .f div{display:flex;align-items:center;border:1.5px solid var(--cardBorder);border-radius:12px;padding:11px 13px;font-size:16px;font-weight:700;background:var(--card)}
+.band .f div em{font-style:normal;color:var(--muted);margin-right:5px;font-weight:500}
+.track{height:6px;border-radius:3px;background:#DCE5DD;position:relative;margin:14px 6px 6px}
+.track i{position:absolute;top:0;bottom:0;left:8%;right:22%;background:var(--pine);border-radius:3px}
+.track s{position:absolute;top:-7px;width:20px;height:20px;border-radius:50%;background:#fff;border:2.5px solid var(--pine)}
+.track s.a{left:calc(8% - 10px)}.track s.b{right:calc(22% - 10px)}
+.ticks{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin:0 4px;font-variant-numeric:tabular-nums}
+/* banker rows */
+.br{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid #F0F4F1;font-size:13.5px}
+.br:first-of-type{border-top:none}
+.br .av{flex:none;width:30px;height:30px;border-radius:10px;background:#EDF1EE;color:var(--muted);display:flex;align-items:center;justify-content:center;font:700 11px/1 "Schibsted Grotesk",sans-serif}
+.br.on .av{background:#FBF0D6;color:var(--gold)}
+.br .nm{flex:1;font-weight:600}
+.br .hc{color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums}
+.br .tag{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;background:#FBF0D6;color:var(--gold);border-radius:5px;padding:3px 6px}
+.dact{display:flex;gap:8px;margin-top:10px}
+.dact div{flex:1;border:1px solid var(--cardBorder);border-radius:8px;padding:9px;text-align:center;color:var(--pine);font-weight:600;font-size:12.5px}
+.dact div.on{border-color:var(--pine);background:#E4F2EA}
+/* rules */
+.rl{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid #F0F4F1}
+.rl:first-of-type{border-top:none}
+.rl .tx{flex:1;min-width:0;font-size:12px;line-height:1.45;color:var(--muted)}
+.rl .tx b{display:block;color:var(--deepPine);font-weight:600;font-size:13.5px;margin-bottom:1px}
+.rl .tx u{text-decoration:none;display:inline-block;font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--gold);background:#FBF0D6;border-radius:4px;padding:1px 5px;margin-top:4px}
+.sw{flex:none;width:38px;height:23px;border-radius:999px;background:var(--pine);position:relative;margin-top:3px}
+.sw:after{content:"";position:absolute;top:2.5px;right:2.5px;width:18px;height:18px;border-radius:50%;background:#fff}
+.sw.off{background:#C8D3CB}
+.sw.off:after{right:auto;left:2.5px}
+/* exposure */
+.exp{border:1px solid #E8D6BC;background:#FDF3E7;border-radius:8px;padding:12px 14px;margin-bottom:16px}
+.exp .h{font-family:"Schibsted Grotesk",sans-serif;font-size:13.5px;font-weight:700;color:#8A5216;margin-bottom:3px}
+.exp p{margin:0 0 9px;font-size:11.5px;line-height:1.5;color:#6B5330}
+.el{display:flex;align-items:baseline;gap:8px;padding:5px 0;font-size:12px;color:#6B5330;border-top:1px solid #F0E2CC}
+.el:first-of-type{border-top:none}
+.el b{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-size:15px;font-weight:700;color:#8A5216;font-variant-numeric:tabular-nums}
+.el.top b{font-size:19px}
+.cape{display:flex;align-items:flex-start;gap:10px;border-top:1px solid #F0E2CC;margin-top:6px;padding-top:10px}
+.cape .tx{flex:1;font-size:11.5px;line-height:1.45;color:#6B5330}
+.cape .tx b{display:block;color:#5C4326;font-weight:700;font-size:13px;margin-bottom:1px}
+.cape .sw{background:#C8B79C}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 18px;background:linear-gradient(transparent,var(--surface) 26%)}
+.start{width:100%;height:52px;border-radius:16px;border:none;background:var(--pine);color:#fff;font-weight:700;font-size:16px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Banker, setting it up</h1>
+<p>Every other game in the app has a stake you can write on one line. Banker has <b>a band, a per-hole ceiling set by one golfer, and four rules that multiply</b> &mdash; and the interaction of those is the only thing this screen really has to communicate.</p>
+<h3>The band is two numbers and they are not symmetric</h3>
+<p>The minimum protects the banker: it is what an opponent must have on the hole, so nobody sits out the hole they think they will lose. The maximum protects everyone else: it is the ceiling the banker cannot raise past, whatever he announces on the tee.</p>
+<p>Drawn as a two-handle track rather than two fields, because <b>the width of the band is the decision</b> and two boxes hide it. $5 to $50 is a different game from $20 to $25.</p>
+<h3>Exposure is the headline, not a footnote</h3>
+<p>This is the one game in the set where a golfer can lose a genuinely surprising amount on a single hole, and it is not because the stakes are high &mdash; it is because <b>the banker faces three bets at once and both sides can double them.</b></p>
+<div class="own"><table>
+<tr><td>Base</td><td>Three opponents at the $50 ceiling &mdash; $150.</td></tr>
+<tr><td>They double</td><td>$300.</td></tr>
+<tr><td>He counter-doubles</td><td>$600. He chose it, but he chose it before three approach shots landed.</td></tr>
+<tr><td>Par 3, tripled</td><td>$900.</td></tr>
+<tr><td>Three birdies</td><td>$1,800 &mdash; the bonus doubles the payout and only ever pays out.</td></tr>
+</table></div>
+<p>Nobody setting up a $50 game is picturing eighteen hundred dollars. The panel shows the ladder rather than one worst case, because <b>the point is not that the top number is likely &mdash; it is that the top number exists</b>, and a golfer who reads the second line will set the ceiling differently.</p>
+<h3>So the screen offers a hole cap, off by default</h3>
+<p>One number that stops the whole hole &mdash; all three bets, all doubles &mdash; from exceeding it. This is <b>not part of the traditional game</b> and it is presented as an addition, unticked, with the ladder above it as the argument for ticking it.</p>
+<p>It is off by default because the group that plays Banker properly does not want it, and a safety rail switched on without being asked reads as the app deciding the stakes. Shown, argued, and left to them.</p>
+<h3>Rotation is where the app helps most</h3>
+<p>The traditional rule is <b>low score, holed out first</b>, and the second half of that is the part an app cannot see. The default is therefore to <b>ask</b>: on a tie the group gets a one-tap picker on the tee and answers from what actually happened on the green. A draw is offered as an alternative for groups who would rather not adjudicate, and <b>a drawn result stays changeable until a score is posted</b> &mdash; the app&rsquo;s guess must never outrank the group&rsquo;s memory.</p>
+<p>The old reasoning, kept because it still applies to the draw option: a phone does not know who putted out first, and guessing silently would be worse than guessing.</p>
+<p>So a tie for low score is <b>drawn at random</b>, stated plainly on the row. The alternative &mdash; the current banker keeps it &mdash; concentrates the role and the exposure with whoever is playing well, which is the opposite of what the rotation is for.</p>
+<h3>Birdie bonus is the asymmetric rule</h3>
+<p>It doubles a <b>player&rsquo;s</b> payout and never a banker&rsquo;s. One golfer against three is already a lopsided position; letting the banker double three collections at once would make the role unplayable. The switch is one rule with one direction, and the row says so rather than leaving it to be discovered.</p>
+<h3>Still open</h3>
+<ul>
+<li>Whether <b>bogey-or-better to win</b> ships at all. Drawn as available and off &mdash; it is a common house rule but it turns a won hole into a no-pay, which is the most confusing outcome the game can produce.</li>
+<li>Whether the banker announces a hole maximum or plays the round maximum every hole. Drawn as <b>he announces</b>, which is the traditional rule and the whole reason the role has any strategy.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>9:41</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span style="font-size:17px">&#8249;</span><span class="ttl">Banker</span><span style="width:17px"></span></div>
+<div class="body">
+
+<div class="sc" style="padding-bottom:6px">
+<div class="sct">One against three, every hole</div>
+<p class="scd">The banker plays each opponent separately, net. Beat the banker and he pays you your bet; lose and you pay him. <b>A tie is no action</b> &mdash; nobody pays. <b>He tees off last.</b> Lowest score on the hole takes the role for the next one.</p>
+</div>
+
+<div class="sc">
+<div class="sct">Wager band</div>
+<p class="scd">The floor every opponent must have on the hole, and the ceiling the banker cannot raise past.</p>
+<div class="band"><span class="f"><span>Minimum</span><div><em>$</em>5</div></span><span class="f"><span>Maximum</span><div><em>$</em>50</div></span></div>
+<div class="track"><i></i><s class="a"></s><s class="b"></s></div>
+<div class="ticks"><span>$1</span><span>$25</span><span>$50</span><span>$100</span></div>
+</div>
+
+<div class="sc">
+<div class="sct">First banker</div>
+<p class="scd">Traditionally a flipped tee on the first box. The app will draw if you would rather not.</p>
+<div class="br on"><span class="av">PK</span><span class="nm">Paul Kelly</span><span class="hc">8.2</span><span class="tag">Banker</span></div>
+<div class="br"><span class="av">DM</span><span class="nm">Dave Moran</span><span class="hc">12.4</span></div>
+<div class="br"><span class="av">SR</span><span class="nm">Sam Reid</span><span class="hc">4.1</span></div>
+<div class="br"><span class="av">LN</span><span class="nm">Lee Naylor</span><span class="hc">15.9</span></div>
+<div class="dact"><div class="on">Group picked</div><div>&#127922; Flip for it</div></div>
+</div>
+
+<div class="sc">
+<div class="sct">Rotation</div>
+<p class="scd">Lowest net on the hole becomes banker for the next one.</p>
+<div class="opt"><span class="radio on"></span><div><div class="t">The group says who</div><div class="d">On a tie the app asks, on the tee, and the group answers &mdash; usually with whoever holed out first. The one thing a phone cannot see, so it does not guess.</div></div></div>
+<div class="opt"><span class="radio"></span><div><div class="t">Tied low scores are drawn</div><div class="d">The traditional tiebreak is whoever holed out first, which the app cannot know. A draw is honest; asking four golfers to remember is not.</div></div></div>
+<div class="opt"><span class="radio"></span><div><div class="t">Current banker keeps it</div><div class="d">Simpler, and it hands the role and the exposure to whoever is playing best.</div></div></div>
+</div>
+
+<div class="sc">
+<div class="sct">Handicap</div>
+<div class="seg"><div class="on">Net</div><div>Gross</div><div>Strokes Off</div></div>
+<p class="scd" style="margin:0">Full allocation by stroke index. Every one-on-one is settled on net, including the banker&rsquo;s.</p>
+</div>
+
+<div class="sc">
+<div class="sct">Action</div>
+<p class="scd">Four rules, all on. Turn any of them off and the game still works &mdash; it just gets quieter.</p>
+<div class="rl"><span class="tx"><b>Player double off the tee</b>Call it while your ball is in the air. Doubles your bet with the banker, nobody else&rsquo;s.<u>Before it lands</u></span><span class="sw"></span></div>
+<div class="rl"><span class="tx"><b>Banker counter-double</b>After his own tee shot, the banker can double <b>every</b> standing bet on the hole. He hits last, so he is answering all three.<u>His shot only</u></span><span class="sw"></span></div>
+<div class="rl"><span class="tx"><b>Par 3s triple instead</b>On a par 3 the airborne call is a triple, not a double. The banker&rsquo;s counter still doubles what stands.<u>Par 3 only</u></span><span class="sw"></span></div>
+<div class="rl"><span class="tx"><b>Birdie bonus</b>A player&rsquo;s birdie doubles his own payout. It never doubles the banker&rsquo;s collection &mdash; a banker who birdies already wins the hole three times.<u>Pays out only</u></span><span class="sw"></span></div>
+<div class="rl"><span class="tx"><b>Bogey or better to win</b>A player who beats the banker with a double bogey collects nothing. Off &mdash; it produces the game&rsquo;s most confusing outcome, a won hole that pays nobody.</span><span class="sw off"></span></div>
+</div>
+
+<div class="exp">
+<div class="h">What a hole can reach</div>
+<p>The banker faces three bets at once and both sides can double them. At a $50 ceiling:</p>
+<div class="el"><span>Three opponents at the max</span><b>$150</b></div>
+<div class="el"><span>All three double off the tee</span><b>$300</b></div>
+<div class="el"><span>Banker counter-doubles</span><b>$600</b></div>
+<div class="el"><span>On a par 3, tripled instead</span><b>$900</b></div>
+<div class="el top"><span>Three birdies against him</span><b>$1,800</b></div>
+<div class="cape"><span class="tx"><b>Cap the hole</b>One ceiling for the whole hole, all bets and doubles included. Not a traditional rule &mdash; on if your group wants a rail.</span><span class="sw off"></span></div>
+</div>
+
+<div style="height:8px"></div>
+</div>
+<div class="bottom"><button class="start">Start &mdash; Paul banks the 1st</button></div>
+</div>
+</body>
+</html>

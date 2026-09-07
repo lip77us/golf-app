@@ -1,0 +1,190 @@
+<!-- @dsCard group="Games" name="Banker — settle up" subtitle="BankerSettlement — nets by man, three payments, and a receipt split into banking and betting" viewport="1480x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Banker — settle up</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--warn:#8A5216;--win:#388E3C;--gold:#B8860B}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:30px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.own{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:96px;color:var(--deepPine);font-weight:600}
+.wrap{position:relative;margin-bottom:34px}
+.cap{position:absolute;left:0;right:0;bottom:-30px;text-align:center;font-size:11.5px;font-weight:600;color:var(--muted)}
+.phone{width:390px;height:844px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:10px;padding:4px 16px 10px}
+.appbar .bk{font-size:23px;line-height:1}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px}
+.appbar .ic{margin-left:auto;font-size:13px;color:var(--muted)}
+.body{padding:0 14px 26px;overflow-y:auto;height:690px}
+.blk{background:#fff;border:1px solid var(--cardBorder);border-radius:16px;padding:14px 15px 12px;margin-bottom:11px}
+.blk>h6{font-family:"Schibsted Grotesk",sans-serif;font-size:12.5px;font-weight:700;margin:0 0 3px;display:flex;align-items:baseline;gap:8px}
+.blk>h6 em{margin-left:auto;font-style:normal;font-size:10.5px;font-weight:600;color:var(--muted)}
+.blk>p{margin:0 0 10px;font-size:11px;line-height:1.5;color:var(--muted)}
+.nl{display:flex;align-items:center;gap:9px;padding:8px 0;font-size:13px}
+.nl+.nl{border-top:1px solid #F2F6F3}
+.nl .nm{flex:1;min-width:0;font-weight:600}
+.nl .nm u{text-decoration:none;display:block;font-size:10.5px;color:var(--muted);font-weight:500;margin-top:1px}
+.nl .bk{flex:none;font-size:9.5px;font-weight:700;letter-spacing:.4px;background:#FBF0D6;color:var(--gold);border-radius:4px;padding:2px 5px}
+.nl .v{flex:none;width:60px;text-align:right;font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
+.nl .v.pos{color:var(--win)}.nl .v.neg{color:var(--warn)}
+.bal{display:flex;align-items:baseline;border-top:1.5px solid var(--cardBorder);margin-top:5px;padding-top:9px;font-size:11.5px;color:var(--muted)}
+.bal b{margin-left:auto;color:var(--deepPine);font-weight:700}
+.pay{display:flex;align-items:center;gap:11px;padding:11px 0}
+.pay+.pay{border-top:1px solid #F2F6F3}
+.pay .av{flex:none;width:34px;height:34px;border-radius:11px;background:#E4F2EA;color:var(--pine);display:flex;align-items:center;justify-content:center;font:700 13px/1 "Schibsted Grotesk",sans-serif}
+.pay .fl{flex:1;min-width:0;font-size:13.5px;line-height:1.4}
+.pay .fl b{font-weight:700}
+.pay .fl u{text-decoration:none;display:block;font-size:10.5px;color:var(--muted);margin-top:2px}
+.pay .amt{flex:none;font-family:"Schibsted Grotesk",sans-serif;font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.pay .ck{flex:none;width:22px;height:22px;border-radius:7px;border:1.5px solid #C3CFC6;background:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff}
+.pay .ck.on{background:var(--pine);border-color:var(--pine)}
+.hint{display:flex;gap:8px;background:#F4FAF6;border:1px solid #C9E3D4;border-radius:11px;padding:9px 11px;font-size:11px;line-height:1.5;color:#38564A;margin-top:10px}
+.hint b{color:var(--deepPine)}
+/* receipt */
+.rc .ev{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--pine)}
+.rc .ev+.sub{font-size:11px;color:var(--muted);margin:2px 0 12px}
+.rc .who{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:19px;line-height:1.2}
+.rc .who small{display:block;font-family:"Spline Sans",sans-serif;font-size:11px;font-weight:500;color:var(--muted);margin-top:3px}
+.big{display:flex;align-items:baseline;gap:8px;margin:13px 0 3px}
+.big em{font-style:normal;font-family:"Schibsted Grotesk",sans-serif;font-size:38px;font-weight:700;letter-spacing:-1px;font-variant-numeric:tabular-nums;color:var(--pine)}
+.big span{font-size:12.5px;font-weight:600;color:var(--muted)}
+.h1{font-size:11.5px;color:var(--muted);line-height:1.5;margin:0}
+.split{display:flex;gap:8px;margin:13px 0 2px}
+.split div{flex:1;border:1px solid var(--cardBorder);border-radius:11px;padding:9px 10px}
+.split div span{display:block;font-size:9.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--muted)}
+.split div b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:19px;font-weight:700;margin-top:3px;font-variant-numeric:tabular-nums}
+.split div b.pos{color:var(--win)}.split div b.neg{color:var(--warn)}
+.split div u{text-decoration:none;display:block;font-size:9.5px;color:#8B9990;margin-top:3px;line-height:1.35}
+.sec{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:15px 0 4px}
+.ln{display:flex;align-items:baseline;gap:9px;padding:7px 0;font-size:12.5px}
+.ln+.ln{border-top:1px solid #F2F6F3}
+.ln .d{flex:1;min-width:0;color:var(--deepPine)}
+.ln .d u{text-decoration:none;display:block;font-size:10.5px;color:#8B9990;margin-top:2px;line-height:1.4}
+.ln .x{flex:none;font-size:9.5px;font-weight:700;color:#8A5216;background:#F5E4CB;border-radius:4px;padding:1px 5px}
+.ln .v{flex:none;font-weight:700;font-variant-numeric:tabular-nums;width:46px;text-align:right}
+.ln .v.pos{color:var(--win)}.ln .v.neg{color:var(--warn)}.ln .v.zero{color:#B6C4BB;font-weight:600}
+.ln.sum{border-top:1.5px solid #DCE5DD;margin-top:5px;padding-top:9px}
+.ln.sum .d{font-weight:700;font-size:13px}
+.ln.sum .v{font-size:16px}
+.stamp{display:flex;align-items:center;gap:7px;background:#F4FAF6;border:1px solid #C9E3D4;border-radius:11px;padding:9px 11px;font-size:11px;line-height:1.45;color:#38564A;margin:12px 0 0}
+.stamp b{color:var(--deepPine)}
+.excl{font-size:11px;color:var(--muted);line-height:1.5;margin:11px 2px 0}
+.cta{position:absolute;left:0;right:0;bottom:0;padding:11px 14px 20px;background:linear-gradient(transparent,var(--surface) 26%);display:flex;gap:9px}
+.cta button{flex:1;height:52px;border:none;border-radius:15px;background:var(--pine);color:#fff;font:700 15px/1 "Spline Sans",system-ui,sans-serif;cursor:pointer}
+.cta button.ghost{flex:none;width:60px;background:#fff;border:1.5px solid var(--cardBorder);color:var(--deepPine);font-size:19px}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Banker, settling up</h1>
+<p>Unlike every other game in the app, <b>Banker&rsquo;s debts really are pairwise.</b> Every bet was one named golfer against one named golfer for an agreed number, so the app knows exactly who owes whom &mdash; and the settlement can say so without inventing anything.</p>
+<h3>Which makes the collapse an explicit choice</h3>
+<p>Fifty-four true pairwise transactions net down to <b>three handovers</b>. The app shows the three, because nobody is settling a round with fifty-four exchanges of five dollar bills &mdash; but it keeps the itemisation one tap away, and unlike Sequoya 3s it can honestly say the detail is real rather than derived.</p>
+<div class="own"><table>
+<tr><td>Nets</td><td>Four numbers, summing to zero. What gets paid.</td></tr>
+<tr><td>Payments</td><td>Fewest handovers. Three here, because one golfer collected from the other three.</td></tr>
+<tr><td>Detail</td><td>Genuinely pairwise, hole by hole. Available and not shown by default.</td></tr>
+</table></div>
+<h3>The receipt splits the round in two</h3>
+<p>Banking and betting are different games and the receipt says so before it says anything else: <b>&minus;$80 as banker over six holes, +$60 as a player over twelve.</b> A golfer reads that pair and knows immediately what kind of day he had &mdash; and it is the only summary that survives being repeated at the bar.</p>
+<h3>Banked holes are itemised; played holes are grouped</h3>
+<p>The six holes he banked get a line each, with all three bets on them. He faced three opponents at once and <b>that is where the money and the arguments live</b>, so it is written out in full.</p>
+<p>The twelve holes he merely played are grouped <b>by whose bank he was betting into</b> &mdash; seven holes against Sam, three against Dave, two against Lee &mdash; with a subtotal. Twelve individual five-dollar lines would bury the six that matter, and the grouping happens to answer the question a golfer actually asks: <i>who took my money.</i></p>
+<h3>The hole that paid nobody</h3>
+<p>The 14th is on the receipt at <b>zero</b>, and it is the most instructive line on it: a par 3 where all three opponents tripled into a $180 hole, two of them lost, one made birdie, and the banker came out exactly level.</p>
+<p>Rolling that line up or dropping it would be the natural instinct and the wrong one. <b>A golfer who remembers a $180 hole and cannot find it on his receipt does not trust the receipt.</b> Zero-value lines stay when the stake was large.</p>
+<h3>A tie pays nobody, and the receipt still shows it</h3>
+<p><b>The banker does not win ties.</b> Match his net and the bet is void, whatever it had grown to &mdash; so a tied bet reads <b>$0 tied</b> with the amount it reached printed beside it. The 7th is the case: Paul countered into $40 apiece and then halved two of the three, collecting on neither. That is the receipt&rsquo;s job &mdash; a golfer who remembers a $40 bet and cannot find it does not trust the receipt.</p>
+<p>The old draft had ties paying the banker, and it was the rule most often forgotten by whoever was not banking &mdash; settlement is exactly where the forgetting produces an argument.</p>
+<h3>What is not on the receipt</h3>
+<p>Bets between the <b>other two</b> golfers on a hole he did not bank. Those were private and stay private, even in a four-man game where everybody was standing there. The app is not the group&rsquo;s memory of what everyone else had on.</p>
+<h3>Still open</h3>
+<ul>
+<li>Whether the shortest payment set is the right default, or whether a group would rather <b>pay each other in full pairwise</b> &mdash; some do, on the grounds that it settles who beat whom.</li>
+<li>Whether to offer a <b>running tab</b> for a regular game. More pressing here than in Sequoya 3s: Banker swings are large enough that a single Saturday can be an unpleasant number.</li>
+</ul>
+</div>
+
+<div class="wrap"><div class="phone">
+<div class="status"><span>2:58</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Settle up</span><span class="ic">&#9679;&#9679;&#9679;</span></div>
+<div class="body">
+
+<div class="blk">
+<h6>Banker<em>$5&ndash;$50 band, net</em></h6>
+<p>Eighteen holes, three bets a hole. Fifty-four one-on-ones settled.</p>
+<div class="nl"><span class="nm">Sam Reid<u>banking &minus;$90 &middot; betting +$290</u></span><span class="bk">7 HOLES</span><span class="v pos">+$200</span></div>
+<div class="nl"><span class="nm">Paul Kelly<u>banking &minus;$80 &middot; betting +$60</u></span><span class="bk">6 HOLES</span><span class="v neg">&minus;$20</span></div>
+<div class="nl"><span class="nm">Lee Naylor<u>banking &minus;$30 &middot; betting &minus;$10</u></span><span class="bk">2 HOLES</span><span class="v neg">&minus;$40</span></div>
+<div class="nl"><span class="nm">Dave Moran<u>banking &minus;$80 &middot; betting &minus;$60</u></span><span class="bk">3 HOLES</span><span class="v neg">&minus;$140</span></div>
+<div class="bal"><span>Balances to zero</span><b>&#10003;</b></div>
+</div>
+
+<div class="blk">
+<h6>Three payments<em>fewest handovers</em></h6>
+<p>Every bet in this game was one man against one man, so the detail behind these is real and not a reconstruction. Fifty-four exchanges collapse to three &mdash; and with one golfer up $200, all three run the same way.</p>
+<div class="pay"><span class="av">DM</span><span class="fl"><b>Dave</b> pays <b>Sam</b><u>Clears Dave in one</u></span><span class="amt">$140</span><span class="ck on">&#10003;</span></div>
+<div class="pay"><span class="av">LN</span><span class="fl"><b>Lee</b> pays <b>Sam</b><u>Clears Lee in one</u></span><span class="amt">$40</span><span class="ck"></span></div>
+<div class="pay"><span class="av">PK</span><span class="fl"><b>Paul</b> pays <b>Sam</b><u>Clears Paul in one</u></span><span class="amt">$20</span><span class="ck"></span></div>
+<div class="hint"><span>&#10003;</span><span><b>Ticking marks it done in the app only.</b> No money moves here &mdash; the pairwise detail is one tap away if anyone wants to check it.</span></div>
+</div>
+<div style="height:6px"></div>
+</div>
+<div class="cta"><button class="ghost">&#8679;</button><button>Text the group</button></div>
+</div><div class="cap">Fifty-four bets, three handovers</div></div>
+
+<div class="wrap"><div class="phone">
+<div class="status"><span>3:01</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Receipt</span><span class="ic">&#9679;&#9679;&#9679;</span></div>
+<div class="body">
+<div class="blk rc">
+<div class="ev">Saturday game &middot; Banker</div><div class="sub">12 September &middot; Sequoya CC &middot; four golfers</div>
+<div class="who">Paul Kelly<small>HI 8.2 &middot; net &middot; band $5&ndash;$50</small></div>
+<div class="big"><em style="color:#8A5216">&minus;$20</em><span>to pay</span></div>
+<p class="h1">You owe Sam Reid $20. Nobody owes you anything.</p>
+
+<div class="split">
+<div><span>As banker</span><b class="neg">&minus;$80</b><u>6 holes &middot; 18 bets faced</u></div>
+<div><span>As a player</span><b class="pos">+$60</b><u>12 holes &middot; one bet each</u></div>
+</div>
+
+<div class="sec">The six holes you banked</div>
+<div class="ln"><span class="d">Hole 1 &middot; max $10<u>Dave +$5 &middot; Sam $0 tied &middot; Lee +$5</u></span><span class="v pos">+$10</span></div>
+<div class="ln"><span class="d">Hole 7 &middot; max $20<u>Dave $0 tied at $40 &middot; Sam $0 tied at $40 &middot; Lee &minus;$20 birdie &mdash; you countered</u></span><span class="x">COUNTER</span><span class="v neg">&minus;$20</span></div>
+<div class="ln"><span class="d">Hole 11 &middot; max $10<u>Par 3 &mdash; Sam tripled and birdied, &minus;$60. Dave &minus;$5, Lee $0 tied</u></span><span class="v neg">&minus;$65</span></div>
+<div class="ln"><span class="d">Hole 14 &middot; max $20<u>Par 3, all three tripled &mdash; $180 on the hole. Dave +$60, Lee +$60, Sam &minus;$120 birdie</u></span><span class="v zero">&mdash;</span></div>
+<div class="ln"><span class="d">Hole 15 &middot; max $15<u>Sam &minus;$15 &middot; Dave $0 tied &middot; Lee $0 tied</u></span><span class="v neg">&minus;$15</span></div>
+<div class="ln"><span class="d">Hole 17 &middot; max $15<u>Lee +$10 &middot; Dave $0 tied &middot; Sam $0 tied &mdash; you countered</u></span><span class="x">COUNTER</span><span class="v pos">+$10</span></div>
+
+<div class="sec">The twelve you played &mdash; by whose bank</div>
+<div class="ln"><span class="d">v. Sam Reid<u>Holes 2, 3, 6, 9, 10, 13, 16</u></span><span class="v pos">+$50</span></div>
+<div class="ln"><span class="d">v. Lee Naylor<u>Holes 4, 8 &mdash; one won, one tied</u></span><span class="v pos">+$10</span></div>
+<div class="ln"><span class="d">v. Dave Moran<u>Holes 5, 12, 18 &mdash; all three tied</u></span><span class="v zero">&mdash;</span></div>
+
+<div class="ln sum"><span class="d">Net</span><span class="v neg">&minus;$20</span></div>
+<div class="stamp"><span>&#10003;</span><span><b>Agreed by all four</b> at 2:58 PM. Every bet locked before its banker teed off; every double recorded when it was called.</span></div>
+</div>
+<p class="excl">Bets between the other three on holes you did not bank are not listed. Those were their business. Tap any hole for the pairwise detail behind it.</p>
+<div style="height:6px"></div>
+</div>
+<div class="cta"><button class="ghost">&#8679;</button><button>Text this receipt</button></div>
+</div><div class="cap">Banking itemised, betting grouped by opponent</div></div>
+</body>
+</html>

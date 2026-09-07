@@ -1,0 +1,467 @@
+<!-- @dsCard group="Games" name="Banker (play)" subtitle="BankerScreen — bets set on the tee, doubles in the air, scores entered, three one-on-ones resolved, and the tie the group has to settle" viewport="2800x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Banker (play)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--brightMint:#3BD89A;--surface:#EEF3EE;--card:#FFFFFF;--cardBorder:#D3DED6;--muted:#5C6B62;--under:#D32F2F;--win:#388E3C;--warn:#8A5216;--gold:#B8860B}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:30px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.own{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:100px;color:var(--deepPine);font-weight:600}
+.wrap{position:relative;margin-bottom:34px}
+.cap{position:absolute;left:0;right:0;bottom:-30px;text-align:center;font-size:11.5px;font-weight:600;color:var(--muted)}
+.phone{width:390px;height:812px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:12px;padding:6px 14px 10px}
+.appbar .ic{font-size:17px}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:18px;flex:1;text-align:center}
+.body{padding:0 12px;overflow-y:auto;height:636px}
+/* banker banner */
+.bb{border:1px solid #E4D3A8;background:#FDF8EC;border-radius:8px;padding:11px 12px;margin:2px 0 12px}
+.bb .t1{display:flex;align-items:baseline;gap:8px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--gold)}
+.bb .t1 em{margin-left:auto;font-style:normal;color:#9C8149}
+.bb .t2{display:flex;align-items:flex-end;gap:10px;margin-top:7px}
+.bb .t2 .who{flex:1;min-width:0}
+.bb .t2 .who b{font-family:"Schibsted Grotesk",sans-serif;font-size:19px;font-weight:700;line-height:1.1;display:block}
+.bb .t2 .who u{text-decoration:none;display:block;font-size:11.5px;color:#8A7440;margin-top:3px}
+.bb .t2 .mx{flex:none;text-align:right;white-space:nowrap}
+.bb .t2 .mx b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:20px;font-weight:700;line-height:1;color:var(--gold)}
+.bb .t2 .mx u{text-decoration:none;display:block;font-size:9px;font-weight:700;letter-spacing:.4px;color:#9C8149;margin-top:4px}
+.bb .risk{display:flex;align-items:baseline;gap:7px;border-top:1px solid #F0E4C8;margin-top:9px;padding-top:8px;font-size:11.5px;color:#8A7440}
+.bb .risk b{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-size:15px;color:#8A5216;font-variant-numeric:tabular-nums}
+/* hole header */
+.hh{position:relative;background:#E1EAE2;border-radius:8px;padding:10px 44px;text-align:center;margin-bottom:11px}
+.hh .n{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:18px}
+.hh .sub{font-size:12px;color:var(--muted)}
+.hh .help{position:absolute;top:6px;right:8px;color:var(--pine);font-size:16px}
+/* section head */
+.sh{display:flex;align-items:baseline;gap:8px;margin:0 4px 6px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--pine)}
+.sh em{margin-left:auto;font-style:normal;letter-spacing:0;text-transform:none;font-size:11px;color:var(--muted);font-weight:600}
+/* bet rows */
+.card{border:1px solid var(--cardBorder);border-radius:8px;overflow:hidden;background:var(--card);margin-bottom:11px}
+.brow{padding:10px 12px;border-top:1px solid var(--cardBorder)}
+.brow:first-child{border-top:none}
+.brow .top{display:flex;align-items:center;gap:8px}
+.brow .nm{flex:1;font-weight:600;font-size:14px}
+.brow .gets{font-size:10px;color:var(--muted);font-weight:600;background:rgba(29,158,117,.12);border:1px solid var(--cardBorder);border-radius:8px;padding:1px 6px}
+.brow .amt{font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
+.brow .amt s{text-decoration:none;font-size:11px;font-weight:600;color:var(--muted);margin-right:5px;font-family:"Spline Sans",sans-serif}
+.chips{display:flex;gap:6px;margin-top:8px}
+.chips div{flex:1;border:1px solid var(--cardBorder);border-radius:8px;padding:8px 0;text-align:center;font-weight:700;font-size:13px;color:var(--muted)}
+.chips div.on{border-color:var(--pine);border-width:2px;background:#E4F2EA;color:var(--pine)}
+.chips div.mx{color:var(--gold)}
+.mline{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;color:var(--muted)}
+.mline .mc{font-size:9.5px;font-weight:700;letter-spacing:.4px;border-radius:4px;padding:2px 6px}
+.mline .mc.d{background:#DCE8F5;color:#1A5490}
+.mline .mc.c{background:#F5E4CB;color:#8A5216}
+.mline .mc.b{background:#DCF2E4;color:#0B5B44}
+.mline .eq{margin-left:auto;font-weight:700;color:var(--deepPine);font-variant-numeric:tabular-nums}
+/* airborne actions */
+.air{border:1px solid #B8CFE8;background:#F1F7FD;border-radius:8px;padding:11px 12px;margin-bottom:11px}
+.air .h{display:flex;align-items:baseline;gap:8px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#1A5490}
+.air .h em{margin-left:auto;font-style:normal}
+.air p{margin:6px 0 9px;font-size:11.5px;line-height:1.5;color:#3E5C7E}
+.dbl{display:flex;gap:7px}
+.dbl div{flex:1;border:1.5px solid #B8CFE8;background:#fff;border-radius:9px;padding:9px 4px;text-align:center;font-weight:700;font-size:12px;color:#1A5490;line-height:1.3}
+.dbl div small{display:block;font-size:9px;font-weight:600;color:#7A93AE;margin-top:2px}
+.dbl div.on{background:#1A5490;border-color:#1A5490;color:#fff}
+.dbl div.on small{color:#B8CFE8}
+.counter{margin-top:9px;border:1.5px solid #8A5216;background:#8A5216;color:#fff;border-radius:10px;padding:12px;text-align:center;font-weight:700;font-size:14px;line-height:1.35}
+.counter small{display:block;font-size:10.5px;font-weight:500;opacity:.85;margin-top:2px}
+.counter.done{background:#FDF3E7;color:#8A5216;border-color:#E8D6BC}
+/* open (pre-lock) */
+.openbar{display:flex;align-items:center;gap:9px;background:#FDF8EC;border:1px solid #E4D3A8;border-radius:8px;padding:10px 12px;margin-bottom:11px;font-size:11.5px;line-height:1.45;color:#8A7440}
+.openbar b{color:var(--deepPine)}
+.openbar .ic{flex:none;font-size:14px}
+.brow.now{background:rgba(15,110,86,.06);border-top:1.5px solid var(--pine)}
+.brow .wait{font-size:10.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--pine)}
+.brow .amt.none{color:#C3CFC6}
+.maxrow{display:flex;align-items:baseline;gap:8px;padding:10px 12px;font-size:11.5px;color:var(--muted)}
+.maxrow b{color:var(--deepPine);font-weight:600}
+.maxrow em{margin-left:auto;font-style:normal;font-size:10.5px}
+.next:disabled{background:#B9C8BE;color:#F1F5F2}
+.pend{font-size:10.5px;color:var(--muted);text-align:center;margin-top:6px}
+/* lock */
+.lockbar{display:flex;align-items:center;gap:9px;background:#F4FAF6;border:1px solid #C9E3D4;border-radius:8px;padding:10px 12px;margin-bottom:11px;font-size:11.5px;line-height:1.45;color:#38564A}
+.lockbar b{color:var(--deepPine)}
+.lockbar .ic{flex:none;font-size:14px}
+/* score entry */
+.er{padding:9px 12px;border-top:1px solid var(--cardBorder)}
+.er:first-child{border-top:none}
+.er.bkr{background:#FDF8EC}
+.er .top{display:flex;align-items:center;gap:8px}
+.er .nm{flex:1;font-weight:600;font-size:14px}
+.er .role{font-size:9.5px;font-weight:700;letter-spacing:.4px;background:#FBF0D6;color:var(--gold);border-radius:4px;padding:2px 5px}
+.er .net{font-size:11px;color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums;width:44px;text-align:right}
+.er .net b{color:var(--pine)}
+.er .box{position:relative;width:38px;height:34px;border-radius:6px;border:1px solid var(--cardBorder);display:flex;align-items:center;justify-content:center;font-weight:700;font-variant-numeric:tabular-nums}
+.er .box i{position:absolute;top:4px;right:4px;width:5px;height:5px;border-radius:50%;background:var(--pine)}
+.er .box.wait{color:#C3CFC6}
+.er.now{background:rgba(15,110,86,.06);border-top:1.5px solid var(--pine)}
+.er.now .box{border-color:var(--pine);border-width:2px}
+.picker{display:flex;gap:6px;justify-content:center;padding:8px 0 2px}
+.opt{min-width:40px;height:46px;border-radius:9px;border:1px solid var(--cardBorder);background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;font-size:17px}
+.opt small{font-size:8px;color:var(--muted);text-transform:uppercase;margin-top:1px}
+.opt.sel{border:2px solid var(--pine)}
+.opt.u{color:var(--under)}
+.awaits{display:flex;align-items:center;gap:8px;background:#F4FAF6;border:1px solid #C9E3D4;border-radius:8px;padding:9px 12px;margin-bottom:11px;font-size:11.5px;line-height:1.45;color:#38564A}
+.awaits b{color:var(--deepPine)}
+.awaits .n{margin-left:auto;font-weight:700;white-space:nowrap}
+/* resolution */
+.rr{padding:11px 12px;border-top:1px solid var(--cardBorder)}
+.rr:first-child{border-top:none}
+.rr .top{display:flex;align-items:center;gap:8px}
+.rr .nm{flex:1;font-weight:600;font-size:14px}
+.rr .net{font-size:11px;color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums}
+.rr .net b{color:var(--pine)}
+.rr .box{width:38px;height:34px;border-radius:6px;border:1px solid var(--cardBorder);display:flex;align-items:center;justify-content:center;font-weight:700;font-variant-numeric:tabular-nums}
+.rr .box.bird{background:#DCF2E4;border-color:#B6DEC7;color:#0B5B44}
+.rr .res{display:flex;align-items:center;gap:7px;margin-top:8px;font-size:11.5px;color:var(--muted)}
+.rr .res .vd{font-size:9.5px;font-weight:700;letter-spacing:.4px;border-radius:4px;padding:2px 6px}
+.rr .res .vd.l{background:#F5E9E9;color:#9B2C2C}
+.rr .res .vd.w{background:#DCF2E4;color:#0B5B44}
+.rr .res .vd.t{background:#EDF1EE;color:var(--muted)}
+.rr .res .pay{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
+.rr .res .pay.pos{color:var(--win)}.rr .res .pay.neg{color:var(--warn)}
+.rr .chain{font-size:10.5px;color:#8B9990;margin-top:5px;line-height:1.45}
+.holetot{display:flex;align-items:baseline;padding:11px 12px;border-top:1.5px solid var(--cardBorder);background:#FBFDFC;font-size:12.5px;font-weight:700}
+.holetot b{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-size:20px;color:var(--win)}
+/* next banker */
+.nb{border:1px solid #E4D3A8;background:#FDF8EC;border-radius:8px;padding:11px 12px;margin-bottom:11px;display:flex;align-items:center;gap:11px}
+.nb .av{flex:none;width:36px;height:36px;border-radius:11px;background:#FBF0D6;color:var(--gold);display:flex;align-items:center;justify-content:center;font:700 13px/1 "Schibsted Grotesk",sans-serif}
+.nb .tx{flex:1;min-width:0;font-size:11.5px;line-height:1.45;color:#8A7440}
+.nb .tx b{display:block;color:var(--deepPine);font-family:"Schibsted Grotesk",sans-serif;font-size:14.5px;font-weight:700;margin-bottom:2px}
+/* tie picker */
+.tie{border:1px solid #E4D3A8;background:#FDF8EC;border-radius:8px;padding:11px 12px;margin-bottom:11px}
+.tie .h{display:flex;align-items:baseline;gap:8px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--gold)}
+.tie .h em{margin-left:auto;font-style:normal;color:#9C8149}
+.tie .q{font-family:"Schibsted Grotesk",sans-serif;font-size:15px;font-weight:700;margin:6px 0 3px}
+.tie p{margin:0 0 10px;font-size:11.5px;line-height:1.5;color:#8A7440}
+.tie .who{display:flex;gap:8px}
+.tie .who div{flex:1;border:1.5px solid #E4D3A8;background:#fff;border-radius:10px;padding:10px 6px;text-align:center;font-weight:700;font-size:14px;color:#8A5216;line-height:1.3}
+.tie .who div small{display:block;font-size:10px;font-weight:600;color:#9C8149;margin-top:2px}
+.tie .who div.on{background:#8A5216;border-color:#8A5216;color:#fff}
+.tie .who div.on small{color:#E8D6BC}
+.tie .alt{display:flex;align-items:center;gap:6px;margin-top:9px;font-size:10.5px;color:#8A7440;line-height:1.4}
+.tie .alt a{color:#8A5216;font-weight:600}
+/* running */
+.run{border:1px solid var(--cardBorder);border-radius:8px;padding:10px 12px;background:var(--card);margin-bottom:11px}
+.run .h{font-size:10px;font-weight:700;color:var(--pine);text-transform:uppercase;letter-spacing:.4px;margin-bottom:7px;display:flex;align-items:baseline}
+.run .h em{margin-left:auto;font-style:normal;color:var(--muted);letter-spacing:0;text-transform:none;font-size:11px}
+.rl{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12.5px;border-top:1px solid #F2F6F3}
+.rl:first-of-type{border-top:none}
+.rl .nm{flex:1;font-weight:600}
+.rl .bk{font-size:9.5px;font-weight:700;letter-spacing:.4px;background:#FBF0D6;color:var(--gold);border-radius:4px;padding:2px 5px}
+.rl .hb{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.rl .v{width:52px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.rl .v.pos{color:var(--win)}.rl .v.neg{color:var(--warn)}
+.bottom{position:absolute;left:0;right:0;bottom:0;padding:10px 12px 16px;display:flex;gap:8px;background:linear-gradient(transparent,var(--surface) 26%)}
+.prev{flex:1;height:48px;border-radius:12px;border:1.5px solid var(--pine);background:transparent;color:var(--pine);font-weight:700;font-size:14px}
+.next{flex:1;height:48px;border-radius:12px;border:none;background:var(--pine);color:#fff;font-weight:700;font-size:14px}
+.next.wide{flex:2}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#FFFFFF;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+
+<div class="notes">
+<h1>Banker, playing it</h1>
+<p>Banker is the only game in the app where <b>money is decided before anybody swings</b>, and the sequence in which it is decided is the entire game. Get the order wrong on screen and the format collapses into a guessing contest.</p>
+<h3>Five frames, four moments</h3>
+<p>A hole is <b>set on the tee, doubled in the air, scored and resolved on the green</b> &mdash; and then, before anyone moves on, <b>the next banker has to be settled</b>. The frames below run in that order; the first four are one hole, the fifth is a later hole where the rotation tied. The first is the one that carries the format: by the time the banker swings, every number is fixed and he is the only golfer who knows all of them.</p>
+<h3>The order is the rule</h3>
+<div class="own"><table>
+<tr><td>1. Banker sets</td><td>A maximum for this hole, at or under the round ceiling.</td></tr>
+<tr><td>2. Three bet</td><td>Each opponent picks his own number, floor to the banker&rsquo;s max.</td></tr>
+<tr><td>3. Bets lock</td><td>Then, and only then, the banker tees off &mdash; last, knowing all three.</td></tr>
+<tr><td>4. In the air</td><td>Players double on their own shot. The banker counters on his, doubling everything.</td></tr>
+</table></div>
+<p>Step 3 is the one the app has to <b>enforce rather than record.</b> A banker who can still see bets moving after his tee shot is playing a different game, so the screen has an explicit lock and the button says what it unlocks: <i>Lock bets &mdash; Paul tees off.</i> Nothing above the lock is editable afterwards without a visible correction.</p>
+<h3>Entering the bets is a gate, not a form</h3>
+<p>The banker&rsquo;s maximum goes in first, as chips rather than a keypad &mdash; a hole max is one of four or five habitual numbers, and a stepper invites a $17 bet nobody wants to settle. The round ceiling is printed beside it so a banker cannot exceed what the group agreed at setup.</p>
+<p>Then each opponent picks his own number, <b>floor to the banker&rsquo;s max</b>, on his own row. The rows are independent and visible to each other: this is a table game and concealing what Dave bet from Sam would be inventing a rule the format does not have.</p>
+<div class="own"><table>
+<tr><td>Max chip</td><td>The banker&rsquo;s number is the top of every opponent&rsquo;s range. Change it before the lock and the ranges move with it.</td></tr>
+<tr><td>At the max</td><td>Marked in gold on the row that took it &mdash; the group notices who is playing for the full number.</td></tr>
+<tr><td>Not in yet</td><td>Row highlighted, amount greyed. <b>The lock button stays disabled</b> and says how many bets are missing.</td></tr>
+<tr><td>Worst case</td><td>Already live in the banner, and it reads <i>if Lee takes the max</i> while a bet is outstanding &mdash; the banker&rsquo;s exposure is a range until every number is in.</td></tr>
+</table></div>
+<p>The lock is the only irreversible-feeling action in the game and the button says what it does rather than what it is: <b>Lock bets &mdash; Paul tees off.</b> A banker who can still watch bets move after his tee shot is playing a different game.</p>
+<h3>Score entry is the shared surface, and it resolves nothing</h3>
+<p>Entry itself is not a Banker screen &mdash; it is <b>the same four-row card and inline picker every game in the app uses</b>, centred on net par, one row active at a time. What is Banker-specific is what surrounds it, and one rule: <b>no row resolves until all four scores are in.</b></p>
+<p>The bet rows sit below holding their stakes with the word <i>unresolved</i>, and the banker&rsquo;s worst case stays a worst case. Resolving one bet at a time would be technically possible and badly wrong: three of the four numbers are meaningless until the banker&rsquo;s is among them, and a golfer watching his row flip to <i>lost</i> and back as scores arrive will not trust any of it. The counter reads <b>1 to go</b> instead, and the button says <i>Post the hole</i>.</p>
+<p>The banker&rsquo;s own row is tinted and tagged, because the whole card is read against it &mdash; his net is the number the other three are compared to, and burying it in alphabetical order would make every reader hunt for it.</p>
+<h3>The card sits under the entry, in net</h3>
+<p>Same card as the leaderboard: <b>gold is who banked, a green box beat him</b>, a dot is a stroke received. It is cut to the holes already posted, so the hole being entered stays blank rather than showing a half-finished row.</p>
+<p>Net rather than gross, for the reason the leaderboard gives: a hole here is three net comparisons against one net number, and gross on the card would make the reader do the subtraction four times a row to check a single bet.</p>
+<h3>Doubles are called in about four seconds</h3>
+<p>&ldquo;Double&rdquo; is shouted at a ball in flight. Nobody is holding a phone, so the controls are not really live &mdash; they are <b>a fast way to record what was just shouted</b>, and they are designed for a thumb at walking pace: one tap per player, one tap for the banker, no confirmation.</p>
+<p>They stay open until the first score is entered, then close. That window is generous on purpose: the alternative is a golfer arguing at settlement that he called it, and the app having no row to put it in.</p>
+<p>The banker&rsquo;s counter is a <b>single full-width control</b>, not three toggles, because it is one decision that lands on all three bets at once. Drawing it as three would suggest he can pick.</p>
+<h3>Par 3s swap the word</h3>
+<p>On a par 3 the airborne call is a triple. The buttons change label rather than adding a fourth option &mdash; <b>there is no double available on a par 3</b>, so offering one would be wrong, not merely redundant.</p>
+<h3>The chain, not the total</h3>
+<p>Each resolved row shows how it got there: <b>$10 bet &middot; &times;2 his double &middot; &times;2 counter = $40.</b> This is the only screen in the app that shows arithmetic, and it earns it &mdash; three bets on one hole with two independent doublers produce a number no golfer can verify from memory, and the argument at the bar is always about the chain rather than the outcome.</p>
+<p>The birdie bonus appears in the chain as a fourth link and only on a row that pays out &mdash; never on a tied row, which pays nothing, and never for the banker. That asymmetry is the rule made visible.</p>
+<h3>A tie is no action</h3>
+<p>The banker does not win ties. Match his net and the bet is void &mdash; whatever it had grown to. So a tied row reads <b>TIED &mdash; NO ACTION</b> with <b>$0</b>, and the chain still prints what the bet had reached, because <i>a $40 bet that paid nothing</i> is a fact the group wants to see rather than an omission.</p>
+<p>This is what makes the banker&rsquo;s counter a genuine gamble. A counter-double turns three bets into three bigger ones, and a hole where two opponents halve him collects on neither &mdash; he doubled his way into a hole worth less than his exposure suggested.</p>
+<h3>The banker&rsquo;s exposure sits in his own banner</h3>
+<p>One number: what this hole can cost him at the multipliers currently standing. It updates when a double lands. <b>He is the only golfer on the hole facing three bets</b>, and the banner is the only place in the app where a live worst case is shown, because it is the only place one exists.</p>
+<h3>Rotation is announced, and a tie is asked about</h3>
+<p>Low net takes the role, and when it is outright the app just says so. A role that silently changed hands is the fastest way to have two golfers think they are banking the 8th.</p>
+<p>A tie for low net is the interesting case, because <b>the traditional tiebreak is whoever holed out first and no phone can see that.</b> So the app does not guess: the fourth frame is the picker, on the tee, naming the tied golfers and asking the group which of them holed out first. One tap, and the next hole cannot start until it is answered &mdash; the button stays disabled reading <i>confirm the banker</i>.</p>
+<div class="own"><table>
+<tr><td>Default</td><td><b>The group says who.</b> The app asks; the group answers from what happened on the green.</td></tr>
+<tr><td>Draw</td><td>Offered on the card itself for groups who would rather not adjudicate, and selectable as the standing rule at setup. <b>A drawn result stays changeable</b> until a score is posted &mdash; the app&rsquo;s guess must never outrank the group&rsquo;s memory.</td></tr>
+<tr><td>Banker keeps it</td><td>The third setup option. Simplest, and it hands the role and the exposure to whoever is playing best.</td></tr>
+</table></div>
+<p>Whatever settles it, the answer is <b>recorded with its reason</b> &mdash; <i>holed out first</i>, <i>drawn</i>, <i>banker kept it</i> &mdash; and carried to the receipt. A rotation nobody can account for is how a Banker round ends in an argument about a hole three hours earlier.</p>
+<h3>Still open</h3>
+<ul>
+<li>Whether one phone runs the hole or all four do. Drawn as <b>one</b>, which matches the rest of the app but makes every double a relayed shout.</li>
+<li>Whether a bet can be corrected after the lock. Drawn as <b>yes, with a visible correction</b> &mdash; refusing outright means a mistyped bet ends the game.</li>
+<li>Whether the banker&rsquo;s hole maximum should default to his last one. Probably yes; most bankers repeat.</li>
+<li>Whether an answered tie can be corrected after the next hole has started. Drawn as <b>no</b> &mdash; by then bets have been set against a banker, and unwinding them is worse than living with it.</li>
+</ul>
+</div>
+
+<div class="wrap"><div class="phone">
+<div class="status"><span>11:14</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="ic">&#10005;</span><span class="ttl">Banker</span><span class="ic">&#128172;</span><span class="ic">&#128202;</span><span class="ic">&#8942;</span></div>
+<div class="body">
+
+<div class="bb">
+<div class="t1"><span>Banking the 7th</span><em>Hole 7 of 18</em></div>
+<div class="t2"><span class="who"><b>Paul Kelly</b><u>Tees off last &middot; net 8.2</u></span><span class="mx"><b>$20</b><u>HIS MAX</u></span></div>
+<div class="risk"><span>Facing three bets</span><b>&minus;$50 if Lee takes the max</b></div>
+</div>
+
+<div class="hh"><div class="n">Hole 7</div><div class="sub">Par 4 &middot; 411 yds &middot; SI 5</div><div class="help">&#65311;</div></div>
+
+<div class="openbar"><span class="ic">&#9201;</span><span><b>Bets are open.</b> Paul has not teed off &mdash; he goes last, once all three numbers are in.</span></div>
+
+<div class="sh"><span>Paul&rsquo;s maximum</span><em>the top of every bet</em></div>
+<div class="card">
+<div class="chips" style="margin:10px 12px 0"><div>$5</div><div>$10</div><div class="on">$20</div><div>$40</div></div>
+<div class="maxrow"><span>Nobody can bet above it</span><em>Round ceiling <b>$40</b></em></div>
+</div>
+
+<div class="sh"><span>The three bets</span><em>$5 floor &middot; $20 max</em></div>
+<div class="card">
+<div class="brow"><div class="top"><span class="nm">Dave Moran</span><span class="gets">Strokes</span><span class="amt">$10</span></div>
+<div class="chips"><div>$5</div><div class="on">$10</div><div class="mx">$20</div></div></div>
+<div class="brow"><div class="top"><span class="nm">Sam Reid</span><span class="amt" style="color:var(--gold)">$20</span></div>
+<div class="chips"><div>$5</div><div>$10</div><div class="on mx" style="border-color:var(--gold);background:#FBF0D6;color:var(--gold)">$20</div></div>
+<div class="mline"><span class="mc c">AT THE MAX</span><span class="eq">$20 at stake</span></div></div>
+<div class="brow now"><div class="top"><span class="nm">Lee Naylor</span><span class="gets">Strokes</span><span class="wait">His call</span><span class="amt none">&mdash;</span></div>
+<div class="chips"><div>$5</div><div>$10</div><div class="mx">$20</div></div></div>
+</div>
+
+<div class="run">
+<div class="h"><span>Round so far</span><em>thru 6</em></div>
+<div class="rl"><span class="nm">Paul Kelly</span><span class="bk">BANKING</span><span class="hb">banked 1</span><span class="v pos">+$40</span></div>
+<div class="rl"><span class="nm">Sam Reid</span><span class="hb">banked 3</span><span class="v pos">+$25</span></div>
+<div class="rl"><span class="nm">Dave Moran</span><span class="hb">banked 1</span><span class="v neg">&minus;$30</span></div>
+<div class="rl"><span class="nm">Lee Naylor</span><span class="hb">banked 1</span><span class="v neg">&minus;$35</span></div>
+</div>
+<div style="height:10px"></div>
+</div>
+<div class="bottom" style="flex-direction:column;gap:0"><div style="display:flex;gap:8px;width:100%"><button class="prev">&#8249; Hole 6</button><button class="next wide" disabled>Lock bets &mdash; Paul tees off</button></div><p class="pend">One bet still to come &mdash; Lee has not called his number</p></div>
+</div><div class="cap">On the tee &mdash; the max set, two bets in, one to come</div></div>
+
+<div class="wrap"><div class="phone">
+<div class="status"><span>11:18</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="ic">&#10005;</span><span class="ttl">Banker</span><span class="ic">&#128172;</span><span class="ic">&#128202;</span><span class="ic">&#8942;</span></div>
+<div class="body">
+
+<div class="bb">
+<div class="t1"><span>Banking the 7th</span><em>Hole 7 of 18</em></div>
+<div class="t2"><span class="who"><b>Paul Kelly</b><u>Tees off last &middot; net 8.2</u></span><span class="mx"><b>$20</b><u>HIS MAX</u></span></div>
+<div class="risk"><span>Facing three bets</span><b>&minus;$90 worst case</b></div>
+</div>
+
+<div class="hh"><div class="n">Hole 7</div><div class="sub">Par 4 &middot; 411 yds &middot; SI 5</div><div class="help">&#65311;</div></div>
+
+<div class="lockbar"><span class="ic">&#128274;</span><span><b>Bets locked at 11:16.</b> Paul has teed off. Doubles are open until the first score goes in.</span></div>
+
+<div class="sh"><span>The three bets</span><em>v. Paul, net</em></div>
+<div class="card">
+<div class="brow"><div class="top"><span class="nm">Dave Moran</span><span class="gets">Strokes</span><span class="amt"><s>$10</s>$40</span></div>
+<div class="mline"><span class="mc d">&times;2 HIS DOUBLE</span><span class="mc c">&times;2 COUNTER</span><span class="eq">$40 at stake</span></div></div>
+<div class="brow"><div class="top"><span class="nm">Sam Reid</span><span class="amt"><s>$20</s>$40</span></div>
+<div class="mline"><span class="mc c">&times;2 COUNTER</span><span class="eq">$40 at stake</span></div></div>
+<div class="brow"><div class="top"><span class="nm">Lee Naylor</span><span class="gets">Strokes</span><span class="amt"><s>$5</s>$10</span></div>
+<div class="mline"><span class="mc c">&times;2 COUNTER</span><span class="eq">$10 at stake</span></div></div>
+</div>
+
+<div class="air">
+<div class="h"><span>In the air</span><em>open until the first score</em></div>
+<p>Called on the shot, recorded here. One tap each &mdash; no confirmation, because nobody is looking at the phone when it happens.</p>
+<div class="dbl"><div class="on">Dave<small>doubled</small></div><div>Sam<small>double</small></div><div>Lee<small>double</small></div></div>
+<div class="counter done">Paul countered &mdash; all three doubled<small>Called after his tee shot, 11:17</small></div>
+</div>
+
+<div class="run">
+<div class="h"><span>Round so far</span><em>thru 6</em></div>
+<div class="rl"><span class="nm">Paul Kelly</span><span class="bk">BANKING</span><span class="hb">banked 1</span><span class="v pos">+$40</span></div>
+<div class="rl"><span class="nm">Sam Reid</span><span class="hb">banked 3</span><span class="v pos">+$25</span></div>
+<div class="rl"><span class="nm">Dave Moran</span><span class="hb">banked 1</span><span class="v neg">&minus;$30</span></div>
+<div class="rl"><span class="nm">Lee Naylor</span><span class="hb">banked 1</span><span class="v neg">&minus;$35</span></div>
+</div>
+<div style="height:10px"></div>
+</div>
+<div class="bottom"><button class="prev">&#8249; Hole 6</button><button class="next wide">Enter scores</button></div>
+</div><div class="cap">Bets locked, banker countered &mdash; the moment of the hole</div></div>
+
+<div class="wrap"><div class="phone">
+<div class="status"><span>11:26</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="ic">&#10005;</span><span class="ttl">Banker</span><span class="ic">&#128172;</span><span class="ic">&#128202;</span><span class="ic">&#8942;</span></div>
+<div class="body">
+
+<div class="bb">
+<div class="t1"><span>Banking the 7th</span><em>Hole 7 of 18</em></div>
+<div class="t2"><span class="who"><b>Paul Kelly</b><u>Gross 5 in &middot; net 4</u></span><span class="mx"><b>$20</b><u>HIS MAX</u></span></div>
+<div class="risk"><span>Facing three bets</span><b>&minus;$90 worst case</b></div>
+</div>
+
+<div class="hh"><div class="n">Hole 7</div><div class="sub">Par 4 &middot; 411 yds &middot; SI 5</div><div class="help">&#65311;</div></div>
+
+<div class="awaits"><span>&#9998;</span><span><b>Nothing settles until all four are in.</b> The bets below hold their stakes; no row resolves early.</span><span class="n">1 to go</span></div>
+
+<div class="sh"><span>Scores</span><em>gross &middot; net beside it &middot; &#9679; a stroke here</em></div>
+<div class="card">
+<div class="er bkr"><div class="top"><span class="nm">Paul Kelly</span><span class="role">BANKER</span><span class="net">net <b>4</b></span><span class="box">5<i></i></span></div></div>
+<div class="er"><div class="top"><span class="nm">Dave Moran</span><span class="net">net 4</span><span class="box">5<i></i></span></div></div>
+<div class="er"><div class="top"><span class="nm">Sam Reid</span><span class="net">net 4</span><span class="box">4</span></div></div>
+<div class="er now"><div class="top"><span class="nm">Lee Naylor</span><span class="net">net 2</span><span class="box">3<i></i></span></div>
+<div class="picker"><span class="opt u">2<small>eagle</small></span><span class="opt u sel">3<small>bird</small></span><span class="opt">4<small>par</small></span><span class="opt">5<small>bog</small></span></div></div>
+</div>
+
+<div class="sh" style="margin-top:11px"><span>The three bets</span><em>the counter doubled each once</em></div>
+<div class="card">
+<div class="brow"><div class="top"><span class="nm">Dave Moran</span><span class="amt">$40</span></div>
+<div class="mline"><span class="mc d">&times;2 HIS DOUBLE</span><span class="mc c">&times;2 COUNTER</span><span class="eq" style="color:#8B9990">$10 &rarr; $20 &rarr; $40</span></div></div>
+<div class="brow"><div class="top"><span class="nm">Sam Reid</span><span class="amt">$40</span></div>
+<div class="mline"><span class="mc c">&times;2 COUNTER</span><span class="eq" style="color:#8B9990">$20 &rarr; $40</span></div></div>
+<div class="brow"><div class="top"><span class="nm">Lee Naylor</span><span class="amt">$10</span></div>
+<div class="mline"><span class="mc c">&times;2 COUNTER</span><span class="eq" style="color:#8B9990">$5 &rarr; $10</span></div></div>
+</div>
+
+<div style="height:11px"></div>
+<div class="scmount"></div>
+<div style="height:10px"></div>
+</div>
+<div class="bottom"><button class="prev">&#8249; Hole 6</button><button class="next wide" disabled>Post the hole</button></div>
+</div><div class="cap">Score entry &mdash; three in, one open, nothing resolved</div></div>
+
+<div class="wrap"><div class="phone">
+<div class="status"><span>11:31</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="ic">&#10005;</span><span class="ttl">Banker</span><span class="ic">&#128172;</span><span class="ic">&#128202;</span><span class="ic">&#8942;</span></div>
+<div class="body">
+
+<div class="bb">
+<div class="t1"><span>Banked the 7th</span><em>Hole 7 of 18</em></div>
+<div class="t2"><span class="who"><b>Paul Kelly</b><u>Gross 5 &middot; net 4 </u></span><span class="mx"><b style="color:#8A5216">&minus;$20</b><u>THIS HOLE</u></span></div>
+<div class="risk"><span>Two tied &mdash; no action, one paid out</span><b>$90 was at stake</b></div>
+</div>
+
+<div class="hh"><div class="n">Hole 7</div><div class="sub">Par 4 &middot; 411 yds &middot; SI 5</div><div class="help">&#65311;</div></div>
+
+<div class="sh"><span>Three one-on-ones</span><em>net, v. the banker&rsquo;s 4 &middot; signed to you</em></div>
+<div class="card">
+<div class="rr">
+<div class="top"><span class="nm">Dave Moran</span><span class="gets" style="font-size:10px;color:var(--muted);font-weight:600;background:rgba(29,158,117,.12);border:1px solid var(--cardBorder);border-radius:8px;padding:1px 6px">Strokes</span><span class="net">net <b>4</b></span><span class="box">5</span></div>
+<div class="res"><span class="vd t">TIED &mdash; NO ACTION</span><span class="pay" style="color:#B6C4BB">$0</span></div>
+<div class="chain">$10 bet &middot; &times;2 his double &middot; &times;2 Paul&rsquo;s counter = <b style="color:#5C6B62">$40</b> &mdash; void, matched the banker</div>
+</div>
+<div class="rr">
+<div class="top"><span class="nm">Sam Reid</span><span class="net">net <b>4</b></span><span class="box">4</span></div>
+<div class="res"><span class="vd t">TIED &mdash; NO ACTION</span><span class="pay" style="color:#B6C4BB">$0</span></div>
+<div class="chain">$20 bet at the max &middot; &times;2 Paul&rsquo;s counter = <b style="color:#5C6B62">$40</b> &mdash; void, matched the banker</div>
+</div>
+<div class="rr">
+<div class="top"><span class="nm">Lee Naylor</span><span class="gets" style="font-size:10px;color:var(--muted);font-weight:600;background:rgba(29,158,117,.12);border:1px solid var(--cardBorder);border-radius:8px;padding:1px 6px">Strokes</span><span class="net">net <b>2</b></span><span class="box bird">3</span></div>
+<div class="res"><span class="vd w">BEAT THE BANKER &middot; BIRDIE</span><span class="pay neg">&minus;$20</span></div>
+<div class="chain">$5 bet &middot; &times;2 Paul&rsquo;s counter &middot; &times;2 birdie bonus = <b style="color:#5C6B62">$20</b></div>
+</div>
+<div class="holetot"><span>Paul&rsquo;s hole</span><b style="color:var(--warn)">&minus;$20</b></div>
+</div>
+
+<div class="nb">
+<div class="av">LN</div>
+<div class="tx"><b>Lee banks the 8th</b>Low net on the hole with a 2 &mdash; no tie, no draw needed. He sets the max on the tee.</div>
+</div>
+
+<div class="run">
+<div class="h"><span>Round so far</span><em>thru 7</em></div>
+<div class="rl"><span class="nm">Sam Reid</span><span class="hb">banked 3</span><span class="v pos">+$25</span></div>
+<div class="rl"><span class="nm">Paul Kelly</span><span class="hb">banked 2</span><span class="v pos">+$20</span></div>
+<div class="rl"><span class="nm">Lee Naylor</span><span class="bk">NEXT</span><span class="hb">banked 1</span><span class="v neg">&minus;$15</span></div>
+<div class="rl"><span class="nm">Dave Moran</span><span class="hb">banked 1</span><span class="v neg">&minus;$30</span></div>
+</div>
+<div style="height:10px"></div>
+</div>
+<div class="bottom"><button class="prev">&#8249; Hole 6</button><button class="next wide">Hole 8 &mdash; Lee sets the max</button></div>
+</div><div class="cap">Resolved &mdash; the chain shown on every row</div></div>
+<div class="wrap"><div class="phone">
+<div class="status"><span>2:06</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="ic">&#10005;</span><span class="ttl">Banker</span><span class="ic">&#128172;</span><span class="ic">&#128202;</span><span class="ic">&#8942;</span></div>
+<div class="body">
+
+<div class="bb">
+<div class="t1"><span>Banked the 16th</span><em>Hole 16 of 18</em></div>
+<div class="t2"><span class="who"><b>Sam Reid</b><u>Gross 5 &middot; net 5 &middot; no stroke here</u></span><span class="mx"><b style="color:#8A5216">&minus;$15</b><u>THIS HOLE</u></span></div>
+<div class="risk"><span>Two beat him, one tied</span><b>$20 was at stake</b></div>
+</div>
+
+<div class="tie">
+<div class="h"><span>Who banks the 17th?</span><em>needed before the tee</em></div>
+<div class="q">Paul and Dave tied at net 4</div>
+<p>Low net takes the role and two of you have it. The tiebreak is <b>whoever holed out first</b> &mdash; the one thing this app cannot see. Tap the man who did.</p>
+<div class="who"><div class="on">Paul<small>holed out first</small></div><div>Dave<small>tap to switch</small></div></div>
+<div class="alt"><span>&#127922;</span><span>Would rather not adjudicate? <a href="#">Draw it</a> &mdash; or change the rotation rule in settings.</span></div>
+</div>
+
+<div class="hh"><div class="n">Hole 16</div><div class="sub">Par 4 &middot; 366 yds &middot; SI 4</div><div class="help">&#65311;</div></div>
+
+<div class="sh"><span>Three one-on-ones</span><em>net, v. the banker&rsquo;s 5 &middot; signed to Sam</em></div>
+<div class="card">
+<div class="rr"><div class="top"><span class="nm">Paul Kelly</span><span class="gets" style="font-size:10px;color:var(--muted);font-weight:600;background:rgba(29,158,117,.12);border:1px solid var(--cardBorder);border-radius:8px;padding:1px 6px">Strokes</span><span class="net">net <b>4</b></span><span class="box">5</span></div>
+<div class="res"><span class="vd w">BEAT THE BANKER</span><span class="pay neg">&minus;$10</span></div>
+<div class="chain">$10 bet, no double = <b style="color:#5C6B62">$10</b></div></div>
+<div class="rr"><div class="top"><span class="nm">Dave Moran</span><span class="gets" style="font-size:10px;color:var(--muted);font-weight:600;background:rgba(29,158,117,.12);border:1px solid var(--cardBorder);border-radius:8px;padding:1px 6px">Strokes</span><span class="net">net <b>4</b></span><span class="box">5</span></div>
+<div class="res"><span class="vd w">BEAT THE BANKER</span><span class="pay neg">&minus;$5</span></div>
+<div class="chain">$5 bet, no double = <b style="color:#5C6B62">$5</b></div></div>
+<div class="rr"><div class="top"><span class="nm">Lee Naylor</span><span class="gets" style="font-size:10px;color:var(--muted);font-weight:600;background:rgba(29,158,117,.12);border:1px solid var(--cardBorder);border-radius:8px;padding:1px 6px">Strokes</span><span class="net">net <b>5</b></span><span class="box">6</span></div>
+<div class="res"><span class="vd t">TIED &mdash; NO ACTION</span><span class="pay" style="color:#B6C4BB">$0</span></div>
+<div class="chain">$5 bet, no double = <b style="color:#5C6B62">$5</b> &mdash; void, matched the banker</div></div>
+<div class="holetot"><span>Sam&rsquo;s hole</span><b style="color:var(--warn)">&minus;$15</b></div>
+</div>
+<div style="height:10px"></div>
+</div>
+<div class="bottom"><button class="prev">&#8249; Hole 15</button><button class="next wide" disabled>Hole 17 &mdash; confirm the banker</button></div>
+</div><div class="cap">A tie for low net &mdash; the group settles it, the app records it</div></div>
+<script src="banker-scorecard.js"></script>
+<script>
+Array.prototype.forEach.call(document.querySelectorAll('.scmount'),function(el){
+  BankerScorecard.render(el,{played:6});
+});
+</script>
+</body>
+</html>

@@ -15,7 +15,7 @@ from decimal import Decimal
 from django.test import TestCase
 
 from core.models import HandicapMode
-from games.models import BankerGame, BankerHole
+from games.models import BankerBet, BankerGame, BankerHole
 from services.banker import (ZERO, BankerLocked, banker_settlement, cap_for,
                              banker_summary,
                              exposure_ladder, hole_exposure,
@@ -1024,6 +1024,55 @@ class BankerLossCapTests(TestCase):
 
     def _totals(self):
         return {p['short_name']: p for p in banker_summary(self.fs)['players']}
+
+    # -- what the screen has to be able to draw --------------------------
+
+    def test_the_hole_in_play_names_who_is_cut_off(self):
+        """The play screen cannot grey out what it cannot see.
+
+        Phase 1 offered a cut off golfer the whole ladder and then showed the
+        floor lighting up instead, and phase 2 lit his double button and
+        answered the tap with a server error. Both need the set on the HOLE,
+        not only the round totals — a golfer cut off on the 3rd is in the
+        action on the 1st, and the same payload draws both.
+        """
+        self._sink_dave()
+        self._open(2)
+        cur = banker_summary(self.fs)['current']
+        self.assertEqual(cur['hole'], 2)
+        self.assertEqual(cur['cut_off'], [self.pid['Dave']])
+
+    def test_the_floor_goes_down_for_him_the_moment_the_hole_has_a_maximum(self):
+        """He has one bet available and no way to change it, so the app puts
+        it down rather than asking him to tap a chip that cannot say anything
+        else — and rather than holding the lock while the other two wait."""
+        self._sink_dave()
+        self._open(2)
+        set_hole_max(self.fs, 2, 50)
+        bet = BankerBet.objects.get(hole__game=self.game, hole__hole_number=2,
+                                    player_id=self.pid['Dave'])
+        self.assertEqual(bet.amount, Decimal('5'))
+        # Only him. The other two still name their own numbers.
+        self.assertEqual(
+            BankerBet.objects.filter(hole__game=self.game,
+                                     hole__hole_number=2).count(), 1)
+
+    def test_a_bet_placed_before_the_lock_already_says_it_is_capped(self):
+        """Phase 2 draws its rows and its buttons off the lines, and it draws
+        them while the hole is still open. A `capped` flag that only appeared
+        once the hole resolved would be right at the one moment nobody can act
+        on it."""
+        self._sink_dave()
+        self._open(2)
+        set_hole_max(self.fs, 2, 50)
+        for n in ('Dave', 'Sam', 'Lee'):
+            place_bet(self.fs, 2, self.pid[n], 50)
+        lines = {l['player_id']: l
+                 for l in banker_summary(self.fs)['current']['lines']}
+        self.assertTrue(lines[self.pid['Dave']]['capped'])
+        self.assertFalse(lines[self.pid['Sam']]['capped'])
+        # And the floor is what he actually has on it, whatever he tapped.
+        self.assertEqual(lines[self.pid['Dave']]['bet'], Decimal('5'))
 
     # -- the threshold -------------------------------------------------------
 

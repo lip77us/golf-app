@@ -6932,6 +6932,10 @@ class BankerHoleState {
   final double  exposureIfMax;
   /// Short names of the opponents who have not bet yet.
   final List<String> outstanding;
+  /// Who was already cut off when this hole opened. He plays the floor with
+  /// no multipliers and the counter goes past him — so the screen has to stop
+  /// offering him a ladder and a double it will refuse.
+  final List<int> cutOff;
 
   const BankerHoleState({
     required this.hole, this.par, this.strokeIndex, required this.isPar3,
@@ -6941,6 +6945,7 @@ class BankerHoleState {
     this.holeCapped = false, required this.lines,
     required this.bankerDelta, required this.resolved, required this.exposure,
     required this.exposureIfMax, required this.outstanding,
+    this.cutOff = const [],
   });
 
   factory BankerHoleState.fromJson(Map<String, dynamic> j) => BankerHoleState(
@@ -6966,6 +6971,7 @@ class BankerHoleState {
         exposureIfMax: _d(j['exposure_if_max']),
         outstanding: ((j['outstanding'] as List?) ?? [])
             .map((e) => '$e').toList(),
+        cutOff: ((j['cut_off'] as List?) ?? []).map((e) => e as int).toList(),
       );
 
   bool get betsIn => lines.isNotEmpty;

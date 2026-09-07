@@ -298,6 +298,17 @@ def set_hole_max(foursome, hole_number, amount) -> BankerHole:
     # A bet already above the new maximum comes down with it rather than
     # standing at a number the banker just refused.
     row.bets.filter(amount__gt=amt).update(amount=amt)
+    # A cut off golfer has the floor and nothing else, so the app puts it down
+    # for him the moment the hole has a maximum. This is the one golfer the
+    # `lock_bets` rule against a silent floor bet does not describe: that rule
+    # exists so the app never CHOOSES somebody's stake, and he has no stake to
+    # choose. Making him tap a single chip to confirm a number he cannot
+    # change is ceremony, and it holds up the lock for the other two.
+    for pid in cut_off_players(foursome, upto_hole=hole_number):
+        if pid == row.banker_id:
+            continue
+        row.bets.get_or_create(player_id=pid,
+                               defaults={'amount': Decimal(game.min_bet)})
     return row
 
 

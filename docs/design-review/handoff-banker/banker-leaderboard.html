@@ -1,0 +1,272 @@
+<!-- @dsCard group="Games" name="Banker — leaderboard" subtitle="BankerLeaderboard — the eighteen-hole ledger as one four-column table, the biggest swings, and the money by man" viewport="900x1080" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halved · Banker — leaderboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--surface:#EAF0EA;--card:#FFF;--cardBorder:#DCE5DD;--muted:#5C6B62;--warn:#8A5216;--win:#388E3C;--gold:#B8860B}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:34px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.own{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:96px;color:var(--deepPine);font-weight:600}
+.phone{width:390px;height:844px;background:var(--surface);border:11px solid #0B1F1A;border-radius:40px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);flex:none}
+.status{height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.appbar{display:flex;align-items:center;gap:10px;padding:4px 16px 8px}
+.appbar .bk{font-size:23px;line-height:1}
+.appbar .ttl{font-family:"Schibsted Grotesk",sans-serif;font-weight:700;font-size:17px}
+.appbar .ic{margin-left:auto;font-size:13px;color:var(--muted)}
+.tabs{display:flex;gap:7px;padding:0 14px 9px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:none;border:1.5px solid var(--cardBorder);background:#fff;border-radius:999px;padding:7px 13px;font:600 12.5px/1 "Spline Sans",system-ui,sans-serif;color:var(--muted);cursor:pointer}
+.tabs button.on{border-color:var(--pine);background:#E4F2EA;color:var(--pine)}
+.body{padding:0 12px 26px;overflow-y:auto;height:735px}
+.chips{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);padding:2px 2px 10px}
+.chips b{color:var(--deepPine);font-weight:700}
+.chips .r{margin-left:auto;font-weight:600}
+.sec{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 2px 7px;display:flex;align-items:baseline}
+.sec em{margin-left:auto;font-style:normal;letter-spacing:0;text-transform:none;font-size:11px;font-weight:600}
+/* the ledger table */
+.tbl{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:8px 9px 10px;margin-bottom:12px}
+.tr{display:grid;grid-template-columns:46px repeat(4,1fr);align-items:center;gap:2px;font-size:12px;padding:4px 0;border-top:1px solid #F2F6F3}
+.tr:first-child{border-top:none}
+.tr .rl{font-size:10.5px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.tr .rl u{text-decoration:none;font-weight:500;color:#A9B6AD;margin-left:3px}
+.tr i{font-style:normal;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;padding:2px 3px 2px 0;border-radius:4px}
+.tr.head{padding-bottom:7px}
+.tr.head i{font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--muted);display:flex;flex-direction:column;align-items:flex-end;line-height:1.2}
+.tr.head i u{text-decoration:none;color:var(--deepPine);font-size:10.5px}
+.tr.head .rl{font-size:9.5px;letter-spacing:.3px}
+.tr .pos{color:var(--win)}.tr .neg{color:var(--warn)}.tr .zero{color:#C3CFC6;font-weight:600}
+.tr i.bk{background:#FBF0D6}
+.tr.total{border-top:1.5px solid var(--cardBorder);margin-top:4px;padding-top:9px}
+.tr.total .rl{color:var(--deepPine);font-size:11px}
+.tr.total i{font-family:"Schibsted Grotesk",sans-serif;font-size:15px}
+.tr.split .rl{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.2px;color:#8B9990}
+.tr.split i{font-size:11px;font-weight:600}
+.key{display:flex;flex-wrap:wrap;gap:10px;font-size:9.5px;color:var(--muted);padding:8px 2px 0}
+.key span{display:inline-flex;align-items:center;gap:4px}
+.key s{text-decoration:none;width:11px;height:11px;border-radius:3px;display:block;background:#FBF0D6}
+.zsum{display:flex;align-items:baseline;font-size:10.5px;color:var(--muted);padding:7px 2px 0}
+.zsum b{margin-left:auto;color:var(--deepPine);font-weight:700}
+/* swings */
+.sw{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;padding:9px 11px 10px;margin-bottom:12px}
+.sl{display:flex;align-items:baseline;gap:9px;padding:6px 0;font-size:12px;border-top:1px solid #F2F6F3}
+.sl:first-child{border-top:none}
+.sl .h{flex:none;width:52px;font-weight:700;color:var(--gold);font-size:11px}
+.sl .d{flex:1;min-width:0;color:var(--muted);line-height:1.4}
+.sl .d b{color:var(--deepPine);font-weight:600}
+.sl .v{flex:none;font-weight:700;font-variant-numeric:tabular-nums}
+.sl .v{font-size:11.5px}.sl .v.pos{color:var(--win)}.sl .v.neg{color:var(--warn)}
+/* scorecard */
+.scw{background:#fff;border:1px solid var(--cardBorder);border-radius:12px;overflow:hidden;margin-bottom:12px}
+.scs{overflow-x:auto;scrollbar-width:none}.scs::-webkit-scrollbar{display:none}
+.sct{border-collapse:separate;border-spacing:0;table-layout:fixed;font-variant-numeric:tabular-nums}
+.sct td{padding:0;text-align:center;font-weight:600}
+.sct .lb{position:sticky;left:0;z-index:2;background:#fff;text-align:left;padding:0 8px 0 10px;font-size:11.5px;font-weight:700;white-space:nowrap}
+.sct tr.meta .lb{background:#EEF3EF}
+.sct tr.meta td{background:#EEF3EF;font-size:11px;height:22px;color:var(--muted)}
+.sct tr.hole td,.sct tr.hole .lb{background:#E1EAE2;font-weight:700;color:var(--deepPine);font-size:11px;height:24px}
+.sct tr.par td{font-style:italic}
+.sct tr.par td,.sct tr.par .lb{border-bottom:1px solid var(--cardBorder)}
+.sct tr.p td{height:29px;font-size:12.5px}
+.scc{display:inline-flex;align-items:center;justify-content:center;width:26px;height:23px;border-radius:5px}
+.scc.bank{background:#FBF0D6;color:#8A6410;font-weight:700}
+.scc.beat{background:#DCF2E4;border:1px solid #7FC79F;color:#0B5B44;font-weight:700}
+.scf{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:8px 10px 10px;font-size:10px;color:var(--muted);border-top:1px solid #EDF2EE}
+.scf s{text-decoration:none;width:11px;height:11px;border-radius:3px;display:block}
+.scf span{display:inline-flex;align-items:center;gap:4px}
+.foot{font-size:11px;color:var(--muted);line-height:1.5;margin:11px 2px 0}
+.foot b{color:var(--deepPine)}
+</style>
+</head>
+<body>
+<a href="../index-contents.html" style="position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 'Spline Sans',system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)">&#8592; Contents</a>
+<div class="notes">
+<h1>Banker, leaderboard</h1>
+<p>Eighteen holes, three bets a hole, two independent doublers. Fifty-four one-on-ones in a round, and no golfer alive can reconstruct them. This board exists so nobody has to.</p>
+<h3>It is the round, not your round</h3>
+<p>The earlier draft opened as four golfer rows you tapped to expand, each showing that golfer's own ledger and hiding everyone else's. It answered <i>how did I do</i> four times over and never once answered <b>what happened out there</b> &mdash; and in a game where the whole foursome watched every bet get called, hiding Dave's number from Sam was inventing a privacy rule the format does not have.</p>
+<p>So the board is <b>one table: eighteen hole rows, four golfer columns, every cell signed.</b> Nothing is per-viewer; four phones show the same screen.</p>
+<div class="own"><table>
+<tr><td>A row</td><td>One hole. The four cells are what that hole did to each man &mdash; and because every bet was one-on-one, the row sums to zero.</td></tr>
+<tr><td>Gold cell</td><td>Who banked. Reading the gold down the table shows the rotation, and it is the only marker the table needs.</td></tr>
+<tr><td>Dash</td><td>Nothing moved. Either a tie &mdash; <b>a tie is no action</b> &mdash; or, for a golfer who banked, a hole where the three bets cancelled.</td></tr>
+</table></div>
+<h3>Money, not multipliers</h3>
+<p>The table shows what each hole <b>paid</b>, not what was on it. An earlier pass marked multiplied bets with an outline and it made the table a puzzle: a golfer would find the loud cell and then have to work out whether the noise cost him anything. The multipliers are in the play screen's chain, hole by hole, where they can be read in full.</p>
+<p>What survives here instead is the <b>banking / betting split</b> under the total, because those are two different games. Three bets against you at once is high variance by construction; one bet of your own size is not. A golfer can finish level having been wildly up as banker and wildly down as a player, and that pair is the only useful thing a Banker round says about how it was played.</p>
+<h3>The card is net, because every bet settles on net</h3>
+<p>Other games in the app show gross with a stroke dot, the way golfers write it on paper. Banker does not: a hole here is <b>three net comparisons against one net number</b>, and putting gross on the card would make the reader do the subtraction four times a row to check a single bet.</p>
+<p>So the cells are net scores, and two marks carry the whole hole. <b>Gold is the banker</b>; <b>a green box beat him</b>. Everything unmarked lost to him or tied him &mdash; and since a tie is no action, unmarked does not mean paid. The money table above says who paid.</p>
+<h3>The biggest holes get named</h3>
+<p>A Banker round is nearly always settled by two or three holes where a doubled bet met good shots. Everybody half-remembers them and nobody agrees on the number, so they are printed: <b>the hole, what happened, and the largest single move on it.</b></p>
+<p>One quantity in the right-hand column, and it is named: <i>+$120 Sam</i>, not a bare figure. A block whose column silently alternates between the banker&rsquo;s net and one opponent&rsquo;s bet is unreadable, and ranking by the banker&rsquo;s net would bury the round&rsquo;s biggest hole &mdash; the 14th, where three tripled bets cancelled to nothing <b>for the banker</b> while $120 changed hands around him.</p>
+<h3>Ranking is money and nothing else</h3>
+<p>No points, no match record. The total row sorts nothing &mdash; it is a table, in hole order, and <b>holes banked is a fact about the round rather than an achievement</b>: the golfer who banked seven is as likely to have been beaten seven times as to have collected.</p>
+<h3>Still open</h3>
+<ul>
+<li>Whether eighteen rows is too tall for a phone. It scrolls, and the alternative &mdash; collapsing to nines &mdash; hides exactly the holes the group argues about. Drawn as <b>all eighteen</b>.</li>
+<li>Whether a cell should open the hole's three bets in detail. Probably yes, as a sheet; it is the one place per-hole depth is worth a tap.</li>
+</ul>
+</div>
+<div class="phone">
+<div class="status"><span>2:52</span><span>&#9679;&#9679;&#9679; &#9646;</span></div>
+<div class="appbar"><span class="bk">&#8249;</span><span class="ttl">Leaderboard</span><span class="ic">&#9679;&#9679;&#9679;</span></div>
+<div class="tabs"><button class="on">Banker</button><button>Skins</button><button>Scorecard</button></div>
+<div class="body">
+<div class="chips"><span>Band</span><b>$5&ndash;$50, net</b><span class="r">Round complete</span></div>
+<div class="sec"><span>The eighteen holes</span><em id="cnt"></em></div>
+<div class="tbl" id="tbl"></div>
+<div class="sec"><span>The card</span><em>net, 18 holes</em></div>
+<div id="sc"></div>
+<div class="sec"><span>The holes that decided it</span><em>largest single move</em></div>
+<div class="sw" id="sw"></div>
+<p class="foot">The banker plays each opponent one-on-one, net. Beat him and he pays your bet; lose and you pay him. <b>A tie is no action</b> &mdash; the banker does not win ties. Players double on their own shot; the banker&rsquo;s counter doubles every standing bet. Par 3s triple instead. A player&rsquo;s birdie doubles his payout &mdash; never a tie, never the banker&rsquo;s. <b>Lowest net on the hole banks the next one</b>; a tie for low is drawn.</p>
+</div>
+</div>
+<script>
+var P=['Paul','Dave','Sam','Lee'],FULL={Paul:'Paul Kelly',Dave:'Dave Moran',Sam:'Sam Reid',Lee:'Lee Naylor'};
+var PAR=[4,4,4,3,4,4,4,5,4,4,3,4,5,3,4,4,5,4];
+// net relative to par, per golfer, per hole
+var NET={
+ Paul:[0,1,0,0,1,0,0,1,1,0,1,1,0,0,1,0,1,1],
+ Dave:[1,1,1,0,1,1,0,2,1,1,0,1,1,1,1,0,1,1],
+ Sam :[0,0,1,0,0,1,0,1,0,1,0,0,1,-1,0,1,1,0],
+ Lee :[1,2,0,1,1,0,-2,1,2,1,1,2,0,1,1,1,2,1]
+};
+// per hole: banker, his announced max, each opponent's [bet, own multiplier], banker counter, gross birdies
+var H=[
+ {bk:'Paul',mx:10,b:{Dave:[5,1],Sam:[10,1],Lee:[5,1]},ctr:1,bird:[]},
+ {bk:'Sam', mx:10,b:{Paul:[5,1],Dave:[10,1],Lee:[5,1]},ctr:1,bird:[]},
+ {bk:'Sam', mx:15,b:{Paul:[15,1],Dave:[5,1],Lee:[5,1]},ctr:1,bird:['Lee']},
+ {bk:'Lee', mx:10,b:{Paul:[10,1],Dave:[5,3],Sam:[10,1]},ctr:1,bird:[]},
+ {bk:'Dave',mx:10,b:{Paul:[5,1],Sam:[10,2],Lee:[5,1]},ctr:2,bird:[]},
+ {bk:'Sam', mx:15,b:{Paul:[10,1],Dave:[5,1],Lee:[5,1]},ctr:1,bird:['Lee']},
+ {bk:'Paul',mx:20,b:{Dave:[10,2],Sam:[20,1],Lee:[5,1]},ctr:2,bird:['Lee']},
+ {bk:'Lee', mx:15,b:{Paul:[10,1],Dave:[5,1],Sam:[15,1]},ctr:1,bird:[]},
+ {bk:'Sam', mx:15,b:{Paul:[10,1],Dave:[5,1],Lee:[5,1]},ctr:1,bird:[]},
+ {bk:'Sam', mx:15,b:{Paul:[10,1],Dave:[5,1],Lee:[10,1]},ctr:1,bird:[]},
+ {bk:'Paul',mx:10,b:{Dave:[5,1],Sam:[10,3],Lee:[5,1]},ctr:1,bird:['Sam']},
+ {bk:'Dave',mx:15,b:{Paul:[10,1],Sam:[15,2],Lee:[5,1]},ctr:1,bird:[]},
+ {bk:'Sam', mx:15,b:{Paul:[10,1],Dave:[5,1],Lee:[10,1]},ctr:2,bird:['Lee']},
+ {bk:'Paul',mx:20,b:{Dave:[20,3],Sam:[20,3],Lee:[20,3]},ctr:1,bird:['Sam']},
+ {bk:'Paul',mx:15,b:{Dave:[10,1],Sam:[15,1],Lee:[5,1]},ctr:1,bird:[]},
+ {bk:'Sam', mx:15,b:{Paul:[10,1],Dave:[5,1],Lee:[5,1]},ctr:1,bird:[]},
+ {bk:'Paul',mx:15,b:{Dave:[10,1],Sam:[15,2],Lee:[5,1]},ctr:2,bird:[]},
+ {bk:'Dave',mx:15,b:{Paul:[15,1],Sam:[15,1],Lee:[5,1]},ctr:1,bird:[]}
+];
+function m(v){return (v<0?'\u2212$':'+$')+Math.abs(v)}
+/* one hole, one golfer — ties are no action */
+function cell(i,p){
+  var d=H[i];
+  if(d.bk===p){
+    var tot=0;
+    Object.keys(d.b).forEach(function(o){
+      var st=d.b[o][0]*d.b[o][1]*d.ctr,diff=NET[o][i]-NET[d.bk][i];
+      if(diff<0)tot-=st*(d.bird.indexOf(o)>=0?2:1);
+      else if(diff>0)tot+=st;
+    });
+    return tot;
+  }
+  var bt=d.b[p];if(!bt)return 0;
+  var st=bt[0]*bt[1]*d.ctr,diff=NET[p][i]-NET[d.bk][i];
+  if(diff===0)return 0;
+  return diff<0?st*(d.bird.indexOf(p)>=0?2:1):-st;
+}
+function totals(p){
+  var asB=0,asP=0,banked=0;
+  for(var i=0;i<18;i++){var v=cell(i,p);if(H[i].bk===p){asB+=v;banked++}else asP+=v}
+  return {asB:asB,asP:asP,net:asB+asP,banked:banked};
+}
+var T={};P.forEach(function(p){T[p]=totals(p)});
+var bets=H.reduce(function(s,d){return s+Object.keys(d.b).length},0);
+document.getElementById('cnt').textContent=bets+' one-on-ones settled';
+function row(cls,label,fn){
+  return '<div class="tr '+cls+'"><span class="rl">'+label+'</span>'+
+    P.map(fn).join('')+'</div>';
+}
+var head=row('head','Hole',function(p){var f=FULL[p].split(' ');
+  return '<i><u>'+f[0]+'</u>'+f.slice(1).join(' ')+'</i>'});
+var body='';
+for(var i=0;i<18;i++){
+  body+=(function(i){
+    return row('','<b style="font-weight:700">'+(i+1)+'</b><u>p'+PAR[i]+'</u>',function(p){
+      var v=cell(i,p),bk=H[i].bk===p;
+      return '<i class="'+(v>0?'pos':v<0?'neg':'zero')+(bk?' bk':'')+'">'+(v?m(v):'\u2013')+'</i>';
+    });
+  })(i);
+}
+var tot=row('total','Net',function(p){var v=T[p].net;
+  return '<i class="'+(v>0?'pos':v<0?'neg':'zero')+'">'+(v?m(v):'\u2014')+'</i>'});
+var sB=row('split','As banker',function(p){var v=T[p].asB;
+  return '<i class="'+(v>0?'pos':v<0?'neg':'zero')+'">'+(v?m(v):'\u2013')+'</i>'});
+var sP=row('split','As a player',function(p){var v=T[p].asP;
+  return '<i class="'+(v>0?'pos':v<0?'neg':'zero')+'">'+(v?m(v):'\u2013')+'</i>'});
+var bk=row('split','Holes banked',function(p){return '<i style="color:#B8860B">'+T[p].banked+'</i>'});
+var sum=P.reduce(function(a,p){return a+T[p].net},0);
+document.getElementById('tbl').innerHTML=head+body+tot+sB+sP+bk+
+  '<div class="key"><span><s></s>banked the hole</span><span>&ndash; nothing moved &mdash; a tie is no action</span></div>'+
+  '<div class="zsum"><span>Every row and the total sum to zero</span><b>'+(sum===0?'\u2713':'\u2715')+'</b></div>';
+/* the card — net scores, because every bet in this game settles on net */
+(function(){
+  var cw=30,cols='';for(var i=0;i<18;i++)cols+='<col style="width:'+cw+'px">';
+  function r(cls,lb,fn){var o='<tr class="'+cls+'"><td class="lb">'+lb+'</td>';
+    for(var i=0;i<18;i++)o+='<td>'+fn(i)+'</td>';return o+'</tr>'}
+  var t='<table class="sct"><colgroup><col style="width:52px">'+cols+'</colgroup>'+
+    r('meta hole','Hole',function(i){return i+1})+
+    r('meta par','Par',function(i){return PAR[i]})+
+    P.map(function(p){
+      return r('p',p,function(i){
+        var d=H[i],net=PAR[i]+NET[p][i],
+            bank=d.bk===p,
+            beat=!bank&&NET[p][i]<NET[d.bk][i];
+        return '<span class="scc'+(bank?' bank':beat?' beat':'')+'">'+net+'</span>';
+      });
+    }).join('')+'</table>';
+  document.getElementById('sc').innerHTML='<div class="scw"><div class="scs">'+t+'</div>'+
+    '<div class="scf"><span><s style="background:#FBF0D6"></s>banked the hole</span>'+
+    '<span><s style="background:#DCF2E4;border:1px solid #7FC79F"></s>beat the banker</span>'+
+    '<span>everything else lost or tied him</span></div></div>';
+})();
+/* biggest swings — derived, ranked by the largest single move on the hole */
+(function(){
+  var rows=H.map(function(d,i){
+    var c={},big=0,who='';
+    P.forEach(function(p){var v=cell(i,p);c[p]=v;if(Math.abs(v)>Math.abs(big)){big=v;who=p}});
+    var opp=Object.keys(d.b),dbl=opp.filter(function(o){return d.b[o][1]>1}),
+        word=PAR[i]===3?'tripled':'doubled';
+    var parts=opp.map(function(o){
+      var v=c[o];
+      return '<b>'+o+'</b> '+(v>0?'+$'+v:v<0?'\u2212$'+Math.abs(v):'$0 tied');
+    }).join(' &middot; ');
+    var why=[];
+    if(dbl.length===3)why.push('all three '+word);
+    else if(dbl.length)why.push(dbl.join(' and ')+' '+word);
+    if(d.ctr>1)why.push('<b>he countered</b>');
+    var pot=opp.reduce(function(s,o){return s+d.b[o][0]*d.b[o][1]*d.ctr},0);
+    return {h:i+1,par:PAR[i],bk:d.bk,mx:d.mx,big:big,who:who,pot:pot,
+      d:'<b>'+d.bk+'</b> banked at $'+d.mx+(why.length?' &mdash; '+why.join(', ')+', $'+pot+' on the hole':'')+'. '+parts};
+  });
+  rows.sort(function(a,b){return Math.abs(b.big)-Math.abs(a.big)});
+  document.getElementById('sw').innerHTML=rows.slice(0,3).map(function(x){
+    return '<div class="sl"><span class="h">Hole '+x.h+'</span><span class="d">'+x.d+'</span>'+
+      '<span class="v '+(x.big>0?'pos':'neg')+'">'+m(x.big)+' '+x.who+'</span></div>';
+  }).join('');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,230 @@
+<!-- @dsCard group="Live Activities" name="Banker — lock screen" subtitle="BankerLiveActivity — the banker's exposure and the player's bet from two phones, rotation and counter-double pushes" viewport="1560x1400" -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Halved · Banker Live Activity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--deepPine:#0B1F1A;--pine:#0F6E56;--mint:#3BD89A;--muted:#5C6B62;--gold:#E8C46A;--amber:#F0C070;--blue:#5AA7F5}
+*{box-sizing:border-box}
+body{margin:0;background:#DDE6DE;font-family:"Spline Sans",system-ui,sans-serif;color:var(--deepPine);padding:26px;display:flex;gap:28px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+a{color:var(--pine)}a:hover{color:var(--deepPine)}
+.home{position:fixed;top:12px;right:14px;z-index:99;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #D3DED6;border-radius:999px;padding:6px 13px 6px 11px;font:500 12px/1 "Spline Sans",system-ui,sans-serif;color:#0F6E56;text-decoration:none;box-shadow:0 1px 3px rgba(11,31,26,.08)}
+.notes{max-width:372px;padding-top:6px}
+.notes h1{font-family:"Schibsted Grotesk",sans-serif;font-weight:600;font-size:21px;margin:0 0 6px}
+.notes p{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 11px}
+.notes b{color:var(--deepPine)}
+.notes h3{font-size:11.5px;font-weight:700;margin:15px 0 5px;text-transform:uppercase;letter-spacing:.4px;color:var(--pine)}
+.notes ul{margin:0 0 11px;padding-left:17px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.notes li{margin-bottom:4px}
+.own{background:#fff;border:1px solid #DCE5DD;border-radius:12px;padding:11px 13px;margin:0 0 11px;font-size:12px;line-height:1.6}
+.own table{border-collapse:collapse;width:100%}
+.own td{padding:3px 0;vertical-align:top;color:var(--muted)}
+.own td:first-child{width:100px;color:var(--deepPine);font-weight:600}
+.wrap{position:relative;margin-bottom:36px}
+.cap{position:absolute;left:0;right:0;bottom:-30px;text-align:center;font-size:11.5px;font-weight:600;color:var(--muted)}
+.lock{width:352px;height:762px;border:10px solid #0B1F1A;border-radius:44px;overflow:hidden;position:relative;box-shadow:0 24px 60px rgba(6,18,14,.34);background:radial-gradient(120% 90% at 50% 0%,#1E4038 0%,#0C1F1B 45%,#050D0B 100%);flex:none;color:#fff}
+.lock.aod{filter:brightness(.74) saturate(.82)}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:112px;height:31px;border-radius:20px;background:#000}
+.clock{text-align:center;padding:58px 0 0}
+.clock .d{font-size:14px;font-weight:600;opacity:.72}
+.clock .t{font-family:"Schibsted Grotesk",sans-serif;font-size:74px;font-weight:600;line-height:1.02;letter-spacing:-2px;margin-top:2px}
+.la{margin:26px 14px 0;border-radius:24px;background:rgba(255,255,255,.13);backdrop-filter:blur(20px);padding:12px 15px;border:.5px solid rgba(255,255,255,.14)}
+.lah{display:flex;align-items:center;gap:7px;margin-bottom:9px}
+.lah .mark{width:17px;height:17px;border-radius:5px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 10px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.lah .mark.gd{background:var(--gold);color:#3A2B06}
+.lah .g{font-size:11.5px;font-weight:700;letter-spacing:.3px;white-space:nowrap}
+.lah .seg{margin-left:auto;font-size:10.5px;font-weight:600;opacity:.62;white-space:nowrap}
+.big{display:flex;flex-wrap:wrap;align-items:flex-end;column-gap:11px;row-gap:0}
+.big .st{order:1;flex:none;white-space:nowrap;font-family:"Schibsted Grotesk",sans-serif;font-size:36px;font-weight:700;line-height:.94;letter-spacing:-1px;color:var(--mint)}
+.big .st.gd{color:var(--gold)}
+.big .state{order:2;flex:none;white-space:nowrap;margin-left:auto;text-align:right;padding-bottom:2px}
+.big .state b{display:block;font-family:"Schibsted Grotesk",sans-serif;font-size:17px;font-weight:700;line-height:1;letter-spacing:.2px}
+.big .state b.gd{color:var(--gold)}
+.big .state u{text-decoration:none;display:block;font-size:9px;font-weight:700;letter-spacing:.4px;opacity:.55;margin-top:4px}
+.big .sub{order:3;flex:0 0 100%;min-width:0;margin-top:8px;font-size:12.5px;line-height:1.55;opacity:.8;white-space:nowrap}
+.big .sub b{font-weight:700;opacity:1}
+.big .sub .dim{opacity:.6}
+.big .sub .gd{color:var(--gold);font-weight:700;opacity:1}
+.foot{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:11px}
+.foot>span{opacity:.6}
+.foot .mult{opacity:1;font-weight:700;font-size:9.5px;letter-spacing:.4px;background:rgba(240,192,112,.2);color:var(--amber);border-radius:4px;padding:2px 5px}
+.foot .mny{opacity:1;font-weight:600}
+.foot .par{margin-left:auto;display:flex;align-items:baseline;gap:7px;white-space:nowrap;opacity:1}
+.foot .par .t{opacity:.55;font-weight:600}
+.foot .par b{font-family:"Schibsted Grotesk",sans-serif;font-size:14px;font-weight:700;letter-spacing:-.3px;line-height:1}
+.bar{position:absolute;left:50%;bottom:9px;transform:translateX(-50%);width:126px;height:5px;border-radius:3px;background:rgba(255,255,255,.5)}
+.torch{position:absolute;bottom:38px;left:0;right:0;display:flex;justify-content:space-between;padding:0 34px;opacity:.5;font-size:17px}
+.torch span{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center}
+.notif{margin:16px 14px 0;border-radius:22px;background:rgba(255,255,255,.19);backdrop-filter:blur(20px);padding:12px 14px;border:.5px solid rgba(255,255,255,.16);display:flex;gap:11px;align-items:flex-start}
+.notif .ic{flex:none;width:34px;height:34px;border-radius:9px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 16px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.notif .ic.gd{background:var(--gold);color:#3A2B06}
+.notif .ic.am{background:var(--amber);color:#3A2B06}
+.notif .tx{flex:1;min-width:0}
+.notif .tx .t1{display:flex;align-items:baseline;gap:7px;font-size:11px;font-weight:700;letter-spacing:.3px;opacity:.7}
+.notif .tx .t1 span{margin-left:auto;font-weight:600;opacity:.8}
+.notif .tx .t2{font-size:14px;font-weight:700;margin-top:3px}
+.notif .tx .t3{font-size:12.5px;opacity:.82;margin-top:2px;line-height:1.4}
+.di{background:#0B1F1A;border-radius:22px;padding:22px 20px;width:372px;flex:none;color:#fff;margin-bottom:36px}
+.di h4{font-family:"Schibsted Grotesk",sans-serif;font-size:13px;font-weight:700;margin:0 0 4px}
+.di p{font-size:11px;line-height:1.5;opacity:.6;margin:0 0 13px}
+.dr{margin-bottom:16px}
+.dr>span{display:block;font-size:9.5px;font-weight:700;letter-spacing:.4px;opacity:.5;margin-bottom:6px}
+.pill{background:#000;border-radius:20px;height:37px;display:inline-flex;align-items:center;gap:9px;padding:0 13px;font-size:13px;font-weight:700}
+.pill .mk{flex:none;width:15px;height:15px;border-radius:4px;background:var(--mint);display:flex;align-items:center;justify-content:center;font:700 9px/1 "Schibsted Grotesk",sans-serif;color:#06231A}
+.pill .mk.gd{background:var(--gold);color:#3A2B06}
+.pill.min{width:52px;gap:0;justify-content:space-between;padding:0 11px}
+.pill .mint{color:var(--mint)}.pill .gd{color:var(--gold)}
+.exp{background:#000;border-radius:26px;padding:14px 16px 15px}
+.exp .top{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;opacity:.6;letter-spacing:.3px}
+.exp .mid{display:flex;align-items:flex-end;gap:10px;margin-top:9px}
+.exp .mid b{font-family:"Schibsted Grotesk",sans-serif;font-size:29px;font-weight:700;line-height:.95;color:var(--gold)}
+.exp .mid span{font-size:11.5px;opacity:.72;padding-bottom:3px;line-height:1.4}
+.exp .mid .m{margin-left:auto;font-family:"Schibsted Grotesk",sans-serif;font-size:13px;font-weight:700;padding-bottom:2px;color:var(--gold)}
+.rot{display:flex;gap:5px;margin-top:11px}
+.rot i{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.2)}
+.rot i.g{background:var(--gold)}
+.rot i.now{box-shadow:0 0 0 1.5px rgba(255,255,255,.65)}
+.rib{margin:-12px -15px 9px;padding:5px 15px;border-radius:24px 24px 0 0;background:linear-gradient(180deg,#BBD9F7 0%,#94C0EE 100%);color:#0C2438;display:flex;align-items:center;gap:6px;font-size:9.5px;font-weight:700;letter-spacing:.5px;white-space:nowrap}
+.rib i{font-style:normal;font-size:9px;line-height:1}
+.rib em{margin-left:auto;font-style:normal;font-weight:700;opacity:.62;letter-spacing:.3px}
+.sd{display:inline-block;width:4px;height:4px;border-radius:50%;background:var(--blue);vertical-align:2px;margin-right:4px}
+</style></head>
+<body>
+<a class="home" href="../index-contents.html">&#8592; Contents</a>
+<div class="notes">
+<h1>Banker on the lock screen</h1>
+<p>Of every game in the app this is the one with the strongest case for a Live Activity, and for a reason the others do not have: <b>the thing you most need to know is a thing you were told once, on a tee box, twenty minutes ago.</b></p>
+<p>Who is banking. What you bet. Whether somebody doubled it. All three were spoken aloud and none of them are written anywhere a golfer can check &mdash; which is exactly the gap a lock-screen card exists to fill.</p>
+<h3>This card is personal, and that is a departure</h3>
+<p>Sixes and Sequoya 3s put a <b>neutral scoreboard</b> on the lock screen &mdash; the same string on four phones, so two golfers can read one device. Banker cannot do that. There is no shared state on a Banker hole; there are three separate one-on-ones with three different numbers, and <i>the score</i> is not a thing that exists.</p>
+<p>So the card reads from the holder&rsquo;s side. <b>The banker&rsquo;s phone shows his exposure; a player&rsquo;s phone shows his bet.</b> Two compositions of one card, drawn side by side below, and the only place in the set where the same hole produces two different headlines.</p>
+<div class="own"><table>
+<tr><td>Banker sees</td><td><b>$90</b> at stake, the three bets itemised, and that he countered.</td></tr>
+<tr><td>Player sees</td><td><b>$40</b> at stake, who he is playing, and what multiplied it.</td></tr>
+<tr><td>Neither sees</td><td>Anyone else&rsquo;s bet. A player has no business reading Sam&rsquo;s number off Dave&rsquo;s phone.</td></tr>
+</table></div>
+<h3>The headline is the hole, not the round</h3>
+<p>The running total goes in the footer with the stake, as everywhere else in the set. The 36-point number is <b>what is live right now</b>, because in this game that figure moves by a factor of four between the tee and the fairway and it is the only thing a glance cannot reconstruct.</p>
+<p>A round total in the headline would be the safer choice and the wrong one: it is the number you already know, and it does not change while you are walking.</p>
+<h3>Two pushes, and the second one is the point</h3>
+<div class="own"><table>
+<tr><td>New banker</td><td>Up to seventeen a round. Gold. Names who banks and what he set.</td></tr>
+<tr><td>Counter-double</td><td>Amber. <b>Your bet just doubled and you did not agree to it.</b></td></tr>
+<tr><td>No push</td><td>Your own double. You called it &mdash; you know.</td></tr>
+</table></div>
+<p>The counter-double push is the one that justifies the whole activity. It is the single event in this game where <b>a golfer&rsquo;s money changes without his consent or his knowledge</b>, and it is legal, and it happens while three balls are in the air and nobody is watching a phone. Learning about it at settlement is how groups stop playing Banker.</p>
+<p>Seventeen banker-change pushes is a lot, and it is the honest count &mdash; the role rotates every hole. Sending one per hole is defensible only because <b>the hole is unplayable without it</b>: you cannot choose a bet if you do not know whose max you are betting into. If field testing says it is too many, the fallback is a silent activity update and a push only when the banker <b>changes his maximum</b> from the last hole.</p>
+<h3>The state slot holds the role</h3>
+<p><b>BANKING</b> in gold on the banker&rsquo;s phone; <b>V. PAUL</b> on a player&rsquo;s. Gold appears nowhere else in the set and does one job here: it marks the role. Mint stays the app&rsquo;s colour and never means <i>banker</i>.</p>
+<h3>Eighteen bankers, in the island</h3>
+<p>The expanded island carries a strip of eighteen &mdash; gold where you banked. That is the one summary this format produces that nothing else does: <b>how many holes you held the role</b>, which correlates with both your scoring and your variance, and which no golfer can count from memory.</p>
+<h3>Who strokes, in the ribbon</h3>
+<p>Every bet on a Banker hole settles on <b>net</b>, so a golfer cannot read his own one-on-one without knowing who gets a shot &mdash; and this is the one fact on the card he cannot recover by looking at the group. Survivor&rsquo;s ribbon slot carries it: <b>a strip above the header naming the strokes on this hole</b>, with the stroke index it came from on the trailing edge.</p>
+<p>It is <b>blue, not gold</b>. Gold means the role and nothing else in this card; strokes are a neutral fact of the hole, not an alarm, so they take the one colour the set does not otherwise use.</p>
+<div class="own"><table>
+<tr><td>Banker sees</td><td>Which of the three opponents strokes, and whether he does &mdash; each bet line carries <b>a dot ahead of the name</b>, the same mark the score-entry screen uses.</td></tr>
+<tr><td>Player sees</td><td>Only the two men in his bet: <b>himself and the banker</b>. Whether Sam gets a shot has no bearing on his money.</td></tr>
+<tr><td>Nobody sees</td><td>A stroke count for the round. <i>Gets 4</i> is an eighteen-hole fact and belongs on the card, not here.</td></tr>
+</table></div>
+<p>When neither man in the bet strokes, the ribbon reads <b>scratch hole</b> rather than disappearing &mdash; an absent ribbon is indistinguishable from a card that forgot.</p>
+<h3>The final state names the swing</h3>
+<p>The money, the gross, and <b>the hole that decided it</b>. Banker rounds are usually settled by one or two holes where a counter-double met three good shots, and the golfer already half-remembers which one &mdash; the card finishes the sentence.</p>
+<h3>Still open</h3>
+<ul>
+<li>Whether the banker&rsquo;s headline should be <b>his exposure</b> (drawn) or <b>his net position on the hole</b> once scores start landing. The second is more useful late in a hole and undefined early.</li>
+<li>Whether a player should be able to see the <b>total</b> on the hole without seeing the split. Probably yes &mdash; it is the banker&rsquo;s risk, not a private number &mdash; but it invites arithmetic.</li>
+<li>Whether the seventeen rotation pushes survive contact with a real round.</li>
+</ul>
+</div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">11:18</div></div>
+<div class="la">
+<div class="rib"><i>&#9679;</i><span>YOU, DAVE AND LEE STROKE &middot; SAM DOES NOT</span><em>SI 5</em></div>
+<div class="lah"><span class="mark gd">H</span><span class="g">BANKER &middot; YOU BANK</span><span class="seg">HOLE 7 &middot; PAR 4 &middot; 411</span></div>
+<div class="big"><span class="st gd">$90</span><span class="state"><b class="gd">BANKING</b><u>3 BETS</u></span><span class="sub"><span class="sd"></span><b>Dave $40</b> &middot; <b>Sam $40</b> &middot; <span class="sd"></span><b>Lee $10</b><br><span class="dim">You countered &mdash; all three doubled</span></span></div>
+<div class="foot"><span>$5&ndash;$50 band</span><span class="mult">YOUR MAX $20</span><span class="mny">+$40</span><span class="par"><span class="t">THRU 6</span><b>+5</b></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">The banker&rsquo;s phone &mdash; his exposure, itemised</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">11:18</div></div>
+<div class="notif">
+<div class="ic am">H</div>
+<div class="tx"><div class="t1">HALVED<span>now</span></div>
+<div class="t2">Paul countered &mdash; your bet is $40</div>
+<div class="t3">You doubled to $20, he doubled it again after his tee shot. <b style="font-weight:700">Nothing to accept</b> &mdash; his counter stands.</div></div>
+</div>
+<div class="la">
+<div class="rib"><i>&#9679;</i><span>YOU AND PAUL BOTH STROKE</span><em>SI 5</em></div>
+<div class="lah"><span class="mark">H</span><span class="g">BANKER &middot; DAVE</span><span class="seg">HOLE 7 &middot; PAR 4 &middot; 411</span></div>
+<div class="big"><span class="st">$40</span><span class="state"><b>v. PAUL</b><u>YOUR BET</u></span><span class="sub"><b>$10</b> &middot; &times;2 your double &middot; &times;2 his counter<br><span class="dim">Beat his net or you pay &mdash; ties go to him</span></span></div>
+<div class="foot"><span>$5&ndash;$50 band</span><span class="mult">&times;4</span><span class="mny">&minus;$30</span><span class="par"><span class="t">THRU 6</span><b>+8</b></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">A player&rsquo;s phone &mdash; the counter-double push</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">11:33</div></div>
+<div class="notif">
+<div class="ic gd">H</div>
+<div class="tx"><div class="t1">HALVED<span>now</span></div>
+<div class="t2">Lee banks the 8th &mdash; max $25</div>
+<div class="t3">Low net on the 7th with a 2. <b style="font-weight:700">Set your bet before he tees off</b> &mdash; he hits last.</div></div>
+</div>
+<div class="la">
+<div class="rib"><i>&#9679;</i><span>YOU STROKE &middot; LEE DOES NOT</span><em>SI 13</em></div>
+<div class="lah"><span class="mark">H</span><span class="g">BANKER &middot; LEE</span><span class="seg">HOLE 8 &middot; PAR 5 &middot; 534</span></div>
+<div class="big"><span class="st" style="color:#fff;opacity:.9">$25</span><span class="state"><b>OPEN</b><u>HIS MAX</u></span><span class="sub"><span class="dim">No bet set yet &mdash; floor is $5</span><br><span class="dim">Three others betting into him</span></span></div>
+<div class="foot"><span>$5&ndash;$50 band</span><span class="mny">+$100</span><span class="par"><span class="t">THRU 7</span><b>+6</b></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Rotation &mdash; the push that makes the next hole playable</div></div>
+
+<div class="wrap"><div class="lock aod">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">1:47</div></div>
+<div class="la">
+<div class="rib"><i>&#9679;</i><span>SAM AND LEE STROKE &middot; YOU DO NOT</span><em>SI 8</em></div>
+<div class="lah"><span class="mark gd">H</span><span class="g">BANKER &middot; YOU BANK</span><span class="seg">HOLE 14 &middot; PAR 3 &middot; 172</span></div>
+<div class="big"><span class="st gd">$180</span><span class="state"><b class="gd">BANKING</b><u>PAR 3 &middot; TRIPLES</u></span><span class="sub"><b>Dave $60</b> &middot; <span class="sd"></span><b>Sam $60</b> &middot; <span class="sd"></span><b>Lee $60</b><br><span class="dim">All three tripled &mdash; you have not countered</span></span></div>
+<div class="foot"><span>$5&ndash;$50 band</span><span class="mult">YOUR MAX $20</span><span class="mny">+$40</span><span class="par"><span class="t">THRU 13</span><b>+11</b></span></div>
+</div>
+<div class="bar"></div>
+</div><div class="cap">Always-on &mdash; a par 3 with three triples standing</div></div>
+
+<div class="wrap"><div class="lock">
+<div class="island"></div>
+<div class="clock"><div class="d">Saturday, 12 September</div><div class="t">2:52</div></div>
+<div class="la">
+<div class="lah"><span class="mark">H</span><span class="g">BANKER</span><span class="seg">ROUND COMPLETE</span></div>
+<div class="big"><span class="st" style="font-size:42px">+$125</span><span class="state"><b style="font-size:34px;letter-spacing:-1px">84</b><u>GROSS, 18 HOLES</u></span><span class="sub">Banked 6 holes &middot; <b>+$90 on the 17th</b><br>Collect from <b>Dave</b></span></div>
+<div class="foot"><span>Dismisses in 5 min</span><span class="par"><span class="t">THRU 18</span><b>+12</b></span></div>
+</div>
+<div class="torch"><span>&#9728;</span><span>&#9679;</span></div>
+<div class="bar"></div>
+</div><div class="cap">Final &mdash; the money and the hole that made it</div></div>
+
+<div class="di">
+<h4>Dynamic Island</h4>
+<p>Gold marks the role and nothing else. The compact pill is the only place a golfer can check who is banking without unlocking the phone.</p>
+<div class="dr"><span>MINIMAL &mdash; ANOTHER APP IS ACTIVE</span>
+<div class="pill min"><span class="mk gd">H</span><span class="gd">&#9679;</span></div></div>
+<div class="dr"><span>COMPACT &mdash; YOU ARE BANKING</span>
+<div class="pill"><span class="mk gd">H</span><span class="gd">$90</span><span style="opacity:.55;font-weight:600">3 bets</span></div></div>
+<div class="dr"><span>COMPACT &mdash; SOMEBODY ELSE BANKS</span>
+<div class="pill"><span class="mk">H</span><span>$40</span><span style="opacity:.55;font-weight:600">v. Paul</span></div></div>
+<div class="dr" style="margin-bottom:0"><span>EXPANDED &mdash; LONG PRESS</span>
+<div class="exp">
+<div class="top"><span style="width:14px;height:14px;border-radius:4px;background:var(--gold);display:inline-flex;align-items:center;justify-content:center;font:700 9px/1 'Schibsted Grotesk',sans-serif;color:#3A2B06">H</span><span>BANKER &middot; YOU BANK THE 7th</span></div>
+<div class="mid"><b>$90</b><span><span style="font-weight:700"><span class="sd"></span>Dave $40 &middot; Sam $40 &middot; <span class="sd"></span>Lee $10</span><br><span style="opacity:.6">You countered &middot; you and the dotted men stroke</span></span><span class="m">3 BETS</span></div>
+<div class="rot"><i class="g"></i><i></i><i></i><i></i><i></i><i></i><i class="g now"></i><i></i><i></i><i></i><i class="g"></i><i></i><i></i><i class="g"></i><i class="g"></i><i></i><i class="g"></i><i></i></div>
+</div></div>
+</div>
+</body></html>

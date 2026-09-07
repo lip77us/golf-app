@@ -314,8 +314,15 @@ class _BankerScreenState extends State<BankerScreen> {
 
   Widget _betRow(BankerSummary s, BankerHoleState h, BankerPlayerTotal m) {
     final line  = h.lines.where((l) => l.playerId == m.playerId).firstOrNull;
-    final steps = _chipSteps(s.minBet, h.maxBet ?? s.maxBet);
-    final atMax = line != null && line.bet == h.maxBet;
+    // A golfer at his loss cap has no number to choose: the server holds him
+    // to the floor whatever he taps. Offering the ladder anyway was the
+    // screen asking a question it would then overrule — tap $50, watch $5
+    // light up.
+    final capped = h.cutOff.contains(m.playerId);
+    final steps = capped
+        ? [s.minBet]
+        : _chipSteps(s.minBet, h.maxBet ?? s.maxBet);
+    final atMax = !capped && line != null && line.bet == h.maxBet;
 
     return Container(
       margin: const EdgeInsets.only(top: 8),
@@ -341,6 +348,7 @@ class _BankerScreenState extends State<BankerScreen> {
           // many shots sit between him and the banker.
           _getsChip(m.playingHandicap),
           const Spacer(),
+          if (capped) _tag('CAPPED', _amber, _amberFill, _amberLine),
           if (atMax)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -368,6 +376,14 @@ class _BankerScreenState extends State<BankerScreen> {
                       {'player_id': m.playerId, 'amount': v}
                     ])),
         ]),
+        if (capped)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text(
+                'He reached his loss cap, so the floor is already down for '
+                'him. No doubles, and the counter goes past him.',
+                style: TextStyle(fontSize: 12, color: _amber)),
+          ),
       ]),
     );
   }
@@ -381,11 +397,11 @@ class _BankerScreenState extends State<BankerScreen> {
           scored
               ? 'The hole is posted. Every bet below settled on its own pair '
                 'of strokes.'
-              // "Calls" covers the double, the triple and the counter — the
-              // packet's own verb for them ("doubles are called in about
-              // four seconds") and the only word true on all eighteen holes.
-              : 'Bets can only increase from here. Calls stay open until the '
-                'first score goes in.',
+              // Nothing here about the calls staying open. On the course
+              // they are decided the moment the ball lands — the score going
+              // in later is bookkeeping, not the deadline — so a screen
+              // announcing a window is describing its own plumbing.
+              : 'Bets can only increase from here.',
           fill: const Color(0xFFEAF4EE),
           line: const Color(0xFFC2DDCD),
           icon: '🔒'),
@@ -684,41 +700,46 @@ class _BankerScreenState extends State<BankerScreen> {
         borderRadius: BorderRadius.circular(Halved.rCard),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Row(children: [
-          Text('IN THE AIR',
-              style: TextStyle(
-                  fontSize: 10.5, fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5, color: _blue)),
-          Spacer(),
-          Text('OPEN UNTIL THE FIRST SCORE',
-              style: TextStyle(
-                  fontSize: 10, fontWeight: FontWeight.w600,
-                  color: Halved.muted)),
-        ]),
+        const Text('IN THE AIR',
+            style: TextStyle(
+                fontSize: 10.5, fontWeight: FontWeight.w700,
+                letterSpacing: 0.5, color: _blue)),
         const SizedBox(height: 8),
-        Row(children: [
-          for (final l in h.lines) ...[
-            Expanded(
-              child: _airButton(
-                l.shortName,
-                l.ownMultiplier > 1 ? '${word}d' : word,
-                on: l.ownMultiplier > 1,
-                onTap: _busy
-                    ? null
-                    : () => _declare(
-                        double_  : l.ownMultiplier > 1 ? null : l.playerId,
-                        undouble : l.ownMultiplier > 1 ? l.playerId : null),
+        // Index order, the same order the bets are listed in directly above.
+        // Two rows of the same three men in two different orders is a
+        // misread waiting to happen when the button says only a short name.
+        Builder(builder: (_) {
+          final lines = _byIndex(h.lines);
+          return Row(children: [
+            for (final l in lines) ...[
+              Expanded(
+                child: _airButton(
+                  l.shortName,
+                  // A capped golfer cannot double, so the button says why
+                  // rather than taking the tap and returning a server error.
+                  l.capped
+                      ? 'capped'
+                      : l.ownMultiplier > 1 ? '${word}d' : word,
+                  on: l.ownMultiplier > 1,
+                  off: l.capped,
+                  onTap: (_busy || l.capped)
+                      ? null
+                      : () => _declare(
+                          double_  : l.ownMultiplier > 1 ? null : l.playerId,
+                          undouble : l.ownMultiplier > 1 ? l.playerId : null),
+                ),
               ),
-            ),
-            if (l != h.lines.last) const SizedBox(width: 8),
-          ],
-        ]),
+              if (l != lines.last) const SizedBox(width: 8),
+            ],
+          ]);
+        }),
       ]),
     );
   }
 
   Widget _airButton(String name, String sub,
-      {required bool on, VoidCallback? onTap}) {
+      {required bool on, bool off = false, VoidCallback? onTap}) {
+    final ink = off ? Halved.muted : (on ? Colors.white : _blue);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(Halved.rChip),
@@ -726,19 +747,22 @@ class _BankerScreenState extends State<BankerScreen> {
         height: 58,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: on ? _blue : Halved.card,
-          border: Border.all(color: on ? _blue : _blueLine),
+          color: off ? Halved.surface : (on ? _blue : Halved.card),
+          border: Border.all(
+              color: off ? Halved.cardBorder : (on ? _blue : _blueLine)),
           borderRadius: BorderRadius.circular(Halved.rChip),
         ),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Text(name,
               style: TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.w700,
-                  color: on ? Colors.white : _blue)),
+                  fontSize: 14, fontWeight: FontWeight.w700, color: ink)),
           Text(sub,
               style: TextStyle(
                   fontSize: 11,
-                  color: on ? Colors.white70 : _blue.withValues(alpha: 0.7))),
+                  color: off ? Halved.muted
+                             : (on ? Colors.white70
+                                   : _blue.withValues(alpha: 0.7))),
+          ),
         ]),
       ),
     );
@@ -766,7 +790,10 @@ class _BankerScreenState extends State<BankerScreen> {
                     fontSize: 15, fontWeight: FontWeight.w700,
                     color: h.countered ? Colors.white : _amber)),
             const SizedBox(height: 2),
-            Text(_allBets(h.lines.length),
+            // Only the bets the counter can actually reach — it goes past a
+            // capped golfer, so "all three bets" would be a promise the
+            // settlement does not keep.
+            Text(_allBets(h.lines.where((l) => !l.capped).length),
                 style: TextStyle(
                     fontSize: 11.5,
                     color: h.countered ? Colors.white70
