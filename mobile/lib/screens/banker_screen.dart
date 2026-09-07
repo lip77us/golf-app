@@ -163,6 +163,12 @@ class _BankerScreenState extends State<BankerScreen> {
                 : () => Navigator.of(context)
                     .pushNamed('/leaderboard', arguments: rp.round!.id),
           ),
+          IconButton(
+            tooltip: 'Settle up',
+            icon: const Icon(Icons.receipt_long_outlined),
+            onPressed: () => Navigator.of(context).pushNamed(
+                '/banker-settlement', arguments: widget.foursomeId),
+          ),
         ],
       ),
       bottomNavigationBar: s == null ? null : _bottomBar(s),

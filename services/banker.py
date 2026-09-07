@@ -12,11 +12,13 @@ one-on-ones settle on net, and the lowest net takes the bank for the next hole.
 
 Three asymmetries, all deliberate and all load-bearing:
 
-* **A tie is no action.** The banker does not win ties. The bet is void and
+* **A tie is no action.** Match the banker's net and the bet is void and
   nobody pays — but what it had GROWN to is still reported, because a doubled
   bet that paid nothing is a fact the group wants to see. It is also what makes
   the counter a real gamble: a counter-double into two halves collects on
-  neither.
+  neither. (Not to be confused with `ROTATION_KEEP`, "the banker keeps it",
+  which is a tie for the LOW NET and decides only who banks the next hole.
+  "The banker wins ties" names that rule and nothing about the money.)
 * **The birdie bonus pays out only.** A gross birdie doubles a player's
   winnings and never the banker's. One against three is lopsided already;
   letting him double three collections at once would make the role unplayable.
@@ -36,7 +38,7 @@ settled. Everything decided by the scores — who won each one-on-one, what it
 paid, who banks next — is derived every time, so a corrected score cannot leave
 a stale result behind it.
 """
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 from random import Random
 
 from core.models import HandicapMode
@@ -473,7 +475,13 @@ def resolve_hole(game, foursome, row, gross, cut_off=frozenset()) -> dict:
         stake = (Decimal(bet.amount) if capped
                  else _stake(bet, row.countered))
         if scale is not None:
-            stake = (stake * scale).quantize(Decimal('0.01'))
+            # **Down to a whole dollar.** A scaled bet of $166.67 is not a bet
+            # anybody settles — this game is paid in notes in a car park — and
+            # the chain printed `= $167` beside it, so the receipt's own
+            # arithmetic did not tie out. Rounding DOWN also keeps the promise
+            # the setup screen made: three bets of $166 is $498, under the
+            # $500 ceiling rather than a cent over it.
+            stake = (stake * scale).to_integral_value(rounding=ROUND_DOWN)
         o_gross = gross.get(bet.player_id, {}).get(hole)
         s_b, s_o = pair_strokes(game, foursome, row.banker_id, bet.player_id,
                                 hole)
@@ -1121,8 +1129,70 @@ def _grid(order, ids, gross, plan, rows, foursome, idx) -> list:
 # Settlement — the one game in the set whose debts really are pairwise
 # ---------------------------------------------------------------------------
 
+def _fmt_money(v) -> str:
+    """`+$50`, `−$20`, `$0`. The en-dash minus, as everywhere else in the app."""
+    if not v:
+        return '$0'
+    return f"{'+' if v > 0 else '−'}${abs(v):,.0f}"
+
+
+def _bank_line_phrase(line) -> str:
+    """One opponent's result on a hole the reader BANKED, from his side.
+
+    A tie prints the number the bet had REACHED — `Sam $0 tied at $40`. A
+    golfer who remembers a $40 bet and cannot find it does not trust the
+    receipt, and a doubled bet that paid nothing is a fact rather than an
+    omission.
+    """
+    name = line['name']
+    amt  = line['amount']
+    if line['outcome'] == 'tied':
+        grown = (f" at ${line['stake']:,.0f}"
+                 if line['stake'] > line['bet'] else '')
+        return f'{name} $0 tied{grown}'
+    if line['outcome'] == 'open':
+        return f'{name} — not in'
+    tail = ' birdie' if line.get('birdie') else ''
+    return f'{name} {_fmt_money(amt)}{tail}'
+
+
+_COUNT_WORDS = {1: 'one', 2: 'two', 3: 'three'}
+
+
+def _by_bank_note(holes) -> str:
+    """`Holes 4, 8 — one won, one tied`.
+
+    The clause is only worth printing on a SHORT group: against the man who
+    banked seven of them it is a sentence nobody reads, and the hole numbers
+    are already the answer to what a golfer asks here.
+    """
+    nums = ', '.join(str(h['hole']) for h in holes)
+    label = f"Hole{'' if len(holes) == 1 else 's'} {nums}"
+    if len(holes) > 3:
+        return label
+    counts = {}
+    for h in holes:
+        counts[h['outcome']] = counts.get(h['outcome'], 0) + 1
+    if len(counts) == 1 and 'tied' in counts:
+        n = len(holes)
+        return (f'{label} — tied' if n == 1
+                else f'{label} — both tied' if n == 2
+                else f'{label} — all three tied')
+    order = [('won', 'won'), ('lost', 'lost'), ('tied', 'tied')]
+    bits = [f'{_COUNT_WORDS.get(counts[k], counts[k])} {word}'
+            for k, word in order if counts.get(k)]
+    return f"{label} — {', '.join(bits)}" if bits else label
+
+
 def banker_settlement(foursome) -> dict | None:
     """Per-golfer receipts, plus the collapse to the fewest handovers.
+
+    **Banker's debts really are pairwise**, and this is the only game in the
+    set that can say so: every bet was one named golfer against one named
+    golfer for an agreed number. The collapse to the fewest handovers is
+    therefore an explicit convenience rather than the only honest answer —
+    nobody settles fifty-four exchanges in a car park — and the itemisation
+    underneath it is real rather than reconstructed.
 
     The receipt itemises the holes he BANKED in full — three bets each — and
     GROUPS the ones he played by whose bank he was betting into. Twelve
@@ -1135,24 +1205,50 @@ def banker_settlement(foursome) -> dict | None:
 
     shorts = {p['player_id']: p['short_name'] for p in summary['players']}
     names  = {p['player_id']: p['name'] for p in summary['players']}
+    played = [h for h in summary['holes'] if h.get('resolved')]
+    transfers = summary['money']['transfers']
+
+    def owed_line(pid, total):
+        """Who this golfer hands money to, or takes it from, in one sentence."""
+        if total > 0:
+            payers = [t for t in transfers if t['to'] == pid]
+            if not payers:
+                return 'You are square with the table.'
+            return ' '.join(f"{names.get(t['from'], t['from_name'])} owes you "
+                            f"${t['amount']:,.0f}." for t in payers)
+        if total < 0:
+            owes = [t for t in transfers if t['from'] == pid]
+            said = ' '.join(f"You owe {names.get(t['to'], t['to_name'])} "
+                            f"${t['amount']:,.0f}." for t in owes)
+            return (said + ' Nobody owes you anything.') if said else \
+                'You are square with the table.'
+        return 'You are square with the table.'
 
     receipts = []
     for p in summary['players']:
         pid = p['player_id']
-        banked, against = [], {}
-        for h in summary['holes']:
-            if not h.get('resolved'):
-                continue
+        banked, against, faced = [], {}, 0
+        for h in played:
             if h['banker_id'] == pid:
+                faced += len(h['lines'])
+                lines = [{'name': l['short_name'], 'chain': l['chain'],
+                          'outcome': l['outcome'], 'bet': l['bet'],
+                          'stake': l['stake'], 'birdie': l['birdie'],
+                          # Signed from the BANKER's side: + it came to him.
+                          'amount': (l['amount'] if l['outcome'] == 'lost'
+                                     else -l['amount'])}
+                         for l in h['lines']]
+                detail = ' · '.join(_bank_line_phrase(l) for l in lines)
                 banked.append({
-                    'hole'   : h['hole'],
-                    'par'    : h['par'],
-                    'delta'  : h['banker_delta'],
-                    'lines'  : [{'name': l['short_name'], 'chain': l['chain'],
-                                 'outcome': l['outcome'],
-                                 'amount': (l['amount'] if l['outcome'] == 'lost'
-                                            else -l['amount'])}
-                                for l in h['lines']],
+                    'hole'     : h['hole'],
+                    'par'      : h['par'],
+                    'is_par_3' : h.get('is_par_3', False),
+                    'max_bet'  : h.get('max_bet'),
+                    'countered': h.get('countered', False),
+                    'delta'    : h['banker_delta'],
+                    'detail'   : (f'Par 3 · {detail}'
+                                  if h.get('is_par_3') and detail else detail),
+                    'lines'    : lines,
                 })
                 continue
             line = next((l for l in h['lines'] if l['player_id'] == pid), None)
@@ -1161,6 +1257,7 @@ def banker_settlement(foursome) -> dict | None:
             grp = against.setdefault(h['banker_id'], {
                 'banker_id': h['banker_id'],
                 'banker'   : shorts.get(h['banker_id'], ''),
+                'banker_name': names.get(h['banker_id'], ''),
                 'holes'    : [], 'subtotal': ZERO})
             amt = (line['amount'] if line['outcome'] == 'won'
                    else -line['amount'] if line['outcome'] == 'lost' else ZERO)
@@ -1172,17 +1269,92 @@ def banker_settlement(foursome) -> dict | None:
                                  'outcome': line['outcome'], 'amount': amt,
                                  'stake': line['stake']})
 
+        by_bank = sorted(against.values(), key=lambda g: -abs(g['subtotal']))
+        for g in by_bank:
+            g['note'] = _by_bank_note(g['holes'])
+
         receipts.append({
             'player_id': pid, 'name': names[pid], 'short_name': p['short_name'],
+            'handicap_index': p.get('handicap_index'),
             'banking': p['banking'], 'betting': p['betting'],
             'total': p['total'],
-            'holes_banked': banked,
-            'by_bank': sorted(against.values(), key=lambda g: g['banker']),
+            'owed_line': owed_line(pid, p['total']),
+            'holes_banked': len(banked),
+            'holes_played': sum(len(g['holes']) for g in by_bank),
+            'bets_faced': faced,
+            'loss_cap': p.get('loss_cap'),
+            'cut_off': p.get('cut_off', False),
+            'cut_off_hole': p.get('cut_off_hole'),
+            'banked': banked,
+            'by_bank': by_bank,
+            'text': _receipt_text(names[pid], p, owed_line(pid, p['total']),
+                                  summary),
         })
 
+    bet_count = sum(len(h['lines']) for h in played)
     return {
-        'players'   : receipts,
-        'transfers' : summary['money']['transfers'],
-        'bet_count' : sum(len(h['lines']) for h in summary['holes']
-                          if h.get('resolved')),
+        'status'     : summary['status'],
+        'min_bet'    : summary['min_bet'],
+        'max_bet'    : summary['max_bet'],
+        'handicap_mode': summary['handicap_mode'],
+        'headline'   : _settlement_headline(len(played), bet_count),
+        'players'    : [{'player_id': p['player_id'], 'name': p['name'],
+                         'short_name': p['short_name'],
+                         'banking': p['banking'], 'betting': p['betting'],
+                         'total': p['total'],
+                         'holes_banked': sum(
+                             1 for h in played if h['banker_id'] == p['player_id']),
+                         'cut_off': p.get('cut_off', False)}
+                        for p in summary['players']],
+        'receipts'   : receipts,
+        'transfers'  : transfers,
+        # Four numbers summing to zero is the whole assertion; if they ever did
+        # not, nothing below is worth reading.
+        'balances'   : abs(sum(p['total'] for p in summary['players'])) < Decimal('0.005'),
+        'bet_count'  : bet_count,
+        'group_text' : _group_text(summary, transfers, bet_count, len(played)),
     }
+
+
+def _settlement_headline(n_holes, n_bets) -> str:
+    if not n_holes:
+        return 'Nothing settled yet.'
+    return (f'{n_holes} hole{"" if n_holes == 1 else "s"} played, '
+            f'{n_bets} one-on-one{"" if n_bets == 1 else "s"} settled.')
+
+
+def _band_line(summary) -> str:
+    mode = {'strokes_off': 'strokes off', 'net': 'net',
+            'gross': 'gross'}.get(summary['handicap_mode'],
+                                  summary['handicap_mode'])
+    return (f"${summary['min_bet']:,.0f}–${summary['max_bet']:,.0f} band, "
+            f"{mode}")
+
+
+def _group_text(summary, transfers, bet_count, n_holes) -> str:
+    """Plain text for the group thread: the nets, then the shortest clear.
+
+    Label, en dash, amount — the tournament receipt's rule. Nobody needs
+    fifty-four bets in a text message; they need what they owe.
+    """
+    lines = [f'Banker — {_band_line(summary)}', '']
+    lines += [f"{p['name']} — {_fmt_money(p['total'])}"
+              for p in summary['players']]
+    if transfers:
+        lines.append('')
+        lines += [f"{t['from_name']} pays {t['to_name']} ${t['amount']:,.0f}"
+                  for t in transfers]
+    lines += ['', _settlement_headline(n_holes, bet_count)]
+    return '\n'.join(lines)
+
+
+def _receipt_text(name, player, owed, summary) -> str:
+    return '\n'.join([
+        f'Banker — {name}',
+        f"Net {_fmt_money(player['total'])}",
+        f"As banker {_fmt_money(player['banking'])} · "
+        f"as a player {_fmt_money(player['betting'])}",
+        owed,
+        f'{_band_line(summary)}. Every bet was one golfer against one '
+        'golfer, settled on its own pair of strokes.',
+    ])

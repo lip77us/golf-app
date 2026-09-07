@@ -71,6 +71,7 @@ class BankerGroupCard extends StatelessWidget {
           const SizedBox(height: 16),
           _card(s, cols),
           _limits(s, cols),
+          _settleUp(context),
         ]),
       ),
     );
@@ -358,6 +359,29 @@ class BankerGroupCard extends StatelessWidget {
   /// A ceiling you cannot see is one you cannot check — and the first thing a
   /// golfer does when a number surprises him is look for the rule that
   /// produced it.
+  /// The way out of the board and into the money.
+  ///
+  /// It sits under the card rather than behind a tab for the same reason the
+  /// scorecard does: this game's settlement is the one place fifty-four
+  /// one-on-ones collapse into something a group can act on, and a reader who
+  /// has just read the table is exactly the reader who wants it.
+  Widget _settleUp(BuildContext context) {
+    final id = group['foursome_id'];
+    if (id is! int) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () => Navigator.of(context)
+              .pushNamed('/banker-settlement', arguments: id),
+          icon: const Icon(Icons.receipt_long_outlined, size: 18),
+          label: const Text('Settle up · receipts'),
+        ),
+      ),
+    );
+  }
+
   Widget _limits(BankerSummary s, List<BankerPlayerTotal> cols) {
     final capped = cols.where((p) => p.lossCap != null).toList();
     if (s.holeCap == null && capped.isEmpty) return const SizedBox.shrink();

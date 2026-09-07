@@ -462,9 +462,9 @@ class ApiClient {
     return BankerSummary.fromJson((data as Map).cast<String, dynamic>());
   }
 
-  Future<Map<String, dynamic>> getBankerSettlement(int foursomeId) async {
+  Future<BankerSettlement> getBankerSettlement(int foursomeId) async {
     final data = await _get('/foursomes/$foursomeId/banker/settlement/');
-    return (data as Map).cast<String, dynamic>();
+    return BankerSettlement.fromJson((data as Map).cast<String, dynamic>());
   }
 
   Future<PlayerProfile> updatePlayer(

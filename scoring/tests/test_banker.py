@@ -337,11 +337,11 @@ class BankerTests(TestCase):
         self._play(2, paul=4, dave=6, sam=6, lee=6)
 
         s = banker_settlement(self.fs)
-        paul = next(p for p in s['players']
+        paul = next(p for p in s['receipts']
                     if p['player_id'] == self.pid['Paul'])
         # The hole he banked, in full — three bets.
-        self.assertEqual(len(paul['holes_banked']), 1)
-        self.assertEqual(len(paul['holes_banked'][0]['lines']), 3)
+        self.assertEqual(len(paul['banked']), 1)
+        self.assertEqual(len(paul['banked'][0]['lines']), 3)
         # The hole he played, grouped by whose bank he was betting into.
         dave_short = next(x['short_name'] for x in s['players']
                           if x['player_id'] == self.pid['Dave'])
@@ -358,7 +358,7 @@ class BankerTests(TestCase):
         for who in ('Dave', 'Sam', 'Lee'):
             set_double(self.fs, 3, self.pid[who])
         self._play(3, paul=3, dave=3, sam=3, lee=3)       # all square
-        dave = next(p for p in banker_settlement(self.fs)['players']
+        dave = next(p for p in banker_settlement(self.fs)['receipts']
                     if p['player_id'] == self.pid['Dave'])
         line = dave['by_bank'][0]['holes'][0]
         self.assertEqual(line['amount'], Decimal('0'))
@@ -973,6 +973,170 @@ class BankerThreeHandedTests(TestCase):
         self.assertEqual(len(s['grid'][0]['scores']), 3)
 
 
+class BankerHoleCapRoundingTests(TestCase):
+    """A capped hole settles in whole dollars.
+
+    Banker is paid in notes in a car park. A scaled bet of $166.67 is not a
+    number anybody hands over, and the chain beside it printed `= $167`, so
+    the receipt's own arithmetic did not tie out: three lines of $167 against
+    a total of $500.01, under a ceiling stated as $500.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['banker'])
+        self.fs = make_foursome(self.round,
+                                [('Paul', 0), ('Dave', 0), ('Sam', 0),
+                                 ('Lee', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        self.game = setup_banker(
+            self.fs, first_banker_id=self.pid['Paul'], min_bet=5, max_bet=50,
+            hole_cap_enabled=True, hole_cap_amount=100)
+
+    def _hole_that_does_not_divide(self):
+        """$150 at stake under a $100 cap — three ways, which does not."""
+        set_hole_max(self.fs, 1, 50)
+        for n in ('Dave', 'Sam', 'Lee'):
+            place_bet(self.fs, 1, self.pid[n], 50)
+        lock_bets(self.fs, 1)
+        submit_hole(self.fs, 1, [(self.pid['Paul'], 5),
+                                 (self.pid['Dave'], 4),
+                                 (self.pid['Sam'], 4),
+                                 (self.pid['Lee'], 4)])
+        return next(h for h in banker_summary(self.fs)['holes']
+                    if h['hole'] == 1)
+
+    def test_every_bet_lands_on_a_whole_dollar(self):
+        h = self._hole_that_does_not_divide()
+        for line in h['lines']:
+            self.assertEqual(line['amount'], line['amount'].to_integral_value(),
+                             line['short_name'])
+
+    def test_the_hole_stays_under_the_ceiling_rather_than_a_cent_over(self):
+        h = self._hole_that_does_not_divide()
+        self.assertEqual(abs(h['banker_delta']), Decimal('99'))   # 3 × $33
+
+    def test_the_chain_prints_the_number_that_was_actually_settled(self):
+        """The chain is the receipt's arithmetic. If it rounds and the money
+        does not, a golfer adding up his own receipt gets a different answer
+        from the app."""
+        h = self._hole_that_does_not_divide()
+        for line in h['lines']:
+            self.assertIn(f"= ${line['amount']:.0f}", line['chain'])
+
+
+class BankerSettlementReceiptTests(TestCase):
+    """The receipt is the argument-ender, so what it prints is the point.
+
+    Banker is the only game in the set whose debts really are pairwise — every
+    bet was one named golfer against one named golfer for an agreed number —
+    so the itemisation underneath the handovers is real rather than a
+    reconstruction, and it has to read like it.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['banker'])
+        self.fs = make_foursome(self.round,
+                                [('Paul', 0), ('Dave', 0), ('Sam', 0),
+                                 ('Lee', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        self.game = setup_banker(self.fs, first_banker_id=self.pid['Paul'],
+                                 min_bet=5, max_bet=50)
+
+    def _hole(self, hole, banker, bets, scores, doubles=()):
+        # update_or_create, not get_or_create: setup opened hole 1 with Paul
+        # banking it, and a test that names a different banker means it.
+        BankerHole.objects.update_or_create(
+            game=self.game, hole_number=hole,
+            defaults={'banker_id': self.pid[banker]})
+        set_hole_max(self.fs, hole, max(bets.values()))
+        for n, amt in bets.items():
+            place_bet(self.fs, hole, self.pid[n], amt)
+        lock_bets(self.fs, hole)
+        for n in doubles:
+            set_double(self.fs, hole, self.pid[n])
+        submit_hole(self.fs, hole,
+                    [(self.pid[n], v) for n, v in scores.items()])
+
+    def _receipt(self, who):
+        return next(r for r in banker_settlement(self.fs)['receipts']
+                    if r['player_id'] == self.pid[who])
+
+    def test_banking_and_betting_add_up_to_the_net(self):
+        """The split IS the summary — a golfer reads that pair and knows what
+        kind of day he had. It is worthless if it does not reconcile."""
+        self._hole(1, 'Paul', {'Dave': 10, 'Sam': 10, 'Lee': 10},
+                   {'Paul': 6, 'Dave': 4, 'Sam': 4, 'Lee': 5})
+        self._hole(2, 'Dave', {'Paul': 10, 'Sam': 10, 'Lee': 10},
+                   {'Paul': 4, 'Dave': 6, 'Sam': 6, 'Lee': 6})
+        for who in ('Paul', 'Dave', 'Sam', 'Lee'):
+            r = self._receipt(who)
+            self.assertEqual(r['banking'] + r['betting'], r['total'], who)
+
+    def test_a_tie_prints_the_number_the_bet_had_reached(self):
+        """A doubled bet that paid nothing is a fact, not an omission — and a
+        golfer who remembers a $30 bet and cannot find it stops trusting the
+        receipt."""
+        self._hole(1, 'Paul', {'Dave': 10, 'Sam': 10, 'Lee': 10},
+                   {'Paul': 4, 'Dave': 4, 'Sam': 5, 'Lee': 5},
+                   doubles=('Dave',))
+        detail = self._receipt('Paul')['banked'][0]['detail']
+        self.assertIn('$0 tied at $20', detail)
+
+    def test_the_holes_he_played_are_grouped_by_whose_bank(self):
+        """Twelve five-dollar lines would bury the six that matter, and the
+        grouping answers the question a golfer actually asks."""
+        self._hole(1, 'Dave', {'Paul': 10, 'Sam': 10, 'Lee': 10},
+                   {'Paul': 4, 'Dave': 6, 'Sam': 6, 'Lee': 6})
+        self._hole(2, 'Sam', {'Paul': 5, 'Dave': 5, 'Lee': 5},
+                   {'Paul': 5, 'Dave': 5, 'Sam': 5, 'Lee': 5})
+        by_bank = {g['banker']: g for g in self._receipt('Paul')['by_bank']}
+        self.assertEqual(set(by_bank), {'D', 'S'})
+        self.assertEqual(by_bank['D']['subtotal'], Decimal('10'))
+        # A short group says how it went; the hole numbers alone would not.
+        self.assertEqual(by_bank['S']['note'], 'Hole 2 — tied')
+
+    def test_a_long_group_states_the_holes_and_stops(self):
+        """Against the man who banked seven of them, `four won, three lost` is
+        a sentence nobody reads."""
+        for hole in range(1, 5):
+            self._hole(hole, 'Dave', {'Paul': 5, 'Sam': 5, 'Lee': 5},
+                       {'Paul': 4, 'Dave': 5, 'Sam': 5, 'Lee': 5})
+        note = self._receipt('Paul')['by_bank'][0]['note']
+        self.assertEqual(note, 'Holes 1, 2, 3, 4')
+
+    def test_the_owed_line_names_the_man_and_says_nobody_owes_him(self):
+        self._hole(1, 'Paul', {'Dave': 10, 'Sam': 10, 'Lee': 10},
+                   {'Paul': 6, 'Dave': 4, 'Sam': 4, 'Lee': 4})
+        paul = self._receipt('Paul')
+        self.assertLess(paul['total'], 0)
+        self.assertIn('You owe', paul['owed_line'])
+        self.assertIn('Nobody owes you anything.', paul['owed_line'])
+        dave = self._receipt('Dave')
+        self.assertIn('owes you $10.', dave['owed_line'])
+
+    def test_the_nets_balance_and_the_group_text_carries_them(self):
+        self._hole(1, 'Paul', {'Dave': 10, 'Sam': 10, 'Lee': 10},
+                   {'Paul': 6, 'Dave': 4, 'Sam': 4, 'Lee': 4})
+        s = banker_settlement(self.fs)
+        self.assertTrue(s['balances'])
+        self.assertEqual(s['bet_count'], 3)
+        for who in ('Paul', 'Dave', 'Sam', 'Lee'):
+            self.assertIn(who, s['group_text'])
+        self.assertIn('pays', s['group_text'])
+        self.assertIn('1 hole played, 3 one-on-ones settled.', s['group_text'])
+
+    def test_an_unplayed_round_settles_to_nothing_rather_than_crashing(self):
+        s = banker_settlement(self.fs)
+        self.assertEqual(s['bet_count'], 0)
+        self.assertEqual(s['transfers'], [])
+        self.assertTrue(s['balances'])
+        self.assertEqual(s['headline'], 'Nothing settled yet.')
+
+
 class BankerLossCapTests(TestCase):
     """The loss cap is a THRESHOLD, not a clamp.
 
@@ -1339,17 +1503,20 @@ class BankerHoleCapTests(TestCase):
 
     def test_every_bet_is_scaled_by_the_same_factor(self):
         """A hole is one closed settlement, so scaling inside it is honest —
-        and each golfer keeps his share of the hole."""
+        and each golfer keeps his share of the hole.
+
+        Whole dollars, rounded DOWN: the scaled figure is one the app derived
+        rather than one the group agreed, and this game is settled in notes.
+        Dave's half of the hole survives the rounding; the loose 50¢ does not,
+        and the hole comes in under its ceiling rather than on it."""
         self._game(cap=50)
-        # $100 at stake against a $50 ceiling — everything halves, and Dave
-        # still owns half the hole.
         h = self._play({'Dave': 50, 'Sam': 25, 'Lee': 25},
                        {'Paul': 4, 'Dave': 5, 'Sam': 5, 'Lee': 5})
         by = {l['short_name']: l['stake'] for l in h['lines']}
-        self.assertEqual(by['D'], Decimal('25.00'))
-        self.assertEqual(by['S'], Decimal('12.50'))
-        self.assertEqual(by['L'], Decimal('12.50'))
-        self.assertEqual(sum(by.values()), Decimal('50.00'))
+        self.assertEqual(by['D'], Decimal('25'))
+        self.assertEqual(by['S'], Decimal('12'))
+        self.assertEqual(by['L'], Decimal('12'))
+        self.assertLessEqual(sum(by.values()), Decimal('50'))
 
     def test_a_hole_under_the_ceiling_is_untouched(self):
         self._game(cap=500)

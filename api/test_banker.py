@@ -231,9 +231,9 @@ class BankerEndpointTests(TestCase):
         res = self.client.get(reverse('api-banker-settlement',
                                       args=[self.fs.id]))
         self.assertEqual(res.status_code, 200)
-        paul = next(p for p in res.data['players']
+        paul = next(p for p in res.data['receipts']
                     if p['player_id'] == self.pid['Paul'])
-        self.assertEqual(len(paul['holes_banked'][0]['lines']), 3)
+        self.assertEqual(len(paul['banked'][0]['lines']), 3)
         self.assertEqual(paul['total'], Decimal('-30'))
 
     def test_the_leaderboard_carries_the_game(self):

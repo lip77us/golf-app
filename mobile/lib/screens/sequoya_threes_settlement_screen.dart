@@ -9,8 +9,10 @@
 /// payments under the nets are presented as what they are: the shortest way
 /// to make four numbers true, never a record of who beat whom.
 ///
-/// The app does not move money and does not pretend to. Ticking a payment
-/// records that the golfers said it happened.
+/// **The app does not move money, and it does not keep track of who paid.**
+/// The payments were ticked off here once; the checkbox came out because a
+/// box beside a handover reads as a ledger, and a ledger is a promise this
+/// app cannot keep — it never learns whether the note changed hands.
 library;
 
 import 'package:flutter/material.dart';
@@ -44,9 +46,6 @@ class _SequoyaThreesSettlementScreenState
   SequoyaSettlement? _s;
   bool    _loading = true;
   Object? _error;
-  /// Ticked payments. **Local and cosmetic** — no money moves here, and the
-  /// app must not imply that it does, so this is deliberately not persisted.
-  final Set<int> _settled = {};
 
   @override
   void initState() {
@@ -144,8 +143,7 @@ class _SequoyaThreesSettlementScreenState
                           color: theme.colorScheme.onSurfaceVariant)),
                 )
               else
-                for (var i = 0; i < s.transfers.length; i++)
-                  _payRow(theme, i, s.transfers[i]),
+                for (final t in s.transfers) _payRow(theme, t),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -157,8 +155,9 @@ class _SequoyaThreesSettlementScreenState
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  'Ticking one marks it done in the app only. No money moves '
-                  'here — this is the four of you agreeing what happened.',
+                  'The app does not move money and does not keep track of '
+                  'who has paid. This is the four of you agreeing what '
+                  'happened.',
                   style: theme.textTheme.labelSmall?.copyWith(height: 1.45),
                 ),
               ),
@@ -244,14 +243,14 @@ class _SequoyaThreesSettlementScreenState
     );
   }
 
-  Widget _payRow(ThemeData theme, int i, SequoyaTransfer t) {
-    final done = _settled.contains(i);
+  /// **No tick.** A checkbox beside a payment reads as a ledger, and the app
+  /// keeps no ledger: it does not move money, does not know whether anybody
+  /// paid, and must not imply that it is watching. What it can honestly say
+  /// is who hands what to whom, which is the row itself.
+  Widget _payRow(ThemeData theme, SequoyaTransfer t) {
     final initials = t.fromName.split(' ')
         .where((w) => w.isNotEmpty).take(2).map((w) => w[0]).join();
-    return InkWell(
-      onTap: () => setState(() =>
-          done ? _settled.remove(i) : _settled.add(i)),
-      child: Padding(
+    return Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(children: [
           Container(
@@ -286,24 +285,7 @@ class _SequoyaThreesSettlementScreenState
           Text('\$${t.amount.toStringAsFixed(0)}',
               style: const TextStyle(
                   fontSize: 17, fontWeight: FontWeight.bold)),
-          const SizedBox(width: 10),
-          Container(
-            width: 22, height: 22,
-            decoration: BoxDecoration(
-              color: done ? theme.colorScheme.primary : Colors.transparent,
-              border: Border.all(
-                  color: done
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.outline,
-                  width: 1.5),
-              borderRadius: BorderRadius.circular(7),
-            ),
-            child: done
-                ? const Icon(Icons.check, size: 14, color: Colors.white)
-                : null,
-          ),
         ]),
-      ),
     );
   }
 }
