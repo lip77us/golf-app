@@ -139,10 +139,13 @@ class _FourballSetupScreenState extends State<FourballSetupScreen> {
       final rp = context.read<RoundProvider>();
       final client = context.read<AuthProvider>().client;
 
-      final parsed = double.tryParse(_betCtrl.text.trim());
-      if (parsed != null && rp.round != null && parsed != rp.round!.betUnit) {
-        await rp.updateRoundBetUnit(parsed);
-      }
+      // **The stake is the MATCH's, not the round's.** This used to call
+      // `updateRoundBetUnit`, which is the figure Honors, Nassau and the rest
+      // read as their own stake — so setting a $20 fourball silently restaked
+      // every side game on the round. `FourballGame.bet_amount` is the game's
+      // own field and the only one its settlement reads; the round's unit is
+      // left where the round set it.
+      final parsed = double.tryParse(_betCtrl.text.trim()) ?? 0;
 
       await client.postFourballSetup(
         widget.foursomeId,
