@@ -1,12 +1,14 @@
-# Singles Match — as built: Setup
+# Singles Match — as built
 
 **There is no packet for this game.** What the screen does today, and the
 choices taken with no rule to follow.
 
 Screen: `mobile/lib/screens/nassau_setup_screen.dart` — **not a screen of its
-own.** Engine: `services/nassau.py`. Play is a separate document.
+own.** Engine: `services/nassau.py`. Setup is Part 1 below; Play follows it in the same file.
 
 ---
+
+# Setup
 
 ## 1. It is Nassau's setup screen wearing a different name
 
@@ -76,3 +78,34 @@ conditioned on the flag.
   progress grid and hole-outcome strip. Neither has been drawn.
 - **`tiebreak_2nd` should probably be hidden** in this mode (decision 3).
 - **No How to Play, no web view, no receipt.**
+
+---
+
+# Play
+
+## 6. Where the game is played
+
+**Nassau's play screen**, `/nassau`, and Nassau's progress grid under shared
+score entry. As with setup, this game has no surface of its own.
+
+## 7. What the screen draws
+
+| Element | In a Singles Match |
+|---|---|
+| Team banner | Two golfers rather than two sides — blue and orange dots with names |
+| Entry pattern | The shared one: per-hole card, hot-spot row with an inline picker, 18-hole summary grid with a per-hole winner indicator, bottom hole navigation |
+| Presses strip | Active and completed presses |
+| Match chips | `F9` · `B9` · `Overall` + `Call Press` — **but only Overall is a live bet here** |
+
+## 8. Decisions taken with no rule to follow — Play
+
+| # | Decision | Why | Worth revisiting? |
+|---|---|---|---|
+| 6 | **The Nassau chip row is reused unchanged** | One screen, three games | ⚠ Two of the three chips describe bets that do not exist in this mode. This is the single most likely thing to look broken to a golfer |
+| 7 | **Presses run on the one bet** | A press on an 18-hole match is a real bet | Settled |
+| 8 | **The winner indicator is per hole, not per bet** | The grid answers "who won this hole", which is the same question in every mode | Settled |
+
+## 9. Still open — Play
+
+- **The F9 / B9 chips** (decision 6) — hide them, or say why they are dark.
+- The whole screen has never been drawn in this mode, only in Nassau's.

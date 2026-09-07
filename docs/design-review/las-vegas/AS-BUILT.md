@@ -1,12 +1,14 @@
-# Las Vegas — as built: Setup
+# Las Vegas — as built
 
 **There is no packet for this game.** What the screen does today, and the
 choices taken with no rule to follow.
 
 Screen: `mobile/lib/screens/vegas_setup_screen.dart`.
-Engine: `services/vegas.py`. Play is a separate document.
+Engine: `services/vegas.py`. Setup is Part 1 below; Play follows it in the same file.
 
 ---
+
+# Setup
 
 ## 1. The "number" is the game, and it is the one thing setup never shows
 
@@ -70,3 +72,35 @@ dedicated play screen.
 - **The net-max-double-bogey switch is mislabelled for its job** (decision 2).
 - **No play screen, no web view, no lock-screen card, no receipt, no How to
   Play.**
+
+---
+
+# Play
+
+## 6. Where the game is played
+
+Under shared score entry, as a `_VegasStatusCard`. No dedicated screen.
+
+## 7. What the card draws
+
+| Element | Content |
+|---|---|
+| Header | `Las Vegas`, the birdie rule (`Flip` / `Multiply`), and a `Carryover` marker when it is on |
+| One row per team | Names in the team colour, `N pts`, and money — `—` at zero, otherwise `±$X.XX` |
+
+**And that is all.** Which produces the finding of this document.
+
+## 8. Decisions taken with no rule to follow — Play
+
+| # | Decision | Why | Worth revisiting? |
+|---|---|---|---|
+| 7 | **The NUMBER is never shown** | The card reports points and money. The two-digit number that is the entire game — `45` against `56`, eleven points — appears nowhere in the app, on any screen, at any time | ⚠ **This is the one to fix.** A golfer cannot check the app's arithmetic against the game they just played, and the game is unlike anything else in the set so intuition does not cover for it |
+| 8 | **No per-hole grid** | Every other game with a card under entry has one; Vegas has rows only | ⚠ Follows from 7 — a grid is where a per-hole number would live |
+| 9 | **The birdie rule is shown as a word** | `Flip` / `Multiply` beside the title, so the reader can see which is on without opening setup | Good, and worth copying |
+| 10 | **Money carries two decimal places** | The point differential × stake rarely lands on a dollar | Settled, though it is the only game in the set that shows cents |
+
+## 9. Still open — Play
+
+- **Show the number** (decision 7), per hole, per side. Everything else about
+  this game is secondary to it.
+- A per-hole grid to put it in (decision 8).

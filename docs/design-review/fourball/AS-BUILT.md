@@ -1,4 +1,4 @@
-# Fourball — as built: Setup
+# Fourball — as built
 
 **There is no packet for this game.** Design has never drawn its setup screen,
 so this is not a packet-versus-shipped document: there is no rule of design's
@@ -7,9 +7,11 @@ choice taken in the absence of a rule, so the next drawing starts from the
 real thing rather than from the code.
 
 Screen: `mobile/lib/screens/fourball_setup_screen.dart`.
-Engine: `services/fourball.py`. Play is a separate document.
+Engine: `services/fourball.py`. Setup is Part 1 below; Play follows it in the same file.
 
 ---
+
+# Setup
 
 ## 1. The play surface is under score entry, and that is the intended shape
 
@@ -98,3 +100,35 @@ that draws it:
   there is nothing to sweep. Spots owns a field and correctly leaves the round
   alone; Fourball owned one and wrote the round's anyway, which is the bug that
   was fixed here.
+
+---
+
+# Play
+
+## 6. Where the game is played
+
+Under shared score entry — there is no `/fourball` route. §1 has the summary;
+this is the detail.
+
+## 7. What the surface draws
+
+| Element | Content |
+|---|---|
+| Match status card | Both teams in `GameColors.team1` / `team2`, their names joined with `&`, the margin, `thru N`, and the handicap label (`Gross`, `Net 90%`, `Strokes-off`) |
+| Per-hole progress grid | Modelled on Nassau's. Hole, par, the four golfers grouped and tinted by team, and a **Won by** row. Taps navigate to a hole |
+| The one thing it does that Nassau's does not | **The winning best ball is highlighted in that golfer's own cell**, so the grid shows not just who won the hole but which ball did it |
+
+## 8. Decisions taken with no rule to follow — Play
+
+| # | Decision | Why | Worth revisiting? |
+|---|---|---|---|
+| 8 | **`thru N` counts holes COMPLETED, not the hole number** | It reads right on a shotgun or a mid-course start: holes 7–12 played is `thru 6`, not `thru 12` | Settled, and worth copying |
+| 9 | **The winning ball is highlighted rather than labelled** | A label would need a column the grid does not have | Settled |
+| 10 | **No close-out treatment in the grid** | Holes after `3&2` still draw, greyed by nothing. The engine stops counting them; the grid does not say so | ⚠ The close-out is invisible in the one place a golfer would look for it |
+
+## 9. Still open — Play
+
+- **The close-out** (decision 10). The match is over and the grid keeps drawing
+  holes exactly as it drew the live ones.
+- This pair of widgets is the model for a game with no screen of its own, and
+  is worth drawing as a reusable pattern rather than as Fourball's furniture.

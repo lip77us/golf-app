@@ -1,12 +1,14 @@
-# Spots — as built: Setup
+# Spots — as built
 
 **There is no packet for this game.** What the screen does today, and the
 choices taken with no rule to follow.
 
 Screen: `mobile/lib/screens/spots_setup_screen.dart`.
-Engine: `services/spots.py`. Play is a separate document.
+Engine: `services/spots.py`. Setup is Part 1 below; Play follows it in the same file.
 
 ---
+
+# Setup
 
 ## 1. Spots is not a game, it is a capture add-on
 
@@ -73,3 +75,40 @@ Two consequences design should hold on to:
 - **Naming a spot** (decision 6) is the one feature request this game has.
 - **The stake label** (decision 3).
 - **No web view, no lock-screen card, no How to Play** beyond the prose block.
+
+---
+
+# Play
+
+## 6. Where the game is played
+
+**Inside every score-entry screen there is.** `SpotsCapture` is a shared widget
+used by the universal score entry *and* by the dedicated Wolf and Rabbit
+screens, so a group can tally spots whatever else they are playing.
+
+## 7. What it draws
+
+An inline `⊖ N spots ⊕` control under each golfer's name. Nothing else — no
+board, no strip, no card.
+
+| Detail | Behaviour |
+|---|---|
+| Starting state | `0 spots` |
+| The minus is always shown | Even at zero — **spots can go negative** |
+| Writing | Optimistic local tally, then a debounced POST |
+
+## 8. Decisions taken with no rule to follow — Play
+
+| # | Decision | Why | Worth revisiting? |
+|---|---|---|---|
+| 7 | **A spot count can go negative** | The count IS the data and there is no recalculation to correct it, so the only way back from a mis-tap is down. Hiding the minus at zero would trap a golfer who tapped ⊕ twice | Settled, and worth understanding before anyone tidies it away |
+| 8 | **Optimistic, then debounced** | A tally is tapped standing on a green with one thumb; a spinner per tap would be unusable | Settled |
+| 9 | **It rides inside other screens rather than owning one** | It is an add-on to whatever is being played | Settled — and it is why this game's PLAY cell is the only filled one among the eight |
+| 10 | **The control never says what a spot IS** | The group defines it out loud | ⚠ Pairs with the setup-side request to name the spot |
+
+## 9. Still open — Play
+
+- **Naming the spot** would change this control's label from `N spots` to
+  `N sandies`, which is the whole difference between a tally and a game.
+- No running total is visible while playing — a golfer sees their count for
+  *this hole* and nothing else.

@@ -1,12 +1,14 @@
-# Nassau Nine — as built: Setup
+# Nassau Nine — as built
 
 **There is no packet for this game.** What the screen does today, and the
 choices taken with no rule to follow.
 
 Screen: `mobile/lib/screens/nassau_setup_screen.dart` — **not a screen of its
-own.** Engine: `services/nassau.py`. Play is a separate document.
+own.** Engine: `services/nassau.py`. Setup is Part 1 below; Play follows it in the same file.
 
 ---
+
+# Setup
 
 ## 1. It is Nassau's screen in single-match mode, over a partial round
 
@@ -72,4 +74,37 @@ Identical to Nassau's, with the bet block collapsed to a single match:
 - **No web view, no receipt, no How to Play.**
 - Whether Nassau Nine deserves a row of its own on the coverage table at all,
   or whether it and Singles Match are honestly *modes of Nassau* — three rows
+  currently describe one screen, one engine and one play surface.
+
+---
+
+# Play
+
+## 6. Where the game is played
+
+**Nassau's play screen**, `/nassau`, and Nassau's progress grid under shared
+score entry — the same surfaces as Nassau and Singles Match. See
+`singles-match/AS-BUILT.md` §7 for what the screen draws; the differences here
+are the bet count and the hole range.
+
+## 7. What differs in this mode
+
+| Element | In Nassau Nine |
+|---|---|
+| Match chips | One bet, not three |
+| Summary grid | Nine holes of an eighteen-hole grid, or a nine-hole round's full grid — the screen does not distinguish |
+| Presses strip | Same as Nassau's |
+| Lock screen | **None**, by design — see Part 1 §3, decision 2 |
+
+## 8. Decisions taken with no rule to follow — Play
+
+| # | Decision | Why | Worth revisiting? |
+|---|---|---|---|
+| 6 | **The grid does not mark which nine the match covers** | Nassau's grid draws the round; the match's own range lives in the chips | ⚠ On an eighteen-hole round carrying a nine-hole match, half the grid is outside the bet and nothing says so |
+| 7 | **No lock-screen card** | Holes-remaining does not fit the shared state slot | ⚠ Carried from Part 1 — the only game excluded from the card set |
+
+## 9. Still open — Play
+
+- **Marking the match's nine on the grid** (decision 6).
+- Whether this and Singles Match are games or modes — three coverage rows
   currently describe one screen, one engine and one play surface.

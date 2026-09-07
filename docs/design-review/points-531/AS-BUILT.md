@@ -1,12 +1,14 @@
-# Points 5-3-1 — as built: Setup
+# Points 5-3-1 — as built
 
 **There is no packet for this game.** This is the other half of an as-built:
 what the screen does today and every choice taken in the absence of a rule.
 
 Screen: `mobile/lib/screens/points_531_setup_screen.dart`.
-Engine: `services/points_531.py`. Play is a separate document.
+Engine: `services/points_531.py`. Setup is Part 1 below; Play follows it in the same file.
 
 ---
+
+# Setup
 
 ## 1. It has a play screen design has never seen
 
@@ -66,3 +68,38 @@ you play when you're a threesome*. Setup refuses anything else.
 - **No web view, no lock-screen card, no receipt.**
 - **The default-settlement inconsistency** (decision 3) is worth one ruling
   that lands on all three screens.
+
+---
+
+# Play
+
+## 6. Where the game is played
+
+**`/points-531` — a dedicated screen**, plus a copy of its summary grid ported
+into shared score entry. Both exist; neither has been drawn.
+
+## 7. What the screen draws, top to bottom
+
+| Element | Content |
+|---|---|
+| App bar | `Points 5-3-1`, with scorecard and leaderboard shortcuts |
+| Hole card | `Hole N` header, then one row per golfer: running total as gross-vs-par **and** net-vs-par, a stroke-dot badge when they get a stroke here, and a score box |
+| The hot spot | The first golfer without a score on this hole. An inline picker opens under their row automatically — **no tap needed to start entering** |
+| Points strip | This hole's awards beside each name — `5 3 1`, `4 4 1`, `3 3 3` — and only once all three cards are in |
+| Summary grid | 18 holes × three golfers, plus a points row |
+| Bottom nav | `← Hole N−1` / `Hole N+1 →`, `Done` on 18 |
+
+## 8. Decisions taken with no rule to follow — Play
+
+| # | Decision | Why | Worth revisiting? |
+|---|---|---|---|
+| 7 | **The hot spot opens its picker with no tap** | Three golfers, eighteen holes: a tap to begin each entry is fifty-four taps that buy nothing | Settled, and the pattern Wolf and Nassau both copy |
+| 8 | **The points strip appears only when the hole is complete** | Two of three scores cannot be ranked, and a strip that filled in progressively would show a golfer leading a hole that is not over | Settled |
+| 9 | **Running totals show gross-vs-par AND net-vs-par** | The game settles on one and golfers talk in the other | ⚠ Two numbers per row on a three-row card; nobody has checked which one is read |
+| 10 | **The summary grid exists in two places** — this screen and shared score entry | Ported rather than shared, so the two can drift | ⚠ Worth extracting, and design should know it is one design drawn twice |
+
+## 9. Still open — Play
+
+- **Nothing explains 9 points a hole** on the play screen. The strip shows
+  `4 4 1` and a first-time golfer has to work out why.
+- **The duplicated grid** (decision 10).

@@ -1,12 +1,14 @@
-# Honors — as built: Setup
+# Honors — as built
 
 **There is no packet for this game.** What the screen does today, and the
 choices taken with no rule to follow.
 
 Screen: `mobile/lib/screens/honors_setup_screen.dart`.
-Engine: `services/honors.py`. Play is a separate document — though see §1.
+Engine: `services/honors.py`. Setup is Part 1 below; Play follows it in the same file.
 
 ---
+
+# Setup
 
 ## 1. Honors is the one game with no play surface at all
 
@@ -78,3 +80,43 @@ A golfer holds it for a hole, they score a point. Points are holes held.
 - **Pool settlement** (decision 5) — surface or delete.
 - **No web view, no lock-screen card, no receipt, no How to Play** beyond the
   prose block.
+
+---
+
+# Play
+
+## 6. There is no play surface. This is the whole document.
+
+Honors has **no play screen, no card under score entry, no strip and no
+indicator anywhere in the round.** A golfer plays eighteen holes and learns the
+state of the game only by leaving score entry for the leaderboard.
+
+That is a gap in a way the other seven are not. Points 5-3-1 and Wolf have
+screens design has not drawn; Fourball, Vegas and Singles Match have cards;
+Spots has its stepper. Honors has nothing.
+
+## 7. What a surface would have to carry
+
+Written here because the game's own rules dictate it, and because they are the
+argument for building one:
+
+| Fact | Why it cannot live only on the leaderboard |
+|---|---|
+| **Who holds the honor right now** | It is the entire state of the game, and it changes on a hole a golfer may not have watched |
+| **How many holes they have held it** | Points are holes held — the score IS this number |
+| **That a tie was kept rather than won** | "A tie doesn't beat you" is the rule golfers argue about, and the app currently resolves it in silence |
+| **That a contested tie was broken by walking back** | The winner was decided by a hole played earlier. Nothing shows which |
+| **That the honor DIED** | Two golfers beat the holder, could not be separated, and the token went loose. Nobody is told |
+| **That it is still loose** | Before anybody wins a hole outright, no point is awarded at all |
+
+## 8. Decisions taken with no rule to follow — Play
+
+| # | Decision | Why | Worth revisiting? |
+|---|---|---|---|
+| 8 | **No surface was built** | Honors shipped as a side game whose state the leaderboard could report | ⚠ This is the recommendation of the whole batch |
+| 9 | **The three silent moments** — the kept tie, the walk-back, the death | Each is derived correctly by the engine and reported nowhere | ⚠ These are what a card would be FOR |
+
+## 9. Still open — Play
+
+Everything. The smallest useful thing is a one-line strip under score entry:
+who holds it, for how long, and a word when it changes hands or dies.
