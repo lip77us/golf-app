@@ -238,8 +238,18 @@ def _sequoya(foursome, player_id, *, final):
                                   thru=holes_played(foursome))
 
 
+def _banker(foursome, player_id, *, final):
+    from services.live_activity_banker import (banker_activity_state,
+                                               banker_final_state)
+    if final:
+        return banker_final_state(foursome, player_id=player_id)
+    return banker_activity_state(foursome, player_id=player_id,
+                                 thru=holes_played(foursome))
+
+
 BUILDERS = {
     'sixes'   : _sixes,
+    'banker'  : _banker,
     'sequoya_threes': _sequoya,
     'survivor': _survivor,
     'rabbit'  : _rabbit,
@@ -292,7 +302,12 @@ CARD_KIND = {'match_18': 'match', 'fourball': 'match',
 # and left in the same commit that bumped the build carrying its layout —
 # 2.8.1+32 — which is the intended shape, and the reason this set still exists
 # rather than being deleted: the next card written before its build goes here.
-UNSHIPPED_KINDS: set = set()
+#
+# `banker` is that next card. It needs more of the client than Sequoya did —
+# the kind string, two palette entries (gold for the role, amber for the
+# counter) and a blue tone on the stroke ribbon — so no installed phone can
+# draw it until a build carries them.
+UNSHIPPED_KINDS: set = {'banker'}
 
 
 def card_kind(slug: str) -> str:

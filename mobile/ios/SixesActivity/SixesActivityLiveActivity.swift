@@ -101,7 +101,7 @@ private struct LockScreenView: View {
     /// the footer beside the stake — the SERVER has already resolved into the
     /// same five slots, so there is no layout of its own to add.
     static let known: Set<String> = ["sixes", "rabbit", "nassau", "skins",
-                                     "match", "survivor", "sequoya"]
+                                     "match", "survivor", "sequoya", "banker"]
 
     let state: SixesActivityAttributes.ContentState
     var isStale: Bool = false
@@ -150,7 +150,8 @@ private struct BoardView: View {
             // is not drawn at all when the string is absent or empty, so it
             // costs them not even the stack's spacing.
             if let ribbon = state.ribbon, !ribbon.isEmpty {
-                StrokeRibbon(text: ribbon)
+                StrokeRibbon(text: ribbon,
+                             tone: state.kind == "banker" ? "blue" : "gold")
             }
             HeaderView(header: state.header)
 
@@ -280,8 +281,26 @@ private struct SurvivorSidesView: View {
 
 /// `POPPING ON HOLE 13`. Gold is used nowhere else in the system, which is what
 /// stops the band being read as a state.
+///
+/// **Except on the Banker card**, where gold is already spoken for: it marks
+/// the role, and a card where gold means both *banker* and *you are popping*
+/// has spent its one loud colour twice. That card's band is blue — a stroke is
+/// a fact of the hole rather than an alarm. The tone comes off the card's kind
+/// rather than a payload field because the rule belongs to the card, not to
+/// the hole it is describing.
 private struct StrokeRibbon: View {
     let text: String
+    var tone: String = "gold"
+
+    private var fill: [Color] {
+        tone == "blue"
+            ? [Color(hex: 0xBBD9F7), Color(hex: 0x94C0EE)]
+            : [Color(hex: 0xE9C063), Color(hex: 0xD9A63F)]
+    }
+
+    private var ink: Color {
+        Color(hex: tone == "blue" ? 0x0C2438 : 0x3A2703)
+    }
 
     var body: some View {
         // Drawn INSIDE the content, not bled over the card's edge.
@@ -299,15 +318,14 @@ private struct StrokeRibbon: View {
         Text(text)
             .font(Sixes.body(9.5, .bold))
             .tracking(0.5)
-            .foregroundStyle(Color(hex: 0x3A2703))
+            .foregroundStyle(ink)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(LinearGradient(
-                        colors: [Color(hex: 0xE9C063), Color(hex: 0xD9A63F)],
-                        startPoint: .top, endPoint: .bottom))
+                    .fill(LinearGradient(colors: fill,
+                                         startPoint: .top, endPoint: .bottom))
             )
     }
 }

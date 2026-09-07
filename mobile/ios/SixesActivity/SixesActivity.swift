@@ -180,6 +180,12 @@ enum Sixes {
     static let blue     = Color(hex: 0x5AA7F5)
     static let orange   = Color(hex: 0xF3A059)
     static let plum     = Color(hex: 0xC9A6E8)
+    /// Banker's two. **Gold marks the ROLE and does nothing else** — not a
+    /// state, not a warning — and amber is the banker's counter-double, the
+    /// one event in that game where a golfer's money moves without his
+    /// consent. Both are lifted for lock-screen glass, as plum is.
+    static let gold     = Color(hex: 0xE8C46A)
+    static let amber    = Color(hex: 0xF0C070)
 
     /// A side's colour by the server's name for it. `neutral` is all square —
     /// white, so it belongs to neither side.
@@ -194,6 +200,11 @@ enum Sixes {
         // read against lock-screen glass, so the card uses the lifted plum —
         // one semantic colour with two renderings.
         case "plum":   return plum
+        // Banker. Gold is the role — the man facing three bets at once — and
+        // amber is his counter. Each means exactly one thing in that game and
+        // appears in no other card.
+        case "gold":   return gold
+        case "amber":  return amber
         case "dim":    return .white.opacity(0.55)
         default:       return .white.opacity(0.90)
         }

@@ -270,7 +270,10 @@ class SequoyaStrokeRibbonTests(TestCase):
                  / 'SixesActivityLiveActivity.swift').read_text()
         board = swift.split('private struct BoardView')[1]
         board = board.split('private struct')[0]
-        self.assertIn('StrokeRibbon(text: ribbon)', board)
+        # Matched WITHOUT the closing paren: the band has since grown a tone
+        # argument for Banker, where gold is the role and the ribbon is blue.
+        # What this test guards is that BoardView draws the band at all.
+        self.assertIn('StrokeRibbon(text: ribbon', board)
 
     def test_gross_scoring_has_no_strokes_to_announce(self):
         setup_sequoya_threes(
