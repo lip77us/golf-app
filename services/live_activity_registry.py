@@ -303,11 +303,12 @@ CARD_KIND = {'match_18': 'match', 'fourball': 'match',
 # 2.8.1+32 — which is the intended shape, and the reason this set still exists
 # rather than being deleted: the next card written before its build goes here.
 #
-# `banker` is that next card. It needs more of the client than Sequoya did —
+# `banker` was that next card. It needed more of the client than Sequoya did —
 # the kind string, two palette entries (gold for the role, amber for the
-# counter) and a blue tone on the stroke ribbon — so no installed phone can
-# draw it until a build carries them.
-UNSHIPPED_KINDS: set = {'banker'}
+# counter) and a blue tone on the stroke ribbon — and it left in the same
+# commit that bumped the build carrying them, 2.8.2+33. The set is empty again
+# and stays here for the card after it.
+UNSHIPPED_KINDS: set = set()
 
 
 def card_kind(slug: str) -> str:

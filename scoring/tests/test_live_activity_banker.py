@@ -142,12 +142,17 @@ class BankerCardTests(TestCase):
 
     # -- the gate ------------------------------------------------------------
 
-    def test_the_card_is_held_until_a_build_can_draw_it(self):
-        """It needs more of the client than Sequoya did — the kind, two palette
-        entries and a ribbon tone — so no installed phone can draw it yet."""
-        self.assertIn('banker', UNSHIPPED_KINDS)
-        self.assertEqual(card_kind('banker'), 'banker')
-        self.assertFalse(round_has_board(self.round))
+    def test_the_card_ships_now_that_a_build_draws_it(self):
+        """A kind enters `UNSHIPPED_KINDS` with its builder and leaves with its
+        build — 2.8.2+33 carries the kind string, the gold and amber palette
+        entries and the ribbon's blue tone, so the gate is off.
+
+        Kept rather than deleted because the failure it guards is silent:
+        starting an activity the installed app cannot render turns "this game
+        has no board" into a lock-screen nag pointing at an update that does
+        not exist."""
+        self.assertNotIn(card_kind('banker'), UNSHIPPED_KINDS)
+        self.assertTrue(round_has_board(self.round))
 
     def test_the_ios_build_declares_the_kind_and_the_two_colours(self):
         """The half no Python test would otherwise reach. `banker` renders with
