@@ -91,9 +91,10 @@ that draws it:
 - **The lock-screen card exists** — Fourball and Singles Match share one
   `match` card, since a single match over eighteen holes differs only in how
   many names sit on a side.
-- **The stake's scope on the other eleven setup screens** (decision 3).
-  Fourball is fixed; Sixes, Rabbit, Wolf, Honors, Survivor, Vegas, Skins,
-  Points 5-3-1, Nassau, Triple Cup and the onboarding wizard all still write
-  the round's unit. For some that is correct — Honors and Nassau read
-  `Round.bet_unit` as their stake and have no field of their own — so it is a
-  per-game question rather than one sweep.
+- **The stake's scope is now settled, and Fourball was the only offender.**
+  Checked against the models: exactly four games own a stake field —
+  Fourball, Spots, Multi-skins and Sequoya 3s. Every other casual game reads
+  `Round.bet_unit` as its own stake, so those setup screens *must* write it and
+  there is nothing to sweep. Spots owns a field and correctly leaves the round
+  alone; Fourball owned one and wrote the round's anyway, which is the bug that
+  was fixed here.
