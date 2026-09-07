@@ -6381,6 +6381,7 @@ class BankerSetupView(APIView):
                 allow_counter       = d.get('allow_counter', True),
                 par3_triples        = d.get('par3_triples', True),
                 birdie_bonus        = d.get('birdie_bonus', True),
+                loss_caps        = d.get('loss_caps'),
                 hole_cap_enabled = d.get('hole_cap_enabled', False),
                 hole_cap_amount  = d.get('hole_cap_amount'),
             )

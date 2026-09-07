@@ -12,12 +12,13 @@
 ///
 /// Step three is the one the app has to ENFORCE rather than record, so the
 /// button says what it does rather than what it is. The packet words it *Lock
-/// bets — Paul tees off*; this says **doubles only from here**, because the
-/// app cannot know when anybody swings and naming one golfer asserts an order
-/// the format does not have — the banker plays last, but the other three tee
-/// off in whatever order they like and every bet is in before any of them
-/// does. The server refuses anything above the lock afterwards, so this screen
-/// is the polite half of a rule that holds either way.
+/// bets — Paul tees off*; this says **increases only from here**, because the
+/// app
+/// cannot know when anybody swings and naming one golfer asserts an order the
+/// format does not have — the banker plays last, but the other three tee off
+/// in whatever order they like and every bet is in before any of them does.
+/// The server refuses anything above the lock afterwards, so this screen is
+/// the polite half of a rule that holds either way.
 library;
 
 import 'package:flutter/material.dart';
@@ -28,6 +29,9 @@ import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../theme/halved_brand.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_app_bar.dart';
+import '../widgets/hole_grid_scorecard.dart';
+import '../widgets/round_chat_button.dart';
 
 /// Three action colours, one concept each, reused for nothing else:
 /// gold = the role, blue = a player's double, amber = the banker's counter.
@@ -51,7 +55,6 @@ const _amberLine = Color(0xFFE8D6BC);
 /// it, and the two are unrelated: a bet can be lost with no counter anywhere
 /// near it.
 final _owed     = Colors.red.shade700;
-const _owedFill = Color(0xFFFBECEA);
 
 class BankerScreen extends StatefulWidget {
   const BankerScreen({super.key, required this.foursomeId});
@@ -137,12 +140,30 @@ class _BankerScreenState extends State<BankerScreen> {
 
     return Scaffold(
       backgroundColor: Halved.surface,
-      appBar: AppBar(
-        title: const Text('Banker'),
+      // The same bar every other play screen carries. Banker had a bare one,
+      // so the round's chat and leaderboard were unreachable from the screen a
+      // group spends the whole hole on — and this is the game whose board
+      // exists precisely because nobody can hold fifty-four one-on-ones in
+      // their head.
+      appBar: GolfAppBar(
+        title: 'Banker',
+        automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.close),
-          onPressed: () => Navigator.of(context).pop(),
+          tooltip: 'Close',
+          onPressed: () => Navigator.of(context).maybePop(),
         ),
+        actions: [
+          if (rp.round != null) RoundChatButton(roundId: rp.round!.id),
+          IconButton(
+            tooltip: 'Leaderboard',
+            icon: const Icon(Icons.leaderboard_outlined),
+            onPressed: rp.round == null
+                ? null
+                : () => Navigator.of(context)
+                    .pushNamed('/leaderboard', arguments: rp.round!.id),
+          ),
+        ],
       ),
       bottomNavigationBar: s == null ? null : _bottomBar(s),
       body: s == null
@@ -155,8 +176,10 @@ class _BankerScreenState extends State<BankerScreen> {
                   const SizedBox(height: 12),
                 ],
                 if (s.current != null) ...[
-                  _bankerBanner(s, s.current!),
-                  const SizedBox(height: 12),
+                  // No banner card. The banker leads the list below with his
+                  // gross, his three nets and what the hole is doing to him —
+                  // a card above it repeating his name was saying the same
+                  // thing twice and pushing the hole itself off the fold.
                   _holeStrip(s.current!),
                   const SizedBox(height: 12),
                   if (!s.current!.locked) ..._openHole(s, s.current!)
@@ -171,138 +194,48 @@ class _BankerScreenState extends State<BankerScreen> {
                 ],
                 const SizedBox(height: 16),
                 _standings(s),
+                const SizedBox(height: 16),
+                // **The card belongs on both screens.** A one-screen game
+                // keeps it under the hole all round; Banker splits the hole
+                // across two, and leaving the card on only one of them means
+                // the group loses sight of the round exactly when the bets
+                // are being argued over. Same shared grid, same gold banker
+                // cells, same stroke plan.
+                if (s.grid.isNotEmpty)
+                  HoleGridScorecard(
+                    holes: s.grid,
+                    participants: s.gridPlayers,
+                    legend: null,
+                  ),
               ],
             ),
     );
   }
 
-  // -- the banner -----------------------------------------------------------
-
-  /// The banker's own banner, and the only live worst case anywhere in the app
-  /// — because it is the only place one exists. While a bet is still
-  /// outstanding it reads as a RANGE, not a total: his exposure is not a
-  /// number yet.
-  Widget _bankerBanner(BankerSummary s, BankerHoleState h) {
-    final banker = s.players
-        .where((p) => p.playerId == h.bankerId).firstOrNull;
-    // Before every number is in, his exposure is a RANGE — so the banner
-    // projects the top of it and names who is still to bet, rather than
-    // showing a total that grows silently as bets arrive.
-    final pending = h.outstanding;
-    final worst   = pending.isEmpty ? h.exposure : h.exposureIfMax;
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: _goldPanel,
-        border: Border.all(color: _goldLine),
-        borderRadius: BorderRadius.circular(Halved.rCard),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Text('BANKING THE ${_ordinal(h.hole)}'.toUpperCase(),
-              style: const TextStyle(
-                  fontSize: 11, fontWeight: FontWeight.w700,
-                  letterSpacing: 0.6, color: _gold)),
-          const Spacer(),
-          Text('HOLE ${h.hole}',
-              style: const TextStyle(
-                  fontSize: 11, fontWeight: FontWeight.w600,
-                  letterSpacing: 0.4, color: Halved.muted)),
-        ]),
-        const SizedBox(height: 6),
-        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(banker?.name ?? 'Banker',
-                    style: const TextStyle(
-                        fontSize: 22, fontWeight: FontWeight.w700,
-                        color: Halved.deepPine)),
-                const SizedBox(height: 2),
-                const Text('Tees off last',
-                    style: TextStyle(fontSize: 13, color: Halved.muted)),
-              ],
-            ),
-          ),
-          if (h.maxBet != null)
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text('\$${h.maxBet!.round()}',
-                  style: const TextStyle(
-                      fontSize: 26, fontWeight: FontWeight.w700, color: _gold)),
-              const Text('HIS MAX',
-                  style: TextStyle(
-                      fontSize: 10, fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5, color: _gold)),
-            ]),
-        ]),
-        if (h.betsIn) ...[
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.only(top: 10),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: _goldLine)),
-            ),
-            child: Row(children: [
-              Text(
-                  !h.resolved
-                      ? 'Facing ${h.lines.length} '
-                        '${h.lines.length == 1 ? "bet" : "bets"}'
-                      : h.bankerDelta > 0
-                          ? 'The hole made him'
-                          : h.bankerDelta < 0
-                              ? 'The hole cost him'
-                              : 'He came out level',
-                  style: const TextStyle(fontSize: 13, color: Halved.muted)),
-              const Spacer(),
-              Flexible(
-                child: Text(
-                    // Once the hole is posted the worst case is history. What
-                    // he wants then is what it actually did, and leaving a
-                    // number labelled "worst case" beside a settled hole reads
-                    // as money still at risk.
-                    h.resolved
-                        // Level reads as a word, not "—": on a hole where
-                        // three bets cancelled, nothing moving IS the story.
-                        ? (h.bankerDelta == 0
-                            ? 'the three cancelled'
-                            : _signed(h.bankerDelta))
-                        : pending.isEmpty
-                            ? '−\$${worst.round()} worst case'
-                            : '−\$${worst.round()} if ${_andList(pending)} '
-                              '${pending.length == 1 ? "takes" : "take"} the max',
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                        fontSize: 17, fontWeight: FontWeight.w700,
-                        color: h.resolved && h.bankerDelta > 0
-                            ? Halved.pine : _owed)),
-              ),
-            ]),
-          ),
-        ],
-      ]),
-    );
-  }
-
+  /// Hole, par and STROKE INDEX on one line. The index earns its place here
+  /// rather than being course trivia: it is what decides who strokes in each
+  /// of the three matches, so it is the reason a bet is worth what it is.
   Widget _holeStrip(BankerHoleState h) => Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: const Color(0xFFDFE8E0),
           borderRadius: BorderRadius.circular(Halved.rCard),
         ),
         child: Column(children: [
-          Text('Hole ${h.hole}',
-              style: const TextStyle(
-                  fontSize: 20, fontWeight: FontWeight.w700,
-                  color: Halved.deepPine)),
-          const SizedBox(height: 2),
           Text([
+            'Hole ${h.hole}',
             if (h.par != null) 'Par ${h.par}',
-            if (h.isPar3) 'triples, not doubles',
-          ].join(' · '),
-              style: const TextStyle(fontSize: 13, color: Halved.muted)),
+            if (h.strokeIndex != null) 'SI ${h.strokeIndex}',
+          ].join('   ·   '),
+              style: const TextStyle(
+                  fontSize: 17, fontWeight: FontWeight.w700,
+                  color: Halved.deepPine)),
+          if (h.isPar3) ...[
+            const SizedBox(height: 2),
+            const Text('triples, not doubles',
+                style: TextStyle(fontSize: 12.5, color: Halved.muted)),
+          ],
         ]),
       );
 
@@ -310,13 +243,24 @@ class _BankerScreenState extends State<BankerScreen> {
 
   List<Widget> _openHole(BankerSummary s, BankerHoleState h) {
     final need = _opponentCount(s) - h.lines.length;
+    final first = _bankerFirstName(s, h);
     return [
+      // **He leads the hole from the first frame.** Dropping the old banner
+      // card took his name off the screen entirely until a maximum had been
+      // named — on the one screen whose whole subject is what HE is about to
+      // do. The row is the same one the locked and settled frames use, so the
+      // reader's eye lands in the same place all the way through the hole.
+      _label('THE HOLE', 'floor \$${s.minBet.round()}'),
+      _bankerRow(s, h, false),
+      const SizedBox(height: 12),
       _note(
         h.maxBet == null
-            ? 'The banker names his maximum first — nobody can pick a bet '
+            // Named, not "the banker". Three golfers are waiting on one man
+            // and the sentence should say which.
+            ? '$first names his maximum first — nobody can pick a bet '
               'without it.'
-            : 'Bets are open. Every opponent names his own number, and the '
-              'banker plays the hole last.',
+            : 'Bets are open. Every opponent names his own number, and $first '
+              'plays the hole last.',
         fill: _goldPanel, line: _goldLine, icon: '⏱',
       ),
       const SizedBox(height: 12),
@@ -385,11 +329,18 @@ class _BankerScreenState extends State<BankerScreen> {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Expanded(
+          Flexible(
             child: Text(m.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     fontSize: 16, fontWeight: FontWeight.w600)),
           ),
+          // The handicap is on the row while the bet is being CHOSEN, which
+          // is when it matters: a golfer picking his number wants to know how
+          // many shots sit between him and the banker.
+          _getsChip(m.playingHandicap),
+          const Spacer(),
           if (atMax)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -430,15 +381,23 @@ class _BankerScreenState extends State<BankerScreen> {
           scored
               ? 'The hole is posted. Every bet below settled on its own pair '
                 'of strokes.'
-              : 'Bets are final. Doubles are open until the first score goes '
-                'in.',
+              // "Calls" covers the double, the triple and the counter — the
+              // packet's own verb for them ("doubles are called in about
+              // four seconds") and the only word true on all eighteen holes.
+              : 'Bets can only increase from here. Calls stay open until the '
+                'first score goes in.',
           fill: const Color(0xFFEAF4EE),
           line: const Color(0xFFC2DDCD),
           icon: '🔒'),
       const SizedBox(height: 12),
-      _label('THE ${h.lines.length} BETS',
-             'v. ${_bankerShort(s, h)}, net'),
-      for (final l in h.lines) _resolvedRow(l, scored),
+      _label('THE HOLE', '${h.lines.length} bets, strokes off'),
+      // The banker leads the list and the opponents follow by index. He is
+      // the man all three are measured against, and index order is the order
+      // the strokes are in — everyone giving him a shot above everyone taking
+      // one. It also makes the list add up on screen: his row plus the three
+      // sums to zero, which is the only check a reader can run at a glance.
+      _bankerRow(s, h, scored),
+      for (final l in _byIndex(h.lines)) _resolvedRow(l, scored, h),
       if (!scored) ...[
         const SizedBox(height: 12),
         if (s.rules.playerDouble) _inTheAir(s, h),
@@ -450,13 +409,138 @@ class _BankerScreenState extends State<BankerScreen> {
     ];
   }
 
-  Widget _resolvedRow(BankerBetLine l, bool scored) {
-    final (tag, tone, fill) = switch (l.outcome) {
-      'won'  => ('WON', Halved.pine, const Color(0xFFEAF4EE)),
-      'lost' => ('LOST', _owed, _owedFill),
-      'tied' => ('TIED — NO ACTION', Halved.muted, const Color(0xFFF2F5F2)),
-      _      => ('UNRESOLVED', Halved.muted, Halved.card),
+  /// The banker's row, and the only place his three nets can honestly live.
+  ///
+  /// **He has one gross and three nets.** Strokes come off inside each
+  /// one-on-one, so he plays Paul off one difference and Jim off another in
+  /// the same breath — there is no single "his net", and every screen that
+  /// tried to print one was printing a number that is not true of two of the
+  /// three bets. So the gross stands alone and the three nets are named by
+  /// whose match each belongs to.
+  Widget _bankerRow(BankerSummary s, BankerHoleState h, bool scored) {
+    final banker = s.players
+        .where((p) => p.playerId == h.bankerId).firstOrNull;
+    // Named, not initialled: "net versus Sean 4, RyanL 5, Paul 5". His three
+    // nets are the one thing on this screen a reader cannot derive, so each
+    // one says whose match it belongs to.
+    final nets = _byIndex(h.lines)
+        .map((l) => '${l.shortName} ${l.bankerNet ?? "–"}')
+        .join(', ');
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: _goldPanel,
+        border: Border.all(color: _goldLine),
+        borderRadius: BorderRadius.circular(Halved.rCard),
+      ),
+      child: Row(children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Flexible(
+                  child: Text(banker?.name ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: _goldFill,
+                    borderRadius: BorderRadius.circular(Halved.rPill),
+                  ),
+                  child: const Text('BANKS',
+                      style: TextStyle(
+                          fontSize: 10, fontWeight: FontWeight.w700,
+                          letterSpacing: 0.4, color: _gold)),
+                ),
+                // His handicap, on his row only. Every opponent's strokes are
+                // the gap between this number and his own, so with it here the
+                // three differentials can be checked without leaving the
+                // screen — and the opponents' rows stay uncluttered, since
+                // each already carries the one stroke that applies to him.
+                _getsChip(h.bankerHandicap),
+              ]),
+              const SizedBox(height: 5),
+              if (h.bankerGross != null)
+                Text('gross ${h.bankerGross}   ·   net versus $nets',
+                    style: const TextStyle(
+                        fontSize: 12.5, color: Halved.muted))
+              else if (h.maxBet == null)
+                const Text('to name his maximum',
+                    style: TextStyle(fontSize: 12.5, color: Halved.muted))
+              else
+                // Before every number is in his exposure is a RANGE, so it
+                // projects the outstanding bets at his own maximum and names
+                // who is still to bet.
+                Text(
+                    h.outstanding.isEmpty
+                        ? 'facing ${h.lines.length} '
+                          '${h.lines.length == 1 ? "bet" : "bets"}'
+                        : 'if ${_andList(h.outstanding)} '
+                          '${h.outstanding.length == 1 ? "takes" : "take"} '
+                          'the max',
+                    style: const TextStyle(
+                        fontSize: 12.5, color: Halved.muted)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        // Before the hole settles this is not a loss, it is EXPOSURE — so it
+        // is labelled rather than signed. A minus in front of a number nobody
+        // has lost yet reads as money already gone.
+        if (scored)
+          Text(h.bankerDelta == 0 ? '\$0' : _signed(h.bankerDelta),
+              style: TextStyle(
+                  fontSize: 22, fontWeight: FontWeight.w700,
+                  color: h.bankerDelta > 0
+                      ? Halved.pine
+                      : h.bankerDelta < 0 ? _owed : Halved.muted))
+        else if (h.maxBet != null)
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            const Text('AT RISK',
+                style: TextStyle(
+                    fontSize: 9.5, fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5, color: Halved.muted)),
+            Text(_money(h.outstanding.isEmpty
+                    ? h.exposure : h.exposureIfMax),
+                style: const TextStyle(
+                    fontSize: 22, fontWeight: FontWeight.w700,
+                    color: Halved.deepPine)),
+          ]),
+      ]),
+    );
+  }
+
+  /// Opponents by handicap index. See `_bankerRow` for why that is the order.
+  List<BankerBetLine> _byIndex(List<BankerBetLine> lines) =>
+      List<BankerBetLine>.from(lines)
+        ..sort((a, b) => a.handicapIndex.compareTo(b.handicapIndex));
+
+  String _money(double v) => '\$${v.round()}';
+
+  /// One bet, before or after the hole.
+  ///
+  /// **The number means one thing at each stage.** Before it resolves it is
+  /// the STAKE — what is at risk, which is the only figure that exists yet.
+  /// After, it is the RESULT: what actually changed hands. Leading with the
+  /// stake on a settled hole made the loudest number on the row the one
+  /// nobody owes.
+  Widget _resolvedRow(BankerBetLine l, bool scored, BankerHoleState h) {
+    final result = switch (l.outcome) {
+      'won'  => l.amount,
+      'lost' => -l.amount,
+      _      => 0.0,
     };
+    final tone = result > 0 ? Halved.pine : result < 0 ? _owed : Halved.muted;
+
     return Container(
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -465,74 +549,127 @@ class _BankerScreenState extends State<BankerScreen> {
         border: Border.all(color: Halved.cardBorder),
         borderRadius: BorderRadius.circular(Halved.rCard),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(
-            child: Text(l.name,
-                style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w600)),
-          ),
-          // The stroke is a fact of the MATCH, so it sits on the match's row —
-          // never a dot on somebody's score box, because the banker holds a
-          // different relationship in each of the three bets.
-          if (l.strokes != 0)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE9F1EA),
-                borderRadius: BorderRadius.circular(Halved.rPill),
-              ),
-              child: Text(l.strokeNote,
-                  style: const TextStyle(
-                      fontSize: 10.5, fontWeight: FontWeight.w600,
-                      color: Halved.pine)),
-            ),
-          const SizedBox(width: 8),
-          Text('\$${l.stake.round()}',
-              style: const TextStyle(
-                  fontSize: 19, fontWeight: FontWeight.w700,
-                  color: Halved.deepPine)),
-        ]),
-        const SizedBox(height: 6),
-        Wrap(spacing: 6, runSpacing: 6, children: [
-          if (l.ownMultiplier > 1)
-            _tag('×${l.ownMultiplier} '
-                 '${l.ownMultiplier == 3 ? "HIS TRIPLE" : "HIS DOUBLE"}',
-                 _blue, _blueFill, _blueLine),
-          if (l.countered) _tag('×2 COUNTER', _amber, _amberFill, _amberLine),
-          if (l.birdie) _tag('×2 BIRDIE', Halved.pine,
-                             const Color(0xFFEAF4EE),
-                             const Color(0xFFC2DDCD)),
-        ]),
-        if (scored) ...[
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: fill,
-              borderRadius: BorderRadius.circular(Halved.rChip),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(tag,
-                    style: TextStyle(
-                        fontSize: 11, fontWeight: FontWeight.w700,
-                        letterSpacing: 0.4, color: tone)),
-                const SizedBox(height: 3),
-                // The only screen in the app that shows arithmetic, and it
-                // earns it: the argument is always about the chain.
-                Text(l.chain,
+      child: Row(children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Flexible(
+                  child: Text(l.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w600)),
+                ),
+                // The stroke is a fact of the MATCH, so it sits on the match's
+                // row — never a dot on somebody's score box, because the
+                // banker holds a different relationship in each of the three.
+                _getsChip(l.playingHandicap),
+                if (l.strokes != 0) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAF1FF),
+                      borderRadius: BorderRadius.circular(Halved.rPill),
+                    ),
+                    child: Text(l.strokeNote,
+                        style: const TextStyle(
+                            fontSize: 10.5, fontWeight: FontWeight.w600,
+                            color: _blue)),
+                  ),
+                ],
+              ]),
+              const SizedBox(height: 6),
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                ..._multiplierTags(l),
+                // A tie pays nothing, and a bare $0 with no reason beside it
+                // is the most confusing thing this game produces. The void
+                // still names what the bet had REACHED — a doubled bet that
+                // paid nothing is a fact the group wants to see, and it is
+                // what makes the counter a real gamble.
+                if (scored && l.outcome == 'tied')
+                  Text('no action · \$${l.stake.round()} void',
+                      style: const TextStyle(
+                          fontSize: 12, color: Halved.muted)),
+                if (!scored)
+                  Text('\$${l.stake.round()} at risk',
+                      style: const TextStyle(
+                          fontSize: 12, color: Halved.muted)),
+              ]),
+              // His gross, his net off the difference with the banker, and
+              // the banker's net in THIS match — the two numbers that
+              // actually decided this bet, side by side.
+              if (l.gross != null) ...[
+                const SizedBox(height: 4),
+                Text('gross ${l.gross}   ·   net ${l.net}'
+                     ' v ${l.bankerNet ?? "–"}',
                     style: const TextStyle(
                         fontSize: 12.5, color: Halved.muted)),
               ],
-            ),
+            ],
           ),
-        ],
+        ),
+        const SizedBox(width: 10),
+        Text(
+            scored
+                ? (result == 0 ? '\$0' : _signed(result))
+                : '\$${l.stake.round()}',
+            style: TextStyle(
+                fontSize: 22, fontWeight: FontWeight.w700,
+                color: scored ? tone : Halved.deepPine)),
       ]),
     );
   }
+
+  /// "gets 17" — the playing handicap, on every one of the four rows.
+  ///
+  /// The strokes in each match are the gap between two of these, so the whole
+  /// hole's handicap arithmetic can be checked on one screen without trusting
+  /// the app to have done it right.
+  Widget _getsChip(int? hcp) {
+    if (hcp == null) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(left: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE9F1EA),
+        borderRadius: BorderRadius.circular(Halved.rPill),
+      ),
+      child: Text('gets $hcp',
+          style: const TextStyle(
+              fontSize: 10.5, fontWeight: FontWeight.w600,
+              color: Halved.pine)),
+    );
+  }
+
+  /// Named for who called it, not for the arithmetic. "×2 his double" told a
+  /// reader the factor and left them to work out whose shot it rode on; the
+  /// two doubles in this game come from opposite sides of the table and that
+  /// is the part worth reading at a glance.
+  List<Widget> _multiplierTags(BankerBetLine l) => [
+        // Cut off by the house — floor bet, no double, and the counter went
+        // past him. First on the row, because it explains why the rest of it
+        // is so quiet.
+        if (l.capped) _tag('CAPPED', _amber, _amberFill, _amberLine),
+        // The bet he actually agreed on the tee, first in the row. With the
+        // multipliers beside it the whole chain is legible again — $20 · a
+        // golfer double · a banker double is $80 — but as bubbles rather than
+        // the sentence of arithmetic that used to run under the row. The
+        // headline stays the RESULT; this is how a golfer checks it.
+        _tag('\$${l.bet.round()} bet', Halved.deepPine,
+             const Color(0xFFEDF1EE), const Color(0xFFDDE5DF)),
+        if (l.ownMultiplier > 1)
+          _tag(l.ownMultiplier == 3 ? 'Golfer triple' : 'Golfer double',
+               _blue, _blueFill, _blueLine),
+        if (l.countered)
+          _tag('Banker double', _amber, _amberFill, _amberLine),
+        if (l.birdie)
+          _tag('Birdie ×2', Halved.pine, const Color(0xFFEAF4EE),
+               const Color(0xFFC2DDCD)),
+      ];
 
   /// One tap per player, no confirmation — a double is shouted at a ball in
   /// flight and nobody is holding a phone. These controls are not live; they
@@ -629,7 +766,7 @@ class _BankerScreenState extends State<BankerScreen> {
                     fontSize: 15, fontWeight: FontWeight.w700,
                     color: h.countered ? Colors.white : _amber)),
             const SizedBox(height: 2),
-            Text('One tap, all three bets',
+            Text(_allBets(h.lines.length),
                 style: TextStyle(
                     fontSize: 11.5,
                     color: h.countered ? Colors.white70
@@ -680,19 +817,23 @@ class _BankerScreenState extends State<BankerScreen> {
           border: Border.all(color: _goldLine),
           borderRadius: BorderRadius.circular(Halved.rCard),
         ),
-        child: Row(children: [
-          const Text('NEXT BANK',
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('THE BANK PASSES',
               style: TextStyle(
                   fontSize: 10.5, fontWeight: FontWeight.w700,
                   letterSpacing: 0.5, color: _gold)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text('${s.nextBankerName} had the low net',
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                    fontSize: 14.5, fontWeight: FontWeight.w600,
-                    color: Halved.deepPine)),
-          ),
+          const SizedBox(height: 4),
+          Text('${s.nextBankerName} had the low net',
+              style: const TextStyle(
+                  fontSize: 17, fontWeight: FontWeight.w700,
+                  color: Halved.deepPine)),
+          const SizedBox(height: 2),
+          const Text('Outright, so there is nothing to settle — but it is '
+                     'said out loud, because a role that changes hands '
+                     'quietly is how two golfers both think they are banking '
+                     'the next one.',
+              style: TextStyle(
+                  fontSize: 12.5, height: 1.45, color: Halved.muted)),
         ]),
       );
 
@@ -725,9 +866,19 @@ class _BankerScreenState extends State<BankerScreen> {
               padding: const EdgeInsets.symmetric(vertical: 7),
               child: Row(children: [
                 Expanded(
-                  child: Text(p.name,
-                      style: const TextStyle(
-                          fontSize: 14.5, fontWeight: FontWeight.w600)),
+                  child: Row(children: [
+                    Flexible(
+                      child: Text(p.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 14.5, fontWeight: FontWeight.w600)),
+                    ),
+                    if (p.cutOff) ...[
+                      const SizedBox(width: 7),
+                      _tag('CAPPED', _amber, _amberFill, _amberLine),
+                    ],
+                  ]),
                 ),
                 Text(_signed(p.total),
                     style: TextStyle(
@@ -760,51 +911,121 @@ class _BankerScreenState extends State<BankerScreen> {
           .pushNamed('/score-entry', arguments: widget.foursomeId);
     } else if (!h.locked) {
       final need = _opponentCount(s) - h.lines.length;
-      // NOT "— Paul tees off", which the packet asks for. The app cannot know
-      // when anybody swings and naming one golfer asserts an order the format
-      // does not have: the banker plays last, but the other three tee off in
-      // whatever order they like and every bet has to be in before any of
-      // them does. The button names the CONSEQUENCE instead — and "no changes
-      // after this" would be wrong, because a double still moves a number.
+      // NOT "— Paul tees off", which the packet asks for: the app cannot know
+      // when anybody swings, and naming one golfer asserts an order the
+      // format does not have. The button names the CONSEQUENCE.
+      //
+      // And not "doubles only from here" either — on a par 3 the call is a
+      // TRIPLE, so the word was wrong on four holes of the round. "Presses"
+      // would be worse: in this app a press is a NEW BET at the same amount
+      // and explicitly not a doubling (Nassau's meaning, and Sequoya's), so
+      // it would point at the wrong mechanic entirely.
+      //
+      // "Amounts are final" was nearly right and quietly false: a $10 bet can
+      // reach $60 after the lock. What the lock closes is the DIRECTION —
+      // nothing can come down again, only up, whether by a double, a triple
+      // or the counter. That holds on all eighteen holes and tells the banker
+      // the thing he actually needs: his exposure has one way to go.
       label = need > 0
           ? '$need ${need == 1 ? "bet" : "bets"} to go'
-          : 'Lock the bets — doubles only from here';
+          : 'Lock the bets — increases only from here';
       onTap = (need > 0 || h.maxBet == null || _busy)
           ? null
           : () => _declare(lock: true);
     } else if (!h.resolved) {
       label = 'Enter scores';
-      onTap = () async {
-        await Navigator.of(context)
-            .pushNamed('/score-entry', arguments: widget.foursomeId);
-        if (mounted) {
-          await context.read<RoundProvider>().loadBanker(widget.foursomeId);
-        }
-      };
+      onTap = _openScoreEntry;
     } else {
-      // Naming him on the button too: this is the tap that hands the role
-      // over, and it should say whose it becomes.
-      final who = s.nextBankerName.split(' ').first;
-      label = who.isEmpty ? 'Next hole' : 'Next hole — $who banks it';
+      // **A settled hole is a stop, not a step.** With a clean low net there
+      // is nothing to ask, so it would be easy to slide straight into the
+      // next hole's betting — and the group would never see what the last one
+      // did to them. So the screen holds here on the result, the rotation is
+      // announced above, and the button names where it goes next rather than
+      // saying "next": you are proceeding FROM something you have read.
+      final next = _nextHoleNumber(s);
+      label = next == null ? 'Proceed' : 'Proceed to hole $next';
       onTap = _busy ? null : () => _advance(s);
     }
+
+    // **A posted hole still has to be reachable.** Once the three bets
+    // resolved, the only button here was "Next hole" — so a score typed wrong
+    // had nowhere to be corrected from: this screen had stopped offering
+    // score entry and the hub sends a Banker round back here rather than to
+    // it. The way in stays open for the whole round.
+    final canEdit = h != null && h.locked;
 
     return SafeArea(
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
-        child: SizedBox(
-          height: 52,
-          width: double.infinity,
-          child: FilledButton(
-            onPressed: onTap,
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.bold)),
+        child: Row(children: [
+          if (canEdit && (h.resolved || tie)) ...[
+            Expanded(
+              child: SizedBox(
+                height: 52,
+                child: OutlinedButton(
+                  onPressed: _busy ? null : _openScoreEntry,
+                  child: const Text('Edit scores',
+                      style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
+          Expanded(
+            flex: 2,
+            child: SizedBox(
+              height: 52,
+              child: FilledButton(
+                onPressed: onTap,
+                child: Text(label,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+            ),
           ),
-        ),
+        ]),
       ),
     );
+  }
+
+  String _bankerFirstName(BankerSummary s, BankerHoleState h) =>
+      s.players
+          .where((p) => p.playerId == h.bankerId)
+          .map((p) => p.name.split(' ').first)
+          .firstOrNull ??
+      'The banker';
+
+  /// "all three bets", "both bets", "the bet" — Banker plays three-handed as
+  /// happily as four, and a control that lands on two while announcing three
+  /// is the sort of thing that makes a group stop trusting the numbers beside
+  /// it.
+  String _allBets(int n) => switch (n) {
+        0 => 'One tap',
+        1 => 'One tap, the whole bet',
+        2 => 'One tap, both bets',
+        _ => 'One tap, all $n bets',
+      };
+
+  /// The hole after the one on screen, in PLAY order — a shotgun start does
+  /// not go 3, 4.
+  int? _nextHoleNumber(BankerSummary s) {
+    final holes = s.holes.map((h) => h.hole).toList();
+    final i = holes.indexOf(s.currentHole ?? -1);
+    if (i < 0 || i + 1 >= holes.length) return null;
+    return holes[i + 1];
+  }
+
+  /// Into the shared entry screen, and back with the summary refreshed. The
+  /// same door whether the hole is being scored for the first time or a wrong
+  /// number is being put right.
+  Future<void> _openScoreEntry() async {
+    await Navigator.of(context)
+        .pushNamed('/score-entry', arguments: widget.foursomeId);
+    if (!mounted) return;
+    await context.read<RoundProvider>().loadBanker(widget.foursomeId);
   }
 
   // -- small pieces ---------------------------------------------------------
@@ -880,24 +1101,46 @@ class _BankerScreenState extends State<BankerScreen> {
 
   int _opponentCount(BankerSummary s) => (s.players.length - 1).clamp(1, 3);
 
+  /// The three opponents, by handicap — the same order the resolved list and
+  /// score entry use, so a golfer's row is in the same place at every stage of
+  /// the hole.
   List<BankerPlayerTotal> _opponents(BankerSummary s, BankerHoleState h) =>
-      s.players.where((p) => p.playerId != h.bankerId).toList();
+      s.players.where((p) => p.playerId != h.bankerId).toList()
+        ..sort((a, b) => a.handicapIndex.compareTo(b.handicapIndex));
 
-  String _bankerShort(BankerSummary s, BankerHoleState h) =>
-      s.players.where((p) => p.playerId == h.bankerId)
-          .map((p) => p.shortName).firstOrNull ?? 'the banker';
 
-  /// Four or five habitual numbers between the floor and the ceiling — never a
-  /// stepper, which invites a $17 bet nobody wants to settle.
+  /// The numbers golfers actually bet, laddered — never a stepper, which
+  /// invites a \$17 bet nobody wants to settle.
+  ///
+  /// This used to interpolate quarters and round them to multiples of five,
+  /// which worked at \$5–\$50 and fell apart underneath it: a \$1–\$4 band
+  /// rounded every intermediate to 0 or 5, both outside the band, and offered
+  /// ONE chip. A dollar game is worth playing — it gets big fast enough
+  /// through the doubles — so the small end has to work as well as the big.
+  ///
+  /// Walking a fixed ladder of habitual amounts fixes both ends at once:
+  /// \$1–\$5 lands exactly on \$1 \$2 \$3 \$5, and \$5–\$50 thins to four
+  /// round numbers instead of five arbitrary ones.
+  static const _ladder = [1, 2, 3, 5, 10, 15, 20, 25, 30, 40, 50, 75, 100,
+                          150, 200];
+
   List<double> _chipSteps(double lo, double hi) {
     if (hi <= lo) return [lo];
-    final out = <double>{lo};
-    for (final f in [0.25, 0.5, 0.75]) {
-      final v = (lo + (hi - lo) * f);
-      out.add((v / 5).round() * 5.0);
+    // Both ends always appear: the floor is what he must have on, and the
+    // banker's maximum is the number the group is watching for.
+    final vals = <double>{lo, hi};
+    for (final v in _ladder) {
+      if (v > lo && v < hi) vals.add(v.toDouble());
     }
-    out.add(hi);
-    return out.where((v) => v >= lo && v <= hi).toList()..sort();
+    final all = vals.toList()..sort();
+    if (all.length <= 4) return all;
+    // Four is the most a thumb picks from without reading. Thin by position
+    // so the ends survive and the middle stays evenly spread.
+    final out = <double>{};
+    for (var i = 0; i < 4; i++) {
+      out.add(all[((i * (all.length - 1)) / 3).round()]);
+    }
+    return out.toList()..sort();
   }
 
   /// "Lee", "Sam and Lee", "Ryan, Sam and Lee".
@@ -908,10 +1151,4 @@ class _BankerScreenState extends State<BankerScreen> {
 
   String _signed(double v) =>
       v == 0 ? '—' : (v > 0 ? '+\$${v.round()}' : '−\$${v.abs().round()}');
-
-  String _ordinal(int n) {
-    if (n >= 11 && n <= 13) return '${n}th';
-    return switch (n % 10) { 1 => '${n}st', 2 => '${n}nd', 3 => '${n}rd',
-                             _ => '${n}th' };
-  }
 }

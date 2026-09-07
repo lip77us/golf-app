@@ -16,11 +16,12 @@ from django.test import TestCase
 
 from core.models import HandicapMode
 from games.models import BankerGame, BankerHole
-from services.banker import (ZERO, BankerLocked, banker_settlement,
+from services.banker import (ZERO, BankerLocked, banker_settlement, cap_for,
                              banker_summary,
                              exposure_ladder, hole_exposure,
                              hole_exposure_if_max, lock_bets,
-                             open_next_hole, place_bet, set_counter,
+                             open_next_hole, pair_strokes, place_bet,
+                             set_counter,
                              set_double, set_hole_max, setup_banker)
 from ._helpers import make_foursome, make_round, make_tee, submit_hole
 
@@ -472,29 +473,6 @@ class BankerStrokesTests(TestCase):
         self.assertEqual(by['S']['stroke_note'], 'P strokes')
         self.assertEqual(by['L']['stroke_note'], 'scratch hole')
 
-    def test_the_card_carries_each_match_on_the_opponents_side(self):
-        """There is no single "his net" to put in the banker's column, so the
-        whole handicap of a match rides on the OPPONENT's number and the
-        banker's column is his plain gross. The arithmetic is identical and
-        every comparison on the card is direct."""
-        self._open(5)
-        submit_hole(self.fs, 5, [(self.pid['Paul'], 5), (self.pid['Dave'], 5),
-                                 (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
-        card = banker_summary(self.fs)['scorecard']
-        rows = {r['short_name']: r for r in card['rows']}
-        self.assertEqual(rows['P']['net'][5], 5)      # his gross, unadorned
-        self.assertTrue(rows['P']['banked'][5])
-        self.assertFalse(rows['P']['beat'][5])
-        # Dave receives one, so he is a shot better than the banker's gross.
-        self.assertEqual(rows['D']['net'][5], 4)
-        self.assertTrue(rows['D']['beat'][5])
-        # The banker receives one from Sam — added to SAM rather than taken
-        # off the banker, so the column stays one number.
-        self.assertEqual(rows['S']['net'][5], 6)
-        self.assertFalse(rows['S']['beat'][5])
-        self.assertEqual(rows['L']['net'][5], 5)      # level, and a tie
-        self.assertFalse(rows['L']['beat'][5])
-
     def test_the_signed_strokes_still_travel_even_though_the_card_hides_them(self):
         """The card drops the dot — every bet settles on net and gross would
         make the reader subtract four times a row — but the per-pair strokes
@@ -536,19 +514,49 @@ class BankerStrokesTests(TestCase):
         self.assertEqual(h['banker_delta'], Decimal('0'))
         self.assertTrue(all(l['strokes'] == 0 for l in by.values()))
 
-    def test_the_rotation_ranks_the_field_on_its_own_scale(self):
-        """Two jobs for one handicap, and they must not be confused: bets
-        settle strokes-off pairwise, which has no common scale, so the bank
-        passes on each golfer's own full allocation."""
+    def test_the_rotation_ranks_on_the_scale_the_card_shows(self):
+        """The bank passes on strokes off the LOW golfer — what the card
+        draws, what the dots show, what the `gets` chips state.
+
+        Sam is the low man off 4, so on this stroke index 1 hole Paul and Lee
+        (off 8) stroke and Dave (off 12) does too, while Sam plays gross:
+        nets 4, 5, 5, 4. Paul and Lee tie.
+        """
         self._open(5)
         submit_hole(self.fs, 5, [(self.pid['Paul'], 5), (self.pid['Dave'], 6),
                                  (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
-        # Full allocation on SI 1: Paul 4, Dave 5, Sam 4, Lee 4 — Sam wins the
-        # tiebreak only by being named, so this is a tie and the group is asked.
         s = banker_summary(self.fs)
         self.assertEqual(s['awaiting_tie'], 5)
         self.assertEqual({c['short_name'] for c in s['tie_candidates']},
-                         {'P', 'S', 'L'})
+                         {'P', 'L'})
+
+    def test_a_golfer_is_not_offered_a_tie_the_card_says_he_lost(self):
+        """The bug this replaced, in miniature.
+
+        Ranking on each golfer's FULL allocation is not the same as ranking
+        off the low man, and the gap is not a constant — allocation is not
+        linear. A golfer off 11 strokes down to index 11 on the full scale but
+        only to index 5 off a low man of 6, so on an index 9 hole the full
+        scale hands him a shot the card plainly does not, and he was offered a
+        bank he had not tied for.
+        """
+        self._open(9)          # stroke index 5 on the test card
+        submit_hole(self.fs, 9, [(self.pid['Paul'], 5), (self.pid['Dave'], 5),
+                                 (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
+        s = banker_summary(self.fs)
+        # Read the net straight off the CARD the group sees: gross minus the
+        # dots drawn on it. If the rotation and the card can disagree, one of
+        # them is lying to somebody standing on a tee.
+        grid = next(x for x in s['grid'] if x['hole'] == 9)
+        short = {p['player_id']: p['short_name'] for p in s['players']}
+        rot = {short[sc['player_id']]: sc['gross'] - sc['strokes']
+               for sc in grid['scores'] if sc['gross'] is not None}
+        best = min(rot.values())
+        for c in s['tie_candidates']:
+            name = c['short_name']
+            self.assertEqual(rot[name], best,
+                             f'{name} was offered the bank at {rot[name]} '
+                             f'when the card says {best} won the hole')
 
 
 class BankerActionRulesTests(TestCase):
@@ -738,3 +746,573 @@ class BankerRotationAnnouncementTests(TestCase):
         s = banker_summary(self.fs)
         self.assertIsNone(s['next_banker_id'])
         self.assertIsNone(s['awaiting_tie'])
+
+
+class BankerDisplayedHandicapTests(TestCase):
+    """The screen shows each golfer off the LOW one, because a gap is easier to
+    read when one end is zero. That is a display convention and must never
+    reach the money."""
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['banker'])
+        self.fs = make_foursome(self.round,
+                                [('Paul', 16), ('Sean', 6), ('Jim', 17),
+                                 ('Ryan', 11)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        self.game = setup_banker(self.fs, first_banker_id=self.pid['Jim'])
+        set_hole_max(self.fs, 1, 10)
+        for who in ('Paul', 'Sean', 'Ryan'):
+            place_bet(self.fs, 1, self.pid[who], 10)
+        lock_bets(self.fs, 1)
+        submit_hole(self.fs, 1, [(self.pid[n], 5)
+                                 for n in ('Paul', 'Sean', 'Jim', 'Ryan')])
+
+    def _hole(self):
+        return next(h for h in banker_summary(self.fs)['holes']
+                    if h['hole'] == 1)
+
+    def test_the_low_golfer_shows_zero_and_the_rest_their_gap(self):
+        h = self._hole()
+        shown = {l['short_name']: l['playing_handicap'] for l in h['lines']}
+        self.assertEqual(shown['S'], 0)      # Sean is the low man
+        self.assertEqual(shown['R'], 5)
+        self.assertEqual(shown['P'], 10)
+        self.assertEqual(h['banker_handicap'], 11)   # Jim, off 17
+
+    def test_the_difference_of_two_shown_numbers_is_the_strokes_in_that_match(self):
+        """The whole point of showing it this way — and the invariant that
+        makes it safe, since subtracting the same constant from everybody
+        cannot change a difference."""
+        h = self._hole()
+        for l in h['lines']:
+            s_b, s_o = pair_strokes(self.game, self.fs, self.pid['Jim'],
+                                    l['player_id'], 1)
+            gap = (l['playing_handicap'] or 0) - (h['banker_handicap'] or 0)
+            # The sign of the gap is the direction of the shot, every time.
+            if gap > 0:
+                self.assertEqual(s_b, 0)
+            elif gap < 0:
+                self.assertEqual(s_o, 0)
+            else:
+                self.assertEqual((s_b, s_o), (0, 0))
+            # And the row's own signed figure agrees with the gap's sign.
+            self.assertEqual(l['strokes'] > 0, gap > 0 and s_o > 0)
+            self.assertEqual(l['strokes'] < 0, gap < 0 and s_b > 0)
+
+    def test_the_money_is_unchanged_by_how_the_handicap_is_displayed(self):
+        """Every bet settles off the raw numbers; showing them off the low
+        golfer is arithmetic on the screen and nowhere else.
+
+        Four identical fives, and the hole is not a wash — which is the shape
+        of this game in one line. Hole 1 is stroke index 7, so a gap only pays
+        a shot when it reaches that far down the card: Jim is 11 clear of Sean
+        and takes one from him, but only 6 clear of Ryan and 1 clear of Paul,
+        so those two halve.
+        """
+        h = self._hole()
+        by = {l['short_name']: l for l in h['lines']}
+        self.assertEqual(by['S']['outcome'], 'lost')
+        self.assertEqual(by['R']['outcome'], 'tied')
+        self.assertEqual(by['P']['outcome'], 'tied')
+        self.assertEqual(h['banker_delta'], Decimal('10'))
+
+
+class BankerCardPlanTests(TestCase):
+    """The shared card shows the stroke PLAN, so it has to be complete on the
+    first tee — a card that fills in as it is played cannot be read forwards,
+    which is most of what a card is for."""
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['banker'])
+        self.fs = make_foursome(self.round,
+                                [('Paul', 16), ('Sean', 6), ('Jim', 17),
+                                 ('Ryan', 11)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        setup_banker(self.fs, first_banker_id=self.pid['Jim'])
+
+    def _grid(self):
+        return {h['hole']: h for h in banker_summary(self.fs)['grid']}
+
+    def test_the_whole_plan_is_there_before_a_ball_is_struck(self):
+        grid = self._grid()
+        self.assertEqual(len(grid), 18)
+        planned = sum(1 for h in grid.values()
+                      for sc in h['scores'] if sc['strokes'] > 0)
+        self.assertGreater(planned, 0)
+
+    def test_holes_nobody_has_reached_still_carry_their_strokes(self):
+        """The bug this replaced: with no banker on a future hole there was
+        nobody for a pairwise dot to be pairwise with, so every hole ahead
+        showed an empty plan."""
+        grid = self._grid()
+        # Hole 18 has no banker and never will until it is reached.
+        self.assertIsNone(grid[18]['banker_id'])
+        self.assertTrue(any(sc['strokes'] > 0 for sc in grid[18]['scores']))
+
+    def test_the_low_golfer_never_carries_a_dot(self):
+        grid = self._grid()
+        for h in grid.values():
+            for sc in h['scores']:
+                if sc['player_id'] == self.pid['Sean']:
+                    self.assertEqual(sc['strokes'], 0)
+
+    def test_each_golfer_gets_his_whole_allocation_over_the_round(self):
+        """Off the low man, so the totals are the gaps: Ryan 5, Paul 10,
+        Jim 11 — the same numbers the `gets` chips state."""
+        grid = self._grid()
+        got = {}
+        for h in grid.values():
+            for sc in h['scores']:
+                got[sc['player_id']] = got.get(sc['player_id'], 0) + sc['strokes']
+        self.assertEqual(got[self.pid['Ryan']], 5)
+        self.assertEqual(got[self.pid['Paul']], 10)
+        self.assertEqual(got[self.pid['Jim']], 11)
+
+    def test_gold_marks_who_banked_and_nothing_else(self):
+        grid = self._grid()
+        self.assertEqual(grid[1]['banker_id'], self.pid['Jim'])
+        self.assertIsNone(grid[1]['winner_id'])
+
+
+class BankerHoleShapeTests(TestCase):
+    """Every hole in the summary answers the same questions, opened or not — a
+    reader that works for sixteen holes and trips on the seventeenth is worse
+    than one that never worked."""
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['banker'])
+        self.fs = make_foursome(self.round,
+                                [('Paul', 0), ('Dave', 0), ('Sam', 0),
+                                 ('Lee', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        setup_banker(self.fs, first_banker_id=self.pid['Paul'])
+
+    def test_an_unopened_hole_has_the_same_keys_as_an_opened_one(self):
+        holes = banker_summary(self.fs)['holes']
+        opened = next(h for h in holes if h['banker_id'] is not None)
+        unopened = next(h for h in holes if h['banker_id'] is None)
+        self.assertEqual(set(opened), set(unopened))
+
+    def test_an_unopened_hole_still_knows_its_own_card(self):
+        h = next(x for x in banker_summary(self.fs)['holes'] if x['hole'] == 3)
+        self.assertEqual(h['par'], 3)
+        self.assertEqual(h['stroke_index'], 15)
+        self.assertTrue(h['is_par_3'])
+
+
+class BankerThreeHandedTests(TestCase):
+    """One banker and TWO opponents. The format does not need a fourth — it
+    needs somebody to bank and somebody to bet against him — so every count
+    that assumes three bets has to hold at two."""
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['banker'])
+        self.fs = make_foursome(self.round,
+                                [('Paul', 8), ('Dave', 12), ('Sam', 4)],
+                                tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        self.game = setup_banker(self.fs, first_banker_id=self.pid['Paul'],
+                                 min_bet=5, max_bet=50)
+
+    def _play(self, hole, bets, scores, counter=False):
+        set_hole_max(self.fs, hole, max(bets.values()))
+        for n, amt in bets.items():
+            place_bet(self.fs, hole, self.pid[n], amt)
+        lock_bets(self.fs, hole)
+        if counter:
+            set_counter(self.fs, hole)
+        submit_hole(self.fs, hole,
+                    [(self.pid[n], v) for n, v in scores.items()])
+
+    def test_the_lock_wants_two_bets_not_three(self):
+        set_hole_max(self.fs, 1, 20)
+        place_bet(self.fs, 1, self.pid['Dave'], 10)
+        with self.assertRaises(ValueError):
+            lock_bets(self.fs, 1)          # Sam still to bet
+        place_bet(self.fs, 1, self.pid['Sam'], 10)
+        self.assertIsNotNone(lock_bets(self.fs, 1).locked_at)
+
+    def test_two_one_on_ones_settle_and_the_table_is_zero_sum(self):
+        self._play(1, {'Dave': 10, 'Sam': 20},
+                   {'Paul': 5, 'Dave': 4, 'Sam': 6}, counter=True)
+        s = banker_summary(self.fs)
+        self.assertEqual(s['bets_settled'], 2)
+        self.assertEqual(sum(p['total'] for p in s['players']), Decimal('0'))
+
+    def test_the_ladder_counts_two_opponents(self):
+        """Nobody setting up a three-handed game should be shown a four-handed
+        worst case."""
+        ladder = exposure_ladder(self.game, 2)
+        self.assertEqual(ladder[0]['label'], '2 opponents at the max')
+        self.assertEqual(ladder[0]['amount'], Decimal('100'))
+        self.assertEqual(ladder[-1]['amount'], Decimal('1200'))
+
+    def test_the_summary_reports_a_two_opponent_ladder_by_itself(self):
+        rungs = banker_summary(self.fs)['exposure_ladder']
+        self.assertEqual(rungs[0]['label'], '2 opponents at the max')
+
+    def test_the_bank_still_rotates_between_three(self):
+        self._play(1, {'Dave': 10, 'Sam': 10},
+                   {'Paul': 6, 'Dave': 4, 'Sam': 6})
+        nxt = open_next_hole(self.fs, 1)
+        self.assertEqual(nxt.banker_id, self.pid['Dave'])
+
+    def test_the_card_carries_all_three_rows(self):
+        self._play(1, {'Dave': 10, 'Sam': 10},
+                   {'Paul': 5, 'Dave': 4, 'Sam': 6})
+        s = banker_summary(self.fs)
+        self.assertEqual(len(s['grid_players']), 3)
+        self.assertEqual(len(s['grid'][0]['scores']), 3)
+
+
+class BankerLossCapTests(TestCase):
+    """The loss cap is a THRESHOLD, not a clamp.
+
+    Nothing already owed is forgiven and no total is scaled — which is what
+    keeps this game's itemised receipt honest, since it is the only settlement
+    in the app that names who owes whom for which hole. What the cap changes is
+    the future: at his ceiling a golfer is cut off from the ACTION, not from
+    the game.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['banker'])
+        self.fs = make_foursome(self.round,
+                                [('Paul', 0), ('Dave', 0), ('Sam', 0),
+                                 ('Lee', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        # Each golfer names his own number. Dave says $40; nobody else caps.
+        self.game = setup_banker(
+            self.fs, first_banker_id=self.pid['Paul'], min_bet=5, max_bet=50,
+            loss_caps={self.pid['Dave']: 40})
+
+    def _hole(self, hole, banker, bets, scores, doubles=(), counter=False):
+        row = self.game.holes.filter(hole_number=hole).first()
+        if row is None:
+            row = BankerHole.objects.create(game=self.game, hole_number=hole,
+                                            banker_id=self.pid[banker])
+        set_hole_max(self.fs, hole, max(bets.values()))
+        for n, amt in bets.items():
+            place_bet(self.fs, hole, self.pid[n], amt)
+        lock_bets(self.fs, hole)
+        for n in doubles:
+            set_double(self.fs, hole, self.pid[n])
+        if counter:
+            set_counter(self.fs, hole)
+        submit_hole(self.fs, hole,
+                    [(self.pid[n], v) for n, v in scores.items()])
+
+    def _open(self, hole, banker='Paul'):
+        BankerHole.objects.get_or_create(
+            game=self.game, hole_number=hole,
+            defaults={'banker_id': self.pid[banker]})
+
+    def _sink_dave(self, amount=50):
+        """Dave loses in one hole — past a $40 cap."""
+        self._hole(1, 'Paul', {'Dave': amount, 'Sam': 5, 'Lee': 5},
+                   {'Paul': 4, 'Dave': 5, 'Sam': 4, 'Lee': 4})
+
+    def _totals(self):
+        return {p['short_name']: p for p in banker_summary(self.fs)['players']}
+
+    # -- the threshold -------------------------------------------------------
+
+    def test_nothing_already_owed_is_forgiven(self):
+        """He is $50 down against a $40 cap and he owes all fifty. A clamp
+        would have quietly rewritten a hole the group had already read out."""
+        self._sink_dave()
+        self.assertEqual(self._totals()['D']['total'], Decimal('-50'))
+        self.assertEqual(self._totals()['P']['total'], Decimal('50'))
+
+    def test_the_table_still_balances(self):
+        self._sink_dave()
+        self.assertEqual(
+            sum(p['total'] for p in banker_summary(self.fs)['players']),
+            Decimal('0'))
+
+    def test_crossing_the_line_cuts_him_off(self):
+        self._sink_dave()
+        me = self._totals()['D']
+        self.assertTrue(me['cut_off'])
+        self.assertEqual(me['cut_off_hole'], 1)
+        self.assertFalse(self._totals()['S']['cut_off'])
+
+    # -- what being cut off costs him ---------------------------------------
+
+    def test_he_is_held_to_the_floor(self):
+        self._sink_dave()
+        self._open(2)
+        set_hole_max(self.fs, 2, 50)
+        bet = place_bet(self.fs, 2, self.pid['Dave'], 50)
+        self.assertEqual(bet.amount, Decimal('5'))     # the round's floor
+
+    def test_he_cannot_double(self):
+        self._sink_dave()
+        self._open(2)
+        set_hole_max(self.fs, 2, 20)
+        for n in ('Dave', 'Sam', 'Lee'):
+            place_bet(self.fs, 2, self.pid[n], 20 if n != 'Dave' else 5)
+        lock_bets(self.fs, 2)
+        with self.assertRaises(ValueError):
+            set_double(self.fs, 2, self.pid['Dave'])
+        set_double(self.fs, 2, self.pid['Sam'])        # unaffected
+
+    def test_the_counter_goes_past_him(self):
+        """One decision that lands on every standing bet — except the one the
+        cap has taken out of the action."""
+        self._sink_dave()
+        self._hole(2, 'Paul', {'Dave': 5, 'Sam': 20, 'Lee': 20},
+                   {'Paul': 5, 'Dave': 6, 'Sam': 6, 'Lee': 6}, counter=True)
+        lines = {l['short_name']: l
+                 for l in banker_summary(self.fs)['holes'][1]['lines']}
+        self.assertEqual(lines['D']['stake'], Decimal('5'))    # not doubled
+        self.assertTrue(lines['D']['capped'])
+        self.assertFalse(lines['D']['countered'])
+        self.assertEqual(lines['S']['stake'], Decimal('40'))   # doubled
+
+    def test_he_cannot_take_the_bank(self):
+        """The role is the biggest exposure in the game — three bets at once —
+        so handing it to the man the cap protects would undo it in one hole."""
+        self._sink_dave()
+        self._open(2)
+        # Dave has the low net and cannot have it; Sam is next, outright.
+        self._hole(2, 'Paul', {'Dave': 5, 'Sam': 20, 'Lee': 20},
+                   {'Paul': 5, 'Dave': 3, 'Sam': 4, 'Lee': 5})
+        nxt = open_next_hole(self.fs, 2)
+        self.assertEqual(nxt.banker_id, self.pid['Sam'])
+
+    def test_when_the_low_net_is_cut_off_the_rest_can_still_tie_for_it(self):
+        """Skipping him does not skip the question — the two behind him are
+        level, and a phone still cannot see who holed out first."""
+        self._sink_dave()
+        self._open(2)
+        self._hole(2, 'Paul', {'Dave': 5, 'Sam': 20, 'Lee': 20},
+                   {'Paul': 5, 'Dave': 3, 'Sam': 5, 'Lee': 5})
+        s = banker_summary(self.fs)
+        self.assertEqual(s['awaiting_tie'], 2)
+        # Paul is among them: he banked the hole, and a banker with the low
+        # net keeps the role like anybody else. Dave, who actually had it, is
+        # the only man skipped.
+        self.assertEqual({c['short_name'] for c in s['tie_candidates']},
+                         {'P', 'S', 'L'})
+
+    # -- and what it does not do --------------------------------------------
+
+    def test_he_can_still_drift_past_his_own_ceiling(self):
+        """A soft landing, not an exit — the cap buys him the minimum, not
+        immunity."""
+        self._sink_dave()
+        self._open(2)
+        self._hole(2, 'Paul', {'Dave': 5, 'Sam': 5, 'Lee': 5},
+                   {'Paul': 4, 'Dave': 6, 'Sam': 4, 'Lee': 4})
+        self.assertEqual(self._totals()['D']['total'], Decimal('-55'))
+
+    def test_winning_back_does_not_restore_his_doubles(self):
+        """Cut off by the house until the next round. A cap that switched off
+        and on again would be a free option: lose to the line, take the
+        protection, win a hole, hand it back."""
+        # $42 down against a $40 cap, so ONE floor win puts him back above it —
+        # which is the whole point of the test.
+        self._sink_dave(42)
+        self._open(2)
+        self._hole(2, 'Paul', {'Dave': 5, 'Sam': 50, 'Lee': 50},
+                   {'Paul': 6, 'Dave': 3, 'Sam': 3, 'Lee': 3})
+        # Gross 3 on a par 4 is a birdie, so his floor $5 doubles to $10 —
+        # the cap took his CALLS, not his golf.
+        me = self._totals()['D']
+        self.assertEqual(me['total'], Decimal('-32'))     # back above the line
+        self.assertTrue(me['cut_off'])
+
+    def test_the_birdie_bonus_still_reaches_him(self):
+        """The cap takes away what he can CALL, not what he earns. A birdie is
+        not aggression — it is a good shot — and a capped golfer holing one
+        still doubles his own floor bet."""
+        self._sink_dave()
+        self._open(2)
+        self._hole(2, 'Paul', {'Dave': 5, 'Sam': 5, 'Lee': 5},
+                   {'Paul': 5, 'Dave': 3, 'Sam': 5, 'Lee': 5})
+        line = next(l for l in banker_summary(self.fs)['holes'][1]['lines']
+                    if l['short_name'] == 'D')
+        self.assertTrue(line['birdie'])
+        self.assertEqual(line['amount'], Decimal('10'))   # $5 floor, doubled
+
+    def test_the_live_hole_never_moves_the_line(self):
+        """Settled holes only — Nassau's non-aggressive rule. Being cut off has
+        to be a fact about what has already happened, or a golfer would lose
+        his double halfway through calling it."""
+        set_hole_max(self.fs, 1, 50)
+        for n in ('Dave', 'Sam', 'Lee'):
+            place_bet(self.fs, 1, self.pid[n], 50)
+        lock_bets(self.fs, 1)
+        set_double(self.fs, 1, self.pid['Dave'])          # still allowed
+        self.assertEqual(self.game.holes.get(hole_number=1)
+                         .bets.get(player_id=self.pid['Dave'])
+                         .own_multiplier, 2)
+
+    def test_no_cap_means_no_cut_off(self):
+        setup_banker(self.fs, first_banker_id=self.pid['Paul'],
+                     min_bet=5, max_bet=50)
+        self._sink_dave()
+        self.assertFalse(self._totals()['D']['cut_off'])
+        self.assertEqual(self._totals()['D']['total'], Decimal('-50'))
+
+    def test_each_golfer_carries_his_own_number(self):
+        """Four golfers, four appetites — one man's ceiling must not cut
+        anybody else off."""
+        setup_banker(self.fs, first_banker_id=self.pid['Paul'],
+                     min_bet=5, max_bet=50,
+                     loss_caps={self.pid['Dave']: 40, self.pid['Sam']: 200})
+        self._hole(1, 'Paul', {'Dave': 50, 'Sam': 50, 'Lee': 50},
+                   {'Paul': 4, 'Dave': 5, 'Sam': 5, 'Lee': 5})
+        t = self._totals()
+        self.assertTrue(t['D']['cut_off'])        # $50 down against $40
+        self.assertFalse(t['S']['cut_off'])       # $50 down against $200
+        self.assertFalse(t['L']['cut_off'])       # no number at all
+        self.assertEqual(t['D']['loss_cap'], Decimal('40'))
+        self.assertIsNone(t['L']['loss_cap'])
+
+    def test_a_zero_is_not_a_cap(self):
+        """A golfer who declined to name one is playing without a cap, not
+        with a cap of nothing."""
+        setup_banker(self.fs, first_banker_id=self.pid['Paul'],
+                     min_bet=5, max_bet=50, loss_caps={self.pid['Dave']: 0})
+        self._sink_dave()
+        self.assertFalse(self._totals()['D']['cut_off'])
+
+
+class BankerCapInputTests(TestCase):
+    """`loss_caps` arrives as JSON from a client, so the keys are whatever the
+    client sent. A key that names no golfer caps nobody — it must not take the
+    whole setup down."""
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['banker'])
+        self.fs = make_foursome(self.round,
+                                [('Paul', 0), ('Dave', 0), ('Sam', 0),
+                                 ('Lee', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+
+    def _setup(self, caps):
+        return setup_banker(self.fs, first_banker_id=self.pid['Paul'],
+                            min_bet=5, max_bet=50, loss_caps=caps)
+
+    def test_a_key_that_names_nobody_is_dropped_not_raised(self):
+        """A client once sent the literal string '$k' for every key — an
+        un-interpolated template — and it raised out of a POST that was
+        otherwise perfectly good."""
+        game = self._setup({'$k': 100, self.pid['Dave']: 40})
+        self.assertEqual(cap_for(game, self.pid['Dave']), Decimal('40'))
+
+    def test_an_amount_that_is_not_a_number_is_dropped(self):
+        game = self._setup({self.pid['Dave']: 'lots'})
+        self.assertIsNone(cap_for(game, self.pid['Dave']))
+
+    def test_string_keys_and_int_keys_both_land(self):
+        """JSON round-trips the map with string keys; the app sends ints."""
+        game = self._setup({str(self.pid['Dave']): 40})
+        self.assertEqual(cap_for(game, self.pid['Dave']), Decimal('40'))
+
+
+class BankerHoleCapTests(TestCase):
+    """The hole cap: one ceiling on what a single hole can reach, all bets and
+    doubles included.
+
+    It used to live only inside `hole_exposure`, so the banner obeyed it and
+    the settlement did not — the screen promised a ceiling and the money went
+    straight through it.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['banker'])
+        self.fs = make_foursome(self.round,
+                                [('Paul', 0), ('Dave', 0), ('Sam', 0),
+                                 ('Lee', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+
+    def _game(self, cap=None):
+        return setup_banker(self.fs, first_banker_id=self.pid['Paul'],
+                            min_bet=5, max_bet=50,
+                            hole_cap_enabled=cap is not None,
+                            hole_cap_amount=cap)
+
+    def _play(self, bets, scores, counter=False):
+        set_hole_max(self.fs, 1, max(bets.values()))
+        for n, amt in bets.items():
+            place_bet(self.fs, 1, self.pid[n], amt)
+        lock_bets(self.fs, 1)
+        if counter:
+            set_counter(self.fs, 1)
+        submit_hole(self.fs, 1,
+                    [(self.pid[n], v) for n, v in scores.items()])
+        return banker_summary(self.fs)['holes'][0]
+
+    def test_the_settlement_obeys_the_ceiling(self):
+        self._game(cap=60)
+        # $150 at stake, doubled by the counter to $300, capped to $60.
+        h = self._play({'Dave': 50, 'Sam': 50, 'Lee': 50},
+                       {'Paul': 4, 'Dave': 5, 'Sam': 5, 'Lee': 5},
+                       counter=True)
+        self.assertTrue(h['hole_capped'])
+        self.assertEqual(sum(l['stake'] for l in h['lines']), Decimal('60'))
+        self.assertEqual(h['banker_delta'], Decimal('60'))
+
+    def test_without_the_cap_the_same_hole_runs_to_three_hundred(self):
+        self._game()
+        h = self._play({'Dave': 50, 'Sam': 50, 'Lee': 50},
+                       {'Paul': 4, 'Dave': 5, 'Sam': 5, 'Lee': 5},
+                       counter=True)
+        self.assertFalse(h['hole_capped'])
+        self.assertEqual(h['banker_delta'], Decimal('300'))
+
+    def test_the_banner_and_the_settlement_agree(self):
+        """They disagreed before: the exposure obeyed the cap and the money
+        did not, so the screen was quietly lying about both."""
+        self._game(cap=60)
+        h = self._play({'Dave': 50, 'Sam': 50, 'Lee': 50},
+                       {'Paul': 4, 'Dave': 5, 'Sam': 5, 'Lee': 5},
+                       counter=True)
+        self.assertEqual(h['exposure'], Decimal('60'))
+        self.assertEqual(sum(l['stake'] for l in h['lines']), h['exposure'])
+
+    def test_every_bet_is_scaled_by_the_same_factor(self):
+        """A hole is one closed settlement, so scaling inside it is honest —
+        and each golfer keeps his share of the hole."""
+        self._game(cap=50)
+        # $100 at stake against a $50 ceiling — everything halves, and Dave
+        # still owns half the hole.
+        h = self._play({'Dave': 50, 'Sam': 25, 'Lee': 25},
+                       {'Paul': 4, 'Dave': 5, 'Sam': 5, 'Lee': 5})
+        by = {l['short_name']: l['stake'] for l in h['lines']}
+        self.assertEqual(by['D'], Decimal('25.00'))
+        self.assertEqual(by['S'], Decimal('12.50'))
+        self.assertEqual(by['L'], Decimal('12.50'))
+        self.assertEqual(sum(by.values()), Decimal('50.00'))
+
+    def test_a_hole_under_the_ceiling_is_untouched(self):
+        self._game(cap=500)
+        h = self._play({'Dave': 10, 'Sam': 10, 'Lee': 10},
+                       {'Paul': 4, 'Dave': 5, 'Sam': 5, 'Lee': 5})
+        self.assertFalse(h['hole_capped'])
+        self.assertEqual(h['banker_delta'], Decimal('30'))
+
+    def test_the_table_still_balances_under_the_cap(self):
+        self._game(cap=60)
+        self._play({'Dave': 50, 'Sam': 50, 'Lee': 50},
+                   {'Paul': 4, 'Dave': 3, 'Sam': 5, 'Lee': 5}, counter=True)
+        self.assertEqual(
+            sum(p['total'] for p in banker_summary(self.fs)['players']),
+            Decimal('0'))

@@ -400,6 +400,7 @@ class ApiClient {
     bool birdieBonus = true,
     bool holeCapEnabled = false,
     double? holeCapAmount,
+    Map<int, double> lossCaps = const {},
   }) async {
     final data = await _post('/foursomes/$foursomeId/banker/setup/', {
       'first_banker_id'    : firstBankerId,
@@ -414,6 +415,8 @@ class ApiClient {
       'birdie_bonus'       : birdieBonus,
       'hole_cap_enabled'   : holeCapEnabled,
       if (holeCapAmount != null) 'hole_cap_amount': holeCapAmount,
+      if (lossCaps.isNotEmpty)
+        'loss_caps': lossCaps.map((k, v) => MapEntry(k.toString(), v)),
     });
     return BankerSummary.fromJson((data as Map).cast<String, dynamic>());
   }

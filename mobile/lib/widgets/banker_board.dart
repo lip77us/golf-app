@@ -21,6 +21,7 @@ import 'package:flutter/material.dart';
 
 import '../api/models.dart';
 import '../theme/halved_brand.dart';
+import 'hole_grid_scorecard.dart';
 
 const _gold      = Color(0xFFB8860B);
 const _goldFill  = Color(0xFFFBF0D6);
@@ -69,6 +70,7 @@ class BankerGroupCard extends StatelessWidget {
           _swings(s),
           const SizedBox(height: 16),
           _card(s, cols),
+          _limits(s, cols),
         ]),
       ),
     );
@@ -146,6 +148,7 @@ class BankerGroupCard extends StatelessWidget {
         _totalRow('AS BANKER', cols, (p) => p.banking, muted: true),
         _totalRow('AS A PLAYER', cols, (p) => p.betting, muted: true),
         _bankedRow(s, cols),
+        _getsRow(s, cols),
       ]),
     );
   }
@@ -321,6 +324,100 @@ class BankerGroupCard extends StatelessWidget {
     );
   }
 
+  /// What each golfer gets off the LOW man — the number every stroke in this
+  /// game is a difference of, so the card below can be checked against it.
+  /// The low man reads 0, which is the point: one end of every gap is fixed.
+  Widget _getsRow(BankerSummary s, List<BankerPlayerTotal> cols) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: Color(0xFFF1F5F1))),
+        ),
+        child: Row(children: [
+          const SizedBox(
+            width: 44,
+            child: Text('GETS',
+                style: TextStyle(
+                    fontSize: 10, fontWeight: FontWeight.w700,
+                    color: Halved.muted)),
+          ),
+          for (final p in cols)
+            Expanded(
+              child: Text('${p.playingHandicap ?? 0}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 12.5, fontWeight: FontWeight.w700,
+                      color: Halved.pine)),
+            ),
+        ]),
+      );
+
+  /// **What the group agreed to, stated where the money is read.**
+  ///
+  /// Both caps were invisible once the round started: they were typed on a
+  /// setup screen nobody goes back to, and then silently shaped every hole.
+  /// A ceiling you cannot see is one you cannot check — and the first thing a
+  /// golfer does when a number surprises him is look for the rule that
+  /// produced it.
+  Widget _limits(BankerSummary s, List<BankerPlayerTotal> cols) {
+    final capped = cols.where((p) => p.lossCap != null).toList();
+    if (s.holeCap == null && capped.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: Halved.card,
+        border: Border.all(color: Halved.cardBorder),
+        borderRadius: BorderRadius.circular(Halved.rChip),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('THE LIMITS',
+            style: TextStyle(
+                fontSize: 10.5, fontWeight: FontWeight.w700,
+                letterSpacing: 0.5, color: Halved.muted)),
+        const SizedBox(height: 6),
+        if (s.holeCap != null)
+          _limitRow('Any one hole',
+              '\$${s.holeCap!.round()} — bets scale to fit'),
+        for (final p in capped)
+          _limitRow(p.name,
+              p.cutOff
+                  ? 'cut off on ${_ordinal(p.cutOffHole ?? 0)} — '
+                    'floor bets since'
+                  : 'cuts off at \$${p.lossCap!.round()}',
+              tone: p.cutOff ? _owed : null),
+        if (s.holeCap == null)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text('No ceiling on a single hole.',
+                style: TextStyle(fontSize: 11.5, color: Halved.muted)),
+          ),
+      ]),
+    );
+  }
+
+  Widget _limitRow(String label, String value, {Color? tone}) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(children: [
+          Expanded(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13)),
+          ),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 12.5, fontWeight: FontWeight.w600,
+                  color: tone ?? Halved.muted)),
+        ]),
+      );
+
+  String _ordinal(int n) {
+    if (n >= 11 && n <= 13) return '${n}th';
+    return switch (n % 10) {
+      1 => '${n}st', 2 => '${n}nd', 3 => '${n}rd', _ => '${n}th'
+    };
+  }
+
   // -- the biggest holes ----------------------------------------------------
 
   /// A Banker round is nearly always settled by two or three holes where a
@@ -369,10 +466,21 @@ class BankerGroupCard extends StatelessWidget {
 
   Color _goldPanelFor(BankerSwing w) => const Color(0xFFFDF8EC);
 
-  // -- the net card ---------------------------------------------------------
+  // -- the card -------------------------------------------------------------
 
+  /// The SAME grid the entry screen draws — header shading, a stroke-index
+  /// row, gold on whoever banked. There used to be a bespoke net card here
+  /// with its own marks, and it was the only card in the app that looked like
+  /// itself: a golfer who had just read the hole on entry had to re-learn it
+  /// on the board. One idiom is worth more than the cleverer card.
   Widget _card(BankerSummary s, List<BankerPlayerTotal> cols) =>
-      BankerNetCard(summary: s);
+      s.grid.isEmpty
+          ? const SizedBox.shrink()
+          : HoleGridScorecard(
+              holes: s.grid,
+              participants: s.gridPlayers,
+              legend: null,
+            );
 
   // -- small helpers --------------------------------------------------------
 
@@ -387,120 +495,3 @@ class BankerGroupCard extends StatelessWidget {
   }
 }
 
-
-/// The net card, drawn identically wherever it appears.
-///
-/// The packet ships it as one file with two consumers — the play surface and
-/// the leaderboard — and that is the point: a card that disagreed with itself
-/// between two screens would be worse than no card.
-///
-/// **Net, and with no stroke dot.** The one place Banker departs from every
-/// other card in the app: a hole here is three net comparisons against the
-/// banker, and gross would make the reader do the subtraction four times a row
-/// to check a single bet.
-///
-/// **The whole handicap of a match is carried on the opponent's side of it**,
-/// because under strokes-off the banker holds a different relationship in each
-/// of the three and there is no single "his net" for his column. Where he
-/// receives the shot it is added to the opponent instead. Identical
-/// arithmetic, one honest column, and every comparison direct.
-///
-/// Two marks and nothing else: **gold is the banker, a green box beat him.**
-/// Unmarked lost to him or tied him — and since a tie is no action, unmarked
-/// does not mean paid.
-class BankerNetCard extends StatelessWidget {
-  const BankerNetCard({super.key, required this.summary, this.title = 'THE CARD'});
-
-  final BankerSummary summary;
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    final rows = (summary.scorecard['rows'] as List? ?? [])
-        .map((e) => (e as Map).cast<String, dynamic>())
-        .toList();
-    if (rows.isEmpty) return const SizedBox.shrink();
-    final holes = (summary.scorecard['holes'] as List? ?? []).cast<int>();
-    // Cut to the holes already posted, so the hole being entered stays blank
-    // rather than showing a half-finished row.
-    final played = holes
-        .where((h) => rows.any((r) => _at(r['net'], h) != null))
-        .toList();
-    if (played.isEmpty) return const SizedBox.shrink();
-
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Text(title,
-            style: const TextStyle(
-                fontSize: 10.5, fontWeight: FontWeight.w700,
-                letterSpacing: 0.5, color: Halved.muted)),
-        const SizedBox(width: 8),
-        const Text('net · gold banked · green beat him',
-            style: TextStyle(fontSize: 10.5, color: Halved.muted)),
-      ]),
-      const SizedBox(height: 6),
-      SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const SizedBox(width: 52),
-            for (final h in played)
-              SizedBox(
-                width: 30,
-                child: Text('$h',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 10.5, fontWeight: FontWeight.w700,
-                        color: Halved.muted)),
-              ),
-          ]),
-          for (final r in rows)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Row(children: [
-                SizedBox(
-                  width: 52,
-                  child: Text('${r['short_name']}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w600)),
-                ),
-                for (final h in played) _cell(r, h),
-              ]),
-            ),
-        ]),
-      ),
-    ]);
-  }
-
-  Widget _cell(Map<String, dynamic> row, int hole) {
-    final v      = _at(row['net'], hole);
-    final banked = _at(row['banked'], hole) == true;
-    final beat   = _at(row['beat'], hole) == true;
-    return Container(
-      width: 30,
-      height: 24,
-      margin: const EdgeInsets.symmetric(horizontal: 0.5),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: banked ? _goldFill : null,
-        border: beat
-            ? Border.all(color: Halved.pine, width: 1.4)
-            : banked ? Border.all(color: _goldLine) : null,
-        borderRadius: BorderRadius.circular(5),
-      ),
-      child: Text(v == null ? '' : '$v',
-          style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: (banked || beat) ? FontWeight.w700 : FontWeight.w500,
-              color: banked ? _gold : beat ? Halved.pine : Halved.deepPine)),
-    );
-  }
-
-  /// JSON object keys arrive as strings; a map built in Dart keys on int.
-  static dynamic _at(dynamic map, int hole) {
-    if (map is! Map) return null;
-    return map['$hole'] ?? map[hole];
-  }
-}

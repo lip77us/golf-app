@@ -3516,6 +3516,22 @@ class BankerGame(models.Model):
     allow_counter       = models.BooleanField(default=True)
     par3_triples        = models.BooleanField(default=True)
     birdie_bonus        = models.BooleanField(default=True)
+    # **Per golfer, because it is his own risk tolerance and not a house
+    # rule.** `{player_id: amount}`, and a golfer with no entry has no cap.
+    # The hole cap above is one number for everybody — a ceiling on what any
+    # single hole can reach — but how much a man is willing to lose over a
+    # round is his to name, and four golfers will name four numbers.
+    #
+    # **A threshold, not a ceiling.** Once a golfer's SETTLED losses reach his
+    # own, he is cut off — floor bets, no doubles, the counter skips him, and
+    # he cannot take the bank — but nothing he already owes is forgiven and he
+    # can still drift past the number at the minimum. That is what keeps the
+    # itemised receipt honest: every debt stands exactly as agreed on the tee,
+    # and the cap changes only what happens NEXT.
+    #
+    # Irreversible for the round. Winning back above the line does not restore
+    # his doubles — he has been cut off by the house until next time.
+    loss_caps        = models.JSONField(default=dict, blank=True)
     hole_cap_enabled = models.BooleanField(default=False)
     hole_cap_amount  = models.DecimalField(max_digits=9, decimal_places=2,
                                            null=True, blank=True)

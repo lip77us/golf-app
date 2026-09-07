@@ -6840,6 +6840,17 @@ class BankerBetLine {
   final double amount;
   final int    strokes;
   final String strokeNote;
+  /// His loss cap took this bet out of the action — floor stake, no double,
+  /// and the banker's counter went past him.
+  final bool   capped;
+  /// The WHS index, so a screen can order the opponents by it — in this game
+  /// a handicap only ever matters as a difference from the banker's, which
+  /// makes index order the order the strokes are in.
+  final double handicapIndex;
+  /// The playing handicap this golfer is off. His strokes in this match are
+  /// the gap between it and the banker's, allocated by stroke index — with
+  /// both on screen the differential can be checked without leaving it.
+  final int?   playingHandicap;
   final int?   bankerNet;
   final int?   net;
   final int?   gross;
@@ -6848,8 +6859,10 @@ class BankerBetLine {
     required this.playerId, required this.name, required this.shortName,
     required this.bet, required this.ownMultiplier, required this.countered,
     required this.birdie, required this.stake, required this.chain,
+    this.capped = false,
     required this.outcome, required this.amount, required this.strokes,
-    required this.strokeNote, this.bankerNet, this.net, this.gross,
+    required this.strokeNote, this.handicapIndex = 0, this.playingHandicap,
+    this.bankerNet, this.net, this.gross,
   });
 
   factory BankerBetLine.fromJson(Map<String, dynamic> j) => BankerBetLine(
@@ -6860,12 +6873,15 @@ class BankerBetLine {
         ownMultiplier: j['own_multiplier'] as int? ?? 1,
         countered    : j['countered'] as bool? ?? false,
         birdie       : j['birdie'] as bool? ?? false,
+        capped       : j['capped'] as bool? ?? false,
         stake        : _d(j['stake']),
         chain        : j['chain'] as String? ?? '',
         outcome      : j['outcome'] as String? ?? 'open',
         amount       : _d(j['amount']),
         strokes      : j['strokes'] as int? ?? 0,
         strokeNote   : j['stroke_note'] as String? ?? '',
+        handicapIndex: _d(j['handicap_index']),
+        playingHandicap: j['playing_handicap'] as int?,
         bankerNet    : j['banker_net'] as int?,
         net          : j['net'] as int?,
         gross        : j['gross'] as int?,
@@ -6885,13 +6901,23 @@ class BankerBetLine {
 class BankerHoleState {
   final int     hole;
   final int?    par;
+  /// The stroke index. Not decoration here — it is what decides who strokes
+  /// in each of the three matches, so it belongs beside the par.
+  final int?    strokeIndex;
   final bool    isPar3;
   final int?    bankerId;
   final int?    bankerGross;
+  /// The playing handicap the banker is off. Shown on his row so a reader can
+  /// check the differential himself — the strokes in each match are the gap
+  /// between this and that opponent's, allocated by stroke index.
+  final int?    bankerHandicap;
   final double? maxBet;
   final bool    locked;
   final bool    countered;
   final String  tieReason;
+  /// The hole cap bit on this hole — every bet scaled so the whole hole fits
+  /// under the group's ceiling.
+  final bool    holeCapped;
   final List<BankerBetLine> lines;
   final double  bankerDelta;
   final bool    resolved;
@@ -6908,9 +6934,11 @@ class BankerHoleState {
   final List<String> outstanding;
 
   const BankerHoleState({
-    required this.hole, this.par, required this.isPar3, this.bankerId,
-    this.bankerGross, this.maxBet, required this.locked,
-    required this.countered, required this.tieReason, required this.lines,
+    required this.hole, this.par, this.strokeIndex, required this.isPar3,
+    this.bankerId,
+    this.bankerGross, this.bankerHandicap, this.maxBet, required this.locked,
+    required this.countered, required this.tieReason,
+    this.holeCapped = false, required this.lines,
     required this.bankerDelta, required this.resolved, required this.exposure,
     required this.exposureIfMax, required this.outstanding,
   });
@@ -6918,13 +6946,16 @@ class BankerHoleState {
   factory BankerHoleState.fromJson(Map<String, dynamic> j) => BankerHoleState(
         hole       : j['hole'] as int,
         par        : j['par'] as int?,
+        strokeIndex: j['stroke_index'] as int?,
         isPar3     : j['is_par_3'] as bool? ?? false,
         bankerId   : j['banker_id'] as int?,
         bankerGross: j['banker_gross'] as int?,
+        bankerHandicap: j['banker_handicap'] as int?,
         maxBet     : j['max_bet'] == null ? null : _d(j['max_bet']),
         locked     : j['locked'] as bool? ?? false,
         countered  : j['countered'] as bool? ?? false,
         tieReason  : j['tie_reason'] as String? ?? '',
+        holeCapped : j['hole_capped'] as bool? ?? false,
         lines      : ((j['lines'] as List?) ?? [])
             .map((e) => BankerBetLine.fromJson(
                 (e as Map).cast<String, dynamic>()))
@@ -6950,10 +6981,22 @@ class BankerPlayerTotal {
   final double banking;
   final double betting;
   final double total;
+  final double handicapIndex;
+  /// What he gets off the LOW golfer — the figure the screens show, so the
+  /// strokes in a match are the difference between two of them.
+  final int?   playingHandicap;
+  /// Cut off by the house until next round — floor bets, no doubles, no bank.
+  final bool   cutOff;
+  final int?   cutOffHole;
+  /// HIS OWN cap, because how much a man is willing to lose is his call and
+  /// not a house rule. Null when he named no number.
+  final double? lossCap;
 
   const BankerPlayerTotal({
     required this.playerId, required this.name, required this.shortName,
     required this.banking, required this.betting, required this.total,
+    this.handicapIndex = 0, this.playingHandicap,
+    this.cutOff = false, this.cutOffHole, this.lossCap,
   });
 
   factory BankerPlayerTotal.fromJson(Map<String, dynamic> j) =>
@@ -6961,6 +7004,11 @@ class BankerPlayerTotal {
         playerId : j['player_id'] as int,
         name     : j['name'] as String? ?? '',
         shortName: j['short_name'] as String? ?? '',
+        handicapIndex: _d(j['handicap_index']),
+        playingHandicap: j['playing_handicap'] as int?,
+        cutOff   : j['cut_off'] as bool? ?? false,
+        cutOffHole: j['cut_off_hole'] as int?,
+        lossCap  : j['loss_cap'] == null ? null : _d(j['loss_cap']),
         banking  : _d(j['banking']),
         betting  : _d(j['betting']),
         total    : _d(j['total']),
@@ -7016,6 +7064,7 @@ class BankerSummary {
   final double maxBet;
   final String rotationRule;
   final double? holeCap;
+
   final BankerRules rules;
   final List<Map<String, dynamic>> exposureLadder;
   final List<BankerPlayerTotal> players;
@@ -7032,7 +7081,16 @@ class BankerSummary {
   final int?   nextBankerId;
   final String nextBankerName;
   final List<BankerSwing> biggestSwings;
-  final Map<String, dynamic> scorecard;
+  /// `{bankerId: {opponentId: {hole: signed strokes}}}` for EVERY golfer as
+  /// banker, not only the one who currently is — a man choosing a bet needs
+  /// the shots ahead of him, and in this game those depend on who is banking.
+  /// Signed from the opponent's side: positive he receives, negative the
+  /// banker does.
+  final Map<String, dynamic> strokePlan;
+  /// The shared `HoleGridScorecard` payload, so Banker draws the card every
+  /// other game draws rather than a bespoke one that would drift from it.
+  final List<Map<String, dynamic>> grid;
+  final List<Map<String, dynamic>> gridPlayers;
   final List<Map<String, dynamic>> transfers;
 
   const BankerSummary({
@@ -7042,7 +7100,9 @@ class BankerSummary {
     required this.players, required this.holes, this.currentHole, this.current,
     this.awaitingTie, required this.tieCandidates, this.nextBankerId,
     this.nextBankerName = '', required this.biggestSwings,
-    required this.scorecard, required this.transfers,
+    this.strokePlan = const {},
+    this.grid = const [], this.gridPlayers = const [],
+    required this.transfers,
   });
 
   factory BankerSummary.fromJson(Map<String, dynamic> j) => BankerSummary(
@@ -7079,7 +7139,11 @@ class BankerSummary {
             .map((e) => BankerSwing.fromJson(
                 (e as Map).cast<String, dynamic>()))
             .toList(),
-        scorecard: ((j['scorecard'] as Map?) ?? {}).cast<String, dynamic>(),
+        strokePlan: ((j['stroke_plan'] as Map?) ?? {}).cast<String, dynamic>(),
+        grid: ((j['grid'] as List?) ?? [])
+            .map((e) => (e as Map).cast<String, dynamic>()).toList(),
+        gridPlayers: ((j['grid_players'] as List?) ?? [])
+            .map((e) => (e as Map).cast<String, dynamic>()).toList(),
         transfers: (((j['money'] as Map?) ?? {})['transfers'] as List? ?? [])
             .map((e) => (e as Map).cast<String, dynamic>()).toList(),
       );

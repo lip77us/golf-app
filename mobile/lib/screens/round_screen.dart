@@ -2044,14 +2044,22 @@ class _FoursomeCard extends StatelessWidget {
                           : Icons.edit_note,
                   size: 18,
                 ),
+                // **One rule for every game: Start Match, then Continue
+                // Match.** "Enter Scores" described what the button did in
+                // Skins and lied everywhere the round begins with something
+                // else — Sixes needed a draw, Banker needs a maximum and
+                // three bets before a ball is struck, and a group tapping it
+                // for scores went looking for a screen they had walked past.
+                // Where you are in the round is a fact every game shares, so
+                // it is the one thing the button says.
                 label: Text(
                   isComplete
                       ? 'View Scorecard'
                       : needsBracketSetup
                           ? 'Set Up Bracket →'
-                          : (sixesActive && !sixesStarted)
-                              ? 'Start Match'
-                              : 'Enter Scores',
+                          : foursome.hasAnyScore
+                              ? 'Continue Match'
+                              : 'Start Match',
                 ),
               ),
             ),

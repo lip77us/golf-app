@@ -474,6 +474,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     if (primary == 'skins' && rp.skinsSummary != null) {
       return (rp.skinsSummary!.handicapMode, rp.skinsSummary!.netPercent);
     }
+    // Banker settles strokes-off INSIDE each one-on-one, so the screen must
+    // not fall through to the round's full-net default — that is what made a
+    // scratch golfer show "gets 6" and a stroke he never receives. The
+    // per-row figures are overridden below; this stops the generic net path
+    // from claiming the row first.
+    if (primary == GameIds.banker && rp.bankerSummary != null) {
+      return ('strokes_off', 100);
+    }
     if (games.contains('sixes') && rp.sixesSummary != null) {
       return (rp.sixesSummary!.handicapMode, rp.sixesSummary!.netPercent);
     }
@@ -2235,6 +2243,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               if (games.contains('irish_rumble')) _irBallsBanner(ctx, rp),
               // Active hole score card
               _HoleScoreCard(
+                bankerSummary: resolvePrimary(
+                        rp.round?.primaryGame, games) == GameIds.banker
+                    ? rp.bankerSummary
+                    : null,
                 holeData:        holeData,
                 holeNumber:      _selectedHole,
                 courseName:      rp.round?.course.name ?? '',
@@ -2391,6 +2403,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                                   ?.grossScore) != null)
                       .length,
                   fieldSize: players.length,
+                  // What has been typed on this hole but not posted, so the
+                  // card below fills in as the group calls their numbers.
+                  pendingGross: {
+                    for (final e in (_pending[_selectedHole] ?? {}).entries)
+                      if (e.value != _kClearedScore) e.key: e.value,
+                  },
                 ),
                 const SizedBox(height: 4),
               ],
@@ -2486,6 +2504,10 @@ class _HoleScoreCard extends StatelessWidget {
   final FourballSummary?        fourballSummary;
   final TripleCupSummary?       tripleCupSummary;
   final Points531Summary?       points531Summary;
+  /// Banker's strokes are PAIRWISE — each opponent has one relationship, with
+  /// the banker, and the banker has three. A row can draw one dot, so the
+  /// summary comes down and `_strokesForHole` picks the right one per row.
+  final BankerSummary?          bankerSummary;
   final String                  handicapMode;
   final int                     netPercent;
   final bool                    allowJunk;
@@ -2554,6 +2576,7 @@ class _HoleScoreCard extends StatelessWidget {
     this.matchPlayData,
     this.isCupSingles = false,
     this.hasThreePersonMatch = false,
+    this.bankerSummary,
     required this.handicapMode,
     required this.netPercent,
     required this.allowJunk,
@@ -2804,6 +2827,53 @@ class _HoleScoreCard extends StatelessWidget {
     return 0;
   }
 
+  /// What this golfer gets off the BEST golfer in the group, or null when
+  /// this is not a Banker round. Zero for the low man himself.
+  int? _bankerGets(Membership m) {
+    final s = bankerSummary;
+    if (s == null) return null;
+    for (final p in s.players) {
+      if (p.playerId == m.player.id) return p.playingHandicap;
+    }
+    return null;
+  }
+
+  /// Banker's per-row stroke for a hole, or null when this is not a Banker
+  /// round (or the hole has no banker yet).
+  int? _bankerStrokes(Membership m, ScorecardHole? h) {
+    final s = bankerSummary;
+    if (s == null || h == null || s.strokePlan.isEmpty) return null;
+    final row = s.holes
+        .where((x) => x.hole == h.holeNumber && x.bankerId != null)
+        .firstOrNull;
+    if (row == null) return null;
+
+    // The reference is the banker for an opponent, and the lowest-index
+    // golfer for the banker himself.
+    var reference = row.bankerId!;
+    if (m.player.id == row.bankerId) {
+      final low = (List<BankerPlayerTotal>.from(s.players)
+            ..sort((a, b) => a.handicapIndex.compareTo(b.handicapIndex)))
+          .firstOrNull;
+      if (low == null || low.playerId == m.player.id) return 0;
+      reference = low.playerId;
+    }
+    final signed =
+        _planStrokes(s.strokePlan, reference, m.player.id, h.holeNumber);
+    // Negative means the reference receives from him — he strokes nowhere.
+    return signed > 0 ? signed : 0;
+  }
+
+  int _planStrokes(
+      Map<String, dynamic> plan, int banker, int player, int hole) {
+    final forBanker = plan['$banker'] ?? plan[banker];
+    if (forBanker is! Map) return 0;
+    final forPlayer = forBanker['$player'] ?? forBanker[player];
+    if (forPlayer is! Map) return 0;
+    final v = forPlayer['$hole'] ?? forPlayer[hole];
+    return v is int ? v : 0;
+  }
+
   int _strokesForHole(Membership m, ScorecardHole? h) {
     if (h == null || handicapMode == 'gross') return 0;
     final entry = h.scoreFor(m.player.id);
@@ -2819,6 +2889,19 @@ class _HoleScoreCard extends StatelessWidget {
       final tcStrokes = _tripleCupExpectedStrokes(m.player.id, h.holeNumber);
       if (tcStrokes != null) return tcStrokes;
     }
+
+    // **Banker: the dot follows the MATCH, not the man.**
+    //
+    // Every other game allocates once across the foursome. Banker cannot: an
+    // opponent's only stroke relationship is with the banker, and the banker
+    // holds three at once. A row has one dot, so an opponent gets the stroke
+    // he receives IN HIS MATCH — which is why a golfer who GIVES the banker
+    // shots shows no dot at all, however high his own handicap — and the
+    // banker gets his stroke off the LOW golfer, the one absolute figure he
+    // has. If he is the low golfer he never strokes, which is right: nobody
+    // gives the low man anything.
+    final bk = _bankerStrokes(m, h);
+    if (bk != null) return bk;
 
     // Cup singles: match-play handicap (lower of the pair = 0, higher = diff).
     // isCupSingles is set from the games list so this fires even before
@@ -3321,7 +3404,12 @@ class _HoleScoreCard extends StatelessWidget {
                               matchPlayData?['bracket_type'] == 'single_elim')
                     ? _matchPlaySo(m.player.id, holeNumber)
                     : null;
-                final displayHcap = mpSo ?? _effectiveHcapForRound(m);
+                // Banker: what he gets off the BEST golfer, not his full
+                // net. Every stroke in this game is a gap between two
+                // handicaps, and a gap reads at a glance when one end is
+                // zero — the low man gets nothing and shows no chip at all.
+                final displayHcap =
+                    _bankerGets(m) ?? mpSo ?? _effectiveHcapForRound(m);
                 if (displayHcap > 0) hcapLabel = 'gets $displayHcap';
               }
             }

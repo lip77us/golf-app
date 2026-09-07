@@ -2,6 +2,13 @@ import 'package:flutter/material.dart';
 import '../game_colors.dart';
 import '../theme/halved_brand.dart';
 
+/// Gold marks a ROLE rather than a result — Banker's, at present. It is
+/// deliberately not the win green: the man who banked a hole is as likely to
+/// have been beaten on it three times as to have collected.
+const _gold     = Color(0xFFB8860B);
+const _goldFill = Color(0xFFFBF0D6);
+const _goldLine = Color(0xFFE4D3A8);
+
 /// The shared per-hole scorecard grid — one widget behind every game's card.
 ///
 /// Columns: hole numbers + par (+ stroke index when the backend sends it).
@@ -15,7 +22,7 @@ import '../theme/halved_brand.dart';
 /// two cards identical.
 class HoleGridScorecard extends StatefulWidget {
   /// `holes` items are the per-hole payload from the multi-skins summary:
-  ///   { hole, par, stroke_index, winner_id, winner_short, is_dead,
+  ///   { hole, par, stroke_index, winner_id, winner_short, is_dead, banker_id,
   ///     scores: [{player_id, gross, strokes}, …] }
   final List<Map<String, dynamic>> holes;
   /// Standings entries (used for the player labels in the leftmost column,
@@ -206,6 +213,11 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
       // Survivor + Zombie Option: this hole is where he won his way back in.
       // Every other game omits the flag, so it is inert there.
       final isBack = mine['resurrected'] == true;
+      // Banker: whoever banked this hole. Gold, and gold means the ROLE here
+      // and nothing else — not a win, which is why it cannot borrow the green.
+      // Every other game omits the key, so it is inert there.
+      final isBanker = entry['banker_id'] != null &&
+                       entry['banker_id'] == playerId;
       // Nassau: the whole winning TEAM's cells get tinted in their colour.
       final winnerTeam = entry['winner_team'] as int?;
       // A side carried on the SCORE wins over the per-player map: Sequoya 3s
@@ -232,8 +244,12 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
         cellBg     = outBg;
         cellFg     = outFg;
         cellBorder = Border.all(color: Colors.red.shade400, width: 1);
+      } else if (isBanker) {
+        cellBg     = _goldFill;
+        cellFg     = _gold;
+        cellBorder = Border.all(color: _goldLine, width: 1);
       }
-      final highlight = teamWin || isWinner || isOut || isBack;
+      final highlight = teamWin || isWinner || isOut || isBack || isBanker;
 
       return Container(
         width: _cellW, height: _rowH,

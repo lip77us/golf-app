@@ -1774,6 +1774,12 @@ class BankerSetupSerializer(serializers.Serializer):
     allow_counter       = serializers.BooleanField(required=False)
     par3_triples        = serializers.BooleanField(required=False)
     birdie_bonus        = serializers.BooleanField(required=False)
+    # PER GOLFER — `{player_id: amount}` — because how much a man is willing
+    # to lose is his own call, not a house rule. A THRESHOLD, not a ceiling:
+    # reaching his own holds him to floor bets with no doubles for the rest of
+    # the round and takes him out of the rotation. Nothing he already owes is
+    # forgiven, so the itemised receipt stays true.
+    loss_caps        = serializers.DictField(required=False)
     hole_cap_enabled = serializers.BooleanField(required=False)
     hole_cap_amount  = serializers.DecimalField(max_digits=9, decimal_places=2,
                                                 required=False, allow_null=True)
