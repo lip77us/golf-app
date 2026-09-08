@@ -55,8 +55,43 @@ ZERO = Decimal('0.00')
 # ---------------------------------------------------------------------------
 
 def _real_members(foursome):
-    return [m for m in foursome.memberships.select_related('player', 'tee')
-            if not m.player.is_phantom]
+    """The roster, cached on the foursome INSTANCE.
+
+    Called 311 times in one `banker_summary` before this cache existed — once
+    inside every `pair_strokes`, and `stroke_plan` asks for 216 of those. The
+    cache lives exactly as long as the instance that holds it, so a roster edit
+    arrives on a later request with a fresh object and sees the change.
+    """
+    cached = getattr(foursome, '_banker_real_members', None)
+    if cached is None:
+        cached = [m for m in foursome.memberships.select_related('player', 'tee')
+                  if not m.player.is_phantom]
+        foursome._banker_real_members = cached
+    return cached
+
+
+def _pair_ctx(game, foursome):
+    """The roster, the stroke allocator and the playing handicaps — built ONCE.
+
+    `pair_strokes` answers for a single hole, and `stroke_plan` asks it 216
+    times: four golfers as banker × three opponents × eighteen holes. Rebuilding
+    the roster, the allocator and the handicaps inside every one of those calls
+    cost **785 queries and 571ms on a five-hole round** — which is what a golfer
+    felt as a slow tap on every bet, every lock, every double and every counter,
+    since each of those posts re-reads the whole summary.
+
+    None of the three can change inside one request, so they are computed once
+    and cached on the foursome instance beside the roster.
+    """
+    key = f'_banker_pair_ctx_{game.id}'
+    ctx = getattr(foursome, key, None)
+    if ctx is None:
+        members = {m.player_id: m for m in _real_members(foursome)
+                   if m.tee_id is not None}
+        ctx = (members, make_strokes_fn(foursome),
+               _playing_hcps(game, list(members.values())))
+        setattr(foursome, key, ctx)
+    return ctx
 
 
 def _effective_hcps(game, members):
@@ -103,14 +138,10 @@ def pair_strokes(game, foursome, banker_id, opponent_id, hole) -> tuple:
     matters and the half a single-number model loses — the banker giving four
     to Dave and receiving two from Sam is an ordinary hole.
     """
-    members = {m.player_id: m for m in _real_members(foursome)
-               if m.tee_id is not None}
+    members, strokes, ph = _pair_ctx(game, foursome)
     b, o = members.get(banker_id), members.get(opponent_id)
     if b is None or o is None or game.handicap_mode == HandicapMode.GROSS:
         return 0, 0
-
-    strokes = make_strokes_fn(foursome)
-    ph = _playing_hcps(game, [b, o])
 
     if game.handicap_mode == HandicapMode.NET:
         # Full allocation, each golfer off his own handicap — offered for a

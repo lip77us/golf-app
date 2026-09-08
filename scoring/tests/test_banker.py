@@ -16,6 +16,7 @@ from django.test import TestCase
 
 from core.models import HandicapMode
 from games.models import BankerBet, BankerGame, BankerHole
+from tournament.models import Foursome
 from services.banker import (ZERO, BankerLocked, banker_settlement, cap_for,
                              banker_summary,
                              exposure_ladder, hole_exposure,
@@ -1024,6 +1025,56 @@ class BankerHoleCapRoundingTests(TestCase):
         h = self._hole_that_does_not_divide()
         for line in h['lines']:
             self.assertIn(f"= ${line['amount']:.0f}", line['chain'])
+
+
+class BankerSummaryCostTests(TestCase):
+    """`banker_summary` is read on EVERY tap.
+
+    Every declaration — a maximum, a bet, the lock, a double, the counter —
+    posts and gets the whole summary back, and so does every score and every
+    advance. It was costing **785 queries and 571ms on a five-hole round**,
+    which a golfer feels as a slow screen rather than as a slow query: the
+    roster, the stroke allocator and the playing handicaps were being rebuilt
+    inside every one of `stroke_plan`'s 216 `pair_strokes` calls.
+
+    The bound below is deliberately loose. It is not a benchmark; it is a
+    tripwire for the shape of that mistake coming back.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['banker'])
+        self.fs = make_foursome(self.round,
+                                [('Paul', 0), ('Dave', 8), ('Sam', 4),
+                                 ('Lee', 12)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        self.game = setup_banker(self.fs, first_banker_id=self.pid['Paul'],
+                                 min_bet=5, max_bet=50)
+
+    def test_a_full_summary_stays_well_under_a_hundred_queries(self):
+        from django.test.utils import CaptureQueriesContext
+        from django.db import connection
+
+        # Four holes played, so the walk has real work to do.
+        for hole in range(1, 5):
+            BankerHole.objects.update_or_create(
+                game=self.game, hole_number=hole,
+                defaults={'banker_id': self.pid['Paul']})
+            set_hole_max(self.fs, hole, 20)
+            for n in ('Dave', 'Sam', 'Lee'):
+                place_bet(self.fs, hole, self.pid[n], 10)
+            lock_bets(self.fs, hole)
+            submit_hole(self.fs, hole,
+                        [(self.pid['Paul'], 5), (self.pid['Dave'], 4),
+                         (self.pid['Sam'], 5), (self.pid['Lee'], 6)])
+
+        fs = Foursome.objects.get(id=self.fs.id)      # a fresh request's object
+        with CaptureQueriesContext(connection) as ctx:
+            banker_summary(fs)
+        self.assertLess(len(ctx.captured_queries), 100,
+                        f'banker_summary used {len(ctx.captured_queries)} '
+                        'queries — the per-call rebuild is back')
 
 
 class BankerSettlementReceiptTests(TestCase):

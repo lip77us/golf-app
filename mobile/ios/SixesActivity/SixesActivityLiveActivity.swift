@@ -173,7 +173,8 @@ private struct BoardView: View {
             }
 
             PipsView(pips: state.pips)
-            FooterView(footer: state.footer, isStale: isStale)
+            FooterView(footer: state.footer, thru: state.thru,
+                       isStale: isStale)
         }
     }
 }
@@ -483,7 +484,8 @@ private struct SkinsBoardView: View {
             Rectangle()
                 .fill(.white.opacity(0.11))
                 .frame(height: 0.5)
-            FooterView(footer: state.footer, isStale: isStale)
+            FooterView(footer: state.footer, thru: state.thru,
+                       isStale: isStale)
         }
     }
 }
@@ -505,7 +507,8 @@ private struct NassauBoardView: View {
             HeaderView(header: state.header)
             NamedOnceView(sides: state.sides)
             ForEach(rows, id: \.label) { MatchRowView(row: $0) }
-            FooterView(footer: state.footer, isStale: isStale)
+            FooterView(footer: state.footer, thru: state.thru,
+                       isStale: isStale)
         }
     }
 }
@@ -610,7 +613,8 @@ private struct RabbitBoardView: View {
                 StateView(state: state.state)
             }
 
-            FooterView(footer: state.footer, isStale: isStale)
+            FooterView(footer: state.footer, thru: state.thru,
+                       isStale: isStale)
         }
     }
 }
@@ -783,10 +787,19 @@ private struct PipsView: View {
     }
 }
 
-/// Round context left, money right. Thru lives here because the headline band
-/// holds three things and two of them cannot shrink.
+/// Stake terms and money left, **the locked corner right**.
+///
+/// The lower-right corner is `THRU 12 · +7` on every card in the set — the
+/// round behind you, against gross par — and it pairs with the locked
+/// upper-right corner that rides in `header.segment`. This view's own comment
+/// used to claim thru lived here while the code drew only context and money,
+/// so every card that renders through `BoardView` sent the corner and dropped
+/// it: Sixes, Sequoya, Banker, Skins, Nassau and Rabbit all shipped without
+/// the half of the pair that survives the always-on state. Only Survivor's
+/// footer ever drew it.
 private struct FooterView: View {
     let footer: SixesActivityAttributes.ContentState.Footer
+    var thru: String? = nil
     var isStale: Bool = false
 
     var body: some View {
@@ -797,16 +810,29 @@ private struct FooterView: View {
         //
         // Staleness still claims the row: "no scores in a while" is a fault
         // report, and it outranks a layout rule.
-        if isStale || !footer.context.isEmpty || !footer.money.isEmpty {
-            HStack {
+        let hasThru = !(thru ?? "").isEmpty
+        if isStale || hasThru || !footer.context.isEmpty
+            || !footer.money.isEmpty {
+            HStack(spacing: 8) {
                 Text(isStale ? "No scores in a while" : footer.context)
                     .font(Sixes.body(11))
                     .foregroundStyle(.white.opacity(0.66))
                     .lineLimit(1)
+                if !footer.money.isEmpty {
+                    Text(footer.money)
+                        .font(Sixes.body(11, .semibold))
+                        .foregroundStyle(.white.opacity(0.66))
+                }
                 Spacer(minLength: 8)
-                Text(footer.money)
-                    .font(Sixes.body(11, .semibold))
-                    .foregroundStyle(.white.opacity(0.66))
+                if let thru, !thru.isEmpty {
+                    // Locked: never wraps, never yields to anything on its
+                    // left. Same treatment Survivor's footer already gives it.
+                    Text(thru)
+                        .font(Sixes.body(11, .semibold))
+                        .foregroundStyle(.white.opacity(0.72))
+                        .lineLimit(1)
+                        .fixedSize()
+                }
             }
         }
     }

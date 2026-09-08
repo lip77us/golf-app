@@ -134,6 +134,59 @@ class BankerCardTests(TestCase):
         self.assertEqual(card['number']['text'], '$20')      # this hole
         self.assertEqual(card['footer']['money'], '−$30')    # the round
 
+    def test_the_band_rides_with_the_maximum_not_in_the_footer(self):
+        """They are one fact in two halves — what the banker set, inside what
+        the round allows. A golfer reading `MAX $30` wants to know whether that
+        is near the ceiling, and the footer is too far to hold it."""
+        self._bets(1, _max=30, Dave=10, Sam=10, Lee=10)
+        card = self._card('Dave')
+        self.assertEqual(card['state']['to_play'], 'MAX $30 · $5–$50')
+        self.assertNotIn('band', card['footer']['context'])
+
+    def test_the_footers_left_is_the_readers_own_money(self):
+        """One personal figure on the left, the locked round figure on the
+        right — which is what the pair is for."""
+        self._bets(1, Dave=10, Sam=10, Lee=10)
+        submit_hole(self.fs, 1, [(self.pid['Paul'], 6), (self.pid['Dave'], 4),
+                                 (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
+        card = self._card('Dave', thru=1)
+        self.assertEqual(card['footer']['context'], '')
+        self.assertEqual(card['footer']['money'], '+$10')
+
+    def test_the_versus_label_is_a_name_not_a_shout(self):
+        """Every other word in the state slot is a STATE — DORMIE, CLOSED,
+        BANKING — and capitals suit them. This one is a golfer, and a name in
+        capitals reads as a different man."""
+        self._bets(1, Dave=10, Sam=10, Lee=10)
+        self.assertEqual(self._card('Dave')['state']['word'], 'v. P')
+
+    def test_the_locked_lower_right_corner_is_sent_on_every_state(self):
+        """`THRU 2 · +3` — the round behind you, against gross par. It pairs
+        with the locked upper-right corner in the header, and both belong to
+        the shared frame rather than to any one game."""
+        self._bets(1, Dave=10, Sam=10, Lee=10)
+        self.assertEqual(self._card('Dave')['thru'], 'TEE OFF')
+        submit_hole(self.fs, 1, [(self.pid['Paul'], 6), (self.pid['Dave'], 4),
+                                 (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
+        self.assertTrue(self._card('Dave', thru=1)['thru'].startswith('THRU 1'))
+
+    def test_the_shared_board_draws_the_corner_the_server_sends(self):
+        """The half no Python test would otherwise reach, and the failure it
+        guards is silent — it already happened once.
+
+        `FooterView`'s own comment claimed thru lived there while the code drew
+        only context and money, so every card rendering through `BoardView`
+        sent the corner and dropped it. Only Survivor's footer ever drew it."""
+        swift = (Path(settings.BASE_DIR) / 'mobile' / 'ios' / 'SixesActivity'
+                 / 'SixesActivityLiveActivity.swift').read_text()
+        board = swift.split('private struct BoardView')[1].split(
+            'private struct')[0]
+        self.assertIn('FooterView(footer: state.footer, thru: state.thru',
+                      board)
+        footer = swift.split('private struct FooterView')[1].split(
+            'private struct')[0]
+        self.assertIn('Text(thru)', footer)
+
     # -- the hole is over ----------------------------------------------------
 
     def _settle_hole_1(self):

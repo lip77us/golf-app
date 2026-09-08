@@ -172,8 +172,15 @@ def banker_activity_state(foursome, *, player_id=None, thru=None) -> dict:
     mine   = next((p['total'] for p in summary['players']
                    if p['player_id'] == player_id), None)
     to_par = gross_to_par(summary, player_id)
+    # **The band belongs with the maximum, not in the footer.** They are one
+    # fact in two halves — what the banker set, inside what the round allows —
+    # and a golfer reading `MAX $30` wants to know whether that is near the
+    # ceiling. Splitting them put the ceiling at the bottom of the card and
+    # left the reader to hold one number while finding the other.
+    band = (f"${summary['min_bet']:.0f}–${summary['max_bet']:.0f}")
     max_bet = hole.get('max_bet')
-    max_note = f'MAX {_amount(max_bet)}' if max_bet else 'NO MAX YET'
+    max_note = (f'MAX {_amount(max_bet)} · {band}' if max_bet
+                else f'NO MAX YET · {band}')
 
     settled = bool(hole.get('resolved'))
 
@@ -208,7 +215,10 @@ def banker_activity_state(foursome, *, player_id=None, thru=None) -> dict:
             {'names': f'{b_short} banks · {note}', 'colour': 'gold',
              'leading': False},
         ]
-        state = {'word': f'V. {b_short.upper()}'[:12], 'to_play': max_note}
+        # `v. Jim`, not `V. JIM`. Every other word in this slot is a STATE —
+        # DORMIE, CLOSED, BANKING — and shouting suits them. This one is a
+        # golfer's name, and a name in capitals reads as a different man.
+        state = {'word': f'v. {b_short}'[:12], 'to_play': max_note}
     else:
         # ── No bet of his own yet, or a watcher. The neutral facts only: who
         #    is banking and what he set. A watcher must not be shown three
@@ -247,9 +257,11 @@ def banker_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         # No pips. Banker has no segments — every hole is its own settlement,
         # and eighteen of anything will not fit a row this card does not have.
         'pips'  : [],
+        # The footer's left is the reader's own money now that the band has
+        # gone up beside the maximum, and its right is the locked corner. One
+        # personal figure and one round figure, which is what the pair is for.
         'footer': {
-            'context': (f"${summary['min_bet']:.0f}–${summary['max_bet']:.0f} "
-                        f'band'),
+            'context': '',
             # A watcher has no position, so no money. `$0` would read as a
             # round played for nothing rather than one he is not in.
             'money'  : _cash(mine) if mine else '',
