@@ -950,6 +950,20 @@ def banker_summary(foursome) -> dict | None:
     caps = {p: cap_for(game, p) for p in ids}
     cut_off, cut_at = set(), {}
 
+    def _scores_on(hole_number):
+        """`[{player_id, gross}]` — the shared frame's shape, not this game's.
+
+        Banker's own hole payload keeps its gross scores in two places for two
+        good reasons: the banker's on the hole (`banker_gross`, because he has
+        one card against three bets) and each opponent's on his BET line. What
+        neither of those is, is the list `live_activity_registry.gross_to_par`
+        reads to fill the locked lower-right corner — so `THRU 4` drew with no
+        `+3` beside it, exactly the silent shape-mismatch that helper's own
+        docstring warns about.
+        """
+        return [{'player_id': pid, 'gross': gross.get(pid, {}).get(hole_number)}
+                for pid in ids]
+
     holes, swings = [], []
     for h in order:
         row = rows.get(h)
@@ -966,12 +980,13 @@ def banker_summary(foursome) -> dict | None:
                 'countered': False, 'tie_reason': '', 'lines': [],
                 'banker_delta': ZERO, 'resolved': False,
                 'exposure': ZERO, 'exposure_if_max': ZERO, 'outstanding': [],
-                'cut_off': [], 'hole_capped': False,
+                'cut_off': [], 'hole_capped': False, 'scores': _scores_on(h),
             })
             continue
         res = resolve_hole(game, foursome, row, gross,
                            cut_off=frozenset(cut_off))
         res['cut_off'] = sorted(cut_off)
+        res['scores'] = _scores_on(h)
         if res['resolved']:
             banking[row.banker_id] += res['banker_delta']
             for line in res['lines']:

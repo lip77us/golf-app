@@ -168,7 +168,26 @@ class BankerCardTests(TestCase):
         self.assertEqual(self._card('Dave')['thru'], 'TEE OFF')
         submit_hole(self.fs, 1, [(self.pid['Paul'], 6), (self.pid['Dave'], 4),
                                  (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
-        self.assertTrue(self._card('Dave', thru=1)['thru'].startswith('THRU 1'))
+        # BOTH halves. Asserting the `THRU 1` prefix alone passed for a card
+        # that drew `THRU 4` and nothing else for a whole round: the score half
+        # comes from `gross_to_par`, which reads a per-hole `scores` list that
+        # Banker's bet-shaped hole payload did not have — and a helper that
+        # returns None on a shape mismatch fails in silence.
+        self.assertEqual(self._card('Dave', thru=1)['thru'], 'THRU 1 · E')
+
+    def test_the_summary_carries_gross_scores_in_the_shared_frames_shape(self):
+        """Banker keeps its gross in two places, and neither is the one the
+        frame reads: the banker's on the hole, each opponent's on his BET line.
+        Every other game in the set emits a per-hole `scores` list; this one
+        did not, so the corner lost its score half."""
+        from services.live_activity_registry import gross_to_par
+        from services.banker import banker_summary
+        self._bets(1, Dave=10, Sam=10, Lee=10)
+        submit_hole(self.fs, 1, [(self.pid['Paul'], 6), (self.pid['Dave'], 4),
+                                 (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
+        s = banker_summary(self.fs)
+        self.assertIn('scores', s['holes'][0])
+        self.assertEqual(gross_to_par(s, self.pid['Paul']), 2)   # 6 on a par 4
 
     def test_the_shared_board_draws_the_corner_the_server_sends(self):
         """The half no Python test would otherwise reach, and the failure it
