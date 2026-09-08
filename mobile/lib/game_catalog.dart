@@ -488,6 +488,12 @@ const List<GameMeta> kGameCatalog = [
     // lock, then whatever is shouted at a ball in the air. None of that fits
     // the shared entry screen, so Banker owns its own.
     hostsOverlaySideGames: true,
+    // **This flag is what starts the activity.** The server built Banker's
+    // card, took it off the gate and shipped the build that draws it, and the
+    // phone still raised nothing — because this is the switch the CLIENT
+    // reads before it calls `Activity.request`, and the card being ready on
+    // the server says nothing about it.
+    hasLiveActivity      : true,
     excludes    : {GameIds.sixes, GameIds.points531, GameIds.nassau,
                    GameIds.wolf, GameIds.rabbit, GameIds.survivor,
                    GameIds.sequoyaThrees, GameIds.tripleCup,

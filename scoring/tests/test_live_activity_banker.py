@@ -273,6 +273,39 @@ class BankerCardTests(TestCase):
         self.assertNotIn(card_kind('banker'), UNSHIPPED_KINDS)
         self.assertTrue(round_has_board(self.round))
 
+    def test_the_flutter_catalog_declares_the_game_starts_an_activity(self):
+        """The third half of the gate, and the one that actually bit.
+
+        The server can build a card, take it off `UNSHIPPED_KINDS` and ship the
+        build that draws it, and the phone will still raise NOTHING — because
+        `hasLiveActivity` in the Dart catalog is what the client reads before
+        it calls `Activity.request`, and nothing on the server side knows about
+        it. A Banker round played all the way through hole one with a card that
+        was ready, shipped and never started.
+
+        Asserted for EVERY slug with a builder rather than for Banker alone:
+        this is a three-sided gate and the next card will be added by somebody
+        who has just read the other two sides.
+        """
+        catalog = (Path(settings.BASE_DIR) / 'mobile' / 'lib'
+                   / 'game_catalog.dart').read_text()
+        # `id : GameIds.foo,` … up to the entry's closing `),`
+        entries = re.findall(r'id\s*:\s*GameIds\.(\w+),(.*?)\n  \),',
+                             catalog, re.S)
+        declared = {name for name, body in entries
+                    if re.search(r'hasLiveActivity\s*:\s*true', body)}
+        # GameIds constants are camelCase for snake_case slugs.
+        def camel(slug):
+            head, *rest = slug.split('_')
+            return head + ''.join(w.title() for w in rest)
+
+        from services.live_activity_registry import BUILDERS
+        for slug in BUILDERS:
+            self.assertIn(
+                camel(slug), declared,
+                f'{slug} has a card builder but its Flutter catalog entry '
+                'does not set hasLiveActivity, so the phone never starts one')
+
     def test_the_ios_build_declares_the_kind_and_the_two_colours(self):
         """The half no Python test would otherwise reach. `banker` renders with
         `BoardView`, so the client side of shipping it is the kind string plus
