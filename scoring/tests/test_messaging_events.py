@@ -173,6 +173,36 @@ class NassauMatchResultTests(TestCase):
             len([m for m in _events(rnd, 'match_result')
                  if m.data.get('unit') in ('back9', 'overall')]), 0)
 
+    def test_a_singles_match_is_never_told_it_lost_a_nine(self):
+        """Reported from a round: `you lost 2&1 on the front nine`, in a game
+        that has no front-nine bet.
+
+        A Singles Match is this engine with Front and Back switched off, and
+        the summary computes a front-nine margin regardless — the running
+        margin over holes 1-9 is a fact of the card whether or not anybody bet
+        on it. The announcement read that margin and reported a result for a
+        bet that does not exist.
+        """
+        from services.nassau import setup_nassau, calculate_nassau
+        tee = make_tee(make_course())
+        rnd = make_round(tee.course, active_games=['match_18'])
+        paul = make_player('Paul Lipkin', 0, short_name='Paul')
+        dana = make_player('Dana Wu', 0, short_name='Dana')
+        fs = make_foursome(rnd, [(paul, 0), (dana, 0)], tee=tee)
+        setup_nassau(fs, [paul.id], [dana.id], game_type='match_18',
+                     play_front=False, play_back=False, play_overall=True)
+        # Paul wins every hole of the front — a front nine decided 9&0 if
+        # anybody were counting it. Nobody is.
+        for h in range(1, 10):
+            submit_hole(fs, h, [(paul, 4), (dana, 5)])
+        calculate_nassau(fs)
+        ev.emit_score_events(fs, 9, [{'player_id': paul.id, 'gross_score': 4},
+                                     {'player_id': dana.id, 'gross_score': 5}])
+
+        nines = [m for m in _events(rnd, 'match_result')
+                 if m.data.get('unit') in ('front9', 'back9')]
+        self.assertEqual(nines, [], 'a Singles Match announced a nine')
+
     def test_front_nine_announced_when_decided_early(self):
         """The front-nine card fires the MOMENT the nine is clinched (before
         all 9 holes are in), with match-play "N&M" close-out notation."""

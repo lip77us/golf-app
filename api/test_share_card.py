@@ -174,6 +174,28 @@ class InviteCardTests(TestCase):
         self.assertEqual(resp['Content-Type'], 'image/png')
         self.assertEqual(Image.open(io.BytesIO(resp.content)).size, (1200, 630))
 
+    def test_the_shared_invite_link_is_the_link_domain_not_the_api_host(self):
+        """Reported from the app: Invite Friends shared a raw Railway URL that
+        did not work.
+
+        `build_absolute_uri` returns whatever host the API was reached on, and
+        in production that is the Railway domain — not the link domain, not
+        what the universal-link association covers, and not a URL anybody would
+        tap. Every other share surface already builds from `PUBLIC_BASE_URL`.
+        """
+        from django.test import override_settings
+        self.client.force_login(self.user)
+        with override_settings(
+                PUBLIC_BASE_URL='https://link.halved.golf',
+                ALLOWED_HOSTS=['*']):
+            resp = self.client.get(
+                '/api/invite/', HTTP_HOST='web-production-b84d4a.up.railway.app')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['url'],
+                         f'https://link.halved.golf/i/{self.code}/')
+        self.assertIn('https://link.halved.golf/i/', resp.data['share_text'])
+        self.assertNotIn('railway', resp.data['share_text'])
+
     def test_an_unknown_code_is_404_not_a_card(self):
         self.assertEqual(self.client.get('/i/nope/card.png').status_code, 404)
 

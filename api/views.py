@@ -1379,7 +1379,16 @@ class InviteView(APIView):
 
     def get(self, request):
         code = request.user.ensure_invite_code()
-        url  = request.build_absolute_uri(f'/i/{code}/')
+        # **`PUBLIC_BASE_URL`, not the request host.** `build_absolute_uri`
+        # returns whatever host the API was reached on — in production that is
+        # the raw Railway domain, so the invite went out as
+        # `web-production-….up.railway.app/i/ABC123/`: not the link domain, not
+        # what the universal-link association covers, and not a URL anybody
+        # would tap. Every other share surface in the app already builds from
+        # this setting; this one was the exception.
+        base = (getattr(settings, 'PUBLIC_BASE_URL', '') or '').rstrip('/')
+        url  = (f'{base}/i/{code}/' if base
+                else request.build_absolute_uri(f'/i/{code}/'))
         share_text = (
             'Join me on Halved — the easiest way to track golf bets with your '
             f'group. {url}'

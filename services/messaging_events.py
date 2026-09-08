@@ -426,10 +426,19 @@ def _emit_match_results(foursome):
         _emit_survivor_results(foursome)
 
 
+# unit -> (how it reads in a sentence, its holes, the flag that says it is a
+# bet at all).
+#
+# **The flag is the load-bearing part.** A Singles Match is this same engine
+# with Front and Back switched off, and the summary computes a front-nine
+# margin for it regardless — the running margin over holes 1–9 is a fact of the
+# card whether or not anybody bet on it. Announcing it told a golfer playing
+# one 18-hole match that he had "lost the front nine, 2&1": a result, with a
+# number, for a bet that did not exist.
 _NINE = {
-    'front9':  ('the front nine', 9),
-    'back9':   ('the back nine', 9),
-    'overall': ('the overall match', 18),
+    'front9':  ('the front nine', 9, 'play_front'),
+    'back9':   ('the back nine', 9, 'play_back'),
+    'overall': ('the overall match', 18, 'play_overall'),
 }
 
 
@@ -442,7 +451,11 @@ def _emit_nassau_results(foursome, game_type='nassau'):
     round_obj = foursome.round
     team1 = s.get('teams', {}).get('team1', [])
     team2 = s.get('teams', {}).get('team2', [])
-    for unit, (label, holes) in _NINE.items():
+    for unit, (label, holes, flag) in _NINE.items():
+        # Not a bet in this game type — nothing to announce, however the
+        # margin happens to have run.
+        if not s.get(flag, True):
+            continue
         seg = s.get(unit) or {}
         # Announce the MOMENT the nine is won — either mathematically decided
         # before the last hole (decided_margin set → "3&2" style) or played out

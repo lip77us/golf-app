@@ -14,6 +14,7 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../screens/player_form_screen.dart';
 import '../widgets/halved_mark.dart';
+import '../widgets/roster_filter.dart';
 
 /// Open the invite-a-watcher sheet for a round OR a tournament (exactly one id).
 Future<void> inviteWatcher(BuildContext context,
@@ -58,11 +59,16 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
 
   final TextEditingController _searchCtrl = TextEditingController();
   String _search    = '';
-  /// Show only golfers who have signed up. A watcher who is on Halved opens
-  /// the link in the app and follows live; anyone else lands on the read-only
-  /// web page — so "who already has it" is a real distinction when you are
-  /// deciding who to rail you, not just a badge.
-  bool   _onAppOnly = false;
+  /// The same chip row the player picker uses — All / Favorites / On Halved.
+  ///
+  /// This sheet already had the On Halved half as a lone toggle, and the
+  /// distinction is real: a watcher on Halved opens the link in the app and
+  /// follows live, anyone else lands on the read-only web page. What it was
+  /// missing is the half that actually shortens the list. **The man you ask to
+  /// rail you is one of the same few people you always play with** — which is
+  /// exactly what Favorites already knows, and it was answering that question
+  /// on one screen only.
+  RosterFilter _filter = RosterFilter.all;
 
   @override
   void dispose() {
@@ -78,7 +84,8 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
   List<PlayerProfile> get _filtered {
     final q = _search.trim().toLowerCase();
     return widget.golfers.where((p) {
-      if (_onAppOnly && !p.isOnApp) return false;
+      if (_filter == RosterFilter.onHalved && !p.isOnApp) return false;
+      if (_filter == RosterFilter.favorites && !p.isFavorite) return false;
       if (q.isEmpty) return true;
       return p.name.toLowerCase().contains(q)
           || p.phone.toLowerCase().contains(q);
@@ -406,20 +413,27 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Row(children: [
-                      FilterChip(
-                        selected: _onAppOnly,
-                        onSelected: (v) => setState(() => _onAppOnly = v),
-                        avatar: const HalvedMark(size: 16),
-                        label: const Text('On Halved'),
-                      ),
-                      const Spacer(),
-                      Text(
+                    RosterFilterChips(
+                      value: _filter,
+                      onChanged: (f) => setState(() => _filter = f),
+                      // Counts of the WHOLE roster, not of what the search has
+                      // narrowed it to: a filter that could empty the list has
+                      // to say so before it is tapped.
+                      allCount: widget.golfers.length,
+                      favoriteCount:
+                          widget.golfers.where((p) => p.isFavorite).length,
+                      onHalvedCount:
+                          widget.golfers.where((p) => p.isOnApp).length,
+                    ),
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
                         '${_filtered.length} of ${widget.golfers.length}',
                         style: theme.textTheme.labelSmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant),
                       ),
-                    ]),
+                    ),
                   ],
                 ),
               ),
@@ -438,11 +452,17 @@ class _WatcherInviteSheetState extends State<_WatcherInviteSheet> {
                   ? Padding(
                       padding: const EdgeInsets.all(24),
                       child: Text(
-                        _onAppOnly
-                            ? 'No golfers on Halved match that. Invite by phone '
-                              'number, or turn off the On Halved filter.'
-                            : 'No golfers match that. Invite by phone number '
-                              'instead.',
+                        switch (_filter) {
+                          RosterFilter.onHalved =>
+                            'No golfers on Halved match that. Invite by phone '
+                            'number, or switch to All.',
+                          RosterFilter.favorites =>
+                            'None of your favorites match that. Switch to All, '
+                            'or invite by phone number.',
+                          RosterFilter.all =>
+                            'No golfers match that. Invite by phone number '
+                            'instead.',
+                        },
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant),
