@@ -87,6 +87,12 @@ def _multiplier_note(hole, line=None) -> tuple[str, str]:
         return '', 'dim'
     countered = any(x['countered'] for x in lines)
     doubles   = [x for x in lines if x['own_multiplier'] > 1]
+    # **A birdie is a multiplier too**, and the only one the reader cannot
+    # infer: he can see who doubled and he was there for the counter, but a
+    # settled hole that paid twice what the chain says looks like an error
+    # until the word `birdie` appears next to it. It is set on the line only
+    # when the birdie actually WON, which is the only time it doubles anything.
+    birdies = [x for x in lines if x.get('birdie')]
     bits = []
     if doubles:
         if line is not None:
@@ -97,6 +103,13 @@ def _multiplier_note(hole, line=None) -> tuple[str, str]:
             bits.append(f'{len(doubles)} {word}')
     if countered:
         bits.append('countered' if line is not None else 'you countered')
+    if birdies:
+        if line is not None:
+            bits.append('birdie ×2')
+        elif len(birdies) == 1:
+            bits.append(f'{birdies[0]["short_name"]} birdie ×2')
+        else:
+            bits.append(f'{len(birdies)} birdies ×2')
     if not bits:
         return ('no doubles' if line is None else 'straight up'), 'dim'
     return ' · '.join(bits), ('amber' if countered else 'blue')
@@ -282,7 +295,11 @@ def _settled(summary, hole, player_id, banker_id, b_short, n):
     """
     lines = hole.get('lines') or []
     awaiting = summary.get('awaiting_tie') == n
-    nxt = summary.get('next_banker_name') or ''
+    # The SHORT name. `next_banker_name` is the full one, and a 17pt slot cut
+    # it mid-surname — `PAUL LIPKI BANKS NEXT` names nobody. Short names are
+    # what the group set and what every other slot on this card uses.
+    shorts = {p['player_id']: p['short_name'] for p in summary['players']}
+    nxt = shorts.get(summary.get('next_banker_id')) or ''
 
     # The state slot carries what happens NEXT, because the result is already
     # the headline. A tie the group has to answer outranks it: until somebody
@@ -290,7 +307,7 @@ def _settled(summary, hole, player_id, banker_id, b_short, n):
     if awaiting:
         state = {'word': 'TIED', 'to_play': 'GROUP DECIDES'}
     elif nxt:
-        state = {'word': nxt.upper()[:10], 'to_play': 'BANKS NEXT'}
+        state = {'word': nxt, 'to_play': 'BANKS NEXT'}
     else:
         state = {'word': 'SETTLED', 'to_play': ''}
 

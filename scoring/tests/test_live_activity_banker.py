@@ -242,6 +242,31 @@ class BankerCardTests(TestCase):
         self.assertEqual(card['number']['text'], '+$10')
         self.assertIn('You won v', card['sides'][0]['names'])
 
+    def test_a_birdie_is_named_because_the_money_cannot_explain_itself(self):
+        """The reader can see who doubled and he was standing there for the
+        counter. A hole that paid twice what the chain says looks like an error
+        until the word `birdie` appears beside it."""
+        self._bets(1, Dave=10, Sam=10, Lee=10)
+        set_double(self.fs, 1, self.pid['Dave'])
+        set_counter(self.fs, 1)
+        # Dave makes 3 on the par 4 and wins — his collection doubles again.
+        submit_hole(self.fs, 1, [(self.pid['Paul'], 6), (self.pid['Dave'], 3),
+                                 (self.pid['Sam'], 5), (self.pid['Lee'], 5)])
+        note = self._card('Paul')['sides'][1]['names']
+        self.assertIn('birdie ×2', note)
+        self.assertIn('countered', note)
+        self.assertIn('D birdie', note)          # named, since three could
+        # And on his own card it is his birdie, not somebody's.
+        self.assertIn('birdie ×2', self._card('Dave')['sides'][1]['names'])
+
+    def test_the_next_banker_is_a_short_name_never_cut_mid_surname(self):
+        """`PAUL LIPKI BANKS NEXT` names nobody. Short names are what the group
+        set, and what every other slot on this card already uses."""
+        self._settle_hole_1()
+        word = self._card('Paul')['state']['word']
+        self.assertEqual(word, 'D')
+        self.assertNotIn(' ', word)
+
     def test_the_state_slot_names_who_banks_next(self):
         """The result is already the headline, so the slot beside it owes the
         reader the one thing that has not happened yet."""
