@@ -42,25 +42,29 @@ and it resolves itself on update.
 | What's New | the block below |
 | Promotional text | worth refreshing — **Banker** is the headline |
 | Description | **needs editing** — two new games to list, see below |
-| Keywords | consider adding `banker` |
+| Keywords | `banker` in, `settle` out — the updated 98-char string is in `app-store-listing.md` |
 | **Age Rating** | Gambling = **Yes**, already set — the 2026-09-02 rejection under 2.3.6 was fixed and a version has shipped since |
 | Screenshots | refreshing — see the note at the end |
 
 ### What's New
 
+**Kept clear of the gambling-trigger words** the listing doc bans —
+`bet`, `wager`, `gambling`, `winnings`, `real money`. The first draft of this
+block used "bet" five times, which is the vocabulary that drew the 2.3.6
+rejection in September.
+
 ```
 Two new games.
 
-BANKER — one golfer banks the hole and the other three bet against him,
-each in their own match. Set a maximum on the tee, take the bets, double
-on your own shot, and counter all three at once if you fancy it. Strokes
-come off inside each match, so the banker can be giving a shot in one bet
-and taking one in another on the same hole. Full receipt at the end, hole
-by hole.
+BANKER — one golfer banks the hole and the other three take him on, each
+in their own match. Name a maximum on the tee, then double on your own
+shot, or counter all three at once. Strokes come off inside each match, so
+the banker can be giving a shot in one and taking one in another on the
+same hole. A full receipt at the end, hole by hole.
 
-SEQUOYA 3s — six three-hole matches, partners rotating every third hole,
-so you play with everybody twice. Presses, an auto press, and a settle-up
-that shows every match that made your money.
+SEQUOYA 3s — six three-hole matches with partners rotating every third
+hole, so you play alongside everybody twice. Presses, an automatic press,
+and a settle-up that shows every match that made the difference.
 
 Both games run on the lock screen while you play.
 

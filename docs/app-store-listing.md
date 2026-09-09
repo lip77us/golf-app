@@ -1,4 +1,4 @@
-# App Store listing copy — Halved (v2.7.1)
+# App Store listing copy — Halved (v2.8.3)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
@@ -21,14 +21,24 @@ https://halved.golf/support
 ## Primary category
 Sports  (Secondary: optional, e.g. Utilities)
 
-## Keywords (100 max) — refreshed for 2.6.0 (98 chars)
-vegas,wolf,sixes,stableford,spots,handicap,foursome,matchplay,scorecard,tournament,settle,survivor
-(Dropped `stakes` to fit `survivor` — the new game's name is worth more as a
-search term, and `stakes` is a gambling-adjacent word we'd rather not lead on.)
+## Keywords (100 max) — refreshed for 2.8.3 (98 chars)
+banker,vegas,wolf,sixes,stableford,spots,handicap,foursome,matchplay,scorecard,tournament,survivor
+(Added `banker` and dropped `settle` to fit it. A game NAME is worth more than
+a verb: somebody searching `banker` is looking for exactly this app, and
+nobody finds a golf app by searching `settle`.)
+(`sequoya` is deliberately out — it is our name for the format, not a term
+anybody searches. It earns its place in the description instead.)
+(Dropped `stakes` back at 2.6.0 — a gambling-adjacent word we'd rather not
+lead on.)
 (Skins/Nassau are already in the subtitle, so they're omitted here — Apple
 indexes the subtitle words anyway; keywords spend the budget on new terms.)
 
-## Promotional text (170 max, editable without review) — 162 chars
+## Promotional text (170 max, editable without review) — 166 chars
+New: Banker — one golfer takes on the other three at once, and the stakes can
+double twice on a single hole. Plus Sequoya 3s, six short matches, partners
+rotating.
+
+## Promotional text — previous (v2.7.x, 162 chars)
 New: Survivor — worst score is knocked out, and the last two standing duel for
 the hole. Plus fully developed tournaments for singles, pairs, foursomes and teams.
 
@@ -38,6 +48,9 @@ games, enter scores hole by hole, and Halved does the rest — live results,
 handicaps, a shareable spectator web page, and an easy settle-up at the end.
 
 GAMES YOU CAN PLAY
+• Banker — one golfer takes the hole on against the other three, each in its
+  own match, with doubles called at a ball in the air
+• Sequoya 3s — six three-hole matches, partners rotating every third hole
 • Skins, with optional carryover
 • Nassau — front, back, overall, with presses
 • Las Vegas — 2v2 team game
@@ -94,6 +107,30 @@ seconds, with no spreadsheets and no napkin math.
 
 Halved is built for friendly play among friends. It tracks informal stakes for
 scoring purposes only and does not process payments.
+
+## What's New (v2.8.3)
+Two new games.
+
+BANKER — one golfer banks the hole and the other three take him on, each in
+their own match. Name a maximum on the tee, then double on your own shot, or
+counter all three at once. Strokes come off inside each match, so the banker
+can be giving a shot in one and taking one in another on the same hole. A full
+receipt at the end, hole by hole.
+
+SEQUOYA 3s — six three-hole matches with partners rotating every third hole,
+so you play alongside everybody twice. Presses, an automatic press, and a
+settle-up that shows every match that made the difference.
+
+Both games run on your lock screen while you play.
+
+ALSO IN THIS RELEASE
+• Favorites in the golfer picker — flag the people you always play with and
+  find them first
+• Survivor rebuilt: clearer score entry, a card that fits the lock screen, and
+  Zombie mode on the board
+• Lock screen cards for singles matches and fourballs
+• Force a playing handicap when the group is scoring off an outside card
+• Faster scorecards, and the label column stays put when you scroll
 
 ## What's New (v2.7.1)
 Your lock screen keeps the match now.
