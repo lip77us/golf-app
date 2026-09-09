@@ -406,6 +406,18 @@ class _GolfAppState extends State<GolfApp> {
           // cost an evening of debugging a feature that was never once being
           // exercised, and a real Twilio SMS, before the missing flag surfaced.
           if (kReleaseMode && Config.isProd) return scaled;
+          // **App Store screenshots.** Release mode is not available for a
+          // simulator, so a 6.9" store shot has to come off a profile build —
+          // and a profile build at production wears the RED ribbon, which is
+          // worse in a listing than the green one. This is the opt-out, and it
+          // is explicit on purpose: nobody loses the warning by forgetting a
+          // flag, only by typing one.
+          //
+          //   flutter build ios --simulator --profile \
+          //     --dart-define=SCREENSHOTS=true
+          if (const bool.fromEnvironment('SCREENSHOTS') && Config.isProd) {
+            return scaled;
+          }
           return Banner(
             message : Config.backendLabel,
             location: BannerLocation.bottomStart,
