@@ -36,10 +36,18 @@ import '../utils/round_complete.dart';
 const Color _kBlue   = Color(0xFF1976D2);   // side 1 of match 1 — "Team A"
 const Color _kOrange = Color(0xFFEF6C00);   // side 2
 
+/// Dollars, with pennies only when there are any. A column of "$30.00" is two
+/// characters of noise on every row, and the stakes here are whole far more
+/// often than not — a half only turns up when a bet is split. Same test the
+/// receipt and the rounds list use.
+String _dollars(double v) => v.abs() == v.abs().roundToDouble()
+    ? v.abs().toStringAsFixed(0)
+    : v.abs().toStringAsFixed(2);
+
 String _fmtMoney(double v) {
   if (v == 0) return '—';
   final sign = v > 0 ? '+' : '−';
-  return '$sign\$${v.abs().toStringAsFixed(2)}';
+  return '$sign\$${_dollars(v)}';
 }
 
 /// How a bet reads on the banner. Never a multiplier, and never "DORMIE"
@@ -570,11 +578,6 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
               // hole a press would cover — see _PressOffer.
               holeScored: [...match.side1, ...match.side2]
                   .every((p) => scores.containsKey(p.playerId)),
-              // Whether anything in this match has been DECIDED. A halved
-              // hole leaves the match level exactly as an uncontested one
-              // does, and the margin alone cannot tell the two apart.
-              anyHoleWon: summary!.cardHoles.any((h) =>
-                  h['match'] == match.index && h['winner_team'] != null),
               mySide: _mySide(match, context.read<AuthProvider>().player?.id),
               onCall: (side) => _callPress(match, side),
               onUndo: () => _removePress(match),
@@ -843,14 +846,13 @@ class _PressOffer extends StatelessWidget {
   final int  hole;
   final bool busy;
   final bool holeScored;
-  final bool anyHoleWon;
   final int? mySide;
   final void Function(int side) onCall;
   final VoidCallback onUndo;
 
   const _PressOffer({
     required this.match, required this.hole, required this.busy,
-    required this.holeScored, required this.anyHoleWon,
+    required this.holeScored,
     required this.mySide, required this.onCall, required this.onUndo,
   });
 
@@ -896,8 +898,14 @@ class _PressOffer extends StatelessWidget {
     final legal    = !already && twin == null && roomLeft
                      && trailing != null && !busy;
 
-    final where = covered == 1
-        ? 'hole $start' : 'holes $start–${match.endHole}';
+    // **No card unless there is something to do.** A press that cannot be
+    // called is not an offer, and rendering one greyed out read as being asked
+    // to press and then told no — on the second hole of every match whose first
+    // hole was won, which is most of them. The states that used to print here
+    // (an auto press already covering these holes, nothing decided yet, the
+    // match all square, no holes left) all resolve on their own as the match
+    // runs, and the banner above already lists every live bet.
+    if (!legal && !already) return const SizedBox.shrink();
 
     final String title;
     final String body;
@@ -911,28 +919,6 @@ class _PressOffer extends StatelessWidget {
           ? '${who}Nothing has been played on it yet, so a mis-tap can still '
             'be taken back.'
           : '${who}A bet the group has played cannot be taken back.';
-    } else if (!roomLeft) {
-      title = 'Press';
-      body  = 'No holes left in this match for a press to cover.';
-    } else if (!anyHoleWon) {
-      // Nothing has been won yet — the first tee, or holes that halved. That
-      // is the plain reason, and it outranks any talk of doubling.
-      title = 'Press';
-      body  = 'Callable once a hole in this match has been decided — there is '
-              'nobody to trail until one is.';
-    } else if (twin != null && twin.isPress) {
-      // Same as a called press: a state, not a refusal. "You cannot
-      // hand-call one" told the group off for something the game did by
-      // itself.
-      title = 'Auto press in play on ${twin.holeRange}';
-      body  = 'It opened when the first hole of the match was won.';
-    } else if (twin != null) {
-      title = 'A press would double the match';
-      body  = '${twin.label} is level with $where left, so a press over '
-              '$where settles on exactly the same golf.';
-    } else if (trailing == null) {
-      title = 'Press';
-      body  = 'The match is all square. Only the side that is DOWN may press.';
     } else {
       // **The card names the side and wears its colour.** Amber said only
       // "something is on offer" — and being orange-ish, it read as the ORANGE
@@ -1482,7 +1468,7 @@ class _MoneyCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 1.5),
                 child: Text(
                   '${t.fromName} pays ${t.toName} '
-                  '\$${t.amount.toStringAsFixed(2)}',
+                  '\$${_dollars(t.amount)}',
                   style: theme.textTheme.bodySmall,
                 ),
               ),
