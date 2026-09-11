@@ -1776,6 +1776,14 @@ class LowNetChampionshipConfig(models.Model):
                                 "{'place': 2, 'amount': 100.00}]"
                             ),
                         )
+    # Golfers who are RANKED but cannot be paid — a guest, or somebody whose
+    # index nobody knows and who is therefore playing for the card rather than
+    # the money. They keep their place on the board, so their scores are visible
+    # and honest; the prize ranking is recomputed over the eligible alone, so
+    # the golfer behind an excluded man moves UP a paid place rather than that
+    # place going unclaimed. Mirrors LowNetRoundConfig and the Stableford
+    # configs, which have had this from the start.
+    excluded_player_ids = models.JSONField(default=list, blank=True)
 
     def __str__(self):
         return f"Low Net Championship config — {self.tournament}"

@@ -158,3 +158,69 @@ class FlightsIntegrationTests(TestCase):
         self._play_par()
         rows = self._low_net_standings()
         self.assertTrue(all(r['flight'] is None for r in rows))
+
+
+class ExcludedFromTheLowNetPoolTests(FlightsIntegrationTests):
+    """Ranked, visible, not paid.
+
+    The case: three golfers whose index nobody knows. Estimating one would be
+    inventing a number that decides their strokes AND their flight. Leaving
+    them out of the prize pool instead means their gross is on the board and
+    honest — they can lose by fifty — while the money goes to the field that
+    entered a real index.
+    """
+
+    def _standings(self, excluded=None):
+        from services.low_net_championship import low_net_championship_standings
+        from games.models import LowNetChampionshipConfig
+        LowNetChampionshipConfig.objects.update_or_create(
+            tournament=self.tournament,
+            defaults={'entry_fee': 0,
+                      'payouts': [{'place': 1, 'amount': 100.0},
+                                  {'place': 2, 'amount': 50.0}],
+                      'excluded_player_ids': excluded or []})
+        return low_net_championship_standings(self.tournament)
+
+    def test_an_excluded_golfer_is_still_on_the_board(self):
+        players = self._field([2.0, 6.0, 11.0, 19.0])
+        self._play_par()
+        rows = self._standings(excluded=[players[0].id])
+        self.assertEqual(len(rows), 4)
+        self.assertTrue(next(r for r in rows
+                             if r['player_id'] == players[0].id)['excluded'])
+
+    def test_an_excluded_golfer_is_not_paid(self):
+        players = self._field([2.0, 6.0, 11.0, 19.0])
+        self._play_par()
+        # Everybody shoots par, so the highest handicap wins on net: players[3].
+        rows = self._standings(excluded=[players[3].id])
+        paid = {r['player_id']: r['payout'] for r in rows if r['payout']}
+        self.assertNotIn(players[3].id, paid)
+
+    def test_the_golfer_behind_him_moves_up_a_paid_place(self):
+        # Not "his place goes unclaimed" — the money is for the field that
+        # entered a real index, so it all goes out.
+        players = self._field([2.0, 6.0, 11.0, 19.0])
+        self._play_par()
+        rows = self._standings(excluded=[players[3].id])
+        paid = sorted(r['payout'] for r in rows if r['payout'])
+        self.assertEqual(paid, [50.0, 100.0])
+
+    def test_exclusion_is_per_flight(self):
+        players = self._field([2.0, 6.0, 11.0, 19.0, 25.0, 30.0, 33.0, 40.0])
+        set_flights(self.tournament, 2)
+        self._play_par()
+        rows = self._standings(excluded=[players[7].id])   # bottom flight's winner
+        by_flight = {}
+        for r in rows:
+            if r['payout']:
+                by_flight.setdefault(r['flight'], []).append(r['payout'])
+        # Both flights still pay their whole table.
+        self.assertAlmostEqual(sum(by_flight[1]), 150.0)
+        self.assertAlmostEqual(sum(by_flight[2]), 150.0)
+
+    def test_nobody_excluded_is_unchanged(self):
+        self._field([2.0, 6.0, 11.0, 19.0])
+        self._play_par()
+        rows = self._standings()
+        self.assertFalse(any(r['excluded'] for r in rows))

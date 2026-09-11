@@ -2053,6 +2053,7 @@ class TournamentLowNetSetupView(APIView):
         net_percent   : int 0-200                           (default 100)
         entry_fee     : decimal                             (default 0.00)
         payouts       : [{"place": 1, "amount": 200.00}, ...]
+        excluded_player_ids : [id, ...]  golfers ranked but not paid
     """
     def get(self, request, pk):
         tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
@@ -2065,6 +2066,7 @@ class TournamentLowNetSetupView(APIView):
                 'net_percent'  : cfg.net_percent,
                 'entry_fee'    : float(cfg.entry_fee),
                 'payouts'      : cfg.payouts,
+                'excluded_player_ids': cfg.excluded_player_ids or [],
             }
         except LowNetChampionshipConfig.DoesNotExist:
             data = {
@@ -2072,6 +2074,7 @@ class TournamentLowNetSetupView(APIView):
                 'net_percent'  : 100,
                 'entry_fee'    : 0.00,
                 'payouts'      : [],
+                'excluded_player_ids': [],
             }
         return Response(data)
 
@@ -2098,6 +2101,7 @@ class TournamentLowNetSetupView(APIView):
                 'net_percent'  : int(d.get('net_percent', 100)),
                 'entry_fee'    : d.get('entry_fee', 0.00),
                 'payouts'      : payouts,
+                'excluded_player_ids': d.get('excluded_player_ids', []) or [],
             },
         )
         return Response({

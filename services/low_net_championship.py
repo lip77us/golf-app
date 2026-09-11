@@ -151,11 +151,13 @@ def low_net_championship_standings(tournament) -> list:
         handicap_mode = config.handicap_mode
         net_percent   = config.net_percent
         payouts_cfg   = {p['place']: float(p['amount']) for p in (config.payouts or [])}
+        excluded      = set(config.excluded_player_ids or [])
     except Exception:
         from core.models import HandicapMode
         handicap_mode = HandicapMode.NET
         net_percent   = 100
         payouts_cfg   = {}
+        excluded      = set()
 
     aggregated = _aggregate_rounds(tournament, handicap_mode, net_percent)
 
@@ -188,6 +190,9 @@ def low_net_championship_standings(tournament) -> list:
         rank_key=lambda kv: (1, 0) if kv[1]['holes_played'] == 0 else (0, _ntp(kv)),
         flight_of=lambda pid: flights.get(pid, 1),
         payouts_cfg=payouts_cfg,
+        # Ranked but not paid. The helper keeps their display rank and
+        # recomputes the prize ranking over the eligible alone.
+        eligible=set(aggregated) - excluded,
     )
     ranked = [(pid, data, rank) for pid, data, rank, _flight in ranked_f]
     flight_of = {pid: f for pid, _d, _r, f in ranked_f}
@@ -203,6 +208,7 @@ def low_net_championship_standings(tournament) -> list:
         standings.append({
             'rank'          : r,
             'flight'        : flight_of.get(pid) if flights else None,
+            'excluded'      : pid in excluded,
             'player_id'     : pid,
             'player_name'   : data['name'],
             'net_total'     : data['total'],
@@ -337,6 +343,7 @@ def low_net_championship_summary(tournament, round_id: int | None = None) -> dic
             {
                 'rank'          : s['rank'],
                 'flight'        : s.get('flight'),
+                'excluded'      : s.get('excluded', False),
                 # `A · Paul L` until a build draws flight headers — see
                 # services.flights.prefixed_name. Summary only; the standings
                 # rows settlement reads keep the plain name.
