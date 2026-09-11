@@ -18,6 +18,31 @@ import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/tee_assignment.dart';
 
+/// The tee rows a save should send.
+///
+/// **Every row with a tee, not only the ones the user moved.** Skipping
+/// unchanged rows looks like an obvious optimisation — a foursome is four rows,
+/// so it buys nothing — and it broke the one job this screen uniquely does:
+/// `PATCH /foursomes/{id}/tees/` is the ONLY place a membership's course and
+/// playing handicap are recomputed from the golfer's index, and the change that
+/// makes a recompute necessary happens somewhere else entirely, in My Golfers.
+/// A TD who corrected an index there, came here and pressed Save got
+/// "No changes." and an untouched handicap; the workaround was to change a tee
+/// and change it back, which dirties the row twice and recomputes on the way.
+///
+/// A row with no tee selected is still skipped — there is nothing to assign.
+List<Map<String, int>> buildTeePayload(
+    List<Membership> members, Map<int, int> picks) {
+  final out = <Map<String, int>>[];
+  for (final m in members) {
+    final pick = picks[m.player.id] ?? m.tee?.id;
+    if (pick == null || pick == 0) continue;
+    out.add({'player_id': m.player.id, 'tee_id': pick});
+  }
+  return out;
+}
+
+
 class ConfirmTeesScreen extends StatefulWidget {
   final int foursomeId;
   const ConfirmTeesScreen({super.key, required this.foursomeId});
@@ -111,15 +136,8 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
     setState(() { _saving = true; _error = null; });
     try {
       final client  = context.read<AuthProvider>().client;
-      // Only send rows that actually changed — keeps the payload small
-      // and avoids touching memberships we don't need to.
-      final payload = <Map<String, int>>[];
-      for (final m in _members) {
-        final pick = _picks[m.player.id];
-        if (pick == null || pick == 0) continue;
-        if (pick == m.tee?.id) continue;
-        payload.add({'player_id': m.player.id, 'tee_id': pick});
-      }
+      // Every row, not only the moved ones — see buildTeePayload.
+      final payload = buildTeePayload(_members, _picks);
 
       // Forced handicaps — only the ones that actually moved. A blank field
       // clears the override, which is a real change and must be sent as an
@@ -138,9 +156,10 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
       }
 
       if (payload.isEmpty && hcaps.isEmpty) {
+        // Only reachable when nobody has a tee at all.
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No changes.')),
+          const SnackBar(content: Text('Nothing to save — no tees selected.')),
         );
         Navigator.of(context).pop(false);
         return;
