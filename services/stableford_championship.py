@@ -96,38 +96,34 @@ def stableford_championship_standings(tournament) -> list:
     if not aggregated:
         return []
 
-    # Higher points = better.
-    rows = sorted(aggregated.items(), key=lambda kv: -kv[1]['points'])
+    # Flights (docs/flights-plan.md). Unflighted is one flight holding
+    # everybody, so this is ONE code path — the shipped behaviour is the
+    # degenerate case rather than a branch that can drift from the flighted one.
+    #
+    # `eligible` matters more here than in Low Net: Stableford pays among
+    # non-excluded golfers only, and the helper reproduces the shipped rule —
+    # an excluded golfer keeps his display rank while the prize ranking is
+    # recomputed over the eligible alone.
+    from services.flights import flight_map, rank_in_flights
+    flights = flight_map(tournament)
 
-    def _rank_list(items):
-        out, rank = [], 1
-        for i, (pid, data) in enumerate(items):
-            if i > 0 and data['points'] < items[i - 1][1]['points']:
-                rank = i + 1
-            out.append((pid, data, rank))
-        return out
-
-    ranked = _rank_list(rows)
-
-    # Prize ranks among eligible (non-excluded) players only.
-    eligible = [(pid, d) for pid, d in rows if pid not in excluded]
-    prize_ranked = _rank_list(eligible)
-    prize_rank_map = {pid: r for pid, _d, r in prize_ranked}
-    # Tied players split the money for the PLACES THEY OCCUPY (services/payout.py).
-    from services.payout import split_tied_places
-    rank_payout = {
-        r: (amt or None)
-        for r, amt in split_tied_places(
-            payouts_cfg, [r for _pid, _d, r in prize_ranked]).items()
-    }
+    ranked_f, payouts = rank_in_flights(
+        aggregated,
+        sort_key=lambda kv: -kv[1]['points'],       # higher points = better
+        rank_key=lambda kv: kv[1]['points'],
+        flight_of=lambda pid: flights.get(pid, 1),
+        payouts_cfg=payouts_cfg,
+        eligible=set(aggregated) - set(excluded),
+    )
+    flight_of = {pid: f for pid, _d, _r, f in ranked_f}
 
     standings = []
-    for pid, data, rank in ranked:
+    for pid, data, rank, _flight in ranked_f:
         is_excluded = pid in excluded
-        payout = (None if is_excluded
-                  else rank_payout.get(prize_rank_map.get(pid)))
+        payout = None if is_excluded else payouts.get(pid)
         standings.append({
             'rank'         : rank,
+            'flight'       : flight_of.get(pid) if flights else None,
             'player_id'    : pid,
             'player_name'  : data['name'],
             'total_points' : data['points'],

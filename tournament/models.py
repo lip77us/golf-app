@@ -82,6 +82,18 @@ class Tournament(models.Model):
                                 "0 = no carve-out."
                             ),
                         )
+    # Flights. 0 = one board for everyone (the shipped behaviour); 2+ cuts the
+    # field and gives each flight its own ranking and its own payout. The count
+    # lives on the TOURNAMENT rather than on a game config because one cut
+    # serves every championship the event runs — Low Net and Stableford must
+    # not be able to flight the same field differently.
+    flight_count        = models.PositiveSmallIntegerField(
+                            default=0,
+                            help_text=(
+                                "Number of flights. 0 = unflighted (one board). "
+                                "Assignments are frozen in TournamentFlight."
+                            ),
+                        )
     created_at          = models.DateTimeField(auto_now_add=True)
 
     objects             = AccountScopedManager()
@@ -129,6 +141,50 @@ class Tournament(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class TournamentFlight(models.Model):
+    """Which flight a golfer plays in — frozen, one row per golfer.
+
+    **Why a table and not a derivation.** Flights are cut on handicap INDEX and
+    sized off the field, so deriving them live would move a golfer between
+    boards when his index changed or when somebody withdrew. Freezing makes the
+    assignment a fact rather than a convention the next calculator has to
+    remember.
+
+    **Why its own model.** There is no tournament-level participant row — the
+    field is derived from FoursomeMembership across the rounds (see
+    services.tournament_settlement._field) — so there is nothing else to hang
+    this on.
+
+    Written once by the Set-flights action, after pairings are final: equal
+    sizing is a function of the field, so it cannot be settled while the field
+    is still moving.
+    """
+    tournament  = models.ForeignKey('tournament.Tournament',
+                                    on_delete=models.CASCADE,
+                                    related_name='flights')
+    player      = models.ForeignKey('core.Player', on_delete=models.CASCADE,
+                                    related_name='tournament_flights')
+    flight      = models.PositiveSmallIntegerField(
+                    help_text="1 = the lowest-index flight.")
+    # The index the cut was made on. A golfer's index moves, so keeping it makes
+    # the cut explicable a week later — "why am I in B" stays answerable. Null
+    # where the golfer had no index, which is also why he is at the bottom and
+    # was not counted in the sizing.
+    index_at_assignment = models.DecimalField(
+                    max_digits=4, decimal_places=1, null=True, blank=True)
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['tournament', 'player'],
+                                    name='unique_flight_per_tournament_player'),
+        ]
+        ordering = ['flight', 'index_at_assignment']
+
+    def __str__(self):
+        return f"{self.player} — flight {self.flight}"
 
 
 class Round(models.Model):

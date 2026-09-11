@@ -169,26 +169,27 @@ def low_net_championship_standings(tournament) -> list:
             return (1, 0, 0)
         return (0, d['total'] - d['par_played'], -d['holes_played'])
 
-    rows = sorted(aggregated.items(), key=_sort_key)
+    # Flights (docs/flights-plan.md). Unflighted is one flight containing
+    # everybody, so there is ONE code path and the shipped behaviour is the
+    # degenerate case rather than a branch that can drift.
+    from services.flights import flight_map, rank_in_flights
+    flights = flight_map(tournament)
 
-    # Assign ranks.
-    ranked = []
-    rank = 1
-    for i, (pid, data) in enumerate(rows):
-        if i > 0:
-            prev_ntp = rows[i - 1][1]['total'] - rows[i - 1][1]['par_played']
-            curr_ntp = data['total'] - data['par_played']
-            if curr_ntp > prev_ntp:
-                rank = i + 1
-        ranked.append((pid, data, rank))
+    def _ntp(kv):
+        d = kv[1]
+        return d['total'] - d['par_played']
 
-    # Tied players split the money for the PLACES THEY OCCUPY (services/payout.py).
-    from services.payout import split_tied_places
-    rank_payout: dict = {
-        r: (amt or None)
-        for r, amt in split_tied_places(
-            payouts_cfg, [r for _pid, _data, r in ranked]).items()
-    }
+    ranked_f, payouts = rank_in_flights(
+        aggregated,
+        sort_key=_sort_key,
+        # Ranks on net-to-par ALONE: two golfers level there share a rank even
+        # though _sort_key puts the one with more holes played above.
+        rank_key=lambda kv: (1, 0) if kv[1]['holes_played'] == 0 else (0, _ntp(kv)),
+        flight_of=lambda pid: flights.get(pid, 1),
+        payouts_cfg=payouts_cfg,
+    )
+    ranked = [(pid, data, rank) for pid, data, rank, _flight in ranked_f]
+    flight_of = {pid: f for pid, _d, _r, f in ranked_f}
 
     standings = []
     for pid, data, r in ranked:
@@ -200,6 +201,7 @@ def low_net_championship_standings(tournament) -> list:
         ]
         standings.append({
             'rank'          : r,
+            'flight'        : flight_of.get(pid) if flights else None,
             'player_id'     : pid,
             'player_name'   : data['name'],
             'net_total'     : data['total'],
@@ -218,7 +220,7 @@ def low_net_championship_standings(tournament) -> list:
             'round_counts'  : data.get('round_counts', []),
             'round_complete': data.get('round_complete', []),
             'round_holes_in_play': data.get('round_holes_in_play', []),
-            'payout'        : rank_payout.get(r),
+            'payout'        : payouts.get(pid),
         })
 
     return standings

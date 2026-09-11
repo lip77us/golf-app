@@ -140,3 +140,76 @@ def rank_in_flights(aggregated, *, sort_key, rank_key, flight_of, payouts_cfg,
             payouts[pid] = paid.get(r) or None
 
     return ranked, payouts
+
+
+# ---------------------------------------------------------------------------
+# Freezing the cut
+# ---------------------------------------------------------------------------
+
+def tournament_field(tournament):
+    """``[(player_id, index_or_None), ...]`` for every real golfer in the event.
+
+    The field is derived from foursome memberships — there is no
+    tournament-level participant row — which is also why the cut has to be
+    frozen once pairings are final rather than recomputed.
+    """
+    from tournament.models import FoursomeMembership
+    rows = (FoursomeMembership.objects
+            .filter(foursome__round__tournament=tournament,
+                    player__is_phantom=False)
+            .select_related('player')
+            .values_list('player_id', 'player__handicap_index')
+            .distinct())
+    return [(pid, idx) for pid, idx in rows]
+
+
+def set_flights(tournament, n_flights: int = None):
+    """Cut the field and FREEZE it. Returns ``{player_id: flight_no}``.
+
+    Replaces any previous assignment wholesale — a re-cut after a withdrawal is
+    a new cut, not a patch, because the sizing depends on the whole field.
+
+    Passing ``n_flights`` also stores it on the tournament, so the count and the
+    assignment can never disagree.
+    """
+    from django.db import transaction
+    from tournament.models import TournamentFlight
+
+    if n_flights is None:
+        n_flights = tournament.flight_count
+    if n_flights < 1:
+        raise ValueError('Set a flight count of 1 or more before cutting.')
+
+    field = tournament_field(tournament)
+    assignment = assign_flights(field, n_flights)
+    index_of = dict(field)
+
+    with transaction.atomic():
+        TournamentFlight.objects.filter(tournament=tournament).delete()
+        TournamentFlight.objects.bulk_create([
+            TournamentFlight(tournament=tournament, player_id=pid,
+                             flight=flight, index_at_assignment=index_of[pid])
+            for pid, flight in assignment.items()
+        ])
+        if tournament.flight_count != n_flights:
+            tournament.flight_count = n_flights
+            tournament.save(update_fields=['flight_count'])
+
+    return assignment
+
+
+def flight_map(tournament) -> dict:
+    """``{player_id: flight_no}`` as frozen, or ``{}`` when unflighted.
+
+    **A golfer with no frozen row falls to the bottom flight**, not to a crash
+    and not to flight 1. He joined after the cut — a late entry, or a
+    substitute — and the bottom flight is where an unknown goes, the same rule
+    the unindexed follow.
+    """
+    if not tournament.flight_count or tournament.flight_count < 2:
+        return {}
+    frozen = dict(tournament.flights.values_list('player_id', 'flight'))
+    if not frozen:
+        return {}
+    bottom = tournament.flight_count
+    return {pid: frozen.get(pid, bottom) for pid, _idx in tournament_field(tournament)}
