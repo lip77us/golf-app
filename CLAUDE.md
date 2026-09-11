@@ -1416,6 +1416,67 @@ golfers (tournament player select, group builder) — this screen is the first
 consumer. The backend and both widgets are general; the other pickers still
 draw the plain list.
 
+## Flights — Phase 1 (server only, no client build)
+
+Two flights out of one field, each ranked and PAID on its own. Full design and
+the decisions behind it: `docs/flights-plan.md`.
+
+**Why it is not two tournaments.** A foursome belongs to one tournament, and
+mixed groups (A and B golfers together) would have to run two rounds side by
+side — two app sessions for four men walking together, breaking the single
+scorecard and every in-group side game.
+
+**It needed no client build.** The leaderboard renders in server order and takes
+`rank` verbatim, so rows returned flight-by-flight with ranks restarting at 1
+draw as contiguous blocks on the shipped app. `isLeading = rank == 1` even gives
+each flight's leader the leader treatment, by accident. Until real headers ship,
+the summary prefixes each row's name with its letter — `A · Paul L` — applied
+ONLY in the summary, never in `*_championship_standings`, so it cannot leak into
+settlement or a texted receipt. **Delete the prefix when headers land**
+(`services.flights.prefixed_name`).
+
+**The pieces.** `services/flights.py`: `assign_flights` (pure — equal-sized,
+remainder to the LOWER flight), `rank_in_flights` (ranks and pays within a
+flight; takes `sort_key` and `rank_key` SEPARATELY because Low Net sorts on
+(net-to-par, −holes) but ranks on net-to-par alone), `set_flights` / `flight_map`.
+`Tournament.flight_count` (0 = one board) plus `TournamentFlight`, one frozen row
+per golfer — its own model because there is no tournament-level participant row;
+the field is derived from `FoursomeMembership`. Endpoint
+`GET/POST/DELETE /api/tournaments/{id}/flights/`.
+
+**Unflighted is the same code path**, one flight holding everybody — so the
+shipped behaviour is the degenerate case and cannot drift.
+
+**Settlement and the receipt needed no change**: they iterate the standings rows
+and read `row['payout']`. Keep flights inside the two `*_championship_standings()`
+functions and that stays true.
+
+**"No index" is named at cut time, not stored on the golfer.**
+`Player.handicap_index` is NOT NULL and should stay that way — a golfer whose
+index nobody knows still needs one, or his playing handicap snapshots at scratch
+and he takes no strokes all day. So `POST {"unindexed": [id, ...]}` drops those
+ids out of the SIZING (bottom flight, not counted), while the entered index keeps
+giving them shots. It matters at three, not at one: with a single unknown in an
+even field, naming him gives the same cut as a high index.
+
+**`LowNetChampionshipConfig.excluded_player_ids`** was added here — it was the
+only config without it. A golfer can be ranked and visible while unpaid; the
+prize ranking is recomputed over the eligible alone, so the man behind him moves
+UP a paid place. **No client renders the `excluded` flag** (not even Stableford,
+which has had it for ages), so an excluded golfer shows an empty money column
+with no marking.
+
+**Phase 2, needing a build:** real flight headers, showing the INDEX rather than
+the playing handicap on a flighted board, and a marker for an excluded golfer.
+The setup UI already has its home — `_flightsDeferred()` in `new_round_wizard.dart`
+draws a `Flights` card with a `NOT YET` chip.
+
+**Known, pre-existing:** `services/payout.split_tied_places` rounds each share to
+the cent, so a three-way tie over $200 pays $66.67 each and invents a cent.
+Flights make it likelier, since small flights tie more often.
+
+---
+
 ## Release tags
 
 Every marketing version is tagged `v<version>` (annotated), pointing at the
