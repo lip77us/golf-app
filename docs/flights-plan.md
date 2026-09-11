@@ -1,0 +1,181 @@
+# Flights on the Championship leaderboards
+
+**Status:** planned, not built. Written 2026-09-11 for the Monday 2026-09-14 event.
+**Applies to:** Low Net Championship and Stableford Championship.
+
+---
+
+## Why this exists, and why the obvious workaround does not
+
+Two flights, each paying its own places, out of one field.
+
+The workaround is to run two tournaments, one per flight. It fails on the actual
+draw: **one or two foursomes contain both A and B flight golfers.** A foursome
+belongs to one tournament, so a mixed group would have to run *two rounds side
+by side* — the A players scored in one tournament, the B players in another, two
+app sessions for four people walking together. That breaks the single scorecard
+the group plays off and takes every in-group side game with it. It is not a
+workaround; it is a different event.
+
+So flights have to live inside one tournament.
+
+## Decisions already taken
+
+These are settled. They are recorded here so they are not re-litigated.
+
+- **Each flight pays its own places.** That is the entire point of flighting.
+- **Flights are equal-sized**, and the remainder goes to the **lower-index**
+  flight. 23 golfers in two flights is A=12, B=11.
+- **Flights are assigned on handicap INDEX**, not playing handicap. Playing
+  handicap moves with tee and course; the index does not, and a golfer must not
+  change flight because the second round is off a different set of tees.
+- **A flight, once assigned, is frozen.** See the wrinkle below.
+- **Stableford is in from the start**, not bolted on later.
+
+### The wrinkle: "frozen at entry" cannot mean at entry
+
+Equal-sized flights are sized off the field. So every late entry or withdrawal
+resizes them, and a flight frozen when each golfer enters cannot also be
+equal-sized — the two rules contradict each other.
+
+The freeze therefore happens **when the field is final** — an explicit *Set
+flights* action once pairings are set, not a derivation that re-runs. After that
+the assignment is a stored fact and nothing moves it, which is what "frozen"
+was protecting.
+
+---
+
+## Phase 1 — server only, no App Store
+
+The client renders the leaderboard **in the order the server sends and takes
+`rank` verbatim.** It does not sort. Two consequences, both verified in
+`mobile/lib/screens/tournament_leaderboard_screen.dart`:
+
+- The server can return rows flight by flight, ranks restarting at 1 per flight,
+  and the existing installed app draws them as contiguous blocks.
+- `isLeading = rank == 1`, so **each flight's leader gets the leader treatment**
+  — which is correct for flights, by accident rather than design.
+- The row key is `'$rank:$name'`, unique across flights because the names differ.
+
+So the whole of the scoring, ranking and money can ship to Railway with **no new
+iOS build and no App Store review**.
+
+### The ceiling, stated honestly
+
+Without a client build there is **no flight header**. The board will read as two
+ranked blocks with nothing between them announcing where one ends. The stopgap
+is to carry the flight in the row's own `name` — `A · Paul L` — which the client
+renders verbatim. It is ugly and it is temporary; it is also unambiguous, which
+beats two anonymous blocks.
+
+A second cosmetic wart: the row's `handicap` column is **playing handicap**
+(`low_net_round.py`), while flights are cut on index. On a flighted board those
+two numbers sitting together invite the question. Phase 2 should show the index.
+
+---
+
+## Design
+
+Two shared pieces, both game-agnostic, so Stableford costs almost nothing.
+
+### 1. `assign_flights(players_with_index, n_flights) -> {player_id: flight}`
+
+Pure function. Sort by index ascending, cut into equal parts, hand the remainder
+to the lower-index flights. No database, no game knowledge, trivially testable —
+and the only place the sizing rule lives.
+
+Open question it must answer: **a golfer with no index.** Bottom flight is the
+safe default (they are not competing for the A-flight purse on an unknown
+index), but it should be a stated rule rather than a fallthrough.
+
+### 2. `rank_in_flights(aggregated, *, sort_key, flight_of, payouts_cfg, eligible)`
+
+Ranks and pays **within** each flight, returning the rows in flight order.
+
+Both championship services already share one shape — aggregate into
+`{player_id: data}`, sort, assign ranks with a tie-aware loop, then
+`split_tied_places`. The **only** thing they differ on is the sort:
+
+| Game | Sort |
+|---|---|
+| Low Net | net-to-par ascending |
+| Stableford | points descending |
+
+So `sort_key` is the parameter and everything else is shared.
+
+`eligible` is not decoration. **Stableford carries an `excluded` set and pays
+"among eligible players only"; Low Net does not.** A flight helper that ignores
+it will pay Stableford golfers who should not be paid.
+
+### 3. `TournamentFlight(tournament, player, flight)`
+
+There is **no tournament-level participant model** — the field is derived from
+`FoursomeMembership` across the rounds (`_field()` in
+`services/tournament_settlement.py`). So there is nothing to hang a flight on,
+and the frozen assignment needs its own small explicit model. One row per
+golfer, written once by *Set flights*.
+
+This is also what makes "frozen" real: a fact in the database rather than a
+convention that the next calculator forgets.
+
+### What follows for free
+
+`services/tournament_settlement.py` iterates the standings rows and reads
+`row['payout']`. **Put flights inside the two `*_championship_standings()`
+functions and settlement, the receipt and the pots follow with no change.** This
+is the single best structural fact about the job and it should not be given up
+by computing flights anywhere else.
+
+---
+
+## The actual risk: the purse
+
+Everything above is arranging. The money is the part that can be wrong quietly.
+
+`entry_fee × field` is currently one pool, and `payouts` is one flat list of
+`{place, amount}`. Per-flight purses mean:
+
+- Each flight's pool is its own — `entry_fee × that flight's count`. With uneven
+  flights (12 and 11) the two pools differ, so a single payout table cannot be
+  right for both unless it is expressed as shares rather than amounts.
+- **Decide: shares or amounts.** Amounts are what the config holds today and
+  what a TD types. Shares survive an uneven split. This needs an answer before
+  any code.
+- `carve_out()` for the mini-singles carve runs against the whole pool today.
+  Where does the carve come from when there are two pools?
+
+Until those are settled, the flighting is unbuildable no matter how tidy the
+ranking is.
+
+---
+
+## Tests
+
+The suite already covers these calculators (`test_low_net_modes.py` and the
+Stableford equivalents), so extend rather than start over.
+
+- `assign_flights`: 22/2, 23/2 (remainder low), 23/3, a field smaller than the
+  flight count, a golfer with no index.
+- Ranking: ties **inside** a flight split that flight's places and nothing else.
+- Money: the two pools add back to `entry_fee × field` exactly — no cent
+  invented, none lost.
+- Stableford: an excluded golfer is ranked but not paid, inside a flight.
+- Settlement: the pot totals are unchanged by flighting a field of one flight.
+
+---
+
+## Phase 2 — the client, whenever a build next ships
+
+- Real section headers per flight, with the flight's own purse stated.
+- Show the **index** on a flighted board, not the playing handicap.
+- Drop the `A · ` name prefix the moment headers land.
+
+---
+
+## Monday
+
+Phase 1 is the plan. If it is not finished and tested by Sunday, **Monday runs
+unflighted on one board and the flights are settled by hand from the final
+standings** — which is safe, because the standings themselves are unaffected by
+flighting. Do not run two tournaments: the mixed foursomes make that worse than
+either alternative.
