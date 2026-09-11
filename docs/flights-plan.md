@@ -35,7 +35,12 @@ These are settled. They are recorded here so they are not re-litigated.
 - **No Mini Singles on a flighted event**, and none on a one-day event. This is
   a validation rule, and it removes the carve-out question entirely.
 - **Flights are equal-sized**, and the remainder goes to the **lower-index**
-  flight. 23 golfers in two flights is A=12, B=11.
+  flight. 20 indexed golfers in two flights is A=10, B=10; 23 is A=12, B=11.
+- **A golfer with no index goes to the bottom flight and is NOT counted in the
+  split.** The split is taken over the INDEXED golfers alone, then the no-index
+  golfers are added to the highest flight — so the bottom flight is deliberately
+  bigger. 23 golfers of whom 3 have no index: split the 20 indexed (A=10, B=10),
+  then add the 3, giving **A=10, B=13**. Not A=12, B=11.
 - **Flights are assigned on handicap INDEX**, not playing handicap. Playing
   handicap moves with tee and course; the index does not, and a golfer must not
   change flight because the second round is off a different set of tees.
@@ -94,9 +99,16 @@ Pure function. Sort by index ascending, cut into equal parts, hand the remainder
 to the lower-index flights. No database, no game knowledge, trivially testable —
 and the only place the sizing rule lives.
 
-Open question it must answer: **a golfer with no index.** Bottom flight is the
-safe default (they are not competing for the A-flight purse on an unknown
-index), but it should be a stated rule rather than a fallthrough.
+**A golfer with no index does not take part in the sizing.** Partition the
+field first — indexed and not — split only the indexed, then append the rest to
+the highest flight. Writing it the other way round (bottom-flight them, then
+split the whole field) silently pushes a real golfer up a flight to make room
+for one whose index nobody knows, which is exactly what this rule prevents.
+
+The consequence is intended and should not later be read as a bug: **the bottom
+flight can be larger, and both flights still pay the same table**, so more
+golfers there compete for the same money. That is the accepted cost of not
+letting an unknown index displace anybody.
 
 ### 2. `rank_in_flights(aggregated, *, sort_key, flight_of, payouts_cfg, eligible)`
 
@@ -171,7 +183,10 @@ The suite already covers these calculators (`test_low_net_modes.py` and the
 Stableford equivalents), so extend rather than start over.
 
 - `assign_flights`: 22/2, 23/2 (remainder low), 23/3, a field smaller than the
-  flight count, a golfer with no index.
+  flight count.
+- `assign_flights` with no-index golfers: 23 with 3 unindexed gives A=10, B=13
+  (NOT A=12, B=11); a field where every golfer is unindexed; one where only the
+  bottom flight would otherwise be empty.
 - Ranking: ties **inside** a flight split that flight's places and nothing else.
 - Money: each flight pays the full table once, so the event pays
   `sum(table) × n_flights` and no more — a tie inside a flight must not let that
