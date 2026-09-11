@@ -1,0 +1,142 @@
+"""
+services/flights.py
+-------------------
+Cutting a tournament field into flights, and ranking inside them.
+
+Two pieces, both deliberately game-agnostic so the Low Net and Stableford
+championships share one implementation rather than growing two:
+
+    assign_flights(field, n_flights)  -> {player_id: flight_no}
+    rank_in_flights(...)              -> rows, ranked and paid WITHIN each flight
+
+Design notes live in ``docs/flights-plan.md``.  The two rules most likely to be
+"tidied" into something wrong are stated at their implementations: the remainder
+goes to the LOWER-index flight, and a golfer with no index does not take part in
+the sizing at all.
+"""
+from decimal import Decimal
+
+
+# ---------------------------------------------------------------------------
+# Assignment
+# ---------------------------------------------------------------------------
+
+def assign_flights(field, n_flights: int) -> dict:
+    """``{player_id: flight_no}`` (1 = lowest index), for a field of
+    ``(player_id, handicap_index_or_None)`` pairs.
+
+    **Equal-sized, remainder to the LOWER flights.** 23 indexed golfers in two
+    flights is A=12, B=11 — the better players' flight absorbs the odd man, not
+    the other way round.
+
+    **A golfer with no index goes to the bottom flight and is NOT counted in
+    the split.** The split is taken over the indexed golfers alone and the rest
+    are appended afterwards, so the bottom flight is deliberately bigger. 23
+    golfers of whom 3 have no index gives A=10, B=13 — *not* A=12, B=11.
+
+    Doing it the other way round (bottom-flight them first, then split the whole
+    field) pushes a real golfer up a flight to make room for one whose index
+    nobody knows, which is the thing this rule exists to prevent. The cost is
+    accepted and intended: both flights pay the same table, so the bottom flight
+    has more golfers competing for the same money.
+
+    Ties on index are broken by ``player_id`` so the cut is deterministic — two
+    golfers on 11.4 either side of the boundary must not swap flights because a
+    queryset came back in a different order.
+    """
+    if n_flights < 1:
+        raise ValueError('n_flights must be at least 1')
+
+    indexed, unindexed = [], []
+    for pid, idx in field:
+        (unindexed if idx is None else indexed).append((pid, idx))
+
+    indexed.sort(key=lambda p: (Decimal(str(p[1])), p[0]))
+
+    base, remainder = divmod(len(indexed), n_flights)
+    out, pos = {}, 0
+    for flight in range(1, n_flights + 1):
+        size = base + (1 if flight <= remainder else 0)
+        for pid, _idx in indexed[pos:pos + size]:
+            out[pid] = flight
+        pos += size
+
+    for pid, _idx in unindexed:
+        out[pid] = n_flights
+
+    return out
+
+
+def flight_sizes(assignment: dict, n_flights: int) -> list:
+    """``[count, ...]`` per flight — for stating the cut back to the TD before
+    it is frozen, and for the tests that pin the remainder rule."""
+    return [sum(1 for f in assignment.values() if f == n)
+            for n in range(1, n_flights + 1)]
+
+
+# ---------------------------------------------------------------------------
+# Ranking
+# ---------------------------------------------------------------------------
+
+def rank_in_flights(aggregated, *, sort_key, rank_key, flight_of, payouts_cfg,
+                    eligible=None):
+    """``([(player_id, data, rank, flight), ...], {player_id: payout})``.
+
+    Ranks and pays WITHIN each flight, returning rows in flight order so a
+    client that renders the server's list verbatim draws contiguous blocks with
+    ranks restarting at 1.
+
+    The two championships differ in exactly one respect — how a row is ordered
+    and compared — so that is the parameter:
+
+        Low Net     net-to-par ascending
+        Stableford  points descending
+
+    **`sort_key` and `rank_key` are not the same thing, and collapsing them into
+    one is a real bug.** Low Net SORTS on (net-to-par, −holes played) but RANKS
+    on net-to-par alone — two golfers level on net-to-par share a rank even
+    though one has played more holes and sorts above the other. Passing the sort
+    key as the tie test would silently split that tie and pay two places.
+
+    ``eligible`` is not decoration. Stableford carries an excluded set and pays
+    "among eligible players only"; Low Net does not. Note what that means and
+    what this therefore copies from the shipped behaviour: an excluded golfer
+    keeps his DISPLAY rank, but the prize ranking is recomputed over the
+    eligible golfers alone — so the man behind him moves up a paid place rather
+    than that place going unclaimed.
+
+    Every flight pays the SAME table (see the plan): equal pools and stated
+    amounts mean flight B's table is flight A's table.
+    """
+    from services.payout import split_tied_places
+
+    eligible = set(aggregated) if eligible is None else set(eligible)
+
+    def _ranked(rows):
+        """Ties share a rank; the next rank skips by the size of the tie."""
+        out, rank = [], 1
+        for i, (pid, data) in enumerate(rows):
+            if i > 0 and rank_key((pid, data)) != rank_key(rows[i - 1]):
+                rank = i + 1
+            out.append((pid, data, rank))
+        return out
+
+    by_flight: dict = {}
+    for pid, data in aggregated.items():
+        by_flight.setdefault(flight_of(pid), []).append((pid, data))
+
+    ranked, payouts = [], {}
+    for flight in sorted(by_flight):
+        rows = sorted(by_flight[flight], key=sort_key)
+
+        for pid, data, rank in _ranked(rows):
+            ranked.append((pid, data, rank, flight))
+
+        # Prize ranking is its own pass over the eligible golfers in THIS
+        # flight, renumbered from 1 — see the docstring.
+        prize = _ranked([r for r in rows if r[0] in eligible])
+        paid = split_tied_places(payouts_cfg, [r for _pid, _d, r in prize])
+        for pid, _data, r in prize:
+            payouts[pid] = paid.get(r) or None
+
+    return ranked, payouts
