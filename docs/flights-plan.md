@@ -183,6 +183,12 @@ Stableford equivalents), so extend rather than start over.
 
 ## Phase 2 — the client, whenever a build next ships
 
+**The setup UI already has its home.** `_flightsDeferred()` in
+`new_round_wizard.dart` draws a `Flights` card with a `NOT YET` chip on the
+SCORING step — P10 chose to state the absence rather than hide it. Phase 2
+replaces that card's body with the real controls (flight count, *Set flights*),
+so the step's shape does not change and nothing has to be found a place.
+
 - Real section headers per flight, with the flight's own purse stated.
 - Show the **index** on a flighted board, not the playing handicap.
 - Drop the `A · ` name prefix the moment headers land.
