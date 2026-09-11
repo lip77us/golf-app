@@ -163,3 +163,109 @@ class TournamentFlightsEndpointTests(APITestCase):
         self.assertEqual(summary['flight_count'], 0)
         self.assertFalse(any('·' in row['name'] for row in summary['results']))
         self.assertTrue(all(row['flight'] is None for row in summary['results']))
+
+
+class UnindexedAtCutTests(APITestCase):
+    """Naming the golfers whose entered index is a guess.
+
+    `Player.handicap_index` is NOT NULL and should stay that way — a golfer
+    whose index nobody knows still needs one, or he plays off scratch and gets
+    no strokes. So the estimate keeps giving him shots and the TD names, at cut
+    time, whose number should not be counted in the sizing.
+    """
+
+    def setUp(self):
+        from accounts.models import User
+        self.course = make_course()
+        self.tee = make_tee(course=self.course, holes=DEFAULT_HOLES)
+        self.tournament = make_tournament()
+        self.round = make_round(course=self.course, tournament=self.tournament,
+                                active_games=['low_net'])
+        self._group = 0
+        # 12 golfers: 9 with real indexes, 3 whose numbers are guesses.
+        self._field([2.0, 5.0, 8.0, 11.0, 14.0, 17.0, 20.0, 23.0, 26.0,
+                     30.0, 33.0, 36.0])
+        self.guessed = [m.player_id for fs in self.round.foursomes.all()
+                        for m in fs.memberships.all()
+                        if not m.player.is_phantom][-3:]
+
+        self.user = User.objects.create_user(
+            username='td2', password='pw', account=self.tournament.account,
+            is_account_admin=True)
+        self.client.force_authenticate(self.user)
+        self.url = reverse('api-tournament-flights', args=[self.tournament.id])
+
+    def _field(self, indexes):
+        for start in range(0, len(indexes), 4):
+            self._group += 1
+            make_foursome(
+                self.round,
+                [(f'H{start + i:02d}', idx)
+                 for i, idx in enumerate(indexes[start:start + 4])],
+                tee=self.tee, group_number=self._group)
+
+    def _sizes(self):
+        from services.flights import flight_map
+        self.tournament.refresh_from_db()
+        m = flight_map(self.tournament)
+        return [sum(1 for f in m.values() if f == n) for n in (1, 2)]
+
+    def test_naming_three_shrinks_the_top_flight(self):
+        # 12 golfers, 3 named: the 9 indexed split 5/4, then the 3 join the
+        # bottom — 5/7, not 6/6.
+        r = self.client.post(
+            self.url, {'n_flights': 2, 'unindexed': self.guessed}, format='json')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.data['sizes'], [5, 7])
+        self.assertEqual(self._sizes(), [5, 7])
+
+    def test_without_naming_them_the_cut_is_even(self):
+        r = self.client.post(self.url, {'n_flights': 2}, format='json')
+        self.assertEqual(r.data['sizes'], [6, 6])
+
+    def test_the_named_golfers_land_in_the_bottom_flight(self):
+        from services.flights import flight_map
+        self.client.post(
+            self.url, {'n_flights': 2, 'unindexed': self.guessed}, format='json')
+        self.tournament.refresh_from_db()
+        m = flight_map(self.tournament)
+        for pid in self.guessed:
+            self.assertEqual(m[pid], 2)
+
+    def test_their_entered_index_is_untouched(self):
+        # The whole reason this is not a null on the golfer: he still needs the
+        # index, because it is what gives him strokes.
+        from core.models import Player
+        before = {p.id: p.handicap_index
+                  for p in Player.objects.filter(id__in=self.guessed)}
+        self.client.post(
+            self.url, {'n_flights': 2, 'unindexed': self.guessed}, format='json')
+        after = {p.id: p.handicap_index
+                 for p in Player.objects.filter(id__in=self.guessed)}
+        self.assertEqual(before, after)
+
+    def test_the_cut_records_who_was_treated_as_a_guess(self):
+        self.client.post(
+            self.url, {'n_flights': 2, 'unindexed': self.guessed}, format='json')
+        data = self.client.get(self.url).data
+        self.assertEqual(sorted(data['unindexed_at_cut']), sorted(self.guessed))
+
+    def test_the_preview_shows_the_effect_without_writing(self):
+        ids = ','.join(str(i) for i in self.guessed)
+        r = self.client.get(f'{self.url}?n_flights=2&unindexed={ids}')
+        self.assertEqual(r.data['preview_sizes'], [5, 7])
+        self.assertEqual(TournamentFlight.objects.count(), 0)
+
+    def test_an_id_not_in_the_tournament_is_refused(self):
+        # Silently ignoring a typo would change the cut without saying so, and
+        # the cut is money.
+        r = self.client.post(
+            self.url, {'n_flights': 2, 'unindexed': [999999]}, format='json')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('999999', str(r.data['detail']))
+        self.assertEqual(TournamentFlight.objects.count(), 0)
+
+    def test_a_non_list_is_refused(self):
+        r = self.client.post(
+            self.url, {'n_flights': 2, 'unindexed': 'abc'}, format='json')
+        self.assertEqual(r.status_code, 400)

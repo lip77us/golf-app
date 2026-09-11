@@ -2364,8 +2364,14 @@ class TournamentLeaderboardView(APIView):
 class TournamentFlightsView(APIView):
     """
     GET  /api/tournaments/{id}/flights/ — the current cut, and what one would be.
-    POST /api/tournaments/{id}/flights/ — {"n_flights": N} cuts and FREEZES it.
+    POST /api/tournaments/{id}/flights/ — {"n_flights": N, "unindexed": [id, ...]}
+         cuts and FREEZES it.
     DELETE — back to one board.
+
+    `unindexed` names the golfers whose entered index is a guess. They drop out
+    of the sizing and go to the bottom flight, while the index they hold keeps
+    giving them strokes — see services.flights.tournament_field for why this is
+    named here rather than stored on the golfer.
 
     The cut is frozen rather than derived: flights are made on handicap INDEX
     and sized off the field, so a live derivation would move a golfer between
@@ -2382,19 +2388,28 @@ class TournamentFlightsView(APIView):
         field = tournament_field(tournament)
         frozen = list(tournament.flights.select_related('player')
                       .values_list('player__name', 'flight',
-                                   'index_at_assignment'))
+                                   'index_at_assignment', 'player_id'))
         # What a cut would look like if it were taken now — so the TD can see
-        # the split before committing to it.
-        n = tournament.flight_count or 2
-        preview = flight_sizes(assign_flights(field, n), n)
+        # the split before committing to it. `?unindexed=1,2,3` previews the
+        # effect of naming them without writing anything.
+        raw = (request.query_params.get('unindexed') or '').replace(',', ' ')
+        preview_unindexed = {int(x) for x in raw.split() if x.strip().isdigit()}
+        n = int(request.query_params.get('n_flights') or tournament.flight_count or 2)
+        preview_field = tournament_field(tournament, unindexed=preview_unindexed)
+        preview = flight_sizes(assign_flights(preview_field, n), n)
         return Response({
             'flight_count': tournament.flight_count or 0,
             'field_size'  : len(field),
             'unindexed'   : sum(1 for _pid, idx in field if idx is None),
+            'preview_flights': n,
             'preview_sizes': preview,
+            # Whose index was treated as a guess when the cut was made — a NULL
+            # index_at_assignment IS that record.
+            'unindexed_at_cut': [pid for _n, _f, idx, pid in frozen if idx is None],
             'assigned'    : [
-                {'name': name, 'flight': f, 'index': str(idx) if idx is not None else None}
-                for name, f, idx in frozen
+                {'player_id': pid, 'name': name, 'flight': f,
+                 'index': str(idx) if idx is not None else None}
+                for name, f, idx, pid in frozen
             ],
         })
 
@@ -2407,12 +2422,22 @@ class TournamentFlightsView(APIView):
             return Response({'detail': 'n_flights is required.'}, status=400)
         if n < 1:
             return Response({'detail': 'n_flights must be at least 1.'}, status=400)
+        unindexed = request.data.get('unindexed') or []
+        if not isinstance(unindexed, (list, tuple)):
+            return Response({'detail': 'unindexed must be a list of player ids.'},
+                            status=400)
         try:
-            assignment = set_flights(tournament, n)
+            unindexed = [int(x) for x in unindexed]
+        except (TypeError, ValueError):
+            return Response({'detail': 'unindexed must be a list of player ids.'},
+                            status=400)
+        try:
+            assignment = set_flights(tournament, n, unindexed=unindexed)
         except ValueError as e:
             return Response({'detail': str(e)}, status=400)
         return Response({'flight_count': n,
                          'sizes': flight_sizes(assignment, n),
+                         'unindexed': sorted(unindexed),
                          'assigned': len(assignment)})
 
     def delete(self, request, pk):

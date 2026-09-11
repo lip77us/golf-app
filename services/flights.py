@@ -146,24 +146,35 @@ def rank_in_flights(aggregated, *, sort_key, rank_key, flight_of, payouts_cfg,
 # Freezing the cut
 # ---------------------------------------------------------------------------
 
-def tournament_field(tournament):
+def tournament_field(tournament, unindexed=None):
     """``[(player_id, index_or_None), ...]`` for every real golfer in the event.
 
     The field is derived from foursome memberships — there is no
     tournament-level participant row — which is also why the cut has to be
     frozen once pairings are final rather than recomputed.
+
+    **`unindexed` is how "no index" is expressed, and it is deliberately not a
+    property of the golfer.** `Player.handicap_index` is NOT NULL, and it should
+    stay that way: a golfer whose index nobody knows still needs one, or he
+    plays off scratch and gets no strokes all day. So the estimate keeps doing
+    its real job — giving him shots — and the TD names, at cut time, whose
+    number is a guess. That knowledge lives with the TD, not in the database.
+
+    The ids named here come back with a ``None`` index, which is what drops them
+    out of the sizing and puts them at the bottom (see :func:`assign_flights`).
     """
     from tournament.models import FoursomeMembership
+    unindexed = set(unindexed or ())
     rows = (FoursomeMembership.objects
             .filter(foursome__round__tournament=tournament,
                     player__is_phantom=False)
             .select_related('player')
             .values_list('player_id', 'player__handicap_index')
             .distinct())
-    return [(pid, idx) for pid, idx in rows]
+    return [(pid, None if pid in unindexed else idx) for pid, idx in rows]
 
 
-def set_flights(tournament, n_flights: int = None):
+def set_flights(tournament, n_flights: int = None, unindexed=None):
     """Cut the field and FREEZE it. Returns ``{player_id: flight_no}``.
 
     Replaces any previous assignment wholesale — a re-cut after a withdrawal is
@@ -171,6 +182,12 @@ def set_flights(tournament, n_flights: int = None):
 
     Passing ``n_flights`` also stores it on the tournament, so the count and the
     assignment can never disagree.
+
+    ``unindexed`` names the golfers whose entered index is a guess (see
+    :func:`tournament_field`). They are recorded with a NULL
+    ``index_at_assignment``, which is both what they were treated as and the
+    only record that the cut was made that way — so a re-cut a week later can
+    be explained, and so `GET` can read the list back.
     """
     from django.db import transaction
     from tournament.models import TournamentFlight
@@ -180,7 +197,14 @@ def set_flights(tournament, n_flights: int = None):
     if n_flights < 1:
         raise ValueError('Set a flight count of 1 or more before cutting.')
 
-    field = tournament_field(tournament)
+    field = tournament_field(tournament, unindexed=unindexed)
+    known_ids = {pid for pid, _idx in field}
+    stray = set(unindexed or ()) - known_ids
+    if stray:
+        # A typo'd id silently doing nothing would change the cut without
+        # saying so — and the cut is money.
+        raise ValueError(
+            f'Not in this tournament: {sorted(stray)}')
     assignment = assign_flights(field, n_flights)
     index_of = dict(field)
 

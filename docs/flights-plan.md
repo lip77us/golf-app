@@ -37,7 +37,9 @@ These are settled. They are recorded here so they are not re-litigated.
 - **Flights are equal-sized**, and the remainder goes to the **lower-index**
   flight. 20 indexed golfers in two flights is A=10, B=10; 23 is A=12, B=11.
 - **A golfer with no index goes to the bottom flight and is NOT counted in the
-  split.** The split is taken over the INDEXED golfers alone, then the no-index
+  split** — named by the TD at cut time, not stored on the golfer. See "How
+  no-index is expressed" below.
+- **Original statement of the rule:** The split is taken over the INDEXED golfers alone, then the no-index
   golfers are added to the highest flight — so the bottom flight is deliberately
   bigger. 23 golfers of whom 3 have no index: split the 20 indexed (A=10, B=10),
   then add the 3, giving **A=10, B=13**. Not A=12, B=11.
@@ -57,6 +59,45 @@ The freeze therefore happens **when the field is final** — an explicit *Set
 flights* action once pairings are set, not a derivation that re-runs. After that
 the assignment is a stored fact and nothing moves it, which is what "frozen"
 was protecting.
+
+---
+
+## How no-index is expressed
+
+`Player.handicap_index` is **NOT NULL**, and it should stay that way.
+
+The temptation is to make it nullable so "no index" is a property of the golfer.
+That breaks him worse than it fixes him: his **playing handicap is snapshotted
+onto the membership at setup** from whatever index he holds, so a golfer with no
+index plays off **scratch** and gets no strokes all day. Nulling the field would
+correct which flight he is ranked in and ruin the golf he actually plays. It is
+also 93 non-test references and a design question — what does a golfer with no
+index play off? — rather than a migration.
+
+So the estimate stays and keeps doing its real job, and the TD names the guesses
+**at cut time**:
+
+```json
+POST /api/tournaments/{id}/flights/
+{"n_flights": 2, "unindexed": [412, 588, 903]}
+```
+
+Those ids come back from `tournament_field` with a `None` index, which is what
+drops them out of the sizing. The knowledge lives where it actually is — the TD
+knows whose number is a guess; the database cannot.
+
+The record of the cut is the `NULL index_at_assignment` on their frozen rows, so
+a re-cut a week later is explicable and `GET` can read the list back.
+
+**It matters at three, not at one.** With a single unknown golfer in an even
+field the naive alternative (just give him a high index) produces the identical
+cut; the two diverge once there are two or more, or the field is odd:
+
+| field | unknown | flights | this rule | high index |
+|---|---|---|---|---|
+| 36 | 1 | 2 | 18 / 18 | 18 / 18 |
+| 36 | 3 | 2 | **17 / 19** | 18 / 18 |
+| 35 | 1 | 2 | **17 / 18** | 18 / 17 |
 
 ---
 
