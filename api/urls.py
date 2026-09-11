@@ -41,6 +41,7 @@ urlpatterns = [
     # ---- Tournaments ----
     path('tournaments/',                              views.TournamentListView.as_view(),        name='api-tournament-list'),
     path('tournaments/<int:pk>/',                     views.TournamentDetailView.as_view(),      name='api-tournament-detail'),
+    path('tournaments/<int:pk>/flights/',              views.TournamentFlightsView.as_view(), name='api-tournament-flights'),
     path('tournaments/<int:pk>/leaderboard/',         views.TournamentLeaderboardView.as_view(),   name='api-tournament-leaderboard'),
     path('tournaments/<int:pk>/watchers/',            views.TournamentWatcherView.as_view(),       name='api-tournament-watchers'),
     path('tournaments/<int:pk>/watcher-candidates/',  views.TournamentWatcherCandidatesView.as_view(), name='api-tournament-watcher-candidates'),

@@ -2361,6 +2361,69 @@ class TournamentLeaderboardView(APIView):
         })
 
 
+class TournamentFlightsView(APIView):
+    """
+    GET  /api/tournaments/{id}/flights/ — the current cut, and what one would be.
+    POST /api/tournaments/{id}/flights/ — {"n_flights": N} cuts and FREEZES it.
+    DELETE — back to one board.
+
+    The cut is frozen rather than derived: flights are made on handicap INDEX
+    and sized off the field, so a live derivation would move a golfer between
+    boards when his index changed or somebody withdrew.
+
+    Because the sizing is a function of the field, this is meant to be run once
+    PAIRINGS ARE FINAL — "frozen at entry" and "equal-sized" cannot both hold
+    while golfers are still arriving. Re-running it is a fresh cut, not a patch.
+    """
+    def get(self, request, pk):
+        from services.flights import (assign_flights, flight_sizes,
+                                      tournament_field)
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        field = tournament_field(tournament)
+        frozen = list(tournament.flights.select_related('player')
+                      .values_list('player__name', 'flight',
+                                   'index_at_assignment'))
+        # What a cut would look like if it were taken now — so the TD can see
+        # the split before committing to it.
+        n = tournament.flight_count or 2
+        preview = flight_sizes(assign_flights(field, n), n)
+        return Response({
+            'flight_count': tournament.flight_count or 0,
+            'field_size'  : len(field),
+            'unindexed'   : sum(1 for _pid, idx in field if idx is None),
+            'preview_sizes': preview,
+            'assigned'    : [
+                {'name': name, 'flight': f, 'index': str(idx) if idx is not None else None}
+                for name, f, idx in frozen
+            ],
+        })
+
+    def post(self, request, pk):
+        from services.flights import flight_sizes, set_flights
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        try:
+            n = int(request.data.get('n_flights'))
+        except (TypeError, ValueError):
+            return Response({'detail': 'n_flights is required.'}, status=400)
+        if n < 1:
+            return Response({'detail': 'n_flights must be at least 1.'}, status=400)
+        try:
+            assignment = set_flights(tournament, n)
+        except ValueError as e:
+            return Response({'detail': str(e)}, status=400)
+        return Response({'flight_count': n,
+                         'sizes': flight_sizes(assignment, n),
+                         'assigned': len(assignment)})
+
+    def delete(self, request, pk):
+        from tournament.models import TournamentFlight
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        TournamentFlight.objects.filter(tournament=tournament).delete()
+        tournament.flight_count = 0
+        tournament.save(update_fields=['flight_count'])
+        return Response({'flight_count': 0})
+
+
 class MiniSinglesSetupView(APIView):
     """
     GET  /api/tournaments/{id}/mini-singles/setup/ — config or defaults.

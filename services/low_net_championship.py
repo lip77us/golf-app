@@ -23,6 +23,7 @@ Public API
     summary   = low_net_championship_summary(tournament)
 """
 
+from services.flights import prefixed_name
 from services.low_net_round import _build_ln_player_totals
 from services.round_counting import select_counting_rounds
 
@@ -331,10 +332,16 @@ def low_net_championship_summary(tournament, round_id: int | None = None) -> dic
                             else tournament.rounds_to_count),
         'counting_rule' : (None if round_id is not None
                            else tournament.counting_rule_label),
+        'flight_count'  : tournament.flight_count or 0,
         'results'       : [
             {
                 'rank'          : s['rank'],
-                'name'          : s['player_name'],
+                'flight'        : s.get('flight'),
+                # `A · Paul L` until a build draws flight headers — see
+                # services.flights.prefixed_name. Summary only; the standings
+                # rows settlement reads keep the plain name.
+                'name'          : prefixed_name(s['player_name'], s.get('flight'),
+                                                bool(tournament.flight_count > 1)),
                 'net_total'     : s['net_total'],
                 'net_to_par'    : s['net_to_par'],
                 'holes_played'  : s['holes_played'],

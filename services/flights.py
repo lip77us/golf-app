@@ -213,3 +213,34 @@ def flight_map(tournament) -> dict:
         return {}
     bottom = tournament.flight_count
     return {pid: frozen.get(pid, bottom) for pid, _idx in tournament_field(tournament)}
+
+
+# ---------------------------------------------------------------------------
+# Display
+# ---------------------------------------------------------------------------
+
+_LETTERS = 'ABCDEFGH'
+
+
+def flight_label(flight: int) -> str:
+    """1 -> 'A'. Golfers say "I'm in B", not "I'm in flight 2"."""
+    return _LETTERS[flight - 1] if 1 <= flight <= len(_LETTERS) else str(flight)
+
+
+def prefixed_name(name: str, flight, flighted: bool) -> str:
+    """``A · Paul L`` — the STOPGAP until a client build draws flight headers.
+
+    The shipped app renders the leaderboard in server order and prints the row's
+    name verbatim, so flighting works end to end with no build; what it cannot
+    do is announce where one flight ends and the next begins. Carrying the
+    letter in the name is ugly and unambiguous, which beats two anonymous blocks.
+
+    It is applied ONLY in the summary (the client-facing payload), never in
+    `*_championship_standings`, so it cannot leak into settlement or a receipt —
+    those read `player_name` off the standings rows.
+
+    Delete this the moment headers ship.
+    """
+    if not flighted or not flight:
+        return name
+    return f'{flight_label(flight)} · {name}'

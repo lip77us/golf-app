@@ -13,6 +13,7 @@ allocation right there — so the per-round hole detail carries gross + strokes 
 points and no net column.
 """
 from core.models import HandicapMode
+from services.flights import prefixed_name
 from services.round_counting import select_counting_rounds
 from services.stableford import _build_stableford_totals
 
@@ -160,6 +161,15 @@ def stableford_championship_summary(tournament) -> dict:
         'rounds_played': max((s['rounds_played'] for s in standings), default=0),
         'rounds_to_count': tournament.rounds_to_count,
         'counting_rule': tournament.counting_rule_label,
+        'flight_count' : tournament.flight_count or 0,
         'table'        : table,
-        'results'      : standings,
+        # COPIES, not the standings rows themselves. The stopgap flight prefix
+        # is a display concern; mutating these in place would put `A · ` into
+        # settlement and the receipt, which read the standings directly.
+        'results'      : [
+            {**s_, 'player_name': prefixed_name(
+                s_['player_name'], s_.get('flight'),
+                bool(tournament.flight_count > 1))}
+            for s_ in standings
+        ],
     }
