@@ -30,6 +30,7 @@ import 'tournament_leaderboard_screen.dart' show ChampionshipTabView;
 import '../widgets/survivor_rail.dart';
 import 'tournament_settlement_screen.dart';
 import '../widgets/stroke_dots.dart';
+import '../widgets/pinned_hole_grid.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   final int roundId;
@@ -1331,12 +1332,23 @@ class _StablefordPointsGrid extends StatelessWidget {
               style: theme.textTheme.labelLarge?.copyWith(
                   fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
           const SizedBox(height: 4),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          PinnedHoleGrid(
+            labelWidth  : _labelColW,
+            cellWidth   : _cellW,
+            holeCount   : holeRange.length,
+            // A review board, not a live one: it opens on the LAST hole with
+            // points on it, which is the same reading — the round so far, its
+            // far end against the right edge.
+            currentIndex: holeRange.length - 1,
+            // Tot and the money column ride past the holes, so the rule has to
+            // reach them.
+            contentWidth: _cellW * holeRange.length + _totW +
+                (hasMoney ? _payoutW : 0),
+            bands: [
               // Hole numbers + Total
-              Row(children: [
+              HoleGridBand(
                 labelCell('Player', bold: true),
+                [
                 for (final h in holeRange)
                   cell(Text('$h',
                       style: const TextStyle(
@@ -1350,13 +1362,7 @@ class _StablefordPointsGrid extends StatelessWidget {
                           fontSize: 11, fontWeight: FontWeight.bold)),
                       _payoutW),
               ]),
-              Container(
-                height: 1,
-                width: _labelColW + _cellW * holeRange.length + _totW +
-                    (hasMoney ? _payoutW : 0),
-                color: theme.colorScheme.outlineVariant,
-                margin: const EdgeInsets.symmetric(vertical: 2),
-              ),
+              const HoleGridBand.rule(),
               // Per-player points rows
               for (final e in results)
                 () {
@@ -1367,8 +1373,9 @@ class _StablefordPointsGrid extends StatelessWidget {
                   final rank   = r['rank'];
                   final payout = r['payout'] as num?;
                   final name   = _short(r['player_name']?.toString() ?? '—');
-                  return Row(children: [
+                  return HoleGridBand(
                     labelCell(rank == null ? name : '$rank. $name'),
+                    [
                     for (final h in holeRange)
                       cell(Text(holes['$h'] == null ? '' : '${holes['$h']}',
                           style: theme.textTheme.bodySmall), _cellW),
@@ -1387,7 +1394,7 @@ class _StablefordPointsGrid extends StatelessWidget {
                         _payoutW),
                   ]);
                 }(),
-            ]),
+            ],
           ),
         ]),
       ),
