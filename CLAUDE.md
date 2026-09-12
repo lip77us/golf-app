@@ -2673,6 +2673,27 @@ Deliberately **not an audit trail.** If a record of who changed what is ever
 wanted, that is a different table with different retention; this one is
 designed to be thrown away.
 
+### The gate that would have hidden all of it — `setup_editable`
+
+**The hub button was gated on `has_any_score`**, which matched the OLD server
+rule exactly: refuse the moment a real score lands. The moment that rule became
+a 3-hole window, a button still hidden at the first score would have made the
+entire edit window **unreachable from the app** — shipped, tested, and
+impossible to open. Same shape as the casual receipt nothing could open.
+
+`FoursomeSerializer.setup_editable` (+ `setup_edit_note`, `2 of 3 holes used`)
+now carries the answer, and `round_screen.dart` gates BOTH **Tees & Handicaps**
+and **Edit Configuration** on it. Edit Configuration mattered too: Sixes and
+Sequoya accept a redraw inside the window, and the settings that were always
+editable mid-round (handicap mode, allowance, stake) were behind that button as
+well — equally unreachable.
+
+**The client is told rather than counting to three itself.** A phone deriving
+the rule would be an eleventh copy of it, and would not know a Banker round has
+no window at all. `setupEditable` defaults **true** in `Foursome.fromJson`, so
+an older server that sends neither field behaves as it always did rather than
+hiding the button everywhere.
+
 ### Mobile
 
 `confirm_tees_screen.dart`: the standing "neither tees nor handicaps can change
@@ -2688,4 +2709,5 @@ technique the flights preview uses). Today the money moves and the user is told
 afterwards, with the way back. Also outstanding: the stroke-dot cap, and the
 new-match-carrying-gross-scores escape hatch.
 
-Tests: `api/test_setup_edit.py` (23).
+Tests: `api/test_setup_edit.py` (29), including a `ReachabilityTests` class
+asserting the button is offered after hole 1 — the failure mode above.

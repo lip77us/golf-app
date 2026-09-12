@@ -995,10 +995,25 @@ class Foursome {
   /// Scheduled tee time, e.g. "08:00" or null if not set.
   final String? teeTime;
   /// True iff at least one hole has been scored for this foursome.
-  /// Used to hide the "Confirm Tee Boxes" entry point on the Round
-  /// screen once scoring has begun — server refuses the tee change
-  /// in that case anyway.
+  /// Drives "Start Match" vs "Continue Match" on the hub.
+  ///
+  /// **No longer the gate for Tees & Handicaps** — see [setupEditable]. It was,
+  /// which matched the old server rule exactly and so would have hidden the
+  /// edit window the day that rule changed.
   final bool hasAnyScore;
+  /// Whether setup — tees, forced handicaps, teams — can still be corrected.
+  ///
+  /// The server's answer, not the client's: it knows the ceiling is three
+  /// scored holes and that a Banker round has no window at all. Counting to
+  /// three here would be an eleventh copy of a rule that exists in one place
+  /// on purpose.
+  ///
+  /// Defaults TRUE so an older server (which sends neither field) behaves as
+  /// it always did rather than hiding the button everywhere.
+  final bool setupEditable;
+  /// `2 of 3 holes used` — how much of the window is gone, for the button's
+  /// subtitle. Empty before the first score and once the window has closed.
+  final String setupEditNote;
   /// True when the viewer is a designated (phone-matched) scorer of THIS
   /// foursome — so a cross-account scorer can score + edit tees for their group.
   final bool youScore;
@@ -1019,6 +1034,8 @@ class Foursome {
     this.configuredGames = const [],
     this.teeTime,
     this.hasAnyScore     = false,
+    this.setupEditable   = true,
+    this.setupEditNote   = '',
     this.youScore        = false,
     this.startingHole,
     this.shotgunSlot     = '',
@@ -1034,6 +1051,8 @@ class Foursome {
         configuredGames: List<String>.from(j['configured_games'] as List? ?? []),
         teeTime:         j['tee_time'] as String?,
         hasAnyScore:     j['has_any_score'] as bool? ?? false,
+        setupEditable:   j['setup_editable'] as bool? ?? true,
+        setupEditNote:   (j['setup_edit_note'] as String?)?.trim() ?? '',
         youScore:        j['you_score'] as bool? ?? false,
         startingHole:    j['starting_hole'] as int?,
         shotgunSlot:     (j['shotgun_slot'] as String?)?.trim() ?? '',

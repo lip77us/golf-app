@@ -2065,11 +2065,16 @@ class _FoursomeCard extends StatelessWidget {
             ),
             // Tees & Handicaps — the tee each golfer plays, and a forced
             // playing handicap for a card someone else manages (Golf Genius,
-            // a club sheet).  Both are only meaningful before any hole is
-            // scored: each re-nets every hole already played, so the server
-            // refuses them once scoring starts and the button is hidden at the
-            // same threshold rather than tapping into a dead-end.
-            if (canEdit && !isComplete && !foursome.hasAnyScore) ...[
+            // a club sheet).
+            //
+            // **Gated on `setupEditable`, NOT on `hasAnyScore`.** It used to be
+            // the latter, which matched the old server rule exactly: refuse the
+            // moment a real score lands. The rule is now a 3-hole window, and a
+            // button still hidden at the first score would have made the whole
+            // window unreachable from the app — the feature would have shipped
+            // and nobody could have opened it. The server sends the answer
+            // because it also knows a Banker round has no window at all.
+            if (canEdit && !isComplete && foursome.setupEditable) ...[
               const SizedBox(height: 6),
               SizedBox(
                 width: double.infinity,
@@ -2079,17 +2084,27 @@ class _FoursomeCard extends StatelessWidget {
                     arguments: foursome.id,
                   ),
                   icon: const Icon(Icons.golf_course_outlined, size: 18),
-                  label: const Text('Tees & Handicaps'),
+                  // The subtitle only appears once the window is being spent —
+                  // a group that has not teed off does not need telling that
+                  // setup is editable.
+                  label: Text(foursome.setupEditNote.isEmpty
+                      ? 'Tees & Handicaps'
+                      : 'Tees & Handicaps · ${foursome.setupEditNote}'),
                 ),
               ),
             ],
             // Edit Configuration — change game settings (handicap mode,
-            // carryover, stake, …) before any hole is scored.  Hidden once
-            // scoring starts (settings are locked), on cup rounds (configured
-            // via the cup wizard), and for games whose setup screen lacks an
-            // edit mode.
+            // carryover, stake, …).  Hidden on cup rounds (configured via the
+            // cup wizard) and for games whose setup screen lacks an edit mode.
+            //
+            // Same gate as Tees & Handicaps and for the same reason: Sixes and
+            // Sequoya now accept a team or pairing redraw inside the window and
+            // rescore the holes already played, so hiding this at the first
+            // score would put that behind a button nobody can reach. The games
+            // whose settings were ALWAYS editable mid-round — handicap mode,
+            // allowance, stake — were behind it too, and equally unreachable.
             if (canManage && !isComplete && !isCupRound &&
-                !foursome.hasAnyScore) ...[
+                foursome.setupEditable) ...[
               Builder(builder: (context) {
                 final merged = {...roundActiveGames, ...foursome.activeGames};
                 final (route, editArgs) = _editConfigTarget(

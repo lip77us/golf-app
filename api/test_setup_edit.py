@@ -315,3 +315,63 @@ class TeeChangeTests(_Base):
         undo = FoursomeSetupUndo.objects.get(foursome=self.fs)
         self.assertIn('White', undo.note)
         self.assertIn('Blue', undo.note)
+
+
+class ReachabilityTests(_Base):
+    """The gate the hub button reads.
+
+    This is the whole reason the field exists. `Tees & Handicaps` was hidden on
+    `has_any_score` — which matched the OLD server rule exactly: refuse the
+    moment a real score lands. The moment that rule became a 3-hole window, a
+    button still hidden at the first score would have made the entire edit
+    window unreachable from the app. The feature would have shipped, passed its
+    tests, and nobody could have opened it.
+
+    So the client is told, rather than counting to three itself: a phone
+    deriving the rule would be an eleventh copy of it, and would not know that
+    a Banker round has no window at all.
+    """
+
+    def _foursome_json(self):
+        from api.serializers import FoursomeSerializer
+        return FoursomeSerializer(self.fs).data
+
+    def test_the_button_is_offered_after_the_first_hole(self):
+        self._play(1)
+        data = self._foursome_json()
+        self.assertTrue(data['has_any_score'])      # the old gate would hide it
+        self.assertTrue(data['setup_editable'])     # the new one does not
+
+    def test_and_through_the_third(self):
+        self._play(3)
+        self.assertTrue(self._foursome_json()['setup_editable'])
+
+    def test_and_gone_on_the_fourth(self):
+        self._play(4)
+        self.assertFalse(self._foursome_json()['setup_editable'])
+
+    def test_the_note_says_how_much_of_the_window_is_spent(self):
+        self._play(2)
+        self.assertEqual(self._foursome_json()['setup_edit_note'],
+                         '2 of 3 holes used')
+
+    def test_there_is_no_note_before_anybody_tees_off(self):
+        """A group that has not played does not need telling that setup is
+        editable — that is just what setup is."""
+        data = self._foursome_json()
+        self.assertTrue(data['setup_editable'])
+        self.assertEqual(data['setup_edit_note'], '')
+
+    def test_a_banker_round_never_offers_it_once_a_hole_is_in(self):
+        from api.serializers import FoursomeSerializer
+        from services.banker import setup_banker
+        fs = make_foursome(
+            make_round(self.tee.course, active_games=['banker']),
+            [('A', 10), ('B', 4), ('C', 18), ('D', 0)], tee=self.tee)
+        pid = {m.player.name: m.player_id
+               for m in fs.memberships.select_related('player')}
+        setup_banker(fs, first_banker_id=pid['A'])
+        self.assertTrue(FoursomeSerializer(fs).data['setup_editable'])
+        submit_hole(fs, 1, [(pid['A'], 4), (pid['B'], 4),
+                            (pid['C'], 5), (pid['D'], 4)])
+        self.assertFalse(FoursomeSerializer(fs).data['setup_editable'])

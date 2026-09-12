@@ -457,6 +457,12 @@ class FoursomeSerializer(serializers.ModelSerializer):
     active_games     = serializers.SerializerMethodField()
     configured_games = serializers.SerializerMethodField()
     has_any_score    = serializers.SerializerMethodField()
+    # Whether setup may still be corrected — the 3-hole edit ceiling, and the
+    # games that narrow it. Sent rather than derived on the client: a phone
+    # that counted to three itself would be an eleventh copy of the rule, and
+    # would not know that a Banker round has no window at all.
+    setup_editable   = serializers.SerializerMethodField()
+    setup_edit_note  = serializers.SerializerMethodField()
     # True when the viewer is a designated (phone-matched) scorer of THIS
     # foursome — lets the app show Enter Scores + Edit Tees for a cross-account
     # scorer's own group while hiding TD config elsewhere.
@@ -468,6 +474,29 @@ class FoursomeSerializer(serializers.ModelSerializer):
             return False
         from accounts.scoring_access import user_scores_foursome
         return user_scores_foursome(request.user, obj)
+
+    def get_setup_editable(self, obj) -> bool:
+        """True while tees, forced handicaps and teams can still be corrected.
+
+        Replaces `has_any_score` as the gate for the Tees & Handicaps and Edit
+        Configuration buttons. Those used to vanish the moment a real score
+        landed, which matched the old server rule exactly — and would have made
+        the whole edit window unreachable from the app the day the rule changed.
+        """
+        from services.edit_window import edits_open
+        return edits_open(obj)
+
+    def get_setup_edit_note(self, obj) -> str:
+        """`2 of 3 holes used` — what the window has left, for the button's
+        subtitle. Empty once it has closed, because the button is gone."""
+        from services.edit_window import ceiling_for, edits_open, scored_holes
+        if not edits_open(obj):
+            return ''
+        played  = scored_holes(obj)
+        ceiling = ceiling_for(obj)
+        if not played or not ceiling:
+            return ''
+        return f'{played} of {ceiling} holes used'
 
     def get_has_any_score(self, obj):
         """True iff at least one REAL player has a HoleScore with a
@@ -627,6 +656,7 @@ class FoursomeSerializer(serializers.ModelSerializer):
             'id', 'group_number', 'name', 'display_name', 'has_phantom',
             'pink_ball_order', 'active_games', 'configured_games',
             'tee_time', 'memberships', 'has_any_score', 'you_score',
+            'setup_editable', 'setup_edit_note',
             # Shotgun start (see docs/hole-flexibility.md): this group's per-group
             # starting hole (null = inherit the round's) + a display-only tee-slot
             # label (e.g. "A"/"B") rendered as "7A"/"7B" on a shared hole.
