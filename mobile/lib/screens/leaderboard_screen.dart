@@ -5379,57 +5379,28 @@ class _Points531HoleGrid extends StatefulWidget {
 }
 
 class _Points531HoleGridState extends State<_Points531HoleGrid> {
-  final ScrollController _ctrl = ScrollController();
   static const double _labelColW = 48.0;
   static const double _cellW     = 30.0;
 
-  @override
-  void initState() {
-    super.initState();
-    _scheduleScroll();
-  }
-
-  @override
-  void didUpdateWidget(covariant _Points531HoleGrid old) {
-    super.didUpdateWidget(old);
-    _scheduleScroll();
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  // Auto-scroll so the latest-scored hole shows (~7 columns from the left) —
-  // 531 was the only game grid that never followed play (it sat on hole 1, so
-  // finishing at 18 left you stuck looking at the front nine).
-  void _scheduleScroll() {
-    // The grid renders holes in PLAY ORDER, so scroll by the current hole's
-    // POSITION in that sequence (not its hole number) — ~7 columns from the left.
+  // The controller, the pin and the scroll target live in PinnedHoleGrid.
+  // Which hole to open on is still this grid's question, because it keeps a
+  // fallback the others do not: the highest SCORED hole, for when the current
+  // one is not in the rendered range.
+  int get _openIndex {
     final order = widget.holesInPlay.isNotEmpty
         ? widget.holesInPlay
         : (widget.holes
             .map((h) => ((h as Map)['hole'] as num?)?.toInt() ?? 0)
             .toList()
           ..sort());
-    int pos = order.indexOf(widget.currentHole);
-    if (pos < 0) {
-      // Fallback: position of the highest scored hole.
-      int lastHole = 0;
-      for (final h in widget.holes) {
-        final n = ((h as Map)['hole'] as num?)?.toInt() ?? 0;
-        if (n > lastHole) lastHole = n;
-      }
-      pos = order.indexOf(lastHole);
+    final pos = order.indexOf(widget.currentHole);
+    if (pos >= 0) return pos;
+    int lastHole = 0;
+    for (final h in widget.holes) {
+      final n = ((h as Map)['hole'] as num?)?.toInt() ?? 0;
+      if (n > lastHole) lastHole = n;
     }
-    if (pos < 0) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_ctrl.hasClients) return;
-      final target = (_labelColW + (pos - 7) * _cellW)
-          .clamp(0.0, _ctrl.position.maxScrollExtent);
-      _ctrl.jumpTo(target);
-    });
+    return order.indexOf(lastHole);
   }
 
   @override
@@ -5477,14 +5448,14 @@ class _Points531HoleGridState extends State<_Points531HoleGrid> {
     const cellW     = 30.0;
     const rowH      = 26.0;
 
-    return SingleChildScrollView(
-      controller: _ctrl,
-      scrollDirection: Axis.horizontal,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return PinnedHoleGrid(
+      labelWidth  : labelColW,
+      cellWidth   : cellW,
+      holeCount   : renderHoles.length,
+      currentIndex: _openIndex,
+      bands: [
           // Header row: hole numbers
-          Row(children: [
+          HoleGridBand(
             SizedBox(
               width: labelColW,
               height: rowH,
@@ -5494,6 +5465,7 @@ class _Points531HoleGridState extends State<_Points531HoleGrid> {
                     style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
               ),
             ),
+            [
             for (final h in renderHoles)
               SizedBox(
                 width: cellW,
@@ -5505,10 +5477,10 @@ class _Points531HoleGridState extends State<_Points531HoleGrid> {
                 ),
               ),
           ]),
-          const SizedBox(height: 2),
+          const HoleGridBand.gap(2),
           // One row per player
           for (final pid in playerIds)
-            Row(children: [
+            HoleGridBand(
               SizedBox(
                 width: labelColW,
                 height: rowH,
@@ -5520,6 +5492,7 @@ class _Points531HoleGridState extends State<_Points531HoleGrid> {
                       overflow: TextOverflow.ellipsis),
                 ),
               ),
+              [
               for (final h in renderHoles) _PointsCell(
                 entry: byHole[h]?[pid],
                 cellW: cellW,
@@ -5527,8 +5500,7 @@ class _Points531HoleGridState extends State<_Points531HoleGrid> {
                 theme: theme,
               ),
             ]),
-        ],
-      ),
+      ],
     );
   }
 }

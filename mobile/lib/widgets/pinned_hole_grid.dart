@@ -37,12 +37,25 @@ class HoleGridBand {
   final Color? colour;
   final bool isRule;
 
-  const HoleGridBand(this.label, this.cells, {this.colour}) : isRule = false;
+  /// Plain vertical space between bands, when a grid separates its rows with
+  /// a gap rather than a hairline. Both halves get the same height, which is
+  /// the only thing that matters — they fall out of step otherwise.
+  final double gapHeight;
+
+  const HoleGridBand(this.label, this.cells, {this.colour})
+      : isRule = false,
+        gapHeight = 0;
   const HoleGridBand.rule()
       : label = null,
         cells = null,
         colour = null,
+        gapHeight = 0,
         isRule = true;
+  const HoleGridBand.gap(this.gapHeight)
+      : label = null,
+        cells = null,
+        colour = null,
+        isRule = false;
 }
 
 class PinnedHoleGrid extends StatefulWidget {
@@ -131,7 +144,10 @@ class _PinnedHoleGridState extends State<PinnedHoleGrid> {
     final cellCol  = <Widget>[];
 
     for (final b in widget.bands) {
-      if (b.isRule) {
+      if (b.gapHeight > 0) {
+        labelCol.add(SizedBox(height: b.gapHeight));
+        cellCol.add(SizedBox(height: b.gapHeight));
+      } else if (b.isRule) {
         labelCol.add(Container(
             height: 1,
             width: widget.labelWidth,
