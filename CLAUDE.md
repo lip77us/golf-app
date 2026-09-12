@@ -2619,3 +2619,73 @@ new-match-carrying-gross-scores escape hatch.
 
 Tests: `scoring/tests/test_edit_window.py` (20) and the rewritten
 `SixesTeamLockTests` (`scoring/tests/test_sixes.py`).
+
+## The tee / index half — retroactive rescore and one step of undo
+
+`FoursomeTeesView.patch` used to refuse the moment any real golfer posted a
+gross score. It now refuses past the **edit ceiling** instead, and inside the
+window it accepts the change and rescores the round.
+
+**Why the refusal existed.** `HoleScore.handicap_strokes` is denormalised off
+the membership and `net_score` is stored for query performance, so accepting a
+tee change is not a recompute — it is a **rewrite of every scored row** for
+that golfer, after which every game's summary has to be rebuilt on top. Get it
+wrong and you do not display a wrong total, you corrupt completed holes.
+
+### `services/setup_edit.py`
+
+- **`rescore(foursome)`** rewrites `handicap_strokes` on every scored hole from
+  the CURRENT memberships, **retroactive to hole 1** — applying a new tee going
+  forward only would leave the round scored under two allocations, which is not
+  a real result. It sets the strokes and calls `save()`; **`net_score` and
+  `stableford_points` are NOT written here**, because `HoleScore.save()` already
+  derives both and a second copy of that arithmetic is how the two come to
+  disagree. Returns the rows actually changed, so "4 holes rescored" is honest
+  and can legitimately be 0 (off 12 and off 17 both stroke on SI 7).
+- **`snapshot(foursome)` captures the WHOLE foursome**, not the golfers named in
+  the request: a tee change can shift the group's lowest par and re-derive every
+  real member's par-adjusted playing handicap, so an undo restoring only the
+  named golfer would leave the others on numbers nobody chose — and nothing
+  would look wrong.
+- **`restore()` writes the stored numbers rather than re-deriving them**, and
+  uses `QuerySet.update()` for the hole rows precisely because `save()` would
+  re-derive `net_score` from the strokes and overwrite the restored value. The
+  numbers being restored were computed under settings that no longer exist
+  anywhere — that is the whole reason they had to be kept.
+
+### `tournament.FoursomeSetupUndo` (migration `tournament/0070`)
+
+OneToOne, not a log: **one step back, replaced by the next edit**, so a second
+edit makes the first permanent. "Prior value" means the ROWS — membership *and*
+`HoleScore` — because once `handicap_strokes` is overwritten there is nothing
+left to derive the old one from. Under the 3-hole ceiling that is at most three
+holes per golfer, which is what makes keeping them affordable.
+
+`POST /api/foursomes/{id}/tees/undo/` restores and recalculates; the step is
+**spent** afterwards (an undo of an undo is a second step, and a second press
+would re-apply values the round has moved past). `GET` reports whether one is
+standing and what it would put back. The PATCH response carries
+`holes_rescored`, `undo_available` and `undo_note` — the client shows the
+standing step **before** the next save, since discovering it afterwards is no
+use.
+
+Deliberately **not an audit trail.** If a record of who changed what is ever
+wanted, that is a different table with different retention; this one is
+designed to be thrown away.
+
+### Mobile
+
+`confirm_tees_screen.dart`: the standing "neither tees nor handicaps can change
+once a hole is scored" line was now false and says the real rule; a save that
+rescored anything gets an 8-second snackbar naming the hole count with an
+**Undo** action (the round provider and messenger are captured before the
+await, because the action outlives the screen); and a standing undo draws a
+banner above the controls saying that saving again replaces it.
+
+**Still not built:** the confirmation sheet showing the NET MONEY EFFECT before
+committing (Design's item 3 — apply in a transaction, compute, roll back, the
+technique the flights preview uses). Today the money moves and the user is told
+afterwards, with the way back. Also outstanding: the stroke-dot cap, and the
+new-match-carrying-gross-scores escape hatch.
+
+Tests: `api/test_setup_edit.py` (23).

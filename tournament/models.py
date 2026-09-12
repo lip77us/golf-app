@@ -1771,3 +1771,48 @@ class SettlementSend(models.Model):
     def __str__(self):
         parent = f't{self.tournament_id}' if self.tournament_id else f'r{self.round_id}'
         return f'{parent} {self.mode} x{self.recipients}'
+
+
+# ---------------------------------------------------------------------------
+# SETUP UNDO — one step back from a mid-round tee / handicap edit
+# ---------------------------------------------------------------------------
+
+class FoursomeSetupUndo(models.Model):
+    """The prior values of everything a setup edit touched. One step, not a stack.
+
+    Inside the 3-hole edit ceiling a TD may still fix a wrong tee or a wrong
+    forced handicap, and the round is RESCORED from hole 1 under the new value
+    — which means money can move under a group that is looking at it. Design's
+    rule: the change has to be reversible, because a fat-fingered index should
+    not cost somebody the round.
+
+    **"Prior value" has to mean the rows, not the setting.** `HoleScore
+    .handicap_strokes` and `net_score` are stored rather than computed, so once
+    the edit has overwritten them there is nothing left to recompute the old
+    ones FROM. The membership alone would restore the setting and leave the
+    scores wrong. Under the ceiling that is at most three holes per golfer, so
+    keeping the rows is cheap.
+
+    **One step, replaced by the next edit** (hence OneToOne, not a log). A
+    second edit therefore makes the first permanent, which is a thing the
+    confirmation sheet has to SAY while a prior value already exists rather
+    than letting somebody edit twice and discover the first is unreachable.
+
+    Deliberately not an audit trail. If a record of who changed what is ever
+    wanted, that is a different table with different retention — this one is
+    designed to be thrown away.
+    """
+    foursome   = models.OneToOneField('tournament.Foursome',
+                                      on_delete=models.CASCADE,
+                                      related_name='setup_undo')
+    created_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL,
+                                   on_delete=models.SET_NULL,
+                                   null=True, blank=True, related_name='+')
+    # {'memberships': [...], 'hole_scores': [...]} — see services/setup_edit.py
+    payload    = models.JSONField(default=dict)
+    # 'Kevin: Blue → White' — what the undo would put back, in words.
+    note       = models.CharField(max_length=200, blank=True)
+
+    def __str__(self):
+        return f'undo for foursome {self.foursome_id}: {self.note or "—"}'

@@ -103,6 +103,7 @@ urlpatterns = [
     path('foursomes/<int:pk>/',              views.FoursomeDetailView.as_view(),      name='api-foursome-detail'),
     path('foursomes/<int:pk>/active-games/', views.FoursomeActiveGamesView.as_view(), name='api-foursome-active-games'),
     path('foursomes/<int:pk>/tees/',         views.FoursomeTeesView.as_view(),        name='api-foursome-tees'),
+    path('foursomes/<int:pk>/tees/undo/',    views.FoursomeSetupUndoView.as_view(),   name='api-foursome-tees-undo'),
     path('foursomes/<int:pk>/remove-player/', views.FoursomeRemovePlayerView.as_view(),
          name='api-foursome-remove-player'),
     path('foursomes/<int:pk>/withdraw-player/', views.WithdrawPlayerView.as_view(),

@@ -4174,6 +4174,60 @@ class FoursomeActiveGamesView(APIView):
         })
 
 
+class FoursomeSetupUndoView(APIView):
+    """
+    POST   /api/foursomes/{id}/tees/undo/   — put the last setup edit back
+    GET    /api/foursomes/{id}/tees/undo/   — is there one, and what is it
+
+    **One step, not a stack.** The prior values of every row the last edit
+    touched, replaced by the next edit — so a second edit makes the first
+    permanent. That is the whole design: it covers the case that matters, a
+    fat-fingered index caught immediately, and it does not pretend to be a
+    history.
+
+    It restores the ROWS, not the setting. `handicap_strokes` and `net_score`
+    are stored rather than computed, so once an edit has overwritten them there
+    is nothing left to derive the old numbers from — re-deriving would compute
+    them under settings that no longer exist anywhere.
+    """
+    def get(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        undo = getattr(foursome, 'setup_undo', None)
+        return Response({
+            'available' : undo is not None,
+            'note'      : undo.note if undo else '',
+            'created_at': undo.created_at if undo else None,
+        })
+
+    @transaction.atomic
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        undo = getattr(foursome, 'setup_undo', None)
+        if undo is None:
+            return Response(
+                {'detail': 'There is nothing to undo — the last setup change '
+                           'has already been undone, or replaced by a later '
+                           'one.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        from services import setup_edit
+        note     = undo.note
+        restored = setup_edit.restore(foursome, undo.payload)
+        # The step is SPENT. Leaving it would let a second press re-apply
+        # values the round has moved past, and an undo of an undo is a second
+        # step — which this deliberately is not.
+        undo.delete()
+        _recalculate_games(foursome)
+
+        return Response({
+            'foursome_id'   : foursome.id,
+            'rows_restored' : restored,
+            'undone'        : note,
+            'undo_available': False,
+            'scorecard'     : _build_scorecard(foursome),
+        })
+
+
 class FoursomeTeesView(APIView):
     """
     PATCH /api/foursomes/{id}/tees/
@@ -4190,10 +4244,20 @@ class FoursomeTeesView(APIView):
     rating.  The original round-level handicap_allowance ratio is
     preserved (we infer it from the existing playing/course ratio).
 
-    Refuses the request when any HoleScore with a gross_score exists
-    for the foursome — changing a tee changes the stroke-index
-    allocation, so applying new tees to already-scored holes would
-    silently corrupt every saved handicap_strokes value.
+    Refuses the request past the EDIT CEILING (`services/edit_window`) — the
+    first three holes are the window, and Banker has none at all. Inside it the
+    change is accepted and the round is RESCORED from hole 1: changing a tee
+    changes the stroke-index allocation, and `handicap_strokes` / `net_score`
+    are stored rather than computed, so the already-scored rows are rewritten
+    and every game recalculated on top. Applying it going forward only would
+    leave the round scored under two different allocations, which is not a real
+    result.
+
+    The prior values of every row it touched are kept for ONE step of undo
+    (`POST .../tees/undo/`) — once `handicap_strokes` is overwritten there is
+    nothing left to derive the old one from. A second edit replaces that step
+    and so makes the first permanent; the response says whether one is standing
+    so the client can say it BEFORE the second edit rather than after.
 
     GET returns the tees AVAILABLE at this foursome's course (for the
     tee-box editor's dropdown) — sourced from the round's course, not the
@@ -4222,21 +4286,22 @@ class FoursomeTeesView(APIView):
             base=Foursome.objects.prefetch_related('memberships__player'),
         )
 
-        # Phantom-player scores (Sixes phantom, Pink Ball rotation, etc.)
-        # don't represent real scoring — exclude them so the lock only
-        # kicks in once a real player has played a hole.
-        scored = HoleScore.objects.filter(
-            foursome=foursome,
-            gross_score__isnull=False,
-            player__is_phantom=False,
-        ).exists()
-        if scored:
-            return Response(
-                {'detail':
-                 'Cannot change tees after scores have been entered for '
-                 'this foursome.  Reopen the round and clear scores first.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # The edit ceiling, shared with every game that locks on it. Phantom
+        # scores don't spend the window — a phantom padding a three-ball is not
+        # somebody playing — which `scored_holes` already handles.
+        from services.edit_window import (ceiling_for, closed_reason,
+                                          edits_open, scored_holes)
+        if not edits_open(foursome):
+            if ceiling_for(foursome) == 0:
+                from services.edit_window import banker_closed_reason
+                detail = banker_closed_reason('Tees and handicaps')
+            else:
+                detail = closed_reason(
+                    'Tees and handicaps',
+                    'the holes already played were scored against them')
+            return Response({'detail': detail},
+                            status=status.HTTP_400_BAD_REQUEST)
+        played = scored_holes(foursome)
 
         tees_data  = request.data.get('tees', []) or []
         hcaps_data = request.data.get('handicaps', []) or []
@@ -4256,6 +4321,14 @@ class FoursomeTeesView(APIView):
             )
 
         from scoring.handicap import par_adjusted_playing_handicap
+        from services import setup_edit
+
+        # BEFORE any write. Scoped to the whole foursome rather than the
+        # golfers named in the request, because a tee change can shift the
+        # group's lowest par and so re-derive every real member's par-adjusted
+        # playing handicap — an undo that restored only the named golfer would
+        # leave the others on numbers nobody chose.
+        before = setup_edit.snapshot(foursome) if played else None
 
         memberships = {
             m.player_id: m
@@ -4343,9 +4416,26 @@ class FoursomeTeesView(APIView):
             m.save(update_fields=['tee', 'course_handicap', 'playing_handicap',
                                   'playing_handicap_override'])
 
+        # ── Retroactive rescore, and the one step back ──────────────────────
+        rescored = 0
+        if before is not None:
+            # Every real member, not just `updated`: a tee change moves the
+            # group's lowest par, so a golfer nobody edited can come out with a
+            # different playing handicap and must be rescored with them.
+            rescored = setup_edit.rescore(foursome)
+            _recalculate_games(foursome)
+            setup_edit.store_undo(foursome, before, request.user)
+
+        undo = getattr(foursome, 'setup_undo', None)
         return Response({
             'foursome_id'      : foursome.id,
             'updated_player_ids': updated,
+            'holes_rescored'   : rescored,
+            # Whether a step back is standing, and what it would put back. The
+            # client shows this BEFORE the next edit — a second one replaces it,
+            # and discovering that afterwards is too late to be useful.
+            'undo_available'   : undo is not None,
+            'undo_note'        : (undo.note if undo else ''),
             'scorecard'        : _build_scorecard(foursome),
         })
 

@@ -125,10 +125,34 @@ class HandicapOverrideEndpointTests(TestCase):
 
     # -- the gate ------------------------------------------------------------
 
-    def test_it_is_refused_once_a_hole_is_scored(self):
-        """Same threshold as a tee change, and for the same reason: it re-nets
-        every hole already played."""
+    def test_it_is_accepted_inside_the_edit_ceiling_and_rescores(self):
+        """Same threshold as a tee change, and for the same reason — but the
+        threshold moved. Inside the first three holes it re-nets the holes
+        already played rather than refusing, because a forced handicap typed
+        from the wrong line of a club sheet is exactly the setup mistake the
+        window exists for."""
+        from scoring.models import HoleScore
         submit_hole(self.fs, 1, [(self.pid['Paul'], 4), (self.pid['Sam'], 5)])
+        # Hole 1 is stroke index 7, so Paul off 12 gets a stroke on it. Forced
+        # down to 5 he does not — 12 -> 17 would have left the row alone, which
+        # is a real answer but not a test of the rescore.
+        self.assertEqual(
+            HoleScore.objects.get(foursome=self.fs, player_id=self.pid['Paul'],
+                                  hole_number=1).handicap_strokes, 1)
+        resp = self._set('Paul', 5)
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(self._reload('Paul').playing_handicap_override, 5)
+        self.assertEqual(resp.data['holes_rescored'], 1)
+
+        hs = HoleScore.objects.get(foursome=self.fs,
+                                   player_id=self.pid['Paul'], hole_number=1)
+        self.assertEqual(hs.handicap_strokes, 0)
+        self.assertEqual(hs.net_score, 4)        # derived on save, not written
+
+    def test_it_is_refused_past_the_ceiling(self):
+        for h in range(1, 5):
+            submit_hole(self.fs, h, [(self.pid['Paul'], 4),
+                                     (self.pid['Sam'], 5)])
         resp = self._set('Paul', 17)
         self.assertEqual(resp.status_code, 400, resp.data)
         self.assertIsNone(self._reload('Paul').playing_handicap_override)

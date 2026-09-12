@@ -2238,9 +2238,11 @@ class ApiClient {
 
   /// Reassign each player's tee for a foursome.  Server-side this also
   /// recomputes course_handicap + playing_handicap from the new tee.
-  /// Returns the updated scorecard payload.  Throws ApiException(400)
-  /// when any hole has already been scored — tees can only change
-  /// before the first score is entered.
+  ///
+  /// Throws ApiException(400) past the EDIT CEILING — the first three scored
+  /// holes are the window, and a Banker round has none at all. Inside it the
+  /// change is accepted and the round is RESCORED from hole 1; the response
+  /// carries `holes_rescored` and whether a one-step `undo` is now standing.
   /// Reassign tees and/or force playing handicaps for one foursome.
   ///
   /// Both lists are optional and independent — forcing a handicap is not a tee
@@ -2256,6 +2258,25 @@ class ApiClient {
       if (tees.isNotEmpty) 'tees': tees,
       if (handicaps.isNotEmpty) 'handicaps': handicaps,
     });
+    return data as Map<String, dynamic>;
+  }
+
+  /// Is there a setup change to undo, and what would it put back?
+  ///
+  /// One step, never a stack — a second edit replaces it, which is why the
+  /// screen asks BEFORE offering a second save rather than after.
+  Future<Map<String, dynamic>> getFoursomeSetupUndo(int foursomeId) async {
+    final data = await _get('/foursomes/$foursomeId/tees/undo/');
+    return data as Map<String, dynamic>;
+  }
+
+  /// Put the last tee / forced-handicap change back, scores and all.
+  ///
+  /// Restores the stored prior rows rather than recomputing them: once
+  /// `handicap_strokes` has been overwritten there is nothing left to derive
+  /// the old value from. The step is spent afterwards.
+  Future<Map<String, dynamic>> undoFoursomeSetup(int foursomeId) async {
+    final data = await _post('/foursomes/$foursomeId/tees/undo/', {});
     return data as Map<String, dynamic>;
   }
 

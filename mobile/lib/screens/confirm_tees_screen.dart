@@ -5,9 +5,17 @@
 /// picked a default.  Before the first hole is scored, anyone can pop
 /// in here and confirm or correct the choices.
 ///
-/// Server refuses the change if any hole has already been scored.
-/// We additionally hide the entry point on the Round screen once
-/// scoring starts, so the user shouldn't normally see the error.
+/// **It is no longer setup-only.** Inside the edit ceiling — the first three
+/// scored holes, and none at all in a Banker round — a wrong tee or a wrong
+/// forced handicap can still be corrected, and the server RESCORES the holes
+/// already played rather than leaving the round scored under two different
+/// allocations. Past the ceiling it refuses, and says which rule it is.
+///
+/// Because money can move under a group that is looking at it, a save that
+/// rescored anything reports how many holes it touched and offers one step of
+/// Undo. That step is replaced by the next edit, so a standing one is shown
+/// BEFORE a second save rather than after it — discovering that the first
+/// change is now unreachable is no use once it is.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -71,6 +79,11 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
   /// the reason nobody can explain a golfer's strokes.
   bool _forceHcaps = false;
 
+  /// What a standing undo would put back — '' when there is none. Shown while
+  /// the user is deciding on a SECOND edit, because that is the one that makes
+  /// the first permanent.
+  String _undoNote = '';
+
   @override
   void dispose() {
     for (final c in _hcaps.values) {
@@ -110,6 +123,17 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
       // scorer doesn't get an empty dropdown).
       _tees = await client.getFoursomeCourseTees(widget.foursomeId);
 
+      // Best-effort: a round that has never been edited has nothing to report,
+      // and a screen that cannot open because of a banner is worse than a
+      // screen with no banner.
+      try {
+        final undo = await client.getFoursomeSetupUndo(widget.foursomeId);
+        _undoNote = (undo['available'] == true)
+            ? (undo['note'] as String? ?? '') : '';
+      } catch (_) {
+        _undoNote = '';
+      }
+
       // Seed _picks with each player's current tee (or first available
       // tee that matches their sex if for some reason they don't have
       // one yet).
@@ -131,6 +155,26 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
 
   /// Tees this player can play — matches their sex, plus any unisex.
   List<TeeInfo> _teesForPlayer(PlayerProfile p) => teesForPlayer(_tees, p);
+
+  /// Put the last change back — scores, strokes and setting together.
+  ///
+  /// Takes the ids rather than reading them off `context`, because by the time
+  /// the Undo action is tapped this screen has popped and its context is
+  /// dead. The round provider is captured for the same reason.
+  Future<void> _undo(int foursomeId, RoundProvider rp) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final client    = context.read<AuthProvider>().client;
+    try {
+      final resp = await client.undoFoursomeSetup(foursomeId);
+      if (rp.round != null) await rp.loadRound(rp.round!.id);
+      final what = (resp['undone'] as String? ?? '').trim();
+      messenger.showSnackBar(SnackBar(
+          content: Text(what.isEmpty ? 'Change undone.'
+                                     : 'Undone — $what')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Could not undo: $e')));
+    }
+  }
 
   Future<void> _save() async {
     setState(() { _saving = true; _error = null; });
@@ -164,20 +208,39 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
         Navigator.of(context).pop(false);
         return;
       }
-      await client.patchFoursomeTees(widget.foursomeId,
-                                     tees: payload, handicaps: hcaps);
+      // Captured BEFORE the await — after it this screen may be gone, and the
+      // Undo action in the snackbar outlives the screen entirely.
+      final rp = context.read<RoundProvider>();
+      final resp = await client.patchFoursomeTees(widget.foursomeId,
+                                                  tees: payload,
+                                                  handicaps: hcaps);
       // Re-fetch the round so the foursome's memberships pick up the
       // new tees + handicaps the server just recomputed.
-      final rp = context.read<RoundProvider>();
       if (rp.round != null) {
         await rp.loadRound(rp.round!.id);
       }
       if (!mounted) return;
       final touched = {...payload.map((e) => e['player_id']),
                        ...hcaps.map((e) => e['player_id'])}.length;
+      final rescored = (resp['holes_rescored'] as int?) ?? 0;
+
+      // A save that only moved a setting gets the old line. A save that
+      // rewrote scored holes has to SAY so — the money can have moved on a
+      // board somebody is looking at — and hand back the way out.
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(
-            'Updated $touched player${touched == 1 ? '' : 's'}.')),
+        rescored > 0
+            ? SnackBar(
+                duration: const Duration(seconds: 8),
+                content: Text(
+                    'Updated $touched player${touched == 1 ? '' : 's'} · '
+                    '$rescored hole${rescored == 1 ? '' : 's'} rescored'),
+                action: SnackBarAction(
+                  label: 'Undo',
+                  onPressed: () => _undo(widget.foursomeId, rp),
+                ),
+              )
+            : SnackBar(content: Text(
+                'Updated $touched player${touched == 1 ? '' : 's'}.')),
       );
       Navigator.of(context).pop(true);
     } catch (e) {
@@ -249,12 +312,47 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Neither tees nor handicaps can change once a hole is scored — both '
-          're-net every hole already played.',
+          'Both re-net every hole already played, so they can only be '
+          'corrected through the first three holes — after that, start a new '
+          'match with the same golfers.',
           style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
               fontStyle: FontStyle.italic),
         ),
+        // A change is already standing, and saving again would replace the way
+        // back to it. Said HERE, above the controls, because after the second
+        // save it is no longer useful information.
+        if (_undoNote.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.secondaryContainer,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(Icons.history, size: 18,
+                   color: theme.colorScheme.onSecondaryContainer),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Last change: $_undoNote\nSaving again replaces it — you '
+                  'can only step back once.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSecondaryContainer),
+                ),
+              ),
+              TextButton(
+                onPressed: _saving ? null : () async {
+                  await _undo(widget.foursomeId,
+                              context.read<RoundProvider>());
+                  if (mounted) _load();
+                },
+                child: const Text('Undo'),
+              ),
+            ]),
+          ),
+        ],
         const SizedBox(height: 8),
         // The switch, not the fields, is what most rounds see: a forced
         // handicap is for a card somebody else manages, which is the
