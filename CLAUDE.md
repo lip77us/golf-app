@@ -2838,11 +2838,23 @@ Things the sweep turned up:
   introspecting widgets, and their `build` composes the halves back for any
   caller that still wants one row.
 
-**Still unpinned — the five leaderboard review grids and the landscape card:**
-`_StablefordPointsGrid`, `_IRLeaderboardScorecard`, `_Points531HoleGrid`,
-`_TpmPhase2HoleStrip`, `_TripleCupHoleDetail`, and `scorecard_grid`'s
-`_LandscapeGrid`. Deferred deliberately — those are read after the fact rather
-than stood over.
+**The six review grids followed** — `_StablefordPointsGrid`,
+`_IRLeaderboardScorecard`, `_Points531HoleGrid`, `_TpmPhase2HoleStrip`,
+`_TripleCupHoleDetail` and `scorecard_grid`'s `_LandscapeGrid`. **Eighteen of
+eighteen; nothing in the app now scrolls its label column away.** A board read
+after the fact has no hole in play, so those open on the LAST column — the same
+"round so far, far end at the right edge" reading.
+
+**The landscape card could not use `PinnedHoleGrid`** — it is a `Table`, and
+`TableBorder.all` is what rules it like a scorecard. It is split the same way
+instead: every `TableRow` is built with its label cell FIRST, so the halves come
+apart into two Tables that share their row heights (22 for headers, 38 for a
+player) and stay in step. It also **centred** the current hole rather than
+right-edging it, which on a near-full landscape card put the hole you were about
+to play in the middle with finished holes pushed off the left.
+
+`HoleGridBand.gap(h)` exists for grids that separate rows with space rather than
+a hairline — the Points 5-3-1 board is the one that does.
 
 Tests: `mobile/test/pinned_hole_grid_test.dart` (8) — the pin and the offset
 are geometry claims, so both are measured rather than eyeballed.

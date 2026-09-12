@@ -616,62 +616,95 @@ class _LandscapeGridState extends State<_LandscapeGrid> {
 
   void _scrollToHole(int hole) {
     if (!_scroll.hasClients) return;
-    final double holeLeft;
+    // The name column is PINNED outside the scroller now, so the offset is
+    // measured in hole columns alone — no _nameW to add back.
+    final double holeRight;
     final fi = _front.indexOf(hole);
     if (fi >= 0) {
-      holeLeft = _nameW + fi * _colW;
+      holeRight = (fi + 1) * _colW;
     } else {
       final bi = _back.indexOf(hole);
       if (bi < 0) return;
-      holeLeft = _nameW +
-          _front.length * _colW +
+      holeRight = _front.length * _colW +
           (_showOut ? _summaryW : 0) +
-          bi * _colW;
+          (bi + 1) * _colW;
     }
-    final viewport = _scroll.position.viewportDimension;
-    double offset  = holeLeft - viewport / 2 + _colW / 2;
-    offset = offset.clamp(0.0, _scroll.position.maxScrollExtent);
+    // The hole in play finishes at the right edge, as on every other grid —
+    // the round so far to its left. This card used to CENTRE it, which on a
+    // near-full landscape card put the hole you are about to play in the
+    // middle with finished holes pushed off to the left.
+    final offset = (holeRight - _scroll.position.viewportDimension)
+        .clamp(0.0, _scroll.position.maxScrollExtent);
     _scroll.animateTo(offset,
         duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
   }
 
   @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      controller:      _scroll,
-      scrollDirection: Axis.horizontal,
-      child: _buildTable(context),
-    );
-  }
+  Widget build(BuildContext context) => _buildTable(context);
 
+  /// **The name column is pinned; only the holes scroll.**
+  ///
+  /// This is a `Table` rather than rows of boxes — `TableBorder.all` is what
+  /// rules it like a scorecard — so it cannot use `PinnedHoleGrid`. It is
+  /// split the same way instead: every `TableRow` here is built with its
+  /// label cell FIRST, so the halves come apart cleanly and go into two
+  /// Tables that share their row heights (22 for the headers, 38 for a
+  /// player) and therefore stay in step.
   Widget _buildTable(BuildContext context) {
     final theme = Theme.of(context);
     const hdrH  = 22.0;
     const rowH  = 38.0;
 
-    // Column widths, built to match the dynamic column layout: name, front
-    // holes, [OUT], back holes, [IN], TOT, NET, STBL.
-    final colWidths = <int, TableColumnWidth>{0: FixedColumnWidth(_nameW)};
-    int idx = 1;
-    for (final _ in _front) { colWidths[idx++] = FixedColumnWidth(_colW); }
-    if (_showOut) colWidths[idx++] = FixedColumnWidth(_summaryW);
-    for (final _ in _back) { colWidths[idx++] = FixedColumnWidth(_colW); }
-    if (_showIn) colWidths[idx++] = FixedColumnWidth(_summaryW);
-    colWidths[idx++] = FixedColumnWidth(_summaryW); // TOT
-    colWidths[idx++] = FixedColumnWidth(_summaryW); // NET
-    colWidths[idx++] = FixedColumnWidth(_summaryW); // STBL
+    final rows = <TableRow>[
+      _holeHeaderRow(theme, hdrH),
+      _parRow(theme, hdrH),
+      ..._playerRows(theme, rowH),
+    ];
 
-    return Table(
-      defaultColumnWidth: FixedColumnWidth(_colW),
-      columnWidths: colWidths,
-      border: TableBorder.all(
-          color: theme.colorScheme.outlineVariant, width: 0.5),
-      children: [
-        _holeHeaderRow(theme, hdrH),
-        _parRow(theme, hdrH),
-        ..._playerRows(theme, rowH),
-      ],
-    );
+    // Column widths for the SCROLLING half — the layout minus the name
+    // column, so every index shifts down by one: front holes, [OUT], back
+    // holes, [IN], TOT, NET, STBL.
+    final cellWidths = <int, TableColumnWidth>{};
+    int idx = 0;
+    for (final _ in _front) { cellWidths[idx++] = FixedColumnWidth(_colW); }
+    if (_showOut) cellWidths[idx++] = FixedColumnWidth(_summaryW);
+    for (final _ in _back) { cellWidths[idx++] = FixedColumnWidth(_colW); }
+    if (_showIn) cellWidths[idx++] = FixedColumnWidth(_summaryW);
+    cellWidths[idx++] = FixedColumnWidth(_summaryW); // TOT
+    cellWidths[idx++] = FixedColumnWidth(_summaryW); // NET
+    cellWidths[idx++] = FixedColumnWidth(_summaryW); // STBL
+
+    final border = TableBorder.all(
+        color: theme.colorScheme.outlineVariant, width: 0.5);
+
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Table(
+        columnWidths: {0: const FixedColumnWidth(_nameW)},
+        defaultColumnWidth: const FixedColumnWidth(_nameW),
+        border: border,
+        children: [
+          for (final r in rows)
+            TableRow(decoration: r.decoration,
+                     children: [r.children.first]),
+        ],
+      ),
+      Expanded(
+        child: SingleChildScrollView(
+          controller:      _scroll,
+          scrollDirection: Axis.horizontal,
+          child: Table(
+            defaultColumnWidth: const FixedColumnWidth(_colW),
+            columnWidths: cellWidths,
+            border: border,
+            children: [
+              for (final r in rows)
+                TableRow(decoration: r.decoration,
+                         children: r.children.sublist(1)),
+            ],
+          ),
+        ),
+      ),
+    ]);
   }
 
   TableRow _holeHeaderRow(ThemeData theme, double h) {
