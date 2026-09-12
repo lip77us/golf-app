@@ -31,6 +31,7 @@ import '../utils/match_handicap.dart';
 import '../utils/nassau_team_style.dart';
 import '../utils/round_complete.dart';
 import '../widgets/stroke_dots.dart';
+import '../widgets/pinned_hole_grid.dart';
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -1383,44 +1384,12 @@ class _NassauSummaryGrid extends StatefulWidget {
 }
 
 class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
-  final ScrollController _scrollCtrl = ScrollController();
-
   static const double _labelColW = 56.0;
   static const double _cellW     = 34.0;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _scrollToHole(widget.currentHole));
-  }
-
-  @override
-  void didUpdateWidget(_NassauSummaryGrid old) {
-    super.didUpdateWidget(old);
-    if (old.currentHole != widget.currentHole) {
-      WidgetsBinding.instance.addPostFrameCallback(
-          (_) => _scrollToHole(widget.currentHole));
-    }
-  }
-
-  @override
-  void dispose() {
-    _scrollCtrl.dispose();
-    super.dispose();
-  }
-
-  void _scrollToHole(int hole) {
-    if (!_scrollCtrl.hasClients) return;
-    // Position current hole at slot 7 of ~10 visible (70% from left).
-    final target = (_labelColW + (hole - 7) * _cellW)
-        .clamp(0.0, _scrollCtrl.position.maxScrollExtent);
-    _scrollCtrl.animateTo(
-      target,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
-    );
-  }
+  // The controller, the pin and the scroll target live in PinnedHoleGrid.
+  // This one also scrolled by HOLE NUMBER rather than by position in play
+  // order, so a back-nine round aimed at a column that does not exist.
 
   int _strokesOnHoleFor(Membership m, int h) {
     final nassau  = widget.nassau;
@@ -1517,24 +1486,23 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.primary)),
             const SizedBox(height: 4),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              controller: _scrollCtrl,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            Builder(builder: (ctx) {
+              Widget lbl(String text, TextStyle? style) => SizedBox(
+                    width: labelColW, height: rowH,
+                    child: Align(alignment: Alignment.centerLeft,
+                        child: Text(text, style: style)),
+                  );
+              return PinnedHoleGrid(
+                labelWidth  : labelColW,
+                cellWidth   : cellW,
+                holeCount   : holeRange.length,
+                currentIndex: holeRange.indexOf(currentHole),
+                bands: [
                   // Hole numbers header
-                  Row(children: [
-                    SizedBox(
-                      width: labelColW, height: rowH,
-                      child: const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('Hole',
-                            style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold)),
-                      ),
-                    ),
+                  HoleGridBand(
+                    lbl('Hole', const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.bold)),
+                    [
                     for (final h in holeRange)
                       holeCell(h,
                           child: Text('$h',
@@ -1543,16 +1511,10 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                                   fontWeight: FontWeight.bold))),
                   ]),
                   // Par row
-                  Row(children: [
-                    SizedBox(
-                      width: labelColW, height: rowH,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('Par',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                                fontStyle: FontStyle.italic)),
-                      ),
-                    ),
+                  HoleGridBand(
+                    lbl('Par', theme.textTheme.bodySmall?.copyWith(
+                        fontStyle: FontStyle.italic)),
+                    [
                     for (final h in holeRange)
                       holeCell(h,
                           child: Text(
@@ -1560,13 +1522,7 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                             style: theme.textTheme.bodySmall,
                           )),
                   ]),
-                  // Divider
-                  Container(
-                    height: 1,
-                    width: labelColW + cellW * holeRange.length,
-                    color: theme.colorScheme.outlineVariant,
-                    margin: const EdgeInsets.symmetric(vertical: 2),
-                  ),
+                  const HoleGridBand.rule(),
                   // Player score rows (real players + phantom)
                   for (final m in players)
                     _NassauGridPlayerRow(
@@ -1580,20 +1536,16 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                       rowH:          rowH,
                       strokesOnHole: (h) => _strokesOnHoleFor(m, h),
                       isPhantom:     m.player.isPhantom,
-                    ),
+                    ).toBand(ctx),
+                  const HoleGridBand.rule(),
                   // Hole winner row (top bet)
-                  Row(children: [
-                    SizedBox(
-                      width: labelColW, height: rowH,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
+                  HoleGridBand(
+                    lbl(
                           nassau.isClaremont ? 'Top' : 'Won by',
-                          style: theme.textTheme.labelSmall?.copyWith(
+                          theme.textTheme.labelSmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                               fontStyle: FontStyle.italic)),
-                      ),
-                    ),
+                    [
                     for (final h in holeRange)
                       Builder(builder: (_) {
                         final winner = _winnerForHole(h);
@@ -1626,17 +1578,11 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
 
                   // ── Claremont bottom delta row ─────────────────────────
                   if (nassau.isClaremont)
-                    Row(children: [
-                      SizedBox(
-                        width: labelColW, height: rowH,
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text('Bot',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                  fontStyle: FontStyle.italic)),
-                        ),
-                      ),
+                    HoleGridBand(
+                      lbl('Bot', theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontStyle: FontStyle.italic)),
+                      [
                       for (final h in holeRange)
                         Builder(builder: (_) {
                           final hd = nassau.holes
@@ -1671,8 +1617,8 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                         }),
                     ]),
                 ],
-              ),
-            ),
+              );
+            }),
           // (Phantom info strip is rendered outside this grid in _buildBody)
         ],
         ),
@@ -1874,6 +1820,13 @@ class _NassauGridPlayerRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final b = toBand(context);
+    return Row(children: [b.label!, ...b.cells!]);
+  }
+
+  /// The row's pinned half and its scrolling half, so the names can sit
+  /// outside the horizontal scroll view.
+  HoleGridBand toBand(BuildContext context) {
     final theme = Theme.of(context);
     // Phantom rows are shown with a subdued style and "PHM hc:N" label
     final labelStyle = isPhantom
@@ -1888,7 +1841,7 @@ class _NassauGridPlayerRow extends StatelessWidget {
         ? 'PHM hc:${member.playingHandicap}'
         : member.player.displayShort;
 
-    return Row(children: [
+    return HoleGridBand(
       SizedBox(
         width: labelColW, height: rowH,
         child: Align(
@@ -1898,6 +1851,7 @@ class _NassauGridPlayerRow extends StatelessWidget {
               style: labelStyle),
         ),
       ),
+      [
       for (final h in holeRange)
         _cell(h, context,
             child: SizedBox(
