@@ -4995,42 +4995,14 @@ class _IrishRumbleScorecardGrid extends StatefulWidget {
 
 class _IrishRumbleScorecardGridState
     extends State<_IrishRumbleScorecardGrid> {
-  final ScrollController _scrollCtrl = ScrollController();
-
   static const double _labelColW = 60.0;
   static const double _cellW     = 34.0;
   static const double _rowH      = 28.0;
   static const double _totalRowH = 30.0;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _scrollToHole(widget.currentHole));
-  }
-
-  @override
-  void didUpdateWidget(_IrishRumbleScorecardGrid old) {
-    super.didUpdateWidget(old);
-    if (old.currentHole != widget.currentHole) {
-      WidgetsBinding.instance.addPostFrameCallback(
-          (_) => _scrollToHole(widget.currentHole));
-    }
-  }
-
-  @override
-  void dispose() {
-    _scrollCtrl.dispose();
-    super.dispose();
-  }
-
-  void _scrollToHole(int hole) {
-    if (!_scrollCtrl.hasClients) return;
-    final target = (_labelColW + (hole - 7) * _cellW)
-        .clamp(0.0, _scrollCtrl.position.maxScrollExtent);
-    _scrollCtrl.animateTo(target,
-        duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
-  }
+  // The controller, the pin and the scroll target live in PinnedHoleGrid.
+  // This one also scrolled by HOLE NUMBER rather than by position in play
+  // order, so a back-nine round aimed at a column that does not exist.
 
   /// Returns balls-to-count for a given hole number.
   int _ballsForHole(int hole) {
@@ -5189,23 +5161,25 @@ class _IrishRumbleScorecardGridState
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.primary)),
             const SizedBox(height: 4),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              controller: _scrollCtrl,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            Builder(builder: (ctx) {
+              Widget lbl(String text, TextStyle? style,
+                      {double h = _rowH}) =>
+                  SizedBox(
+                    width: _labelColW, height: h,
+                    child: Align(alignment: Alignment.centerLeft,
+                        child: Text(text, style: style)),
+                  );
+              return PinnedHoleGrid(
+                labelWidth  : _labelColW,
+                cellWidth   : _cellW,
+                holeCount   : holeRange.length,
+                currentIndex: holeRange.indexOf(widget.currentHole),
+                bands: [
                   // Hole numbers row
-                  Row(children: [
-                    SizedBox(
-                      width: _labelColW, height: _rowH,
-                      child: const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('Hole',
-                            style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
+                  HoleGridBand(
+                    lbl('Hole', const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.bold)),
+                    [
                     for (final h in holeRange)
                       cell(h,
                           isCurrent: h == widget.currentHole,
@@ -5214,16 +5188,10 @@ class _IrishRumbleScorecardGridState
                                   fontSize: 11, fontWeight: FontWeight.bold))),
                   ]),
                   // Par row
-                  Row(children: [
-                    SizedBox(
-                      width: _labelColW, height: _rowH,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('Par',
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(fontStyle: FontStyle.italic)),
-                      ),
-                    ),
+                  HoleGridBand(
+                    lbl('Par', theme.textTheme.bodySmall
+                        ?.copyWith(fontStyle: FontStyle.italic)),
+                    [
                     for (final h in holeRange)
                       cell(h,
                           isCurrent: h == widget.currentHole,
@@ -5233,16 +5201,10 @@ class _IrishRumbleScorecardGridState
                           )),
                   ]),
                   // Balls-to-count row (shows "1" / "2" / "3" / "4" per segment)
-                  Row(children: [
-                    SizedBox(
-                      width: _labelColW, height: _rowH,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('Count',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant)),
-                      ),
-                    ),
+                  HoleGridBand(
+                    lbl('Count', theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)),
+                    [
                     for (final h in holeRange) () {
                       final n = _ballsForHole(h);
                       final isFirst = segBoundaries.contains(h);
@@ -5264,31 +5226,18 @@ class _IrishRumbleScorecardGridState
                       );
                     }(),
                   ]),
-                  // Thin divider
-                  Container(
-                    height: 1,
-                    width: _labelColW + _cellW * holeRange.length,
-                    color: theme.colorScheme.outlineVariant,
-                    margin: const EdgeInsets.symmetric(vertical: 2),
-                  ),
+                  const HoleGridBand.rule(),
                   // Player rows
-                  for (final m in players) Builder(builder: (ctx) {
+                  for (final m in players) () {
                     final name = m.player.displayShort.isNotEmpty
                         ? m.player.displayShort
                         : m.player.name;
-                    return Row(children: [
-                      SizedBox(
-                        width: _labelColW, height: _rowH,
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(name,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.onSurface)),
-                        ),
-                      ),
+                    return HoleGridBand(
+                      lbl(name, TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurface)),
+                      [
                       for (final h in holeRange) () {
                         final ntp      = _netToPar(m, h);
                         final counts   = countingIds[h]!.contains(m.player.id);
@@ -5323,27 +5272,15 @@ class _IrishRumbleScorecardGridState
                             ));
                       }(),
                     ]);
-                  }),
-                  // Thin divider before total
-                  Container(
-                    height: 1,
-                    width: _labelColW + _cellW * holeRange.length,
-                    color: theme.colorScheme.outlineVariant,
-                    margin: const EdgeInsets.symmetric(vertical: 2),
-                  ),
+                  }(),
+                  const HoleGridBand.rule(),
                   // Running team total row
-                  Row(children: [
-                    SizedBox(
-                      width: _labelColW, height: _totalRowH,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('Total',
-                            style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.primary)),
-                      ),
-                    ),
+                  HoleGridBand(
+                    lbl('Total', TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary), h: _totalRowH),
+                    [
                     for (final h in holeRange) () {
                       final tot = runningTotals[h];
                       final isCurrent = h == widget.currentHole;
@@ -5369,8 +5306,8 @@ class _IrishRumbleScorecardGridState
                     }(),
                   ]),
                 ],
-              ),
-            ),
+              );
+            }),
           ],
         ),
       ),
