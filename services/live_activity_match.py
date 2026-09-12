@@ -153,9 +153,14 @@ def _normalise_fourball(foursome, player_id):
 
     overall = summary.get('overall') or {}
     leader  = overall.get('leader')
+    # `holes_up` is ALREADY SIGNED — FourballGame.holes_up_after_final is
+    # documented "positive = Team 1 up", and `leader` is derived from that sign
+    # rather than being independent of it. Negating it again for team2 flipped
+    # it back to positive, so the margin was never negative and the status
+    # number wore team1's BLUE for eighteen holes no matter who was up. Reported
+    # from a live fourball on 2026-09-12, where Orange was 1 up and the lock
+    # screen said so in blue.
     margin  = overall.get('holes_up') or 0
-    if leader == 'team2':
-        margin = -margin
 
     finished = summary.get('finished_on_hole')
     closed   = finished is not None

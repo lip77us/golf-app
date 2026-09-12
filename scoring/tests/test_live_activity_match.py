@@ -411,3 +411,68 @@ class CardReleaseGateTests(TestCase):
         self.assertEqual(card_kind('match_18'), 'match')
         self.assertEqual(card_kind('fourball'), 'match')
         self.assertEqual(card_kind('skins'), 'skins')
+
+
+class FourballLeaderColourTests(FourballActivityTests):
+    """The status number must wear the LEADING side's colour.
+
+    Reported from a live fourball on 2026-09-12: Orange was 1 up and the lock
+    screen said "1 UP" in blue — a golfer glancing at his phone read the
+    opposite of the truth.
+
+    The cause was a double negation. `FourballGame.holes_up_after_final` is
+    documented "positive = Team 1 up", so `overall['holes_up']` arrives ALREADY
+    SIGNED and `leader` is derived from that sign. Negating it again for team2
+    flipped it back to positive, so the margin was never negative and the colour
+    never left blue. The singles path never had it — there `leader` is derived
+    from the margin rather than applied to it.
+    """
+
+    def test_team1_up_is_blue(self):
+        self._play(1, 4, 5)
+        n = self._state()['number']
+        self.assertEqual(n['text'], '1 UP')
+        self.assertEqual(n['colour'], 'blue')
+
+    def test_team2_up_is_ORANGE_not_blue(self):
+        self._play(1, 5, 4)
+        n = self._state()['number']
+        self.assertEqual(n['text'], '1 UP')
+        self.assertEqual(n['colour'], 'orange')
+
+    def test_all_square_is_neutral_and_favours_neither_side(self):
+        self._play(1, 4, 5)
+        self._play(2, 5, 4)
+        self.assertEqual(self._state()['number']['colour'], 'neutral')
+
+    def test_before_a_hole_is_scored_it_is_neutral(self):
+        self.assertEqual(self._state()['number']['colour'], 'neutral')
+
+    def test_the_colour_follows_the_lead_changing_hands(self):
+        self._play(1, 4, 5)
+        self.assertEqual(self._state()['number']['colour'], 'blue')
+        self._play(2, 5, 4)
+        self.assertEqual(self._state()['number']['colour'], 'neutral')
+        self._play(3, 5, 4)
+        self.assertEqual(self._state()['number']['colour'], 'orange')
+
+    def test_a_two_hole_lead_for_team2_is_orange(self):
+        self._play(1, 5, 4)
+        self._play(2, 5, 4)
+        n = self._state()['number']
+        self.assertEqual(n['text'], '2 UP')
+        self.assertEqual(n['colour'], 'orange')
+
+    def test_the_colour_does_not_depend_on_who_is_reading(self):
+        # The card is a neutral scoreboard: the number is the match's, not the
+        # reader's. Both sides see the same colour.
+        self._play(1, 5, 4)
+        self.assertEqual(self._state('Paul Kelly')['number']['colour'], 'orange')
+        self.assertEqual(self._state('Sam Reid')['number']['colour'], 'orange')
+
+    def test_the_leading_flag_on_the_sides_agrees_with_the_colour(self):
+        self._play(1, 5, 4)
+        st = self._state()
+        self.assertFalse(st['sides'][0]['leading'])
+        self.assertTrue(st['sides'][1]['leading'])
+        self.assertEqual(st['number']['colour'], st['sides'][1]['colour'])
