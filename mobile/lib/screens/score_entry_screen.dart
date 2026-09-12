@@ -51,6 +51,7 @@ import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/team_splitter_4.dart';
 import '../widgets/stroke_dots.dart';
+import '../widgets/pinned_hole_grid.dart';
 
 // ---------------------------------------------------------------------------
 // Handicap helpers (shared with nassau_screen.dart)
@@ -5960,46 +5961,15 @@ class _FourballProgressGrid extends StatefulWidget {
 }
 
 class _FourballProgressGridState extends State<_FourballProgressGrid> {
-  final ScrollController _scrollCtrl = ScrollController();
   static const double _labelColW = 56.0;
   static const double _cellW     = 34.0;
   static const double _rowH      = 28.0;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _scrollToHole(widget.currentHole));
-  }
-
-  @override
-  void didUpdateWidget(_FourballProgressGrid old) {
-    super.didUpdateWidget(old);
-    if (old.currentHole != widget.currentHole) {
-      WidgetsBinding.instance.addPostFrameCallback(
-          (_) => _scrollToHole(widget.currentHole));
-    }
-  }
-
-  @override
-  void dispose() {
-    _scrollCtrl.dispose();
-    super.dispose();
-  }
-
-  void _scrollToHole(int hole) {
-    if (!_scrollCtrl.hasClients) return;
-    // Scroll by POSITION in the played sequence (back-9 / partial aware).
-    final range = widget.holesInPlay.isNotEmpty
-        ? widget.holesInPlay
-        : List.generate(18, (i) => i + 1);
-    final pos = range.indexOf(hole);
-    if (pos < 0) return;
-    final target = (_labelColW + (pos - 6) * _cellW)
-        .clamp(0.0, _scrollCtrl.position.maxScrollExtent);
-    _scrollCtrl.animateTo(target,
-        duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
-  }
+  // The scroll controller, the pin and the scroll maths all live in
+  // PinnedHoleGrid now. This grid had its labels INSIDE the scroll view, so
+  // by the 14th the four rows were anonymous — exactly when a fourball needs
+  // to know whose ball is whose — and it parked the current hole in the middle
+  // rather than at the right edge a scorecard is read from.
 
   // Strokes this player gets on hole [h] under the match's handicap mode —
   // mirrors services/fourball.py so the dots + nets match the calculator.
@@ -6113,68 +6083,62 @@ class _FourballProgressGridState extends State<_FourballProgressGrid> {
               style: theme.textTheme.labelLarge?.copyWith(
                   fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
           const SizedBox(height: 4),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            controller: _scrollCtrl,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              // Hole numbers
-              Row(children: [
-                SizedBox(width: _labelColW, height: _rowH,
-                    child: const Align(alignment: Alignment.centerLeft,
-                        child: Text('Hole',
-                            style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.bold)))),
-                for (final h in holeRange)
-                  holeCell(h, child: Text('$h',
-                      style: const TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.bold))),
-              ]),
-              // Par
-              Row(children: [
-                SizedBox(width: _labelColW, height: _rowH,
-                    child: Align(alignment: Alignment.centerLeft,
-                        child: Text('Par',
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(fontStyle: FontStyle.italic)))),
-                for (final h in holeRange)
-                  holeCell(h, child: Text('${scorecard.holeData(h)?.par ?? "-"}',
-                      style: theme.textTheme.bodySmall)),
-              ]),
-              Container(
-                height: 1,
-                width: _labelColW + _cellW * holeRange.length,
-                color: theme.colorScheme.outlineVariant,
-                margin: const EdgeInsets.symmetric(vertical: 2),
-              ),
-              // Player score rows — names tinted by team; the winning best
-              // ball each hole is highlighted in that player's cell.
-              for (final m in ordered)
-                Builder(builder: (_) {
-                  final tNum  = summary.teamOf(m.player.id);
-                  final tCol  = teamColor(tNum);
-                  return Row(children: [
-                    SizedBox(width: _labelColW, height: _rowH,
-                        child: Align(alignment: Alignment.centerLeft,
-                            child: Text(m.player.displayShort,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                    fontWeight: FontWeight.w600, color: tCol)))),
-                    for (final h in holeRange)
+          Builder(builder: (_) {
+            Widget label(String text, TextStyle? style) => SizedBox(
+                  width: _labelColW, height: _rowH,
+                  child: Align(alignment: Alignment.centerLeft,
+                      child: Text(text, style: style)),
+                );
+
+            return PinnedHoleGrid(
+              labelWidth : _labelColW,
+              cellWidth  : _cellW,
+              holeCount  : holeRange.length,
+              currentIndex: holeRange.indexOf(current),
+              bands: [
+                // Hole numbers
+                HoleGridBand(
+                  label('Hole', const TextStyle(
+                      fontSize: 11, fontWeight: FontWeight.bold)),
+                  [for (final h in holeRange)
+                    holeCell(h, child: Text('$h',
+                        style: const TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.bold)))],
+                ),
+                // Par
+                HoleGridBand(
+                  label('Par', theme.textTheme.bodySmall
+                      ?.copyWith(fontStyle: FontStyle.italic)),
+                  [for (final h in holeRange)
+                    holeCell(h, child: Text(
+                        '${scorecard.holeData(h)?.par ?? "-"}',
+                        style: theme.textTheme.bodySmall))],
+                ),
+                const HoleGridBand.rule(),
+                // Player score rows — names tinted by team; the winning best
+                // ball each hole is highlighted in that player's cell.
+                for (final m in ordered)
+                  HoleGridBand(
+                    label(m.player.displayShort,
+                        theme.textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: teamColor(summary.teamOf(m.player.id)))),
+                    [for (final h in holeRange)
                       Builder(builder: (_) {
+                        final tCol  = teamColor(summary.teamOf(m.player.id));
                         final hd    = scorecard.holeData(h);
                         final gross = hd?.scoreFor(m.player.id)?.grossScore;
                         final win   = _isWinningCell(m, h);
                         final strokes = _strokesOnHoleFor(m, h);
                         return holeCell(h,
-                            bg: win
-                                ? tCol.withValues(alpha: 0.18)
-                                : null,
+                            bg: win ? tCol.withValues(alpha: 0.18) : null,
                             child: Stack(children: [
                               Center(child: Text(
                                   gross == null ? '–' : '$gross',
                                   style: theme.textTheme.bodySmall?.copyWith(
-                                      fontWeight:
-                                          win ? FontWeight.w800 : FontWeight.w600,
+                                      fontWeight: win
+                                          ? FontWeight.w800
+                                          : FontWeight.w600,
                                       color: gross == null
                                           ? theme.colorScheme.onSurfaceVariant
                                           : win ? tCol : null))),
@@ -6182,48 +6146,41 @@ class _FourballProgressGridState extends State<_FourballProgressGrid> {
                                   strokes: strokes,
                                   color: theme.colorScheme.primary),
                             ]));
-                      }),
-                  ]);
-                }),
-              Container(
-                height: 1,
-                width: _labelColW + _cellW * holeRange.length,
-                color: theme.colorScheme.outlineVariant,
-                margin: const EdgeInsets.symmetric(vertical: 2),
-              ),
-              // Won by — T1 / T2 / = per hole.
-              Row(children: [
-                SizedBox(width: _labelColW, height: _rowH,
-                    child: Align(alignment: Alignment.centerLeft,
-                        child: Text('Won by',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                                fontStyle: FontStyle.italic)))),
-                for (final h in holeRange)
-                  Builder(builder: (_) {
-                    final hr = _holeResult(h);
-                    Color? bg; Color? fg; String label;
-                    if (hr == null) {
-                      label = '·';
-                    } else if (hr.winner == 'T1') {
-                      bg = GameColors.team1Bg; fg = GameColors.team1;
-                      label = teamInitialsFromNames(summary.team1.players);
-                    } else if (hr.winner == 'T2') {
-                      bg = GameColors.team2Bg; fg = GameColors.team2;
-                      label = teamInitialsFromNames(summary.team2.players);
-                    } else {
-                      bg = Colors.grey.shade100; fg = Colors.grey.shade600;
-                      label = '=';
-                    }
-                    return holeCell(h, bg: bg,
-                        child: Text(label,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: fg ?? theme.colorScheme.onSurfaceVariant)));
-                  }),
-              ]),
-            ]),
-          ),
+                      })],
+                  ),
+                const HoleGridBand.rule(),
+                // Won by — T1 / T2 / = per hole.
+                HoleGridBand(
+                  label('Won by', theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontStyle: FontStyle.italic)),
+                  [for (final h in holeRange)
+                    Builder(builder: (_) {
+                      final hr = _holeResult(h);
+                      Color? bg; Color? fg; String lbl;
+                      if (hr == null) {
+                        lbl = '·';
+                      } else if (hr.winner == 'T1') {
+                        bg = GameColors.team1Bg; fg = GameColors.team1;
+                        lbl = teamInitialsFromNames(summary.team1.players);
+                      } else if (hr.winner == 'T2') {
+                        bg = GameColors.team2Bg; fg = GameColors.team2;
+                        lbl = teamInitialsFromNames(summary.team2.players);
+                      } else {
+                        bg = Colors.grey.shade100; fg = Colors.grey.shade600;
+                        lbl = '=';
+                      }
+                      return holeCell(h, bg: bg,
+                          child: Text(lbl,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: fg ??
+                                      theme.colorScheme.onSurfaceVariant)));
+                    })],
+                ),
+              ],
+            );
+          }),
         ]),
       ),
     );
