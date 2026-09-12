@@ -235,8 +235,8 @@ class DispatchTests(_Base):
         state = activity_state(self.round, user)
         self.assertEqual(state['kind'], 'skins')
         self.assertEqual(set(state),
-                         {'kind', 'header', 'number', 'sides', 'state', 'pips',
-                          'final', 'footer'})
+                         {'kind', 'ribbon', 'header', 'number', 'sides',
+                          'state', 'pips', 'final', 'footer'})
 
 
 class PoolJunkTests(_Base):

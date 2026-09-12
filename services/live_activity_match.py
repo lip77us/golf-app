@@ -205,6 +205,26 @@ def _fourball_to_par(summary, player_id):
 # The card
 # ---------------------------------------------------------------------------
 
+def _handicap_cfg(foursome, slug):
+    """(mode, net_percent) for whichever engine is behind this card.
+
+    The normalisers reduce two games to one vocabulary and deliberately do not
+    carry handicap settings — nothing on the board needed them until the stroke
+    band. Read from the model rather than threaded through, so the two paths
+    stay as thin as they are.
+    """
+    if slug == 'fourball':
+        from games.models import FourballGame
+        g = FourballGame.objects.filter(foursome=foursome).first()
+    else:
+        from games.models import NassauGame
+        g = NassauGame.objects.filter(foursome=foursome,
+                                      game_type='match_18').first()
+    if g is None:
+        return None, 100
+    return g.handicap_mode, (getattr(g, 'net_percent', None) or 100)
+
+
 def match_activity_state(foursome, *, slug, player_id=None, thru=None) -> dict:
     """The five slots for this foursome's match, right now."""
     if slug == 'fourball':
@@ -216,6 +236,16 @@ def match_activity_state(foursome, *, slug, player_id=None, thru=None) -> dict:
 
     played = m['played'] if thru is None else thru
     hole   = min(played + 1, _HOLES)
+
+    # The stroke band. Both engines allocate over the full round by course
+    # stroke index, so the shared allocator serves the card exactly as the card
+    # serves both games.
+    from services.live_activity_registry import (hole_in_play, stroke_ribbon,
+                                                 full_round_strokes)
+    _mode, _npct = _handicap_cfg(foursome, slug)
+    ribbon = stroke_ribbon(
+        foursome, player_id, hole_in_play(foursome, played),
+        full_round_strokes(foursome, handicap_mode=_mode, net_percent=_npct))
 
     # ── Sides. Assigned once and immutable for the round, which is what lets
     #    the number wear a side's colour for eighteen holes.
@@ -282,6 +312,7 @@ def match_activity_state(foursome, *, slug, player_id=None, thru=None) -> dict:
 
     return {
         'kind'  : KIND,
+        'ribbon': ribbon,
         'header': header,
         'number': number,
         'sides' : sides,

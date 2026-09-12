@@ -172,6 +172,123 @@ def thru_line(holes_played, to_par) -> str:
 
 
 # ---------------------------------------------------------------------------
+# The stroke ribbon — the band across the top of every card
+# ---------------------------------------------------------------------------
+#
+# `POPPING ON HOLE 13`, gold, when the reader gets a stroke on the hole he is
+# about to play. Survivor was simply the first card to send one and Sequoya the
+# second; the question it answers belongs to no game in particular — a golfer
+# wants to know he is stroking on the hole in front of him whatever is being
+# scored, and one told in two cards and left to work it out in the other five
+# learns to distrust all seven.
+#
+# Three rules carry across every card, and each of them was learnt the hard way
+# on one of the first three:
+#
+# 1. **Read the game's own ALLOCATOR, never the summary's played holes.** A
+#    summary reports strokes as part of a SCORED hole, and the hole in play is
+#    by definition not one — a ribbon built from the scorecard could never
+#    fire. (Survivor's first version did exactly that.)
+# 2. **Only a golfer who is playing gets one.** A watcher has no strokes, and a
+#    phantom padding a three-ball is not a reader.
+# 3. **Running states only.** A finished round has no hole in play, so the band
+#    comes down rather than inventing a HOLE 19.
+#
+# Banker is the one card that does not use this: strokes there come off inside
+# each one-on-one, so there is no field-wide allocation to report and its band
+# has to name the matches. It keeps its own writer, and its own blue.
+
+
+def hole_in_play(foursome, holes_played):
+    """The hole the group is standing on, or None once the round is finished.
+
+    Play ORDER, not `played + 1` — a back-nine round starts on 10, and the
+    arithmetic form would put its first ribbon on hole 1, a hole nobody in that
+    round will play.
+    """
+    from core.models import RoundStatus
+    from services.hole_plan import play_order
+
+    if foursome.round.status == RoundStatus.COMPLETE:
+        return None
+    order = play_order(foursome.round, foursome)
+    n = holes_played or 0
+    if not order or n >= len(order):
+        return None
+    return order[n]
+
+
+def full_round_strokes(foursome, *, handicap_mode, net_percent=100,
+                    holes=None) -> dict:
+    """``{pid: {hole: strokes}}`` for a game that allocates over the FULL round.
+
+    The plain case, shared by Nassau, Skins and the match card. Sixes and
+    Rabbit spread strokes over a segment's own window and hand in their own
+    allocation instead; passing this one would report a stroke on a hole their
+    engines do not give it on.
+
+    Gross returns an empty allocation rather than None, so a caller never has
+    to branch on the mode before asking.
+    """
+    from core.models import HandicapMode
+    from scoring.handicap import (_strokes_on_hole, effective_hcp_for,
+                                  _effective_hcp)
+    from services.hole_plan import play_order
+
+    members = [m for m in foursome.memberships.select_related('player', 'tee')
+               if not getattr(m.player, 'is_phantom', False) and m.tee_id]
+    alloc = {m.player_id: {} for m in members}
+    if handicap_mode == HandicapMode.GROSS:
+        return alloc
+
+    npct  = net_percent or 100
+    order = holes if holes is not None else play_order(foursome.round, foursome)
+
+    # Strokes-off-low is measured against the group's lowest PLAYING handicap,
+    # before the allowance — the same anchor every engine uses, so the ribbon
+    # cannot disagree with the stroke dots on the score screen.
+    phcps = [m.playing_handicap for m in members
+             if m.playing_handicap is not None]
+    low = min(phcps) if phcps else 0
+
+    for m in members:
+        if handicap_mode == HandicapMode.STROKES_OFF:
+            hcp = _effective_hcp(max(0, (m.playing_handicap or 0) - low), npct)
+        else:
+            hcp = effective_hcp_for(m, npct)
+        if hcp <= 0:
+            continue
+        per = alloc[m.player_id]
+        for h in order:
+            try:
+                si = m.tee.hole(h).get('stroke_index', 18)
+            except Exception:
+                continue
+            s = _strokes_on_hole(hcp, si)
+            if s:
+                per[h] = s
+    return alloc
+
+
+def stroke_ribbon(foursome, player_id, hole, alloc) -> str:
+    """`POPPING ON HOLE 13`, or '' — the shared band, given an allocation.
+
+    The allocation comes from the caller because only the game knows how it
+    spreads strokes; everything else about the band is the same on every card
+    and lives here.
+    """
+    if player_id is None or not hole:
+        return ''
+    playing = any(m.player_id == player_id
+                  and not getattr(m.player, 'is_phantom', False)
+                  for m in foursome.memberships.select_related('player'))
+    if not playing:
+        return ''          # a watcher is not playing, so nothing pops for him
+    return (f'POPPING ON HOLE {hole}'
+            if ((alloc or {}).get(player_id) or {}).get(hole) else '')
+
+
+# ---------------------------------------------------------------------------
 # The registry
 # ---------------------------------------------------------------------------
 

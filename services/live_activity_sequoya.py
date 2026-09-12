@@ -108,21 +108,16 @@ def _stroke_ribbon(foursome, player_id, hole) -> str:
     ribbon built from the scorecard could never fire.
     """
     from services.hole_plan import play_order
-    from services.sequoya_threes import _real_members, strokes_by_hole
+    from services.sequoya_threes import strokes_by_hole
+    from services.live_activity_registry import stroke_ribbon
     from games.models import SequoyaThreesGame
 
-    if player_id is None or not hole:
-        return ''
     try:
         game = foursome.sequoya_threes_game
     except SequoyaThreesGame.DoesNotExist:
         return ''
-    if not any(m.player_id == player_id for m in _real_members(foursome)):
-        return ''          # a watcher is not playing, so nothing pops for him
-
     alloc = strokes_by_hole(game, foursome, play_order(foursome.round, foursome))
-    return (f'POPPING ON HOLE {hole}'
-            if alloc.get(player_id, {}).get(hole) else '')
+    return stroke_ribbon(foursome, player_id, hole, alloc)
 
 
 def sequoya_activity_state(foursome, *, player_id=None, thru=None) -> dict:

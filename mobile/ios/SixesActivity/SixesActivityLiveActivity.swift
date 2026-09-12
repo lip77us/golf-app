@@ -459,6 +459,14 @@ private struct SkinsBoardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
+            // The stroke band is the shared FRAME's, not one game's — see
+            // BoardView. It hangs off the payload rather than the kind, so a
+            // card whose server has not started sending one is untouched: the
+            // row is not drawn at all, costing it not even the stack's
+            // spacing.
+            if let ribbon = state.ribbon, !ribbon.isEmpty {
+                StrokeRibbon(text: ribbon)
+            }
             HeaderView(header: state.header)
 
             HStack(alignment: .top, spacing: 12) {
@@ -504,6 +512,14 @@ private struct NassauBoardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
+            // The stroke band is the shared FRAME's, not one game's — see
+            // BoardView. It hangs off the payload rather than the kind, so a
+            // card whose server has not started sending one is untouched: the
+            // row is not drawn at all, costing it not even the stack's
+            // spacing.
+            if let ribbon = state.ribbon, !ribbon.isEmpty {
+                StrokeRibbon(text: ribbon)
+            }
             HeaderView(header: state.header)
             NamedOnceView(sides: state.sides)
             ForEach(rows, id: \.label) { MatchRowView(row: $0) }
@@ -593,6 +609,14 @@ private struct RabbitBoardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
+            // The stroke band is the shared FRAME's, not one game's — see
+            // BoardView. It hangs off the payload rather than the kind, so a
+            // card whose server has not started sending one is untouched: the
+            // row is not drawn at all, costing it not even the stack's
+            // spacing.
+            if let ribbon = state.ribbon, !ribbon.isEmpty {
+                StrokeRibbon(text: ribbon)
+            }
             HeaderView(header: state.header)
 
             HStack(alignment: .top, spacing: 12) {

@@ -894,7 +894,10 @@ def sixes_player_hole_strokes(foursome) -> dict:
       + hardest-holes-in-segment), reusing ``_overlay_so_strokes_for_segment``.
     * Strokes-Off, ``full_round`` → one stroke on every hole whose SI <= SO.
 
-    Only holes a player has actually scored appear (dots render on played holes).
+    Defined on EVERY hole in play, not only the scored ones — the plan is
+    prospective (see the comment in the body). The lock screen's stroke band
+    depends on that: the hole in front of the reader is by definition
+    unscored, and a scored-holes-only allocation could never fire.
     """
     segments = list(
         SixesSegment.objects.filter(foursome=foursome)

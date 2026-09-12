@@ -179,6 +179,28 @@ def _gross_to_par(summary, player_id):
     from services.live_activity_registry import gross_to_par
     return gross_to_par(summary, player_id)
 
+def _alloc(summary) -> dict:
+    """{pid: {hole: strokes}} for the stroke band.
+
+    The one card that reads its allocation off the summary, and legitimately:
+    `rabbit_summary` walks the FULL play order and emits `strokes` from the
+    game's own allocator on every hole, scored or not — it exists precisely so
+    the stroke dots do not snap around as holes come in. That is an allocation,
+    not a gross-minus-net reading, so the hole in play carries a real number.
+
+    Rabbit spreads a leg's strokes over that leg's window, so the shared
+    full-round allocator would report strokes on holes this engine does not
+    give them on.
+    """
+    out: dict = {}
+    for h in (summary.get('holes') or []):
+        hole = h.get('hole')
+        for e in (h.get('entries') or []):
+            if e.get('strokes'):
+                out.setdefault(e['player_id'], {})[hole] = e['strokes']
+    return out
+
+
 def rabbit_activity_state(foursome, *, player_id=None, thru=None) -> dict:
     """The five slots for this foursome's rabbit, right now."""
     summary  = rabbit_summary(foursome)
@@ -192,6 +214,10 @@ def rabbit_activity_state(foursome, *, player_id=None, thru=None) -> dict:
 
     thru       = thru or 0
     holes_left = _holes_left(seg, thru)
+
+    from services.live_activity_registry import hole_in_play, stroke_ribbon
+    ribbon = stroke_ribbon(foursome, player_id,
+                           hole_in_play(foursome, thru), _alloc(summary))
     stake      = float((summary.get('money') or {}).get('bet_unit') or 0)
 
     to_par  = _gross_to_par(summary, player_id)
@@ -203,6 +229,7 @@ def rabbit_activity_state(foursome, *, player_id=None, thru=None) -> dict:
     bits.append(f'${stake:,.0f} a rabbit')
 
     return {
+        'ribbon': ribbon,
         'header': _header(seg),
         'number': _number(seg),
         'sides' : _names(seg, summary),

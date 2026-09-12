@@ -287,8 +287,9 @@ class ContractTests(TestCase):
     def test_every_top_level_slot_exists_in_the_swift_struct(self):
         state = sixes_activity_state(self.fs, player_id=self.paul)
         for key in state:
-            self.assertIn(f'let {key}:', self.swift,
-                          f'`{key}` has no field in ContentState')
+            self.assertTrue(
+                f'let {key}:' in self.swift or f'var {key}:' in self.swift,
+                f'`{key}` has no field in ContentState')
 
     def test_the_dispatched_payload_is_the_one_that_must_decode(self):
         """The builders are not what goes over the wire — the registry's state
@@ -307,8 +308,9 @@ class ContractTests(TestCase):
         state = activity_state(self.round, user)
         self.assertEqual(state['kind'], 'sixes')
         for key in state:
-            self.assertIn(f'let {key}:', self.swift,
-                          f'`{key}` has no field in ContentState')
+            self.assertTrue(
+                f'let {key}:' in self.swift or f'var {key}:' in self.swift,
+                f'`{key}` has no field in ContentState')
 
     def test_the_nested_keys_the_swift_decodes_are_all_emitted(self):
         state = sixes_activity_state(self.fs, player_id=self.paul, thru=3)

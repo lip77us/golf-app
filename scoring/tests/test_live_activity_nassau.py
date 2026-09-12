@@ -275,9 +275,9 @@ class NassauContractTests(TestCase):
         state = activity_state(self.round, user)
         self.assertEqual(state['kind'], 'nassau')
         for key in state:
-            self.assertIn(f'let {key}:', self.swift.replace('var rows:',
-                                                            'let rows:'),
-                          f'`{key}` has no field in ContentState')
+            self.assertTrue(
+                f'let {key}:' in self.swift or f'var {key}:' in self.swift,
+                f'`{key}` has no field in ContentState')
 
     def test_the_row_keys_the_swift_decodes_are_all_emitted(self):
         state = nassau_activity_state(self.fs, player_id=self.pid['Paul'],

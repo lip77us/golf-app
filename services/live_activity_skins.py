@@ -345,12 +345,25 @@ def _footer(summary, player_id, variation, hole, settled) -> dict:
 
 def skins_activity_state(foursome, *, player_id=None, thru=None) -> dict:
     """The five slots for this foursome's skins game, right now."""
+    from services.live_activity_registry import (hole_in_play, stroke_ribbon,
+                                                 full_round_strokes)
+
     summary = skins_summary(foursome)
     if not summary or not _rows(summary):
         return {}
 
     thru      = thru or 0
     hole      = min(18, max(1, thru + 1))      # the hole being played
+
+    # The stroke band, and on this card it is the most load-bearing of the set:
+    # net skins turn on strokes, which is already why par sits in the header
+    # here and nowhere else. Whether a 4 takes the hole is unanswerable without
+    # knowing whether you are popping on it.
+    ribbon = stroke_ribbon(
+        foursome, player_id, hole_in_play(foursome, thru),
+        full_round_strokes(foursome,
+                        handicap_mode=summary.get('handicap_mode'),
+                        net_percent=summary.get('net_percent') or 100))
     riding    = _carry_run(summary, hole)
     variation = _variation(summary)
     settled   = len(_played(summary))
@@ -376,6 +389,7 @@ def skins_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         who     = last.get('winner_short') or 'Someone'
         leader, lead_n = _leader(summary)
         return {
+            'ribbon': ribbon,
             'header': head,
             'number': {'text': who.upper(), 'colour': 'mint'},
             'sides' : [{'names': f'{_cash(nxt)} on the line on the '
@@ -397,6 +411,7 @@ def skins_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         headline = _cash(_headline(summary, riding))
 
     return {
+        'ribbon': ribbon,
         'header': head,
         'number': {'text': headline, 'colour': 'mint'},
         'sides' : [{'names': _sub_line(summary, variation, hole, riding),

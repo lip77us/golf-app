@@ -209,7 +209,19 @@ def sixes_activity_state(foursome, *, player_id=None, thru=None) -> dict:
     game = 'SIXES · HIGH-LOW' if high_low else 'SIXES'
     stake = float(foursome.round.bet_unit or 0)
 
+    # The stroke band. Sixes spreads a match's strokes over that match's own
+    # six holes, so it hands in its OWN allocation — `sixes_player_hole_strokes`
+    # is the same prospective plan the scorecard dots are drawn from, defined on
+    # every hole in play rather than only the scored ones, which is exactly what
+    # a band about the hole in front of you needs.
+    from services.sixes import sixes_player_hole_strokes
+    from services.live_activity_registry import hole_in_play, stroke_ribbon
+    ribbon = stroke_ribbon(foursome, player_id,
+                           hole_in_play(foursome, thru or 0),
+                           sixes_player_hole_strokes(foursome))
+
     return {
+        'ribbon': ribbon,
         'header': {'game': game, 'segment': _seg_label(segments, seg)},
         'number': _number(seg, high_low),
         'sides' : _sides(seg),

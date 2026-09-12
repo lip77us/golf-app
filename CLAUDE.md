@@ -2454,3 +2454,73 @@ option) are not built. `widgets/inline_score_picker.dart` is shared by roughly
 eight score screens, so adding them restyles every game in the app. That is a
 system-wide visual change and wants deciding as one, not smuggled in under
 Survivor.
+
+## The stroke band, on every card — one writer in the frame
+
+`POPPING ON HOLE 13`: the band across the top of the lock screen when the
+reader gets a stroke on the hole he is about to play. It began as Survivor's,
+Sequoya picked it up, Banker wrote a third — and Sequoya's own packet had
+already said why that was wrong: **the band belongs to the shared frame, not to
+one game.** A golfer wants to know he is stroking on the hole in front of him
+whatever is being scored, and one told in two cards and left to work it out in
+the other five learns to distrust all seven. It now goes out on every card.
+
+**One writer, in `live_activity_registry`.** `stroke_ribbon(foursome,
+player_id, hole, alloc)` holds everything that is the same on every card — the
+wording, the watcher rule, the empty string — and takes the allocation from the
+caller, because only the game knows how it spreads strokes. Three rules carry
+across, each learnt the hard way on one of the first three cards:
+
+1. **Read the game's own ALLOCATOR, never the summary's played holes.** A
+   summary reports strokes as part of a SCORED hole, and the hole in play is by
+   definition not one — a band built from the scorecard could never fire.
+   Survivor's first version did exactly that.
+2. **Only a golfer who is playing gets one.** A watcher has no strokes; a
+   phantom is not a reader.
+3. **Running states only.** A finished round has no hole in play, so the band
+   comes down rather than inventing a `HOLE 19`.
+
+**Which allocation each card hands in:**
+
+| Card | Allocation | Why |
+|---|---|---|
+| Nassau · Skins · match (`match_18`/`fourball`) | `full_round_strokes()` | full-round by course stroke index |
+| Sixes | `services.sixes.sixes_player_hole_strokes` | a match's strokes fall on that match's own six holes |
+| Rabbit | its own summary's per-hole `strokes` | see below |
+| Survivor · Sequoya | unchanged, now delegating the formatting | |
+| Banker | **its own writer, and its own blue** | strokes come off inside each one-on-one, so there is no field-wide allocation to report — its band has to name the matches |
+
+**Rabbit is the one card that reads its band off the summary, and legitimately:**
+`rabbit_summary` walks the FULL play order and emits `strokes` from the
+allocator on every hole, scored or not — it exists precisely so the stroke dots
+do not snap around as holes come in. That is an allocation, not a
+gross-minus-net reading, so the hole in play carries a real number.
+
+**`hole_in_play(foursome, played)` uses play ORDER, not `played + 1`** — the
+arithmetic form (which Survivor shipped) puts a back-nine round's first band on
+hole 1, a hole nobody in that round will play.
+
+**`full_round_strokes` is named that, not `strokes_by_hole`**, because
+`services/sequoya_threes.py` already exports a `strokes_by_hole` with a
+different signature, and two of those in one package is how the next person
+picks the wrong one.
+
+**No gating was needed.** `ribbon` has been in the Swift `ContentState` since
+Survivor and is optional, so an installed phone decodes a card carrying one
+whether or not its layout draws it. `BoardView` already drew it — so **Sixes
+and the match card light up on the shipped build with no client change**, while
+Skins, Nassau and Rabbit gained the row in their own board views and need the
+next build to show it. Nothing is broken in the meantime; the row is simply not
+drawn, costing those cards not even the stack's spacing.
+
+**Corrected along the way:** `sixes_player_hole_strokes`'s docstring claimed
+"only holes a player has actually scored appear", which its own body
+contradicts in a comment four lines up — the plan is prospective. That claim
+would have sent the next person to a different allocator for exactly this job.
+
+Tests: `scoring/tests/test_live_activity_ribbon.py` (20) — written per card
+rather than as a loop, because each game allocates differently and the whole
+risk in the sweep is a card reporting a stroke on a hole its engine does not
+give one on. The reader is off **2** against a scratch group, so he strokes on
+exactly two holes (SI 1 = hole 5, SI 2 = hole 14) and the first tee is SI 7 —
+a card firing on hole 1 is reporting a stroke nobody gets.
