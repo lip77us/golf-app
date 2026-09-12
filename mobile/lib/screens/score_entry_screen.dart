@@ -5404,50 +5404,11 @@ class _NassauProgressGrid extends StatefulWidget {
 }
 
 class _NassauProgressGridState extends State<_NassauProgressGrid> {
-  final ScrollController _scrollCtrl = ScrollController();
-
   static const double _labelColW = 56.0;
   static const double _cellW     = 34.0;
   static const double _rowH      = 28.0;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _scrollToHole(widget.currentHole));
-  }
-
-  @override
-  void didUpdateWidget(_NassauProgressGrid old) {
-    super.didUpdateWidget(old);
-    if (old.currentHole != widget.currentHole) {
-      WidgetsBinding.instance.addPostFrameCallback(
-          (_) => _scrollToHole(widget.currentHole));
-    }
-  }
-
-  @override
-  void dispose() {
-    _scrollCtrl.dispose();
-    super.dispose();
-  }
-
-  void _scrollToHole(int hole) {
-    if (!_scrollCtrl.hasClients) return;
-    // Scroll by POSITION in the played sequence (back-9 / shotgun aware).
-    final range = widget.holesInPlay.isNotEmpty
-        ? widget.holesInPlay
-        : List.generate(18, (i) => i + 1);
-    final pos = range.indexOf(hole);
-    if (pos < 0) return;
-    final target = (_labelColW + (pos - 6) * _cellW)
-        .clamp(0.0, _scrollCtrl.position.maxScrollExtent);
-    _scrollCtrl.animateTo(
-      target,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
-    );
-  }
+  // The controller, the pin and the scroll target live in PinnedHoleGrid.
 
   int _strokesOnHoleFor(Membership m, int h) {
     final nassau    = widget.nassau;
@@ -5536,73 +5497,53 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.primary)),
             const SizedBox(height: 4),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              controller: _scrollCtrl,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            Builder(builder: (ctx) {
+              Widget lbl(String text, TextStyle? style) => SizedBox(
+                    width: _labelColW, height: _rowH,
+                    child: Align(alignment: Alignment.centerLeft,
+                        child: Text(text, style: style)),
+                  );
+              return PinnedHoleGrid(
+                labelWidth  : _labelColW,
+                cellWidth   : _cellW,
+                holeCount   : holeRange.length,
+                currentIndex: holeRange.indexOf(currentHole),
+                bands: [
                   // Hole numbers
-                  Row(children: [
-                    SizedBox(
-                      width: _labelColW, height: _rowH,
-                      child: const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('Hole',
-                            style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                    for (final h in holeRange)
+                  HoleGridBand(
+                    lbl('Hole', const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.bold)),
+                    [for (final h in holeRange)
                       holeCell(h,
                           child: Text('$h',
                               style: const TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.bold))),
-                  ]),
+                                  fontSize: 11, fontWeight: FontWeight.bold)))],
+                  ),
                   // Par row
-                  Row(children: [
-                    SizedBox(
-                      width: _labelColW, height: _rowH,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('Par',
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(fontStyle: FontStyle.italic)),
-                      ),
-                    ),
-                    for (final h in holeRange)
+                  HoleGridBand(
+                    lbl('Par', theme.textTheme.bodySmall
+                        ?.copyWith(fontStyle: FontStyle.italic)),
+                    [for (final h in holeRange)
                       holeCell(h,
                           child: Text(
                             '${scorecard.holeData(h)?.par ?? "-"}',
                             style: theme.textTheme.bodySmall,
-                          )),
-                  ]),
+                          ))],
+                  ),
                   // Stroke-index (hole handicap) row — shows which holes are
                   // hardest and, read with the stroke dots, where strokes fall.
-                  Row(children: [
-                    SizedBox(
-                      width: _labelColW, height: _rowH,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('Index',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant)),
-                      ),
-                    ),
-                    for (final h in holeRange)
+                  HoleGridBand(
+                    lbl('Index', theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)),
+                    [for (final h in holeRange)
                       holeCell(h,
                           child: Text(
                             '${scorecard.holeData(h)?.strokeIndex ?? "-"}',
                             style: theme.textTheme.labelSmall?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant),
-                          )),
-                  ]),
-                  Container(
-                    height: 1,
-                    width: _labelColW + _cellW * holeRange.length,
-                    color: theme.colorScheme.outlineVariant,
-                    margin: const EdgeInsets.symmetric(vertical: 2),
+                          ))],
                   ),
+                  const HoleGridBand.rule(),
                   // Player score rows — names tinted with team colour.
                   for (final m in players)
                     _GridPlayerRow(
@@ -5620,22 +5561,17 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                           : nassau.team2.any((p) => p.playerId == m.player.id)
                               ? GameColors.team2
                               : null,
-                    ),
+                    ).toBand(ctx),
+                  const HoleGridBand.rule(),
                   // Top hole winner row
                   // Claremont: label "Top", show "1" (team colour) or "—".
                   // Standard:  label "Won by", show "T1"/"T2"/"=".
-                  Row(children: [
-                    SizedBox(
-                      width: _labelColW, height: _rowH,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                            nassau.isClaremont ? 'Top' : 'Won by',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                                fontStyle: FontStyle.italic)),
-                      ),
-                    ),
+                  HoleGridBand(
+                    lbl(nassau.isClaremont ? 'Top' : 'Won by',
+                        theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontStyle: FontStyle.italic)),
+                    [
                     for (final h in holeRange)
                       Builder(builder: (_) {
                         final winner = _winnerForHole(h);
@@ -5720,17 +5656,11 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
 
                   // Bottom hole points row — Claremont only
                   if (nassau.isClaremont)
-                    Row(children: [
-                      SizedBox(
-                        width: _labelColW, height: _rowH,
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text('Bottom',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                  fontStyle: FontStyle.italic)),
-                        ),
-                      ),
+                    HoleGridBand(
+                      lbl('Bottom', theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontStyle: FontStyle.italic)),
+                      [
                       for (final h in holeRange)
                         Builder(builder: (_) {
                           final delta = _bottomDeltaForHole(h);
@@ -5767,8 +5697,8 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                         }),
                     ]),
                 ],
-              ),
-            ),
+              );
+            }),
           ],
         ),
       ),
@@ -5830,6 +5760,18 @@ class _GridPlayerRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final b = toBand(context);
+    return Row(children: [b.label!, ...b.cells!]);
+  }
+
+  /// The row split into its pinned half and its scrolling half.
+  ///
+  /// The name and the cells are handed over separately now that the label
+  /// column does not scroll — a finished `Row` cannot be taken apart
+  /// afterwards without introspecting widgets, which is the kind of clever
+  /// that breaks silently. `build` composes them back for any caller that
+  /// still wants one row.
+  HoleGridBand toBand(BuildContext context) {
     final theme = Theme.of(context);
 
     // Gross total over a set of holes — null (shows '—') until every hole in
@@ -5915,14 +5857,13 @@ class _GridPlayerRow extends StatelessWidget {
 
     // No totals requested → the historic flat row (Nassau).
     if (!showOut && !showIn && !showTot) {
-      return Row(children: [
+      return HoleGridBand(
         nameCell(),
-        for (final h in holeRange) holeCellWidget(h),
-      ]);
+        [for (final h in holeRange) holeCellWidget(h)],
+      );
     }
     // Totals: front nine, OUT, back nine, IN, TOT — mirroring the leaderboard.
-    return Row(children: [
-      nameCell(),
+    return HoleGridBand(nameCell(), [
       for (final h in frontHoles) holeCellWidget(h),
       if (showOut) summaryCell(grossSum(frontHoles)),
       for (final h in backHoles) holeCellWidget(h),
