@@ -234,7 +234,12 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
     }
     final theme = Theme.of(context);
     return ListView(
-      padding: const EdgeInsets.all(16),
+      // Room to scroll the last row clear of the keyboard. The Done bar and the
+      // tap-outside dismissal are the way OUT; this is what makes the field you
+      // are typing in reachable in the first place, on a screen whose rows run
+      // to the bottom edge.
+      padding: EdgeInsets.fromLTRB(
+          16, 16, 16, 16 + MediaQuery.viewInsetsOf(context).bottom),
       children: [
         Text(
           'Pick the tee each player will play.  Course handicaps and '

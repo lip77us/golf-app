@@ -28,6 +28,7 @@ import 'screens/onboarding_wizard.dart';
 import 'screens/tournament_list_screen.dart';
 import 'screens/round_screen.dart';
 import 'screens/round_feed_screen.dart';
+import 'widgets/keyboard_done_bar.dart';
 import 'widgets/round_landscape_scorecard.dart';
 import 'screens/sixes_setup_screen.dart';
 import 'screens/points_531_setup_screen.dart';
@@ -378,14 +379,21 @@ class _GolfAppState extends State<GolfApp> {
         // every screen inherits the clamped MediaQuery.
         builder: (context, child) {
           final mq = MediaQuery.of(context);
-          final Widget scaled = MediaQuery(
-            data: mq.copyWith(
-              textScaler: mq.textScaler.clamp(
-                minScaleFactor: 1.0,
-                maxScaleFactor: 1.3,
+          // The 10-key numeric pad has NO return key, and Flutter has no input
+          // accessory — so a screen that raises one and keeps its buttons near
+          // the bottom traps the user with no way to dismiss it. Wrapped here
+          // rather than on the 34 screens that raise a numeric keyboard, so no
+          // screen can have the bug, including ones not written yet.
+          final Widget scaled = KeyboardDismissal(
+            child: MediaQuery(
+              data: mq.copyWith(
+                textScaler: mq.textScaler.clamp(
+                  minScaleFactor: 1.0,
+                  maxScaleFactor: 1.3,
+                ),
               ),
+              child: child!,
             ),
-            child: child!,
           );
           // Which backend this build is talking to, named on screen.
           //
