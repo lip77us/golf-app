@@ -6097,50 +6097,14 @@ class _StrokePlayProgressGrid extends StatefulWidget {
 }
 
 class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
-  final ScrollController _scrollCtrl = ScrollController();
   static const double _labelColW = 56.0;
   static const double _cellW     = 34.0;
   static const double _rowH      = 28.0;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _scrollToHole(widget.currentHole));
-  }
-
-  @override
-  void didUpdateWidget(_StrokePlayProgressGrid old) {
-    super.didUpdateWidget(old);
-    if (old.currentHole != widget.currentHole) {
-      WidgetsBinding.instance.addPostFrameCallback(
-          (_) => _scrollToHole(widget.currentHole));
-    }
-  }
-
-  @override
-  void dispose() {
-    _scrollCtrl.dispose();
-    super.dispose();
-  }
-
-  void _scrollToHole(int hole) {
-    if (!_scrollCtrl.hasClients) return;
-    // Scroll by POSITION in the played sequence, not by hole number, so a
-    // back-9 / partial round centres the current hole correctly.
-    final range = widget.holesInPlay.isNotEmpty
-        ? widget.holesInPlay
-        : List.generate(18, (i) => i + 1);
-    final pos = range.indexOf(hole);
-    if (pos < 0) return;
-    final target = (_labelColW + (pos - 6) * _cellW)
-        .clamp(0.0, _scrollCtrl.position.maxScrollExtent);
-    _scrollCtrl.animateTo(
-      target,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
-    );
-  }
+  // The controller, the pin and the scroll target live in PinnedHoleGrid.
+  // This grid interleaves OUT / IN / TOT among the holes, so it hands over an
+  // explicit right edge rather than a column index — a back-nine hole sits one
+  // summary column further right than its position suggests.
 
   // Strokes this player gets on hole [h] under the active handicap mode —
   // mirrors the per-game logic so the dots match what the calculator used.
@@ -6281,23 +6245,38 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
                       color: theme.colorScheme.onSurfaceVariant)),
             ]),
             const SizedBox(height: 4),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              controller: _scrollCtrl,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            Builder(builder: (ctx) {
+              Widget lbl(String text, TextStyle? style) => SizedBox(
+                    width: _labelColW, height: _rowH,
+                    child: Align(alignment: Alignment.centerLeft,
+                        child: Text(text, style: style)),
+                  );
+              final nSummary = (showOut ? 1 : 0) +
+                  (showIn ? 1 : 0) + (showTot ? 1 : 0);
+              // The current hole's right edge, counting the summary columns
+              // that sit before it.
+              double? edge;
+              final fi = front.indexOf(currentHole);
+              final bi = back.indexOf(currentHole);
+              if (fi >= 0) {
+                edge = (fi + 1) * _cellW;
+              } else if (bi >= 0) {
+                edge = front.length * _cellW +
+                    (showOut ? summaryW : 0) + (bi + 1) * _cellW;
+              }
+              return PinnedHoleGrid(
+                labelWidth  : _labelColW,
+                cellWidth   : _cellW,
+                holeCount   : holeRange.length,
+                currentIndex: edge == null ? -1 : 0,
+                currentRightEdge: edge,
+                contentWidth: _cellW * holeRange.length + summaryW * nSummary,
+                bands: [
                   // Hole numbers
-                  Row(children: [
-                    SizedBox(
-                      width: _labelColW, height: _rowH,
-                      child: const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('Hole',
-                            style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
+                  HoleGridBand(
+                    lbl('Hole', const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.bold)),
+                    [
                     for (final h in front)
                       holeCell(h,
                           child: Text('$h',
@@ -6313,16 +6292,10 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
                     if (showTot) headSummary('TOT'),
                   ]),
                   // Par row
-                  Row(children: [
-                    SizedBox(
-                      width: _labelColW, height: _rowH,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('Par',
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(fontStyle: FontStyle.italic)),
-                      ),
-                    ),
+                  HoleGridBand(
+                    lbl('Par', theme.textTheme.bodySmall
+                        ?.copyWith(fontStyle: FontStyle.italic)),
+                    [
                     for (final h in front)
                       holeCell(h,
                           child: Text(
@@ -6339,17 +6312,7 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
                     if (showIn) parSummary(back),
                     if (showTot) parSummary([...front, ...back]),
                   ]),
-                  Container(
-                    height: 1,
-                    width: _labelColW +
-                        _cellW * holeRange.length +
-                        summaryW *
-                            ((showOut ? 1 : 0) +
-                                (showIn ? 1 : 0) +
-                                (showTot ? 1 : 0)),
-                    color: theme.colorScheme.outlineVariant,
-                    margin: const EdgeInsets.symmetric(vertical: 2),
-                  ),
+                  const HoleGridBand.rule(),
                   // Per-player gross scores with stroke-dot indicators + the
                   // OUT / IN / TOT gross totals (matching the leaderboard).
                   for (final m in players)
@@ -6370,10 +6333,10 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
                       showIn:        showIn,
                       showTot:       showTot,
                       summaryW:      summaryW,
-                    ),
+                    ).toBand(ctx),
                 ],
-              ),
-            ),
+              );
+            }),
           ],
         ),
       ),

@@ -58,6 +58,19 @@ class PinnedHoleGrid extends StatefulWidget {
   /// round's first column is hole 10. Negative means "do not scroll".
   final int currentIndex;
 
+  /// The content's real width, when it is not simply `cellWidth * holeCount`.
+  ///
+  /// Only the rule dividers use it. Stroke Play interleaves OUT / IN / TOT
+  /// columns among the holes, so a rule measured in hole cells alone stops
+  /// short of the grid it is meant to underline.
+  final double? contentWidth;
+
+  /// Where the current hole's RIGHT EDGE sits in content coordinates, when the
+  /// columns are not uniform. Same reason: with an OUT column between the
+  /// nines, a back-nine hole is one summary column further right than its
+  /// index suggests, and scrolling by index alone would stop short of it.
+  final double? currentRightEdge;
+
   const PinnedHoleGrid({
     super.key,
     required this.bands,
@@ -65,6 +78,8 @@ class PinnedHoleGrid extends StatefulWidget {
     required this.cellWidth,
     required this.holeCount,
     required this.currentIndex,
+    this.contentWidth,
+    this.currentRightEdge,
   });
 
   @override
@@ -93,17 +108,17 @@ class _PinnedHoleGridState extends State<PinnedHoleGrid> {
   }
 
   void _schedule() {
-    if (widget.currentIndex < 0) return;
+    if (widget.currentIndex < 0 && widget.currentRightEdge == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_ctrl.hasClients) return;
       // The scroller holds the hole columns ALONE — the label column is
       // outside it — so the offset is measured in cells, with no label width
       // to add back. Putting the current hole's right edge on the viewport's
       // right edge is the whole of it.
-      final target =
-          ((widget.currentIndex + 1) * widget.cellWidth -
-                  _ctrl.position.viewportDimension)
-              .clamp(0.0, _ctrl.position.maxScrollExtent);
+      final edge = widget.currentRightEdge ??
+          (widget.currentIndex + 1) * widget.cellWidth;
+      final target = (edge - _ctrl.position.viewportDimension)
+          .clamp(0.0, _ctrl.position.maxScrollExtent);
       _ctrl.animateTo(target,
           duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
     });
@@ -124,7 +139,8 @@ class _PinnedHoleGridState extends State<PinnedHoleGrid> {
             margin: const EdgeInsets.symmetric(vertical: 2)));
         cellCol.add(Container(
             height: 1,
-            width: widget.cellWidth * widget.holeCount,
+            width: widget.contentWidth ??
+                widget.cellWidth * widget.holeCount,
             color: theme.colorScheme.outlineVariant,
             margin: const EdgeInsets.symmetric(vertical: 2)));
       } else {
