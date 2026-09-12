@@ -375,3 +375,55 @@ class ReachabilityTests(_Base):
         submit_hole(fs, 1, [(pid['A'], 4), (pid['B'], 4),
                             (pid['C'], 5), (pid['D'], 4)])
         self.assertFalse(FoursomeSerializer(fs).data['setup_editable'])
+
+
+class UndoAfterMoreHolesTests(_Base):
+    """The round does not stand still between the edit and the undo.
+
+    An edit on the 2nd is undone on the 6th, and the four holes played in
+    between were scored under the NEW setting — so they are not in the
+    snapshot. Restoring only what was captured puts the membership back and
+    leaves those holes allocated off a tee the golfer is no longer on: the
+    exact "hole 1 used one index and hole 4 used another" corruption the whole
+    feature exists to prevent, arrived through the back door.
+    """
+
+    def test_holes_played_after_the_edit_are_put_back_too(self):
+        self._play(2)
+        self.assertEqual(self._strokes('Paul', 1), 1)
+        self._force('Paul', 5)                     # hole 1 loses its stroke
+        self.assertEqual(self._strokes('Paul', 1), 0)
+
+        # Play on under the forced handicap. Hole 4 is stroke index 9, which is
+        # the hole that separates the two settings: inside 12, outside 5.
+        for h in (3, 4, 5, 6):
+            submit_hole(self.fs, h, [(self.pid['Paul'], 4),
+                                     (self.pid['Sam'], 5)])
+        self.assertEqual(self._strokes('Paul', 4), 0)   # off 5, SI 9: none
+
+        resp = self.client.post(self._undo_url())
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        # Captured holes come back from the snapshot...
+        self.assertEqual(self._strokes('Paul', 1), 1)
+        # ...and the ones played since are recomputed off the restored
+        # handicap, rather than being left on the one that was undone.
+        self.assertEqual(self._strokes('Paul', 4), 1)
+        self.assertEqual(self._net('Paul', 4), 3)
+
+    def test_the_undo_still_works_after_the_window_has_closed(self):
+        """Deliberately not gated on the ceiling. The window governs making a
+        CHANGE; putting one back is safe at any hole, and noticing on the 9th
+        that the wrong tee was applied on the 2nd is exactly when it is wanted.
+        """
+        self._play(2)
+        self._force('Paul', 5)
+        for h in range(3, 10):
+            submit_hole(self.fs, h, [(self.pid['Paul'], 4),
+                                     (self.pid['Sam'], 5)])
+        # The window is long shut — a fresh edit would be refused.
+        self.assertEqual(self._force('Paul', 9).status_code, 400)
+        # The step back is not.
+        self.assertEqual(self.client.post(self._undo_url()).status_code, 200)
+        self.assertEqual(self._strokes('Paul', 1), 1)
+        self.assertEqual(self._strokes('Paul', 4), 1)

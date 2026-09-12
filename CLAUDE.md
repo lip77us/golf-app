@@ -2661,8 +2661,21 @@ edit makes the first permanent. "Prior value" means the ROWS — membership *and
 left to derive the old one from. Under the 3-hole ceiling that is at most three
 holes per golfer, which is what makes keeping them affordable.
 
-`POST /api/foursomes/{id}/tees/undo/` restores and recalculates; the step is
-**spent** afterwards (an undo of an undo is a second step, and a second press
+**The undo RESCORES as well as restoring.** The round does not stand still
+between the edit and the undo: holes played in between were scored under the
+new setting and are not in the snapshot, so restoring only what was captured
+left them allocated off a tee the golfer was no longer on — the "hole 1 used
+one index and hole 4 used another" corruption, arriving through the back door.
+A rescore over everything fixes exactly those, because the allocation is a pure
+function of (playing handicap, tee, hole): on the captured holes it recomputes
+the value just restored and writes nothing.
+
+**The undo is deliberately NOT gated on the ceiling.** The window governs
+making a change; putting one back is safe at any hole, and noticing on the 9th
+that the wrong tee went on at the 2nd is exactly when it is wanted.
+
+`POST /api/foursomes/{id}/tees/undo/` restores, rescores and recalculates; the
+step is **spent** afterwards (an undo of an undo is a second step, and a second press
 would re-apply values the round has moved past). `GET` reports whether one is
 standing and what it would put back. The PATCH response carries
 `holes_rescored`, `undo_available` and `undo_note` — the client shows the

@@ -4213,6 +4213,17 @@ class FoursomeSetupUndoView(APIView):
         from services import setup_edit
         note     = undo.note
         restored = setup_edit.restore(foursome, undo.payload)
+        # The round did not stand still. Holes played BETWEEN the edit and the
+        # undo were scored under the new setting and are not in the snapshot,
+        # so restoring only what was captured would leave them allocated off a
+        # tee the golfer is no longer on — the "hole 1 used one index and hole 4
+        # used another" corruption, arriving through the back door.
+        #
+        # A rescore over everything fixes exactly those: the allocation is a
+        # pure function of (playing handicap, tee, hole), so on the captured
+        # holes it recomputes the value just restored and writes nothing. It is
+        # the holes it has never seen that it puts right.
+        setup_edit.rescore(foursome)
         # The step is SPENT. Leaving it would let a second press re-apply
         # values the round has moved past, and an undo of an undo is a second
         # step — which this deliberately is not.
