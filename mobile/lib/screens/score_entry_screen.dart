@@ -50,6 +50,7 @@ import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/team_splitter_4.dart';
+import '../widgets/stroke_dots.dart';
 
 // ---------------------------------------------------------------------------
 // Handicap helpers (shared with nassau_screen.dart)
@@ -3984,24 +3985,12 @@ class _PhantomPlayerRow extends StatelessWidget {
                     width:    40,
                     height:   36,
                   ),
-                  if (donorStrokesThisHole > 0)
-                    Positioned(
-                      top: 2, right: 2,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: List.generate(
-                          donorStrokesThisHole.clamp(0, 2),
-                          (i) => Container(
-                            width: 4, height: 4,
-                            margin: const EdgeInsets.only(left: 1),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                  // The 40x36 score box, not a grid cell — three dots cost
+                  // 15px of 40 here and clear the digit, so this keeps the
+                  // horizontal run it has always had.
+                  StrokeDotRow(
+                      strokes: donorStrokesThisHole,
+                      color: theme.colorScheme.primary),
                 ],
               )
             else
@@ -5915,27 +5904,10 @@ class _GridPlayerRow extends StatelessWidget {
                       theme: theme);
                 }),
               ),
-              Positioned(
-                top: 2, right: 2,
-                child: Builder(builder: (_) {
-                  final strokes = strokesOnHole(h);
-                  if (strokes <= 0) return const SizedBox.shrink();
-                  return Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: List.generate(
-                      strokes.clamp(0, 2),
-                      (i) => Container(
-                        width: 4, height: 4,
-                        margin: const EdgeInsets.only(left: 1),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-              ),
+              Builder(builder: (_) => StrokeDotColumn(
+                    strokes: strokesOnHole(h),
+                    color: theme.colorScheme.primary,
+                  )),
             ]),
           ),
         );
@@ -6206,19 +6178,9 @@ class _FourballProgressGridState extends State<_FourballProgressGrid> {
                                       color: gross == null
                                           ? theme.colorScheme.onSurfaceVariant
                                           : win ? tCol : null))),
-                              if (strokes > 0)
-                                Positioned(top: 2, right: 2,
-                                    child: Row(mainAxisSize: MainAxisSize.min,
-                                        children: List.generate(
-                                            strokes.clamp(0, 2),
-                                            (i) => Container(
-                                                width: 4, height: 4,
-                                                margin: const EdgeInsets
-                                                    .only(left: 1),
-                                                decoration: BoxDecoration(
-                                                    color: theme
-                                                        .colorScheme.primary,
-                                                    shape: BoxShape.circle))))),
+                              StrokeDotColumn(
+                                  strokes: strokes,
+                                  color: theme.colorScheme.primary),
                             ]));
                       }),
                   ]);
@@ -9281,24 +9243,10 @@ class _P531PlayerGridRows extends StatelessWidget {
                   );
                 }),
               ),
-              Positioned(
-                top: 2, right: 2,
-                child: Builder(builder: (_) {
-                  final strokes = strokesOnHole(h);
-                  if (strokes <= 0) return const SizedBox.shrink();
-                  return Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: List.generate(strokes.clamp(0, 2), (i) => Container(
-                      width: 4, height: 4,
-                      margin: const EdgeInsets.only(left: 1),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primary,
-                        shape: BoxShape.circle,
-                      ),
-                    )),
-                  );
-                }),
-              ),
+              Builder(builder: (_) => StrokeDotColumn(
+                    strokes: strokesOnHole(h),
+                    color: theme.colorScheme.primary,
+                  )),
             ]),
           )),
         ]),
@@ -9879,25 +9827,10 @@ class _CupSinglesProgressGridState extends State<_CupSinglesProgressGrid> {
                             ? FontWeight.w600
                             : FontWeight.normal)),
               ),
-              // Handicap-stroke dots (match-play differential) — top-right.
-              if (strokes > 0)
-                Positioned(
-                  top: 2, right: 2,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: List.generate(
-                      strokes.clamp(0, 2),
-                      (i) => Container(
-                        width: 4, height: 4,
-                        margin: const EdgeInsets.only(left: 1),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+              // Handicap-stroke dots (match-play differential) — a column down
+              // the cell's right edge, clear of the centred digit.
+              StrokeDotColumn(
+                  strokes: strokes, color: theme.colorScheme.primary),
             ]),
           ),
         );

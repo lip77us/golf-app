@@ -2738,3 +2738,53 @@ escape hatch.
 
 Tests: `api/test_setup_edit.py` (29), including a `ReachabilityTests` class
 asserting the button is offered after hole 1 — the failure mode above.
+
+## Stroke dots — the cap is gone, and the grid changed axis
+
+`strokes.clamp(0, 2)` lived on **nine** surfaces and silently misreported a real
+state: the row drew two dots and the golfer had three. It was never a constraint
+on the score box, which has room for four — it was invented for the 32px
+scorecard cell, where three horizontal dots reach the centred digit, and then
+applied everywhere.
+
+**Measured rather than argued** (`test/stroke_dots_test.dart` renders the real
+cell): three horizontal dots in a 32×26 cell overlap the digit by **8.1px**. So
+the collision is real and the cap was the wrong answer to it.
+
+Design's answer (`~/Downloads/handoff-app-fixes/stroke-dots.html`, option B) is
+the **same dot rotated ninety degrees** in the grid — a 4px column down the
+right edge, inset 3px, vertically centred. Three dots then cost **7px of the
+cell's width instead of 14**, so they cannot reach the digit at three strokes or
+at four. Rejected alternatives, both for stated reasons: smaller dots only
+reduce the overlap (and make the grid disagree with the score box about how big
+a stroke is), and two-dots-plus-a-numeral puts a second small number in a cell
+that already has one — the failure that retired `gets N`.
+
+`widgets/stroke_dots.dart` holds both treatments, because **nine copies of one
+4px dot is how a single vocabulary becomes several**:
+
+- **`StrokeDotRow`** — the score box (40×36) and the phantom's box. Horizontal,
+  top-right, unchanged apart from the cap.
+- **`StrokeDotColumn`** — every scorecard grid: `hole_grid_scorecard` (32×26),
+  score entry ×4 and Nassau (34×28), the leaderboard's Nassau net grid (28×26,
+  the narrowest in the app, so `inset: 2`).
+- `scoreCellWithDots` in `net_score_button.dart` keeps its own 5px strip ABOVE
+  the box — it never had the collision, so it only lost the cap.
+
+Dot size, gap and colour are identical across both; only the axis differs, which
+is what keeps it one mark rather than two meaning the same thing. **Do not
+restyle the score box to match the grid** — they are different sizes for good
+reasons.
+
+`top: 0, bottom: 0` on the column stretches it to the cell's full height so the
+`Center` has something to centre against; measuring from an edge would put it
+level with the digit at one row height and nowhere near it at another.
+
+Tests: `mobile/test/stroke_dots_test.dart` (9) — the counts, and the geometry,
+since the geometry IS the argument for the shape.
+
+**Still outstanding from that packet:** `gets N` survives on about fifteen call
+sites — Wolf, Banker, Points 5-3-1, Rabbit, Triple Nassau, Skins, Nassau, score
+entry and the leaderboard. (An earlier note of mine claimed Wolf only; that was
+a bad grep.) Design keeps it as its own cleanup item. Also open: the new-match
+escape hatch, and the scroll-inset sweep.

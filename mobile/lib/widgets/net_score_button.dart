@@ -10,7 +10,10 @@ import '../utils/golf_colors.dart';
 /// square that fills the cell.  The strip is always reserved (fixed height) so
 /// rows stay aligned whether or not a player gets strokes on the hole.
 Widget scoreCellWithDots(Widget box, int strokes, Color color) {
-  final n = strokes.clamp(0, 2);
+  // No cap. The strip sits above the box rather than inside it, so it has
+  // never had the 32px cell's collision — the clamp here was the grid's
+  // problem applied to a surface that did not have it.
+  final n = strokes;
   return Column(
     mainAxisSize: MainAxisSize.min,
     children: [

@@ -30,6 +30,7 @@ import '../widgets/spots_capture.dart';
 import '../utils/match_handicap.dart';
 import '../utils/nassau_team_style.dart';
 import '../utils/round_complete.dart';
+import '../widgets/stroke_dots.dart';
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -1927,27 +1928,10 @@ class _NassauGridPlayerRow extends StatelessWidget {
                   }),
                 ),
                 if (!isPhantom)
-                  Positioned(
-                    top: 2, right: 2,
-                    child: Builder(builder: (_) {
-                      final strokes = strokesOnHole(h);
-                      if (strokes <= 0) return const SizedBox.shrink();
-                      return Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: List.generate(
-                          strokes.clamp(0, 2),
-                          (i) => Container(
-                            width: 4, height: 4,
-                            margin: const EdgeInsets.only(left: 1),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
+                  Builder(builder: (_) => StrokeDotColumn(
+                        strokes: strokesOnHole(h),
+                        color: theme.colorScheme.primary,
+                      )),
               ]),
             )),
     ]);

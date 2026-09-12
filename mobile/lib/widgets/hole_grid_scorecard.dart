@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../game_colors.dart';
 import '../theme/halved_brand.dart';
+import 'stroke_dots.dart';
 
 /// Gold marks a ROLE rather than a result — Banker's, at present. It is
 /// deliberately not the win green: the man who banked a hole is as likely to
@@ -268,25 +269,12 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
               ),
             ),
           ),
-          if (strokes > 0)
-            Positioned(
-              top: 2, right: 2,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: List.generate(
-                  strokes.clamp(0, 2),
-                  (i) => Container(
-                    width: 4, height: 4,
-                    margin: const EdgeInsets.only(left: 1),
-                    decoration: BoxDecoration(
-                      // Neutral green, matching the score-entry stroke dots.
-                      color: isWinner ? winFg : theme.colorScheme.primary,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-              ),
-            ),
+          // The 32x26 cell the cap was invented for. A column down the right
+          // edge costs 7px of it instead of 14, so three strokes — or four —
+          // never reach the centred digit.
+          StrokeDotColumn(
+              strokes: strokes,
+              color: isWinner ? winFg : theme.colorScheme.primary),
         ]),
       );
     }

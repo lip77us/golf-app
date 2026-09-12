@@ -29,6 +29,7 @@ import 'match_play_screen.dart' show MatchPlayDetailView;
 import 'tournament_leaderboard_screen.dart' show ChampionshipTabView;
 import '../widgets/survivor_rail.dart';
 import 'tournament_settlement_screen.dart';
+import '../widgets/stroke_dots.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   final int roundId;
@@ -8463,24 +8464,11 @@ class _CupSinglesGroupCard extends StatelessWidget {
                     fontWeight: won ? FontWeight.bold : FontWeight.normal,
                     color: won ? color : theme.colorScheme.onSurface)),
           ),
-          if (strokes > 0)
-            Positioned(
-              top: 1, right: 1,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: List.generate(
-                  strokes.clamp(0, 2),
-                  (i) => Container(
-                    width: 4, height: 4,
-                    margin: const EdgeInsets.only(left: 1),
-                    decoration: BoxDecoration(
-                      // Neutral green, matching the score-entry stroke dots.
-                      color: theme.colorScheme.primary,
-                      shape: BoxShape.circle),
-                  ),
-                ),
-              ),
-            ),
+          // Neutral green, matching the score-entry stroke dots. The narrowest
+          // grid in the app at 28px, which is why the column is inset 2 rather
+          // than the design's 3.
+          StrokeDotColumn(
+              strokes: strokes, color: theme.colorScheme.primary, inset: 2),
         ]),
         bg: won ? color.withOpacity(0.14) : null,
       );
