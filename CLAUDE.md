@@ -2525,33 +2525,58 @@ give one on. The reader is off **2** against a scratch group, so he strokes on
 exactly two holes (SI 1 = hole 5, SI 2 = hole 14) and the first tee is SI 7 —
 a card firing on hole 1 is reporting a stroke nobody gets.
 
-## The 4-hole edit ceiling — `services/edit_window.py`
+## The 3-hole edit ceiling — `services/edit_window.py`
 
-> **Edits are open through 4 scored holes. After that, tee box, handicap index
-> and teams are locked for every game.** A game's own rule may lock a setting
-> EARLIER; no game's rule extends past the ceiling.
+> **The first three holes are the window. The 4th score locks tee box,
+> handicap index and teams for every game.** A game's own rule may lock a
+> setting EARLIER; no game's rule extends past the ceiling.
 
-Decided by Design in `~/Downloads/REPLY-2.md` (12 Sep 2026) after the engine
-check found that only one of eleven games guarded a setting at all. The
-reasoning is the one the round produced: realising on hole 3 that a golfer is
-on the wrong tee is a correctable setup mistake; realising it on hole 14 is a
-different round.
+Design proposed four (`~/Downloads/REPLY-2.md`, 12 Sep 2026) after the engine
+check found only one of eleven games guarded a setting at all, and left the
+boundary a hole ambiguous. **Paul settled both at three**, and the reason is
+what pins the number rather than a feel for it: **three scored holes is exactly
+one complete Sequoya match, and match 2 has not been set.** A window reaching
+hole 4 would be redrawing a pairing the second match was already being played
+under. Three is also enough to find the three things it exists for — the wrong
+tee, the wrong teams, the wrong forced handicap — all of which announce
+themselves on the first green.
 
 **It also bounds the rewrite.** `HoleScore.handicap_strokes` and `net_score`
 are stored rather than computed, so accepting a retroactive edit means
-rewriting rows. Under the ceiling the maximum is four holes per golfer, never
+rewriting rows. Under the ceiling the maximum is three holes per golfer, never
 eighteen.
 
-The constant lives in ONE module because it is one rule for every game — a 4
+The constant lives in ONE module because it is one rule for every game — a 3
 written into each service is how eleven games end up with eleven rules again,
-which is what the matrix was trying to stop.
+which is what the matrix was trying to stop. **The refusal COPY is shared for
+the same reason** (`closed_reason(noun, because)`): the first version let each
+service write its own f-string, and those had already drifted by the time the
+number moved from four to three.
+
+### Banker is the one game with a stricter rule — a window of zero
+
+`ceiling_for(foursome)` is the only place a game may narrow the ceiling, and
+Banker narrows it to **0**: every hole is a separately negotiated bet priced
+against the strokes in play when it was struck, so a bet made on the 1st cannot
+survive its inputs changing on the 2nd. There is no interval in which a
+correction is free, because the first hole has already been bought.
+
+`setup_banker` now raises **`BankerSetupLocked`** — named apart from
+`BankerLocked`, which is a hole's BETTING window closing; two different locks,
+both real, and one name for them would make every traceback ambiguous. It
+guards only `_PRICED_IN` = handicap mode, allowance, first banker. The wager
+band, doubles, the counter, par-3 triples, birdie bonus and loss caps govern
+bets **not yet struck**, so a TD may still move them — locking those would be
+strictness for its own sake. An idempotent re-post of the same values is not a
+change and is not refused.
 
 ### Shipped so far: the two team/pairing games
 
 **Sixes** moved from "locked at the first real score" to the ceiling.
 Design's alternative was to lock at the SECOND MATCH — which begins at hole 7,
-past the ceiling, so that trigger could never have fired. Paul settled it on
-12 Sep: **Sixes is not an exception.** The trigger is deliberately not built.
+far past the ceiling, so that trigger could never have fired. Paul settled it
+on 12 Sep: **Sixes is not an exception.** The trigger is deliberately not
+built.
 - Inside the ceiling a redraw rebuilds the segments AND **recalculates**, so
   the played holes are rescored under the new teams rather than reading as
   unscored until the next score lands. The recalc is in `setup_sixes`, not the
@@ -2570,8 +2595,8 @@ is worse here than in Sixes rather than better: Sequoya stores no hole results,
 all six matches are DERIVED from `match1_side1` through `pairings()`, so a
 redraw silently re-decides the matches already settled. Nothing would have
 looked wrong; the money would just have been different. Now `SequoyaLocked`,
-on the same ceiling — which suits a three-hole match particularly well, since
-four scored holes covers a complete first match and one hole of the second.
+on the same ceiling — and it is Sequoya that SET the ceiling: three scored
+holes is one complete match, so the window shuts exactly as match 2 begins.
 Only the PAIRING is locked; stake, allowance and press mode stay open.
 `[B, A]` is not a redraw of `[A, B]` — a side is a set of two golfers, so an
 idempotent save from a client that reordered the list is not refused.
@@ -2587,8 +2612,10 @@ value Design specified for undo, and the confirmation sheet, since the money
 can move under a group that is looking at it. Those three land together or not
 at all: a ceiling on its own converts a refusal into silent corruption.
 
-Also unbuilt from that packet: Banker's new settings lock, the stroke-dot cap
-removal, and the new-match-carrying-gross-scores escape hatch.
+Also unbuilt from that packet: the stroke-dot cap removal (measured — three
+dots fit the 40px score box but collide with the centred digit in the 32px
+scorecard-grid cell, which needs a design answer) and the
+new-match-carrying-gross-scores escape hatch.
 
-Tests: `scoring/tests/test_edit_window.py` (11) and the rewritten
+Tests: `scoring/tests/test_edit_window.py` (20) and the rewritten
 `SixesTeamLockTests` (`scoring/tests/test_sixes.py`).

@@ -509,7 +509,7 @@ class SixesTeamLockTests(TestCase):
     re-running it with different teams rewrites what those holes meant.
 
     Inside the ceiling that is a setup mistake being corrected — the group
-    realises on the 3rd that they drew the wrong pairing — and the played holes
+    realises on the 2nd that they drew the wrong pairing — and the played holes
     are rescored under the new teams. Past it, it is a different match.
     **Sixes is deliberately not an exception to the ceiling** (Paul, 12 Sep):
     the alternative trigger, the second match, begins at hole 7 and so could
@@ -566,10 +566,11 @@ class SixesTeamLockTests(TestCase):
         t1 = seg.teams.get(team_number=1)
         self.assertEqual({p.id for p in t1.players.all()}, {self.A, self.C})
 
-    def test_the_fourth_scored_hole_is_still_inside(self):
-        """Open THROUGH four — the bound is the rewrite it permits, and four
-        holes per golfer is the number that was agreed."""
-        self._score_through(4)
+    def test_the_third_scored_hole_is_still_inside(self):
+        """Open THROUGH three — the bound is the rewrite it permits, and the
+        number comes from Sequoya: three holes is a complete match there, so
+        the window closes before a second match has been set."""
+        self._score_through(3)
         setup_sixes(self.fs, self._swapped(), handicap_mode='gross')
         seg = self.fs.sixes_segments.order_by('segment_number').first()
         self.assertEqual({p.id for p in seg.teams.get(team_number=1)
@@ -577,11 +578,11 @@ class SixesTeamLockTests(TestCase):
 
     # -- past it ------------------------------------------------------------
 
-    def test_a_team_change_is_refused_once_the_fifth_hole_is_scored(self):
-        self._score_through(5)
+    def test_a_team_change_is_refused_once_the_fourth_hole_is_scored(self):
+        self._score_through(4)
         with self.assertRaises(SixesLocked) as ctx:
             setup_sixes(self.fs, self._swapped(), handicap_mode='gross')
-        self.assertIn('after 4 holes are scored', str(ctx.exception))
+        self.assertIn('after the first 3 holes', str(ctx.exception))
         # ...and the original pairing is untouched.
         seg = self.fs.sixes_segments.order_by('segment_number').first()
         t1 = seg.teams.get(team_number=1)
@@ -590,13 +591,13 @@ class SixesTeamLockTests(TestCase):
     def test_the_second_match_trigger_was_not_built(self):
         """Design's alternative was to lock at the second match, which starts
         at hole 7. Under the ceiling that trigger can never fire, so it is
-        deliberately absent: hole 5 locks, three holes before match two."""
+        deliberately absent: hole 4 locks, well before match two."""
         self._score_through(6)
         with self.assertRaises(SixesLocked):
             setup_sixes(self.fs, self._swapped(), handicap_mode='gross')
 
     def test_moving_a_segment_boundary_is_refused_too(self):
-        self._score_through(5)
+        self._score_through(4)
         moved = _team_data(self.A, self.B, self.C, self.D)
         moved[0]['end_hole'] = 7          # segment 1 now 1-7
         with self.assertRaises(SixesLocked):
@@ -604,7 +605,7 @@ class SixesTeamLockTests(TestCase):
 
     def test_swapping_which_side_is_team_one_is_refused(self):
         """The sides are reported separately, so the comparison is ordered."""
-        self._score_through(5)
+        self._score_through(4)
         with self.assertRaises(SixesLocked):
             setup_sixes(self.fs, _team_data(self.C, self.D, self.A, self.B),
                         handicap_mode='gross')

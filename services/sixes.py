@@ -225,12 +225,10 @@ def setup_sixes(
         # mistake being corrected and the played holes are rescored under the
         # new teams; past it, it is a different match.
         if _teams_locked(foursome):
-            from services.edit_window import EDIT_CEILING_HOLES
-            raise SixesLocked(
-                f'Teams and segments are locked after {EDIT_CEILING_HOLES} '
-                f'holes are scored — holes already played were scored against '
-                f'them. Start a new match with the same golfers to change who '
-                f'plays whom.')
+            from services.edit_window import closed_reason
+            raise SixesLocked(closed_reason(
+                'Teams and segments',
+                'the holes already played were scored against them'))
 
         # A voided segment is a WITHDRAWAL's record, and the rebuild below
         # would take it with the segments. Redefining the segments a

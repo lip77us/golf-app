@@ -6484,7 +6484,8 @@ class BankerSetupView(APIView):
                                        'group.'},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        from services.banker import setup_banker, banker_summary
+        from services.banker import (BankerSetupLocked, setup_banker,
+                                     banker_summary)
         try:
             setup_banker(
                 foursome,
@@ -6502,6 +6503,12 @@ class BankerSetupView(APIView):
                 hole_cap_enabled = d.get('hole_cap_enabled', False),
                 hole_cap_amount  = d.get('hole_cap_amount'),
             )
+        except BankerSetupLocked as e:
+            # Who banks and what the strokes are were priced into every bet
+            # already struck. The wager band, doubles and caps still move —
+            # they govern holes nobody has bet on yet.
+            return Response({'detail': str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
         except ValueError as e:
             return Response({'detail': str(e)},
                             status=status.HTTP_400_BAD_REQUEST)

@@ -10,7 +10,8 @@ module pins the ceiling itself and Sequoya, which had no lock at all before.
 """
 from django.test import TestCase
 
-from services.edit_window import (EDIT_CEILING_HOLES, edits_open, scored_holes)
+from services.edit_window import (EDIT_CEILING_HOLES, ceiling_for,
+                                  edits_open, scored_holes)
 from services.sequoya_threes import SequoyaLocked, setup_sequoya_threes
 from ._helpers import make_foursome, make_round, make_tee, submit_hole
 
@@ -35,10 +36,15 @@ class _Base(TestCase):
 
 class CeilingTests(_Base):
 
-    def test_the_ceiling_is_four(self):
-        """Written down once. A 4 repeated in each service is how eleven games
-        end up with eleven rules again."""
-        self.assertEqual(EDIT_CEILING_HOLES, 4)
+    def test_the_ceiling_is_three(self):
+        """Written down once. A 3 repeated in each service is how eleven games
+        end up with eleven rules again.
+
+        Three, not four, and the reason pins it rather than a feel for it:
+        three scored holes is exactly one complete Sequoya match, and match 2
+        has not been set. A window reaching hole 4 would redraw a pairing the
+        second match was already being played under."""
+        self.assertEqual(EDIT_CEILING_HOLES, 3)
 
     def test_it_counts_holes_not_rows(self):
         """A group is through 3 when three holes are in, whether that is three
@@ -46,15 +52,15 @@ class CeilingTests(_Base):
         self._score_through(3)
         self.assertEqual(scored_holes(self.fs), 3)
 
-    def test_open_through_the_fourth_and_closed_on_the_fifth(self):
+    def test_open_through_the_third_and_closed_on_the_fourth(self):
         self.assertTrue(edits_open(self.fs))
+        self._score_through(3)
+        self.assertTrue(edits_open(self.fs), 'the third hole is inside')
         self._score_through(4)
-        self.assertTrue(edits_open(self.fs), 'four is inside, not past')
-        self._score_through(5)
         self.assertFalse(edits_open(self.fs))
 
     def test_the_bound_is_the_rewrite_it_permits(self):
-        """Four scored holes is four holes per golfer to rewrite, never
+        """Three scored holes is three holes per golfer to rewrite, never
         eighteen — which is what makes accepting a retroactive edit tractable
         when `handicap_strokes` and `net_score` are stored rather than
         computed."""
@@ -104,22 +110,26 @@ class SequoyaPairingLockTests(_Base):
         self.assertEqual(set(self.fs.sequoya_threes_game.match1_side1),
                          {self.A, self.C})
 
-    def test_and_through_the_first_match_and_one_more(self):
-        """Three holes is a whole match; the fourth is the one after it."""
-        self._score_through(4)
+    def test_and_through_the_whole_first_match(self):
+        """Three holes IS match 1. This is the boundary the number was chosen
+        for: at three, match 2 has not been set, so redrawing the pairing
+        cannot change a match already being played."""
+        self._score_through(3)
         self._redraw()
         self.fs.refresh_from_db()
         self.assertEqual(set(self.fs.sequoya_threes_game.match1_side1),
                          {self.A, self.C})
 
-    def test_the_fifth_scored_hole_closes_it(self):
-        self._score_through(5)
+    def test_the_first_hole_of_match_two_closes_it(self):
+        """Hole 4 is match 2's first, and scoring it is what shuts the
+        window — the two facts are the same fact."""
+        self._score_through(4)
         with self.assertRaises(SequoyaLocked) as ctx:
             self._redraw()
-        self.assertIn('after 4 holes are scored', str(ctx.exception))
+        self.assertIn('after the first 3 holes', str(ctx.exception))
 
     def test_the_refused_save_leaves_the_pairing_alone(self):
-        self._score_through(5)
+        self._score_through(4)
         with self.assertRaises(SequoyaLocked):
             self._redraw()
         self.fs.refresh_from_db()
@@ -147,3 +157,95 @@ class SequoyaPairingLockTests(_Base):
         self.fs.refresh_from_db()
         self.assertEqual(set(self.fs.sequoya_threes_game.match1_side1),
                          {self.A, self.B})
+
+
+class BankerZeroWindowTests(TestCase):
+    """Banker gets no window at all.
+
+    A game may lock EARLIER than the ceiling and never later, and one game
+    does. Every Banker hole is a separately negotiated bet, priced against the
+    strokes in play at the moment it is struck — so a bet made on the 1st
+    cannot survive its inputs changing on the 2nd. There is no interval in
+    which a correction is free, because the first hole has already been bought.
+    Paul, 12 Sep: before any holes are scored, and not after.
+
+    Distinct from `BankerLocked`, which is a hole's BETTING window closing.
+    """
+
+    def setUp(self):
+        from services.banker import setup_banker
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['banker'])
+        self.round.primary_game = 'banker'
+        self.round.save(update_fields=['primary_game'])
+        self.fs = make_foursome(
+            self.round, [('Paul', 8), ('Dave', 14), ('Sam', 2), ('Lee', 8)],
+            tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        setup_banker(self.fs, first_banker_id=self.pid['Paul'],
+                     min_bet=5, max_bet=50)
+
+    def _score_one(self):
+        submit_hole(self.fs, 1, [(self.pid['Paul'], 4), (self.pid['Dave'], 5),
+                                 (self.pid['Sam'], 4), (self.pid['Lee'], 6)])
+
+    def test_the_window_is_zero_not_the_shared_three(self):
+        self.assertEqual(ceiling_for(self.fs), 0)
+        self.assertNotEqual(ceiling_for(self.fs), EDIT_CEILING_HOLES)
+
+    def test_open_before_a_hole_is_scored(self):
+        self.assertTrue(edits_open(self.fs))
+
+    def test_shut_by_the_first_scored_hole(self):
+        """Where every other game would still have two holes of room."""
+        self._score_one()
+        self.assertEqual(scored_holes(self.fs), 1)
+        self.assertFalse(edits_open(self.fs))
+
+    def test_the_banker_can_still_be_changed_before_anybody_plays(self):
+        from services.banker import setup_banker
+        setup_banker(self.fs, first_banker_id=self.pid['Dave'],
+                     min_bet=5, max_bet=50)
+        self.fs.refresh_from_db()
+        self.assertEqual(self.fs.banker_game.first_banker_id, self.pid['Dave'])
+
+    def test_changing_who_banks_is_refused_once_a_hole_is_scored(self):
+        from services.banker import BankerSetupLocked, setup_banker
+        self._score_one()
+        with self.assertRaises(BankerSetupLocked) as ctx:
+            setup_banker(self.fs, first_banker_id=self.pid['Dave'],
+                         min_bet=5, max_bet=50)
+        self.assertIn('once a hole is scored', str(ctx.exception))
+        self.fs.refresh_from_db()
+        self.assertEqual(self.fs.banker_game.first_banker_id, self.pid['Paul'])
+
+    def test_changing_the_strokes_is_refused_too(self):
+        """The bet was priced against them."""
+        from services.banker import BankerSetupLocked, setup_banker
+        self._score_one()
+        with self.assertRaises(BankerSetupLocked):
+            setup_banker(self.fs, first_banker_id=self.pid['Paul'],
+                         min_bet=5, max_bet=50, handicap_mode='gross')
+
+    def test_the_wager_band_still_moves(self):
+        """It governs bets not yet struck, so raising the ceiling mid-round
+        re-prices nothing. Locking it would be strictness for its own sake."""
+        from services.banker import setup_banker
+        self._score_one()
+        setup_banker(self.fs, first_banker_id=self.pid['Paul'],
+                     min_bet=10, max_bet=100)
+        self.fs.refresh_from_db()
+        self.assertEqual(int(self.fs.banker_game.max_bet), 100)
+
+    def test_an_idempotent_re_post_is_not_a_change(self):
+        """The setup screen saving the same values back must not 400."""
+        from services.banker import setup_banker
+        self._score_one()
+        setup_banker(self.fs, first_banker_id=self.pid['Paul'],
+                     min_bet=5, max_bet=50)
+
+    def test_a_round_without_banker_keeps_the_shared_ceiling(self):
+        other = make_foursome(make_round(self.tee.course),
+                              [('Ann', 0), ('Ben', 0)], tee=self.tee)
+        self.assertEqual(ceiling_for(other), EDIT_CEILING_HOLES)

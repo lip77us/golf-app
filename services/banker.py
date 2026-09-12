@@ -229,6 +229,45 @@ class BankerLocked(Exception):
     """Raised when a declaration would move money after the bets locked."""
 
 
+class BankerSetupLocked(Exception):
+    """A setup change that would re-price holes already bet.
+
+    **Named apart from `BankerLocked` on purpose.** That one is a hole's
+    BETTING window closing — the doubles and the counter shutting when the
+    first score of the hole goes in. This one is the SETTINGS lock: who banks,
+    and what the strokes are. Two different locks, both real, and a single name
+    for them would have made every traceback ambiguous.
+    """
+
+
+# The settings that decide what a PLAYED hole meant. Everything else on the
+# game — the wager band, doubles, the counter, par-3 triples, birdie bonus,
+# loss caps — governs bets not yet struck, so a TD may still move it.
+_PRICED_IN = ('handicap_mode', 'net_percent', 'first_banker_id')
+
+
+def _setup_locked(foursome, wanted: dict) -> bool:
+    """Would this save change what an already-bet hole was priced against?
+
+    Banker's window is ZERO holes, not the shared three (`edit_window
+    .ceiling_for`): every hole is a separately negotiated bet against the
+    strokes in play at the time, so a bet struck on the 1st cannot survive its
+    inputs changing on the 2nd. There is no interval in which a correction is
+    free, because the first hole has already been bought.
+
+    A save that changes none of them is not a change — an idempotent re-post
+    from the setup screen must not be refused.
+    """
+    from services.edit_window import edits_open
+
+    game = BankerGame.objects.filter(foursome=foursome).first()
+    if game is None:
+        return False
+    if all(getattr(game, f) == wanted[f] for f in _PRICED_IN):
+        return False
+    return not edits_open(foursome)
+
+
 def setup_banker(foursome, *, first_banker_id, min_bet=5, max_bet=50,
                  handicap_mode=HandicapMode.STROKES_OFF, net_percent=100,
                  rotation_rule=BankerGame.ROTATION_ASK,
@@ -241,6 +280,13 @@ def setup_banker(foursome, *, first_banker_id, min_bet=5, max_bet=50,
     if lo <= 0 or hi < lo:
         raise ValueError('The wager band needs a floor above zero and a '
                          'ceiling at or above it.')
+
+    if _setup_locked(foursome, {'handicap_mode': handicap_mode,
+                                'net_percent': net_percent,
+                                'first_banker_id': first_banker_id}):
+        from services.edit_window import banker_closed_reason
+        raise BankerSetupLocked(
+            banker_closed_reason('The banker and the strokes'))
 
     game, _ = BankerGame.objects.update_or_create(
         foursome=foursome,

@@ -142,12 +142,11 @@ def setup_sequoya_threes(foursome, side1_ids, *,
     settings still move at any hole.
     """
     if _pairing_locked(foursome, side1_ids):
-        from services.edit_window import EDIT_CEILING_HOLES
-        raise SequoyaLocked(
-            f'The pairing is locked after {EDIT_CEILING_HOLES} holes are '
-            f'scored — every match is derived from it, including the ones '
-            f'already settled. Start a new match with the same golfers to '
-            f'change who plays whom.')
+        from services.edit_window import closed_reason
+        raise SequoyaLocked(closed_reason(
+            'The pairing',
+            'every match is derived from it, including the ones already '
+            'settled'))
 
     game, _ = SequoyaThreesGame.objects.update_or_create(
         foursome=foursome,
