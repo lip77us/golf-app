@@ -2552,41 +2552,45 @@ class _IRLeaderboardScorecard extends StatelessWidget {
                       fontStyle: FontStyle.italic)),
             ] else ...[
               const SizedBox(height: 6),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+              PinnedHoleGrid(
+                labelWidth  : _labelColW,
+                cellWidth   : _cellW,
+                holeCount   : holeRange.length,
+                currentIndex: holeRange.length - 1,
+                bands: [
                     // Hole row
-                    Row(children: [
+                    HoleGridBand(
                       SizedBox(width: _labelColW, height: _rowH,
                           child: const Align(alignment: Alignment.centerLeft,
                               child: Text('Hole',
                                   style: TextStyle(fontSize: 11,
                                       fontWeight: FontWeight.bold)))),
+                      [
                       for (final h in holeRange)
                         cell(Text('$h', style: const TextStyle(
                             fontSize: 11, fontWeight: FontWeight.bold))),
                     ]),
                     // Par row
-                    Row(children: [
+                    HoleGridBand(
                       SizedBox(width: _labelColW, height: _rowH,
                           child: Align(alignment: Alignment.centerLeft,
                               child: Text('Par',
                                   style: theme.textTheme.bodySmall
                                       ?.copyWith(fontStyle: FontStyle.italic)))),
+                      [
                       for (final h in holeRange)
                         cell(Text(
                           '${scorecard!.holeData(h)?.par ?? "–"}',
                           style: theme.textTheme.bodySmall)),
                     ]),
                     // Balls-to-count row
-                    Row(children: [
+                    HoleGridBand(
                       SizedBox(width: _labelColW, height: _rowH,
                           child: Align(alignment: Alignment.centerLeft,
                               child: Text('Count',
                                   style: theme.textTheme.labelSmall?.copyWith(
                                       color: theme.colorScheme.onSurfaceVariant)))),
+                      [
                       for (final h in holeRange)
                         cell(
                           Text('${_ballsForHole(h)}',
@@ -2596,15 +2600,9 @@ class _IRLeaderboardScorecard extends StatelessWidget {
                           leftBorder: segBoundaries.contains(h),
                         ),
                     ]),
-                    // Divider
-                    Container(
-                      height: 1,
-                      width: _labelColW + _cellW * 18,
-                      color: theme.colorScheme.outlineVariant,
-                      margin: const EdgeInsets.symmetric(vertical: 2),
-                    ),
+                    const HoleGridBand.rule(),
                     // Player rows
-                    for (final m in players) Row(children: [
+                    for (final m in players) HoleGridBand(
                       SizedBox(width: _labelColW, height: _rowH,
                           child: Align(alignment: Alignment.centerLeft,
                               child: Text(
@@ -2616,6 +2614,7 @@ class _IRLeaderboardScorecard extends StatelessWidget {
                                     fontWeight: FontWeight.w600,
                                     color: teamColour),
                               ))),
+                      [
                       for (final h in holeRange) () {
                         final ntp    = _netToPar(m, h);
                         final counts = countingIds[h]!.contains(m.player.id);
@@ -2638,15 +2637,9 @@ class _IRLeaderboardScorecard extends StatelessWidget {
                         );
                       }(),
                     ]),
-                    // Divider
-                    Container(
-                      height: 1,
-                      width: _labelColW + _cellW * 18,
-                      color: theme.colorScheme.outlineVariant,
-                      margin: const EdgeInsets.symmetric(vertical: 2),
-                    ),
+                    const HoleGridBand.rule(),
                     // Running total row
-                    Row(children: [
+                    HoleGridBand(
                       SizedBox(width: _labelColW, height: _totalRowH,
                           child: Align(alignment: Alignment.centerLeft,
                               child: Text('Total',
@@ -2654,6 +2647,7 @@ class _IRLeaderboardScorecard extends StatelessWidget {
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,
                                       color: theme.colorScheme.primary)))),
+                      [
                       for (final h in holeRange) () {
                         final rt = runningTotals[h];
                         final isLast = rt == totalVal && rt != null;
@@ -2672,8 +2666,7 @@ class _IRLeaderboardScorecard extends StatelessWidget {
                         );
                       }(),
                     ]),
-                  ],
-                ),
+                ],
               ),
             ],
           ],
