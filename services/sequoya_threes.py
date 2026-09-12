@@ -95,11 +95,60 @@ def _real_members(foursome):
             if not m.player.is_phantom]
 
 
+class SequoyaLocked(Exception):
+    """A pairing change asked for past the edit ceiling.
+
+    Carries a message safe to show a person; the API turns it into a 400.
+    """
+
+
+def _pairing_locked(foursome, side1_ids) -> bool:
+    """Would this save redraw the pairing past the 4-hole ceiling?
+
+    Sequoya had NO lock at all: `setup_sequoya_threes` was a bare
+    `update_or_create`, so match 1's pairing could be rewritten on the 17th.
+    That is worse here than in Sixes rather than better — Sequoya stores no
+    hole results, every match is DERIVED from `match1_side1` through
+    `pairings()`, so a redraw silently re-decides all six matches including the
+    ones already settled. Nothing would have looked wrong; the money would just
+    have been different.
+
+    The ceiling suits this game particularly well: a match is three holes, so
+    four scored holes covers a complete first match and one hole of the second
+    — long enough to notice the wrong pair, short enough that fixing it is
+    still a correction.
+
+    Only the PAIRING. Handicap mode, allowance, stake and press mode are the
+    same category as Sixes' settings and stay open all round.
+    """
+    from services.edit_window import edits_open
+
+    try:
+        game = foursome.sequoya_threes_game
+    except SequoyaThreesGame.DoesNotExist:
+        return False
+    if set(game.match1_side1 or []) == set(side1_ids or []):
+        return False          # settings-only save, never locked
+    return not edits_open(foursome)
+
+
 def setup_sequoya_threes(foursome, side1_ids, *,
                          handicap_mode=HandicapMode.STROKES_OFF,
                          net_percent=100, bet_amount=5,
                          press_mode=SequoyaThreesGame.PRESS_AUTO):
-    """Create or update the game. Only match 1's pairing is taken."""
+    """Create or update the game. Only match 1's pairing is taken.
+
+    Refuses a PAIRING change past the edit ceiling (`services/edit_window`);
+    settings still move at any hole.
+    """
+    if _pairing_locked(foursome, side1_ids):
+        from services.edit_window import EDIT_CEILING_HOLES
+        raise SequoyaLocked(
+            f'The pairing is locked after {EDIT_CEILING_HOLES} holes are '
+            f'scored — every match is derived from it, including the ones '
+            f'already settled. Start a new match with the same golfers to '
+            f'change who plays whom.')
+
     game, _ = SequoyaThreesGame.objects.update_or_create(
         foursome=foursome,
         defaults={

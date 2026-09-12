@@ -112,12 +112,32 @@ def _foursome_has_real_scores(foursome) -> bool:
     Phantom scores (the Sixes phantom padding a three-ball) are not somebody
     playing, so they must not lock the match — same rule the tee-box editor
     uses.
+
+    No longer the lock itself — see `_teams_locked` — but still the "has the
+    match started at all" question, which decides whether a settings-only save
+    updates in place or rebuilds.
     """
     from scoring.models import HoleScore
     return HoleScore.objects.filter(
         foursome=foursome, gross_score__isnull=False,
         player__is_phantom=False,
     ).exists()
+
+
+def _teams_locked(foursome) -> bool:
+    """The 4-hole ceiling, not the first score.
+
+    Sixes used to lock teams and segment bounds the moment ANY real score
+    landed. That is stricter than the rule the app now runs on: setup stays
+    correctable through four scored holes, for every game, and Sixes is
+    deliberately not an exception (`services/edit_window`).
+
+    Design's alternative was to lock at the SECOND MATCH, which begins at hole
+    7 — past the ceiling, so that trigger could never have fired. It is not
+    built, on purpose.
+    """
+    from services.edit_window import edits_open
+    return not edits_open(foursome)
 
 
 def _teams_or_bounds_differ(existing, team_data) -> bool:
@@ -181,22 +201,15 @@ def setup_sixes(
                     .order_by('segment_number')
                     .prefetch_related('teams__players'))
 
-    if existing and _foursome_has_real_scores(foursome):
-        # The match is under way.  Who is on which team, and where each
-        # segment starts and ends, decide what every played hole MEANT — so
-        # they are locked, the same way the tee-box editor locks a tee once a
-        # score exists.  Reported from the course: a second golfer landing on
-        # the team picker mid-round could have saved from it, and this function
-        # begins by deleting the segments those holes were scored against.
-        if _teams_or_bounds_differ(existing, team_data):
-            raise SixesLocked(
-                'Teams and segments are locked once the match has started — '
-                'holes already scored were played against them. Withdraw a '
-                'player, or start a new round, to change who plays whom.')
+    started   = existing and _foursome_has_real_scores(foursome)
+    restructure = started and _teams_or_bounds_differ(existing, team_data)
 
+    if started and not restructure:
         # Same match, different settings (handicap mode, allowance, format).
         # Update IN PLACE rather than rebuilding: a delete-and-recreate would
         # also take the extra segment and any is_void withdrawal state with it.
+        # Never locked — a TD correcting "we said gross, we meant net" is
+        # legitimate at any hole, and no played hole changes meaning.
         for seg in SixesSegment.objects.filter(foursome=foursome):
             seg.handicap_mode       = handicap_mode
             seg.net_percent         = net_percent
@@ -205,6 +218,30 @@ def setup_sixes(
             seg.save(update_fields=['handicap_mode', 'net_percent',
                                     'scoring_format', 'handicap_allocation'])
         return existing
+
+    if restructure:
+        # Who is on which team, and where each segment starts and ends, decide
+        # what every played hole MEANT. Inside the ceiling that is a setup
+        # mistake being corrected and the played holes are rescored under the
+        # new teams; past it, it is a different match.
+        if _teams_locked(foursome):
+            from services.edit_window import EDIT_CEILING_HOLES
+            raise SixesLocked(
+                f'Teams and segments are locked after {EDIT_CEILING_HOLES} '
+                f'holes are scored — holes already played were scored against '
+                f'them. Start a new match with the same golfers to change who '
+                f'plays whom.')
+
+        # A voided segment is a WITHDRAWAL's record, and the rebuild below
+        # would take it with the segments. Redefining the segments a
+        # withdrawal was applied to leaves nothing to carry it onto, so this
+        # says no rather than losing it quietly.
+        if any(seg.is_void for seg in
+               SixesSegment.objects.filter(foursome=foursome)):
+            raise SixesLocked(
+                'A player has withdrawn from this match, so the teams cannot '
+                'be redrawn — the voided segment records it. Reinstate the '
+                'player first, or start a new match.')
 
     SixesSegment.objects.filter(foursome=foursome).delete()
 
@@ -250,6 +287,15 @@ def setup_sixes(
         t2.players.set(td['team2_player_ids'])
 
         segments.append(seg)
+
+    # A rebuild inside the edit ceiling drops the old segments, and their hole
+    # results cascade with them — so holes 1..N would read as unscored until
+    # the next score came in. Rescoring them under the new teams IS the
+    # retroactive recalculation the rule asks for, and it belongs here rather
+    # than in the view for the same reason the lock does: every caller is
+    # covered, and the two can never disagree about when it is needed.
+    if started:
+        calculate_sixes(foursome)
 
     return segments
 

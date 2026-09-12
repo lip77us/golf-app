@@ -5814,9 +5814,10 @@ class SixesSetupView(APIView):
                 handicap_allocation = data.get('handicap_allocation', 'per_segment'),
             )
         except SixesLocked as exc:
-            # Teams and segment bounds are locked once a real score exists —
-            # the played holes were scored against them.  Settings-only edits
-            # still go through.
+            # Teams and segment bounds are locked past the 4-hole edit
+            # ceiling — the played holes were scored against them. Inside it a
+            # redraw is allowed and rescores those holes. Settings-only edits
+            # go through at any hole.
             return Response({'detail': str(exc)},
                             status=status.HTTP_400_BAD_REQUEST)
         return Response({'segments_created': len(segments)}, status=status.HTTP_201_CREATED)
@@ -6649,15 +6650,23 @@ class SequoyaThreesSetupView(APIView):
                 {'detail': 'Match 1 must pair two golfers from this group.'},
                 status=status.HTTP_400_BAD_REQUEST)
 
-        from services.sequoya_threes import (setup_sequoya_threes,
+        from services.sequoya_threes import (SequoyaLocked,
+                                             setup_sequoya_threes,
                                              sequoya_threes_summary)
-        setup_sequoya_threes(
-            foursome, d['side1_player_ids'],
-            handicap_mode = d.get('handicap_mode', 'net'),
-            net_percent   = d.get('net_percent', 100),
-            bet_amount    = d.get('bet_amount', 5),
-            press_mode    = d.get('press_mode', 'auto'),
-        )
+        try:
+            setup_sequoya_threes(
+                foursome, d['side1_player_ids'],
+                handicap_mode = d.get('handicap_mode', 'net'),
+                net_percent   = d.get('net_percent', 100),
+                bet_amount    = d.get('bet_amount', 5),
+                press_mode    = d.get('press_mode', 'auto'),
+            )
+        except SequoyaLocked as exc:
+            # The pairing is locked past the edit ceiling — every match is
+            # derived from it, so a redraw re-decides the settled ones too.
+            # Settings-only saves still go through.
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
         return Response(sequoya_threes_summary(foursome),
                         status=status.HTTP_201_CREATED)
 

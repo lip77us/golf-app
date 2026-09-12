@@ -2524,3 +2524,71 @@ risk in the sweep is a card reporting a stroke on a hole its engine does not
 give one on. The reader is off **2** against a scratch group, so he strokes on
 exactly two holes (SI 1 = hole 5, SI 2 = hole 14) and the first tee is SI 7 —
 a card firing on hole 1 is reporting a stroke nobody gets.
+
+## The 4-hole edit ceiling — `services/edit_window.py`
+
+> **Edits are open through 4 scored holes. After that, tee box, handicap index
+> and teams are locked for every game.** A game's own rule may lock a setting
+> EARLIER; no game's rule extends past the ceiling.
+
+Decided by Design in `~/Downloads/REPLY-2.md` (12 Sep 2026) after the engine
+check found that only one of eleven games guarded a setting at all. The
+reasoning is the one the round produced: realising on hole 3 that a golfer is
+on the wrong tee is a correctable setup mistake; realising it on hole 14 is a
+different round.
+
+**It also bounds the rewrite.** `HoleScore.handicap_strokes` and `net_score`
+are stored rather than computed, so accepting a retroactive edit means
+rewriting rows. Under the ceiling the maximum is four holes per golfer, never
+eighteen.
+
+The constant lives in ONE module because it is one rule for every game — a 4
+written into each service is how eleven games end up with eleven rules again,
+which is what the matrix was trying to stop.
+
+### Shipped so far: the two team/pairing games
+
+**Sixes** moved from "locked at the first real score" to the ceiling.
+Design's alternative was to lock at the SECOND MATCH — which begins at hole 7,
+past the ceiling, so that trigger could never have fired. Paul settled it on
+12 Sep: **Sixes is not an exception.** The trigger is deliberately not built.
+- Inside the ceiling a redraw rebuilds the segments AND **recalculates**, so
+  the played holes are rescored under the new teams rather than reading as
+  unscored until the next score lands. The recalc is in `setup_sixes`, not the
+  view, for the same reason the lock is: every caller is covered and the two
+  cannot disagree about when it is needed.
+- **A voided segment refuses a redraw even inside the ceiling.** `is_void` is a
+  withdrawal's record and the rebuild would take it with the segments;
+  redefining the segments it was applied to leaves nothing to carry it onto, so
+  this says no rather than losing it quietly.
+- Settings (handicap mode, allowance, format, allocation) stay open all round
+  and still update IN PLACE — unchanged.
+
+**Sequoya 3s had NO lock at all** — `setup_sequoya_threes` was a bare
+`update_or_create`, so match 1's pairing could be rewritten on the 17th. That
+is worse here than in Sixes rather than better: Sequoya stores no hole results,
+all six matches are DERIVED from `match1_side1` through `pairings()`, so a
+redraw silently re-decides the matches already settled. Nothing would have
+looked wrong; the money would just have been different. Now `SequoyaLocked`,
+on the same ceiling — which suits a three-hole match particularly well, since
+four scored holes covers a complete first match and one hole of the second.
+Only the PAIRING is locked; stake, allowance and press mode stay open.
+`[B, A]` is not a redraw of `[A, B]` — a side is a set of two golfers, so an
+idempotent save from a client that reordered the list is not refused.
+
+### NOT built, and why
+
+**The tee-box / handicap-index half.** `FoursomeTeesView.patch` still refuses
+on the FIRST real score. Loosening it to the ceiling is only safe together with
+the retroactive rescore — rewriting each touched `HoleScore`'s
+`handicap_strokes` (`net_score` and `stableford_points` follow from
+`HoleScore.save()`) and recomputing every game on top — plus the stored prior
+value Design specified for undo, and the confirmation sheet, since the money
+can move under a group that is looking at it. Those three land together or not
+at all: a ceiling on its own converts a refusal into silent corruption.
+
+Also unbuilt from that packet: Banker's new settings lock, the stroke-dot cap
+removal, and the new-match-carrying-gross-scores escape hatch.
+
+Tests: `scoring/tests/test_edit_window.py` (11) and the rewritten
+`SixesTeamLockTests` (`scoring/tests/test_sixes.py`).

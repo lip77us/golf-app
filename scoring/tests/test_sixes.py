@@ -502,12 +502,19 @@ class SixesConfiguredGamesTests(TestCase):
 
 
 class SixesTeamLockTests(TestCase):
-    """Teams and segment bounds are locked once the match has started.
+    """Teams and segment bounds are locked after the 4-hole edit ceiling.
 
-    Every played hole was scored against a particular pairing over a
-    particular stretch of holes. `setup_sixes` begins by DELETING the segments,
-    so re-running it with different teams silently rewrites what those holes
-    meant. Locked at the service, not the view, so every caller is covered.
+    Every played hole was scored against a particular pairing over a particular
+    stretch of holes. `setup_sixes` begins by DELETING the segments, so
+    re-running it with different teams rewrites what those holes meant.
+
+    Inside the ceiling that is a setup mistake being corrected — the group
+    realises on the 3rd that they drew the wrong pairing — and the played holes
+    are rescored under the new teams. Past it, it is a different match.
+    **Sixes is deliberately not an exception to the ceiling** (Paul, 12 Sep):
+    the alternative trigger, the second match, begins at hole 7 and so could
+    never have fired. Locked at the service, not the view, so every caller is
+    covered.
     """
 
     def setUp(self):
@@ -533,6 +540,11 @@ class SixesTeamLockTests(TestCase):
         submit_hole(self.fs, 1, [(self.A, 4), (self.B, 5),
                                  (self.C, 5), (self.D, 6)])
 
+    def _score_through(self, n):
+        for h in range(1, n + 1):
+            submit_hole(self.fs, h, [(self.A, 4), (self.B, 5),
+                                     (self.C, 5), (self.D, 6)])
+
     # -- before anybody has played, everything is still open ----------------
 
     def test_teams_can_be_changed_before_a_score_exists(self):
@@ -541,20 +553,50 @@ class SixesTeamLockTests(TestCase):
         t1 = seg.teams.get(team_number=1)
         self.assertEqual({p.id for p in t1.players.all()}, {self.A, self.C})
 
-    # -- once it has started ------------------------------------------------
+    # -- inside the ceiling, a wrong pairing is still a correctable mistake --
 
-    def test_a_team_change_is_refused_once_a_hole_is_scored(self):
-        self._score_one()
+    def test_teams_can_still_be_redrawn_on_the_third_hole(self):
+        """The case the ceiling exists for: the group realises early that they
+        drew the wrong pairing. The played holes are rescored under the new
+        teams, which is the point — not left meaning one thing while the rest
+        of the round means another."""
+        self._score_through(3)
+        setup_sixes(self.fs, self._swapped(), handicap_mode='gross')
+        seg = self.fs.sixes_segments.order_by('segment_number').first()
+        t1 = seg.teams.get(team_number=1)
+        self.assertEqual({p.id for p in t1.players.all()}, {self.A, self.C})
+
+    def test_the_fourth_scored_hole_is_still_inside(self):
+        """Open THROUGH four — the bound is the rewrite it permits, and four
+        holes per golfer is the number that was agreed."""
+        self._score_through(4)
+        setup_sixes(self.fs, self._swapped(), handicap_mode='gross')
+        seg = self.fs.sixes_segments.order_by('segment_number').first()
+        self.assertEqual({p.id for p in seg.teams.get(team_number=1)
+                          .players.all()}, {self.A, self.C})
+
+    # -- past it ------------------------------------------------------------
+
+    def test_a_team_change_is_refused_once_the_fifth_hole_is_scored(self):
+        self._score_through(5)
         with self.assertRaises(SixesLocked) as ctx:
             setup_sixes(self.fs, self._swapped(), handicap_mode='gross')
-        self.assertIn('locked once the match has started', str(ctx.exception))
+        self.assertIn('after 4 holes are scored', str(ctx.exception))
         # ...and the original pairing is untouched.
         seg = self.fs.sixes_segments.order_by('segment_number').first()
         t1 = seg.teams.get(team_number=1)
         self.assertEqual({p.id for p in t1.players.all()}, {self.A, self.B})
 
+    def test_the_second_match_trigger_was_not_built(self):
+        """Design's alternative was to lock at the second match, which starts
+        at hole 7. Under the ceiling that trigger can never fire, so it is
+        deliberately absent: hole 5 locks, three holes before match two."""
+        self._score_through(6)
+        with self.assertRaises(SixesLocked):
+            setup_sixes(self.fs, self._swapped(), handicap_mode='gross')
+
     def test_moving_a_segment_boundary_is_refused_too(self):
-        self._score_one()
+        self._score_through(5)
         moved = _team_data(self.A, self.B, self.C, self.D)
         moved[0]['end_hole'] = 7          # segment 1 now 1-7
         with self.assertRaises(SixesLocked):
@@ -562,10 +604,39 @@ class SixesTeamLockTests(TestCase):
 
     def test_swapping_which_side_is_team_one_is_refused(self):
         """The sides are reported separately, so the comparison is ordered."""
-        self._score_one()
+        self._score_through(5)
         with self.assertRaises(SixesLocked):
             setup_sixes(self.fs, _team_data(self.C, self.D, self.A, self.B),
                         handicap_mode='gross')
+
+    def test_a_redraw_rescores_the_holes_already_played(self):
+        """The rebuild drops the old segments and their hole results cascade
+        with them, so without a recalculation the first three holes would read
+        as unscored until the next one came in. Rescoring them under the NEW
+        teams is the retroactive recalculation the rule asks for."""
+        from games.models import SixesHoleResult
+        self._score_through(3)
+        setup_sixes(self.fs, self._swapped(), handicap_mode='gross')
+        scored = SixesHoleResult.objects.filter(
+            segment__foursome=self.fs, hole_number__in=(1, 2, 3))
+        self.assertEqual(scored.count(), 3)
+        # Ann (4) now plays with Cal (5) against Ben (5) and Dee (6): the new
+        # pairing takes every hole, which the old one did not.
+        seg = self.fs.sixes_segments.order_by('segment_number').first()
+        t1  = seg.teams.get(team_number=1)
+        for r in scored:
+            self.assertEqual(r.winning_team_id, t1.id)
+
+    def test_a_withdrawal_blocks_a_redraw_even_inside_the_ceiling(self):
+        """A voided segment is the withdrawal's record, and the rebuild would
+        take it with the segments. Redefining the segments it was applied to
+        leaves nothing to carry it onto, so this says no rather than losing it
+        quietly."""
+        self._score_one()
+        self.fs.sixes_segments.filter(segment_number=2).update(is_void=True)
+        with self.assertRaises(SixesLocked) as ctx:
+            setup_sixes(self.fs, self._swapped(), handicap_mode='gross')
+        self.assertIn('withdrawn', str(ctx.exception))
 
     # -- settings still move, and without collateral damage -----------------
 
