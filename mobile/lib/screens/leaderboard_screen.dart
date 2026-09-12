@@ -6033,13 +6033,14 @@ class _TpmPhase2HoleStrip extends StatelessWidget {
     const rowH  = 20.0;
     const labelW = 52.0;
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return PinnedHoleGrid(
+      labelWidth  : labelW,
+      cellWidth   : cellW,
+      holeCount   : holes.length,
+      currentIndex: holes.length - 1,
+      bands: [
           // Header row: hole numbers
-          Row(children: [
+          HoleGridBand(
             SizedBox(
               width: labelW,
               height: rowH,
@@ -6047,6 +6048,7 @@ class _TpmPhase2HoleStrip extends StatelessWidget {
                   style: theme.textTheme.labelSmall?.copyWith(
                       fontWeight: FontWeight.bold)),
             ),
+            [
             for (final h in holes)
               SizedBox(
                 width: cellW,
@@ -6061,7 +6063,7 @@ class _TpmPhase2HoleStrip extends StatelessWidget {
               ),
           ]),
           // Leader row: W/L/H
-          Row(children: [
+          HoleGridBand(
             SizedBox(
               width: labelW,
               height: rowH,
@@ -6072,6 +6074,7 @@ class _TpmPhase2HoleStrip extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            [
             for (final h in holes) ...[
               () {
                 final hm         = h as Map<String, dynamic>;
@@ -6101,7 +6104,7 @@ class _TpmPhase2HoleStrip extends StatelessWidget {
             ],
           ]),
           // Margin row
-          Row(children: [
+          HoleGridBand(
             SizedBox(
               width: labelW,
               height: rowH,
@@ -6109,6 +6112,7 @@ class _TpmPhase2HoleStrip extends StatelessWidget {
                   style: theme.textTheme.labelSmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant)),
             ),
+            [
             for (final h in holes) ...[
               () {
                 final hm  = h as Map<String, dynamic>;
@@ -6131,8 +6135,7 @@ class _TpmPhase2HoleStrip extends StatelessWidget {
               }(),
             ],
           ]),
-        ],
-      ),
+      ],
     );
   }
 }
@@ -9875,53 +9878,48 @@ class _TripleCupHoleDetail extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(left: 2, bottom: 8, top: 2),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      child: PinnedHoleGrid(
+        labelWidth  : _labelColW,
+        cellWidth   : _cellW,
+        holeCount   : holeRange.length,
+        currentIndex: holeRange.length - 1,
+        bands: [
             // Hole numbers
-            Row(children: [
+            HoleGridBand(
               _labelCell('Hole', bold: true),
+              [
               for (final h in holeRange)
                 _cell(Text('$h',
                     style: const TextStyle(
                         fontSize: 11, fontWeight: FontWeight.bold))),
             ]),
             // Par
-            Row(children: [
+            HoleGridBand(
               _labelCell('Par', italic: true),
+              [
               for (final h in holeRange)
                 _cell(Text('${byHole[h]?['par'] ?? '-'}',
                     style: theme.textTheme.bodySmall)),
             ]),
             // Stroke Index — lets the user verify which holes get strokes.
-            Row(children: [
+            HoleGridBand(
               _labelCell('SI', italic: true),
+              [
               for (final h in holeRange)
                 _cell(Text('${byHole[h]?['stroke_index'] ?? '-'}',
                     style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant))),
             ]),
-            Container(
-              height: 1,
-              width: _labelColW + _cellW * holeRange.length,
-              color: theme.colorScheme.outlineVariant,
-              margin: const EdgeInsets.symmetric(vertical: 2),
-            ),
+            const HoleGridBand.rule(),
             if (segment == 'foursomes')
               ..._teamRows(theme, holeRange, byHole, players)
             else
               ..._playerRows(theme, holeRange, byHole, players),
-            Container(
-              height: 1,
-              width: _labelColW + _cellW * holeRange.length,
-              color: theme.colorScheme.outlineVariant,
-              margin: const EdgeInsets.symmetric(vertical: 2),
-            ),
+            const HoleGridBand.rule(),
             // Won-by row
-            Row(children: [
+            HoleGridBand(
               _labelCell('Won by', italic: true, dim: true),
+              [
               for (final h in holeRange) Builder(builder: (_) {
                 final w = byHole[h]?['winner']?.toString();
                 if (w == 'T1') {
@@ -9959,8 +9957,7 @@ class _TripleCupHoleDetail extends StatelessWidget {
                         color: theme.colorScheme.onSurfaceVariant)));
               }),
             ]),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -10054,11 +10051,11 @@ class _TripleCupHoleDetail extends StatelessWidget {
   /// Per-player rows for fourball / singles segments.  A player's cell
   /// is highlighted when their net equals the team's net AND their
   /// team won the hole (i.e. they contributed to the win).
-  List<Widget> _playerRows(ThemeData theme, List<int> holeRange,
+  List<HoleGridBand> _playerRows(ThemeData theme, List<int> holeRange,
       Map<int, Map<String, dynamic>> byHole,
       List<Map<String, dynamic>> players) {
     return [
-      for (final p in players) Builder(builder: (_) {
+      for (final p in players) () {
         final teamNum   = p['team_number'] as int? ?? 1;
         final teamColor = teamNum == 1 ? t1Color : t2Color;
         final highlight = teamColor.withValues(alpha: 0.12);
@@ -10069,7 +10066,7 @@ class _TripleCupHoleDetail extends StatelessWidget {
         final badge = soVal != null
             ? 'SO $soVal'
             : (hcap != null ? '($hcap)' : null);
-        return Row(children: [
+        return HoleGridBand(
           SizedBox(
             width: _labelColW, height: _rowH,
             child: Align(
@@ -10096,6 +10093,7 @@ class _TripleCupHoleDetail extends StatelessWidget {
               ),
             ),
           ),
+          [
           for (final h in holeRange) Builder(builder: (_) {
             final hData = byHole[h];
             final scores = (hData?['scores'] as List? ?? [])
@@ -10123,14 +10121,14 @@ class _TripleCupHoleDetail extends StatelessWidget {
             );
           }),
         ]);
-      }),
+      }(),
     ];
   }
 
   /// Two team rows for foursomes (alt-shot).  Per-player detail isn't
   /// meaningful — one ball per team — so the row shows the team net
   /// plus stroke dots for the alt-shot team allocation.
-  List<Widget> _teamRows(ThemeData theme, List<int> holeRange,
+  List<HoleGridBand> _teamRows(ThemeData theme, List<int> holeRange,
       Map<int, Map<String, dynamic>> byHole,
       List<Map<String, dynamic>> players) {
     String teamLabel(int teamNum) {
@@ -10142,10 +10140,10 @@ class _TripleCupHoleDetail extends StatelessWidget {
       return shorts.isEmpty ? '—' : shorts.join('/');
     }
 
-    Widget teamRow(int teamNum) {
+    HoleGridBand teamRow(int teamNum) {
       final teamColor = teamNum == 1 ? t1Color : t2Color;
       final highlight = teamColor.withValues(alpha: 0.12);
-      return Row(children: [
+      return HoleGridBand(
         SizedBox(
           width: _labelColW, height: _rowH,
           child: Align(
@@ -10160,6 +10158,7 @@ class _TripleCupHoleDetail extends StatelessWidget {
             ),
           ),
         ),
+        [
         for (final h in holeRange) Builder(builder: (_) {
           final hData = byHole[h];
           final gross = teamNum == 1
