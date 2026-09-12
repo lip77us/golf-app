@@ -110,15 +110,61 @@ void main() {
       expect(cellRight - dotRight, closeTo(3, 0.01));
     });
 
-    testWidgets('the column is centred vertically, so it sits level with '
-        'the digit whatever the row height', (t) async {
+    testWidgets('the FIRST dot sits in the corner, where one stroke has '
+        'always been drawn', (t) async {
+      // The common case is one stroke. Centring the column moved the familiar
+      // corner dot on every ordinary hole to accommodate a three-stroke case
+      // that, in strokes-off, is extreme. The column grows DOWN from the
+      // corner instead.
       await t.pumpWidget(_cell(
-          const StrokeDotColumn(strokes: 2, color: Colors.green)));
+          const StrokeDotColumn(strokes: 1, color: Colors.green)));
       final cell = t.getRect(find.byKey(_cellKey));
-      final tops = _dotRects(t);
-      final top    = tops.map((r) => r.top).reduce((a, b) => a < b ? a : b);
-      final bottom = tops.map((r) => r.bottom).reduce((a, b) => a > b ? a : b);
-      expect(top - cell.top, closeTo(cell.bottom - bottom, 0.01));
+      final dot  = _dotRects(t).single;
+      expect(dot.top - cell.top, closeTo(2, 0.01));
+      expect(cell.right - dot.right, closeTo(3, 0.01));
+    });
+
+    testWidgets('one stroke lands in the same place as it does on the score '
+        'box', (t) async {
+      await t.pumpWidget(_cell(
+          const StrokeDotColumn(strokes: 1, color: Colors.green)));
+      final cell    = t.getRect(find.byKey(_cellKey));
+      final gridDot = _dotRects(t).single;
+      await t.pumpWidget(_cell(
+          const StrokeDotRow(strokes: 1, color: Colors.green)));
+      final boxCell = t.getRect(find.byKey(_cellKey));
+      final boxDot  = _dotRects(t).single;
+      expect(gridDot.top - cell.top, closeTo(boxDot.top - boxCell.top, 0.01));
+    });
+
+    testWidgets('and the column grows downward from it', (t) async {
+      await t.pumpWidget(_cell(
+          const StrokeDotColumn(strokes: 3, color: Colors.green)));
+      final cell = t.getRect(find.byKey(_cellKey));
+      final rects = _dotRects(t)..sort((a, b) => a.top.compareTo(b.top));
+      expect(rects.first.top - cell.top, closeTo(2, 0.01),
+          reason: 'a third stroke must not move the first dot');
+      // Each one directly below the last. Measured as CONTIGUITY rather than
+      // as a gap: a Container's margin lives inside its own render box, so
+      // box N starts exactly where box N-1 ended while the visible dots are a
+      // gap apart. The first box carries no margin, which is what puts its
+      // dot flush in the corner.
+      for (var i = 1; i < rects.length; i++) {
+        expect(rects[i].top, closeTo(rects[i - 1].bottom, 0.01));
+        expect(rects[i].height, closeTo(kStrokeDot + kStrokeDotGap, 0.01));
+      }
+      expect(rects.first.height, closeTo(kStrokeDot, 0.01));
+      // Still inside a 26pt row.
+      expect(rects.last.bottom, lessThanOrEqualTo(cell.bottom));
+    });
+
+    testWidgets('four still fit the cell', (t) async {
+      await t.pumpWidget(_cell(
+          const StrokeDotColumn(strokes: 4, color: Colors.green)));
+      final cell  = t.getRect(find.byKey(_cellKey));
+      final rects = _dotRects(t);
+      final bottom = rects.map((r) => r.bottom).reduce((a, b) => a > b ? a : b);
+      expect(bottom, lessThanOrEqualTo(cell.bottom));
     });
   });
 

@@ -22,6 +22,14 @@
 ///   they overlapped the number by about 6px at three, which is why the cap
 ///   existed.
 ///
+/// **The column is anchored at the TOP right, not centred.** The first dot
+/// therefore sits exactly where a single stroke has always sat — the corner —
+/// and the column only grows downward when there is a second and a third. That
+/// matters because the common case is one stroke: centring it moved the
+/// familiar corner dot for every ordinary hole in order to accommodate a
+/// three-stroke case that, in strokes-off, is extreme. One stroke now looks
+/// identical in the grid and in the score box.
+///
 /// Dot size, gap and colour are identical in both. Only the axis differs,
 /// which is what keeps it one vocabulary rather than two marks meaning the
 /// same thing.
@@ -72,11 +80,7 @@ class StrokeDotRow extends StatelessWidget {
   }
 }
 
-/// The scorecard grid: a vertical column down the right edge, centred.
-///
-/// `top: 0, bottom: 0` stretches the child to the cell's full height so the
-/// `Center` has something to centre against — the column then sits level with
-/// the digit whatever the row height, rather than being measured from an edge.
+/// The scorecard grid: a vertical column growing down from the top-right.
 ///
 /// Returns a `Positioned`, so it belongs directly inside a `Stack`.
 class StrokeDotColumn extends StatelessWidget {
@@ -90,33 +94,37 @@ class StrokeDotColumn extends StatelessWidget {
   /// about how big a stroke is.
   final double inset;
 
+  /// Distance from the cell's top. Matches [StrokeDotRow]'s, so a single
+  /// stroke lands in the same place on both surfaces.
+  final double top;
+
   const StrokeDotColumn({
     super.key,
     required this.strokes,
     required this.color,
     this.inset = 3,
+    this.top = 2,
   });
 
   @override
   Widget build(BuildContext context) {
     if (strokes <= 0) return const SizedBox.shrink();
     return Positioned(
-      top: 0,
-      bottom: 0,
+      top: top,
       right: inset,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (int i = 0; i < strokes; i++)
-              Container(
-                width: kStrokeDot,
-                height: kStrokeDot,
-                margin: const EdgeInsets.only(top: kStrokeDotGap),
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-              ),
-          ],
-        ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (int i = 0; i < strokes; i++)
+            Container(
+              width: kStrokeDot,
+              height: kStrokeDot,
+              // No gap above the FIRST dot — it has to land in the corner,
+              // where a single stroke has always been drawn.
+              margin: EdgeInsets.only(top: i == 0 ? 0 : kStrokeDotGap),
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+        ],
       ),
     );
   }

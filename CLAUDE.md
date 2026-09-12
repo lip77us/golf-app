@@ -2760,6 +2760,14 @@ reduce the overlap (and make the grid disagree with the score box about how big
 a stroke is), and two-dots-plus-a-numeral puts a second small number in a cell
 that already has one — the failure that retired `gets N`.
 
+**The column is anchored at the TOP right, not centred** (Paul, 12 Sep). The
+first dot therefore sits exactly where a single stroke has always sat — the
+corner — and the column only grows downward when there is a second and a third.
+The common case is one stroke; centring it moved the familiar corner dot on
+every ordinary hole to accommodate a three-stroke case that, in strokes-off, is
+extreme. One stroke now lands in the same place in the grid as in the score box,
+which is pinned by a test.
+
 `widgets/stroke_dots.dart` holds both treatments, because **nine copies of one
 4px dot is how a single vocabulary becomes several**:
 
