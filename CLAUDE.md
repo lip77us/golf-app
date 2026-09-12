@@ -2716,11 +2716,25 @@ rescored anything gets an 8-second snackbar naming the hole count with an
 await, because the action outlives the screen); and a standing undo draws a
 banner above the controls saying that saving again replaces it.
 
-**Still not built:** the confirmation sheet showing the NET MONEY EFFECT before
-committing (Design's item 3 — apply in a transaction, compute, roll back, the
-technique the flights preview uses). Today the money moves and the user is told
-afterwards, with the way back. Also outstanding: the stroke-dot cap, and the
-new-match-carrying-gross-scores escape hatch.
+**The net money effect is DECIDED AGAINST, not outstanding.** Design's item 3
+wanted the confirmation sheet to show `you −$15, Kevin +$15` before committing,
+computed by applying the change in a transaction and rolling back — the
+technique the flights preview uses. Paul killed it (12 Sep) with the argument
+that settles it: **the edit is a mistake being corrected.** The money moving is
+not news, it is the correction landing — the OLD money was wrong. Showing a
+before/after figure presents fixing a typo as a transaction the TD has to weigh,
+and invites second-guessing a change that was already right.
+
+So the reporting stays as it is: `Updated 1 player · 2 holes rescored`, said
+after, with the way back. The hole count is the honest unit — it says what was
+touched without pricing it.
+
+Do not build the preview endpoint for this. (The transaction-and-roll-back
+technique itself is still right where a TD is genuinely CHOOSING — the flights
+preview, where the split is a decision rather than a repair.)
+
+Still outstanding: the stroke-dot cap, and the new-match-carrying-gross-scores
+escape hatch.
 
 Tests: `api/test_setup_edit.py` (29), including a `ReachabilityTests` class
 asserting the button is offered after hole 1 — the failure mode above.
