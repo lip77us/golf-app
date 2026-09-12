@@ -34,6 +34,7 @@ import '../widgets/inline_message.dart';
 import '../widgets/inline_score_picker.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/spots_capture.dart';
+import '../widgets/pinned_hole_grid.dart';
 
 /// Team accent color for a player's role on a hole. Per the color standard the
 /// Wolf side (Wolf + partner) is team 1 (blue); the opponents are team 2
@@ -1721,45 +1722,44 @@ class _WolfGrid extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.primary)),
             const SizedBox(height: 4),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            PinnedHoleGrid(
+              labelWidth  : labelColW,
+              cellWidth   : cellW,
+              holeCount   : holeRange.length,
+              // Never scrolled to a hole before.
+              currentIndex: holeRange.indexOf(currentHole),
+              bands: [
                   // Hole-number header.
-                  Row(children: [
+                  HoleGridBand(
                     SizedBox(width: labelColW, height: rowH,
                       child: const Align(alignment: Alignment.centerLeft,
                         child: Text('Hole',
                             style: TextStyle(fontSize: 11,
                                 fontWeight: FontWeight.bold)))),
+                    [
                     for (final h in holeRange)
                       cell(h, Text('$h',
                           style: const TextStyle(fontSize: 11,
                               fontWeight: FontWeight.bold))),
                   ]),
                   // Wolf row — who held the Wolf each hole.
-                  Row(children: [
+                  HoleGridBand(
                     SizedBox(width: labelColW, height: rowH,
                       child: Align(alignment: Alignment.centerLeft,
                         child: Text('Wolf',
                             style: theme.textTheme.bodySmall?.copyWith(
                                 fontStyle: FontStyle.italic)))),
+                    [
                     for (final h in holeRange)
                       cell(h, Text(
                           (totals[wolfByHole[h]]?.shortName ?? '')
                               .characters.take(3).toString(),
                           style: const TextStyle(fontSize: 9))),
                   ]),
-                  Container(
-                    height: 1,
-                    width: labelColW + cellW * holeRange.length,
-                    color: theme.colorScheme.outlineVariant,
-                    margin: const EdgeInsets.symmetric(vertical: 2),
-                  ),
+                  const HoleGridBand.rule(),
                   // One row per player — per-hole points + running total.
                   for (final m in players)
-                    Row(children: [
+                    HoleGridBand(
                       SizedBox(width: labelColW, height: rowH,
                         child: Align(alignment: Alignment.centerLeft,
                           child: Row(children: [
@@ -1768,6 +1768,7 @@ class _WolfGrid extends StatelessWidget {
                                 style: theme.textTheme.bodySmall
                                     ?.copyWith(fontWeight: FontWeight.w600))),
                           ]))),
+                      [
                       for (final h in holeRange)
                         cell(h, Builder(builder: (_) {
                           final pts = pointsByHole[h]?[m.player.id];
@@ -1789,8 +1790,7 @@ class _WolfGrid extends StatelessWidget {
                           );
                         })),
                     ]),
-                ],
-              ),
+              ],
             ),
             const SizedBox(height: 8),
             // Standings line.

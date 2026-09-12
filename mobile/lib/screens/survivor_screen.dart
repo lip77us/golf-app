@@ -34,6 +34,7 @@ import '../widgets/spots_capture.dart';
 import '../utils/match_handicap.dart';
 import '../utils/play_order.dart';
 import '../utils/round_complete.dart';
+import '../widgets/pinned_hole_grid.dart';
 
 /// Handicap strokes a player receives on a hole, read straight from the
 /// Survivor summary.  The engine emits its own allocation for EVERY hole,
@@ -1496,15 +1497,21 @@ class _SurvivorGrid extends StatelessWidget {
             ),
           ]),
           const SizedBox(height: 8),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
+          PinnedHoleGrid(
+            labelWidth  : labelColW,
+            cellWidth   : cellW,
+            holeCount   : holeRange.length,
+            // Never scrolled to a hole at all before — and Survivor is the
+            // game where it matters most, since the elimination you are
+            // looking for is the hole you have just played.
+            currentIndex: holeRange.indexOf(currentHole),
+            bands: [
+              HoleGridBand(
                 const SizedBox(width: labelColW),
-                for (final h in holeRange) headerCell(h),
-              ]),
+                [for (final h in holeRange) headerCell(h)],
+              ),
               for (final m in players)
-                Row(children: [
+                HoleGridBand(
                   SizedBox(
                     width: labelColW,
                     child: Text(m.player.displayShort,
@@ -1512,9 +1519,9 @@ class _SurvivorGrid extends StatelessWidget {
                         style: theme.textTheme.labelSmall
                             ?.copyWith(fontWeight: FontWeight.w600)),
                   ),
-                  for (final h in holeRange) cell(m, h),
-                ]),
-            ]),
+                  [for (final h in holeRange) cell(m, h)],
+                ),
+            ],
           ),
         ]),
       ),

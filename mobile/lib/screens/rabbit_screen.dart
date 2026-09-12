@@ -31,6 +31,7 @@ import '../widgets/spots_capture.dart';
 import '../utils/match_handicap.dart';
 import '../utils/play_order.dart';
 import '../utils/round_complete.dart';
+import '../widgets/pinned_hole_grid.dart';
 
 String _fmtMoney(double v) {
   if (v == 0) return '—';
@@ -1308,27 +1309,34 @@ class _RabbitGrid extends StatelessWidget {
               style: theme.textTheme.labelLarge?.copyWith(
                   fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
           const SizedBox(height: 4),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
+          PinnedHoleGrid(
+            labelWidth  : labelColW,
+            cellWidth   : cellW,
+            holeCount   : holeRange.length,
+            // This grid never scrolled to a hole at all — on the back nine you
+            // hunted for the one you were standing on, every hole.
+            currentIndex: holeRange.indexOf(currentHole),
+            bands: [
+              HoleGridBand(
                 SizedBox(width: labelColW, height: rowH,
                   child: const Align(alignment: Alignment.centerLeft,
                     child: Text('Hole', style: TextStyle(
                         fontSize: 11, fontWeight: FontWeight.bold)))),
+                [
                 for (final h in holeRange)
                   cell(h, Text('$h', style: const TextStyle(
                       fontSize: 11, fontWeight: FontWeight.bold))),
               ]),
               // Per-player gross rows.
               for (final m in players)
-                Row(children: [
+                HoleGridBand(
                   SizedBox(width: labelColW, height: rowH,
                     child: Align(alignment: Alignment.centerLeft,
                       child: Text(m.player.displayShort,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall
                               ?.copyWith(fontWeight: FontWeight.w600)))),
+                  [
                   for (final h in holeRange)
                     cell(h, Builder(builder: (_) {
                       final g = scorecard.holeData(h)?.scoreFor(m.player.id)?.grossScore;
@@ -1346,15 +1354,14 @@ class _RabbitGrid extends StatelessWidget {
                           Colors.red.shade700);
                     })),
                 ]),
-              Container(height: 1, width: labelColW + cellW * holeRange.length,
-                  color: theme.colorScheme.outlineVariant,
-                  margin: const EdgeInsets.symmetric(vertical: 2)),
+              const HoleGridBand.rule(),
               // Rabbit holder row.
-              Row(children: [
+              HoleGridBand(
                 SizedBox(width: labelColW, height: rowH,
                   child: Align(alignment: Alignment.centerLeft,
                     child: Text('Rabbit', style: theme.textTheme.bodySmall
                         ?.copyWith(fontStyle: FontStyle.italic)))),
+                [
                 for (final h in holeRange)
                   cell(h, Builder(builder: (_) {
                     final hs = holderByHole[h];
@@ -1371,7 +1378,7 @@ class _RabbitGrid extends StatelessWidget {
                           color: theme.colorScheme.primary));
                   })),
               ]),
-            ]),
+            ],
           ),
           const SizedBox(height: 8),
           Wrap(spacing: 12, runSpacing: 4, children: [
