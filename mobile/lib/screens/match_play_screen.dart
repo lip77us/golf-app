@@ -29,6 +29,7 @@ import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/round_chat_button.dart';
+import '../widgets/pinned_hole_grid.dart';
 
 // Colours used for Player-1 and Player-2 holes across all match cards.
 // Matches the score-entry name colours (GameColors.team1 / team2) so a player
@@ -548,8 +549,10 @@ class _MatchScoreDetail extends StatelessWidget {
           ),
         );
 
-    Widget playerRow(int? pid, Color color, String short) => Row(children: [
+    HoleGridBand playerRow(int? pid, Color color, String short) =>
+        HoleGridBand(
           label(short, color: color),
+          [
           for (final h in holes) Builder(builder: (_) {
             final s       = _scoreOf(h, pid);
             final gross   = s['gross'] as int?;
@@ -608,44 +611,54 @@ class _MatchScoreDetail extends StatelessWidget {
               style: theme.textTheme.labelSmall
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
           const SizedBox(height: 4),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
+          Builder(builder: (_) {
+            // This card has no hole in play — it is read after the fact — so
+            // it opens on the last hole SCORED. Same reading either way: the
+            // round so far, with its far end against the right edge.
+            var last = -1;
+            for (var i = 0; i < holes.length; i++) {
+              if ((_scoreOf(holes[i], p1id)['gross'] as int?) != null ||
+                  (_scoreOf(holes[i], p2id)['gross'] as int?) != null) {
+                last = i;
+              }
+            }
+            return PinnedHoleGrid(
+              labelWidth  : _labelW,
+              cellWidth   : _cellW,
+              holeCount   : holes.length,
+              currentIndex: last,
+              bands: [
+                HoleGridBand(
                   label('Hole', color: theme.colorScheme.onSurfaceVariant),
+                  [
                   for (final h in holes)
                     cell(Text('${h['hole']}${h['is_sd'] == true ? '*' : ''}',
                         style: const TextStyle(
                             fontSize: 10, fontWeight: FontWeight.bold))),
                 ]),
-                Row(children: [
+                HoleGridBand(
                   label('Par', italic: true),
+                  [
                   for (final h in holes)
                     cell(Text('${h['par'] ?? '-'}',
                         style: const TextStyle(fontSize: 10))),
                 ]),
-                Row(children: [
+                HoleGridBand(
                   label('SI', italic: true,
                       color: theme.colorScheme.onSurfaceVariant),
+                  [
                   for (final h in holes)
                     cell(Text('${h['stroke_index'] ?? '-'}',
                         style: theme.textTheme.labelSmall?.copyWith(
                             fontSize: 9,
                             color: theme.colorScheme.onSurfaceVariant))),
                 ]),
-                Container(
-                  height: 1,
-                  width: _labelW + _cellW * holes.length,
-                  margin: const EdgeInsets.symmetric(vertical: 2),
-                  color: theme.colorScheme.outlineVariant,
-                ),
+                const HoleGridBand.rule(),
                 playerRow(p1id, _kP1Color, p1short),
                 playerRow(p2id, _kP2Color, p2short),
               ],
-            ),
-          ),
+            );
+          }),
         ],
       ),
     );

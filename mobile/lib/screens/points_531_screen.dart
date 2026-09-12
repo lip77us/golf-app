@@ -35,6 +35,7 @@ import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/spots_capture.dart';
+import '../widgets/pinned_hole_grid.dart';
 
 // ---------------------------------------------------------------------------
 // The screen
@@ -1180,44 +1181,12 @@ class _P531SummaryGrid extends StatefulWidget {
 }
 
 class _P531SummaryGridState extends State<_P531SummaryGrid> {
-  final ScrollController _scrollCtrl = ScrollController();
-
   static const double _labelColW = 56.0;
   static const double _cellW     = 34.0;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _scrollToHole(widget.currentHole));
-  }
-
-  @override
-  void didUpdateWidget(_P531SummaryGrid old) {
-    super.didUpdateWidget(old);
-    if (old.currentHole != widget.currentHole) {
-      WidgetsBinding.instance.addPostFrameCallback(
-          (_) => _scrollToHole(widget.currentHole));
-    }
-  }
-
-  @override
-  void dispose() {
-    _scrollCtrl.dispose();
-    super.dispose();
-  }
-
-  void _scrollToHole(int hole) {
-    if (!_scrollCtrl.hasClients) return;
-    // Position current hole at slot 7 of ~10 visible (70% from left).
-    final target = (_labelColW + (hole - 7) * _cellW)
-        .clamp(0.0, _scrollCtrl.position.maxScrollExtent);
-    _scrollCtrl.animateTo(
-      target,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
-    );
-  }
+  // The controller, the pin and the scroll target live in PinnedHoleGrid.
+  // This one also scrolled by HOLE NUMBER rather than by position in play
+  // order, so a back-nine round aimed at a column that does not exist.
 
   /// Per-hole points awarded for this player (from server summary).
   /// Returns a map: hole → points.
@@ -1330,59 +1299,44 @@ class _P531SummaryGridState extends State<_P531SummaryGrid> {
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.primary)),
             const SizedBox(height: 4),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              controller: _scrollCtrl,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            Builder(builder: (ctx) {
+              Widget lbl(String text, TextStyle? style) => SizedBox(
+                    width: labelColW, height: rowH,
+                    child: Align(alignment: Alignment.centerLeft,
+                        child: Text(text, style: style)),
+                  );
+              return PinnedHoleGrid(
+                labelWidth  : labelColW,
+                cellWidth   : cellW,
+                holeCount   : holeRange.length,
+                currentIndex: holeRange.indexOf(currentHole),
+                bands: [
                   // Header: hole numbers
-                  Row(children: [
-                    SizedBox(
-                      width: labelColW,
-                      height: rowH,
-                      child: const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('Hole',
-                            style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
+                  HoleGridBand(
+                    lbl('Hole', const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.bold)),
+                    [
                     for (final h in holeRange) holeCell(h,
                         child: Text('$h',
                             style: const TextStyle(
                                 fontSize: 11, fontWeight: FontWeight.bold))),
                   ]),
                   // Par row
-                  Row(children: [
-                    SizedBox(
-                      width: labelColW,
-                      height: rowH,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('Par',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                                fontStyle: FontStyle.italic)),
-                      ),
-                    ),
+                  HoleGridBand(
+                    lbl('Par', theme.textTheme.bodySmall?.copyWith(
+                        fontStyle: FontStyle.italic)),
+                    [
                     for (final h in holeRange) holeCell(h,
                         child: Text(
                           '${scorecard.holeData(h)?.par ?? "-"}',
                           style: theme.textTheme.bodySmall,
                         )),
                   ]),
-                  // Divider — visually separates the fixed course-info rows
-                  // (Hole numbers + Par) from the player score / points
-                  // rows below.  Full-width so it spans across every hole
-                  // column plus the label column.
-                  Container(
-                    height: 1,
-                    width: labelColW + cellW * holeRange.length,
-                    color: theme.colorScheme.outlineVariant,
-                    margin: const EdgeInsets.symmetric(vertical: 2),
-                  ),
+                  // Separates the fixed course-info rows (hole numbers + par)
+                  // from the player score / points rows below.
+                  const HoleGridBand.rule(),
                   // One row per player: score cell + stroke dot overlay + points-won below
-                  for (final m in players) _PlayerGridRows(
+                  for (final m in players) ..._PlayerGridRows(
                     member:      m,
                     scorecard:   scorecard,
                     holeRange:   holeRange,
@@ -1393,10 +1347,10 @@ class _P531SummaryGridState extends State<_P531SummaryGrid> {
                     rowH:        rowH,
                     strokesOnHole: (h) => _strokesOnHoleFor(m, h),
                     pointsByHole:  _pointsByHole(m.player.id),
-                  ),
+                  ).toBands(ctx),
                 ],
-              ),
-            ),
+              );
+            }),
           ],
         ),
       ),
@@ -1460,13 +1414,23 @@ class _PlayerGridRows extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        for (final b in toBands(context))
+          Row(children: [b.label!, ...b.cells!]),
+      ],
+    );
+  }
+
+  /// TWO bands — the score row and the points row beneath it — each split into
+  /// its pinned half and its scrolling half.
+  List<HoleGridBand> toBands(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return [
         // Score row (with stroke dot in top-right corner when applicable)
-        Row(children: [
+        HoleGridBand(
           SizedBox(
             width: labelColW, height: rowH,
             child: Align(
@@ -1477,6 +1441,7 @@ class _PlayerGridRows extends StatelessWidget {
                       ?.copyWith(fontWeight: FontWeight.w600)),
             ),
           ),
+          [
           for (final h in holeRange) _cell(h, context, child: scoreCellWithDots(
             SizedBox(
               width:  cellW,
@@ -1501,7 +1466,7 @@ class _PlayerGridRows extends StatelessWidget {
           )),
         ]),
         // Points awarded row (same player, labelled "pts")
-        Row(children: [
+        HoleGridBand(
           SizedBox(
             width: labelColW, height: rowH - 4,
             child: Align(
@@ -1512,6 +1477,7 @@ class _PlayerGridRows extends StatelessWidget {
                       fontStyle: FontStyle.italic)),
             ),
           ),
+          [
           for (final h in holeRange) Container(
             width: cellW, height: rowH - 4,
             alignment: Alignment.center,
@@ -1534,7 +1500,6 @@ class _PlayerGridRows extends StatelessWidget {
             }),
           ),
         ]),
-      ],
-    );
+    ];
   }
 }

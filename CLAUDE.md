@@ -2788,3 +2788,66 @@ sites — Wolf, Banker, Points 5-3-1, Rabbit, Triple Nassau, Skins, Nassau, scor
 entry and the leaderboard. (An earlier note of mine claimed Wolf only; that was
 a bad grep.) Design keeps it as its own cleanup item. Also open: the new-match
 escape hatch, and the scroll-inset sweep.
+
+## Scorecard grids: the label column is pinned, and they open on the hole in play
+
+Reported from a fourball (12 Sep 2026): scrolling the progress grid under score
+entry took the NAMES away with the holes, so by the 14th the four rows were
+anonymous — exactly when a fourball needs to know whose ball is whose. It also
+parked the current hole in the MIDDLE of the viewport (`(pos - 6) * cellW`), so
+the thing you are about to do sat in the centre with empty columns to its right
+while the holes you had finished ran off the left.
+
+**`HoleGridScorecard` had already been fixed** and carries the note explaining
+why — *"by hole 12 the rows were anonymous"*. Eighteen other grids were never
+converted. That is the argument for doing them as a family rather than one
+more.
+
+**`widgets/pinned_hole_grid.dart`** holds both behaviours:
+- The label column sits OUTSIDE the horizontal scroller. Bands and rules are
+  added to the two halves TOGETHER (`HoleGridBand` / `HoleGridBand.rule()`),
+  because a grid whose columns disagree by one row is worse than one that
+  scrolls.
+- The current hole's RIGHT EDGE lands on the viewport's right edge — a paper
+  scorecard is read with the round so far to the left and the hole in front of
+  you at the card's edge.
+- `contentWidth` / `currentRightEdge` exist for non-uniform grids: Stroke Play
+  interleaves OUT / IN / TOT among the holes, so a back-nine hole sits one
+  summary column further right than its index suggests, and a rule measured in
+  hole cells stops short of the grid it underlines.
+
+**Converted (12):** score entry's fourball, Nassau, Irish Rumble, Stroke Play,
+Stableford and Points 5-3-1; and the Nassau, Points 5-3-1, Rabbit, Survivor,
+Wolf and match-play screens.
+
+Things the sweep turned up:
+- **Rabbit, Survivor, Wolf and match play never scrolled to a hole at all** —
+  on the back nine you hunted for the one you were standing on, every hole.
+  Survivor is the worst of them: the elimination you are looking for is the
+  hole you have just played.
+- **Four grids scrolled by HOLE NUMBER rather than play-order position**
+  (Irish Rumble, both Points 5-3-1 grids, the Nassau screen), so a back-nine
+  round aimed at a column that does not exist.
+- **Match play has no hole in play** — it is read after the fact — so it opens
+  on the last hole SCORED, which is the same reading.
+- `_AutoScrollHoleRow` is deleted: a generic "scroll the whole grid" wrapper is
+  the shape that made the label column scroll away in the first place.
+- `_GridPlayerRow`, `_NassauGridPlayerRow` and both `_P531PlayerGridRows` now
+  yield `HoleGridBand`s rather than finished `Row`s (the P531 ones yield TWO —
+  scores, then points). A built `Row` cannot be taken apart afterwards without
+  introspecting widgets, and their `build` composes the halves back for any
+  caller that still wants one row.
+
+**Still unpinned — the five leaderboard review grids and the landscape card:**
+`_StablefordPointsGrid`, `_IRLeaderboardScorecard`, `_Points531HoleGrid`,
+`_TpmPhase2HoleStrip`, `_TripleCupHoleDetail`, and `scorecard_grid`'s
+`_LandscapeGrid`. Deferred deliberately — those are read after the fact rather
+than stood over.
+
+Tests: `mobile/test/pinned_hole_grid_test.dart` (8) — the pin and the offset
+are geometry claims, so both are measured rather than eyeballed.
+
+**Editing one of these grids:** use EXACT string replacements. A conversion
+script that computed a block's end by searching forward from a landmark
+swallowed several classes at once; the damage was invisible until `analyze`
+ran. Convert and COMMIT one grid at a time, so a bad edit costs one grid.
