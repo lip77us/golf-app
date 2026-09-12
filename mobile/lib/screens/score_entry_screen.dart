@@ -8690,43 +8690,12 @@ class _P531SummaryGrid extends StatefulWidget {
 }
 
 class _P531SummaryGridState extends State<_P531SummaryGrid> {
-  final ScrollController _scrollCtrl = ScrollController();
-
   static const double _labelColW = 56.0;
   static const double _cellW     = 34.0;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _scrollToHole(widget.currentHole));
-  }
-
-  @override
-  void didUpdateWidget(_P531SummaryGrid old) {
-    super.didUpdateWidget(old);
-    if (old.currentHole != widget.currentHole) {
-      WidgetsBinding.instance.addPostFrameCallback(
-          (_) => _scrollToHole(widget.currentHole));
-    }
-  }
-
-  @override
-  void dispose() {
-    _scrollCtrl.dispose();
-    super.dispose();
-  }
-
-  void _scrollToHole(int hole) {
-    if (!_scrollCtrl.hasClients) return;
-    final target = (_labelColW + (hole - 7) * _cellW)
-        .clamp(0.0, _scrollCtrl.position.maxScrollExtent);
-    _scrollCtrl.animateTo(
-      target,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
-    );
-  }
+  // The controller, the pin and the scroll target live in PinnedHoleGrid.
+  // This one also scrolled by HOLE NUMBER rather than by position in play
+  // order, so a back-nine round aimed at a column that does not exist.
 
   Map<int, double> _pointsByHole(int playerId) {
     final out = <int, double>{};
@@ -8825,55 +8794,42 @@ class _P531SummaryGridState extends State<_P531SummaryGrid> {
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.primary)),
             const SizedBox(height: 4),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              controller: _scrollCtrl,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            Builder(builder: (ctx) {
+              Widget lbl(String text, TextStyle? style) => SizedBox(
+                    width: labelColW, height: rowH,
+                    child: Align(alignment: Alignment.centerLeft,
+                        child: Text(text, style: style)),
+                  );
+              return PinnedHoleGrid(
+                labelWidth  : labelColW,
+                cellWidth   : cellW,
+                holeCount   : holeRange.length,
+                currentIndex: holeRange.indexOf(currentHole),
+                bands: [
                   // Header: hole numbers
-                  Row(children: [
-                    SizedBox(
-                      width: labelColW,
-                      height: rowH,
-                      child: const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('Hole',
-                            style: TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
+                  HoleGridBand(
+                    lbl('Hole', const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.bold)),
+                    [
                     for (final h in holeRange) holeCell(h,
                         child: Text('$h',
                             style: const TextStyle(
                                 fontSize: 11, fontWeight: FontWeight.bold))),
                   ]),
                   // Par row
-                  Row(children: [
-                    SizedBox(
-                      width: labelColW,
-                      height: rowH,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('Par',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                                fontStyle: FontStyle.italic)),
-                      ),
-                    ),
+                  HoleGridBand(
+                    lbl('Par', theme.textTheme.bodySmall?.copyWith(
+                        fontStyle: FontStyle.italic)),
+                    [
                     for (final h in holeRange) holeCell(h,
                         child: Text(
                           '${scorecard.holeData(h)?.par ?? "-"}',
                           style: theme.textTheme.bodySmall,
                         )),
                   ]),
-                  Container(
-                    height: 1,
-                    width: labelColW + cellW * holeRange.length,
-                    color: theme.colorScheme.outlineVariant,
-                    margin: const EdgeInsets.symmetric(vertical: 2),
-                  ),
+                  const HoleGridBand.rule(),
                   // One double-row per player: scores + points awarded
-                  for (final m in players) _P531PlayerGridRows(
+                  for (final m in players) ..._P531PlayerGridRows(
                     member:        m,
                     scorecard:     scorecard,
                     holeRange:     holeRange,
@@ -8884,10 +8840,10 @@ class _P531SummaryGridState extends State<_P531SummaryGrid> {
                     rowH:          rowH,
                     strokesOnHole: (h) => _strokesOnHoleFor(m, h),
                     pointsByHole:  _pointsByHole(m.player.id),
-                  ),
+                  ).toBands(ctx),
                 ],
-              ),
-            ),
+              );
+            }),
           ],
         ),
       ),
@@ -8946,13 +8902,24 @@ class _P531PlayerGridRows extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        for (final b in toBands(context))
+          Row(children: [b.label!, ...b.cells!]),
+      ],
+    );
+  }
+
+  /// TWO bands — the score row and the points row beneath it — each split into
+  /// its pinned half and its scrolling half, so the label column can sit
+  /// outside the scroll view.
+  List<HoleGridBand> toBands(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return [
         // Score row with stroke-dot overlay
-        Row(children: [
+        HoleGridBand(
           SizedBox(
             width: labelColW, height: rowH,
             child: Align(
@@ -8963,6 +8930,7 @@ class _P531PlayerGridRows extends StatelessWidget {
                       ?.copyWith(fontWeight: FontWeight.w600)),
             ),
           ),
+          [
           for (final h in holeRange) _cell(h, context, child: SizedBox(
             width: cellW,
             height: rowH,
@@ -8989,7 +8957,7 @@ class _P531PlayerGridRows extends StatelessWidget {
           )),
         ]),
         // Points awarded row
-        Row(children: [
+        HoleGridBand(
           SizedBox(
             width: labelColW, height: rowH - 4,
             child: Align(
@@ -9000,6 +8968,7 @@ class _P531PlayerGridRows extends StatelessWidget {
                       fontStyle: FontStyle.italic)),
             ),
           ),
+          [
           for (final h in holeRange) Container(
             width: cellW, height: rowH - 4,
             alignment: Alignment.center,
@@ -9022,8 +8991,7 @@ class _P531PlayerGridRows extends StatelessWidget {
             }),
           ),
         ]),
-      ],
-    );
+    ];
   }
 }
 
