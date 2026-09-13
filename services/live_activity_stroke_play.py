@@ -113,7 +113,9 @@ def _sides(results, mine):
         leader = min(scored, key=lambda r: r.get('net_to_par'))
         text = (f'{leader.get("name", "")} leads · '
                 f'{to_par(leader.get("net_to_par"))}')
-    return [{'names': text, 'colour': 'dim', 'leading': False}]
+    # No dot. It marks a SIDE everywhere else in the set and this card has
+    # none — an empty colour is how the shared frame is told that.
+    return [{'names': text, 'colour': '', 'leading': False}]
 
 
 def stroke_play_activity_state(round_obj, foursome, *, player_id=None,

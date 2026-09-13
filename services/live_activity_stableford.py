@@ -84,6 +84,36 @@ def _state_slot(results, mine):
     return {'word': _ordinal(rank), 'to_play': f'+{best - mine_pts} TO 1ST'}
 
 
+def _sides(results, mine):
+    """The one line that turns a place into a position: `Sam Reid leads · 27`.
+
+    The state slot says WHERE the reader is; this says **against whom**, and a
+    placing without that is a number he cannot act on. `2ND` is the same fact
+    whether the man in front is one point clear or eleven.
+
+    Leading inverts it and names the two chasers instead — a leader's question
+    is who is coming, not who is in front.
+
+    **No dot.** The dot marks a SIDE everywhere else in the set, and this card
+    has none; an empty colour is how the shared frame is told that.
+    """
+    scored = [r for r in results if r.get('total_points') is not None]
+    if not scored:
+        return []
+    if mine is not None and (mine.get('rank') or 0) == 1:
+        chasers = [r for r in scored if r is not mine][:2]
+        text = ' · '.join(f'{r.get("player_name", "")} '
+                          f'{float(r.get("total_points") or 0):g}'
+                          for r in chasers)
+    else:
+        leader = max(scored, key=lambda r: r.get('total_points') or 0)
+        text = (f'{leader.get("player_name", "")} leads · '
+                f'{float(leader.get("total_points") or 0):g}')
+    if not text:
+        return []
+    return [{'names': text, 'colour': '', 'leading': False}]
+
+
 def _footer(summary, mine, thru, to_par):
     """Left: **the ante first**, because it is the only figure already parted
     with, and the ladder is arithmetic on it. Right: the locked corner.
@@ -135,7 +165,7 @@ def stableford_activity_state(round_obj, foursome, *, player_id=None,
             # second colour.
             'colour': 'orange' if (pts or 0) < 0 else 'mint',
         },
-        'sides' : [],
+        'sides' : _sides(results, mine),
         'state' : _state_slot(results, mine),
         'pips'  : [],
         'final' : None,

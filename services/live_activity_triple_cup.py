@@ -203,7 +203,10 @@ def triple_cup_activity_state(foursome, *, player_id=None, thru=None) -> dict:
     else:
         text = ' v. '.join([summary.get('team1_name') or 'Blue',
                             summary.get('team2_name') or 'Orange'])
-    sides = [{'names': text, 'colour': 'dim', 'leading': False}]
+    # No dot. The dot marks a SIDE everywhere else in the set, and this line
+    # names both of them in running text — there is no one side for it to
+    # stand for. An empty colour is how the frame is told that.
+    sides = [{'names': text, 'colour': '', 'leading': False}]
 
     unit = float((summary.get('money') or {}).get('bet_unit') or 0)
     return {

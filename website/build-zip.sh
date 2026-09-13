@@ -9,7 +9,7 @@ out="$HOME/Downloads/halved-site.zip"
 
 rm -f "$out"
 zip -rX "$out" . \
-  -x '.DS_Store' '*/.DS_Store' 'build-zip.sh' >/dev/null
+  -x '.DS_Store' '*/.DS_Store' 'build-zip.sh' 'build-guides.py' >/dev/null
 
 echo "Built $out"
 unzip -l "$out"

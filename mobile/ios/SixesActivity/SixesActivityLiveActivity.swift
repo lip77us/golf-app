@@ -57,7 +57,24 @@ struct SixesActivityLiveActivity: Widget {
                         } else {
                             SidesView(sides: s.sides)
                         }
-                        PipsView(pips: s.pips)
+                        if s.kind == "triple_cup" {
+                            CupCellsView(cells: s.pips)
+                        } else {
+                            PipsView(pips: s.pips)
+                        }
+                        // Expanded has no locked footer competing for the row,
+                        // so the strip and the rows — the shape of the round
+                        // on the cards that have one — get drawn here at the
+                        // size the lock screen gives them.
+                        StripView(strip: s.strip)
+                        if s.kind == "points", let rows = s.rows {
+                            VStack(alignment: .leading, spacing: 3) {
+                                ForEach(Array(rows.enumerated()),
+                                        id: \.offset) { _, row in
+                                    PointsRowView(row: row)
+                                }
+                            }
+                        }
                         // **The track lives here**, not on the lock screen.
                         // Expanded has no locked footer competing for the row,
                         // so it gets 11pt cells — larger than it ever had on
@@ -100,8 +117,17 @@ private struct LockScreenView: View {
     /// about it — the pairing rotating every third hole, the press riding in
     /// the footer beside the stake — the SERVER has already resolved into the
     /// same five slots, so there is no layout of its own to add.
+    ///
+    /// The five added with this build — `stableford`, `stroke_play`, `points`,
+    /// `wolf`, `triple_cup` — are what lets the server stop gating them. That
+    /// order is not optional: a kind leaves the server's `UNSHIPPED_KINDS` in
+    /// the commit that bumps the build carrying its layout, never before, or
+    /// the first phone without this build draws `UnsupportedView` on a game it
+    /// was told it could start.
     static let known: Set<String> = ["sixes", "rabbit", "nassau", "skins",
-                                     "match", "survivor", "sequoya", "banker"]
+                                     "match", "survivor", "sequoya", "banker",
+                                     "stableford", "stroke_play", "points",
+                                     "wolf", "triple_cup"]
 
     let state: SixesActivityAttributes.ContentState
     var isStale: Bool = false
@@ -125,6 +151,10 @@ private struct LockScreenView: View {
                 SkinsBoardView(state: state, isStale: isStale)
             } else if state.kind == "survivor" {
                 SurvivorBoardView(state: state, isStale: isStale)
+            } else if state.kind == "points", let rows = state.rows {
+                PointsBoardView(state: state, rows: rows, isStale: isStale)
+            } else if state.kind == "triple_cup" {
+                TripleCupBoardView(state: state, isStale: isStale)
             } else {
                 BoardView(state: state, isStale: isStale)
             }
@@ -139,6 +169,19 @@ private struct LockScreenView: View {
 private struct BoardView: View {
     let state: SixesActivityAttributes.ContentState
     var isStale: Bool = false
+
+    /// **36 unless the card has something better to spend the height on.**
+    ///
+    /// Wolf drops to 21 because its headline is the PRICE of one hole and the
+    /// four totals below it are the standing — a 36px price over a strip of
+    /// 18px totals says the hole outranks the round. Every other card here
+    /// headlines the figure the game is scored on, and keeps the size.
+    ///
+    /// Points makes the same call for a different reason and Triple Cup takes
+    /// 32; both draw through their own views, so their sizes live there.
+    static func headline(_ kind: String?) -> CGFloat {
+        kind == "wolf" ? 21 : 36
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -156,21 +199,30 @@ private struct BoardView: View {
             HeaderView(header: state.header)
             WhoRow(who: state.who)
 
-            HStack(alignment: .top, spacing: 12) {
-                // The number and both sides. The number wears the LEADING
-                // side's colour so the tie between the score and the side is
-                // carried by colour rather than by reading order.
-                VStack(alignment: .leading, spacing: 5) {
+            // The headline and the state share ONE baseline, and the
+            // sides line runs the FULL width beneath both — not inside a
+            // left-hand column with the state stacked beside it. The state
+            // slot is the shorter element in that row, and hanging it off the
+            // top of a 36px numeral left it floating against nothing.
+            //
+            // The sides line paid for the change: boxed into a column it was
+            // competing with the state for width, which is what forces four
+            // surnames to shrink on the card that has four of them.
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .lastTextBaseline, spacing: 11) {
+                    // The number wears the LEADING side's colour so the tie
+                    // between the score and the side is carried by colour
+                    // rather than by reading order.
                     Text(state.number.text)
-                        .font(Sixes.display(36, .bold))
+                        .font(Sixes.display(Self.headline(state.kind), .bold))
                         .tracking(-1)
                         .foregroundStyle(Sixes.side(state.number.colour))
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
-                    SidesView(sides: state.sides)
+                    Spacer(minLength: 8)
+                    StateView(state: state.state)
                 }
-                Spacer(minLength: 0)
-                StateView(state: state.state)
+                SidesView(sides: state.sides)
             }
 
             PipsView(pips: state.pips)
@@ -753,6 +805,209 @@ private struct MatchRowView: View {
     }
 }
 
+/// Points 5-3-1 — three rows, and they are the card
+/// (`handoff-lock-screens/personal/HANDOFF.md`).
+///
+/// **Three rows is one more than any other card carries, and it is affordable
+/// for the reason the format is: Points is three-handed only.** No partner to
+/// name, no side to colour, and the row count can never grow. The nine points
+/// are divided rather than earned, so a point you took is a point neither of
+/// the others got — a single number cannot describe that state, which is why
+/// the rows survived the height audit and the headline did not.
+///
+/// **The headline gave way, not the rows.** 36px became 21 because the
+/// reader's own total already sits three lines below at full weight, so the
+/// big number was the only slot on the card repeating something. That is the
+/// opposite call to Survivor, where the 36px word was protected — the
+/// difference is duplication, not importance.
+private struct PointsBoardView: View {
+    let state: SixesActivityAttributes.ContentState
+    let rows: [SixesActivityAttributes.ContentState.Row]
+    var isStale: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            if let ribbon = state.ribbon, !ribbon.isEmpty {
+                StrokeRibbon(text: ribbon, tone: "gold")
+            }
+            HeaderView(header: state.header)
+            WhoRow(who: state.who)
+
+            HStack(alignment: .lastTextBaseline, spacing: 9) {
+                Text(state.number.text)
+                    .font(Sixes.display(21, .bold))
+                    .tracking(-0.5)
+                    .foregroundStyle(Sixes.side(state.number.colour))
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                StateView(state: state.state)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    PointsRowView(row: row)
+                }
+            }
+
+            TeeRow(tee: state.tee)
+            FooterView(footer: state.footer, thru: state.thru,
+                       isStale: isStale)
+        }
+    }
+}
+
+/// `Sam Reid  43  5` — the golfer, his total, and what he just won.
+///
+/// **Two different marks, and they mean two different things.** The row at
+/// full weight is the READER; mint on the total is the LEADER. They are
+/// usually different men, and a card that used one mark for both would be
+/// unreadable in the state that matters most.
+///
+/// On a watcher's card nothing is bold at all — the tell that none of it is
+/// about him. That falls out for free: no row says it is his.
+private struct PointsRowView: View {
+    let row: SixesActivityAttributes.ContentState.Row
+
+    private var mine: Bool { row.isReader }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(row.label)
+                .font(Sixes.body(12, mine ? .bold : .regular))
+                .foregroundStyle(.white.opacity(mine ? 1 : 0.62))
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 4)
+            Text(row.text)
+                .font(Sixes.display(12, .bold))
+                .monospacedDigit()
+                .foregroundStyle(row.colour == "mint"
+                                 ? Sixes.mint
+                                 : .white.opacity(mine ? 1 : 0.62))
+            // The last hole's award. **It sets its own alpha rather than
+            // inheriting the row's** — a dimmed row multiplying a dimmed
+            // numeral put losing awards near 30% white, illegible at 10.5px
+            // and worse under always-on. A fixed width so three single digits
+            // form a column rather than three ragged right edges.
+            //
+            // Mint marks the BEST award on the hole, never the leader: a man
+            // who scrambled a 3 while somebody else took the 5 reads dim,
+            // which is the column's whole job.
+            Text(row.award ?? "")
+                .font(Sixes.body(10.5, .bold))
+                .monospacedDigit()
+                .foregroundStyle(row.awardBest ? Sixes.mint
+                                               : .white.opacity(0.62))
+                .frame(width: 26, alignment: .trailing)
+        }
+    }
+}
+
+/// Triple Cup — the headline is the CUP SCORE, including `0–0`
+/// (`handoff-lock-screens/triple-cup/HANDOFF.md`).
+///
+/// Triple Cup exists to produce a cup score, and the match in front of you is
+/// a way of earning one point in it. Those are different questions, and the
+/// smaller slot takes the second one. An earlier design pass swapped them for
+/// the Fourball to avoid headlining `0–0` and it was wrong: **a headline that
+/// means one thing before the first point and another after is a slot nobody
+/// can learn.**
+///
+/// 32px rather than 36 — the headline here is two numbers and a dash, and it
+/// is the widest string any card in the set puts in that slot.
+///
+/// The sides line is ONE row, always. Holes 13–18 run two Singles at once, and
+/// a row each measured 163pt — over the 160 ceiling on its own, before the
+/// cells. Surnames buy both matches for nothing.
+private struct TripleCupBoardView: View {
+    let state: SixesActivityAttributes.ContentState
+    var isStale: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            if let ribbon = state.ribbon, !ribbon.isEmpty {
+                StrokeRibbon(text: ribbon, tone: "gold")
+            }
+            HeaderView(header: state.header)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .lastTextBaseline, spacing: 11) {
+                    // Never mint. Mint is the app's colour, not a side's, and
+                    // this number belongs to whichever side is ahead — or to
+                    // neither, which is what `neutral` draws.
+                    Text(state.number.text)
+                        .font(Sixes.display(32, .bold))
+                        .tracking(-1)
+                        .foregroundStyle(Sixes.side(state.number.colour))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Spacer(minLength: 8)
+                    StateView(state: state.state)
+                }
+                SidesView(sides: state.sides)
+            }
+
+            CupCellsView(cells: state.pips)
+            TeeRow(tee: state.tee)
+            FooterView(footer: state.footer, thru: state.thru,
+                       isStale: isStale)
+        }
+    }
+}
+
+/// The four points of the cup, and the line that wins it.
+///
+/// **Four cells are the FORMAT, not a guess.** Fourball, Foursomes and two
+/// Singles, in that order, every time — which is exactly why this card can
+/// carry a structure graphic where Sixes could not: a Sixes round has no fixed
+/// number of matches, so three bars would have been wrong as often as right.
+///
+/// The tick at the centre is the half. Two of four halves the cup and 2½ wins
+/// it, so the line is where the reader's eye goes to answer *is it gone* — a
+/// question the four cells alone cannot answer without counting.
+private struct CupCellsView: View {
+    let cells: [String]
+
+    var body: some View {
+        if !cells.isEmpty {
+            HStack(spacing: 5) {
+                ForEach(Array(cells.enumerated()), id: \.offset) { _, cell in
+                    CupCell(cell: cell)
+                }
+            }
+            .overlay(alignment: .center) {
+                Rectangle()
+                    .fill(.white.opacity(0.85))
+                    .frame(width: 2, height: 15)
+                    .cornerRadius(1)
+            }
+        }
+    }
+}
+
+private struct CupCell: View {
+    let cell: String
+
+    var body: some View {
+        Group {
+            // A halved point is **both colours, split down the middle** — not
+            // the white a halved segment wears elsewhere in the set. Here the
+            // half is a point each rather than a point nobody took, and the
+            // cell has to show two men getting paid.
+            if cell == "halved" {
+                LinearGradient(
+                    stops: [.init(color: Sixes.blue, location: 0.5),
+                            .init(color: Sixes.orange, location: 0.5)],
+                    startPoint: .leading, endPoint: .trailing)
+            } else {
+                Sixes.pip(cell)
+            }
+        }
+        .frame(height: 7)
+        .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+    }
+}
+
 /// Rabbit — one holder, no sides, and a number that is a lead rather than a
 /// score (docs/design-review/handoff-live-activities/rabbit-HANDOFF.md).
 ///
@@ -912,9 +1167,15 @@ private struct SidesView: View {
         VStack(alignment: .leading, spacing: 2) {
             ForEach(sides, id: \.names) { side in
                 HStack(spacing: 5) {
-                    Circle()
-                        .fill(Sixes.side(side.colour))
-                        .frame(width: 5, height: 5)
+                    // The dot marks a SIDE. Triple Cup's line names both
+                    // matches in running text — `You v. Naylor · 2 UP · Kelly
+                    // v. Reid · 1 DN` — so there is no one side for a dot to
+                    // stand for, and it sends an empty colour to say so.
+                    if !side.colour.isEmpty {
+                        Circle()
+                            .fill(Sixes.side(side.colour))
+                            .frame(width: 5, height: 5)
+                    }
                     Text(side.names)
                         .font(Sixes.body(12, side.leading ? .bold : .regular))
                         .foregroundStyle(side.leading
@@ -936,15 +1197,27 @@ private struct StateView: View {
     var colour: Color? = nil
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 2) {
+        // **One baseline, not two.** `DORMIE` over `2 TO PLAY` became
+        // `DORMIE · 2 TO PLAY`, which is the arrangement Wolf and Triple Cup
+        // were drawn with and is now the set's standard — the design packet
+        // restated seven delivered cards to match rather than let the five new
+        // ones read as a different family.
+        //
+        // Worth recording what it bought, because it is less than it looks:
+        // 17pt, and only on the cards where this slot was the tallest thing in
+        // its row, which on most of them it was not. It is here for
+        // consistency, not for the height.
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(state.word)
-                .font(Sixes.display(17, .semibold))
+                .font(Sixes.display(15, .bold))
+                .tracking(0.2)
                 .foregroundStyle(colour ?? .white.opacity(0.92))
             Text(state.toPlay)
                 .font(Sixes.body(9, .bold))
                 .tracking(0.4)
                 .foregroundStyle(.white.opacity(0.55))
         }
+        .fixedSize(horizontal: true, vertical: false)
     }
 }
 

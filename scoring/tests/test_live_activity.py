@@ -394,3 +394,120 @@ class FinalStateTests(TestCase):
         final = sixes_final_state(self.fs, player_id=self.pid['Paul'])
         self.assertEqual(final['final']['collect'],
                          'All square — nothing to settle')
+
+
+class ShippingGateTests(TestCase):
+    """**The three-sided gate, checked once for the whole set.**
+
+    A card exists in three places and all three have to agree: a builder in
+    `BUILDERS`, a layout in the widget's `known` set, and `hasLiveActivity` in
+    the Dart catalog. `UNSHIPPED_KINDS` is what holds the line between them —
+    a kind sits in it from the moment its builder lands until the build
+    carrying its Swift layout goes out.
+
+    The failure it prevents is one-directional and silent: a kind the server
+    will send but an installed build cannot draw renders `UnsupportedView` on
+    somebody's lock screen, on a course, with no error anywhere. The reverse —
+    a layout shipped ahead of the gate coming off — costs nothing and is the
+    order every card in this set has been built in.
+
+    These tests were written per card, once each, and said nothing about the
+    cards nobody had thought to add a test for. This closes it over the set.
+    """
+
+    SWIFT = 'mobile/ios/SixesActivity/SixesActivityLiveActivity.swift'
+
+    def _known(self):
+        import os, re
+        from django.conf import settings
+        with open(os.path.join(settings.BASE_DIR, self.SWIFT)) as fh:
+            swift = fh.read()
+        body = re.search(r'static let known: Set<String> = \[(.*?)\]',
+                         swift, re.S).group(1)
+        return set(re.findall(r'"([a-z_]+)"', body))
+
+    def test_no_ungated_kind_is_missing_a_layout(self):
+        """The one direction that fails on a lock screen rather than in CI."""
+        from services.live_activity_registry import (BUILDERS, card_kind,
+                                                     UNSHIPPED_KINDS)
+        known = self._known()
+        for game in BUILDERS:
+            # The BUILDERS key is the GAME — `sequoya_threes`, `low_net_round`
+            # — and the widget knows cards. Two games can share one card, so
+            # the gate and the layout are both keyed on what gets drawn.
+            kind = card_kind(game)
+            if kind in UNSHIPPED_KINDS:
+                continue
+            self.assertIn(
+                kind, known,
+                f'`{game}` sends card `{kind}`, which is off the gate with no '
+                f'layout — every phone without one draws UnsupportedView')
+
+    def test_every_layout_has_something_to_draw(self):
+        """A `known` entry with no builder is a layout for a card the server
+        can never send. Harmless, but it is how a set drifts: the string stops
+        meaning *this ships* and starts meaning *somebody meant to*."""
+        from services.live_activity_registry import BUILDERS, card_kind
+        buildable = {card_kind(g) for g in BUILDERS}
+        for kind in self._known():
+            self.assertIn(kind, buildable,
+                          f'`{kind}` has a layout and no builder')
+
+    def test_a_gated_kind_may_already_have_its_layout(self):
+        """Because that is the order: the Swift lands first, and the gate comes
+        off in the commit that bumps the build carrying it. A test that read
+        the gate as *not yet drawn* would forbid the only safe sequence."""
+        from services.live_activity_registry import UNSHIPPED_KINDS
+        self.assertTrue(UNSHIPPED_KINDS & self._known(),
+                        'the five layouts added ahead of their gate')
+
+
+class WidgetLayoutTests(TestCase):
+    """The half of the contract the JSON schema cannot check.
+
+    A payload can decode perfectly and still draw nothing: a key the Swift
+    struct has no `CodingKeys` entry for, a pip name with no `case` in the
+    colour table. Both fail silently and both look like a server bug from the
+    course.
+    """
+
+    BASE = 'mobile/ios/SixesActivity'
+
+    def _swift(self, name):
+        import os
+        from django.conf import settings
+        with open(os.path.join(settings.BASE_DIR, self.BASE, name)) as fh:
+            return fh.read()
+
+    def test_every_points_row_key_reaches_the_swift_row(self):
+        """`is_reader` is the one that had to be added, and it is the one that
+        matters: without it the reader's row is marked by nothing, because
+        `colour` was reassigned to the leader."""
+        contract = self._swift('SixesActivity.swift')
+        keys = {'label', 'text', 'colour', 'note', 'award', 'award_best',
+                'is_reader'}
+        for key in keys:
+            camel = ''.join(w if i == 0 else w.title()
+                            for i, w in enumerate(key.split('_')))
+            self.assertTrue(
+                f'case {camel} = "{key}"' in contract
+                or f'var {camel}:' in contract
+                or f'let {camel}:' in contract,
+                f'Points sends `{key}` and the Swift Row cannot decode it')
+
+    def test_the_two_row_marks_are_separate_fields_in_swift_too(self):
+        """Conflating them on either side of the wire is the same bug."""
+        contract = self._swift('SixesActivity.swift')
+        self.assertIn('var isReader: Bool = false', contract)
+
+    def test_every_cup_cell_the_server_emits_has_a_rendering(self):
+        """Four cells, and one of them is drawn by a branch rather than the
+        colour table: a HALVED point is both colours split down the middle,
+        not the white a halved segment wears elsewhere. Here the half is a
+        point each rather than a point nobody took."""
+        palette = self._swift('SixesActivity.swift')
+        widget = self._swift('SixesActivityLiveActivity.swift')
+        for cell in ('out', 'blue', 'orange'):
+            self.assertIn(f'case "{cell}":', palette,
+                          f'cup cell `{cell}` has no colour')
+        self.assertIn('if cell == "halved"', widget)

@@ -92,6 +92,18 @@ def _awards(summary) -> tuple:
     return out, (max(out.values()) if out else None)
 
 
+def _pts(v) -> str:
+    """`5`, `4.5` — never `5.0`.
+
+    A tied hole in 5-3-1 is SPLIT, so halves are real points and the decimal
+    is load-bearing when it is a half. What is not load-bearing is the `.0`
+    Python prints on every whole number, and a lock screen reading `41.0 PTS`
+    over rows of `43.0` and `24.0` is the card telling a golfer his own total
+    to one decimal place he does not have.
+    """
+    return f'{float(v or 0):g}'
+
+
 def _fmt_award(v) -> str:
     """**No plus sign.** The card already spends a plus on `+$5` and `+7`; a
     third made the column read as a running total."""
@@ -124,8 +136,8 @@ def _state_slot(summary, mine, rows):
     if pts >= best:
         rest = [r.get('points') or 0 for r in rows if r is not mine]
         return {'word': 'LEADS',
-                'to_play': f'BY {pts - max(rest)}' if rest else ''}
-    return {'word': f'−{best - pts}', 'to_play': 'TO THE LEAD'}
+                'to_play': f'BY {_pts(pts - max(rest))}' if rest else ''}
+    return {'word': f'−{_pts(best - pts)}', 'to_play': 'TO THE LEAD'}
 
 
 def points_activity_state(foursome, *, player_id=None, thru=None) -> dict:
@@ -154,26 +166,38 @@ def points_activity_state(foursome, *, player_id=None, thru=None) -> dict:
     leader = max(rows, key=lambda r: r.get('points') or 0)
     headline_row = mine or leader
 
+    # **Two marks, and they are on two different men.** Mint on a total is the
+    # LEADER; full weight on a row is the READER. Those are usually not the
+    # same golfer, so one field cannot do both jobs — it would be wrong in
+    # exactly the state that matters most, a reader chasing.
+    #
+    # A watcher gets the first and not the second, and nothing on his card is
+    # bold. That is the tell that none of it is about him, and it falls out of
+    # the split rather than needing a case.
+    top = max((r.get('points') or 0) for r in rows)
     out_rows = []
-    for r in rows:
+    for r in sorted(rows, key=lambda r: -(r.get('points') or 0)):
         pid = r.get('player_id')
         out_rows.append({
             'label' : r.get('name', ''),
-            'text'  : str(r.get('points') or 0),
-            # Mint for the reader. On a watcher card NOTHING is bold — that is
-            # the tell that none of it is about him.
-            'colour': 'mint' if (mine is not None and pid == player_id)
-                      else 'dim',
-            'note'  : _cash(r.get('money')),
+            'text'  : _pts(r.get('points')),
+            'colour': 'mint' if (r.get('points') or 0) == top else 'dim',
+            # No per-golfer money column. The reader's own net is in the
+            # footer, and three more figures do not fit under the ceiling —
+            # the row is name, total, and what he just won. Empty rather than
+            # absent: the field is not optional in the contract.
+            'note'  : '',
             'award' : _fmt_award(awards.get(pid)),
             'award_best': (best_award is not None
                            and awards.get(pid) == best_award),
+            'is_reader': mine is not None and pid == player_id,
         })
 
     if mine is None:
         state = {'word': leader.get('name', '').split()[-1].upper(),
-                 'to_play': f'LEADS BY '
-                            f'{(leader.get("points") or 0) - min((r.get("points") or 0) for r in rows)}'}
+                 'to_play': 'LEADS BY ' + _pts(
+                     (leader.get('points') or 0)
+                     - min((r.get('points') or 0) for r in rows))}
     else:
         state = _state_slot(summary, mine, rows)
 
@@ -196,7 +220,7 @@ def points_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         # 21px, not 36 — the size is the client's, but the CHOICE is recorded
         # here: the reader's own total already sits three lines below at full
         # weight, so the headline was the only slot repeating something.
-        'number': {'text': f'{headline_row.get("points") or 0} PTS',
+        'number': {'text': f'{_pts(headline_row.get("points"))} PTS',
                    'colour': 'mint'},
         'rows'  : out_rows,
         'sides' : [],

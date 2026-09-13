@@ -232,6 +232,28 @@ class StablefordTests(TestCase):
         self._play(1, 4, 4)
         self.assertEqual(self._state(1)['footer']['money'], '')
 
+    def test_chasing_names_the_man_in_front(self):
+        """`2ND` is the same fact whether the leader is one point clear or
+        eleven. The place is where the reader is; this line is against whom,
+        and a placing without it is a number he cannot act on."""
+        self._play(1, 5, 3)
+        line = self._state(1)['sides'][0]['names']
+        self.assertIn('leads', line)
+        self.assertIn('Sam Reid', line)
+
+    def test_leading_inverts_it_and_names_the_chasers(self):
+        """A leader's question is who is coming, not who is in front."""
+        self._play(1, 3, 5)
+        line = self._state(1)['sides'][0]['names']
+        self.assertNotIn('leads', line)
+        self.assertIn('Sam Reid', line)
+
+    def test_the_line_carries_no_dot(self):
+        """The dot marks a SIDE everywhere else in the set, and this card has
+        none. An empty colour is how the shared frame is told that."""
+        self._play(1, 3, 5)
+        self.assertEqual(self._state(1)['sides'][0]['colour'], '')
+
 
 class PointsTests(TestCase):
     """Points 5-3-1 — the third personal card, and the one that departs.
@@ -351,10 +373,78 @@ class PointsTests(TestCase):
         self.assertIn('HAYES', s['state']['word'])
 
     def test_nothing_is_bold_on_a_watcher_card(self):
-        """That is the tell that none of it is about him."""
+        """That is the tell that none of it is about him.
+
+        **Bold is `is_reader`, not `colour`.** The two marks are on two
+        different men — mint on a total is the LEADER, full weight on a row is
+        the READER — so a watcher card still marks its leader; what it has
+        none of is a row claiming to be his.
+        """
         self._play(1, 3, 4, 5)
         s = self._state(1, who=None)
-        self.assertEqual({r['colour'] for r in s['rows']}, {'dim'})
+        self.assertEqual([r['is_reader'] for r in s['rows']],
+                         [False, False, False])
+        self.assertEqual([r['colour'] for r in s['rows']].count('mint'), 1,
+                         'the leader is still named on a card nobody owns')
+
+    def test_the_two_row_marks_are_on_two_different_men(self):
+        """Mint is the leader; full weight is the reader.
+
+        The state this exists for is the ordinary one — a reader chasing.
+        Conflated into one field, the card would mark the chaser as the leader
+        and say nothing about who is actually ahead.
+        """
+        # Reid low, so the leader is NOT the reader — the ordinary state,
+        # and the one a single conflated field gets wrong.
+        self._play(1, 5, 3, 4)
+        rows = self._state(1)['rows']
+        mint = [r for r in rows if r['colour'] == 'mint']
+        mine = [r for r in rows if r['is_reader']]
+        self.assertEqual(len(mine), 1)
+        self.assertEqual(len(mint), 1)
+        self.assertEqual(mint[0]['text'],
+                         str(max(int(r['text']) for r in rows)),
+                         'mint sits on the highest total, whoever holds it')
+        self.assertNotEqual(mint[0]['label'], mine[0]['label'])
+
+    def test_the_rows_run_leader_first(self):
+        """The reader is marked in place rather than floated to the top —
+        a three-row card that reorders itself is one a golfer has to re-read
+        every hole."""
+        self._play(1, 5, 3, 4)
+        rows = self._state(1)['rows']
+        self.assertEqual([int(r['text']) for r in rows],
+                         sorted((int(r['text']) for r in rows), reverse=True))
+
+    def test_no_figure_on_the_card_carries_a_trailing_zero(self):
+        """`41 PTS`, never `41.0 PTS`.
+
+        Points are floats because a tied hole is SPLIT — 5 and 3 become 4 and
+        4, and a three-way tie is 3 each — so halves are real and the decimal
+        is load-bearing when it is a half. The `.0` on every whole number is
+        not, and it was on the headline, all three rows and the gap.
+        """
+        self._play(1, 5, 3, 4)
+        s = self._state(1)
+        figures = ([s['number']['text'], s['state']['word'],
+                    s['state']['to_play']]
+                   + [r['text'] for r in s['rows']]
+                   + [r['award'] for r in s['rows']])
+        for f in figures:
+            self.assertNotIn('.0', f, f'{f!r} prints a decimal it does not have')
+
+    def test_a_split_hole_keeps_its_half(self):
+        """The rule above must not become `round()` — 4.5 is a real total."""
+        # Reid and Moran tie for low: 5 and 3 split into 4 apiece.
+        self._play(1, 5, 3, 3)
+        rows = self._state(1)['rows']
+        self.assertEqual(sorted(r['text'] for r in rows), ['1', '4', '4'])
+
+    def test_the_rows_carry_no_money_column(self):
+        """Three more figures do not fit under the ceiling, and the reader's
+        own net is in the footer."""
+        self._play(1, 3, 4, 5)
+        self.assertEqual({r['note'] for r in self._state(1)['rows']}, {''})
 
     def test_the_watchers_footer_is_the_calculation(self):
         self._play(1, 3, 4, 5)

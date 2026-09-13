@@ -3166,9 +3166,94 @@ model (the whole cup as the headline, `12½ · TO WIN` in the right slot, one
 continuous needle instead of four cells) — and it is the only card in the
 bundle that pushes, on lead change and cup decided.
 
+### The five Swift layouts — and what the shared frame owed them
+
+All five are drawn. Two needed views of their own; three did not, and the
+reason is the same one that keeps this widget small: **a card earns a layout by
+having a shape no other card has, not by being a different game.**
+
+- **Stableford** and **Stroke Play** draw through `BoardView` unchanged. They
+  are the shared composition — a name, one figure, a line naming who is ahead,
+  the state, a footer — and adding views for them would have been three copies
+  of it.
+- **Wolf** draws through `BoardView` too, at a 21px headline instead of 36.
+  Its headline is the PRICE of one hole and the four totals below it are the
+  standing; a 36px price over a strip of 18px totals says the hole outranks
+  the round. That is the only thing about Wolf the frame did not already do.
+- **Points** and **Triple Cup** have their own (`PointsBoardView`,
+  `TripleCupBoardView`) — three ranked rows with an award column, and four
+  format cells with a tick at the winning line. Neither shape exists elsewhere.
+
+**Two changes to the frame, and both were owed to every card, not to the five.**
+
+*The headline and the state now share one baseline, with the sides line running
+the full width beneath both.* They used to sit in a left column with the state
+stacked top-right, which left a 15px slot floating against the top of a 36px
+numeral and boxed the sides line into competing with it for width — the thing
+that forces four surnames to shrink on the cards that have four.
+
+*The state slot is inline:* `DORMIE · 2 TO PLAY`, not stacked. The packet
+restated seven already-delivered cards to match rather than let the five new
+ones read as a different family. Worth recording what it bought, because the
+packet is honest about it and it is less than it looks: **17pt, and only where
+this slot was the tallest thing in its row, which on most of them it was not.**
+
+The dot beside a sides line now draws only when a colour is sent. **The dot
+marks a SIDE** — Stableford, Stroke Play and Triple Cup have none (Triple Cup's
+line names both matches in running text), so they send an empty colour and get
+no dot. That was a rule the frame had been applying by accident.
+
+### The widget type-checks from the command line
+
+Discovered building these, and it should have been found much earlier:
+
+```
+cd mobile/ios/SixesActivity && xcrun -sdk iphoneos swiftc -typecheck \
+  -target arm64-apple-ios16.2 *.swift
+```
+
+Clean exit, real diagnostics, no Xcode project and no build. Until now the only
+check on this file was that the next IPA built. `swiftc -parse` is *not* a
+substitute — it is syntax only and will happily accept a field that does not
+exist.
+
+### Four server bugs the layouts found
+
+Building the view that draws a value is how you find out the value is wrong.
+
+1. **Points printed `41.0 PTS`** — and `43.0` on every row, and `BY 2.0` in the
+   state slot. Points are floats because a tied hole is SPLIT (5 and 3 become 4
+   and 4), so the decimal is load-bearing *when it is a half* and noise on
+   every whole number. `_pts()` formats with `:g`; two tests pin both halves of
+   that.
+2. **The reader and the leader were one field.** `colour: mint` meant *the
+   reader* on the server and *the leader* in the design, and they are usually
+   different men — the card would have marked the chaser as ahead in exactly
+   the state that matters. Split: `colour` is the leader, new `is_reader` is
+   the reader. A watcher gets the first and not the second, which is also what
+   makes "nothing is bold on his card" fall out for free rather than need a
+   case.
+3. **Stableford had no leader line at all.** `sides: []`, so the slot the
+   layout draws would have been permanently blank. `2ND` is the same fact
+   whether the man in front is one point clear or eleven.
+4. **Points rows carried a money column the card has no room for** — three more
+   figures under a 160pt ceiling. The reader's own net is in the footer.
+
+### The gate, now checked once for the whole set
+
+`ShippingGateTests` replaces the per-card assertions: **no ungated kind may be
+missing a layout**, keyed on the card kind rather than the game (two games can
+share one card — `sequoya_threes` sends `sequoya`). The reverse direction is
+allowed on purpose — the Swift lands first and the gate comes off in the commit
+that bumps the build carrying it, so a gated kind with a layout is the only
+safe sequence, and a test that forbade it would forbid the sequence.
+
+All five stay in `UNSHIPPED_KINDS` until that build.
+
 ### Still to do
 
-The team-cup configuration; the five Swift layouts; the final states, which are
-`{}` on all five builders.
-Eight designs in `changed-since-delivery/` are CSS-level and mostly already
-match how we built them — the Skins header fix was the part that applied.
+The team-cup configuration of Triple Cup; the final states, which are `{}` on
+all five builders.
+The rest of `changed-since-delivery/` is CSS-level and already matches how we
+built it — the Skins header fix and the inlined state slot were the two parts
+that applied.

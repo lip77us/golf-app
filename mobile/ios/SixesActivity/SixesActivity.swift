@@ -122,10 +122,21 @@ struct SixesActivityAttributes: ActivityAttributes {
             /// dimmed row multiplying a dimmed numeral put losing awards near
             /// 30% white, illegible at 10.5px and worse under always-on.
             var awardBest: Bool = false
+            /// The reader's own row — full weight, where the others sit at
+            /// 62%. **Separate from `colour` because they mark different
+            /// men:** mint on the total is the LEADER, and the two are usually
+            /// not the same golfer. One flag doing both jobs would be wrong in
+            /// exactly the state that matters most.
+            ///
+            /// A WATCHER sets it nowhere, and nothing on his card is bold —
+            /// which is the tell that none of it is about him. That falls out
+            /// of this rather than needing a case of its own.
+            var isReader: Bool = false
 
             enum CodingKeys: String, CodingKey {
                 case label, text, colour, note, chip, award
                 case awardBest = "award_best"
+                case isReader = "is_reader"
             }
         }
 
@@ -291,6 +302,10 @@ enum Sixes {
         case "blue":   return blue
         case "orange": return orange
         case "halved": return .white.opacity(0.45)
+        // Triple Cup's unplayed point. Marginally brighter than the `default`
+        // below because four of these sit alone on the card with nothing else
+        // in the row to give them an edge.
+        case "out":    return .white.opacity(0.17)
         case "void":   return .white.opacity(0.18)
         case "live":   return .white.opacity(0.62)
         // Rabbit's run strip: one bar per rabbit, generated from the computed

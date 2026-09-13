@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Banker Golf Game Rules: How to Play, Doubles and the Counter | Halved</title>
+<meta name="description" content="Banker is a golf game where one golfer plays the whole group, one bet at a time. Full rules: setting the bet, doubling in the air, the banker's counter-double, par 3 triples, the birdie bonus, how the role rotates, and what a hole can cost.">
+<link rel="canonical" href="https://halved.golf/games/banker/">
+<meta property="og:title" content="Banker Golf Game Rules: One Golfer Against the Whole Group">
+<meta property="og:description" content="Three separate bets on one hole, both sides allowed to double, and the role moving to whoever shoots low.">
+<meta property="og:url" content="https://halved.golf/games/banker/">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://halved.golf/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Halved — stop keeping score in your head. Every game on your round, scored live and settled to the dollar.">
+<meta property="og:site_name" content="Halved">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Spline+Sans:wght@400;500;600;700&display=swap">
+<style>html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}body{margin:0;background:#F3F1EA}*{box-sizing:border-box}img{display:block;max-width:100%}a{color:#0F6E56}a:hover{color:#0B1F1A}
+@keyframes bkIn0{0%,2%{opacity:0;transform:translateY(-6px)}6%,100%{opacity:1;transform:translateY(0)}}
+@keyframes bkIn1{0%,11%{opacity:0;transform:translateY(-6px)}15%,100%{opacity:1;transform:translateY(0)}}
+@keyframes bkIn2{0%,18%{opacity:0;transform:translateY(-6px)}22%,100%{opacity:1;transform:translateY(0)}}
+@keyframes bkIn3{0%,25%{opacity:0;transform:translateY(-6px)}29%,100%{opacity:1;transform:translateY(0)}}
+@keyframes bkAir{0%,35%{opacity:0;transform:scale(.6)}39%,100%{opacity:1;transform:scale(1)}}
+@keyframes bkD1{0%,37%{opacity:0}41%,100%{opacity:1}}
+@keyframes bkCtr{0%,50%{opacity:0;transform:scale(.6)}54%,100%{opacity:1;transform:scale(1)}}
+@keyframes bkC1{0%,56%{opacity:0}60%,100%{opacity:1}}
+@keyframes bkC2{0%,60%{opacity:0}64%,100%{opacity:1}}
+@keyframes bkC3{0%,64%{opacity:0}68%,100%{opacity:1}}
+@keyframes bkTot{0%,72%{opacity:0}76%,100%{opacity:1}}
+@keyframes bkCapA{0%,32%{opacity:1}36%,100%{opacity:0}}
+@keyframes bkCapB{0%,34%{opacity:0}38%,48%{opacity:1}52%,100%{opacity:0}}
+@keyframes bkCapC{0%,50%{opacity:0}54%,100%{opacity:1}}
+@media (prefers-reduced-motion:reduce){[data-bk]{animation:none !important;opacity:1 !important;transform:none !important}[data-bkhide]{opacity:0 !important}}</style>
+<meta name="twitter:image" content="https://halved.golf/og.png">
+<style>@media(min-width:821px){.guide-toc{position:sticky;top:28px;padding-top:56px}}@media(max-width:820px){.guide-toc{flex-basis:100%;margin-bottom:8px}}</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "How many golfers do you need for Banker?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Four is the game — one banker against three separate bets. Three works and is a quieter version of the same thing. Two is just a match."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Who becomes the banker?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The lowest net score on the hole banks the next one. The first banker is settled by a flipped tee or a draw. On tied low scores the traditional rule is whoever holed out first — pick that, a draw, or the current banker keeping the role, before the round."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can the banker double the bets?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes — once. After his own tee shot he can counter, which doubles every standing bet on the hole at the same time. He does not answer each drive as it happens, and there is no second counter, so a bet can be doubled at most twice: once by its owner in the air, once by the banker."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What happens on a tie in Banker?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No action. That bet does not pay in either direction, nothing carries into the next hole, and the other two bets on the hole settle as normal."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does a birdie double the money?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A player’s birdie doubles his own collection from the banker. A banker’s birdie doubles nothing — he is already winning three bets on that hole, and doubling all three at once would make the role too strong."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How much can you lose on one hole?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "More than the ceiling suggests. With a $50 maximum, three bets at the max are $150, all three doubling makes $300, the counter makes $600, a par 3 triple makes $900, and three birdies against the banker makes $1,800. Agree the band knowing the ladder, and add a cap on the hole if the group wants a rail."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is Banker played on net or gross?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Net, and the strokes are worked out match by match against the banker — not once across the group. In each one-on-one the lower handicap of the two plays to scratch and the other receives the difference, allocated by stroke index. So the shots you get can change from hole to hole as the banker changes."
+      }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<div style="font-family:'Spline Sans',system-ui,sans-serif;color:#33443C;background:#F3F1EA">
+
+<div style="background:#0B1F1A;background-image:radial-gradient(120% 90% at 82% -10%,#3A2E12 0%,#0B1F1A 62%);color:#fff">
+<div style="max-width:1080px;margin:0 auto;padding:22px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+<a href="/" style="display:inline-flex;align-items:center;gap:9px;text-decoration:none;color:#fff"><span style="width:24px;height:24px;border-radius:7px;background:#3BD89A;color:#0B1F1A;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center">H</span><span style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;letter-spacing:-.2px">Halved</span></a>
+<a href="/games/" style="font-size:13.5px;font-weight:500;color:#8FB3A5;text-decoration:none">All golf games &#8594;</a>
+</div>
+<div style="max-width:1080px;margin:0 auto;padding:30px 24px 56px">
+<nav aria-label="Breadcrumb" style="font-size:12.5px;color:#8FB3A5;margin-bottom:20px"><a href="/" style="color:#8FB3A5;text-decoration:none">Home</a> <span style="opacity:.5">/</span> <a href="/games/" style="color:#8FB3A5;text-decoration:none">Golf games</a> <span style="opacity:.5">/</span> <span style="color:#D7E5DE">Banker</span></nav>
+<div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-end"><div style="flex:1 1 400px;min-width:0;display:flex;flex-direction:column">
+<h1 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(38px,6.6vw,64px);line-height:1.02;letter-spacing:-2px;margin:0 0 18px;color:#fff;max-width:15ch">How to play Banker</h1>
+<p style="max-width:640px;font-size:19.5px;line-height:1.6;color:#D7E5DE;margin:0 0 26px;text-wrap:pretty">One golfer takes on the whole group, one bet at a time, and the role moves every hole. It is the loudest game in golf because both sides can double &mdash; and the banker, who tees off last, gets to answer all three of them at once.</p>
+
+<div style="max-width:660px;background:rgba(232,196,104,.1);border:1px solid rgba(232,196,104,.36);border-radius:16px;padding:18px 20px;margin-top:auto">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:10.5px;letter-spacing:1.3px;color:#E8C468;margin-bottom:10px">THE SHORT ANSWER</div>
+<p style="margin:0;font-size:16.5px;line-height:1.62;color:#D7E5DE;text-wrap:pretty">On each hole one golfer is <strong style="color:#fff;font-weight:600">the banker</strong> and every other golfer has a separate bet against him, set before the tee shots. Beat him on net and he pays you; lose and you pay him; <strong style="color:#fff;font-weight:600">tie and nobody pays</strong>. Lowest net on the hole banks the next one.</p>
+</div>
+</div>
+
+<figure style="flex:1 1 400px;min-width:300px;margin:0;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.13);border-radius:16px;padding:16px 16px 14px">
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;margin-bottom:11px"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:10px;letter-spacing:1.2px;color:#E8C468">ONE HOLE &middot; THREE BETS</div><div style="margin-left:auto;font-size:11.5px;color:#8FB3A5">Paul banks the 7th</div></div>
+
+<div style="position:relative;height:250px;border-radius:12px;background:#10281F;overflow:hidden;padding:14px 15px"><div style="max-width:300px;margin:0 auto"><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:10px"><span style="font:700 9.5px/1 'Spline Sans',system-ui,sans-serif;letter-spacing:1.1px;color:#E8C468">HOLE 7 &middot; PAR 4</span><span style="margin-left:auto;font:600 9.5px/1 'Spline Sans',system-ui,sans-serif;color:#4E6B5C">BAND $5&ndash;$50</span></div><div style="display:flex;flex-direction:column;gap:6px"><div data-bk style="display:flex;align-items:center;gap:10px;background:rgba(232,196,104,.13);border:1px solid rgba(232,196,104,.42);border-radius:10px;padding:8px 11px;opacity:0;animation:bkIn0 22s infinite ease-out"><span style="flex:0 0 46px;font-size:13px;font-weight:600;color:#fff">Paul</span><span style="flex:0 0 auto;font:700 8.5px/1 'Spline Sans',system-ui,sans-serif;letter-spacing:.5px;color:#E8C468">BANKER</span><span style="flex:1 1 auto"></span><span data-bk style="flex:0 0 auto;background:#E8C468;color:#3D2E06;border-radius:6px;padding:3px 7px;font:700 8.5px/1 'Spline Sans',system-ui,sans-serif;letter-spacing:.4px;opacity:0;animation:bkCtr 22s infinite ease-out">&times;2 COUNTER &mdash; ALL THREE</span></div><div data-bk style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px 11px;opacity:0;animation:bkIn1 22s infinite ease-out"><span style="flex:0 0 46px;font-size:13px;font-weight:600;color:#D7E5DE">Dave</span><span data-bk style="flex:0 0 auto;background:#E8635A;color:#fff;border-radius:6px;padding:3px 7px;font:700 8.5px/1 'Spline Sans',system-ui,sans-serif;letter-spacing:.4px;opacity:0;animation:bkAir 22s infinite ease-out">&times;2 IN THE AIR</span><span style="flex:1 1 auto;display:flex;align-items:baseline;justify-content:flex-end;gap:5px;font-family:'Schibsted Grotesk',system-ui,sans-serif;white-space:nowrap"><span style="font-weight:700;font-size:14px;color:#7D9A8A">$10</span><span data-bk style="font-weight:700;font-size:14px;color:#7D9A8A;opacity:0;animation:bkD1 22s infinite ease-out">&rarr; $20</span><span data-bk style="font-weight:700;font-size:16.5px;color:#fff;opacity:0;animation:bkC1 22s infinite ease-out">&rarr; $40</span></span></div><div data-bk style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px 11px;opacity:0;animation:bkIn2 22s infinite ease-out"><span style="flex:0 0 46px;font-size:13px;font-weight:600;color:#D7E5DE">Sam</span><span style="flex:1 1 auto;display:flex;align-items:baseline;justify-content:flex-end;gap:5px;font-family:'Schibsted Grotesk',system-ui,sans-serif;white-space:nowrap"><span style="font-weight:700;font-size:14px;color:#7D9A8A">$20</span><span data-bk style="font-weight:700;font-size:16.5px;color:#fff;opacity:0;animation:bkC2 22s infinite ease-out">&rarr; $40</span></span></div><div data-bk style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px 11px;opacity:0;animation:bkIn3 22s infinite ease-out"><span style="flex:0 0 46px;font-size:13px;font-weight:600;color:#D7E5DE">Lee</span><span style="flex:1 1 auto;display:flex;align-items:baseline;justify-content:flex-end;gap:5px;font-family:'Schibsted Grotesk',system-ui,sans-serif;white-space:nowrap"><span style="font-weight:700;font-size:14px;color:#7D9A8A">$5</span><span data-bk style="font-weight:700;font-size:16.5px;color:#fff;opacity:0;animation:bkC3 22s infinite ease-out">&rarr; $10</span></span></div></div><div data-bk style="display:flex;align-items:baseline;gap:8px;margin-top:10px;padding-top:9px;border-top:1px dashed rgba(255,255,255,.16);opacity:0;animation:bkTot 22s infinite ease-out"><span style="font-size:11.5px;color:#6E8A7B">Paul has at risk</span><span style="margin-left:auto;font:700 20px/1 'Schibsted Grotesk',system-ui,sans-serif;color:#E8C468">$90</span></div></div></div>
+
+<figcaption style="position:relative;height:44px;margin-top:11px"><div data-bk style="position:absolute;inset:0;font-size:13.5px;line-height:1.45;color:#D7E5DE;animation:bkCapA 22s infinite">Paul banks the hole. Each of the other three <strong style="color:#fff;font-weight:600">names his own bet</strong> before anyone hits.</div><div data-bk data-bkhide style="position:absolute;inset:0;font-size:13.5px;line-height:1.45;color:#D7E5DE;opacity:0;animation:bkCapB 22s infinite">Dave likes his drive and <strong style="color:#fff;font-weight:600">doubles his own bet in the air</strong> &mdash; nobody else&rsquo;s moves.</div><div data-bk data-bkhide style="position:absolute;inset:0;font-size:13.5px;line-height:1.45;color:#D7E5DE;opacity:0;animation:bkCapC 22s infinite">Paul hits last, then counters once: <strong style="color:#fff;font-weight:600">every standing bet doubles</strong>.</div></figcaption>
+</figure>
+
+</div>
+
+<div style="display:flex;flex-wrap:wrap;gap:28px;margin-top:32px;padding-top:24px;border-top:1px solid rgba(255,255,255,.14)">
+<div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:26px;color:#E8C468;letter-spacing:-.6px">1 v 3</div><div style="font-size:12.5px;color:#8FB3A5;margin-top:3px">every hole</div></div>
+<div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:26px;color:#E8C468;letter-spacing:-.6px">18</div><div style="font-size:12.5px;color:#8FB3A5;margin-top:3px">bankers in a round</div></div>
+<div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:26px;color:#E8C468;letter-spacing:-.6px">&times;2</div><div style="font-size:12.5px;color:#8FB3A5;margin-top:3px">one counter a hole</div></div>
+<div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:26px;color:#E8C468;letter-spacing:-.6px">$0</div><div style="font-size:12.5px;color:#8FB3A5;margin-top:3px">changes hands on a tie</div></div>
+</div>
+</div>
+</div>
+
+<div style="max-width:1080px;margin:0 auto;padding:0 24px 96px">
+<div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start">
+
+<nav class="guide-toc" style="flex:0 1 168px;min-width:150px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:10.5px;letter-spacing:1.3px;color:#5C6B62;padding-bottom:12px;border-bottom:1px solid #DCE5DD;margin-bottom:14px">ON THIS PAGE</div>
+<div style="display:flex;flex-direction:column;gap:11px">
+<a href="#rules" style="font-size:14px;font-weight:500;color:#0B1F1A;text-decoration:none">The rules</a>
+<a href="#order" style="font-size:14px;font-weight:500;color:#0B1F1A;text-decoration:none">The order of a hole</a>
+<a href="#doubles" style="font-size:14px;font-weight:500;color:#0B1F1A;text-decoration:none">Doubles and the counter</a>
+<a href="#pays" style="font-size:14px;font-weight:500;color:#0B1F1A;text-decoration:none">What pays, what does not</a>
+<a href="#rotation" style="font-size:14px;font-weight:500;color:#0B1F1A;text-decoration:none">How the role rotates</a>
+<a href="#exposure" style="font-size:14px;font-weight:500;color:#0B1F1A;text-decoration:none">What a hole can cost</a>
+<a href="#houserules" style="font-size:14px;font-weight:500;color:#0B1F1A;text-decoration:none">Settle these first</a>
+<a href="#app" style="font-size:14px;font-weight:500;color:#0B1F1A;text-decoration:none">Scoring it in an app</a>
+<a href="#faq" style="font-size:14px;font-weight:500;color:#0B1F1A;text-decoration:none">Questions</a>
+</div>
+</nav>
+
+<main style="flex:1 1 540px;min-width:0;padding-top:56px">
+
+<section id="rules" style="scroll-margin-top:28px">
+<h2 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(28px,3.6vw,36px);line-height:1.12;letter-spacing:-.9px;color:#0B1F1A;margin:0 0 16px">The rules</h2>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 14px;text-wrap:pretty">Banker &mdash; also called Wolf&rsquo;s cousin, Bridge, or simply the money game &mdash; is played hole by hole. On every hole <strong style="color:#0B1F1A;font-weight:600">one golfer is the banker</strong> and plays a separate match against each of the others. Three opponents means three independent bets, settled three different ways.</p>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 14px;text-wrap:pretty">Each opponent chooses what his own bet is worth, inside a band the group agreed on the first tee. Beat the banker on net and he pays you that amount; lose and you pay him; <strong style="color:#0B1F1A;font-weight:600">tie and nothing changes hands</strong>. Nobody plays against anybody but the banker, so Dave winning has no bearing on what Sam owes.</p>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 28px;text-wrap:pretty">Then the role moves. <strong style="color:#0B1F1A;font-weight:600">Lowest net score on the hole banks the next one</strong>, which is the rule that makes the game self-correcting: play well and you are immediately the one exposed to everybody.</p>
+
+<div style="background:#FDF8EC;border:1px solid #E8D9A8;border-radius:16px;padding:20px 22px;margin-bottom:28px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:14.5px;color:#0B1F1A;margin-bottom:9px;letter-spacing:-.1px">Being the banker is not a reward</div>
+<div style="font-size:15px;line-height:1.65;color:#3D3320">The banker can win three bets on one hole, and he can lose three. He is one score against three, so the arithmetic is against him &mdash; the reason to want the role is that <strong style="color:#0B1F1A;font-weight:600">he hits last and he holds the counter</strong>. Everything interesting about the game comes from that asymmetry.</div>
+</div>
+</section>
+
+<section id="order" style="scroll-margin-top:28px;margin-top:72px">
+<h2 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(28px,3.6vw,36px);line-height:1.12;letter-spacing:-.9px;color:#0B1F1A;margin:0 0 16px">The order of a hole</h2>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 26px;text-wrap:pretty">The sequence matters more here than in any other format, because each step is information the next player gets to use.</p>
+
+<div style="display:flex;flex-direction:column;gap:12px;margin-bottom:26px">
+<div style="display:flex;gap:14px;align-items:flex-start;background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:18px 20px">
+<div style="flex:0 0 auto;width:26px;height:26px;border-radius:50%;background:#0B1F1A;color:#E8C468;font:700 13px/26px 'Schibsted Grotesk',system-ui,sans-serif;text-align:center">1</div>
+<div style="flex:1 1 auto;min-width:0"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16.5px;color:#0B1F1A;margin-bottom:4px;letter-spacing:-.2px">The bets are set</div><div style="font-size:15px;line-height:1.6;color:#5C6B62">Before anyone hits, each opponent names his bet inside the band. Nobody may sit the hole out &mdash; the band&rsquo;s floor is what everyone must have on.</div></div>
+</div>
+<div style="display:flex;gap:14px;align-items:flex-start;background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:18px 20px">
+<div style="flex:0 0 auto;width:26px;height:26px;border-radius:50%;background:#0B1F1A;color:#E8C468;font:700 13px/26px 'Schibsted Grotesk',system-ui,sans-serif;text-align:center">2</div>
+<div style="flex:1 1 auto;min-width:0"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16.5px;color:#0B1F1A;margin-bottom:4px;letter-spacing:-.2px">The opponents tee off, and may double in the air</div><div style="font-size:15px;line-height:1.6;color:#5C6B62">A golfer who likes what he has just hit can call the double <strong style="color:#0B1F1A;font-weight:600">while the ball is still in the air</strong>. It doubles his own bet and nobody else&rsquo;s.</div></div>
+</div>
+<div style="display:flex;gap:14px;align-items:flex-start;background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:18px 20px">
+<div style="flex:0 0 auto;width:26px;height:26px;border-radius:50%;background:#E8C468;color:#3D2E06;font:700 13px/26px 'Schibsted Grotesk',system-ui,sans-serif;text-align:center">3</div>
+<div style="flex:1 1 auto;min-width:0"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16.5px;color:#0B1F1A;margin-bottom:4px;letter-spacing:-.2px">The banker hits last, then counters if he wants</div><div style="font-size:15px;line-height:1.6;color:#5C6B62">He has watched three drives and hit his own, and he may then <strong style="color:#0B1F1A;font-weight:600">double every standing bet at once</strong>. One counter, applied to all three. This is the moment the hole is worth watching.</div></div>
+</div>
+<div style="display:flex;gap:14px;align-items:flex-start;background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:18px 20px">
+<div style="flex:0 0 auto;width:26px;height:26px;border-radius:50%;background:#0B1F1A;color:#E8C468;font:700 13px/26px 'Schibsted Grotesk',system-ui,sans-serif;text-align:center">4</div>
+<div style="flex:1 1 auto;min-width:0"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16.5px;color:#0B1F1A;margin-bottom:4px;letter-spacing:-.2px">Play the hole out, then settle three bets</div><div style="font-size:15px;line-height:1.6;color:#5C6B62">Each opponent&rsquo;s net score against the banker&rsquo;s, one at a time. Two can win while the third loses; that is normal.</div></div>
+</div>
+</div>
+<div style="background:#F4FAF6;border:1px solid #C9E3D4;border-radius:16px;padding:20px 22px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:14.5px;color:#0B1F1A;margin-bottom:9px;letter-spacing:-.1px">The banker does not answer each drive as it happens</div>
+<div style="font-size:15px;line-height:1.65;color:#38564A">He waits until all three have hit and he has hit his own, and then presses once. There is no second counter and no back-and-forth &mdash; <strong style="color:#0B1F1A;font-weight:600">a bet is doubled at most twice</strong>, once by its owner and once by the banker.</div>
+</div>
+</section>
+
+<section id="doubles" style="scroll-margin-top:28px;margin-top:72px">
+<h2 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(28px,3.6vw,36px);line-height:1.12;letter-spacing:-.9px;color:#0B1F1A;margin:0 0 16px">Doubles and the counter</h2>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 26px;text-wrap:pretty">Four rules do all the work. Any of them can be switched off and the game still functions &mdash; it just gets quieter.</p>
+
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;overflow:hidden;margin-bottom:24px">
+<div style="display:grid;grid-template-columns:minmax(150px,1fr) minmax(0,1.7fr);border-bottom:1px solid #EAF0EA;background:#F7FAF7">
+<div style="padding:11px 18px;font-size:11px;font-weight:700;letter-spacing:.9px;color:#5C6B62">THE RULE</div>
+<div style="padding:11px 18px;font-size:11px;font-weight:700;letter-spacing:.9px;color:#5C6B62">WHAT IT DOES</div>
+</div>
+<div style="display:grid;grid-template-columns:minmax(150px,1fr) minmax(0,1.7fr);border-bottom:1px solid #EAF0EA">
+<div style="padding:14px 18px"><div style="font-size:15.5px;font-weight:600;color:#0B1F1A">Double off the tee</div><div style="font-size:12.5px;color:#7C8C82;margin-top:2px">before it lands</div></div>
+<div style="padding:14px 18px;font-size:15.5px;line-height:1.55;color:#33443C">A player doubles his own bet with the banker, called while his ball is in the air. Nobody else&rsquo;s bet moves.</div>
+</div>
+<div style="display:grid;grid-template-columns:minmax(150px,1fr) minmax(0,1.7fr);border-bottom:1px solid #EAF0EA">
+<div style="padding:14px 18px"><div style="font-size:15.5px;font-weight:600;color:#0B1F1A">The counter-double</div><div style="font-size:12.5px;color:#7C8C82;margin-top:2px">banker only, after his shot</div></div>
+<div style="padding:14px 18px;font-size:15.5px;line-height:1.55;color:#33443C">The banker doubles <strong style="color:#0B1F1A;font-weight:600">every</strong> standing bet on the hole. He hits last, so he is answering all three at once with one decision.</div>
+</div>
+<div style="display:grid;grid-template-columns:minmax(150px,1fr) minmax(0,1.7fr);border-bottom:1px solid #EAF0EA">
+<div style="padding:14px 18px"><div style="font-size:15.5px;font-weight:600;color:#0B1F1A">Par 3s triple</div><div style="font-size:12.5px;color:#7C8C82;margin-top:2px">par 3 only</div></div>
+<div style="padding:14px 18px;font-size:15.5px;line-height:1.55;color:#33443C">On a par 3 the airborne call is a triple rather than a double &mdash; a tee shot at the flag is worth more. The banker&rsquo;s counter still only doubles what stands.</div>
+</div>
+<div style="display:grid;grid-template-columns:minmax(150px,1fr) minmax(0,1.7fr)">
+<div style="padding:14px 18px"><div style="font-size:15.5px;font-weight:600;color:#0B1F1A">Birdie bonus</div><div style="font-size:12.5px;color:#7C8C82;margin-top:2px">pays out only</div></div>
+<div style="padding:14px 18px;font-size:15.5px;line-height:1.55;color:#33443C">A player&rsquo;s birdie doubles his own collection. It never doubles the banker&rsquo;s &mdash; a banker who birdies is already winning the hole three times over.</div>
+</div>
+</div>
+<p style="font-size:17.5px;line-height:1.66;margin:0;text-wrap:pretty">The birdie bonus is the one rule that is deliberately unfair, and it is what keeps three golfers interested in a hole the banker looks like winning.</p>
+</section>
+
+<section id="pays" style="scroll-margin-top:28px;margin-top:72px">
+<h2 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(28px,3.6vw,36px);line-height:1.12;letter-spacing:-.9px;color:#0B1F1A;margin:0 0 16px">What pays, what does not</h2>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 14px;text-wrap:pretty">Every one-on-one settles on <strong style="color:#0B1F1A;font-weight:600">net score</strong>, and each bet gets its own stroke allocation: <strong style="color:#0B1F1A;font-weight:600">strokes off the low man in that match, against the banker</strong>. Whichever of the two has the lower handicap plays to scratch and the other receives the difference by stroke index. It is not one allocation across the group &mdash; three bets can carry three different sets of shots.</p>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 26px;text-wrap:pretty">A tie is <strong style="color:#0B1F1A;font-weight:600">no action</strong>. Not a carry, not a push into the next hole, not half the bet &mdash; the bet simply does not happen, and the next hole starts fresh at the band. This is the rule most groups get wrong on their first round, usually by trying to carry it.</p>
+<div style="background:#FDF8EC;border:1px solid #E8D9A8;border-radius:16px;padding:20px 22px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:14.5px;color:#0B1F1A;margin-bottom:9px;letter-spacing:-.1px">Who strokes matters more here than anywhere</div>
+<div style="font-size:15px;line-height:1.65;color:#3D3320">Because each bet has its own allocation, a golfer needs to know <strong style="color:#0B1F1A;font-weight:600">what he gets against the banker on this hole</strong> &mdash; and nothing else. Whether the man in the other bet gets a shot has no bearing on his money, and the answer changes when the banker changes. Say the strokes out loud on the tee, before the bets.</div>
+</div>
+</section>
+
+<section id="rotation" style="scroll-margin-top:28px;margin-top:72px">
+<h2 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(28px,3.6vw,36px);line-height:1.12;letter-spacing:-.9px;color:#0B1F1A;margin:0 0 16px">How the role rotates</h2>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 14px;text-wrap:pretty">The first banker is traditionally settled by a flipped tee on the first box. After that, <strong style="color:#0B1F1A;font-weight:600">lowest net score on the hole banks the next one</strong>.</p>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 26px;text-wrap:pretty">The traditional tiebreak is <em>low score, holed out first</em> &mdash; and the second half of that is the part nobody writes down. Three ways to handle it, and the group should pick one before it comes up:</p>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:20px 22px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:17px;color:#0B1F1A;margin-bottom:8px;letter-spacing:-.25px">The group says who</div>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">Answer it on the tee, usually with whoever holed out first. Closest to the traditional rule, and it takes one second.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:20px 22px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:17px;color:#0B1F1A;margin-bottom:8px;letter-spacing:-.25px">Draw for it</div>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">Tied low scores go to a coin flip. Honest, and it does not ask four golfers to agree on what happened two holes ago.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:20px 22px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:17px;color:#0B1F1A;margin-bottom:8px;letter-spacing:-.25px">The current banker keeps it</div>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">Simplest of the three. It also concentrates the role, and the exposure, on whoever is playing best &mdash; which some groups consider a feature.</div>
+</div>
+</div>
+</section>
+
+<section id="exposure" style="scroll-margin-top:28px;margin-top:72px">
+<h2 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(28px,3.6vw,36px);line-height:1.12;letter-spacing:-.9px;color:#0B1F1A;margin:0 0 16px">What a hole can cost</h2>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 14px;text-wrap:pretty">This is the part to read before you agree to the numbers. Banker is the one common format where a single hole can cost a genuinely surprising amount, and it is not because the stakes are high &mdash; it is because <strong style="color:#0B1F1A;font-weight:600">the banker faces three bets and both sides can multiply them</strong>.</p>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 24px;text-wrap:pretty">The ladder below is one hole, with a $50 ceiling on each bet:</p>
+
+<div style="background:#0B1F1A;border-radius:16px;padding:8px 0;margin-bottom:24px">
+<div style="display:flex;align-items:baseline;gap:12px;padding:11px 22px;border-bottom:1px solid rgba(255,255,255,.09)"><span style="flex:1 1 auto;font-size:15px;color:#D7E5DE">Three opponents at the maximum</span><span style="flex:0 0 auto;font:700 17px/1 'Schibsted Grotesk',system-ui,sans-serif;color:#fff">$150</span></div>
+<div style="display:flex;align-items:baseline;gap:12px;padding:11px 22px;border-bottom:1px solid rgba(255,255,255,.09)"><span style="flex:1 1 auto;font-size:15px;color:#D7E5DE">All three double off the tee</span><span style="flex:0 0 auto;font:700 17px/1 'Schibsted Grotesk',system-ui,sans-serif;color:#fff">$300</span></div>
+<div style="display:flex;align-items:baseline;gap:12px;padding:11px 22px;border-bottom:1px solid rgba(255,255,255,.09)"><span style="flex:1 1 auto;font-size:15px;color:#D7E5DE">He counters</span><span style="flex:0 0 auto;font:700 17px/1 'Schibsted Grotesk',system-ui,sans-serif;color:#fff">$600</span></div>
+<div style="display:flex;align-items:baseline;gap:12px;padding:11px 22px;border-bottom:1px solid rgba(255,255,255,.09)"><span style="flex:1 1 auto;font-size:15px;color:#D7E5DE">On a par 3, tripled instead of doubled</span><span style="flex:0 0 auto;font:700 17px/1 'Schibsted Grotesk',system-ui,sans-serif;color:#fff">$900</span></div>
+<div style="display:flex;align-items:baseline;gap:12px;padding:13px 22px 11px"><span style="flex:1 1 auto;font-size:15px;color:#E8C468;font-weight:600">Three birdies against him</span><span style="flex:0 0 auto;font:700 22px/1 'Schibsted Grotesk',system-ui,sans-serif;color:#E8C468">$1,800</span></div>
+</div>
+
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 24px;text-wrap:pretty">The top of that ladder is unlikely. The point is that <strong style="color:#0B1F1A;font-weight:600">nobody agreeing to a $50 game is picturing eighteen hundred dollars</strong>, and the multipliers are what get you there. A group that knows the ladder can set the ceiling honestly.</p>
+<div style="background:#F4FAF6;border:1px solid #C9E3D4;border-radius:16px;padding:20px 22px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:14.5px;color:#0B1F1A;margin-bottom:9px;letter-spacing:-.1px">A cap on the hole, if you want one</div>
+<div style="font-size:15px;line-height:1.65;color:#38564A">One ceiling covering the whole hole &mdash; all three bets and every double inside it. <strong style="color:#0B1F1A;font-weight:600">This is not part of the traditional game</strong>, and groups who play Banker properly do not use it. It exists for the group that wants the format without the tail risk, and it has to be agreed on the first tee rather than invoked on the sixteenth.</div>
+</div>
+</section>
+
+<section id="houserules" style="scroll-margin-top:28px;margin-top:72px">
+<h2 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(28px,3.6vw,36px);line-height:1.12;letter-spacing:-.9px;color:#0B1F1A;margin:0 0 16px">Settle these first</h2>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 28px;text-wrap:pretty">Four questions. The first two take ten seconds; the last two are worth an actual conversation.</p>
+
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:20px 22px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:17px;color:#0B1F1A;margin-bottom:8px;letter-spacing:-.25px">What is the band?</div>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">Two numbers, and they protect different people. The <strong style="color:#0B1F1A;font-weight:600">minimum protects the banker</strong> &mdash; it is what every opponent must have on, so nobody sits out the hole he expects to lose. The <strong style="color:#0B1F1A;font-weight:600">maximum protects everyone else</strong>. $5 to $50 is a different game from $20 to $25, and the width of the band is the real decision.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:20px 22px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:17px;color:#0B1F1A;margin-bottom:8px;letter-spacing:-.25px">Who banks the first hole?</div>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">Flip a tee on the first box, or draw for it. It matters less than it feels like it should, because the role moves on the first hole anyway.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:20px 22px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:17px;color:#0B1F1A;margin-bottom:8px;letter-spacing:-.25px">Does a player need bogey or better to collect?</div>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">A common house rule: beat the banker with a double bogey and you collect nothing. It keeps the game from paying out on ugly holes, at the cost of the format&rsquo;s most confusing outcome &mdash; a hole somebody won that pays nobody. Most groups leave it off.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:20px 22px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:17px;color:#0B1F1A;margin-bottom:8px;letter-spacing:-.25px">Can the double be called after the ball lands?</div>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">No, and this is the rule that needs stating on the first tee rather than the fourth. <strong style="color:#0B1F1A;font-weight:600">In the air or not at all.</strong> A double called after the ball is on the green is not a bet, it is a certainty.</div>
+</div>
+</div>
+</section>
+
+<section id="app" style="scroll-margin-top:28px;margin-top:72px">
+<h2 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(28px,3.6vw,36px);line-height:1.12;letter-spacing:-.9px;color:#0B1F1A;margin:0 0 16px">Scoring it without an argument</h2>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 14px;text-wrap:pretty">Banker is the hardest common format to keep on paper. Every hole has three bets with three different amounts, up to two multipliers each, a birdie bonus that applies to one side only, strokes on both sides of every match, and a role that moves &mdash; eighteen times. By the twelfth hole somebody is reconstructing the ninth from memory, which is exactly how a good game ends badly.</p>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 26px;text-wrap:pretty"><strong style="color:#0B1F1A;font-weight:600">Halved holds the hole while it is live.</strong> Bets go in before the tee shots, doubles and the counter are recorded as they are called, and the three matches resolve against the banker&rsquo;s net score the moment the last card is in. Nothing is reconstructed afterwards.</p>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px">
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:19px 20px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A;margin-bottom:6px;letter-spacing:-.2px">The chain, on every bet</div>
+<div style="font-size:14.5px;line-height:1.55;color:#5C6B62">$10 &rarr; $20 &rarr; $40, so the table can see how a bet got where it is rather than taking the total on trust.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:19px 20px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A;margin-bottom:6px;letter-spacing:-.2px">Exposure while it is live</div>
+<div style="font-size:14.5px;line-height:1.55;color:#5C6B62">What the banker has at risk on this hole, updated as each double is called &mdash; including on the lock screen.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:19px 20px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A;margin-bottom:6px;letter-spacing:-.2px">Who strokes, on the hole</div>
+<div style="font-size:14.5px;line-height:1.55;color:#5C6B62">Marked on the score box and on the card ahead, so the shots in your own bet are never a surprise.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:19px 20px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A;margin-bottom:6px;letter-spacing:-.2px">One receipt at the end</div>
+<div style="font-size:14.5px;line-height:1.55;color:#5C6B62">The holes you banked itemised, the rest grouped by opponent, and the handovers reduced to as few as possible.</div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:32px;margin-top:36px">
+<figure style="margin:0">
+<img src="/games/img/banker-setup.png" alt="Banker setup screen in the Halved golf app: a five to twenty dollar band, the first banker settled between the group or a flip, and the rotation rule giving the hole to the low net" width="1284" height="2778" style="width:100%;height:auto;border:1px solid #DCE5DD;border-radius:14px;background:#EDF2EE">
+<figcaption style="margin-top:14px"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:15px;color:#0B1F1A;margin-bottom:4px;letter-spacing:-.2px">Agree the band first</div><div style="font-size:14px;line-height:1.55;color:#5C6B62">A floor and a ceiling for every bet, who banks the first hole, and what happens on a tie.</div></figcaption>
+</figure>
+<figure style="margin:0">
+<img src="/games/img/banker-bets-open.png" alt="Bets open on hole 1 of a Banker game in Halved: the banker's maximum for the hole, each opponent naming his own number inside a five dollar floor, and one bet still to come" width="1284" height="2778" style="width:100%;height:auto;border:1px solid #DCE5DD;border-radius:14px;background:#EDF2EE">
+<figcaption style="margin-top:14px"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:15px;color:#0B1F1A;margin-bottom:4px;letter-spacing:-.2px">Every opponent names his own number</div><div style="font-size:14px;line-height:1.55;color:#5C6B62">The banker sees each bet as it lands, and the screen will not let him play until all three are in.</div></figcaption>
+</figure>
+<figure style="margin:0">
+<img src="/games/img/banker-countered.png" alt="The counter on hole 1 of a Banker game in Halved: three bets each showing a golfer double and a banker double, the ninety dollars the banker has at risk, and a single button that doubled all three" width="1284" height="2778" style="width:100%;height:auto;border:1px solid #DCE5DD;border-radius:14px;background:#EDF2EE">
+<figcaption style="margin-top:14px"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:15px;color:#0B1F1A;margin-bottom:4px;letter-spacing:-.2px">The counter, once</div><div style="font-size:14px;line-height:1.55;color:#5C6B62">One tap doubles all three bets, and the notice makes it plain that bets can only increase from here.</div></figcaption>
+</figure>
+<figure style="margin:0">
+<img src="/games/img/banker-entry.png" alt="Score entry on hole 1 of a Banker game in Halved, with each golfer's strokes received, the banker's ninety dollars at risk, and the doubled bets listed under him" width="1284" height="2778" style="width:100%;height:auto;border:1px solid #DCE5DD;border-radius:14px;background:#EDF2EE">
+<figcaption style="margin-top:14px"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:15px;color:#0B1F1A;margin-bottom:4px;letter-spacing:-.2px">Then the scores</div><div style="font-size:14px;line-height:1.55;color:#5C6B62">The bets are already fixed by the time anyone writes a number down, which is the whole point of the order.</div></figcaption>
+</figure>
+<figure style="margin:0">
+<img src="/games/img/banker-result.png" alt="The result of hole 1 in Halved: each one-on-one settled with the doubles and birdie bonus that applied, a bet voided as no action on a tie, and a note that the bank passes to the low net" width="1284" height="2778" style="width:100%;height:auto;border:1px solid #DCE5DD;border-radius:14px;background:#EDF2EE">
+<figcaption style="margin-top:14px"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:15px;color:#0B1F1A;margin-bottom:4px;letter-spacing:-.2px">Three bets, settled separately</div><div style="font-size:14px;line-height:1.55;color:#5C6B62">Each one shows the doubles that applied and what it paid, and the handover is said out loud rather than done quietly.</div></figcaption>
+</figure>
+<figure style="margin:0">
+<img src="/games/img/banker-leaderboard.png" alt="Banker leaderboard in Halved: each golfer's money split into what he won as banker and what he won as a player, the holes he banked, the strokes he gets, and the holes that decided it" width="1284" height="2778" style="width:100%;height:auto;border:1px solid #DCE5DD;border-radius:14px;background:#EDF2EE">
+<figcaption style="margin-top:14px"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:15px;color:#0B1F1A;margin-bottom:4px;letter-spacing:-.2px">Know where you stand</div><div style="font-size:14px;line-height:1.55;color:#5C6B62">Money as banker and money as a player kept apart, so you can see which role has been paying you.</div></figcaption>
+</figure>
+</div>
+</section>
+
+<section style="margin-top:80px;background:#0F6E56;background-image:linear-gradient(165deg,#15866A,#0B4A38);border-radius:20px;padding:40px 34px 42px;color:#fff">
+<h2 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(26px,3.4vw,34px);line-height:1.14;letter-spacing:-.9px;margin:0 0 14px;color:#fff;max-width:520px">Fifty-four bets in a round. Somebody has to hold them.</h2>
+<p style="font-size:17.5px;line-height:1.6;color:#CDE8DD;margin:0 0 28px;max-width:540px;text-wrap:pretty">Free for the group. Post gross scores and Halved handles the strokes, the doubles, the counter and the settlement.</p>
+<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+<a href="https://apps.apple.com/app/id6768284628" style="display:inline-flex;align-items:center;justify-content:center;background:#fff;color:#0B4A38;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;padding:14px 26px;border-radius:999px;text-decoration:none">Download on the App Store</a>
+<a href="/games/" style="display:inline-flex;align-items:center;justify-content:center;border:1.5px solid rgba(255,255,255,.4);color:#fff;font-weight:600;font-size:15.5px;padding:13px 24px;border-radius:999px;text-decoration:none">See the other formats</a>
+</div>
+</section>
+
+<section id="faq" style="scroll-margin-top:28px;margin-top:72px">
+<h2 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(28px,3.6vw,36px);line-height:1.12;letter-spacing:-.9px;color:#0B1F1A;margin:0 0 24px">Questions people ask</h2>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:19px 22px">
+<h3 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16.5px;color:#0B1F1A;margin:0 0 7px;letter-spacing:-.2px">How many golfers do you need for Banker?</h3>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">Four is the game &mdash; one banker against three separate bets. Three works and is a quieter version of the same thing. Two is just a match.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:19px 22px">
+<h3 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16.5px;color:#0B1F1A;margin:0 0 7px;letter-spacing:-.2px">Who becomes the banker?</h3>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">The lowest net score on the hole banks the next one. The first banker is settled by a flipped tee or a draw. On tied low scores the traditional rule is whoever holed out first &mdash; pick that, a draw, or the current banker keeping the role, before the round.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:19px 22px">
+<h3 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16.5px;color:#0B1F1A;margin:0 0 7px;letter-spacing:-.2px">Can the banker double the bets?</h3>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">Yes &mdash; once. After his own tee shot he can counter, which doubles every standing bet on the hole at the same time. He does not answer each drive as it happens, and there is no second counter, so a bet can be doubled at most twice: once by its owner in the air, once by the banker.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:19px 22px">
+<h3 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16.5px;color:#0B1F1A;margin:0 0 7px;letter-spacing:-.2px">What happens on a tie in Banker?</h3>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">No action. That bet does not pay in either direction, nothing carries into the next hole, and the other two bets on the hole settle as normal.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:19px 22px">
+<h3 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16.5px;color:#0B1F1A;margin:0 0 7px;letter-spacing:-.2px">Does a birdie double the money?</h3>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">A player&rsquo;s birdie doubles his own collection from the banker. A banker&rsquo;s birdie doubles nothing &mdash; he is already winning three bets on that hole, and doubling all three at once would make the role too strong.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:19px 22px">
+<h3 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16.5px;color:#0B1F1A;margin:0 0 7px;letter-spacing:-.2px">How much can you lose on one hole?</h3>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">More than the ceiling suggests. With a $50 maximum, three bets at the max are $150, all three doubling makes $300, the counter makes $600, a par 3 triple makes $900, and three birdies against the banker makes $1,800. Agree the band knowing the ladder, and add a cap on the hole if the group wants a rail.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:19px 22px">
+<h3 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16.5px;color:#0B1F1A;margin:0 0 7px;letter-spacing:-.2px">Is Banker played on net or gross?</h3>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">Net, and the strokes are worked out <strong style="color:#0B1F1A;font-weight:600">match by match against the banker</strong> &mdash; not once across the group. In each one-on-one the lower handicap of the two plays to scratch and the other receives the difference, allocated by stroke index. So the shots you get can change from hole to hole as the banker changes.</div>
+</div>
+</div>
+</section>
+
+<section style="margin-top:72px;padding-top:34px;border-top:1px solid #DCE5DD">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:10.5px;letter-spacing:1.3px;color:#5C6B62;margin-bottom:18px">IF YOU LIKE BANKER</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px">
+<a href="/games/wolf/" style="display:block;background:#fff;border:1px solid #DCE5DD;border-radius:14px;padding:17px 18px;text-decoration:none"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A;margin-bottom:4px;letter-spacing:-.2px">Wolf</div><div style="font-size:13.5px;line-height:1.5;color:#5C6B62">The same rotating hot seat, but the Wolf can take a partner instead of facing all three.</div></a>
+<a href="/games/nassau/" style="display:block;background:#fff;border:1px solid #DCE5DD;border-radius:14px;padding:17px 18px;text-decoration:none"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A;margin-bottom:4px;letter-spacing:-.2px">Nassau</div><div style="font-size:13.5px;line-height:1.5;color:#5C6B62">Doubling too, but as a press on a match rather than a call in the air.</div></a>
+<a href="/games/skins/" style="display:block;background:#fff;border:1px solid #DCE5DD;border-radius:14px;padding:17px 18px;text-decoration:none"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A;margin-bottom:4px;letter-spacing:-.2px">Skins</div><div style="font-size:13.5px;line-height:1.5;color:#5C6B62">Hole by hole with nobody in the hot seat &mdash; and ties carry instead of dying.</div></a>
+</div>
+</section>
+
+</main>
+</div>
+</div>
+
+<div style="position:fixed;left:0;right:0;bottom:0;z-index:98;background:#0B1F1A;border-top:1px solid rgba(232,196,104,.34);box-shadow:0 -6px 24px rgba(11,31,26,.22);transition:transform .28s cubic-bezier(.4,0,.2,1);will-change:transform;transform:translateY(110%)" id="sticky-cta">
+<div style="max-width:1080px;margin:0 auto;padding:11px 20px;display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+<div style="flex:1 1 200px;min-width:0">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:15px;color:#fff;letter-spacing:-.2px">Three bets a hole, held while they are live</div>
+<div style="font-size:12.5px;color:#8FB3A5;margin-top:2px">Post gross scores and let the app hold the rest.</div>
+</div>
+<a href="https://apps.apple.com/app/id6768284628" style="flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;background:#3BD89A;color:#0B1F1A;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:15px;padding:11px 22px;border-radius:999px;text-decoration:none;white-space:nowrap">Get Halved &mdash; free</a>
+</div>
+</div>
+<div style="height:74px"></div>
+
+<footer style="background:#0B1F1A;color:#8FB3A5">
+<div style="max-width:1080px;margin:0 auto;padding:34px 24px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between">
+<div style="display:flex;align-items:center;gap:9px"><span style="width:20px;height:20px;border-radius:6px;background:#3BD89A;color:#0B1F1A;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center">H</span><span style="font-size:13.5px;color:#D7E5DE">halved.golf</span></div>
+<div style="font-size:12.5px">Scorekeeping and settlement for golf bets.</div>
+</div>
+</footer>
+</div>
+<script>
+  // The download bar rides in once you're past the intro and gets out of the
+  // way at the foot of the page, where the closing CTA already does the job.
+  (function () {
+    var bar = document.getElementById('sticky-cta');
+    if (!bar) return;
+    function onScroll() {
+      var doc = document.documentElement;
+      var y = window.scrollY || doc.scrollTop || 0;
+      var atEnd = y + window.innerHeight > doc.scrollHeight - 160;
+      bar.style.transform = (y > 520 && !atEnd) ? 'translateY(0)' : 'translateY(110%)';
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  })();
+</script>
+</body>
+</html>

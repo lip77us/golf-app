@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wolf Golf Game Rules: How to Play, Scoring, and Lone Wolf | Halved</title>
+<meta name="description" content="Wolf is a four-player golf betting game where a different golfer picks a partner off the tee each hole — or goes Lone Wolf for triple. Full rules, the scoring worked out hole by hole, and a free app that keeps score.">
+<link rel="canonical" href="https://halved.golf/games/wolf/">
+<meta property="og:title" content="Wolf Golf Game Rules: How to Play and How to Score It">
+<meta property="og:description" content="The rules, the three choices the Wolf has, and the point math worked all the way through.">
+<meta property="og:url" content="https://halved.golf/games/wolf/">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://halved.golf/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Halved — stop keeping score in your head. Every game on your round, scored live and settled to the dollar.">
+<meta property="og:site_name" content="Halved">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Spline+Sans:wght@400;500;600;700&display=swap">
+<style>html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}body{margin:0;background:#F3F1EA}*{box-sizing:border-box}img{display:block;max-width:100%}a{color:#0F6E56}a:hover{color:#0B1F1A}
+@keyframes wbA{0%,1%{opacity:0;left:8%;top:50%;transform:scale(.4);background:#fff;color:#0B1F1A}2%{opacity:1}3.5%{left:36%;top:28%;transform:scale(1.2)}5%{left:62%;top:44%;transform:scale(1);background:#fff;color:#0B1F1A}21%{left:62%;top:44%;background:#fff;color:#0B1F1A}24%{background:#1565C0;color:#fff}44%{opacity:1;left:62%;top:44%;background:#1565C0;color:#fff}48%{opacity:0;left:62%;top:44%}50%,51%{opacity:0;left:8%;top:50%;transform:scale(.4);background:#fff;color:#0B1F1A}52%{opacity:1}53.5%{left:34%;top:20%;transform:scale(1.2)}55%{left:58%;top:30%;transform:scale(1);background:#fff;color:#0B1F1A}71%{left:58%;top:30%;background:#fff;color:#0B1F1A}74%{background:#BF5600;color:#fff}95%{opacity:1;left:58%;top:30%;background:#BF5600;color:#fff}100%{opacity:0;left:58%;top:30%}}
+@keyframes wbS{0%,6%{opacity:0;left:8%;top:50%;transform:scale(.4);background:#fff;color:#0B1F1A}7%{opacity:1}8.5%{left:28%;top:14%;transform:scale(1.2)}10%{left:43%;top:26%;transform:scale(1);background:#fff;color:#0B1F1A}21%{left:43%;top:26%;background:#fff;color:#0B1F1A}24%{background:#BF5600;color:#fff}44%{opacity:1;left:43%;top:26%;background:#BF5600;color:#fff}48%{opacity:0;left:43%;top:26%}50%,56%{opacity:0;left:8%;top:50%;transform:scale(.4);background:#fff;color:#0B1F1A}57%{opacity:1}58.5%{left:30%;top:76%;transform:scale(1.2)}60%{left:45%;top:66%;transform:scale(1);background:#fff;color:#0B1F1A}71%{left:45%;top:66%;background:#fff;color:#0B1F1A}74%{background:#BF5600;color:#fff}95%{opacity:1;left:45%;top:66%;background:#BF5600;color:#fff}100%{opacity:0;left:45%;top:66%}}
+@keyframes wbL{0%,11%{opacity:0;left:8%;top:50%;transform:scale(.4);background:#fff;color:#0B1F1A}12%{opacity:1}13.5%{left:26%;top:64%;transform:scale(1.2)}15%{left:39%;top:72%;transform:scale(1);background:#fff;color:#0B1F1A}21%{left:39%;top:72%;background:#fff;color:#0B1F1A}24%{background:#BF5600;color:#fff}44%{opacity:1;left:39%;top:72%;background:#BF5600;color:#fff}48%{opacity:0;left:39%;top:72%}50%,61%{opacity:0;left:8%;top:50%;transform:scale(.4);background:#fff;color:#0B1F1A}62%{opacity:1}63.5%{left:24%;top:32%;transform:scale(1.2)}65%{left:36%;top:40%;transform:scale(1);background:#fff;color:#0B1F1A}71%{left:36%;top:40%;background:#fff;color:#0B1F1A}74%{background:#BF5600;color:#fff}95%{opacity:1;left:36%;top:40%;background:#BF5600;color:#fff}100%{opacity:0;left:36%;top:40%}}
+@keyframes wbD{0%,16%{opacity:0;left:8%;top:50%;transform:scale(.4);background:#fff;color:#0B1F1A}17%{opacity:1}18.5%{left:34%;top:36%;transform:scale(1.2)}20%{left:55%;top:54%;transform:scale(1);background:#fff;color:#0B1F1A}21%{background:#fff;color:#0B1F1A}24%{background:#1565C0;color:#fff}44%{opacity:1;left:55%;top:54%;background:#1565C0;color:#fff}48%{opacity:0;left:55%;top:54%}50%,66%{opacity:0;left:8%;top:50%;transform:scale(.4);background:#fff;color:#0B1F1A}67%{opacity:1}68.5%{left:40%;top:36%;transform:scale(1.2)}70%{left:66%;top:50%;transform:scale(1);background:#fff;color:#0B1F1A}71%{background:#fff;color:#0B1F1A}74%{background:#3BD89A;color:#0B1F1A}95%{opacity:1;left:66%;top:50%;background:#3BD89A;color:#0B1F1A}100%{opacity:0;left:66%;top:50%}}
+@keyframes wRing1{0%,22%{opacity:0;transform:scale(.35)}26%{opacity:1;transform:scale(1)}44%{opacity:1;transform:scale(1)}48%,100%{opacity:0;transform:scale(1)}}
+@keyframes wRing2{0%,72%{opacity:0;transform:scale(.35)}76%{opacity:1;transform:scale(1)}95%{opacity:1;transform:scale(1)}98%,100%{opacity:0;transform:scale(1)}}
+@keyframes wTag1{0%,22%{opacity:0;transform:translateY(5px)}26%{opacity:1;transform:translateY(0)}44%{opacity:1;transform:translateY(0)}48%,100%{opacity:0}}
+@keyframes wTag2{0%,72%{opacity:0;transform:translateY(5px)}76%{opacity:1;transform:translateY(0)}95%{opacity:1;transform:translateY(0)}98%,100%{opacity:0}}
+@keyframes wPick1{0%,22%{background:transparent;color:#8FB3A5;border-color:rgba(255,255,255,.28)}26%,46%{background:#3BD89A;color:#0B1F1A;border-color:#3BD89A}50%,100%{background:transparent;color:#8FB3A5;border-color:rgba(255,255,255,.28)}}
+@keyframes wPick2{0%,72%{background:transparent;color:#8FB3A5;border-color:rgba(255,255,255,.28)}76%,95%{background:#3BD89A;color:#0B1F1A;border-color:#3BD89A}98%,100%{background:transparent;color:#8FB3A5;border-color:rgba(255,255,255,.28)}}
+@keyframes wc1{0%,3%{opacity:0}6%,19%{opacity:1}22%,100%{opacity:0}}
+@keyframes wc2{0%,23%{opacity:0}26%,45%{opacity:1}48%,100%{opacity:0}}
+@keyframes wc3{0%,53%{opacity:0}56%,69%{opacity:1}72%,100%{opacity:0}}
+@keyframes wc4{0%,73%{opacity:0}76%,95%{opacity:1}98%,100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){[data-wolfanim]{animation:none !important}}</style>
+<meta name="twitter:image" content="https://halved.golf/og.png">
+<style>@media(min-width:821px){.guide-toc{position:sticky;top:28px;padding-top:56px}}@media(max-width:820px){.guide-toc{flex-basis:100%;margin-bottom:8px}}</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Can you play Wolf with three golfers?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes, though it changes the game — the Wolf picks from two, and going alone is one against two rather than one against three, so the triple is usually cut to double. The rotation covers eighteen holes exactly with three, which does mean no catch-up holes at the end."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is a good stake for Wolf?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A dollar a point is the usual starting place. Worth knowing before you agree to it: the worst realistic day is losing every hole as the pack and getting caught on a few Lone Wolves, which lands somewhere near thirty times the point value. If that number is uncomfortable, halve the stake rather than the fun."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "When should you actually go Lone Wolf?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Two situations. Your ball is stiff on a par three and nobody else is inside twenty feet. Or you are down late, the arithmetic says a partner hole will not catch you up, and the triple is the only thing that will. Going alone because all three drives were poor is the common mistake — you still have to beat the best of three balls, and one of them will make par."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is Wolf the same as Hollywood or Sixes?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No, though they get confused. In  the partnerships are fixed for six holes at a time and everyone eventually partners everyone. In Wolf the teams change every hole and one golfer chooses them. Wolf is the one with the gamble in it."
+      }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<div style="font-family:'Spline Sans',system-ui,sans-serif;color:#33443C;background:#F3F1EA">
+
+<div style="background:#0B1F1A;background-image:radial-gradient(120% 90% at 82% -10%,#123C31 0%,#0B1F1A 62%);color:#fff">
+<div style="max-width:1080px;margin:0 auto;padding:22px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+<a href="/" style="display:inline-flex;align-items:center;gap:9px;text-decoration:none;color:#fff"><span style="width:24px;height:24px;border-radius:7px;background:#3BD89A;color:#0B1F1A;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center">H</span><span style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;letter-spacing:-.2px">Halved</span></a>
+<a href="/games/" style="font-size:13.5px;font-weight:500;color:#8FB3A5;text-decoration:none">All golf games &#8594;</a>
+</div>
+<div style="max-width:1080px;margin:0 auto;padding:30px 24px 56px">
+<nav aria-label="Breadcrumb" style="font-size:12.5px;color:#8FB3A5;margin-bottom:20px"><a href="/" style="color:#8FB3A5;text-decoration:none">Home</a> <span style="opacity:.5">/</span> <a href="/games/" style="color:#8FB3A5;text-decoration:none">Golf games</a> <span style="opacity:.5">/</span> <span style="color:#D7E5DE">Wolf</span></nav>
+<div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-end"><div style="flex:1 1 400px;min-width:0;display:flex;flex-direction:column">
+<h1 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(38px,6.6vw,64px);line-height:1.02;letter-spacing:-2px;margin:0 0 18px;color:#fff;max-width:15ch">How to play Wolf</h1>
+<p style="max-width:640px;font-size:19.5px;line-height:1.6;color:#D7E5DE;margin:0 0 26px;text-wrap:pretty">Four golfers, and every hole one of them has to decide something on the tee: take a partner, or take on all three alone for triple. It is the best four-man betting game there is, and the only hard part is keeping score.</p>
+
+<div style="max-width:660px;background:rgba(59,216,154,.09);border:1px solid rgba(59,216,154,.32);border-radius:16px;padding:18px 20px;margin-top:auto">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:10.5px;letter-spacing:1.3px;color:#3BD89A;margin-bottom:10px">THE SHORT ANSWER</div>
+<p style="margin:0;font-size:16.5px;line-height:1.62;color:#D7E5DE;text-wrap:pretty">On each hole one golfer is the <strong style="color:#fff;font-weight:600">Wolf</strong>, taken from a rotation set before the round. The Wolf tees off last. After watching the other three drive, the Wolf either <strong style="color:#fff;font-weight:600">picks a partner</strong> for a two-against-two best-ball hole, or goes <strong style="color:#fff;font-weight:600">Lone Wolf</strong> against all three for triple points. Win the hole, take the points; lose it, pay them.</p>
+</div>
+</div>
+
+<figure style="flex:1 1 380px;min-width:290px;margin:0;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.13);border-radius:16px;padding:16px 16px 14px">
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;margin-bottom:11px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:10px;letter-spacing:1.2px;color:#3BD89A">HOLE 6 &middot; PAR 4 &middot; DAVE IS THE WOLF</div>
+<div style="margin-left:auto;font-size:11.5px;color:#8FB3A5">two ways it can go</div>
+</div>
+
+<div style="position:relative;height:182px;border-radius:12px;background:#10281F;overflow:hidden">
+<div style="position:absolute;left:5%;right:6%;top:22%;bottom:22%;border-radius:60px/40px;background:#1B4634"></div>
+<div style="position:absolute;right:7%;top:50%;width:48px;height:48px;margin-top:-24px;border-radius:50%;background:#2E7A57"></div>
+<div style="position:absolute;right:8.8%;top:50%;width:2px;height:24px;margin-top:-24px;background:#D7E5DE"></div>
+<div style="position:absolute;right:8.8%;top:50%;width:9px;height:7px;margin-top:-24px;background:#F3A059"></div>
+<div style="position:absolute;left:6.5%;top:50%;width:16px;height:4px;margin:-2px 0 0 -8px;border-radius:2px;background:#4E6B5C"></div>
+<div style="position:absolute;left:6.5%;top:50%;margin-top:9px;transform:translateX(-50%);font-size:9px;font-weight:700;letter-spacing:.6px;color:#6E8A7B">TEE</div>
+
+<div data-wolfanim style="position:absolute;left:62%;top:44%;width:23px;height:23px;margin:-11.5px 0 0 -11.5px;border-radius:50%;background:#1565C0;color:#fff;font:700 10px/23px 'Spline Sans',system-ui,sans-serif;text-align:center;animation:wbA 16s infinite ease-out">P</div>
+<div data-wolfanim style="position:absolute;left:43%;top:26%;width:23px;height:23px;margin:-11.5px 0 0 -11.5px;border-radius:50%;background:#BF5600;color:#fff;font:700 10px/23px 'Spline Sans',system-ui,sans-serif;text-align:center;animation:wbS 16s infinite ease-out">S</div>
+<div data-wolfanim style="position:absolute;left:39%;top:72%;width:23px;height:23px;margin:-11.5px 0 0 -11.5px;border-radius:50%;background:#BF5600;color:#fff;font:700 10px/23px 'Spline Sans',system-ui,sans-serif;text-align:center;animation:wbL 16s infinite ease-out">L</div>
+<div data-wolfanim style="position:absolute;left:55%;top:54%;width:23px;height:23px;margin:-11.5px 0 0 -11.5px;border-radius:50%;background:#1565C0;color:#fff;font:700 10px/23px 'Spline Sans',system-ui,sans-serif;text-align:center;box-shadow:0 0 0 2px #3BD89A;animation:wbD 16s infinite ease-out">D</div>
+
+<div data-wolfanim style="position:absolute;left:62%;top:44%;width:42px;height:42px;margin:-21px 0 0 -21px;border-radius:50%;border:2px solid #3BD89A;animation:wRing1 16s infinite ease-out"></div>
+<div data-wolfanim style="position:absolute;left:66%;top:50%;width:42px;height:42px;margin:-21px 0 0 -21px;border-radius:50%;border:2px solid #3BD89A;opacity:0;animation:wRing2 16s infinite ease-out"></div>
+<div data-wolfanim style="position:absolute;left:62%;top:44%;margin:-44px 0 0 -40px;background:#3BD89A;color:#0B1F1A;border-radius:999px;padding:3px 9px;font:700 10.5px/1 'Spline Sans',system-ui,sans-serif;white-space:nowrap;animation:wTag1 16s infinite ease-out">Teams formed</div>
+<div data-wolfanim style="position:absolute;left:66%;top:50%;margin:-44px 0 0 -34px;background:#3BD89A;color:#0B1F1A;border-radius:999px;padding:3px 9px;font:700 10.5px/1 'Spline Sans',system-ui,sans-serif;white-space:nowrap;opacity:0;animation:wTag2 16s infinite ease-out">Lone Wolf</div>
+
+<div style="position:absolute;left:12px;bottom:11px;display:flex;gap:6px">
+<div data-wolfanim style="background:#3BD89A;color:#0B1F1A;border:1px solid #3BD89A;border-radius:999px;padding:4px 11px;font:700 10.5px/1 'Spline Sans',system-ui,sans-serif;animation:wPick1 16s infinite ease-out">Partner</div>
+<div data-wolfanim style="background:transparent;color:#8FB3A5;border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:4px 11px;font:700 10.5px/1 'Spline Sans',system-ui,sans-serif;animation:wPick2 16s infinite ease-out">Lone Wolf &times;3</div>
+</div>
+</div>
+
+<figcaption style="position:relative;height:42px;margin-top:11px">
+<div data-wolfanim style="position:absolute;inset:0;font-size:13.5px;line-height:1.45;color:#D7E5DE;opacity:0;animation:wc1 16s infinite">Three drives land. Paul is long and in the fairway.</div>
+<div data-wolfanim style="position:absolute;inset:0;font-size:13.5px;line-height:1.45;color:#D7E5DE;animation:wc2 16s infinite">Dave takes Paul. <strong style="color:#5AA7F5;font-weight:600">Two blue</strong> against <strong style="color:#F3A059;font-weight:600">two orange</strong>, best ball, 1 point each.</div>
+<div data-wolfanim style="position:absolute;inset:0;font-size:13.5px;line-height:1.45;color:#D7E5DE;opacity:0;animation:wc3 16s infinite">Same tee, another day. Nobody has hit one worth having.</div>
+<div data-wolfanim style="position:absolute;inset:0;font-size:13.5px;line-height:1.45;color:#D7E5DE;opacity:0;animation:wc4 16s infinite">So Dave turns them all down. <strong style="color:#fff;font-weight:600">One against three, for triple.</strong></div>
+</figcaption>
+</figure>
+
+</div>
+
+<div style="display:flex;flex-wrap:wrap;gap:28px;margin-top:32px;padding-top:24px;border-top:1px solid rgba(255,255,255,.14)">
+<div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:26px;color:#3BD89A;letter-spacing:-.6px">4</div><div style="font-size:12.5px;color:#8FB3A5;margin-top:3px">golfers</div></div>
+<div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:26px;color:#3BD89A;letter-spacing:-.6px">16</div><div style="font-size:12.5px;color:#8FB3A5;margin-top:3px">holes of rotation</div></div>
+<div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:26px;color:#3BD89A;letter-spacing:-.6px">3&times;</div><div style="font-size:12.5px;color:#8FB3A5;margin-top:3px">for going alone</div></div>
+<div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:26px;color:#3BD89A;letter-spacing:-.6px">~5</div><div style="font-size:12.5px;color:#8FB3A5;margin-top:3px">min to learn</div></div>
+</div>
+</div>
+</div>
+
+<div style="max-width:1080px;margin:0 auto;padding:0 24px 96px">
+<div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start">
+
+<nav class="guide-toc" style="flex:0 1 168px;min-width:150px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:10.5px;letter-spacing:1.3px;color:#5C6B62;padding-bottom:12px;border-bottom:1px solid #DCE5DD;margin-bottom:14px">ON THIS PAGE</div>
+<div style="display:flex;flex-direction:column;gap:11px">
+<a href="#how" style="font-size:14px;font-weight:500;color:#0B1F1A;text-decoration:none">The rules</a>
+<a href="#choices" style="font-size:14px;font-weight:500;color:#0B1F1A;text-decoration:none">The three choices</a>
+<a href="#scoring" style="font-size:14px;font-weight:500;color:#0B1F1A;text-decoration:none">Scoring, worked</a>
+<a href="#closing" style="font-size:14px;font-weight:500;color:#0B1F1A;text-decoration:none">Holes 17 and 18</a>
+<a href="#houserules" style="font-size:14px;font-weight:500;color:#0B1F1A;text-decoration:none">House rules</a>
+<a href="#app" style="font-size:14px;font-weight:500;color:#0B1F1A;text-decoration:none">Scoring it in an app</a>
+<a href="#faq" style="font-size:14px;font-weight:500;color:#0B1F1A;text-decoration:none">Questions</a>
+</div>
+</nav>
+
+<main style="flex:1 1 540px;min-width:0;padding-top:56px">
+
+<section id="how" style="scroll-margin-top:28px">
+<h2 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(28px,3.6vw,36px);line-height:1.12;letter-spacing:-.9px;color:#0B1F1A;margin:0 0 16px">The rules</h2>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 14px;text-wrap:pretty">Before you tee off, put the four of you in an order. That order is the rotation, and it never changes: first golfer is the Wolf on hole 1, second on hole 2, and so on round and round. Over sixteen holes everyone gets four turns.</p>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 30px;text-wrap:pretty"><strong style="color:#0B1F1A;font-weight:600">The Wolf tees off last.</strong> That is the whole engine of the game — he stands on the tee having seen three drives, knowing exactly what is on offer, and has to commit before anyone plays a second shot.</p>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-bottom:30px">
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:20px 20px 22px">
+<div style="width:28px;height:28px;border-radius:9px;background:#EAF0EA;color:#0F6E56;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;margin-bottom:13px">1</div>
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:17px;color:#0B1F1A;margin-bottom:6px;letter-spacing:-.3px">Set the rotation</div>
+<div style="font-size:14.5px;line-height:1.55;color:#5C6B62">Draw it at random on the first tee. Who goes first matters less than everyone knowing the order.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:20px 20px 22px">
+<div style="width:28px;height:28px;border-radius:9px;background:#EAF0EA;color:#0F6E56;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;margin-bottom:13px">2</div>
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:17px;color:#0B1F1A;margin-bottom:6px;letter-spacing:-.3px">Three drive, Wolf watches</div>
+<div style="font-size:14.5px;line-height:1.55;color:#5C6B62">The other three hit in any order. The Wolf hits last, then makes the call.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:20px 20px 22px">
+<div style="width:28px;height:28px;border-radius:9px;background:#EAF0EA;color:#0F6E56;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;margin-bottom:13px">3</div>
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:17px;color:#0B1F1A;margin-bottom:6px;letter-spacing:-.3px">Play it out, settle the hole</div>
+<div style="font-size:14.5px;line-height:1.55;color:#5C6B62">Best ball each side. The hole is settled on its own and the points go straight into the running total.</div>
+</div>
+</div>
+
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;overflow:hidden">
+<div style="padding:16px 20px 14px;border-bottom:1px solid #DCE5DD"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:15.5px;color:#0B1F1A;letter-spacing:-.2px">A rotation, in full</div><div style="font-size:13.5px;color:#5C6B62;margin-top:3px">Paul, Dave, Sam, Lee &mdash; drawn in that order on the first tee.</div></div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">
+<div style="padding:15px 18px;border-right:1px solid #DCE5DD"><div style="font-size:11px;font-weight:700;letter-spacing:.9px;color:#5C6B62;margin-bottom:6px">HOLES 1, 5, 9, 13</div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A">Paul</div></div>
+<div style="padding:15px 18px;border-right:1px solid #DCE5DD"><div style="font-size:11px;font-weight:700;letter-spacing:.9px;color:#5C6B62;margin-bottom:6px">HOLES 2, 6, 10, 14</div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A">Dave</div></div>
+<div style="padding:15px 18px;border-right:1px solid #DCE5DD"><div style="font-size:11px;font-weight:700;letter-spacing:.9px;color:#5C6B62;margin-bottom:6px">HOLES 3, 7, 11, 15</div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A">Sam</div></div>
+<div style="padding:15px 18px"><div style="font-size:11px;font-weight:700;letter-spacing:.9px;color:#5C6B62;margin-bottom:6px">HOLES 4, 8, 12, 16</div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A">Lee</div></div>
+</div>
+<div style="padding:14px 20px;background:#EAF0EA;border-top:1px solid #DCE5DD;font-size:14.5px;line-height:1.55;color:#33443C"><strong style="color:#0B1F1A;font-weight:600">Holes 17 and 18 go to whoever is losing.</strong> <a href="#closing" style="font-weight:500">More on that below.</a></div>
+</div>
+</section>
+
+<section id="choices" style="scroll-margin-top:28px;margin-top:72px">
+<h2 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(28px,3.6vw,36px);line-height:1.12;letter-spacing:-.9px;color:#0B1F1A;margin:0 0 16px">The three choices</h2>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 24px;text-wrap:pretty">Everything the Wolf can do on a tee, and what each one is worth. The point values below are the common ones; groups change them all the time.</p>
+
+<div style="display:flex;flex-direction:column;gap:14px;margin-bottom:26px">
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:20px 22px;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+<div style="flex:1 1 300px;min-width:0">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:19px;color:#0B1F1A;margin-bottom:7px;letter-spacing:-.3px">Take a partner</div>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">The safe play, and the one that happens most. The Wolf names one of the other three and it becomes a two-against-two best-ball hole. Both sides count their better net score.</div>
+</div>
+<div style="flex:0 0 auto;text-align:right;min-width:96px"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:32px;color:#0F6E56;letter-spacing:-1px;line-height:1">1</div><div style="font-size:12.5px;color:#5C6B62;margin-top:3px">point each</div></div>
+</div>
+<div style="background:#fff;border:1.5px solid #C9E3D4;border-radius:16px;padding:20px 22px;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+<div style="flex:1 1 300px;min-width:0">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:19px;color:#0B1F1A;margin-bottom:7px;letter-spacing:-.3px">Lone Wolf</div>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">Turn all three down and play the hole alone against the best ball of the other three. Triple points if you take it, and the same triple out of your pocket if you do not.</div>
+</div>
+<div style="flex:0 0 auto;text-align:right;min-width:96px"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:32px;color:#0F6E56;letter-spacing:-1px;line-height:1">3</div><div style="font-size:12.5px;color:#5C6B62;margin-top:3px">points</div></div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:20px 22px;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+<div style="flex:1 1 300px;min-width:0">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:19px;color:#0B1F1A;margin-bottom:7px;letter-spacing:-.3px">Blind Wolf</div>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">Declare alone <em>before anybody tees off</em>, drives unseen. Double what a Lone Wolf pays. Called about twice a season, usually on a short par four by a man who is losing.</div>
+</div>
+<div style="flex:0 0 auto;text-align:right;min-width:96px"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:32px;color:#0F6E56;letter-spacing:-1px;line-height:1">6</div><div style="font-size:12.5px;color:#5C6B62;margin-top:3px">points</div></div>
+</div>
+</div>
+
+<div style="background:#F4FAF6;border:1px solid #C9E3D4;border-radius:16px;padding:20px 22px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:14.5px;color:#0B1F1A;margin-bottom:9px;letter-spacing:-.1px">The one rule people forget</div>
+<div style="font-size:15px;line-height:1.65;color:#38564A">The pick has to be made <strong style="color:#0B1F1A;font-weight:600">before the next shot is played</strong>. You cannot walk up the fairway, see how the lies turned out, and then choose. Once someone has hit an approach, the Wolf is committed to whatever he said on the tee &mdash; or to going alone if he said nothing.</div>
+</div>
+</section>
+
+<section id="scoring" style="scroll-margin-top:28px;margin-top:72px">
+<h2 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(28px,3.6vw,36px);line-height:1.12;letter-spacing:-.9px;color:#0B1F1A;margin:0 0 16px">Scoring, worked all the way through</h2>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 12px;text-wrap:pretty">Wolf scoring is <strong style="color:#0B1F1A;font-weight:600">zero-sum</strong>. Every hole nets to nothing: whatever the winning side takes, the losing side pays between them. That one property is what makes the running total trustworthy, and it is also what makes it a nuisance to do in your head.</p>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 26px;text-wrap:pretty">Three holes from the same round, at a dollar a point.</p>
+
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;overflow:hidden;margin-bottom:14px">
+<div style="padding:15px 20px;border-bottom:1px solid #DCE5DD;display:flex;flex-wrap:wrap;gap:10px;align-items:baseline"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A;letter-spacing:-.2px">Hole 6 &mdash; Dave takes a partner</div><div style="font-size:13.5px;color:#5C6B62;margin-left:auto">par 4</div></div>
+<div style="padding:16px 20px;font-size:15.5px;line-height:1.62;color:#33443C">Paul bombs one down the middle, so Dave picks him. Net scores: <strong style="color:#0B1F1A;font-weight:600">Paul 4</strong>, Dave 5, Sam 5, Lee 5.</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));border-top:1px solid #EAF0EA">
+<div style="padding:14px 20px;border-right:1px solid #EAF0EA"><div style="font-size:11px;font-weight:700;letter-spacing:.9px;color:#5C6B62;margin-bottom:6px">DAVE &amp; PAUL</div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:20px;color:#0F6E56">+1 each</div><div style="font-size:13px;color:#5C6B62;margin-top:2px">best ball 4</div></div>
+<div style="padding:14px 20px"><div style="font-size:11px;font-weight:700;letter-spacing:.9px;color:#5C6B62;margin-bottom:6px">SAM &amp; LEE</div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:20px;color:#B23A1E">&minus;1 each</div><div style="font-size:13px;color:#5C6B62;margin-top:2px">best ball 5</div></div>
+</div>
+</div>
+
+<div style="background:#fff;border:1.5px solid #C9E3D4;border-radius:16px;overflow:hidden;margin-bottom:14px">
+<div style="padding:15px 20px;border-bottom:1px solid #DCE5DD;display:flex;flex-wrap:wrap;gap:10px;align-items:baseline"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A;letter-spacing:-.2px">Hole 7 &mdash; Sam goes Lone Wolf</div><div style="font-size:13.5px;color:#5C6B62;margin-left:auto">par 3</div></div>
+<div style="padding:16px 20px;font-size:15.5px;line-height:1.62;color:#33443C">Three mediocre tee shots, and Sam knocks it to twelve feet. He turns them all down. Net: <strong style="color:#0B1F1A;font-weight:600">Sam 2</strong>, best of the other three 3.</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));border-top:1px solid #EAF0EA">
+<div style="padding:14px 20px;border-right:1px solid #EAF0EA"><div style="font-size:11px;font-weight:700;letter-spacing:.9px;color:#5C6B62;margin-bottom:6px">SAM, ALONE</div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:20px;color:#0F6E56">+3</div><div style="font-size:13px;color:#5C6B62;margin-top:2px">takes $3</div></div>
+<div style="padding:14px 20px"><div style="font-size:11px;font-weight:700;letter-spacing:.9px;color:#5C6B62;margin-bottom:6px">THE OTHER THREE</div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:20px;color:#B23A1E">&minus;1 each</div><div style="font-size:13px;color:#5C6B62;margin-top:2px">they split it</div></div>
+</div>
+</div>
+
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;overflow:hidden;margin-bottom:22px">
+<div style="padding:15px 20px;border-bottom:1px solid #DCE5DD;display:flex;flex-wrap:wrap;gap:10px;align-items:baseline"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A;letter-spacing:-.2px">Hole 8 &mdash; Lee goes Lone Wolf and misses</div><div style="font-size:13.5px;color:#5C6B62;margin-left:auto">par 5</div></div>
+<div style="padding:16px 20px;font-size:15.5px;line-height:1.62;color:#33443C">Same call, worse result. Lee makes six; Paul makes a net four. The triple runs the other way.</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));border-top:1px solid #EAF0EA">
+<div style="padding:14px 20px;border-right:1px solid #EAF0EA"><div style="font-size:11px;font-weight:700;letter-spacing:.9px;color:#5C6B62;margin-bottom:6px">LEE, ALONE</div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:20px;color:#B23A1E">&minus;3</div><div style="font-size:13px;color:#5C6B62;margin-top:2px">pays all three</div></div>
+<div style="padding:14px 20px"><div style="font-size:11px;font-weight:700;letter-spacing:.9px;color:#5C6B62;margin-bottom:6px">THE OTHER THREE</div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:20px;color:#0F6E56">+1 each</div><div style="font-size:13px;color:#5C6B62;margin-top:2px">for turning up</div></div>
+</div>
+</div>
+
+<div style="background:#0B1F1A;border-radius:16px;padding:24px 24px 26px;color:#fff">
+<div style="font-size:10.5px;font-weight:700;letter-spacing:1.2px;color:#3BD89A;margin-bottom:14px">AFTER THREE HOLES</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:14px;margin-bottom:16px">
+<div><div style="font-size:13px;color:#8FB3A5;margin-bottom:4px">Paul</div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:24px;letter-spacing:-.8px;color:#3BD89A">+$1</div></div>
+<div><div style="font-size:13px;color:#8FB3A5;margin-bottom:4px">Dave</div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:24px;letter-spacing:-.8px;color:#3BD89A">+$1</div></div>
+<div><div style="font-size:13px;color:#8FB3A5;margin-bottom:4px">Sam</div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:24px;letter-spacing:-.8px;color:#3BD89A">+$3</div></div>
+<div><div style="font-size:13px;color:#8FB3A5;margin-bottom:4px">Lee</div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:24px;letter-spacing:-.8px;color:#F3A059">&minus;$5</div></div>
+</div>
+<div style="font-size:16px;line-height:1.6;color:#D7E5DE;border-top:1px solid rgba(255,255,255,.14);padding-top:15px">The four numbers add to zero, and they will still add to zero on the eighteenth. <strong style="color:#fff;font-weight:600">That is the check worth doing if you are keeping it on the back of the card</strong> &mdash; if the column does not sum to nothing, a hole got scored wrong.</div>
+</div>
+</section>
+
+<section id="closing" style="scroll-margin-top:28px;margin-top:72px">
+<h2 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(28px,3.6vw,36px);line-height:1.12;letter-spacing:-.9px;color:#0B1F1A;margin:0 0 16px">Holes 17 and 18</h2>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 22px;text-wrap:pretty">Four golfers into eighteen holes does not divide. The rotation covers sixteen, and the two that are left over go to <strong style="color:#0B1F1A;font-weight:600">whoever is losing</strong>: last place is the Wolf on 17, and last place after 17 is the Wolf on 18.</p>
+<p style="font-size:17.5px;line-height:1.66;margin:0;text-wrap:pretty">Treat that as the game rather than a variant. A rotation that just runs out leaves the man who is down with two holes and nothing to play for, and the closing stretch is exactly where a Wolf game should have something at stake. Being handed the wolf twice, with a triple available on both, is a real way back &mdash; and it is why nobody in a Wolf game is ever out of it walking off the sixteenth.</p>
+</section>
+
+<section id="houserules" style="scroll-margin-top:28px;margin-top:72px">
+<h2 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(28px,3.6vw,36px);line-height:1.12;letter-spacing:-.9px;color:#0B1F1A;margin:0 0 16px">House rules worth agreeing on the first tee</h2>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 28px;text-wrap:pretty">Wolf has been played a hundred ways. None of these is wrong. Settle them before you tee off, because every one of them changes who wins.</p>
+
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:20px 22px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:17px;color:#0B1F1A;margin-bottom:8px;letter-spacing:-.25px">Does the Wolf pick after each drive, or after all three?</div>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">The tighter old version has the Wolf teeing off first and deciding on each golfer the instant his ball lands &mdash; pass on a good drive and it is gone for good. Letting the Wolf hit last and choose from all three is friendlier and quicker, and it is the more common game now. The old way produces far more Lone Wolves.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:20px 22px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:17px;color:#0B1F1A;margin-bottom:8px;letter-spacing:-.25px">What happens on a tie?</div>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">Simplest is that a halved hole pays nobody, which is what most groups do. Some make the Wolf lose ties, on the grounds that he had the pick and the advantage that comes with it. That one bites hardest on a Lone Wolf, where a tie turns into a triple loss.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:20px 22px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:17px;color:#0B1F1A;margin-bottom:8px;letter-spacing:-.25px">Should a clean win by the other three pay double?</div>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">The Wolf has the pick, so beating him without it is the harder thing to do. A clean-win bonus pays the non-Wolf side double when they win outright, which pushes back against a Wolf who only ever takes the best drive. It also makes a bad pick expensive twice over, so try it for a round before adopting it.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:20px 22px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:17px;color:#0B1F1A;margin-bottom:8px;letter-spacing:-.25px">Does everybody have to go solo at least once?</div>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">Left alone, a cautious golfer can take a partner on all four of his turns and never risk anything. Requiring each golfer to go Lone or Blind once &mdash; in practice, locking the partner option out of his last turn if he has not &mdash; guarantees four solo holes a round. It is the single best rule for a group where nobody ever takes the shot.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:20px 22px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:17px;color:#0B1F1A;margin-bottom:8px;letter-spacing:-.25px">Handicaps, or straight up?</div>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">Gross is simplest and favours the good player. Strokes off the low man is the better way to handle handicaps here: the best player gets nothing, everyone else plays the difference, and those strokes fall on the hardest holes. It matters more in Wolf than in most games, because a stroke is what makes a high handicapper worth picking.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:20px 22px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:17px;color:#0B1F1A;margin-bottom:8px;letter-spacing:-.25px">Is there a bonus for beating a Lone Wolf?</div>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">Some groups pay the pack double when they beat a Wolf who went alone, which makes going alone genuinely brave rather than just expensive. Others cap what any one player can lose over the round, which keeps a bad day from turning into a real one.</div>
+</div>
+</div>
+</section>
+
+<section id="app" style="scroll-margin-top:28px;margin-top:72px">
+<h2 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(28px,3.6vw,36px);line-height:1.12;letter-spacing:-.9px;color:#0B1F1A;margin:0 0 16px">Scoring Wolf without doing the arithmetic</h2>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 14px;text-wrap:pretty">Wolf is the hardest of the common golf games to keep on paper, and it is worth being honest about why. Every hole you have to remember whose turn it was, what he chose, which side won it after strokes, and then push a different number into four different columns &mdash; three of them negative. Miss one hole and the total is wrong for the rest of the day.</p>
+<p style="font-size:17.5px;line-height:1.66;margin:0 0 26px;text-wrap:pretty"><strong style="color:#0B1F1A;font-weight:600">Halved does that part.</strong> You post gross scores like any other round. It knows whose wolf it is, asks for the pick on the tee, applies the strokes, and keeps everyone&rsquo;s number in dollars where the whole group can see it.</p>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-bottom:30px">
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:19px 20px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A;margin-bottom:6px;letter-spacing:-.2px">It asks on the tee</div>
+<div style="font-size:14.5px;line-height:1.55;color:#5C6B62">Partner, Lone or Blind, with the points each one is worth right there on the buttons.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:19px 20px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A;margin-bottom:6px;letter-spacing:-.2px">Your house rules, kept</div>
+<div style="font-size:14.5px;line-height:1.55;color:#5C6B62">Point values, ties, handicap method and the loss cap are all settings. Set them once.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:19px 20px">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A;margin-bottom:6px;letter-spacing:-.2px">Everyone sees the same total</div>
+<div style="font-size:14.5px;line-height:1.55;color:#5C6B62">One golfer enters, the group watches. No reconciling four cards in the car park.</div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:32px">
+<figure style="margin:0">
+<img src="/games/img/wolf-setup.png" alt="Wolf setup screen in the Halved golf app: zero-based point values with Lone Wolf 3, Blind Wolf 6 and a team win 1, plus options for Wolf loses ties, a non-Wolf clean-win bonus, last place taking the Wolf on 17 and 18, and a rule forcing everyone solo by hole 16" width="1320" height="2868" style="width:100%;height:auto;border:1px solid #DCE5DD;border-radius:14px;background:#EDF2EE">
+<figcaption style="margin-top:14px"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:15px;color:#0B1F1A;margin-bottom:4px;letter-spacing:-.2px">What a call is worth, and the house rules</div><div style="font-size:14px;line-height:1.55;color:#5C6B62">Lone Wolf, Blind Wolf and a team win priced separately, with every option from the section above as a switch.</div></figcaption>
+</figure>
+<figure style="margin:0">
+<img src="/games/img/wolf-play.png" alt="Halved play screen for Wolf on hole 2: BobT is the Wolf and has gone Lone Wolf for triple, the three opponents colour-coded against him, and a Wolf points grid naming the Wolf on every hole" width="1320" height="2868" style="width:100%;height:auto;border:1px solid #DCE5DD;border-radius:14px;background:#EDF2EE">
+<figcaption style="margin-top:14px"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:15px;color:#0B1F1A;margin-bottom:4px;letter-spacing:-.2px">The call, and who it is against</div><div style="font-size:14px;line-height:1.55;color:#5C6B62">Lone Wolf &times;3 stated at the top, the sides colour-coded, and the points grid naming every Wolf ahead.</div></figcaption>
+</figure>
+<figure style="margin:0">
+<img src="/games/img/wolf-leaderboard.png" alt="Wolf leaderboard in Halved: four golfers with points and dollars totalling zero, a Wolf-by-hole strip, and a scorecard carrying each golfer&rsquo;s points hole by hole" width="1284" height="2778" style="width:100%;height:auto;border:1px solid #DCE5DD;border-radius:14px;background:#EDF2EE">
+<figcaption style="margin-top:14px"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:15px;color:#0B1F1A;margin-bottom:4px;letter-spacing:-.2px">Know where you stand</div><div style="font-size:14px;line-height:1.55;color:#5C6B62">Points and dollars side by side, and the column always adds to zero.</div></figcaption>
+</figure>
+</div>
+</section>
+
+<section style="margin-top:80px;background:#0F6E56;background-image:linear-gradient(165deg,#15866A,#0B4A38);border-radius:20px;padding:40px 34px 42px;color:#fff">
+<h2 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(26px,3.4vw,34px);line-height:1.14;letter-spacing:-.9px;margin:0 0 14px;color:#fff;max-width:520px">Play Wolf. Let something else keep score.</h2>
+<p style="font-size:17.5px;line-height:1.6;color:#CDE8DD;margin:0 0 28px;max-width:540px;text-wrap:pretty">Free for the group, no card to enter, and the settlement is done before you get to the car park.</p>
+<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+<a href="/" style="display:inline-flex;align-items:center;justify-content:center;background:#fff;color:#0B4A38;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;padding:14px 26px;border-radius:999px;text-decoration:none">Get Halved</a>
+<a href="/games/" style="display:inline-flex;align-items:center;justify-content:center;border:1.5px solid rgba(255,255,255,.4);color:#fff;font-weight:600;font-size:15.5px;padding:13px 24px;border-radius:999px;text-decoration:none">See the other formats</a>
+</div>
+</section>
+
+<section id="faq" style="scroll-margin-top:28px;margin-top:72px">
+<h2 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:clamp(28px,3.6vw,36px);line-height:1.12;letter-spacing:-.9px;color:#0B1F1A;margin:0 0 24px">Questions people ask</h2>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:19px 22px">
+<h3 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16.5px;color:#0B1F1A;margin:0 0 7px;letter-spacing:-.2px">Can you play Wolf with three golfers?</h3>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">Yes, though it changes the game &mdash; the Wolf picks from two, and going alone is one against two rather than one against three, so the triple is usually cut to double. The rotation covers eighteen holes exactly with three, which does mean no catch-up holes at the end.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:19px 22px">
+<h3 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16.5px;color:#0B1F1A;margin:0 0 7px;letter-spacing:-.2px">What is a good stake for Wolf?</h3>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">A dollar a point is the usual starting place. Worth knowing before you agree to it: the worst realistic day is losing every hole as the pack and getting caught on a few Lone Wolves, which lands somewhere near thirty times the point value. If that number is uncomfortable, halve the stake rather than the fun.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:19px 22px">
+<h3 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16.5px;color:#0B1F1A;margin:0 0 7px;letter-spacing:-.2px">When should you actually go Lone Wolf?</h3>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">Two situations. Your ball is stiff on a par three and nobody else is inside twenty feet. Or you are down late, the arithmetic says a partner hole will not catch you up, and the triple is the only thing that will. Going alone because all three drives were poor is the common mistake &mdash; you still have to beat the best of three balls, and one of them will make par.</div>
+</div>
+<div style="background:#fff;border:1px solid #DCE5DD;border-radius:16px;padding:19px 22px">
+<h3 style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16.5px;color:#0B1F1A;margin:0 0 7px;letter-spacing:-.2px">Is Wolf the same as Hollywood or Sixes?</h3>
+<div style="font-size:15.5px;line-height:1.62;color:#33443C">No, though they get confused. In  the partnerships are fixed for six holes at a time and everyone eventually partners everyone. In Wolf the teams change every hole and one golfer chooses them. Wolf is the one with the gamble in it.</div>
+</div>
+</div>
+</section>
+
+<section style="margin-top:72px;padding-top:34px;border-top:1px solid #DCE5DD">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:10.5px;letter-spacing:1.3px;color:#5C6B62;margin-bottom:18px">IF YOU LIKE WOLF</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px">
+<a href="/games/banker/" style="display:block;background:#fff;border:1px solid #DCE5DD;border-radius:14px;padding:17px 18px;text-decoration:none"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A;margin-bottom:4px;letter-spacing:-.2px">Banker</div><div style="font-size:13.5px;line-height:1.5;color:#5C6B62">One golfer takes on the other three, and the wager is his to set.</div></a>
+<a href="/games/skins/" style="display:block;background:#fff;border:1px solid #DCE5DD;border-radius:14px;padding:17px 18px;text-decoration:none"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A;margin-bottom:4px;letter-spacing:-.2px">Skins</div><div style="font-size:13.5px;line-height:1.5;color:#5C6B62">Win the hole outright or the money carries to the next one.</div></a>
+<a href="/games/nassau/" style="display:block;background:#fff;border:1px solid #DCE5DD;border-radius:14px;padding:17px 18px;text-decoration:none"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:16px;color:#0B1F1A;margin-bottom:4px;letter-spacing:-.2px">Nassau</div><div style="font-size:13.5px;line-height:1.5;color:#5C6B62">Three bets in one round: front, back and the whole eighteen.</div></a>
+</div>
+</section>
+
+</main>
+</div>
+</div>
+
+<div style="position:fixed;left:0;right:0;bottom:0;z-index:98;background:#0B1F1A;border-top:1px solid rgba(59,216,154,.3);box-shadow:0 -6px 24px rgba(11,31,26,.22);transition:transform .28s cubic-bezier(.4,0,.2,1);will-change:transform;transform:translateY(110%)" id="sticky-cta">
+<div style="max-width:1080px;margin:0 auto;padding:11px 20px;display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+<div style="flex:1 1 200px;min-width:0">
+<div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:15px;color:#fff;letter-spacing:-.2px">Keep score without the arithmetic</div>
+<div style="font-size:12.5px;color:#8FB3A5;margin-top:2px">Rotation, strokes and settlement, done for you.</div>
+</div>
+<a href="/" style="flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;background:#3BD89A;color:#0B1F1A;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:15px;padding:11px 22px;border-radius:999px;text-decoration:none;white-space:nowrap">Get Halved &mdash; free</a>
+</div>
+</div>
+<div style="height:74px"></div>
+
+<footer style="background:#0B1F1A;color:#8FB3A5">
+<div style="max-width:1080px;margin:0 auto;padding:34px 24px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between">
+<div style="display:flex;align-items:center;gap:9px"><span style="width:20px;height:20px;border-radius:6px;background:#3BD89A;color:#0B1F1A;font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center">H</span><span style="font-size:13.5px;color:#D7E5DE">halved.golf</span></div>
+<div style="font-size:12.5px">Scorekeeping and settlement for golf bets.</div>
+</div>
+</footer>
+</div>
+<script>
+  // The download bar rides in once you're past the intro and gets out of the
+  // way at the foot of the page, where the closing CTA already does the job.
+  (function () {
+    var bar = document.getElementById('sticky-cta');
+    if (!bar) return;
+    function onScroll() {
+      var doc = document.documentElement;
+      var y = window.scrollY || doc.scrollTop || 0;
+      var atEnd = y + window.innerHeight > doc.scrollHeight - 160;
+      bar.style.transform = (y > 520 && !atEnd) ? 'translateY(0)' : 'translateY(110%)';
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  })();
+</script>
+</body>
+</html>
