@@ -33,6 +33,7 @@ import '../utils/round_complete.dart';
 import '../widgets/stroke_dots.dart';
 import '../widgets/pinned_hole_grid.dart';
 import '../widgets/combo_tee_chip.dart';
+import '../utils/nine_totals.dart';
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -1498,36 +1499,72 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                     child: Align(alignment: Alignment.centerLeft,
                         child: Text(text, style: style)),
                   );
+              final split = NineSplit.of(holeRange);
+              const summaryW = 34.0;
+              Widget sumCell(String t) => SizedBox(
+                    width: summaryW, height: rowH,
+                    child: Center(
+                      child: Text(t,
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(fontWeight: FontWeight.bold)),
+                    ),
+                  );
+              int parSum(List<int> hs) {
+                var t = 0;
+                for (final h in hs) {
+                  t += scorecard.holeData(h)?.par ?? 0;
+                }
+                return t;
+              }
+              List<Widget> withTotals(Widget Function(int) cell,
+                  {Widget Function(List<int>)? sum}) {
+                final f = sum ?? (List<int> _) => sumCell('');
+                return [
+                  for (final h in split.front) cell(h),
+                  if (split.showOut) f(split.front),
+                  for (final h in split.back) cell(h),
+                  if (split.showIn) f(split.back),
+                  if (split.showTot) f(split.all),
+                ];
+              }
               return PinnedHoleGrid(
                 labelWidth  : labelColW,
                 cellWidth   : cellW,
                 holeCount   : holeRange.length,
-                currentIndex: holeRange.indexOf(currentHole),
+                currentIndex: split.rightEdgeOf(
+                        currentHole, cellW, summaryW) == null ? -1 : 0,
+                currentRightEdge:
+                    split.rightEdgeOf(currentHole, cellW, summaryW),
+                contentWidth: split.contentWidth(cellW, summaryW),
                 bands: [
                   // Hole numbers header
                   HoleGridBand(
                     lbl('Hole', const TextStyle(
                         fontSize: 11, fontWeight: FontWeight.bold)),
                     [
-                    for (final h in holeRange)
-                      holeCell(h,
-                          child: Text('$h',
-                              style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold))),
+                      for (final h in split.front)
+                        holeCell(h, child: Text('$h',
+                            style: const TextStyle(
+                                fontSize: 11, fontWeight: FontWeight.bold))),
+                      if (split.showOut) sumCell('OUT'),
+                      for (final h in split.back)
+                        holeCell(h, child: Text('$h',
+                            style: const TextStyle(
+                                fontSize: 11, fontWeight: FontWeight.bold))),
+                      if (split.showIn) sumCell('IN'),
+                      if (split.showTot) sumCell('TOT'),
                   ]),
                   // Par row
                   HoleGridBand(
                     lbl('Par', theme.textTheme.bodySmall?.copyWith(
                         fontStyle: FontStyle.italic)),
-                    [
-                    for (final h in holeRange)
-                      holeCell(h,
-                          child: Text(
-                            '${scorecard.holeData(h)?.par ?? "-"}',
-                            style: theme.textTheme.bodySmall,
-                          )),
-                  ]),
+                    withTotals(
+                      (h) => holeCell(h, child: Text(
+                          '${scorecard.holeData(h)?.par ?? "-"}',
+                          style: theme.textTheme.bodySmall)),
+                      sum: (hs) => sumCell('${parSum(hs)}'),
+                    ),
+                  ),
                   const HoleGridBand.rule(),
                   // Player score rows (real players + phantom)
                   for (final m in players)
@@ -1542,6 +1579,8 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                       rowH:          rowH,
                       strokesOnHole: (h) => _strokesOnHoleFor(m, h),
                       isPhantom:     m.player.isPhantom,
+                      split:         split,
+                      summaryW:      summaryW,
                     ).toBand(ctx),
                   const HoleGridBand.rule(),
                   // Hole winner row (top bet)
@@ -1551,8 +1590,7 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                           theme.textTheme.labelSmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                               fontStyle: FontStyle.italic)),
-                    [
-                    for (final h in holeRange)
+                    withTotals((h) =>
                       Builder(builder: (_) {
                         final winner = _winnerForHole(h);
                         Color? bg;
@@ -1579,8 +1617,8 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                                   fontWeight: FontWeight.bold,
                                   color: fg ?? theme.colorScheme.onSurfaceVariant,
                                 )));
-                      }),
-                  ]),
+                      })),
+                  ),
 
                   // ── Claremont bottom delta row ─────────────────────────
                   if (nassau.isClaremont)
@@ -1588,8 +1626,7 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                       lbl('Bot', theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                           fontStyle: FontStyle.italic)),
-                      [
-                      for (final h in holeRange)
+                      withTotals((h) =>
                         Builder(builder: (_) {
                           final hd = nassau.holes
                               .where((x) => x.hole == h)
@@ -1620,8 +1657,8 @@ class _NassauSummaryGridState extends State<_NassauSummaryGrid> {
                                     fontWeight: FontWeight.bold,
                                     color: fg ?? theme.colorScheme.onSurfaceVariant,
                                   )));
-                        }),
-                    ]),
+                        })),
+                      ),
                 ],
               );
             }),
@@ -1785,6 +1822,9 @@ class _NassauGridPlayerRow extends StatelessWidget {
   final double       cellW;
   final double       rowH;
   final int Function(int hole) strokesOnHole;
+  /// The nine split, when the card carries OUT / IN / TOT.
+  final NineSplit? split;
+  final double     summaryW;
   final bool         isPhantom;
 
   const _NassauGridPlayerRow({
@@ -1797,6 +1837,8 @@ class _NassauGridPlayerRow extends StatelessWidget {
     required this.cellW,
     required this.rowH,
     required this.strokesOnHole,
+    this.split,
+    this.summaryW = 34.0,
     this.isPhantom = false,
   });
 
@@ -1847,6 +1889,41 @@ class _NassauGridPlayerRow extends StatelessWidget {
         ? 'PHM hc:${member.playingHandicap}'
         : member.player.displayShort;
 
+    Widget sumCell(String t) => SizedBox(
+          width: summaryW, height: rowH,
+          child: Center(
+            child: Text(t,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+          ),
+        );
+
+    /// This golfer's gross over a nine — an em dash until it is complete. A
+    /// PHANTOM has no card of its own, so its subtotal stays blank rather than
+    /// adding up scores that belong to somebody else.
+    Widget grossTotal(List<int> holes) {
+      if (isPhantom) return sumCell('');
+      var total = 0;
+      for (final h in holes) {
+        final g = scorecard.holeData(h)?.scoreFor(member.player.id)?.grossScore;
+        if (g == null) return sumCell('—');
+        total += g;
+      }
+      return sumCell('$total');
+    }
+
+    List<Widget> cells(Widget Function(int) cell) {
+      final sp = split;
+      if (sp == null) return [for (final h in holeRange) cell(h)];
+      return [
+        for (final h in sp.front) cell(h),
+        if (sp.showOut) grossTotal(sp.front),
+        for (final h in sp.back) cell(h),
+        if (sp.showIn) grossTotal(sp.back),
+        if (sp.showTot) grossTotal(sp.all),
+      ];
+    }
+
     return HoleGridBand(
       SizedBox(
         width: labelColW, height: rowH,
@@ -1857,8 +1934,7 @@ class _NassauGridPlayerRow extends StatelessWidget {
               style: labelStyle),
         ),
       ),
-      [
-      for (final h in holeRange)
+      cells((h) =>
         _cell(h, context,
             child: SizedBox(
               width: cellW, height: rowH,
@@ -1893,8 +1969,8 @@ class _NassauGridPlayerRow extends StatelessWidget {
                         color: theme.colorScheme.primary,
                       )),
               ]),
-            )),
-    ]);
+            ))),
+    );
   }
 }
 
