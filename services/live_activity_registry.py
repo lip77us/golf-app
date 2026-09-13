@@ -439,6 +439,15 @@ def _stableford(foursome, player_id, *, final):
         thru=holes_played(foursome))
 
 
+def _stroke_play(foursome, player_id, *, final):
+    from services.live_activity_stroke_play import stroke_play_activity_state
+    if final:
+        return {}   # TODO: the closing frame — `78 · GROSS` beside the place
+    return stroke_play_activity_state(
+        foursome.round, foursome, player_id=player_id,
+        thru=holes_played(foursome))
+
+
 def _banker(foursome, player_id, *, final):
     from services.live_activity_banker import (banker_activity_state,
                                                banker_final_state)
@@ -466,6 +475,9 @@ BUILDERS = {
     # is still built per foursome, because the locked corner is the reader's
     # own hole and his own tee's yardage.
     'stableford': _stableford,
+    # Stroke Play rides the `low_net_round` slug; the card is named for what
+    # the app calls the game on screen.
+    'low_net_round': _stroke_play,
     # nassau_nine still rides the NassauGame model as one match but is a
     # PARTIAL round — its holes-remaining is not 18 minus played, so it does
     # not fit this card's state slot and is not drawn. Triple Nassau is
@@ -479,7 +491,8 @@ _SLUG_AWARE = {'match_18', 'fourball'}
 # slug -> the card `kind` its builder declares, where that differs from the
 # slug. Only needed for a builder serving several games.
 CARD_KIND = {'match_18': 'match', 'fourball': 'match',
-             'sequoya_threes': 'sequoya'}
+             'sequoya_threes': 'sequoya',
+             'low_net_round': 'stroke_play'}
 
 # Cards no client in the wild can draw yet.
 #
@@ -519,7 +532,7 @@ CARD_KIND = {'match_18': 'match', 'fourball': 'match',
 # Swift layout — which for these five matters more than usual: they are games
 # that have NO card today, so an ungated kind would replace nothing at all with
 # a lock-screen nag pointing at an update that does not exist.
-UNSHIPPED_KINDS: set = {'stableford'}
+UNSHIPPED_KINDS: set = {'stableford', 'stroke_play'}
 
 
 def card_kind(slug: str) -> str:

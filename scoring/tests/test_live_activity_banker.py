@@ -339,14 +339,21 @@ class BankerCardTests(TestCase):
         declared = {name for name, body in entries
                     if re.search(r'hasLiveActivity\s*:\s*true', body)}
         # GameIds constants are camelCase for snake_case slugs.
-        def camel(slug):
-            head, *rest = slug.split('_')
-            return head + ''.join(w.title() for w in rest)
+        # A GameIds constant is NOT reliably the camelCase of its slug —
+        # `strokePlay = 'low_net_round'` — so the constant is resolved by its
+        # VALUE. Guessing the name reported a card as unwired when it was
+        # wired, which is the failure mode a gate test can least afford.
+        names = dict(re.findall(
+            r"static const String (\w+)\s*=\s*'([^']+)'", catalog))
+        by_slug = {slug: name for name, slug in names.items()}
 
         from services.live_activity_registry import BUILDERS
         for slug in BUILDERS:
+            const = by_slug.get(slug)
+            self.assertIsNotNone(
+                const, f'{slug} has a card builder but no GameIds constant')
             self.assertIn(
-                camel(slug), declared,
+                const, declared,
                 f'{slug} has a card builder but its Flutter catalog entry '
                 'does not set hasLiveActivity, so the phone never starts one')
 

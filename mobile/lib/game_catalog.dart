@@ -619,6 +619,11 @@ const List<GameMeta> kGameCatalog = [
     // Pure scoring overlay (low net / low gross) — also usable as a
     // leaderboard-only side game alongside another primary.
     canBeSideGame: true,
+    // The card is built and gated server-side. This flag is what the client
+    // reads before calling Activity.request — the third side of a gate a
+    // previous session found at two, after a Banker round played all the way
+    // through hole one with a card that was ready and never started.
+    hasLiveActivity: true,
     // Stroke Play can combine with any per-foursome side game.
     excludes     : {GameIds.points531},
   ),
