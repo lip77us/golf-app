@@ -31,6 +31,7 @@ import '../widgets/survivor_rail.dart';
 import 'tournament_settlement_screen.dart';
 import '../widgets/stroke_dots.dart';
 import '../widgets/pinned_hole_grid.dart';
+import '../utils/nine_totals.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   final int roundId;
@@ -9859,6 +9860,7 @@ class _TripleCupHoleDetail extends StatelessWidget {
   static const double _labelColW = 60.0;
   static const double _cellW     = 30.0;
   static const double _rowH      = 24.0;
+  static const double _summaryW  = 30.0;
 
   @override
   Widget build(BuildContext context) {
@@ -9876,51 +9878,98 @@ class _TripleCupHoleDetail extends StatelessWidget {
         endHole - startHole + 1, (i) => startHole + i);
     final byHole = {for (final h in holes) (h['hole'] as int): h};
 
+    // ── OUT / IN / TOT ──────────────────────────────────────────────────────
+    // A Triple Cup segment is a stretch of holes, not a round, so a segment
+    // that sits entirely inside one nine shows that nine's total alone — which
+    // is what `NineSplit` does without being told.
+    final split = NineSplit.of(holeRange);
+
+    Widget sumCell(String t) => SizedBox(
+          width: _summaryW, height: _rowH,
+          child: Center(
+            child: Text(t,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+          ),
+        );
+
+    int parSum(List<int> hs) {
+      var t = 0;
+      for (final h in hs) {
+        t += (byHole[h]?['par'] as int?) ?? 0;
+      }
+      return t;
+    }
+
+    List<Widget> withTotals(Widget Function(int) cell,
+        {Widget Function(List<int>)? sum}) {
+      final f = sum ?? (List<int> _) => sumCell('');
+      return [
+        for (final h in split.front) cell(h),
+        if (split.showOut) f(split.front),
+        for (final h in split.back) cell(h),
+        if (split.showIn) f(split.back),
+        if (split.showTot) f(split.all),
+      ];
+    }
+
     return Padding(
       padding: const EdgeInsets.only(left: 2, bottom: 8, top: 2),
       child: PinnedHoleGrid(
         labelWidth  : _labelColW,
         cellWidth   : _cellW,
         holeCount   : holeRange.length,
-        currentIndex: holeRange.length - 1,
+        currentIndex: split.rightEdgeOf(
+                holeRange.isEmpty ? -1 : holeRange.last,
+                _cellW, _summaryW) == null ? -1 : 0,
+        currentRightEdge: split.rightEdgeOf(
+            holeRange.isEmpty ? -1 : holeRange.last, _cellW, _summaryW),
+        contentWidth: split.contentWidth(_cellW, _summaryW),
         bands: [
             // Hole numbers
             HoleGridBand(
               _labelCell('Hole', bold: true),
               [
-              for (final h in holeRange)
-                _cell(Text('$h',
-                    style: const TextStyle(
-                        fontSize: 11, fontWeight: FontWeight.bold))),
+                for (final h in split.front)
+                  _cell(Text('$h',
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.bold))),
+                if (split.showOut) sumCell('OUT'),
+                for (final h in split.back)
+                  _cell(Text('$h',
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.bold))),
+                if (split.showIn) sumCell('IN'),
+                if (split.showTot) sumCell('TOT'),
             ]),
             // Par
             HoleGridBand(
               _labelCell('Par', italic: true),
-              [
-              for (final h in holeRange)
-                _cell(Text('${byHole[h]?['par'] ?? '-'}',
+              withTotals(
+                (h) => _cell(Text('${byHole[h]?['par'] ?? '-'}',
                     style: theme.textTheme.bodySmall)),
-            ]),
+                sum: (hs) => sumCell('${parSum(hs)}'),
+              ),
+            ),
             // Stroke Index — lets the user verify which holes get strokes.
+            // No nine total: a stroke index does not add up to anything.
             HoleGridBand(
               _labelCell('SI', italic: true),
-              [
-              for (final h in holeRange)
+              withTotals((h) =>
                 _cell(Text('${byHole[h]?['stroke_index'] ?? '-'}',
                     style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant))),
-            ]),
+                        color: theme.colorScheme.onSurfaceVariant)))),
+            ),
             const HoleGridBand.rule(),
             if (segment == 'foursomes')
-              ..._teamRows(theme, holeRange, byHole, players)
+              ..._teamRows(theme, holeRange, byHole, players, split)
             else
-              ..._playerRows(theme, holeRange, byHole, players),
+              ..._playerRows(theme, holeRange, byHole, players, split),
             const HoleGridBand.rule(),
-            // Won-by row
+            // Won-by row — a hole verdict has no nine total.
             HoleGridBand(
               _labelCell('Won by', italic: true, dim: true),
-              [
-              for (final h in holeRange) Builder(builder: (_) {
+              withTotals((h) => Builder(builder: (_) {
                 final w = byHole[h]?['winner']?.toString();
                 if (w == 'T1') {
                   return _cell(
@@ -9955,8 +10004,8 @@ class _TripleCupHoleDetail extends StatelessWidget {
                 return _cell(Text('·',
                     style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant)));
-              }),
-            ]),
+              })),
+            ),
         ],
       ),
     );
@@ -10053,7 +10102,39 @@ class _TripleCupHoleDetail extends StatelessWidget {
   /// team won the hole (i.e. they contributed to the win).
   List<HoleGridBand> _playerRows(ThemeData theme, List<int> holeRange,
       Map<int, Map<String, dynamic>> byHole,
-      List<Map<String, dynamic>> players) {
+      List<Map<String, dynamic>> players, NineSplit split) {
+    Widget sumCell(String t) => SizedBox(
+          width: _summaryW, height: _rowH,
+          child: Center(
+            child: Text(t,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+          ),
+        );
+
+    /// A golfer's gross over a nine — an em dash until it is complete.
+    Widget grossTotal(int pid, List<int> holes) {
+      var total = 0;
+      for (final h in holes) {
+        final scores =
+            (byHole[h]?['scores'] as List? ?? []).cast<Map<String, dynamic>>();
+        final g = scores
+            .where((x) => (x['player_id'] as int?) == pid)
+            .firstOrNull?['gross'] as int?;
+        if (g == null) return sumCell('—');
+        total += g;
+      }
+      return sumCell('$total');
+    }
+
+    List<Widget> withTotals(int pid, Widget Function(int) cell) => [
+          for (final h in split.front) cell(h),
+          if (split.showOut) grossTotal(pid, split.front),
+          for (final h in split.back) cell(h),
+          if (split.showIn) grossTotal(pid, split.back),
+          if (split.showTot) grossTotal(pid, split.all),
+        ];
+
     return [
       for (final p in players) () {
         final teamNum   = p['team_number'] as int? ?? 1;
@@ -10093,8 +10174,7 @@ class _TripleCupHoleDetail extends StatelessWidget {
               ),
             ),
           ),
-          [
-          for (final h in holeRange) Builder(builder: (_) {
+          withTotals(pid, (h) => Builder(builder: (_) {
             final hData = byHole[h];
             final scores = (hData?['scores'] as List? ?? [])
                 .cast<Map<String, dynamic>>();
@@ -10119,8 +10199,8 @@ class _TripleCupHoleDetail extends StatelessWidget {
               highlight: highlight,
               isWin: contributed,
             );
-          }),
-        ]);
+          })),
+        );
       }(),
     ];
   }
@@ -10130,7 +10210,38 @@ class _TripleCupHoleDetail extends StatelessWidget {
   /// plus stroke dots for the alt-shot team allocation.
   List<HoleGridBand> _teamRows(ThemeData theme, List<int> holeRange,
       Map<int, Map<String, dynamic>> byHole,
-      List<Map<String, dynamic>> players) {
+      List<Map<String, dynamic>> players, NineSplit split) {
+    Widget sumCell(String t) => SizedBox(
+          width: _summaryW, height: _rowH,
+          child: Center(
+            child: Text(t,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+          ),
+        );
+
+    /// One BALL between two golfers in foursomes, so the team's gross is the
+    /// nine total — an em dash until it is complete.
+    Widget teamTotal(int teamNum, List<int> holes) {
+      var total = 0;
+      for (final h in holes) {
+        final g = teamNum == 1
+            ? (byHole[h]?['t1_team_gross'] as int?)
+            : (byHole[h]?['t2_team_gross'] as int?);
+        if (g == null) return sumCell('—');
+        total += g;
+      }
+      return sumCell('$total');
+    }
+
+    List<Widget> withTotals(int teamNum, Widget Function(int) cell) => [
+          for (final h in split.front) cell(h),
+          if (split.showOut) teamTotal(teamNum, split.front),
+          for (final h in split.back) cell(h),
+          if (split.showIn) teamTotal(teamNum, split.back),
+          if (split.showTot) teamTotal(teamNum, split.all),
+        ];
+
     String teamLabel(int teamNum) {
       final shorts = players
           .where((p) => (p['team_number'] as int?) == teamNum &&
@@ -10158,8 +10269,7 @@ class _TripleCupHoleDetail extends StatelessWidget {
             ),
           ),
         ),
-        [
-        for (final h in holeRange) Builder(builder: (_) {
+        withTotals(teamNum, (h) => Builder(builder: (_) {
           final hData = byHole[h];
           final gross = teamNum == 1
               ? (hData?['t1_team_gross'] as int?)
@@ -10177,8 +10287,8 @@ class _TripleCupHoleDetail extends StatelessWidget {
             highlight: highlight,
             isWin: isWin,
           );
-        }),
-      ]);
+        })),
+      );
     }
 
     return [teamRow(1), teamRow(2)];
