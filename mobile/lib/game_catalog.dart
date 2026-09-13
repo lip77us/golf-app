@@ -327,6 +327,9 @@ const List<GameMeta> kGameCatalog = [
     hostsOverlaySideGames: true,
     excludes     : {GameIds.sixes, GameIds.nassau, GameIds.skins,
                     GameIds.strokePlay, GameIds.stableford},
+    // The card is built and gated server-side; this flag is what the client
+    // reads before calling Activity.request.
+    hasLiveActivity: true,
   ),
   GameMeta(
     id          : GameIds.nassau,

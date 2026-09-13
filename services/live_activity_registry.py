@@ -448,6 +448,14 @@ def _stroke_play(foursome, player_id, *, final):
         thru=holes_played(foursome))
 
 
+def _points(foursome, player_id, *, final):
+    from services.live_activity_points import points_activity_state
+    if final:
+        return {}   # TODO: the closing frame — the money becomes the headline
+    return points_activity_state(foursome, player_id=player_id,
+                                 thru=holes_played(foursome))
+
+
 def _banker(foursome, player_id, *, final):
     from services.live_activity_banker import (banker_activity_state,
                                                banker_final_state)
@@ -478,6 +486,7 @@ BUILDERS = {
     # Stroke Play rides the `low_net_round` slug; the card is named for what
     # the app calls the game on screen.
     'low_net_round': _stroke_play,
+    'points_531': _points,
     # nassau_nine still rides the NassauGame model as one match but is a
     # PARTIAL round — its holes-remaining is not 18 minus played, so it does
     # not fit this card's state slot and is not drawn. Triple Nassau is
@@ -492,7 +501,8 @@ _SLUG_AWARE = {'match_18', 'fourball'}
 # slug. Only needed for a builder serving several games.
 CARD_KIND = {'match_18': 'match', 'fourball': 'match',
              'sequoya_threes': 'sequoya',
-             'low_net_round': 'stroke_play'}
+             'low_net_round': 'stroke_play',
+             'points_531': 'points'}
 
 # Cards no client in the wild can draw yet.
 #
@@ -532,7 +542,7 @@ CARD_KIND = {'match_18': 'match', 'fourball': 'match',
 # Swift layout — which for these five matters more than usual: they are games
 # that have NO card today, so an ungated kind would replace nothing at all with
 # a lock-screen nag pointing at an update that does not exist.
-UNSHIPPED_KINDS: set = {'stableford', 'stroke_play'}
+UNSHIPPED_KINDS: set = {'stableford', 'stroke_play', 'points'}
 
 
 def card_kind(slug: str) -> str:

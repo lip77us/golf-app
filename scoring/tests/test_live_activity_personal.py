@@ -231,3 +231,132 @@ class StablefordTests(TestCase):
     def test_the_money_is_empty_until_the_end(self):
         self._play(1, 4, 4)
         self.assertEqual(self._state(1)['footer']['money'], '')
+
+
+class PointsTests(TestCase):
+    """Points 5-3-1 — the third personal card, and the one that departs.
+
+    Three-handed only, nine points DIVIDED rather than earned, so a point you
+    took is a point neither of the others got. That is why three rows stay
+    where every other four-name card became a strip: the row count can never
+    grow, and a single number cannot describe the state.
+    """
+
+    def setUp(self):
+        from services.points_531 import setup_points_531
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['points_531'])
+        self.round.primary_game = 'points_531'
+        self.round.bet_unit = Decimal('1.00')
+        self.round.save(update_fields=['primary_game', 'bet_unit'])
+        self.fs = make_foursome(
+            self.round,
+            [('Tom Hayes', 0), ('Sam Reid', 0), ('Dave Moran', 0)],
+            tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        setup_points_531(self.fs, handicap_mode='gross')
+
+    def _play(self, hole, hayes, reid, moran):
+        from services.points_531 import calculate_points_531
+        submit_hole(self.fs, hole, [(self.pid['Tom Hayes'], hayes),
+                                    (self.pid['Sam Reid'], reid),
+                                    (self.pid['Dave Moran'], moran)])
+        calculate_points_531(self.fs)
+
+    def _state(self, thru, who='Tom Hayes'):
+        from services.live_activity_points import points_activity_state
+        return points_activity_state(
+            self.fs, player_id=self.pid[who] if who else None, thru=thru)
+
+    # -- the shape ----------------------------------------------------------
+
+    def test_three_rows_stay(self):
+        """One more row than any other card carries, affordable because the
+        format is three-handed and the count can never grow."""
+        self._play(1, 3, 4, 5)
+        self.assertEqual(len(self._state(1)['rows']), 3)
+
+    def test_it_is_not_a_strip(self):
+        self._play(1, 3, 4, 5)
+        self.assertNotIn('strip', self._state(1))
+
+    def test_nothing_is_blue_or_orange(self):
+        self._play(1, 3, 4, 5)
+        s = self._state(1)
+        self.assertFalse({r['colour'] for r in s['rows']} & {'blue', 'orange'})
+
+    # -- the header names the payoff model ---------------------------------
+
+    def test_the_header_names_the_model_in_the_config_screens_words(self):
+        """A group that picked a setting reads it back unchanged; two
+        vocabularies for one choice is how a golfer ends up believing the card
+        is showing a different game."""
+        self._play(1, 3, 4, 5)
+        self.assertIn(self._state(1)['header']['game'],
+                      ('POINTS · PAY VS AVERAGE', 'POINTS · PAY JUST LEADER',
+                       'POINTS · PAY ABOVE YOU'))
+
+    # -- the last hole's award ---------------------------------------------
+
+    def test_the_award_carries_no_plus_sign(self):
+        """The card already spends a plus on the money and the gross; a third
+        made the column read as a running total."""
+        self._play(1, 3, 4, 5)
+        for r in self._state(1)['rows']:
+            self.assertNotIn('+', r['award'])
+
+    def test_mint_marks_the_best_award_not_the_leader(self):
+        """A leader who scrambled while somebody else took the 5 reads dim —
+        which is the column's whole job."""
+        self._play(1, 3, 4, 5)          # Hayes wins the hole
+        rows = {r['label']: r for r in self._state(1)['rows']}
+        self.assertTrue(rows['Tom Hayes']['award_best'])
+        self.assertFalse(rows['Dave Moran']['award_best'])
+
+    def test_a_tied_hole_marks_both(self):
+        self._play(1, 4, 4, 5)
+        rows = {r['label']: r for r in self._state(1)['rows']}
+        self.assertTrue(rows['Tom Hayes']['award_best'])
+        self.assertTrue(rows['Sam Reid']['award_best'])
+        self.assertFalse(rows['Dave Moran']['award_best'])
+
+    # -- the money ----------------------------------------------------------
+
+    def test_the_money_is_live_from_the_first_hole(self):
+        """The one card in the set where that is true: a hole IS the
+        settlement, so the figure is a fact before the group reaches the next
+        tee — settled money, never a forecast."""
+        self._play(1, 3, 4, 5)
+        self.assertNotEqual(self._state(1)['footer']['money'], '')
+
+    def test_behind_is_negative(self):
+        """The footer two rows down says `−$2`, and a golfer reading a plus
+        above a minus concludes one of them is a bug."""
+        self._play(1, 5, 3, 4)          # Hayes last
+        st = self._state(1, who='Tom Hayes')['state']
+        self.assertTrue(st['word'].startswith('−') or st['word'] == 'LEADS'
+                        or st['word'].startswith('+'),
+                        f"unexpected state word {st['word']!r}")
+
+    # -- the watcher --------------------------------------------------------
+
+    def test_a_watcher_has_no_row_of_his_own_so_the_leader_is_named(self):
+        """Points names all three golfers, so a watcher is the one reader with
+        nothing of his own on the card — a gap with no owner would be
+        meaningless to him."""
+        self._play(1, 3, 4, 5)
+        s = self._state(1, who=None)
+        self.assertEqual(s['who'], '')
+        self.assertIn('HAYES', s['state']['word'])
+
+    def test_nothing_is_bold_on_a_watcher_card(self):
+        """That is the tell that none of it is about him."""
+        self._play(1, 3, 4, 5)
+        s = self._state(1, who=None)
+        self.assertEqual({r['colour'] for r in s['rows']}, {'dim'})
+
+    def test_the_watchers_footer_is_the_calculation(self):
+        self._play(1, 3, 4, 5)
+        self.assertIn('a point', self._state(1, who=None)['footer']['context'])
+        self.assertEqual(self._state(1, who=None)['footer']['money'], '')

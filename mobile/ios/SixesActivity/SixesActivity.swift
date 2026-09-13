@@ -108,6 +108,25 @@ struct SixesActivityAttributes: ActivityAttributes {
             /// floating the count to the top would say the round has presses
             /// without saying which match carries them.
             var chip: String? = nil
+            /// Points only: what this golfer won on the last closed hole —
+            /// `Sam Reid 43  5` — answering *who took that one* without a
+            /// sentence. It PERSISTS until the next hole closes: the split is
+            /// the standing state of the game, not a flash.
+            var award: String? = nil
+            /// Mint marks **the best award on that hole, never the leader.**
+            /// On a tied hole both `4`s go mint and the `1` goes dim; a leader
+            /// who scrambled a 3 while somebody else took the 5 reads dim,
+            /// which is the column's whole job.
+            ///
+            /// It sets its own alpha rather than inheriting the row's — a
+            /// dimmed row multiplying a dimmed numeral put losing awards near
+            /// 30% white, illegible at 10.5px and worse under always-on.
+            var awardBest: Bool = false
+
+            enum CodingKeys: String, CodingKey {
+                case label, text, colour, note, chip, award
+                case awardBest = "award_best"
+            }
         }
 
         /// One row of the Survivor track — a golfer, and what happened to him
