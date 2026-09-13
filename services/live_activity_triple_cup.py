@@ -133,9 +133,251 @@ def _cannot_lose(t1, t2, available) -> bool:
     return out > 0 and lead >= out
 
 
+def _pairing(m, key) -> str:
+    """`Kelly & Moran` — surnames, because two of them and a `v.` is already
+    most of a 320-point row."""
+    names = (m.get(key) or {}).get('players') or []
+    return ' & '.join(surname(n).title() for n in names if n)
+
+
+def _casual_sides(summary, live, hole, player_id, mine_is_t1) -> list:
+    """The sides line — ONE row, always, and a list rather than a string.
+
+    Each entry is a dot, a name at full weight, and a dim qualifier after it.
+    That is what lets the two live Singles share a row: `You v. Reid · 1 up`
+    and `Moran v. Naylor · 2 dn` at 12.5px are a line, where a row each
+    measured 163pt and put the card over the ceiling on its own.
+
+    **Yours first, always**, and the state slot holds yours.
+    """
+    mine = 'blue' if mine_is_t1 else 'orange'
+    theirs = 'orange' if mine_is_t1 else 'blue'
+
+    singles = _singles_live(summary, hole)
+    if singles:
+        def one(m):
+            t1n = (m.get('team1') or {}).get('players') or []
+            t2n = (m.get('team2') or {}).get('players') or []
+            a = surname(t1n[0]).title() if t1n else ''
+            b = surname(t2n[0]).title() if t2n else ''
+            is_mine = player_id in {p.get('player_id')
+                                    for p in (m.get('players') or [])}
+            return {'names': f'{"You" if is_mine else a} v. {b}',
+                    'note': f'· {_margin_text(m)}',
+                    'colour': mine if is_mine else theirs,
+                    'leading': is_mine}
+        ordered = sorted(singles, key=lambda m: 0 if player_id in {
+            p.get('player_id') for p in (m.get('players') or [])} else 1)
+        return [one(m) for m in ordered]
+
+    # One match live: both pairings, named. The `v.` rides as the first
+    # entry's qualifier so the row is one renderer rather than two.
+    if live is not None and (_pairing(live, 'team1')
+                             or _pairing(live, 'team2')):
+        first, second = ('team1', 'team2') if mine_is_t1 else ('team2', 'team1')
+        return [{'names': _pairing(live, first), 'note': 'v.',
+                 'colour': mine, 'leading': True},
+                {'names': _pairing(live, second), 'note': '',
+                 'colour': theirs, 'leading': False}]
+
+    names = [summary.get('team1_name') or 'Blue',
+             summary.get('team2_name') or 'Orange']
+    if not mine_is_t1:
+        names.reverse()
+    return [{'names': names[0], 'note': 'v.', 'colour': mine, 'leading': True},
+            {'names': names[1], 'note': '', 'colour': theirs,
+             'leading': False}]
+
+
+def _cup_standings(foursome):
+    """The cup this group's match is one match IN, or None for a casual cup.
+
+    **This is what makes it the team configuration** — not a setting, not a
+    flag on the round. A Triple Cup inside a Ryder Cup is a different product
+    from four men playing for twenty-five dollars, and the thing that
+    distinguishes them is whether there is a cup-wide score to report.
+    """
+    rnd = getattr(foursome, 'round', None)
+    tournament = getattr(rnd, 'tournament', None)
+    if tournament is None:
+        return None
+    from services.cup_standings import (cup_round_live_summary,
+                                        cup_standings_summary)
+    # A round with no cup config contributes nothing to a cup and has none to
+    # report — a tournament round is not automatically a cup round.
+    if cup_round_live_summary(rnd) is None:
+        return None
+    return cup_standings_summary(tournament)
+
+
+def _groups_still_out(round_obj) -> str:
+    """`3 groups still out` — the footer-left slot in the team cup.
+
+    **Cup money settles in the team room, not on a lock screen**, so the stake
+    the casual card carries has nothing to say here. What a captain wants off
+    a glance is how much of the cup is unresolved, and a group is the unit he
+    thinks in.
+
+    A group is counted once however many of its points are outstanding: two
+    Singles still on the course are one group still out, not two.
+    """
+    from services.cup_standings import cup_round_live_summary
+    live = cup_round_live_summary(round_obj)
+    if not live:
+        return ''
+    out = set()
+    for m in (live.get('matches') or []):
+        awarded = float(m.get('team1_points') or 0) + \
+                  float(m.get('team2_points') or 0)
+        if awarded + 1e-9 < float(m.get('total_possible') or 0):
+            out.update(m.get('groups') or [])
+    if not out:
+        return 'all groups in'
+    return f'{len(out)} group{"s" if len(out) != 1 else ""} still out'
+
+
+def _cup_palette(cup) -> tuple:
+    """Which of the set's two side colours each cup team wears.
+
+    Position — team 1 blue, team 2 orange — is the app's convention and is
+    what the casual card, the cells and the needle all use. But a cup's teams
+    have their OWN names and colours, and a card that headlines a blue number
+    while the state slot says `ORANGE TAKES IT` is telling a golfer the
+    opposite of the truth in the one glance the card exists for. That is the
+    same defect as the fourball's hardcoded blue, arriving by a different
+    route.
+
+    So the declared colours win when they can: both sides must name a colour
+    the widget actually draws, and they must name different ones. Anything
+    else — a Red/Green cup, a cup where both picked blue, a cup with no
+    colours set — falls back to position, where at least the two halves of
+    the needle are always distinguishable.
+    """
+    known = {'blue', 'orange'}
+    one = (cup.get('team1_colour') or '').strip().lower()
+    two = (cup.get('team2_colour') or '').strip().lower()
+    if one in known and two in known and one != two:
+        return one, two
+    return 'blue', 'orange'
+
+
+def _team_sides(summary, overall, hole, mine_is_t1, palette) -> list:
+    """`Your Triple Cup · 1–0, in the Foursomes` — one entry.
+
+    The headline has been taken by the cup, and your own match is the thing
+    you can still do something about, so it keeps the sides line. **It reads
+    as a sub-total of the cup rather than as a match**, which is why the
+    qualifier is a cup score and not `2 up`.
+    """
+    t1 = float(overall.get('team1_points') or 0)
+    t2 = float(overall.get('team2_points') or 0)
+    mine, theirs = (t1, t2) if mine_is_t1 else (t2, t1)
+    live = _live_match(summary, hole)
+    if live is not None:
+        label = (live.get('label') or live.get('segment') or '').lower()
+        note = f'· {_score(mine)}–{_score(theirs)}, in the {label}'
+    elif mine > theirs:
+        note = f'· won {_score(mine)}–{_score(theirs)}'
+    elif theirs > mine:
+        note = f'· lost {_score(mine)}–{_score(theirs)}'
+    else:
+        note = f'· halved {_score(mine)}–{_score(theirs)}'
+    return [{'names': 'Your Triple Cup', 'note': note,
+             'colour': palette[0] if mine_is_t1 else palette[1],
+             'leading': True}]
+
+
+def _cup_header(foursome, cup) -> str:
+    """`SHELDON CUP · ROUND 2`.
+
+    **`ROUND`, not the design's `DAY`.** The app has called them rounds
+    everywhere since it had them, and two vocabularies for one thing is how a
+    golfer ends up believing he is looking at a different competition — the
+    same argument that kept the Points payoff models in the config screen's
+    words. A cup can also play two rounds in one day, which `DAY 2` would then
+    be lying about.
+    """
+    rnd = getattr(foursome, 'round', None)
+    tt = getattr(getattr(rnd, 'tournament', None), 'team_tournament', None)
+    name = (getattr(tt, 'cup_name', '') or '').upper()
+    number = getattr(rnd, 'round_number', None) or 0
+    if name and number > 1:
+        return f'{name} · ROUND {number}'
+    return name or 'TRIPLE CUP'
+
+
+def _team_state(foursome, summary, cup, *, player_id, thru, mine_is_t1):
+    """The team configuration — same composition, a different view model.
+
+    Seven rows of the packet's difference table, and the headline is the one
+    that carries the rest: **the whole cup**, not this group's four points. A
+    point here is one twenty-fourth of the thing being decided, and the card
+    stops being about the match the moment there is a cup score to report.
+    """
+    from services.live_activity_registry import gross_to_par
+
+    overall = summary.get('overall') or {}
+    played = thru or 0
+    hole = hole_in_play(foursome, played)
+
+    t1 = float(cup.get('team1_points') or 0)
+    t2 = float(cup.get('team2_points') or 0)
+    total = float(cup.get('total_possible') or 0)
+
+    palette = _cup_palette(cup)
+    if t1 > t2:
+        colour = palette[0]
+    elif t2 > t1:
+        colour = palette[1]
+    else:
+        colour = 'neutral'
+
+    # **Your own match cannot go in this slot.** The headline now counts
+    # twenty-four points and eleven other golfers, and a `1 up` beside it
+    # reads as a contradiction. Points-to-win is the figure a captain recites
+    # all afternoon.
+    winner = cup.get('winner_team')
+    if winner in (1, 2):
+        # The cup can clinch while your group is still on the fourteenth, and
+        # when it does it outranks everything else on the card — the same rule
+        # that gives the casual cup its CANNOT LOSE override.
+        side = (cup.get('team1_name') if winner == 1
+                else cup.get('team2_name')) or ''
+        state = {'word': side.upper(), 'to_play': 'TAKES IT', 'colour': 'mint'}
+    elif cup.get('cup_status') == 'tied':
+        state = {'word': 'HALVED', 'to_play': 'CUP SHARED', 'colour': 'mint'}
+    else:
+        state = {'word': _score(cup.get('to_win')), 'to_play': 'TO WIN'}
+
+    return {
+        'kind'  : KIND,
+        'header': {'game': _cup_header(foursome, cup),
+                   'segment': hole_facts(foursome, player_id, hole)},
+        'number': {'text': f'{_score(t1)}–{_score(t2)}', 'colour': colour},
+        'sides' : _team_sides(summary, overall, hole, mine_is_t1, palette),
+        'state' : state,
+        # **The needle instead of the cells.** Twenty-four points as discrete
+        # cells at 320 points would be decoration; the same 7pt strip carries
+        # the same fact as one continuous bar.
+        'pips'  : [],
+        # Keyed by SIDE, not by team number — the needle's left half is
+        # team 1 and wears whatever colour team 1 wears.
+        'needle': {palette[0]: (t1 / total) if total else 0.0,
+                   palette[1]: (t2 / total) if total else 0.0},
+        'final' : None,
+        'footer': {'context': _groups_still_out(foursome.round), 'money': ''},
+        'thru'  : thru_line(played, gross_to_par(summary, player_id)),
+    }
+
+
 def triple_cup_activity_state(foursome, *, player_id=None, thru=None) -> dict:
-    """The casual configuration. The team cup is a different view model over
-    the same composition and is not built yet — see the module note."""
+    """One composition, two games — the configuration follows the cup.
+
+    Nothing about the panel changes between them: same slot order, same type
+    sizes, same one-row sides line. What changes is what each slot is ABOUT,
+    and that is decided by whether this group's match is one match in a
+    tournament cup.
+    """
     from services.triple_cup import triple_cup_summary
     from services.live_activity_registry import gross_to_par
 
@@ -155,6 +397,11 @@ def triple_cup_activity_state(foursome, *, player_id=None, thru=None) -> dict:
     # Which side the reader is on, so "yours first" and the margin can be
     # written from his side rather than team 1's.
     mine_is_t1 = player_id in set(summary.get('team1_ids') or [])
+
+    cup = _cup_standings(foursome)
+    if cup is not None:
+        return _team_state(foursome, summary, cup, player_id=player_id,
+                           thru=thru, mine_is_t1=mine_is_t1)
 
     # The headline is the CUP, and it wears the leader's colour. Never mint —
     # mint is the app's colour, not a side's.
@@ -183,30 +430,7 @@ def triple_cup_activity_state(foursome, *, player_id=None, thru=None) -> dict:
     else:
         state = {'word': '', 'to_play': ''}
 
-    # The sides line. One row, everywhere — a second is 18pt and puts any card
-    # in this packet over the ceiling on its own.
-    singles = _singles_live(summary, hole)
-    if singles:
-        def one(m):
-            t1n = (m.get('team1') or {}).get('players') or []
-            t2n = (m.get('team2') or {}).get('players') or []
-            a = surname(t1n[0]) if t1n else ''
-            b = surname(t2n[0]) if t2n else ''
-            mine = player_id in {p.get('player_id')
-                                 for p in (m.get('players') or [])}
-            who = 'You' if mine else a.title()
-            return f'{who} v. {b.title()} · {_margin_text(m)}'
-        # **Yours first, always**, and the state slot holds yours.
-        ordered = sorted(singles, key=lambda m: 0 if player_id in {
-            p.get('player_id') for p in (m.get('players') or [])} else 1)
-        text = ' · '.join(one(m) for m in ordered)
-    else:
-        text = ' v. '.join([summary.get('team1_name') or 'Blue',
-                            summary.get('team2_name') or 'Orange'])
-    # No dot. The dot marks a SIDE everywhere else in the set, and this line
-    # names both of them in running text — there is no one side for it to
-    # stand for. An empty colour is how the frame is told that.
-    sides = [{'names': text, 'colour': '', 'leading': False}]
+    sides = _casual_sides(summary, live, hole, player_id, mine_is_t1)
 
     unit = float((summary.get('money') or {}).get('bet_unit') or 0)
     return {

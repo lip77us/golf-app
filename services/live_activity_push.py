@@ -172,7 +172,8 @@ def _provider_token():  # pragma: no cover - needs creds
 # Delivery
 # --------------------------------------------------------------------------
 
-def _apns_payload(state, *, event='update', dismiss_after=None) -> dict:
+def _apns_payload(state, *, event='update', dismiss_after=None,
+                  alert=None) -> dict:
     """The `aps` envelope Apple expects for a Live Activity.
 
     `timestamp` is not decoration: iOS uses it to discard a push that arrives
@@ -192,6 +193,14 @@ def _apns_payload(state, *, event='update', dismiss_after=None) -> dict:
         # A few minutes on the lock screen after the round is signed, then it
         # takes itself away.
         aps['dismissal-date'] = int(time.time() + (dismiss_after or 5 * 60))
+    if alert:
+        # **The only updates in the set that make a sound.** Everything else
+        # moves the board silently, because a push for something the reader
+        # watched happen is a phone telling him what he already knows. The two
+        # that ring are cup-wide events landing in a group an hour away — see
+        # services/live_activity_cup_push.py.
+        aps['alert'] = {'title': alert.get('title', ''),
+                        'body': alert.get('body', '')}
     return {'aps': aps}
 
 
@@ -246,13 +255,14 @@ def send_start(start_token: str, state: dict, *, round_id, course_name) -> bool:
         return False
 
 
-def send_state(device_token: str, state: dict, *, event='update') -> bool:
+def send_state(device_token: str, state: dict, *, event='update',
+               alert=None) -> bool:
     """Push one activity state to one token.  Returns True if Apple took it.
 
     Never raises: the caller is a scoring request.
     """
     backend = _backend()
-    payload = _apns_payload(state, event=event)
+    payload = _apns_payload(state, event=event, alert=alert)
     try:
         if backend == 'apns':
             return _send_apns(device_token, payload)
@@ -457,6 +467,20 @@ def push_round(round_obj, *, final=False) -> int:
     if not rows:
         return 0
 
+    # **Once per posted score, not once per recipient.** The alert is a
+    # property of the cup rather than of a phone, and asking inside the loop
+    # would fire four pushes for one half-point and then re-fire it for the
+    # group behind. It also records what it saw, which is what makes the
+    # decided push fire exactly once.
+    alert = None
+    if not final:
+        from services.live_activity_cup_push import cup_alert
+        try:
+            alert = cup_alert(round_obj)
+        except Exception:  # pragma: no cover - never blocks a score
+            logger.exception('live_activity_push: cup alert, round %s',
+                             round_obj.id)
+
     sent = 0
     for row in rows:
         try:
@@ -464,7 +488,8 @@ def push_round(round_obj, *, final=False) -> int:
             if not state:
                 continue
             if send_state(row.token, state,
-                          event='end' if final else 'update'):
+                          event='end' if final else 'update',
+                          alert=alert):
                 sent += 1
         except Exception:  # pragma: no cover - one bad row never stops the rest
             logger.exception('live_activity_push: round %s user %s',

@@ -126,18 +126,45 @@ class SidesLineTests(_Base):
     its own — and the second sides row is the most expensive line in the set at
     18pt. Abbreviating to surnames buys both matches for nothing."""
 
-    def test_the_sides_line_is_always_one_row(self):
-        self._play(1, 3, 4, 5, 5)
-        self.assertEqual(len(self._state(1)['sides']), 1)
+    def test_the_sides_line_never_carries_more_than_two_entries(self):
+        """**One ROW, not one entry.** The entries run ACROSS — the widget
+        lays them out in an HStack — so two of them are a line, not two lines.
+        What the ceiling forbids is a third: the format's only simultaneous
+        state is the two Singles, and that is deliberate.
+        """
+        for thru in (0, 1, 7, 13, 18):
+            for h in range(1, thru + 1):
+                self._play(h, 4, 4, 4, 4)
+            self.assertLessEqual(len(self._state(thru)['sides']), 2,
+                                 f'three entries would wrap at thru {thru}')
+
+    def test_the_entries_run_across_rather_than_down(self):
+        """The assertion the height depends on, and it lives in the widget:
+        a VStack here is the 18pt that puts this card over the ceiling."""
+        from pathlib import Path
+        from django.conf import settings
+        swift = (Path(settings.BASE_DIR) / 'mobile' / 'ios' / 'SixesActivity'
+                 / 'SixesActivityLiveActivity.swift').read_text()
+        body = swift.split('private struct CupSidesView')[1][:600]
+        self.assertIn('HStack', body)
+        self.assertNotIn('VStack', body)
 
     def test_the_two_singles_share_that_row_with_the_readers_first(self):
         for h in range(1, 14):
             self._play(h, 4, 4, 4, 4)
-        s = self._state(13)
-        line = s['sides'][0]['names']
-        if ' · ' in line and 'v.' in line:
-            self.assertTrue(line.startswith('You v.'),
-                            f'the reader own single must come first: {line}')
+        sides = self._state(13)['sides']
+        if len(sides) == 2 and sides[0]['names'].startswith('You'):
+            self.assertTrue(sides[0]['leading'],
+                            'the reader own single leads the row')
+            self.assertTrue(sides[1]['note'].startswith('·'),
+                            'the other single keeps its standing')
+
+    def test_every_entry_carries_a_side_colour(self):
+        """Unlike the personal three, this line HAS sides — yours and theirs
+        — so every entry gets a dot, and yours is the one at full weight."""
+        self._play(1, 3, 4, 5, 5)
+        for side in self._state(1)['sides']:
+            self.assertIn(side['colour'], ('blue', 'orange'))
 
 
 class FooterTests(_Base):
@@ -148,3 +175,319 @@ class FooterTests(_Base):
     def test_the_money_is_empty_until_the_cup_settles(self):
         self._play(1, 3, 4, 5, 5)
         self.assertEqual(self._state(1)['footer']['money'], '')
+
+
+class _TeamCupBase(TestCase):
+    """Two groups in a cup worth eight points — enough that a group's own
+    four are genuinely a share of something larger, which is the premise of
+    this configuration."""
+
+
+    def setUp(self):
+        from datetime import date
+        from core.models import GameType
+        from tournament.models import (Tournament, TeamTournament,
+                                       TournamentTeam, RyderCupRoundConfig,
+                                       RyderCupFoursomeConfig)
+        from services.triple_cup import setup_triple_cup
+        from ._helpers import (make_tee, make_round, make_foursome,
+                               _test_account)
+
+        self.tee = make_tee()
+        self.round = make_round(self.tee.course, handicap_mode='gross')
+        tourn = Tournament.objects.create(
+            account=_test_account(), name='Cup', start_date=date(2026, 1, 1))
+        self.tt = TeamTournament.objects.create(
+            tournament=tourn, cup_name='Sheldon Cup', players_per_team=4)
+        self.t1 = TournamentTeam.objects.create(
+            tournament=self.tt, name='Blue', team_number=1, colour='blue')
+        self.t2 = TournamentTeam.objects.create(
+            tournament=self.tt, name='Orange', team_number=2, colour='orange')
+        self.round.tournament = tourn
+        self.round.save(update_fields=['tournament'])
+        self.rc = RyderCupRoundConfig.objects.create(
+            round=self.round, tournament=self.tt,
+            nassau_point_value=1, point_multiplier=1)
+
+        # TWO groups, so the cup is eight points and a group's own four are
+        # genuinely a share of something larger — which is the whole premise
+        # of this configuration.
+        self.groups = []
+        for n, names in enumerate((('A', 'B', 'C', 'D'),
+                                   ('E', 'F', 'G', 'H')), start=1):
+            fs = make_foursome(self.round, [(x, 0) for x in names],
+                               tee=self.tee, group_number=n)
+            m = {x.player.name: x
+                 for x in fs.memberships.select_related('player')}
+            self.t1.players.add(m[names[0]].player, m[names[1]].player)
+            self.t2.players.add(m[names[2]].player, m[names[3]].player)
+            RyderCupFoursomeConfig.objects.create(
+                foursome=fs, round_config=self.rc,
+                game_type=GameType.TRIPLE_CUP,
+                team1=self.t1, team2=self.t2, point_value=1)
+            setup_triple_cup(
+                fs,
+                team1_ids=[m[names[0]].player_id, m[names[1]].player_id],
+                team2_ids=[m[names[2]].player_id, m[names[3]].player_id],
+                handicap_mode='gross')
+            self.groups.append((fs, m))
+        self.fs, self.m = self.groups[0]
+
+    # -- helpers ------------------------------------------------------------
+
+    def _sweep(self, group, holes, winner='team1'):
+        """Run `holes` of a group with one side winning every one of them."""
+        from services.triple_cup import calculate_triple_cup
+        from ._helpers import submit_hole
+        fs, m = group
+        names = sorted(m)
+        good, bad = (names[:2], names[2:]) if winner == 'team1' \
+            else (names[2:], names[:2])
+        for h in holes:
+            par = self.tee.hole(h)['par']
+            submit_hole(fs, h, [(m[n].player_id, par) for n in good]
+                        + [(m[n].player_id, par + 2) for n in bad])
+        calculate_triple_cup(fs)
+
+    def _state(self, thru, who='A'):
+        from services.live_activity_triple_cup import triple_cup_activity_state
+        return triple_cup_activity_state(
+            self.fs, player_id=self.m[who].player_id, thru=thru)
+
+
+class TeamCupTests(_TeamCupBase):
+    """The **team** configuration — same composition, a different view model.
+
+    Seven rows of the packet's difference table, and the headline carries the
+    rest: your Triple Cup is one match in a tournament cup, so the card is
+    about the cup the moment there is a cup score to report. A point here is
+    one twenty-fourth of the thing being decided.
+
+    Nothing about the panel changes — same slot order, same type sizes, same
+    one-row sides line. What changes is what each slot is ABOUT.
+    """
+
+    # -- the headline is the whole cup --------------------------------------
+
+    def test_the_headline_is_the_cup_not_this_groups_four_points(self):
+        """`6½–4½`, not `2–1`. Your Triple Cup is a way of earning one point
+        in something larger, and the card stops being about the match the
+        moment there is a cup score to report."""
+        self._sweep(self.groups[0], range(1, 13))     # group 1 banks two
+        self._sweep(self.groups[1], range(1, 7))      # group 2 banks one
+        s = self._state(12)
+        self.assertEqual(s['number']['text'], '3–0')
+
+    def test_the_header_names_the_cup(self):
+        self._sweep(self.groups[0], range(1, 7))
+        self.assertIn('SHELDON CUP', self._state(6)['header']['game'])
+
+    # -- the right-hand slot ------------------------------------------------
+
+    def test_the_right_slot_is_points_to_win_never_the_match(self):
+        """The headline now counts eight points and twelve other golfers; a
+        `1 UP` beside it reads as a contradiction. Points-to-win is the figure
+        a captain recites all afternoon."""
+        self._sweep(self.groups[0], range(1, 7))
+        st = self._state(6)['state']
+        self.assertEqual(st['to_play'], 'TO WIN')
+        self.assertEqual(st['word'], '4½')          # eight available
+        self.assertNotIn('UP', st['word'])
+
+    def test_a_clinched_cup_outranks_the_hole_you_are_standing_on(self):
+        """The cup can be decided while your group is on the fourteenth, and
+        when it is, it takes the slot — the same rule that gives the casual
+        cup its CANNOT LOSE override."""
+        self._sweep(self.groups[0], range(1, 19))    # all four to team 1
+        self._sweep(self.groups[1], range(1, 13))    # two more: 6 of 8
+        st = self._state(18)['state']
+        self.assertEqual(st['word'], 'BLUE')
+        self.assertEqual(st['to_play'], 'TAKES IT')
+        self.assertEqual(st['colour'], 'mint')
+
+    # -- the sides line -----------------------------------------------------
+
+    def test_the_sides_line_is_your_own_match_as_a_cup_sub_total(self):
+        """The headline has been taken by the cup, so your own match keeps the
+        sides line — and reads as a share of the cup rather than as a match,
+        which is why the qualifier is a cup score and not `2 up`."""
+        self._sweep(self.groups[0], range(1, 7))
+        sides = self._state(6)['sides']
+        self.assertEqual(len(sides), 1)
+        self.assertEqual(sides[0]['names'], 'Your Triple Cup')
+        self.assertIn('–', sides[0]['note'])
+        self.assertNotIn('up', sides[0]['note'])
+
+    # -- the needle ---------------------------------------------------------
+
+    def test_the_needle_replaces_the_cells_and_never_joins_them(self):
+        """Four cells are the casual format; twenty-four of them across 320
+        points would be decoration."""
+        self._sweep(self.groups[0], range(1, 7))
+        s = self._state(6)
+        self.assertEqual(s['pips'], [])
+        self.assertIsNotNone(s['needle'])
+
+    def test_the_needle_is_a_share_of_points_available_not_points_scored(self):
+        """Normalised to points played the grey band vanishes at the turn and
+        the centre tick stops meaning half the cup — which is the only thing
+        on the card that answers *is it gone*."""
+        self._sweep(self.groups[0], range(1, 7))     # one of eight, to team 1
+        needle = self._state(6)['needle']
+        self.assertAlmostEqual(needle['blue'], 1 / 8)
+        self.assertAlmostEqual(needle['orange'], 0.0)
+        self.assertLess(sum(needle.values()), 1.0,
+                        'the grey band is what is still out')
+
+    # -- the footer ---------------------------------------------------------
+
+    def test_the_footer_counts_groups_rather_than_money(self):
+        """Cup money settles in the team room, not on a lock screen."""
+        self._sweep(self.groups[0], range(1, 7))
+        foot = self._state(6)['footer']
+        self.assertEqual(foot['context'], '2 groups still out')
+        self.assertEqual(foot['money'], '')
+
+    def test_a_group_is_counted_once_however_many_points_it_owes(self):
+        """Two Singles still on the course are one group still out."""
+        self._sweep(self.groups[0], range(1, 19))
+        self._sweep(self.groups[1], range(1, 7))
+        self.assertEqual(self._state(18)['footer']['context'],
+                         '1 group still out')
+
+    # -- the palette --------------------------------------------------------
+
+    def test_the_sides_wear_the_colours_the_cup_declared(self):
+        """A blue headline over a slot reading `ORANGE TAKES IT` is the
+        fourball's hardcoded-blue defect arriving by another route."""
+        from services.live_activity_triple_cup import _cup_palette
+        self.assertEqual(_cup_palette({'team1_colour': 'Orange',
+                                       'team2_colour': 'Blue'}),
+                         ('orange', 'blue'))
+
+    def test_a_colour_the_widget_cannot_draw_falls_back_to_position(self):
+        """A Red/Green cup, or one where both sides picked blue: position at
+        least keeps the two halves of the needle distinguishable."""
+        from services.live_activity_triple_cup import _cup_palette
+        for pair in ({'team1_colour': 'Red', 'team2_colour': 'Green'},
+                     {'team1_colour': 'Blue', 'team2_colour': 'Blue'},
+                     {}):
+            self.assertEqual(_cup_palette(pair), ('blue', 'orange'), pair)
+
+    # -- and the casual card is untouched -----------------------------------
+
+    def test_a_round_with_no_cup_config_still_gets_the_casual_card(self):
+        """A tournament round is not automatically a cup round, and the
+        configuration follows the cup rather than a flag."""
+        from tournament.models import RyderCupRoundConfig
+        RyderCupRoundConfig.objects.filter(pk=self.rc.pk).delete()
+        self.round.refresh_from_db()
+        self._sweep(self.groups[0], range(1, 7))
+        s = self._state(6)
+        self.assertIsNone(s.get('needle'))
+        self.assertEqual(len(s['pips']), 4)
+        self.assertEqual(s['header']['game'], 'TRIPLE CUP')
+
+
+class CupPushTests(_TeamCupBase):
+    """**Exactly two events fire**, and the rest of the cup stays silent.
+
+    A six-group cup has twenty-four points. A push per point is twenty-four
+    pushes, at which point the golfer turns the activity off and loses the
+    nineteen that were worth having. Every other settled point is already on
+    the card, a glance away — the activity does not also flash.
+    """
+
+    def _alert(self):
+        from services.live_activity_cup_push import cup_alert
+        return cup_alert(self.round)
+
+    def test_the_first_score_of_a_cup_is_not_a_lead_change(self):
+        """Somebody has to be ahead of somebody first."""
+        self._sweep(self.groups[0], range(1, 7))
+        self.assertIsNone(self._alert())
+
+    def test_taking_the_lead_fires_once_and_carries_the_score(self):
+        self._sweep(self.groups[0], range(1, 7))
+        self._alert()                                  # establish the marker
+        self._sweep(self.groups[1], range(1, 7), winner='team2')
+        alert = self._alert()
+        self.assertIsNotNone(alert)
+        self.assertIn('–', alert['title'])
+
+    def test_extending_a_lead_fires_nothing(self):
+        """The point is already on the card. This is the case that would have
+        been twenty-four pushes."""
+        self._sweep(self.groups[0], range(1, 7))
+        self._alert()
+        self._sweep(self.groups[0], range(7, 13))       # same side, 2–0
+        self.assertIsNone(self._alert())
+
+    def test_going_level_is_a_lead_change(self):
+        """**Level is a state, not a missing one.** Who is ahead has changed
+        — from somebody to nobody — and that is the fact the push reports."""
+        self._sweep(self.groups[0], range(1, 7))        # 1–0
+        self._alert()
+        self._sweep(self.groups[1], range(1, 7), winner='team2')   # 1–1
+        alert = self._alert()
+        self.assertIn('All square', alert['title'])
+
+    def test_a_second_point_that_keeps_it_level_does_not(self):
+        self._sweep(self.groups[0], range(1, 7))
+        self._alert()
+        self._sweep(self.groups[1], range(1, 7), winner='team2')   # 1–1
+        self._alert()
+        self._sweep(self.groups[0], range(7, 13))                  # 2–1
+        self._alert()
+        self._sweep(self.groups[1], range(7, 13), winner='team2')  # 2–2
+        self.assertIn('All square', self._alert()['title'])
+
+    def test_the_clinch_fires_once_and_then_never_again(self):
+        """The marker is what makes that true. Without it, every score posted
+        after the clinch is another `Blue take the Sheldon Cup`."""
+        self._sweep(self.groups[0], range(1, 7))
+        self._alert()
+        self._sweep(self.groups[0], range(7, 19))       # 4–0 of eight
+        self._alert()
+        self._sweep(self.groups[1], range(1, 13))       # 6–0: out of reach
+        alert = self._alert()
+        self.assertIn('take the Sheldon Cup', alert['title'])
+        self.assertIn('out of reach', alert['body'])
+        self._sweep(self.groups[1], range(13, 19))
+        self.assertIsNone(self._alert(),
+                          'the activity settles under it; it does not re-fire')
+
+    def test_a_clinch_fires_one_push_not_two(self):
+        """A clinch is by definition also a lead change. Two pushes for one
+        half-point is the noise this design exists to avoid."""
+        self._sweep(self.groups[0], range(1, 19))       # 4–0
+        self._alert()
+        self._sweep(self.groups[1], range(1, 13), winner='team2')  # 4–2
+        self._alert()
+        self._sweep(self.groups[1], range(13, 19), winner='team2')  # 4–4
+        alert = self._alert()
+        # Level AND all eight awarded — the halved cup, which is decided.
+        self.assertIn('halved', alert['title'])
+
+    def test_a_casual_round_is_silent(self):
+        """The same reason Wolf, Points and Stableford are: four men in one
+        group, and a push for the Fourball is a phone telling you what you
+        watched."""
+        from tournament.models import RyderCupRoundConfig
+        RyderCupRoundConfig.objects.filter(pk=self.rc.pk).delete()
+        self.round.refresh_from_db()
+        self._sweep(self.groups[0], range(1, 7))
+        self.assertIsNone(self._alert())
+
+    def test_the_alert_reaches_the_apns_envelope(self):
+        """A content-state update with no `alert` is silent by design, so the
+        two that ring have to add one — this is the line that makes the
+        difference between a board that moves and a phone that buzzes."""
+        from services.live_activity_push import _apns_payload
+        quiet = _apns_payload({'kind': 'triple_cup'})
+        self.assertNotIn('alert', quiet['aps'])
+        loud = _apns_payload({'kind': 'triple_cup'},
+                             alert={'title': 'Blue take the lead — 5–4',
+                                    'body': '2 groups still out'})
+        self.assertEqual(loud['aps']['alert']['title'],
+                         'Blue take the lead — 5–4')

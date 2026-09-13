@@ -3161,10 +3161,77 @@ sides line is one row everywhere.** A row each for the two live Singles
 measured 163pt, over the ceiling on its own; surnames buy both matches for
 nothing. Yours first, always.
 
-**The team-cup configuration is not built** — same composition, different view
-model (the whole cup as the headline, `12½ · TO WIN` in the right slot, one
-continuous needle instead of four cells) — and it is the only card in the
-bundle that pushes, on lead change and cup decided.
+### The team cup — the same composition, a different view model
+
+Both configurations now ship off one builder, and **what selects between them
+is whether there is a cup score to report** — not a setting, not a flag. A
+Triple Cup inside a Ryder Cup is a different product from four men playing for
+twenty-five dollars, and `_cup_standings()` asks the only question that
+separates them: does this round carry a cup config.
+
+Six slots change meaning, none change position. The headline becomes the whole
+cup (`6½–4½`), the right slot `12½ · TO WIN` — **your own match cannot go
+there**, because the headline now counts twenty-four points and eleven other
+golfers and a `1 up` beside it reads as a contradiction. Your match keeps the
+sides line, written as a share of the cup (`Your Triple Cup · 1–0, in the
+foursomes`) rather than as a match. The footer-left counts groups still out;
+cup money settles in the team room.
+
+**The cells become one needle**, and the rule that matters is that both fills
+are shares of the points AVAILABLE, not of points scored. Normalised to points
+played the grey band vanishes at the turn and the centre tick stops meaning
+half the cup — the only thing on the card that answers *is it gone*.
+
+Three things the spec did not settle, decided here:
+
+- **`ROUND 2`, not the design's `DAY 2`.** The app has said rounds since it had
+  them, and a cup can play two rounds in one day. Same argument that kept the
+  Points payoff models in the config screen's words.
+- **The sides line became a LIST of entries rather than one joined string**,
+  each with a dim `note`. That is what lets the two live Singles share a row —
+  and the casual card got it too, which is how `Kelly & Moran v. Reid &
+  Naylor` gets its two dots back.
+- **`_cup_palette()`.** A cup's teams have their own names and colours, and a
+  blue headline over a slot reading `ORANGE TAKES IT` is the fourball's
+  hardcoded-blue defect arriving by another route. Declared colours win when
+  both are drawable and different; anything else falls back to position, where
+  the two halves of the needle are at least distinguishable.
+
+The cup can also clinch **while your group is on the fourteenth**, and when it
+does it takes the state slot — the same rule that gives the casual cup its
+`CANNOT LOSE`.
+
+### The two pushes — `services/live_activity_cup_push.py`
+
+The only alerting updates in the set. Everything else moves the board silently,
+because a push for something the reader watched is a phone telling him what he
+knows. **The team cup is the opposite case and the one the pattern was written
+for:** points land in groups an hour ahead. But twenty-four points is
+twenty-four pushes, and a golfer who turns the activity off loses the nineteen
+that were worth having — so lead change and cup decided, and nothing else.
+
+**A lead change is a property of two cup scores**, and the card is rebuilt from
+scratch every request, so the last observed score lives on
+`TeamTournament.last_cup_push` (migration `tournament/0071`). Three things fall
+out of it: level counts as a lead change (from somebody to nobody) while a
+second point that keeps it level does not; the clinch fires once instead of on
+every score after it; and `cup_alert()` is called **once per posted score, not
+once per recipient** — inside the loop it would fire four times for one
+half-point and again for the group behind.
+
+**Decided outranks lead change.** A clinch is by definition also a lead change,
+and two pushes for one half-point is the noise this design exists to avoid.
+
+*The body is not the design's copy.* `Group 2 took their Foursomes. First lead
+change since the turn.` — neither half is derivable: no query attributes a
+resolution to a group, and *since the turn* needs a history nothing keeps. It
+says what is still out instead, which is what a captain asks next. **A push
+that guesses is wrong on a lock screen**, which is the one place this set
+refuses to be.
+
+### Still to do
+
+The final states, which are `{}` on all five builders.
 
 ### The five Swift layouts — and what the shared frame owed them
 
@@ -3250,10 +3317,9 @@ safe sequence, and a test that forbade it would forbid the sequence.
 
 All five stay in `UNSHIPPED_KINDS` until that build.
 
-### Still to do
+### Still outstanding across the set
 
-The team-cup configuration of Triple Cup; the final states, which are `{}` on
-all five builders.
+The final states, which are `{}` on all five new builders.
 The rest of `changed-since-delivery/` is CSS-level and already matches how we
 built it — the Skins header fix and the inlined state slot were the two parts
 that applied.

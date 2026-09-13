@@ -56,15 +56,31 @@ struct SixesActivityAttributes: ActivityAttributes {
             let names: String
             let colour: String
             let leading: Bool
+            /// The dim qualifier that follows the names — Triple Cup's
+            /// `· 1 up`, `· 1–0, in the Foursomes`. It sits at 55% beside a
+            /// name at full weight, which is what lets a sides line carry a
+            /// standing without becoming a second row.
+            ///
+            /// **The one row is a requirement, not a preference.** A second
+            /// sides row is 18pt and puts any card in that packet over the
+            /// 160pt ceiling on its own.
+            var note: String? = nil
         }
 
         struct MatchState: Codable, Hashable {
             /// `DORMIE`, or an em dash. Never the money.
             let word: String
             let toPlay: String
+            /// Optional emphasis on the word. The team cup's decided state —
+            /// `BLUE · TAKES IT` — is the one slot in the set that reports an
+            /// outcome rather than a position, and it wears mint for it.
+            ///
+            /// Nowhere else: a word in a side's colour in this slot would be
+            /// a second, quieter headline, and the card already has one.
+            var colour: String? = nil
 
             enum CodingKeys: String, CodingKey {
-                case word
+                case word, colour
                 case toPlay = "to_play"
             }
         }
@@ -237,6 +253,23 @@ struct SixesActivityAttributes: ActivityAttributes {
         /// The four-across strip — Wolf's roster, a Stableford foursome, a
         /// Stroke Play flight. Absent on every card that names two sides.
         var strip: [StripCol]? = nil
+        /// **The team cup's needle, instead of `pips`.**
+        ///
+        /// A casual Triple Cup is four points in a fixed order, so four cells
+        /// are the format. A six-group cup is twenty-four, and cells at 320
+        /// points would be decoration — so the same 7pt strip becomes one
+        /// continuous bar: blue from the left, orange from the right, grey
+        /// between them still out.
+        ///
+        /// **Both are shares of the points AVAILABLE, not of points scored.**
+        /// Normalised to points played, the grey band would vanish at the
+        /// turn and the centre tick would stop meaning 12½ — which is the
+        /// only thing on the card that answers *is it gone*.
+        struct Needle: Codable, Hashable {
+            let blue: Double
+            let orange: Double
+        }
+        var needle: Needle? = nil
         /// Three, always — the shape of the round.
         let pips: [String]
         let footer: Footer

@@ -631,6 +631,11 @@ class TeamTournament(models.Model):
                            Tournament, on_delete=models.CASCADE,
                            related_name='team_tournament'
                        )
+    # The last cup score a push was decided against. Not the last score
+    # PUSHED — every observed one — because a lead change is a property of two
+    # scores, and comparing against a stale one reports a change that already
+    # happened. See services/live_activity_cup_push.py.
+    last_cup_push    = models.JSONField(null=True, blank=True, default=None)
     cup_name         = models.CharField(
                            max_length=100,
                            default='Ryder Cup',

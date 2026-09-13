@@ -54,10 +54,16 @@ struct SixesActivityLiveActivity: Widget {
                     VStack(alignment: .leading, spacing: 6) {
                         if s.kind == "survivor" {
                             SurvivorSidesView(sides: s.sides)
+                        } else if s.kind == "triple_cup" {
+                            // Keep it in step with the lock card. The Nassau
+                            // expanded island drifted from its own once.
+                            CupSidesView(sides: s.sides)
                         } else {
                             SidesView(sides: s.sides)
                         }
-                        if s.kind == "triple_cup" {
+                        if let needle = s.needle {
+                            CupNeedleView(needle: needle)
+                        } else if s.kind == "triple_cup" {
                             CupCellsView(cells: s.pips)
                         } else {
                             PipsView(pips: s.pips)
@@ -942,15 +948,112 @@ private struct TripleCupBoardView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     Spacer(minLength: 8)
-                    StateView(state: state.state)
+                    StateView(state: state.state,
+                              colour: state.state.colour.map(Sixes.side))
                 }
-                SidesView(sides: state.sides)
+                CupSidesView(sides: state.sides)
             }
 
-            CupCellsView(cells: state.pips)
+            // **Four cells or one needle, never both.** Which one is the
+            // difference between the two games this card serves, and the
+            // server sends exactly the one that applies.
+            if let needle = state.needle {
+                CupNeedleView(needle: needle)
+            } else {
+                CupCellsView(cells: state.pips)
+            }
             TeeRow(tee: state.tee)
             FooterView(footer: state.footer, thru: state.thru,
                        isStale: isStale)
+        }
+    }
+}
+
+/// The sides line — entries ACROSS, never down.
+///
+/// **This is where the card's height comes from.** Holes 13–18 run two
+/// Singles at once, and a row each measured 163pt against a 160 ceiling —
+/// over on its own, before the strip. Surnames and a dim qualifier put both
+/// matches on one line for nothing.
+///
+/// It is the set's other sides renderer for a reason: `SidesView` stacks,
+/// because Sixes and Match restate two pairings that are each long enough to
+/// own a row. Here the entries are short by construction and the row count is
+/// the constraint, so the axis flips.
+private struct CupSidesView: View {
+    let sides: [SixesActivityAttributes.ContentState.Side]
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            ForEach(Array(sides.enumerated()), id: \.offset) { _, side in
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    // Unlike the personal three, this line HAS sides — yours
+                    // and theirs — so every entry carries a dot.
+                    if !side.colour.isEmpty {
+                        Circle()
+                            .fill(Sixes.side(side.colour))
+                            .frame(width: 5, height: 5)
+                    }
+                    Text(side.names)
+                        .font(Sixes.body(12.5, side.leading ? .bold : .regular))
+                        .foregroundStyle(side.leading
+                                         ? Sixes.side(side.colour)
+                                         : .white.opacity(0.62))
+                    // The standing, at 55% beside a name at full weight. That
+                    // difference is what lets one line carry two matches and
+                    // still read as two things rather than one long string.
+                    if let note = side.note, !note.isEmpty {
+                        Text(note)
+                            .font(Sixes.body(12.5, .semibold))
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+    }
+}
+
+/// The team cup's needle — the same 7pt strip, without the cells.
+///
+/// Blue fills from the left, orange from the right, and **the grey between
+/// them is genuinely what is still out**: both widths are shares of the
+/// points AVAILABLE, not of points scored. Normalised to points played the
+/// grey would vanish at the turn and the tick would stop meaning 12½, which
+/// is the only thing on the card that answers *is it gone*.
+///
+/// Discrete cells are dropped here because a six-group cup has twenty-four
+/// points, and twenty-four cells across 320 points would be decoration. The
+/// casual cup keeps them because four points in a fixed order is its format.
+private struct CupNeedleView: View {
+    let needle: SixesActivityAttributes.ContentState.Needle
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(.white.opacity(0.17))
+                HStack(spacing: 0) {
+                    Rectangle()
+                        .fill(Sixes.blue)
+                        .frame(width: geo.size.width * max(0, min(1, needle.blue)))
+                    Spacer(minLength: 0)
+                    Rectangle()
+                        .fill(Sixes.orange)
+                        .frame(width: geo.size.width * max(0, min(1, needle.orange)))
+                }
+            }
+            .clipShape(Capsule())
+        }
+        .frame(height: 7)
+        .overlay(alignment: .center) {
+            // The same tick as the cells, and it means the same thing: cross
+            // it to win the cup, land on it and the cup is halved.
+            Rectangle()
+                .fill(.white.opacity(0.85))
+                .frame(width: 2, height: 15)
+                .cornerRadius(1)
         }
     }
 }
