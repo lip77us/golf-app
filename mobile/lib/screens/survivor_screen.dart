@@ -36,6 +36,7 @@ import '../utils/play_order.dart';
 import '../utils/round_complete.dart';
 import '../widgets/pinned_hole_grid.dart';
 import '../widgets/combo_tee_chip.dart';
+import '../utils/nine_totals.dart';
 
 /// Handicap strokes a player receives on a hole, read straight from the
 /// Survivor summary.  The engine emits its own allocation for EVERY hole,
@@ -1503,32 +1504,78 @@ class _SurvivorGrid extends StatelessWidget {
             ),
           ]),
           const SizedBox(height: 8),
-          PinnedHoleGrid(
-            labelWidth  : labelColW,
-            cellWidth   : cellW,
-            holeCount   : holeRange.length,
-            // Never scrolled to a hole at all before — and Survivor is the
-            // game where it matters most, since the elimination you are
-            // looking for is the hole you have just played.
-            currentIndex: holeRange.indexOf(currentHole),
-            bands: [
-              HoleGridBand(
-                const SizedBox(width: labelColW),
-                [for (final h in holeRange) headerCell(h)],
-              ),
-              for (final m in players)
-                HoleGridBand(
-                  SizedBox(
-                    width: labelColW,
-                    child: Text(m.player.displayShort,
-                        overflow: TextOverflow.ellipsis,
+          Builder(builder: (_) {
+            final split = NineSplit.of(holeRange);
+            const summaryW = 34.0;
+
+            Widget sumCell(String t) => SizedBox(
+                  width: summaryW, height: rowH,
+                  child: Center(
+                    child: Text(t,
                         style: theme.textTheme.labelSmall
-                            ?.copyWith(fontWeight: FontWeight.w600)),
+                            ?.copyWith(fontWeight: FontWeight.bold)),
                   ),
-                  [for (final h in holeRange) cell(m, h)],
+                );
+
+            /// A golfer's gross over a nine — an em dash until it is complete.
+            /// A knocked-out golfer has no score on the holes he missed, so his
+            /// nine stays a dash, which is the honest answer: he did not play
+            /// it.
+            Widget grossTotal(Membership m, List<int> holes) {
+              var total = 0;
+              for (final h in holes) {
+                final g = summary.holeFor(h)?.entries
+                    .where((e) => e.playerId == m.player.id)
+                    .firstOrNull?.gross;
+                if (g == null) return sumCell('—');
+                total += g;
+              }
+              return sumCell('$total');
+            }
+
+            return PinnedHoleGrid(
+              labelWidth  : labelColW,
+              cellWidth   : cellW,
+              holeCount   : holeRange.length,
+              // Never scrolled to a hole at all before — and Survivor is the
+              // game where it matters most, since the elimination you are
+              // looking for is the hole you have just played.
+              currentIndex: split.rightEdgeOf(
+                      currentHole, cellW, summaryW) == null ? -1 : 0,
+              currentRightEdge:
+                  split.rightEdgeOf(currentHole, cellW, summaryW),
+              contentWidth: split.contentWidth(cellW, summaryW),
+              bands: [
+                HoleGridBand(
+                  const SizedBox(width: labelColW),
+                  [
+                    for (final h in split.front) headerCell(h),
+                    if (split.showOut) sumCell('OUT'),
+                    for (final h in split.back) headerCell(h),
+                    if (split.showIn) sumCell('IN'),
+                    if (split.showTot) sumCell('TOT'),
+                  ],
                 ),
-            ],
-          ),
+                for (final m in players)
+                  HoleGridBand(
+                    SizedBox(
+                      width: labelColW,
+                      child: Text(m.player.displayShort,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall
+                              ?.copyWith(fontWeight: FontWeight.w600)),
+                    ),
+                    [
+                      for (final h in split.front) cell(m, h),
+                      if (split.showOut) grossTotal(m, split.front),
+                      for (final h in split.back) cell(m, h),
+                      if (split.showIn) grossTotal(m, split.back),
+                      if (split.showTot) grossTotal(m, split.all),
+                    ],
+                  ),
+              ],
+            );
+          }),
         ]),
       ),
     );

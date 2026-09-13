@@ -33,6 +33,7 @@ import '../utils/play_order.dart';
 import '../utils/round_complete.dart';
 import '../widgets/pinned_hole_grid.dart';
 import '../widgets/combo_tee_chip.dart';
+import '../utils/nine_totals.dart';
 
 String _fmtMoney(double v) {
   if (v == 0) return '—';
@@ -1302,6 +1303,43 @@ class _RabbitGrid extends StatelessWidget {
       );
     }
 
+    // ── OUT / IN / TOT ──────────────────────────────────────────────────────
+    final split = NineSplit.of(holeRange);
+    const summaryW = 34.0;
+
+    Widget sumCell(String t) => SizedBox(
+          width: summaryW, height: rowH,
+          child: Center(
+            child: Text(t,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+          ),
+        );
+
+    /// A golfer's gross over a nine — an em dash until it is complete, so a
+    /// subtotal never appears as a misleading partial.
+    Widget grossTotal(Membership m, List<int> holes) {
+      var total = 0;
+      for (final h in holes) {
+        final g = scorecard.holeData(h)?.scoreFor(m.player.id)?.grossScore;
+        if (g == null) return sumCell('—');
+        total += g;
+      }
+      return sumCell('$total');
+    }
+
+    List<Widget> withTotals(Widget Function(int) cell,
+        {Widget Function(List<int>)? sum}) {
+      final s = sum ?? (List<int> _) => sumCell('');
+      return [
+        for (final h in split.front) cell(h),
+        if (split.showOut) s(split.front),
+        for (final h in split.back) cell(h),
+        if (split.showIn) s(split.back),
+        if (split.showTot) s(split.all),
+      ];
+    }
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -1321,7 +1359,11 @@ class _RabbitGrid extends StatelessWidget {
             holeCount   : holeRange.length,
             // This grid never scrolled to a hole at all — on the back nine you
             // hunted for the one you were standing on, every hole.
-            currentIndex: holeRange.indexOf(currentHole),
+            currentIndex: split.rightEdgeOf(
+                    currentHole, cellW, summaryW) == null ? -1 : 0,
+            currentRightEdge:
+                split.rightEdgeOf(currentHole, cellW, summaryW),
+            contentWidth: split.contentWidth(cellW, summaryW),
             bands: [
               HoleGridBand(
                 SizedBox(width: labelColW, height: rowH,
@@ -1329,9 +1371,15 @@ class _RabbitGrid extends StatelessWidget {
                     child: Text('Hole', style: TextStyle(
                         fontSize: 11, fontWeight: FontWeight.bold)))),
                 [
-                for (final h in holeRange)
-                  cell(h, Text('$h', style: const TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.bold))),
+                  for (final h in split.front)
+                    cell(h, Text('$h', style: const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.bold))),
+                  if (split.showOut) sumCell('OUT'),
+                  for (final h in split.back)
+                    cell(h, Text('$h', style: const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.bold))),
+                  if (split.showIn) sumCell('IN'),
+                  if (split.showTot) sumCell('TOT'),
               ]),
               // Per-player gross rows.
               for (final m in players)
@@ -1342,8 +1390,7 @@ class _RabbitGrid extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall
                               ?.copyWith(fontWeight: FontWeight.w600)))),
-                  [
-                  for (final h in holeRange)
+                  withTotals(sum: (hs) => grossTotal(m, hs), (h) =>
                     cell(h, Builder(builder: (_) {
                       final g = scorecard.holeData(h)?.scoreFor(m.player.id)?.grossScore;
                       final isWinner = winnerByHole[h] == m.player.id;
@@ -1358,8 +1405,8 @@ class _RabbitGrid extends StatelessWidget {
                       // a shot) — clear of the number, aligned across rows.
                       return scoreCellWithDots(digit, _strokesFor(m, h),
                           Colors.red.shade700);
-                    })),
-                ]),
+                    }))),
+                ),
               const HoleGridBand.rule(),
               // Rabbit holder row.
               HoleGridBand(
@@ -1367,8 +1414,7 @@ class _RabbitGrid extends StatelessWidget {
                   child: Align(alignment: Alignment.centerLeft,
                     child: Text('Rabbit', style: theme.textTheme.bodySmall
                         ?.copyWith(fontStyle: FontStyle.italic)))),
-                [
-                for (final h in holeRange)
+                withTotals((h) =>
                   cell(h, Builder(builder: (_) {
                     final hs = holderByHole[h];
                     if (hs == null) {
@@ -1382,8 +1428,8 @@ class _RabbitGrid extends StatelessWidget {
                       style: theme.textTheme.labelSmall?.copyWith(
                           fontSize: 9, fontWeight: FontWeight.w700,
                           color: theme.colorScheme.primary));
-                  })),
-              ]),
+                  }))),
+              ),
             ],
           ),
           const SizedBox(height: 8),
