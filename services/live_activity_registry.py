@@ -270,6 +270,33 @@ def full_round_strokes(foursome, *, handicap_mode, net_percent=100,
     return alloc
 
 
+def combo_tee(foursome, player_id, hole) -> str:
+    """The tee this golfer plays on the hole in play — only on a COMBO set.
+
+    `White`, the name alone: no colour chip and no yardage. Tee names ARE
+    colours, so a coloured chip reading "White" asks the eye to reconcile two
+    at once, and the yardage is on the card already.
+
+    **Only the combo golfer sees it.** For everyone else this returns '' and
+    the row is not drawn, which is what lets a third element onto a surface
+    deliberately capped at two: the two-item rule holds exactly as specified
+    for every reader who is not on a combo.
+
+    Because the parent set is fixed at setup, this is present on all eighteen
+    holes or none — it never appears and disappears mid-round.
+    """
+    if player_id is None or not hole:
+        return ''
+    from services.combo_tees import is_combo, tee_map
+    for m in foursome.memberships.select_related('tee', 'player'):
+        if m.player_id != player_id or m.tee_id is None:
+            continue
+        if not is_combo(m.tee):
+            return ''
+        return tee_map(m.tee).get(int(hole), '')
+    return ''
+
+
 def stroke_ribbon(foursome, player_id, hole, alloc) -> str:
     """`POPPING ON HOLE 13`, or '' — the shared band, given an allocation.
 

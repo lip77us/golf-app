@@ -215,9 +215,11 @@ def rabbit_activity_state(foursome, *, player_id=None, thru=None) -> dict:
     thru       = thru or 0
     holes_left = _holes_left(seg, thru)
 
-    from services.live_activity_registry import hole_in_play, stroke_ribbon
-    ribbon = stroke_ribbon(foursome, player_id,
-                           hole_in_play(foursome, thru), _alloc(summary))
+    from services.live_activity_registry import (combo_tee, hole_in_play,
+                                                 stroke_ribbon)
+    _hip   = hole_in_play(foursome, thru)
+    ribbon = stroke_ribbon(foursome, player_id, _hip, _alloc(summary))
+    tee    = combo_tee(foursome, player_id, _hip)
     stake      = float((summary.get('money') or {}).get('bet_unit') or 0)
 
     to_par  = _gross_to_par(summary, player_id)
@@ -230,6 +232,7 @@ def rabbit_activity_state(foursome, *, player_id=None, thru=None) -> dict:
 
     return {
         'ribbon': ribbon,
+        'tee'   : tee,
         'header': _header(seg),
         'number': _number(seg),
         'sides' : _names(seg, summary),

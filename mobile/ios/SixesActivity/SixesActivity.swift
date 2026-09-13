@@ -150,6 +150,17 @@ struct SixesActivityAttributes: ActivityAttributes {
         /// always-on state, where the stake half of the footer is dropped.
         /// (The locked UPPER-RIGHT rides in `header.segment`.)
         var thru: String? = nil
+        /// `White` — which tee this golfer plays on the hole in front of him,
+        /// and ONLY when he is on a combo set. The name alone: tee names are
+        /// colours, so a coloured chip reading "White" asks the eye to
+        /// reconcile two at once, and the yardage is on the card already.
+        ///
+        /// This is a third element on a surface deliberately capped at two. It
+        /// earns the space by appearing only for a golfer on a combo — for
+        /// everyone else the row is absent and the two-item rule holds exactly.
+        /// The server fixes the parent set at setup, so it is present on all
+        /// eighteen holes or none.
+        var tee: String? = nil
         /// The Survivor track, and the hole numbers above it.
         var track: [TrackRow]? = nil
         var ruler: [Int]? = nil

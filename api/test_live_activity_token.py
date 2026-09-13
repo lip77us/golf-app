@@ -191,8 +191,8 @@ class LiveActivityStateTests(TestCase):
         self.assertEqual(resp.status_code, 200, resp.data)
         state = resp.data['state']
         self.assertEqual(
-            set(state), {'kind', 'ribbon', 'header', 'number', 'sides',
-                         'state', 'pips', 'final', 'footer'})
+            set(state), {'kind', 'ribbon', 'tee', 'header', 'number',
+                         'sides', 'state', 'pips', 'final', 'footer'})
         self.assertEqual(state['kind'], 'sixes')
         self.assertEqual(resp.data['course_name'], self.tee.course.name)
 

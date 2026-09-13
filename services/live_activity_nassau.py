@@ -219,7 +219,8 @@ def nassau_activity_state(foursome, *, player_id=None, thru=None,
     """The five slots for this foursome's Nassau, right now."""
     from games.models import NassauGame
     from services.nassau import resolve_nassau_game_type
-    from services.live_activity_registry import (hole_in_play, stroke_ribbon,
+    from services.live_activity_registry import (combo_tee, hole_in_play,
+                                                 stroke_ribbon,
                                                  full_round_strokes)
 
     summary = nassau_summary(foursome, game_type=game_type)
@@ -240,10 +241,14 @@ def nassau_activity_state(foursome, *, player_id=None, thru=None,
     # index, so the shared allocator is the right one — and it is read rather
     # than the played holes, because the hole in front of the reader is by
     # definition unscored. A finished round gets no band.
+    _hip   = hole_in_play(foursome, thru)
     ribbon = stroke_ribbon(
-        foursome, player_id, hole_in_play(foursome, thru),
+        foursome, player_id, _hip,
         full_round_strokes(foursome, handicap_mode=game.handicap_mode,
                         net_percent=game.net_percent))
+    # The tee this golfer plays on the hole in front of him — combo sets only,
+    # and only on his own card.
+    tee    = combo_tee(foursome, player_id, _hip)
 
     rows = _bet_rows(summary, game, hole, sign)
     if not rows:
@@ -268,6 +273,7 @@ def nassau_activity_state(foursome, *, player_id=None, thru=None,
 
     return {
         'ribbon': ribbon,
+        'tee'   : tee,
         'header': {'game': 'NASSAU' + (' · 2v2' if is_team else ''),
                    'segment': f'HOLE {hole}'},
         # Nothing on this card is 36px, so the single-number slot is unused and

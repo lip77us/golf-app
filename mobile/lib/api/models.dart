@@ -945,6 +945,18 @@ class Membership {
   /// True if the hole right after [withdrewAfterHole] was abandoned by the
   /// whole group when this player withdrew (voided for everyone).
   final bool withdrewKilledNextHole;
+  /// `{hole: tee name}` when this golfer is on a COMBO set — which tee he
+  /// plays on each hole, derived server-side from the yardages.
+  ///
+  /// Empty for an ordinary tee AND for a combo the course data cannot resolve;
+  /// from the reader's side those are the same thing, so the chip is simply
+  /// not drawn. The whole map arrives at once because the answer is fixed at
+  /// setup — it is present on all eighteen holes or none, and never appears
+  /// and disappears mid-round.
+  final Map<int, String> comboTeeByHole;
+
+  /// The tee for one hole, or null when this golfer is not on a combo.
+  String? comboTeeOnHole(int hole) => comboTeeByHole[hole];
 
   const Membership({
     required this.id,
@@ -958,6 +970,7 @@ class Membership {
     this.isScorer = false,
     this.withdrewAfterHole,
     this.withdrewKilledNextHole = false,
+    this.comboTeeByHole = const {},
   });
 
   /// True when this member has withdrawn and is out for [hole] (1-based).
@@ -976,6 +989,11 @@ class Membership {
         isScorer:      j['is_scorer'] as bool? ?? false,
         withdrewAfterHole:      j['withdrew_after_hole'] as int?,
         withdrewKilledNextHole: j['withdrew_killed_next_hole'] as bool? ?? false,
+        comboTeeByHole: {
+          for (final e in ((j['combo_tee_by_hole'] as Map?) ?? const {}).entries)
+            if (int.tryParse(e.key.toString()) != null)
+              int.parse(e.key.toString()): e.value.toString(),
+        },
       );
 }
 

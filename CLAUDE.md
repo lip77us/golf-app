@@ -2871,3 +2871,79 @@ are geometry claims, so both are measured rather than eyeballed.
 script that computed a block's end by searching forward from a landmark
 swallowed several classes at once; the damage was invisible until `analyze`
 ran. Convert and COMMIT one grid at a time, so a bad edit costs one grid.
+
+## Combo tees — which tee a golfer plays on a given hole
+
+A combo is one row in the tee dropdown with one rating and one slope, so **the
+data never says which parent set a hole comes from** — the indicator has to be
+derived. Spec: `~/Downloads/handoff-app-fixes 2/COMBO-TEES.md` (12 Sep 2026).
+
+`services/combo_tees.py`. Two steps, and the first runs **once per round**:
+
+1. **Fix the parents at setup** — the smallest set of the course's ordinary
+   tees whose yardages account for all eighteen holes. All eighteen check out →
+   the set is fixed and the indicator is guaranteed to name one of those tees on
+   every hole. A hole matching none → **unsupported**, and the indicator is off
+   for the whole round. One decision up front with one clear failure, instead of
+   eighteen chances to quietly come back empty.
+2. **Match the yardage per hole**, against the fixed set only — without that
+   restriction a hole could resolve to `Black` on a Blue/White combo merely
+   because Black happens to share the yardage.
+
+**Ties take the LONGER parent.** Identical yardage means an identical shot, so
+there is nothing to get wrong; longer rather than first-named because name order
+carries no meaning ("Blue/White" and "White/Blue" are the same tees) while total
+yardage is a property of the tees. Determinism matters more than the choice —
+the chip must not read Blue on the lock screen and White in score entry.
+
+### Two departures from the spec, both forced by the real data
+
+**The parents are NOT parsed from the name.** The spec proposes parsing with
+yardage matching as a fallback. Against all **56** combo tees in the database,
+matching alone resolves **54** — including `B/W Combo` (initials) and Pacific
+Grove's bare `Combo`, neither of which parses. Matching would have to verify a
+parse anyway, so the parse step only adds a way to disagree with the check that
+follows it.
+
+**The parent set is not always a PAIR.** Three real combos need three sets
+(Corica's `Team Match Combo`, California GC's `Back/Middle Combo`, Richmond's
+`Senior Combo`). The guarantee is unchanged: a fixed set of size N either
+accounts for every hole or the feature turns off. `_all_needed` refuses a set
+that still covers the card with one member dropped — a spare parent would put a
+tee on the chip the combo does not use.
+
+### The two unsupported combos are course-data bugs
+
+- **Corica Park South, `Black/Blue Combo` (Women), tee 362.** Eleven holes match
+  nothing — and all eleven equal the MEN'S Black tee exactly, while the other
+  seven equal the women's Blue. The women's card simply has no Black row.
+  Adding it (Black markers, women's rating/slope) fixes the combo.
+- **California GC of SF, `Senior Combo` (Men), tee 482.** Hole 9 alone: 338y
+  against Venturi 419 / Back 402 / Middle 380 / Forward 270.
+
+`unsupported_reason()` produces those lines. **It is for the log, never for a
+golfer** — the cause is a course-data problem worth fixing once.
+
+### Surfaces
+
+- **Score entry** — a chip on the combo golfer's own row, in the slot `gets N`
+  is vacating, so nothing new competes for width and the other golfers' rows
+  are untouched. `MembershipSerializer.combo_tee_by_hole` sends the whole map
+  at once; an ordinary tee sends `{}`.
+- **Lock screen** — `combo_tee()` in the registry feeds a `tee` slot on every
+  card, drawn by a shared `TeeRow` below a rule. **This is a third element on a
+  surface capped at two**, and it earns the space by appearing only for a golfer
+  on a combo; for everyone else the row is absent and the two-item rule holds
+  exactly. Below a rule rather than beside the status because status and strokes
+  are about the bet and the tee is about the next shot.
+- **Both are a neutral outline, not a filled/green chip.** Tee names ARE
+  colours, so a coloured chip reading "White" asks the eye to reconcile two at
+  once, and a white chip on a white row is invisible. Green is the app's voice
+  for something happening *to* you — strokes, bets, doubles — and a tee box is
+  a fact about the hole.
+
+**No `UNSHIPPED_KINDS` gating needed**: `tee` is a new optional FIELD on an
+existing card, not a new card kind, and Swift's `Codable` ignores keys an older
+build does not know.
+
+Tests: `scoring/tests/test_combo_tees.py` (26).

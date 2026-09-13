@@ -194,6 +194,8 @@ def sequoya_activity_state(foursome, *, player_id=None, thru=None) -> dict:
     # without this the last hole's stroke would keep popping on a card whose
     # header already says ROUND COMPLETE.
     ribbon = '' if finished else _stroke_ribbon(foursome, player_id, hole)
+    from services.live_activity_registry import combo_tee
+    tee    = '' if finished else combo_tee(foursome, player_id, hole)
 
     return {
         'kind'  : KIND,
@@ -206,6 +208,7 @@ def sequoya_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         'sides' : sides,
         'state' : state,
         'ribbon': ribbon,
+        'tee'   : tee,
         # Six pips would be true — there are always six matches — but the lock
         # card has no room for a fourth row. They belong to expanded.
         'pips'  : [],

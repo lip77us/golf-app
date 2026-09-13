@@ -240,12 +240,15 @@ def match_activity_state(foursome, *, slug, player_id=None, thru=None) -> dict:
     # The stroke band. Both engines allocate over the full round by course
     # stroke index, so the shared allocator serves the card exactly as the card
     # serves both games.
-    from services.live_activity_registry import (hole_in_play, stroke_ribbon,
+    from services.live_activity_registry import (combo_tee, hole_in_play,
+                                                 stroke_ribbon,
                                                  full_round_strokes)
     _mode, _npct = _handicap_cfg(foursome, slug)
+    _hip   = hole_in_play(foursome, played)
     ribbon = stroke_ribbon(
-        foursome, player_id, hole_in_play(foursome, played),
+        foursome, player_id, _hip,
         full_round_strokes(foursome, handicap_mode=_mode, net_percent=_npct))
+    tee    = combo_tee(foursome, player_id, _hip)
 
     # ── Sides. Assigned once and immutable for the round, which is what lets
     #    the number wear a side's colour for eighteen holes.
@@ -313,6 +316,7 @@ def match_activity_state(foursome, *, slug, player_id=None, thru=None) -> dict:
     return {
         'kind'  : KIND,
         'ribbon': ribbon,
+        'tee'   : tee,
         'header': header,
         'number': number,
         'sides' : sides,

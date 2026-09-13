@@ -400,6 +400,21 @@ class MembershipSerializer(serializers.ModelSerializer):
     # each player row so the TD can see team distribution at a glance.
     cup_team_colour = serializers.SerializerMethodField()
     cup_team_name   = serializers.SerializerMethodField()
+    # {hole: parent tee name} when this golfer is on a COMBO set — see
+    # services/combo_tees. Empty for an ordinary tee AND for a combo the data
+    # cannot resolve, which are the same thing from the reader's side: nothing
+    # is drawn. Sent as a whole map rather than per hole because the answer is
+    # fixed at setup — the indicator is on all eighteen holes or none, which is
+    # what stops it appearing and disappearing mid-round.
+    combo_tee_by_hole = serializers.SerializerMethodField()
+
+    def get_combo_tee_by_hole(self, obj) -> dict:
+        if obj.tee_id is None:
+            return {}
+        from services.combo_tees import is_combo, tee_map
+        if not is_combo(obj.tee):
+            return {}          # the common case, and it costs one string test
+        return {str(k): v for k, v in tee_map(obj.tee).items()}
 
     class Meta:
         model  = FoursomeMembership
@@ -409,6 +424,7 @@ class MembershipSerializer(serializers.ModelSerializer):
             'playing_handicap_override',
             'cup_team_colour', 'cup_team_name', 'is_scorer',
             'withdrew_after_hole', 'withdrew_killed_next_hole',
+            'combo_tee_by_hole',
         ]
         read_only_fields = [
             'id', 'tee', 'course_handicap', 'playing_handicap',

@@ -195,8 +195,8 @@ class RabbitDispatchTests(TestCase):
         from services.live_activity_registry import activity_state
         state = activity_state(self.round, self.user)
         self.assertEqual(set(state),
-                         {'kind', 'ribbon', 'header', 'number', 'sides',
-                          'state', 'pips', 'final', 'footer'})
+                         {'kind', 'ribbon', 'tee', 'header', 'number',
+                          'sides', 'state', 'pips', 'final', 'footer'})
         self.assertEqual(set(state['number']), {'text', 'colour'})
         self.assertEqual(set(state['state']),  {'word', 'to_play'})
         self.assertEqual(set(state['footer']), {'context', 'money'})

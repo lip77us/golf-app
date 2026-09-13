@@ -256,6 +256,11 @@ def banker_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         [(p, s) for p, s in opponents if p != player_id],
         hole.get('stroke_index'))
 
+    # The tee stays up on a settled hole, unlike the band: the shots are spent
+    # but the tee is a fact about the hole in front of you either way.
+    from services.live_activity_registry import combo_tee
+    tee = '' if finished else combo_tee(foursome, player_id, n)
+
     return {
         'kind'  : KIND,
         'header': {
@@ -267,6 +272,7 @@ def banker_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         'sides' : sides,
         'state' : state,
         'ribbon': ribbon,
+        'tee'   : tee,
         # No pips. Banker has no segments — every hole is its own settlement,
         # and eighteen of anything will not fit a row this card does not have.
         'pips'  : [],

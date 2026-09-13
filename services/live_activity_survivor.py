@@ -340,6 +340,8 @@ def survivor_activity_state(foursome, *, player_id=None, thru=None) -> dict:
     headline, colour = _headline(summary, player_id, holes, zombie_on)
 
     ribbon = _stroke_ribbon(foursome, player_id, hole_in_play)
+    from services.live_activity_registry import combo_tee
+    tee    = combo_tee(foursome, player_id, hole_in_play)
 
     ruler, track = _track(summary, holes, hole_in_play, players, player_id,
                           zombie_on)
@@ -368,6 +370,7 @@ def survivor_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         'track'  : track,
         'ruler'  : ruler,
         'ribbon' : ribbon,
+        'tee'    : tee,
         'footer' : {
             'context': _stake(bet) if bet else 'Playing for nothing',
             'money'  : _cash(mine) if (settled and mine) else '',

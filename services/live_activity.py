@@ -215,13 +215,16 @@ def sixes_activity_state(foursome, *, player_id=None, thru=None) -> dict:
     # every hole in play rather than only the scored ones, which is exactly what
     # a band about the hole in front of you needs.
     from services.sixes import sixes_player_hole_strokes
-    from services.live_activity_registry import hole_in_play, stroke_ribbon
-    ribbon = stroke_ribbon(foursome, player_id,
-                           hole_in_play(foursome, thru or 0),
+    from services.live_activity_registry import (combo_tee, hole_in_play,
+                                                 stroke_ribbon)
+    _hip   = hole_in_play(foursome, thru or 0)
+    ribbon = stroke_ribbon(foursome, player_id, _hip,
                            sixes_player_hole_strokes(foursome))
+    tee    = combo_tee(foursome, player_id, _hip)
 
     return {
         'ribbon': ribbon,
+        'tee'   : tee,
         'header': {'game': game, 'segment': _seg_label(segments, seg)},
         'number': _number(seg, high_low),
         'sides' : _sides(seg),

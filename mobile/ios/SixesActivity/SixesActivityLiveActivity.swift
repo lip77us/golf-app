@@ -173,8 +173,54 @@ private struct BoardView: View {
             }
 
             PipsView(pips: state.pips)
+            TeeRow(tee: state.tee)
             FooterView(footer: state.footer, thru: state.thru,
                        isStale: isStale)
+        }
+    }
+}
+
+/// `TEE · WHITE` — the combo golfer's tee for the hole in front of him.
+///
+/// **Below a rule rather than beside the status.** Status and strokes are
+/// about the bet; the tee is about the next shot, and putting it on the status
+/// row would invite reading it as part of the match. The rule is what says
+/// they are different subjects.
+///
+/// Drawn only when the server sends one, which it does only for a golfer on a
+/// combo — so on every other card and for every other reader this costs
+/// nothing, not even the stack's spacing.
+private struct TeeRow: View {
+    let tee: String?
+
+    var body: some View {
+        if let tee, !tee.isEmpty {
+            VStack(alignment: .leading, spacing: 5) {
+                Rectangle()
+                    .fill(.white.opacity(0.12))
+                    .frame(height: 0.5)
+                HStack(spacing: 6) {
+                    Text("TEE")
+                        .font(Sixes.body(9, .semibold))
+                        .tracking(0.6)
+                        .foregroundStyle(.white.opacity(0.45))
+                    // A neutral outline, not a green status pill: green is the
+                    // app's voice for something happening TO you — strokes,
+                    // bets, doubles — and a tee box is a fact about the hole.
+                    Text(tee.uppercased())
+                        .font(Sixes.body(10.5, .semibold))
+                        .tracking(0.4)
+                        .foregroundStyle(.white.opacity(0.85))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4,
+                                             style: .continuous)
+                                .stroke(.white.opacity(0.28), lineWidth: 0.5)
+                        )
+                    Spacer(minLength: 0)
+                }
+            }
         }
     }
 }
@@ -237,6 +283,9 @@ private struct SurvivorBoardView: View {
             }
 
             SurvivorSidesView(sides: state.sides)
+                .padding(.top, 8)
+
+            TeeRow(tee: state.tee)
                 .padding(.top, 8)
 
             SurvivorFooterView(footer: state.footer, thru: state.thru,
@@ -492,6 +541,7 @@ private struct SkinsBoardView: View {
             Rectangle()
                 .fill(.white.opacity(0.11))
                 .frame(height: 0.5)
+            TeeRow(tee: state.tee)
             FooterView(footer: state.footer, thru: state.thru,
                        isStale: isStale)
         }
@@ -523,6 +573,7 @@ private struct NassauBoardView: View {
             HeaderView(header: state.header)
             NamedOnceView(sides: state.sides)
             ForEach(rows, id: \.label) { MatchRowView(row: $0) }
+            TeeRow(tee: state.tee)
             FooterView(footer: state.footer, thru: state.thru,
                        isStale: isStale)
         }
@@ -637,6 +688,7 @@ private struct RabbitBoardView: View {
                 StateView(state: state.state)
             }
 
+            TeeRow(tee: state.tee)
             FooterView(footer: state.footer, thru: state.thru,
                        isStale: isStale)
         }

@@ -3441,6 +3441,7 @@ class _HoleScoreCard extends StatelessWidget {
                 isHot:               isHot,
                 par:                 par,
                 matchHcapLabel:      hcapLabel,
+                comboTee:            m.comboTeeOnHole(holeNumber),
                 strokesOnThisHole:   matchStrok,
                 teamLabel:           _teamLabelFor(m.player.id),
                 nameColor:           _nameColorFor(m, holeNumber),
@@ -4216,6 +4217,10 @@ class _PlayerRow extends StatelessWidget {
   final bool          isHot;
   final int           par;
   final String?       matchHcapLabel;
+  /// Which tee this golfer plays on THIS hole — combo sets only, and only on
+  /// his own row. Null for an ordinary tee and for a combo the course data
+  /// cannot resolve, which draw the same thing: nothing.
+  final String?       comboTee;
   final VoidCallback? onTap;
   final int           strokesOnThisHole;
   final String?       teamLabel;
@@ -4255,6 +4260,7 @@ class _PlayerRow extends StatelessWidget {
     required this.isHot,
     required this.par,
     this.matchHcapLabel,
+    this.comboTee,
     this.onTap,
     this.strokesOnThisHole = 0,
     this.teamLabel,
@@ -4385,8 +4391,37 @@ class _PlayerRow extends StatelessWidget {
                     ),
                   ),
                 ],
-                // (Tee name intentionally not shown — matches the Pink Ball
-                // screen and keeps the row compact.)
+                // Which tee he plays on this hole, on a COMBO set only.
+                //
+                // **A neutral outline, not a filled status chip.** Tee names
+                // ARE colours, so a coloured chip reading "White" asks the eye
+                // to reconcile two at once, and a white chip on a white row is
+                // invisible. The filled treatment beside it is the app's voice
+                // for something happening TO you — strokes, bets, doubles —
+                // and a tee box is a fact about the hole.
+                //
+                // Name only: no colour swatch and no yardage, which is on the
+                // card already. It takes the slot `gets N` is vacating, so
+                // nothing new competes for width on the row, and the other
+                // golfers' rows are untouched.
+                if (comboTee != null && comboTee!.isNotEmpty) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: theme.colorScheme.outline),
+                    ),
+                    child: Text(
+                      comboTee!,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
                 if (withdrawn) ...[
                   const SizedBox(width: 6),
                   Container(
