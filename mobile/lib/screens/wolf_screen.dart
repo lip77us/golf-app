@@ -35,6 +35,7 @@ import '../widgets/inline_score_picker.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/spots_capture.dart';
 import '../widgets/pinned_hole_grid.dart';
+import '../widgets/combo_tee_chip.dart';
 
 /// Team accent color for a player's role on a hole. Per the color standard the
 /// Wolf side (Wolf + partner) is team 1 (blue); the opponents are team 2
@@ -1430,6 +1431,7 @@ class _HoleScoreCard extends StatelessWidget {
             final teamColor =
                 _wolfTeamColor(role) ?? Theme.of(context).colorScheme.primary;
             final row = _PlayerRow(
+                comboTee: m.comboTeeOnHole(holeData?.holeNumber ?? 0),
                 member:    m,
                 gross:     gross,
                 isHot:     isHot,
@@ -1496,6 +1498,8 @@ class _HoleScoreCard extends StatelessWidget {
 
 class _PlayerRow extends StatelessWidget {
   final Membership member;
+  /// This golfer's tee for the hole being entered — combo sets only.
+  final String?    comboTee;
   final int?       gross;
   final bool       isHot;
   final int        strokes;
@@ -1512,6 +1516,7 @@ class _PlayerRow extends StatelessWidget {
 
   const _PlayerRow({
     required this.member,
+    this.comboTee,
     required this.gross,
     required this.isHot,
     required this.strokes,
@@ -1588,6 +1593,7 @@ class _PlayerRow extends StatelessWidget {
                         color: theme.colorScheme.onSecondaryContainer)),
               ),
             ],
+            ComboTeeChip(tee: comboTee),
             if (showHcap && hcap > 0) ...[
               const SizedBox(width: 6),
               Container(

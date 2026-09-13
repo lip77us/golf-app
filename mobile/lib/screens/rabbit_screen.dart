@@ -32,6 +32,7 @@ import '../utils/match_handicap.dart';
 import '../utils/play_order.dart';
 import '../utils/round_complete.dart';
 import '../widgets/pinned_hole_grid.dart';
+import '../widgets/combo_tee_chip.dart';
 
 String _fmtMoney(double v) {
   if (v == 0) return '—';
@@ -891,6 +892,7 @@ class _HoleScoreCard extends StatelessWidget {
           final editable = gross != null && !isHot;
           final strokes = _strokesForHole(m, holeData);
           final row = _PlayerRow(
+              comboTee: m.comboTeeOnHole(holeData?.holeNumber ?? 0),
               member:   m,
               gross:    gross,
               isHot:    isHot,
@@ -948,6 +950,8 @@ class _HoleScoreCard extends StatelessWidget {
 
 class _PlayerRow extends StatelessWidget {
   final Membership member;
+  /// This golfer's tee for the hole being entered — combo sets only.
+  final String?    comboTee;
   final int?       gross;
   final bool       isHot;
   final int        strokes;
@@ -963,6 +967,7 @@ class _PlayerRow extends StatelessWidget {
 
   const _PlayerRow({
     required this.member,
+    this.comboTee,
     required this.gross,
     required this.isHot,
     required this.strokes,
@@ -1039,6 +1044,7 @@ class _PlayerRow extends StatelessWidget {
                 ),
               ),
             ],
+            ComboTeeChip(tee: comboTee),
               ]),
               if (spotsActive)
                 Padding(

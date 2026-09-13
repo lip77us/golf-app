@@ -22,6 +22,7 @@ import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/spots_capture.dart';
 import '../utils/round_complete.dart';
+import '../widgets/combo_tee_chip.dart';
 
 // Gross Stableford: eagle=4, birdie=3, par=2, bogey=1, dbl+=0
 int _gsf(int gross, int par) => (2 + par - gross).clamp(0, 99);
@@ -916,6 +917,7 @@ class _QNHoleScoreCard extends StatelessWidget {
             return [
               _QNPlayerRow(
                 member:    m,
+                comboTee:  m.comboTeeOnHole(holeData?.holeNumber ?? 0),
                 gross:     gross,
                 isHot:     isHot,
                 quota:     quota,
@@ -957,6 +959,8 @@ class _QNHoleScoreCard extends StatelessWidget {
 
 class _QNPlayerRow extends StatelessWidget {
   final Membership    member;
+  /// This golfer's tee for the hole being entered — combo sets only.
+  final String?       comboTee;
   final int?          gross;
   final bool          isHot;
   final int?          quota;
@@ -972,6 +976,7 @@ class _QNPlayerRow extends StatelessWidget {
 
   const _QNPlayerRow({
     required this.member,
+    this.comboTee,
     required this.gross,
     required this.isHot,
     required this.par,
@@ -1050,6 +1055,7 @@ class _QNPlayerRow extends StatelessWidget {
                     ),
                   ),
                 ),
+                ComboTeeChip(tee: comboTee),
               ]),
               if (quota != null)
                 Text(

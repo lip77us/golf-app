@@ -2926,10 +2926,23 @@ golfer** — the cause is a course-data problem worth fixing once.
 
 ### Surfaces
 
-- **Score entry** — a chip on the combo golfer's own row, in the slot `gets N`
-  is vacating, so nothing new competes for width and the other golfers' rows
-  are untouched. `MembershipSerializer.combo_tee_by_hole` sends the whole map
-  at once; an ordinary tee sends `{}`.
+- **Score entry, and every dedicated play screen** — a chip on the combo
+  golfer's own row, in the slot `gets N` is vacating, so nothing new competes
+  for width and the other golfers' rows are untouched.
+  `MembershipSerializer.combo_tee_by_hole` sends the whole map at once; an
+  ordinary tee sends `{}`.
+
+  **It is `widgets/combo_tee_chip.dart`, not markup on one screen.** The first
+  version went onto the generic score-entry screen alone, so a Sequoya 3s round
+  showed nothing — reported from Metropolitan on 12 Sep, where the data
+  resolved all eighteen holes perfectly. Eleven screens draw a golfer's name
+  beside his score box and all eleven carry it now: score entry, Sequoya 3s,
+  Nassau, Skins, Points 5-3-1, Rabbit, Survivor, Wolf, Triple Nassau, Quota
+  Nassau and Pink Ball. **Banker and Triple Cup need nothing** — they push
+  `/score-entry` for scores and keep their own screens for the betting board.
+
+  Same lesson as the scorecard grids: **the games with their OWN play screen
+  are the ones that get missed.**
 - **Lock screen** — `combo_tee()` in the registry feeds a `tee` slot on every
   card, drawn by a shared `TeeRow` below a rule. **This is a third element on a
   surface capped at two**, and it earns the space by appearing only for a golfer

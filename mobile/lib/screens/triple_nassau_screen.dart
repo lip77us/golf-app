@@ -29,6 +29,7 @@ import '../widgets/inline_score_picker.dart';
 import '../widgets/round_chat_button.dart';
 import '../utils/play_order.dart';
 import '../utils/round_complete.dart';
+import '../widgets/combo_tee_chip.dart';
 
 const List<Color> _kNc = [Color(0xFF1976D2), Color(0xFFEF6C00), Color(0xFF7B3FA0)];
 const Color _muted = Color(0xFF5C6B62);
@@ -615,8 +616,14 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
       final rowContent = Row(children: [
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(m.player.name, overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontWeight: FontWeight.w700, color: colour)),
+          Row(children: [
+            Flexible(
+              child: Text(m.player.name, overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700, color: colour)),
+            ),
+            ComboTeeChip(tee: m.comboTeeOnHole(holeData?.holeNumber ?? 0)),
+          ]),
           if (getsLeft > 0 || getsRight > 0)
             Padding(
               padding: const EdgeInsets.only(top: 3),

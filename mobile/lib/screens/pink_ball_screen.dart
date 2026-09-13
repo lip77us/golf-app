@@ -27,6 +27,7 @@ import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
+import '../widgets/combo_tee_chip.dart';
 
 
 class PinkBallScreen extends StatefulWidget {
@@ -659,6 +660,7 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
 
                 final row = _PlayerScoreRow(
                     member:          m,
+                    comboTee:        m.comboTeeOnHole(_holeNumber),
                     isCarrier:       isCarrier,
                     isHot:           isHot,
                     gameName:       _gameName,
@@ -950,6 +952,8 @@ class _InfoChip extends StatelessWidget {
 
 class _PlayerScoreRow extends StatelessWidget {
   final Membership         member;
+  /// This golfer's tee for the hole being entered — combo sets only.
+  final String?            comboTee;
   final bool               isCarrier;
   final bool               isHot;      // active entry player
   final String             gameName;
@@ -962,6 +966,7 @@ class _PlayerScoreRow extends StatelessWidget {
 
   const _PlayerScoreRow({
     required this.member,
+    this.comboTee,
     required this.isCarrier,
     required this.isHot,
     required this.gameName,
@@ -1011,6 +1016,7 @@ class _PlayerScoreRow extends StatelessWidget {
                 ),
               ),
             ),
+            ComboTeeChip(tee: comboTee),
             const SizedBox(width: 6),
             Container(
               padding: const EdgeInsets.symmetric(
