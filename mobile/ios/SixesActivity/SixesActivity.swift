@@ -150,6 +150,46 @@ struct SixesActivityAttributes: ActivityAttributes {
         /// always-on state, where the stake half of the footer is dropped.
         /// (The locked UPPER-RIGHT rides in `header.segment`.)
         var thru: String? = nil
+        /// One column of the four-across STRIP — a golfer, his figure, and
+        /// what places him.
+        ///
+        /// **Four names go across, not down.** Four stacked rows of
+        /// place/name/score/thru measured 201pt against a 160 ceiling —
+        /// clipped on device — and the same four figures per golfer cost 62pt
+        /// as a strip. Wolf established it; Stableford's foursome and Stroke
+        /// Play's flight proved it retroactively. It is the set's answer to
+        /// any four-name card.
+        struct StripCol: Codable, Hashable {
+            /// `WOLF` / `NEXT` on Wolf; the place (`1ST`) on the personal
+            /// cards. Empty draws nothing and keeps the column's height.
+            let label: String
+            /// SURNAME, caps. A column is about sixty points and a first name
+            /// spends it on nothing.
+            let name: String
+            /// The total, the points, the score to par.
+            let figure: String
+            /// `thru 11` — under the figure, not beside the name: in a flight
+            /// the reader compares positions against different amounts of golf
+            /// played, and the pair only means something read together.
+            var note: String? = nil
+            /// Wolf's side rule under the column: `blue` is the wolf's side,
+            /// `orange` the field, absent is unclaimed. A 2px rule rather than
+            /// a coloured name — a name at 62% white in orange is unreadable
+            /// at a nit, and colouring the figure would collide with mint,
+            /// which already means *leads*.
+            var rule: String? = nil
+            /// The reader: label brighter, name and figure at full weight.
+            var isReader: Bool = false
+            /// Ahead — mint, the same rule as every card in the set.
+            var isLeader: Bool = false
+
+            enum CodingKeys: String, CodingKey {
+                case label, name, figure, note, rule
+                case isReader = "is_reader"
+                case isLeader = "is_leader"
+            }
+        }
+
         /// `White` — which tee this golfer plays on the hole in front of him,
         /// and ONLY when he is on a combo set. The name alone: tee names are
         /// colours, so a coloured chip reading "White" asks the eye to
@@ -164,6 +204,9 @@ struct SixesActivityAttributes: ActivityAttributes {
         /// The Survivor track, and the hole numbers above it.
         var track: [TrackRow]? = nil
         var ruler: [Int]? = nil
+        /// The four-across strip — Wolf's roster, a Stableford foursome, a
+        /// Stroke Play flight. Absent on every card that names two sides.
+        var strip: [StripCol]? = nil
         /// Three, always — the shape of the round.
         let pips: [String]
         let footer: Footer

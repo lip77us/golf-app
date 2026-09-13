@@ -270,6 +270,54 @@ def full_round_strokes(foursome, *, handicap_mode, net_percent=100,
     return alloc
 
 
+# ---------------------------------------------------------------------------
+# The four-across strip — one column per golfer
+# ---------------------------------------------------------------------------
+#
+# **Four names go across, not down.** Four stacked rows of place / name / score
+# / thru measured 201pt against the 160 ceiling — clipped on device — and the
+# same four figures cost 62pt as a strip. Wolf established the shape; the
+# Stableford foursome and the Stroke Play flight proved it retroactively, and
+# it is now the set's answer to any four-name card
+# (`~/Downloads/handoff-lock-screens 2/shared/HEIGHT-AUDIT.md`, finding 3).
+#
+# Built here rather than in each card because three of them share it, and a
+# column assembled three ways is three vocabularies for one row.
+
+
+def surname(name: str) -> str:
+    """`MORAN` — a column is about sixty points and a first name spends it on
+    nothing. Caps, last word, and a single-word name is already a surname."""
+    parts = (name or '').strip().split()
+    return (parts[-1] if parts else '').upper()
+
+
+def strip_column(*, name: str, figure: str, label: str = '', note: str = '',
+                 rule: str = '', is_reader: bool = False,
+                 is_leader: bool = False) -> dict:
+    """One column of the strip.
+
+    `rule` is Wolf's side marker — `blue` for the wolf's side, `orange` for the
+    field, empty for unclaimed — and stays empty on every card that has no
+    sides. `label` is `WOLF` / `NEXT` there and the place (`1ST`) on the
+    personal cards; it is sent even when empty so the columns stay level.
+    """
+    col = {
+        'label' : label,
+        'name'  : surname(name),
+        'figure': figure,
+        'is_reader': bool(is_reader),
+        'is_leader': bool(is_leader),
+    }
+    # Optional keys are omitted rather than sent empty: the Swift decodes them
+    # as `String?` and an empty string would draw an empty row of its own.
+    if note:
+        col['note'] = note
+    if rule:
+        col['rule'] = rule
+    return col
+
+
 def combo_tee(foursome, player_id, hole) -> str:
     """The tee this golfer plays on the hole in play — only on a COMBO set.
 

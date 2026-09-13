@@ -173,10 +173,93 @@ private struct BoardView: View {
             }
 
             PipsView(pips: state.pips)
+            StripView(strip: state.strip)
             TeeRow(tee: state.tee)
             FooterView(footer: state.footer, thru: state.thru,
                        isStale: isStale)
         }
+    }
+}
+
+/// The four-across strip: a golfer per column, and what places him.
+///
+/// **Four names go across, not down.** Four stacked rows of place / name /
+/// score / thru measured 201pt against the 160 ceiling — clipped on device —
+/// and the same four figures cost 62pt like this. Wolf established the shape;
+/// Stableford's foursome and Stroke Play's flight proved it retroactively, and
+/// it is now the set's answer to any four-name card.
+///
+/// Three cards share it, which is why it is here rather than in any of them.
+private struct StripView: View {
+    let strip: [SixesActivityAttributes.ContentState.StripCol]?
+
+    var body: some View {
+        if let strip, !strip.isEmpty {
+            HStack(alignment: .top, spacing: 7) {
+                ForEach(Array(strip.enumerated()), id: \.offset) { _, c in
+                    StripColumn(col: c)
+                }
+            }
+        }
+    }
+}
+
+private struct StripColumn: View {
+    let col: SixesActivityAttributes.ContentState.StripCol
+
+    /// Mint for a claimed label (Wolf's own seat), otherwise a dim eyebrow.
+    /// The reader's label is brighter than the rest without being mint —
+    /// mint means *leads* on these cards and must not come to mean two things.
+    private var labelColour: Color {
+        col.isLeader ? Sixes.mint
+            : .white.opacity(col.isReader ? 0.70 : 0.42)
+    }
+
+    private var figureColour: Color {
+        if col.isLeader || col.isReader { return Sixes.mint }
+        return .white.opacity(0.72)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // The label slot is always spent, even when empty: the columns are
+            // read across, and one starting a row higher than its neighbours
+            // makes the figures stop lining up.
+            Text(col.label)
+                .font(Sixes.body(8.5, .bold))
+                .tracking(0.6)
+                .foregroundStyle(labelColour)
+                .lineLimit(1)
+                .frame(height: 11, alignment: .leading)
+            Text(col.name)
+                .font(Sixes.body(10.5, .bold))
+                .foregroundStyle(.white.opacity(col.isReader ? 1 : 0.62))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Text(col.figure)
+                .font(Sixes.display(18, .bold))
+                .tracking(-0.5)
+                .foregroundStyle(figureColour)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            if let note = col.note, !note.isEmpty {
+                Text(note)
+                    .font(Sixes.body(9))
+                    .foregroundStyle(.white.opacity(0.42))
+                    .lineLimit(1)
+            }
+            // The side rule. Under the number, carrying no type, so it
+            // survives the always-on pull — and grey is an honest state, not a
+            // missing one: before a call, three of these men are about to be
+            // on a side and none of them knows which.
+            Rectangle()
+                .fill(col.rule == nil
+                        ? .white.opacity(0.14)
+                        : Sixes.side(col.rule!))
+                .frame(height: 2)
+                .padding(.top, 3)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
