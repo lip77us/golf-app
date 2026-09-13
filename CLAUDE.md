@@ -3052,3 +3052,99 @@ was working. The bug is reachable through any of the fourteen, by any round
 whose game row is missing, or from a stale offline cache.
 
 Tests: `mobile/test/completed_round_routing_test.dart` (5).
+
+## Lock screens: the personal three, Wolf, and the shared strip
+
+Built from `~/Downloads/handoff-lock-screens 2/` (13 Sep). Five new cards were
+specified; four are built and **all of them are gated in
+`UNSHIPPED_KINDS`** — these are games with NO card today, so an ungated kind
+would replace nothing at all with a lock-screen nag pointing at an update that
+does not exist.
+
+### The four-across strip — `strip_column()` / `StripView`
+
+Four stacked rows of place / name / score / thru measured **201pt** against the
+160 ceiling (clipped on device); the same four figures cost **62pt** across.
+Wolf established it, the Stableford foursome and the Stroke Play flight proved
+it retroactively, and it is now the set's answer to any four-name card. Built
+once, in the shared frame, because three cards use it.
+
+Two rules the design argues for and the code honours: the side marker is a 2px
+**rule**, not a coloured name (a name at 62% white in orange is unreadable at a
+nit, and colouring the figure would collide with mint, which means *leads*);
+and the label slot is spent even when empty, because the columns are read
+ACROSS and one starting a row higher stops the figures lining up.
+
+**`WhoRow` is back** — the reader named above the number. Survivor's fitted card
+deleted that row for 19pt and was right to: it names two sides. The personal
+cards headline a PERSON, and a phone handed round a cart otherwise breaks the
+assumption about whose card it is.
+
+### The cards
+
+| Card | Kind | The departure |
+|---|---|---|
+| Stableford | `stableford` | headline is the total; state slot is the PLACE, because place is the money |
+| Stroke Play | `stroke_play` | `E` never `EVEN`; header names the MODE; the line under the headline inverts — a chaser is told who leads, a leader who is coming |
+| Points 5-3-1 | `points` | three ROWS stay; the HEADLINE gave way to 21px; money live from hole one |
+| Wolf | `wolf` | the headline is the PRICE of the hole, not a standing |
+
+**Points keeps three rows** where every other four-name card became a strip,
+because the format is three-handed and the row count can never grow — the nine
+points are DIVIDED, so a point you took is one neither of the others got and a
+single number cannot describe it. Its headline gave way instead: the reader's
+own total already sits three lines below at full weight, so the big number was
+the only slot repeating something. Opposite call to Survivor, where the 36px
+word was protected — the difference is duplication, not importance.
+
+**Points' money is live from hole one** and still settled money, never a
+forecast. The only card in the set where that holds, because there a hole IS
+the settlement. Its per-hole award carries **no plus sign** (the card already
+spends one on the money and one on the gross) and **mint marks the best award
+on that hole, never the leader** — a leader who scrambled a 3 while somebody
+else took the 5 reads dim, which is the column's whole job.
+
+### Wolf's 17 and 18 — the packet's open question, settled
+
+**Paul, 13 Sep: the lowest point total is wolf on 17; then recalculate, and the
+lowest is wolf on 18.** The packet drew "the two lowest in points", which fixes
+both seats off one standing — a different rule. The confirmed one resolves them
+one at a time, so **the same golfer can be wolf twice** if 17 does not lift him
+off the bottom; that is the point of a catch-up.
+
+**The engine already worked this way** (`_last_place`, walked per hole with
+"Advance standings for the NEXT hole's last-place calc"). Nothing changed;
+`LastTwoHolesTests` exists so it is not "simplified" later.
+
+Two Wolf bugs the tests caught, both mine:
+- **`1–6 PTS` on a group that never plays blind.** `blind_wolf_points` has a
+  non-zero default whether or not the rule is in force, so a naive `max()` over
+  the table named a price nobody could pay. `_blind_on()` is the one line to
+  replace if a real switch is ever added.
+- **The strip reordered itself as money moved.** `summary['players']` is sorted
+  by money for the leaderboard; the strip follows the **rotation**, or the
+  `NEXT` label — which is about the seat — jumps around. Same finding as
+  Survivor's track.
+
+### The three-sided gate, and the flag that lied
+
+Shipping a card is a server builder, `UNSHIPPED_KINDS` + the Swift layout, AND
+`hasLiveActivity` in the Dart catalog. A previous session found that at two
+after a Banker round played through hole one with a card that was ready and
+never started. **Its test derived the Dart constant from the slug**, which
+cannot match `strokePlay = 'low_net_round'` — it reported a wired card as
+unwired. It resolves the constant by VALUE now.
+
+Separately: **`canBePrimary: false` sat on Stableford while the picker offered
+it as a primary anyway** (the picker filters on `sideGameOnly`; `canBePrimary`'s
+only reader is a `primaryGames` getter nothing calls). I read the flag, believed
+it, and wrote that the Stableford card could never appear. It can. **A flag with
+no reader is documentation, and a wrong one is invisible until somebody
+believes it.**
+
+### Still to do
+
+Triple Cup (two configurations, and the only card in the bundle that pushes);
+the five Swift layouts; the final states, which are `{}` on all four builders.
+Eight designs in `changed-since-delivery/` are CSS-level and mostly already
+match how we built them — the Skins header fix was the part that applied.

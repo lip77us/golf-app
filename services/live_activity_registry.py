@@ -456,6 +456,14 @@ def _points(foursome, player_id, *, final):
                                  thru=holes_played(foursome))
 
 
+def _wolf(foursome, player_id, *, final):
+    from services.live_activity_wolf import wolf_activity_state
+    if final:
+        return {}   # TODO: the closing frame — points become money
+    return wolf_activity_state(foursome, player_id=player_id,
+                               thru=holes_played(foursome))
+
+
 def _banker(foursome, player_id, *, final):
     from services.live_activity_banker import (banker_activity_state,
                                                banker_final_state)
@@ -487,6 +495,7 @@ BUILDERS = {
     # the app calls the game on screen.
     'low_net_round': _stroke_play,
     'points_531': _points,
+    'wolf'      : _wolf,
     # nassau_nine still rides the NassauGame model as one match but is a
     # PARTIAL round — its holes-remaining is not 18 minus played, so it does
     # not fit this card's state slot and is not drawn. Triple Nassau is
@@ -542,7 +551,7 @@ CARD_KIND = {'match_18': 'match', 'fourball': 'match',
 # Swift layout — which for these five matters more than usual: they are games
 # that have NO card today, so an ungated kind would replace nothing at all with
 # a lock-screen nag pointing at an update that does not exist.
-UNSHIPPED_KINDS: set = {'stableford', 'stroke_play', 'points'}
+UNSHIPPED_KINDS: set = {'stableford', 'stroke_play', 'points', 'wolf'}
 
 
 def card_kind(slug: str) -> str:

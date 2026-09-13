@@ -463,6 +463,9 @@ const List<GameMeta> kGameCatalog = [
                    GameIds.skins, GameIds.strokePlay, GameIds.stableford,
                    GameIds.tripleCup, GameIds.matchPlay,
                    GameIds.threePersonMatch},
+    // The card is built and gated server-side; this flag is what the client
+    // reads before calling Activity.request.
+    hasLiveActivity: true,
   ),
   GameMeta(
     id          : GameIds.rabbit,
