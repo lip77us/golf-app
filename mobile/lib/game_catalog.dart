@@ -638,18 +638,19 @@ const List<GameMeta> kGameCatalog = [
     // kChampionshipGames (still deferred — casual first).
     casual       : true,
     tournament   : false,
-    canBePrimary : false,
+    // TRUE, and it always behaved that way. This said `false` while the
+    // casual picker offered Stableford as a primary anyway — the picker
+    // filters on `sideGameOnly`, not on this — so the flag was describing a
+    // rule nothing enforced. It is the one game in the catalog where the two
+    // disagreed.
+    canBePrimary : true,
     enabled      : true,
     minPlayers   : 2,
-    // Pure scoring overlay — usable as a leaderboard-only side game.
+    // Pure scoring overlay — also usable as a leaderboard-only side game.
     canBeSideGame: true,
     // The card is built and gated server-side. Declared here because the flag
     // is what the client reads before calling Activity.request, and the three
     // sides of that gate are easy to leave at two.
-    //
-    // **It cannot raise one yet, and not because of the gate**: an activity is
-    // owned by the round's PRIMARY game, and `canBePrimary: false` means
-    // Stableford never is one. See the note in services/live_activity_stableford.
     hasLiveActivity: true,
     excludes     : {GameIds.points531},
   ),
@@ -759,6 +760,14 @@ List<GameMeta> get tournamentRoundGames =>
     kGameCatalog.where((g) => g.tournament && g.enabled && !g.cupOnly).toList();
 
 /// Games eligible as the primary accumulator for multi-day tournaments.
+///
+/// **Nothing calls this.** The casual picker builds its own list from
+/// `sideGameOnly` + the size and partial-round filters
+/// (`casual_round_screen._filteredCasualGames`), and the tournament wizard has
+/// its own. Kept because `canBePrimary` is still the honest statement of which
+/// games CAN own a round — but be aware that it is documentation, not a gate:
+/// a wrong value here is invisible until somebody reads it and believes it.
+/// One did, and concluded the Stableford lock screen could never appear.
 List<GameMeta> get primaryGames =>
     kGameCatalog.where((g) => g.canBePrimary && g.enabled).toList();
 

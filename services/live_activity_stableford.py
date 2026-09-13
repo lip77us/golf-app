@@ -22,26 +22,20 @@ the sum being restated rather than an event.
 resolves on the 18th green. Never a `$0` — that would read as a round played
 for nothing.
 
-## It cannot raise an activity yet, and the gate is not why
+## It is a primary game, despite what the catalog said
 
-An activity is owned by the round's PRIMARY game — one per round, named at
-setup — and Stableford's catalog entry is `canBePrimary: false`. It is a
-scoring overlay: a round is Skins-primary or Stroke-Play-primary WITH
-Stableford beside it, and that round's lock screen belongs to the primary.
+Worth knowing because it nearly went the other way: `canBePrimary: false` sat
+on Stableford's catalog entry, which reads like a statement that a Stableford
+round cannot own an activity — an activity belongs to the round's PRIMARY game.
 
-So this card is complete and correct and will never appear until somebody
-decides one of two things:
+It was wrong. **The casual picker filters on `sideGameOnly`, not on
+`canBePrimary`**, and has always offered Stableford as a primary; the flag's
+only reader is a `primaryGames` getter nothing calls. So the flag was
+describing a rule nothing enforced, and it was the one game in the catalog
+where the two disagreed. Corrected there.
 
-1. **Stableford becomes selectable as a primary.** It already owns a
-   score-entry surface and a setup screen, so the objection is about the
-   picker rather than the game.
-2. **Or the ownership rule gains an exception** for the personal cards — a
-   round whose primary has no card of its own could hand the lock screen to a
-   side game that does.
-
-Neither is a code question, which is why this is written down rather than
-guessed at. The same question does NOT arise for the other four cards in the
-bundle: Wolf, Points, Stroke Play and Triple Cup can all be primary.
+The lesson for the next card: **a flag with no reader is documentation, and a
+wrong one is invisible until somebody believes it.**
 """
 from services.live_activity_registry import (hole_facts, hole_in_play,
                                              strip_column, thru_line)
