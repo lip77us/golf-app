@@ -5967,6 +5967,99 @@ class _FourballProgressGridState extends State<_FourballProgressGrid> {
       );
     }
 
+    // ── OUT / IN / TOT ──────────────────────────────────────────────────────
+    // The same three columns the Stroke Play card carries, built the same way,
+    // so the two read as one object. A nine that is not in play has no column:
+    // a back-nine round shows IN alone rather than an OUT that could only ever
+    // be blank.
+    final front    = holeRange.where((h) => h <= 9).toList();
+    final back     = holeRange.where((h) => h > 9).toList();
+    final showOut  = front.isNotEmpty;
+    final showIn   = back.isNotEmpty;
+    final showTot  = front.isNotEmpty && back.isNotEmpty;
+    const summaryW = 34.0;
+
+    int parSum(List<int> holes) {
+      var t = 0;
+      for (final h in holes) {
+        t += scorecard.holeData(h)?.par ?? 0;
+      }
+      return t;
+    }
+
+    Widget summaryCell(String text) => SizedBox(
+          width: summaryW, height: _rowH,
+          child: Center(
+            child: Text(text,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+          ),
+        );
+
+    /// A golfer's gross over a set of holes — **null until every hole in the
+    /// set is scored**, so a subtotal appears once its nine is complete and
+    /// never as a misleading partial. The same rule `_GridPlayerRow` uses.
+    int? grossSum(Membership m, List<int> holes) {
+      var total = 0;
+      for (final h in holes) {
+        final g = scorecard.holeData(h)?.scoreFor(m.player.id)?.grossScore;
+        if (g == null) return null;
+        total += g;
+      }
+      return total;
+    }
+
+    Widget totalCell(Membership m, List<int> holes) {
+      final t = grossSum(m, holes);
+      return summaryCell(t == null ? '—' : '$t');
+    }
+
+    /// One golfer's gross on one hole — the winning best ball highlighted in
+    /// that player's own cell, his stroke dots down the right edge.
+    Widget scoreCell(Membership m, int h) {
+      final tCol    = teamColor(summary.teamOf(m.player.id));
+      final hd      = scorecard.holeData(h);
+      final gross   = hd?.scoreFor(m.player.id)?.grossScore;
+      final win     = _isWinningCell(m, h);
+      final strokes = _strokesOnHoleFor(m, h);
+      return holeCell(h,
+          bg: win ? tCol.withValues(alpha: 0.18) : null,
+          child: Stack(children: [
+            Center(child: Text(
+                gross == null ? '–' : '$gross',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: win ? FontWeight.w800 : FontWeight.w600,
+                    color: gross == null
+                        ? theme.colorScheme.onSurfaceVariant
+                        : win ? tCol : null))),
+            StrokeDotColumn(strokes: strokes,
+                            color: theme.colorScheme.primary),
+          ]));
+    }
+
+    /// Which side took the hole — T1 / T2 / halved / not yet played.
+    Widget wonByCell(int h) {
+      final hr = _holeResult(h);
+      Color? bg; Color? fg; String lbl;
+      if (hr == null) {
+        lbl = '·';
+      } else if (hr.winner == 'T1') {
+        bg = GameColors.team1Bg; fg = GameColors.team1;
+        lbl = teamInitialsFromNames(summary.team1.players);
+      } else if (hr.winner == 'T2') {
+        bg = GameColors.team2Bg; fg = GameColors.team2;
+        lbl = teamInitialsFromNames(summary.team2.players);
+      } else {
+        bg = Colors.grey.shade100; fg = Colors.grey.shade600;
+        lbl = '=';
+      }
+      return holeCell(h, bg: bg,
+          child: Text(lbl,
+              style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: fg ?? theme.colorScheme.onSurfaceVariant)));
+    }
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -5987,29 +6080,64 @@ class _FourballProgressGridState extends State<_FourballProgressGrid> {
                       child: Text(text, style: style)),
                 );
 
+            final nSummary =
+                (showOut ? 1 : 0) + (showIn ? 1 : 0) + (showTot ? 1 : 0);
+            // Where the current hole's right edge sits, counting the summary
+            // columns before it — a back-nine hole is one column further right
+            // than its position in the play order suggests.
+            double? edge;
+            final fi = front.indexOf(current);
+            final bi = back.indexOf(current);
+            if (fi >= 0) {
+              edge = (fi + 1) * _cellW;
+            } else if (bi >= 0) {
+              edge = front.length * _cellW +
+                  (showOut ? summaryW : 0) + (bi + 1) * _cellW;
+            }
+
             return PinnedHoleGrid(
               labelWidth : _labelColW,
               cellWidth  : _cellW,
               holeCount  : holeRange.length,
-              currentIndex: holeRange.indexOf(current),
+              currentIndex: edge == null ? -1 : 0,
+              currentRightEdge: edge,
+              contentWidth: _cellW * holeRange.length + summaryW * nSummary,
               bands: [
                 // Hole numbers
                 HoleGridBand(
                   label('Hole', const TextStyle(
                       fontSize: 11, fontWeight: FontWeight.bold)),
-                  [for (final h in holeRange)
-                    holeCell(h, child: Text('$h',
-                        style: const TextStyle(
-                            fontSize: 11, fontWeight: FontWeight.bold)))],
+                  [
+                    for (final h in front)
+                      holeCell(h, child: Text('$h',
+                          style: const TextStyle(
+                              fontSize: 11, fontWeight: FontWeight.bold))),
+                    if (showOut) summaryCell('OUT'),
+                    for (final h in back)
+                      holeCell(h, child: Text('$h',
+                          style: const TextStyle(
+                              fontSize: 11, fontWeight: FontWeight.bold))),
+                    if (showIn) summaryCell('IN'),
+                    if (showTot) summaryCell('TOT'),
+                  ],
                 ),
                 // Par
                 HoleGridBand(
                   label('Par', theme.textTheme.bodySmall
                       ?.copyWith(fontStyle: FontStyle.italic)),
-                  [for (final h in holeRange)
-                    holeCell(h, child: Text(
-                        '${scorecard.holeData(h)?.par ?? "-"}',
-                        style: theme.textTheme.bodySmall))],
+                  [
+                    for (final h in front)
+                      holeCell(h, child: Text(
+                          '${scorecard.holeData(h)?.par ?? "-"}',
+                          style: theme.textTheme.bodySmall)),
+                    if (showOut) summaryCell('${parSum(front)}'),
+                    for (final h in back)
+                      holeCell(h, child: Text(
+                          '${scorecard.holeData(h)?.par ?? "-"}',
+                          style: theme.textTheme.bodySmall)),
+                    if (showIn) summaryCell('${parSum(back)}'),
+                    if (showTot) summaryCell('${parSum([...front, ...back])}'),
+                  ],
                 ),
                 const HoleGridBand.rule(),
                 // Player score rows — names tinted by team; the winning best
@@ -6020,30 +6148,13 @@ class _FourballProgressGridState extends State<_FourballProgressGrid> {
                         theme.textTheme.bodySmall?.copyWith(
                             fontWeight: FontWeight.w600,
                             color: teamColor(summary.teamOf(m.player.id)))),
-                    [for (final h in holeRange)
-                      Builder(builder: (_) {
-                        final tCol  = teamColor(summary.teamOf(m.player.id));
-                        final hd    = scorecard.holeData(h);
-                        final gross = hd?.scoreFor(m.player.id)?.grossScore;
-                        final win   = _isWinningCell(m, h);
-                        final strokes = _strokesOnHoleFor(m, h);
-                        return holeCell(h,
-                            bg: win ? tCol.withValues(alpha: 0.18) : null,
-                            child: Stack(children: [
-                              Center(child: Text(
-                                  gross == null ? '–' : '$gross',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                      fontWeight: win
-                                          ? FontWeight.w800
-                                          : FontWeight.w600,
-                                      color: gross == null
-                                          ? theme.colorScheme.onSurfaceVariant
-                                          : win ? tCol : null))),
-                              StrokeDotColumn(
-                                  strokes: strokes,
-                                  color: theme.colorScheme.primary),
-                            ]));
-                      })],
+                    [
+                      for (final h in front) scoreCell(m, h),
+                      if (showOut) totalCell(m, front),
+                      for (final h in back) scoreCell(m, h),
+                      if (showIn) totalCell(m, back),
+                      if (showTot) totalCell(m, [...front, ...back]),
+                    ],
                   ),
                 const HoleGridBand.rule(),
                 // Won by — T1 / T2 / = per hole.
@@ -6051,29 +6162,15 @@ class _FourballProgressGridState extends State<_FourballProgressGrid> {
                   label('Won by', theme.textTheme.labelSmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                       fontStyle: FontStyle.italic)),
-                  [for (final h in holeRange)
-                    Builder(builder: (_) {
-                      final hr = _holeResult(h);
-                      Color? bg; Color? fg; String lbl;
-                      if (hr == null) {
-                        lbl = '·';
-                      } else if (hr.winner == 'T1') {
-                        bg = GameColors.team1Bg; fg = GameColors.team1;
-                        lbl = teamInitialsFromNames(summary.team1.players);
-                      } else if (hr.winner == 'T2') {
-                        bg = GameColors.team2Bg; fg = GameColors.team2;
-                        lbl = teamInitialsFromNames(summary.team2.players);
-                      } else {
-                        bg = Colors.grey.shade100; fg = Colors.grey.shade600;
-                        lbl = '=';
-                      }
-                      return holeCell(h, bg: bg,
-                          child: Text(lbl,
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: fg ??
-                                      theme.colorScheme.onSurfaceVariant)));
-                    })],
+                  [
+                    for (final h in front) wonByCell(h),
+                    // A nine has no winner, so the summary slots stay empty
+                    // rather than carrying an invented one.
+                    if (showOut) summaryCell(''),
+                    for (final h in back) wonByCell(h),
+                    if (showIn) summaryCell(''),
+                    if (showTot) summaryCell(''),
+                  ],
                 ),
               ],
             );

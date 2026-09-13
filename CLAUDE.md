@@ -2828,6 +2828,16 @@ more.
 Stableford and Points 5-3-1; and the Nassau, Points 5-3-1, Rabbit, Survivor,
 Wolf and match-play screens.
 
+**The fourball card carries OUT / IN / TOT** (13 Sep), built the same way the
+Stroke Play card does so the two read as one object — front nine, OUT, back
+nine, IN, TOT, with `contentWidth` and `currentRightEdge` counting the summary
+columns so the rule reaches the end of the grid and a back-nine hole scrolls to
+the right place. A golfer's subtotal is an **em dash until every hole in that
+nine is scored**, the same rule `_GridPlayerRow` uses: a subtotal appears once
+its nine is complete and never as a misleading partial. The `Won by` row leaves
+its summary slots blank — a nine has no winner, and inventing one would be
+worse than the gap.
+
 Things the sweep turned up:
 - **Rabbit, Survivor, Wolf and match play never scrolled to a hole at all** —
   on the back nine you hunted for the one you were standing on, every hole.
