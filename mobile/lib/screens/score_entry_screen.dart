@@ -8945,6 +8945,40 @@ class _P531SummaryGridState extends State<_P531SummaryGrid> {
       );
     }
 
+    // ── OUT / IN / TOT ──────────────────────────────────────────────────────
+    final split = NineSplit.of(holeRange);
+    const summaryW = 34.0;
+
+    Widget sumCell(String t) => SizedBox(
+          width: summaryW, height: rowH,
+          child: Center(
+            child: Text(t,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+          ),
+        );
+
+    int parSum(List<int> hs) {
+      var t = 0;
+      for (final h in hs) {
+        t += scorecard.holeData(h)?.par ?? 0;
+      }
+      return t;
+    }
+
+    List<Widget> withTotals(Widget Function(int) cell,
+        {Widget Function(List<int>)? sum}) {
+      final s = sum ?? (List<int> _) => sumCell('');
+      return [
+        for (final h in split.front) cell(h),
+        if (split.showOut) s(split.front),
+        for (final h in split.back) cell(h),
+        if (split.showIn) s(split.back),
+        if (split.showTot) s(split.all),
+      ];
+    }
+
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -8971,29 +9005,40 @@ class _P531SummaryGridState extends State<_P531SummaryGrid> {
                 labelWidth  : labelColW,
                 cellWidth   : cellW,
                 holeCount   : holeRange.length,
-                currentIndex: holeRange.indexOf(currentHole),
+                currentIndex: split.rightEdgeOf(
+                        currentHole, cellW, summaryW) == null ? -1 : 0,
+                currentRightEdge:
+                    split.rightEdgeOf(currentHole, cellW, summaryW),
+                contentWidth: split.contentWidth(cellW, summaryW),
                 bands: [
                   // Header: hole numbers
                   HoleGridBand(
                     lbl('Hole', const TextStyle(
                         fontSize: 11, fontWeight: FontWeight.bold)),
                     [
-                    for (final h in holeRange) holeCell(h,
-                        child: Text('$h',
-                            style: const TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.bold))),
+                      for (final h in split.front) holeCell(h,
+                          child: Text('$h',
+                              style: const TextStyle(
+                                  fontSize: 11, fontWeight: FontWeight.bold))),
+                      if (split.showOut) sumCell('OUT'),
+                      for (final h in split.back) holeCell(h,
+                          child: Text('$h',
+                              style: const TextStyle(
+                                  fontSize: 11, fontWeight: FontWeight.bold))),
+                      if (split.showIn) sumCell('IN'),
+                      if (split.showTot) sumCell('TOT'),
                   ]),
                   // Par row
                   HoleGridBand(
                     lbl('Par', theme.textTheme.bodySmall?.copyWith(
                         fontStyle: FontStyle.italic)),
-                    [
-                    for (final h in holeRange) holeCell(h,
-                        child: Text(
+                    withTotals(
+                      (h) => holeCell(h, child: Text(
                           '${scorecard.holeData(h)?.par ?? "-"}',
-                          style: theme.textTheme.bodySmall,
-                        )),
-                  ]),
+                          style: theme.textTheme.bodySmall)),
+                      sum: (hs) => sumCell('${parSum(hs)}'),
+                    ),
+                  ),
                   const HoleGridBand.rule(),
                   // One double-row per player: scores + points awarded
                   for (final m in players) ..._P531PlayerGridRows(
@@ -9007,6 +9052,8 @@ class _P531SummaryGridState extends State<_P531SummaryGrid> {
                     rowH:          rowH,
                     strokesOnHole: (h) => _strokesOnHoleFor(m, h),
                     pointsByHole:  _pointsByHole(m.player.id),
+                    split:         split,
+                    summaryW:      summaryW,
                   ).toBands(ctx),
                 ],
               );
@@ -9029,6 +9076,10 @@ class _P531PlayerGridRows extends StatelessWidget {
   final double       rowH;
   final int Function(int hole)    strokesOnHole;
   final Map<int, double>          pointsByHole;
+  /// The nine split, when the card carries OUT / IN / TOT. Null = no summary
+  /// columns, which is how this row behaved before they existed.
+  final NineSplit?                split;
+  final double                    summaryW;
 
   const _P531PlayerGridRows({
     required this.member,
@@ -9041,6 +9092,8 @@ class _P531PlayerGridRows extends StatelessWidget {
     required this.rowH,
     required this.strokesOnHole,
     required this.pointsByHole,
+    this.split,
+    this.summaryW = 34.0,
   });
 
   Widget _cell(int h, BuildContext ctx, {required Widget child}) {
@@ -9084,6 +9137,42 @@ class _P531PlayerGridRows extends StatelessWidget {
   List<HoleGridBand> toBands(BuildContext context) {
     final theme = Theme.of(context);
 
+    Widget sumCell(String t, {double? h}) => SizedBox(
+          width: summaryW, height: h ?? rowH,
+          child: Center(
+            child: Text(t,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+          ),
+        );
+
+    /// The golfer's gross over a nine — an em dash until it is complete.
+    Widget grossTotal(List<int> holes) {
+      var total = 0;
+      for (final h in holes) {
+        final g = scorecard.holeData(h)?.scoreFor(member.player.id)?.grossScore;
+        if (g == null) return sumCell('—');
+        total += g;
+      }
+      return sumCell('$total');
+    }
+
+    /// front · OUT · back · IN · TOT, or the flat row when this card carries
+    /// no summary columns.
+    List<Widget> withTotals(Widget Function(int) cell,
+        {Widget Function(List<int>)? sum, double? h}) {
+      final sp = split;
+      if (sp == null) return [for (final hole in holeRange) cell(hole)];
+      final s = sum ?? (List<int> _) => sumCell('', h: h);
+      return [
+        for (final hole in sp.front) cell(hole),
+        if (sp.showOut) s(sp.front),
+        for (final hole in sp.back) cell(hole),
+        if (sp.showIn) s(sp.back),
+        if (sp.showTot) s(sp.all),
+      ];
+    }
+
     return [
         // Score row with stroke-dot overlay
         HoleGridBand(
@@ -9097,8 +9186,7 @@ class _P531PlayerGridRows extends StatelessWidget {
                       ?.copyWith(fontWeight: FontWeight.w600)),
             ),
           ),
-          [
-          for (final h in holeRange) _cell(h, context, child: SizedBox(
+          withTotals(sum: grossTotal, (h) => _cell(h, context, child: SizedBox(
             width: cellW,
             height: rowH,
             child: Stack(children: [
@@ -9121,8 +9209,8 @@ class _P531PlayerGridRows extends StatelessWidget {
                     color: theme.colorScheme.primary,
                   )),
             ]),
-          )),
-        ]),
+          ))),
+        ),
         // Points awarded row
         HoleGridBand(
           SizedBox(
@@ -9135,8 +9223,7 @@ class _P531PlayerGridRows extends StatelessWidget {
                       fontStyle: FontStyle.italic)),
             ),
           ),
-          [
-          for (final h in holeRange) Container(
+          withTotals(h: rowH - 4, (h) => Container(
             width: cellW, height: rowH - 4,
             alignment: Alignment.center,
             child: Builder(builder: (_) {
@@ -9156,8 +9243,8 @@ class _P531PlayerGridRows extends StatelessWidget {
                 ),
               );
             }),
-          ),
-        ]),
+          )),
+        ),
     ];
   }
 }
