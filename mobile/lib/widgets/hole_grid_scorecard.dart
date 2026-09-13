@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../game_colors.dart';
 import '../theme/halved_brand.dart';
 import 'stroke_dots.dart';
+import '../utils/nine_totals.dart';
 
 /// Gold marks a ROLE rather than a result — Banker's, at present. It is
 /// deliberately not the win green: the man who banked a hole is as likely to
@@ -59,6 +60,7 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
   static const double _labelColW = 78.0;
   static const double _cellW     = 32.0;
   static const double _rowH      = 26.0;
+  static const double _summaryW  = 34.0;
 
   final ScrollController _ctrl = ScrollController();
 
@@ -99,8 +101,13 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_ctrl.hasClients) return;
       // The scroll view holds the HOLE columns only — the label column is
-      // pinned outside it — so the offset is measured in cells alone.
-      final target = ((pos - 7) * _cellW)
+      // pinned outside it — and OUT / IN / TOT sit among them, so the offset
+      // comes from the split rather than from a cell count: a back-nine hole
+      // is one summary column further right than its position suggests.
+      final split = NineSplit.of(order);
+      final edge  = split.rightEdgeOf(hole, _cellW, _summaryW)
+          ?? (pos + 1) * _cellW;
+      final target = (edge - _ctrl.position.viewportDimension)
           .clamp(0.0, _ctrl.position.maxScrollExtent);
       _ctrl.animateTo(target,
           duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
@@ -279,6 +286,61 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
       );
     }
 
+    final split = NineSplit.of(visibleHoles);
+
+    Widget summaryCell(String text) => SizedBox(
+          width: _summaryW, height: _rowH,
+          child: Center(
+            child: Text(text,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+          ),
+        );
+
+    /// A golfer's gross over a set of holes — **an em dash until every hole in
+    /// the set is scored**, so a subtotal appears once its nine is complete
+    /// and never as a misleading partial.
+    Widget grossTotal(int playerId, List<int> holes) {
+      var total = 0;
+      for (final h in holes) {
+        final entry = holeMap[h];
+        final scores =
+            (entry?['scores'] as List? ?? []).cast<Map<String, dynamic>>();
+        final mine = scores.firstWhere((x) => x['player_id'] == playerId,
+            orElse: () => const {});
+        final g = mine['gross'] as int?;
+        if (g == null) return summaryCell('—');
+        total += g;
+      }
+      return summaryCell(holes.isEmpty ? '' : '$total');
+    }
+
+    int parSum(List<int> holes) {
+      var t = 0;
+      for (final h in holes) {
+        t += (holeMap[h]?['par'] as int?) ?? 0;
+      }
+      return t;
+    }
+
+    /// The three columns, interleaved among the holes: front · OUT · back ·
+    /// IN · TOT. `summary` fills a slot that has no meaning for the row —
+    /// the stroke-index line has no nine total, and neither do points.
+    List<Widget> withTotals(
+      Widget Function(int hole) cell, {
+      Widget Function(List<int> holes)? summary,
+    }) {
+      Widget blank(List<int> _) => summaryCell('');
+      final sum = summary ?? blank;
+      return [
+        for (final h in split.front) cell(h),
+        if (split.showOut) sum(split.front),
+        for (final h in split.back) cell(h),
+        if (split.showIn) sum(split.back),
+        if (split.showTot) sum(split.all),
+      ];
+    }
+
     Widget pointsCell(int playerId, int h) {
       final entry = holeMap[h];
       if (entry == null) return SizedBox(width: _cellW, height: _rowH);
@@ -371,7 +433,8 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
                 color: theme.colorScheme.outlineVariant,
                 margin: const EdgeInsets.symmetric(vertical: 2)));
             cellCol.add(Container(
-                height: 1, width: _cellW * visibleHoles.length,
+                height: 1,
+                width: split.contentWidth(_cellW, _summaryW),
                 color: theme.colorScheme.outlineVariant,
                 margin: const EdgeInsets.symmetric(vertical: 2)));
           }
@@ -394,14 +457,23 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
             theme.colorScheme.surfaceContainerHighest,
             textLabel('Hole',
                 const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-            [for (final h in visibleHoles) headerCell(h)],
+            // Built out rather than through `withTotals`: the header's three
+            // slots carry different WORDS, not a function of their holes.
+            [
+              for (final h in split.front) headerCell(h),
+              if (split.showOut) summaryCell('OUT'),
+              for (final h in split.back) headerCell(h),
+              if (split.showIn) summaryCell('IN'),
+              if (split.showTot) summaryCell('TOT'),
+            ],
           );
           band(
             theme.colorScheme.surfaceContainerLow,
             textLabel('Par',
                 theme.textTheme.bodySmall?.copyWith(
                     fontStyle: FontStyle.italic)),
-            [for (final h in visibleHoles) parCell(h)],
+            withTotals(parCell,
+                summary: (holes) => summaryCell('${parSum(holes)}')),
           );
           if (hasStrokeIndex) {
             band(
@@ -409,7 +481,8 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
               textLabel('Index',
                   theme.textTheme.labelSmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant)),
-              [for (final h in visibleHoles) siCell(h)],
+              // A stroke index has no nine total — the slots stay empty.
+              withTotals(siCell),
             );
           }
           rule();
@@ -445,10 +518,10 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
                 ),
               ),
             ));
-            cellCol.add(Row(children: [
-              for (final h in visibleHoles)
-                scoreCell(p['player_id'] as int, h),
-            ]));
+            cellCol.add(Row(children: withTotals(
+              (h) => scoreCell(p['player_id'] as int, h),
+              summary: (holes) => grossTotal(p['player_id'] as int, holes),
+            )));
           }
 
           // Second block: per-player points won on each hole.
@@ -456,10 +529,8 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
             rule();
             for (final p in widget.participants) {
               labelCol.add(participantLabel(p, suffix: ' pts'));
-              cellCol.add(Row(children: [
-                for (final h in visibleHoles)
-                  pointsCell(p['player_id'] as int, h),
-              ]));
+              cellCol.add(Row(children: withTotals(
+                (h) => pointsCell(p['player_id'] as int, h))));
             }
           }
 
