@@ -37,6 +37,7 @@ import '../widgets/round_chat_button.dart';
 import '../widgets/spots_capture.dart';
 import '../widgets/pinned_hole_grid.dart';
 import '../widgets/combo_tee_chip.dart';
+import '../utils/nine_totals.dart';
 
 // ---------------------------------------------------------------------------
 // The screen
@@ -1311,32 +1312,66 @@ class _P531SummaryGridState extends State<_P531SummaryGrid> {
                     child: Align(alignment: Alignment.centerLeft,
                         child: Text(text, style: style)),
                   );
+              final split = NineSplit.of(holeRange);
+              const summaryW = 34.0;
+              Widget sumCell(String t) => SizedBox(
+                    width: summaryW, height: rowH,
+                    child: Center(
+                      child: Text(t,
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(fontWeight: FontWeight.bold)),
+                    ),
+                  );
+              int parSum(List<int> hs) {
+                var t = 0;
+                for (final h in hs) {
+                  t += scorecard.holeData(h)?.par ?? 0;
+                }
+                return t;
+              }
               return PinnedHoleGrid(
                 labelWidth  : labelColW,
                 cellWidth   : cellW,
                 holeCount   : holeRange.length,
-                currentIndex: holeRange.indexOf(currentHole),
+                currentIndex: split.rightEdgeOf(
+                        currentHole, cellW, summaryW) == null ? -1 : 0,
+                currentRightEdge:
+                    split.rightEdgeOf(currentHole, cellW, summaryW),
+                contentWidth: split.contentWidth(cellW, summaryW),
                 bands: [
                   // Header: hole numbers
                   HoleGridBand(
                     lbl('Hole', const TextStyle(
                         fontSize: 11, fontWeight: FontWeight.bold)),
                     [
-                    for (final h in holeRange) holeCell(h,
-                        child: Text('$h',
-                            style: const TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.bold))),
+                      for (final h in split.front) holeCell(h,
+                          child: Text('$h',
+                              style: const TextStyle(
+                                  fontSize: 11, fontWeight: FontWeight.bold))),
+                      if (split.showOut) sumCell('OUT'),
+                      for (final h in split.back) holeCell(h,
+                          child: Text('$h',
+                              style: const TextStyle(
+                                  fontSize: 11, fontWeight: FontWeight.bold))),
+                      if (split.showIn) sumCell('IN'),
+                      if (split.showTot) sumCell('TOT'),
                   ]),
                   // Par row
                   HoleGridBand(
                     lbl('Par', theme.textTheme.bodySmall?.copyWith(
                         fontStyle: FontStyle.italic)),
                     [
-                    for (final h in holeRange) holeCell(h,
-                        child: Text(
-                          '${scorecard.holeData(h)?.par ?? "-"}',
-                          style: theme.textTheme.bodySmall,
-                        )),
+                      for (final h in split.front) holeCell(h,
+                          child: Text(
+                            '${scorecard.holeData(h)?.par ?? "-"}',
+                            style: theme.textTheme.bodySmall)),
+                      if (split.showOut) sumCell('${parSum(split.front)}'),
+                      for (final h in split.back) holeCell(h,
+                          child: Text(
+                            '${scorecard.holeData(h)?.par ?? "-"}',
+                            style: theme.textTheme.bodySmall)),
+                      if (split.showIn) sumCell('${parSum(split.back)}'),
+                      if (split.showTot) sumCell('${parSum(split.all)}'),
                   ]),
                   // Separates the fixed course-info rows (hole numbers + par)
                   // from the player score / points rows below.
@@ -1353,6 +1388,8 @@ class _P531SummaryGridState extends State<_P531SummaryGrid> {
                     rowH:        rowH,
                     strokesOnHole: (h) => _strokesOnHoleFor(m, h),
                     pointsByHole:  _pointsByHole(m.player.id),
+                    split:         split,
+                    summaryW:      summaryW,
                   ).toBands(ctx),
                 ],
               );
@@ -1377,6 +1414,9 @@ class _PlayerGridRows extends StatelessWidget {
   final double       rowH;
   final int Function(int hole)    strokesOnHole;
   final Map<int, double>           pointsByHole;
+  /// The nine split, when the card carries OUT / IN / TOT.
+  final NineSplit?                 split;
+  final double                     summaryW;
 
   const _PlayerGridRows({
     required this.member,
@@ -1389,6 +1429,8 @@ class _PlayerGridRows extends StatelessWidget {
     required this.rowH,
     required this.strokesOnHole,
     required this.pointsByHole,
+    this.split,
+    this.summaryW = 34.0,
   });
 
   static String _fmtPoints(double v) =>
@@ -1434,6 +1476,43 @@ class _PlayerGridRows extends StatelessWidget {
   List<HoleGridBand> toBands(BuildContext context) {
     final theme = Theme.of(context);
 
+    Widget sumCell(String t, {double? h}) => SizedBox(
+          width: summaryW, height: h ?? rowH,
+          child: Center(
+            child: Text(t,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+          ),
+        );
+
+    Widget grossTotal(List<int> holes) {
+      var total = 0;
+      for (final hole in holes) {
+        final g =
+            scorecard.holeData(hole)?.scoreFor(member.player.id)?.grossScore;
+        if (g == null) return sumCell('—');
+        total += g;
+      }
+      return sumCell('$total');
+    }
+
+    /// front · OUT · back · IN · TOT, or the flat row when this card carries
+    /// no summary columns. Points get blank slots — a points total is a
+    /// different quantity from a nine's gross.
+    List<Widget> withTotals(Widget Function(int) cell,
+        {Widget Function(List<int>)? sum, double? h}) {
+      final sp = split;
+      if (sp == null) return [for (final hole in holeRange) cell(hole)];
+      final f = sum ?? (List<int> _) => sumCell('', h: h);
+      return [
+        for (final hole in sp.front) cell(hole),
+        if (sp.showOut) f(sp.front),
+        for (final hole in sp.back) cell(hole),
+        if (sp.showIn) f(sp.back),
+        if (sp.showTot) f(sp.all),
+      ];
+    }
+
     return [
         // Score row (with stroke dot in top-right corner when applicable)
         HoleGridBand(
@@ -1447,8 +1526,8 @@ class _PlayerGridRows extends StatelessWidget {
                       ?.copyWith(fontWeight: FontWeight.w600)),
             ),
           ),
-          [
-          for (final h in holeRange) _cell(h, context, child: scoreCellWithDots(
+          withTotals(sum: grossTotal, (h) =>
+            _cell(h, context, child: scoreCellWithDots(
             SizedBox(
               width:  cellW,
               height: rowH,
@@ -1469,8 +1548,8 @@ class _PlayerGridRows extends StatelessWidget {
             ),
             strokesOnHole(h),
             theme.colorScheme.primary,
-          )),
-        ]),
+          ))),
+        ),
         // Points awarded row (same player, labelled "pts")
         HoleGridBand(
           SizedBox(
@@ -1483,8 +1562,7 @@ class _PlayerGridRows extends StatelessWidget {
                       fontStyle: FontStyle.italic)),
             ),
           ),
-          [
-          for (final h in holeRange) Container(
+          withTotals(h: rowH - 4, (h) => Container(
             width: cellW, height: rowH - 4,
             alignment: Alignment.center,
             child: Builder(builder: (_) {
@@ -1504,8 +1582,8 @@ class _PlayerGridRows extends StatelessWidget {
                 ),
               );
             }),
-          ),
-        ]),
+          )),
+        ),
     ];
   }
 }
