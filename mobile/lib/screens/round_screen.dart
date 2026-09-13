@@ -326,7 +326,7 @@ class _RoundScreenState extends State<RoundScreen> {
                     // configuration; otherwise go straight to universal score entry.
                     // Cup rounds are fully configured via CupRoundSetupScreen —
                     // skip all setup routing and go directly to score entry.
-                    final String route;
+                    String route;
                     if (round.isTeamPlayRound) {
                       // Team Play owns its own card: one huge number for a
                       // format that ends in one ball, a row a man with the
@@ -493,6 +493,34 @@ class _RoundScreenState extends State<RoundScreen> {
                       // universal score entry.
                       route = '/score-entry';
                     }
+                    // **A finished round never opens a setup screen.**
+                    //
+                    // Reported from a completed Sixes match: "View Scorecard"
+                    // landed on the team-picker slot machine. Fourteen branches
+                    // above can choose a `*-setup` route, and not one of them
+                    // knows the round is over — they all ask only whether the
+                    // game is configured. On a live round that is right: an
+                    // unconfigured game has to be set up before it can be
+                    // scored. On a finished one there is nothing to set up, the
+                    // button says View Scorecard, and drawing teams for a match
+                    // that has already been played and settled is the one thing
+                    // it must not offer.
+                    //
+                    // Guarded HERE rather than in each branch on purpose: the
+                    // next game added will get a branch of its own, and it will
+                    // be written the same way as the other fourteen.
+                    // `contains`, not `endsWith`: `/nassau-setup-18` ends in
+                    // its hole count, and a suffix test let the Singles Match
+                    // picker through on a finished round. No play route
+                    // contains `-setup`, so this cannot over-match.
+                    if (isComplete && route.contains('-setup')) {
+                      // The gross card, which is what the button promises. Not
+                      // the game's own screen: the only way to reach a setup
+                      // route is for the game to be unconfigured, and an
+                      // unconfigured game has nothing of its own to show.
+                      route = '/score-entry';
+                    }
+
                     // Build richer arguments for match-play-setup so it can
                     // offer "copy to all" and "copy to peers" actions.
                     final Object routeArgs;

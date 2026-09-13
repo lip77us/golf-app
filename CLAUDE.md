@@ -3016,3 +3016,39 @@ helper rather than a literal width, so the earlier pin sweep's regex missed it
 and "eighteen of eighteen" was really nineteen. Fixed here.
 
 Tests: `mobile/test/nine_totals_test.dart` (9).
+
+## A finished round never opens a setup screen
+
+Reported from a completed Sixes match (13 Sep): **"View Scorecard" landed on
+the team-picker slot machine.**
+
+The hub's one button — Enter Scores while a round is live, View Scorecard once
+it is over — runs a single routing chain, and **fourteen of its branches can
+choose a `*-setup` route**. Every one asks only whether the game is
+CONFIGURED; not one asks whether the round is over. On a live round that is
+right: an unconfigured game has to be set up before it can be scored. On a
+finished one there is nothing to set up, and drawing teams for a match already
+played and settled is the one thing the button must not offer.
+
+Guarded once, after the chain and before the push, rather than in each branch:
+the next game added will get a branch of its own and it will be written like the
+other fourteen.
+
+```dart
+if (isComplete && route.contains('-setup')) route = '/score-entry';
+```
+
+**`contains`, not `endsWith`** — `/nassau-setup-18` ends in its hole count, so a
+suffix test let the Singles Match picker through. Caught by the test, not by
+reading. No play route contains `-setup`, so it cannot over-match.
+
+It falls back to the gross card rather than the game's own screen: the only way
+to reach a setup route is for the game to be unconfigured, and an unconfigured
+game has nothing of its own to show.
+
+Note the DATA was fine throughout — every completed Sixes foursome in the local
+database serialises `configured_games: ['sixes', …]`, so that branch's guard
+was working. The bug is reachable through any of the fourteen, by any round
+whose game row is missing, or from a stale offline cache.
+
+Tests: `mobile/test/completed_round_routing_test.dart` (5).
