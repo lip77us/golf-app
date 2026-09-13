@@ -53,6 +53,7 @@ import '../widgets/team_splitter_4.dart';
 import '../widgets/stroke_dots.dart';
 import '../widgets/pinned_hole_grid.dart';
 import '../widgets/combo_tee_chip.dart';
+import '../utils/nine_totals.dart';
 
 // ---------------------------------------------------------------------------
 // Handicap helpers (shared with nassau_screen.dart)
@@ -5437,6 +5438,42 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
       );
     }
 
+    // ── OUT / IN / TOT ──────────────────────────────────────────────────────
+    final split = NineSplit.of(holeRange);
+    const summaryW = 34.0;
+
+    Widget sumCell(String t) => SizedBox(
+          width: summaryW, height: _rowH,
+          child: Center(
+            child: Text(t,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+          ),
+        );
+
+    int parSum(List<int> hs) {
+      var t = 0;
+      for (final h in hs) {
+        t += scorecard.holeData(h)?.par ?? 0;
+      }
+      return t;
+    }
+
+    /// front · OUT · back · IN · TOT. Without `sum` the summary slots are
+    /// blank, which is right for any row that has no nine total of its own.
+    List<Widget> withTotals(Widget Function(int) cell,
+        {Widget Function(List<int>)? sum}) {
+      final s = sum ?? (List<int> _) => sumCell('');
+      return [
+        for (final h in split.front) cell(h),
+        if (split.showOut) s(split.front),
+        for (final h in split.back) cell(h),
+        if (split.showIn) s(split.back),
+        if (split.showTot) s(split.all),
+      ];
+    }
+
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -5463,41 +5500,51 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                 labelWidth  : _labelColW,
                 cellWidth   : _cellW,
                 holeCount   : holeRange.length,
-                currentIndex: holeRange.indexOf(currentHole),
+                currentIndex: split.rightEdgeOf(
+                        currentHole, _cellW, summaryW) == null ? -1 : 0,
+                currentRightEdge:
+                    split.rightEdgeOf(currentHole, _cellW, summaryW),
+                contentWidth: split.contentWidth(_cellW, summaryW),
                 bands: [
                   // Hole numbers
                   HoleGridBand(
                     lbl('Hole', const TextStyle(
                         fontSize: 11, fontWeight: FontWeight.bold)),
-                    [for (final h in holeRange)
-                      holeCell(h,
-                          child: Text('$h',
-                              style: const TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.bold)))],
+                    [
+                      for (final h in split.front)
+                        holeCell(h, child: Text('$h',
+                            style: const TextStyle(
+                                fontSize: 11, fontWeight: FontWeight.bold))),
+                      if (split.showOut) sumCell('OUT'),
+                      for (final h in split.back)
+                        holeCell(h, child: Text('$h',
+                            style: const TextStyle(
+                                fontSize: 11, fontWeight: FontWeight.bold))),
+                      if (split.showIn) sumCell('IN'),
+                      if (split.showTot) sumCell('TOT'),
+                    ],
                   ),
                   // Par row
                   HoleGridBand(
                     lbl('Par', theme.textTheme.bodySmall
                         ?.copyWith(fontStyle: FontStyle.italic)),
-                    [for (final h in holeRange)
-                      holeCell(h,
-                          child: Text(
-                            '${scorecard.holeData(h)?.par ?? "-"}',
-                            style: theme.textTheme.bodySmall,
-                          ))],
+                    withTotals(
+                      (h) => holeCell(h, child: Text(
+                          '${scorecard.holeData(h)?.par ?? "-"}',
+                          style: theme.textTheme.bodySmall)),
+                      sum: (hs) => sumCell('${parSum(hs)}'),
+                    ),
                   ),
                   // Stroke-index (hole handicap) row — shows which holes are
                   // hardest and, read with the stroke dots, where strokes fall.
+                  // No nine total: a stroke index does not add up to anything.
                   HoleGridBand(
                     lbl('Index', theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant)),
-                    [for (final h in holeRange)
-                      holeCell(h,
-                          child: Text(
-                            '${scorecard.holeData(h)?.strokeIndex ?? "-"}',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant),
-                          ))],
+                    withTotals((h) => holeCell(h, child: Text(
+                        '${scorecard.holeData(h)?.strokeIndex ?? "-"}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant)))),
                   ),
                   const HoleGridBand.rule(),
                   // Player score rows — names tinted with team colour.
@@ -5512,6 +5559,12 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                       cellW:         _cellW,
                       rowH:          _rowH,
                       strokesOnHole: (h) => _strokesOnHoleFor(m, h),
+                      frontHoles:    split.front,
+                      backHoles:     split.back,
+                      showOut:       split.showOut,
+                      showIn:        split.showIn,
+                      showTot:       split.showTot,
+                      summaryW:      summaryW,
                       nameColor: nassau.team1.any((p) => p.playerId == m.player.id)
                           ? GameColors.team1
                           : nassau.team2.any((p) => p.playerId == m.player.id)
@@ -5527,8 +5580,7 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                         theme.textTheme.labelSmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                             fontStyle: FontStyle.italic)),
-                    [
-                    for (final h in holeRange)
+                    withTotals((h) =>
                       Builder(builder: (_) {
                         final winner = _winnerForHole(h);
                         Color? bg;
@@ -5607,8 +5659,8 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                                   fontWeight: FontWeight.bold,
                                   color: fg ?? theme.colorScheme.onSurfaceVariant,
                                 )));
-                      }),
-                  ]),
+                      })),
+                  ),
 
                   // Bottom hole points row — Claremont only
                   if (nassau.isClaremont)
@@ -5616,8 +5668,7 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                       lbl('Bottom', theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                           fontStyle: FontStyle.italic)),
-                      [
-                      for (final h in holeRange)
+                      withTotals((h) =>
                         Builder(builder: (_) {
                           final delta = _bottomDeltaForHole(h);
                           Color? bg;
@@ -5650,8 +5701,8 @@ class _NassauProgressGridState extends State<_NassauProgressGrid> {
                                     fontWeight: FontWeight.bold,
                                     color: fg ?? theme.colorScheme.onSurfaceVariant,
                                   )));
-                        }),
-                    ]),
+                        })),
+                      ),
                 ],
               );
             }),
