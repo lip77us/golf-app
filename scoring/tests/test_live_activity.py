@@ -511,3 +511,79 @@ class WidgetLayoutTests(TestCase):
             self.assertIn(f'case "{cell}":', palette,
                           f'cup cell `{cell}` has no colour')
         self.assertIn('if cell == "halved"', widget)
+
+
+class FinalStateShapeTests(TestCase):
+    """**The closing frame, checked across the set.**
+
+    Two of these shipped broken and nothing caught it. `Final` in Swift is
+    `{amount, detail, collect}` with none of them optional, and Banker and
+    Sequoya were both sending `headline` — which does not fail loudly. APNs
+    accepts the push, the phone cannot decode the content-state, and it drops
+    the WHOLE thing: the board freezes on its last live frame and the card the
+    round was building toward never appears.
+
+    Every per-card test that existed asserted the contents of its own final.
+    None asserted the shape, because the shape is the contract with the other
+    language and no card owns it.
+    """
+
+    def _finals(self):
+        """Every builder that emits a `final` block, by module."""
+        import importlib, inspect, pkgutil, re, os
+        from django.conf import settings
+        out = []
+        d = os.path.join(settings.BASE_DIR, 'services')
+        for name in sorted(os.listdir(d)):
+            if not name.startswith('live_activity') or not name.endswith('.py'):
+                continue
+            src = open(os.path.join(d, name)).read()
+            for m in re.finditer(r"'final'\s*:\s*\{", src):
+                # The literal keys of that dict, up to its close.
+                tail = src[m.end():m.end() + 600]
+                out.append((name, set(re.findall(r"'([a-z_]+)'\s*:", tail[:tail.find('},')]))))
+        return out
+
+    def test_every_final_block_uses_the_keys_swift_decodes(self):
+        """`amount`, never `headline`. The failure is silent on the phone, so
+        it has to be loud here."""
+        for module, keys in self._finals():
+            self.assertIn('amount', keys,
+                          f'{module} sends a final with no `amount` — the '
+                          f'phone drops the whole content-state')
+            self.assertFalse(keys - {'amount', 'detail', 'collect'},
+                             f'{module} sends a final key Swift has no field '
+                             f'for: {keys - {"amount", "detail", "collect"}}')
+
+    def test_the_swift_final_struct_is_still_those_three(self):
+        """If this changes, the test above is checking the wrong contract."""
+        import os
+        from django.conf import settings
+        swift = open(os.path.join(
+            settings.BASE_DIR,
+            'mobile/ios/SixesActivity/SixesActivity.swift')).read()
+        body = swift.split('struct Final: Codable, Hashable {')[1]
+        body = body[:body.index('}')]
+        import re
+        self.assertEqual(set(re.findall(r'let (\w+):', body)),
+                         {'amount', 'detail', 'collect'})
+
+    def test_every_card_signs_off_with_something(self):
+        """A kind whose final is `{}` never sends an end push at all —
+        `push_round` skips an empty state — so the activity lingers until iOS
+        times it out rather than settling under a result.
+
+        Rabbit, Nassau and Survivor are the three that still do this. They are
+        listed rather than fixed here so the gap is visible; the five cards
+        this packet added are not on it.
+        """
+        from services.live_activity_registry import BUILDERS
+        import inspect
+        blank = set()
+        for kind, fn in BUILDERS.items():
+            src = inspect.getsource(fn)
+            if 'if final:' in src and 'return {}' in src:
+                blank.add(kind)
+        self.assertEqual(blank, {'rabbit', 'nassau', 'survivor'},
+                         'a card gained or lost a closing frame — if it '
+                         'gained one, take it off this list')

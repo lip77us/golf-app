@@ -3317,9 +3317,61 @@ safe sequence, and a test that forbade it would forbid the sequence.
 
 All five stay in `UNSHIPPED_KINDS` until that build.
 
+### The five final states — and the two that were already broken
+
+**These five keep the BOARD.** Sixes, Skins, Match, Sequoya and Banker sign off
+by replacing the card with three lines — what you won, who to see. The newer
+packets do not, and the reason is the one that made their running cards worth
+having: *the number a golfer spent four hours on is the last thing he wants
+replaced at the 18th by a figure he cannot check.* So the slots are repurposed
+and `final` stays null; `closed` is what tells the widget.
+
+Both patterns are in the design record and they answer different questions. A
+match card's last word is the settlement. A personal card's last word is still
+the reader's own number, with the settlement beside it.
+
+| Card | What moves |
+| --- | --- |
+| **Stableford** | Total stays; the state slot gains the **gross**, which the running card never had room for and which is what a golfer is asked for in the car park |
+| **Stroke Play** | The two slots **swap** — `2ND` at 36px, the score beside the mode. When there is nothing left to do about the score, the place becomes the question |
+| **Points** | The **money becomes the headline** (21→26px), and the award column turns from what a man won on the last hole into what he won on the round. All three rows survive — they are the card |
+| **Wolf** | Points become money, and the headline is free for the first time all round: there is no hole, so no price. The strip loses its `WOLF` label and side rules, both of which described a hole that no longer exists |
+| **Triple Cup** | **The headline does not move.** It has been the cup score since the third tee. The least-changed closing frame in the set, because the thing it reports is the thing that just finished |
+
+Three departures from the mocks, all for the same reason — *the card must not
+claim something the app cannot know*:
+
+- **No `CUP RETAINED`.** Retaining is a holder keeping a cup he already had,
+  and nothing tracks who held it last. `CUP WON` / `LOST` / `HALVED`, from the
+  reader's side.
+- **Stableford never names a man to collect from.** It is a pool; the ante was
+  already in. Same reasoning Skins' final already used.
+- **Stroke Play collects at the desk**, not from a golfer. Inventing a transfer
+  sends somebody looking for a man who does not owe him anything.
+
+### The bug this found: Banker and Sequoya never showed their final card
+
+`Final` in Swift is `{amount, detail, collect}`, none optional. **Both were
+sending `headline`.** That does not fail loudly — APNs accepts the push, the
+phone cannot decode the content-state and drops the WHOLE thing, so the board
+freezes on its last live frame and the card the round was building toward never
+appears. Shipped, on two cards, for as long as they have existed.
+
+Every per-card test asserted the *contents* of its own final. None asserted the
+*shape*, because the shape is the contract with the other language and no card
+owns it. `FinalStateShapeTests` now checks it across the set, in both
+directions — and one Banker test was pinning the bug, asserting `headline`.
+
+### Rabbit, Nassau and Survivor still have no closing frame
+
+`{}` from the registry, which means `push_round` skips them entirely — **no end
+push at all**, so those activities linger until iOS times them out rather than
+settling under a result. Not fixed here; listed in
+`test_every_card_signs_off_with_something` so the gap is visible and so a
+fourth cannot join them quietly.
+
 ### Still outstanding across the set
 
-The final states, which are `{}` on all five new builders.
 The rest of `changed-since-delivery/` is CSS-level and already matches how we
 built it — the Skins header fix and the inlined state slot were the two parts
 that applied.

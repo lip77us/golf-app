@@ -195,3 +195,90 @@ def stableford_strip(round_obj, *, player_id=None) -> list:
         )
         for r in results
     ]
+
+
+def _dismisses(bits) -> str:
+    """Every closing card in this packet says so in the footer-left.
+
+    It is the one piece of copy on a lock screen that is about the CARD rather
+    than the round, and it belongs where the round context was — not in the
+    locked right corner, which is `THRU 18 · +5` on every card in the set and
+    survives the always-on state.
+    """
+    return ' · '.join([b for b in bits if b] + ['dismisses in 5 min'])
+
+
+def stableford_final_state(round_obj, foursome, *, player_id=None) -> dict:
+    """Round sign-off — **the place becomes the money.**
+
+    This is not the three-slot replacement card Sixes and Skins sign off with.
+    The personal packet keeps the BOARD and moves the closing state into its
+    slots, and the reason is the same one that made the running card worth
+    having: a Stableford total is arithmetic nobody in the group is sure of,
+    and the last thing a golfer wants at the 18th is for it to disappear and
+    be replaced by a number he cannot check.
+
+    So the headline stays his total, the state slot takes the gross — the one
+    figure the running card never had room for — and the sides line becomes
+    the placing and what it paid.
+    """
+    from services.stableford import stableford_summary
+    from services.live_activity_registry import gross_to_par
+
+    summary = stableford_summary(round_obj)
+    results = summary.get('results') or []
+    if not results:
+        return {}
+    mine = _row_for(results, player_id)
+    if mine is None:
+        return {}
+
+    pts = mine.get('total_points')
+    rank = mine.get('rank') or 0
+    best = max((r.get('total_points') or 0) for r in results)
+    gross = sum((mine.get('gross') or {}).values())
+
+    # `1st of 4, won by 3` / `3rd of 4, 6 behind`. The field size is what makes
+    # a placing mean anything — second of four and second of forty are not the
+    # same afternoon.
+    margin = (pts or 0) - best
+    if rank == 1:
+        rest = [r.get('total_points') or 0 for r in results if r is not mine]
+        clear = (pts or 0) - max(rest) if rest else 0
+        placed = (f'{_ordinal(rank).lower()} of {len(results)}, '
+                  + (f'won by {clear:g}' if clear > 0 else 'tied at the top'))
+    else:
+        placed = (f'{_ordinal(rank).lower()} of {len(results)}, '
+                  f'{abs(margin):g} behind')
+
+    # **A pool pays the pot, not a person.** The ante was already in, so there
+    # is nobody to collect from — the same reason Skins' final says what was
+    # divided rather than inventing a settle instruction.
+    payout = float(mine.get('payout') or 0)
+    if payout:
+        placed += f' · collect ${payout:,.0f}'
+
+    return {
+        'kind'  : KIND,
+        'header': {
+            'game': 'STABLEFORD' + (' · MODIFIED'
+                                    if _is_modified(summary.get('table'))
+                                    else ''),
+            'segment': 'ROUND COMPLETE',
+        },
+        'who'   : mine.get('player_name', ''),
+        'closed': True,
+        'number': {'text': '' if pts is None else f'{pts:g} PTS',
+                   'colour': 'orange' if (pts or 0) < 0 else 'mint'},
+        'sides' : [{'names': placed, 'colour': '', 'leading': False}],
+        # The gross, which the running card never had room for and which is
+        # the figure a golfer is asked for in the car park.
+        'state' : {'word': f'{gross:g}' if gross else '', 'to_play': 'GROSS'},
+        'pips'  : [],
+        'final' : None,
+        'footer': {'context': _dismisses(
+                       [_footer(summary, mine, 18, None)['context']]),
+                   'money': ''},
+        'thru'  : thru_line(18, gross_to_par(
+            summary.get('scorecard') or summary, player_id)),
+    }

@@ -46,7 +46,7 @@ twenty feet. There is no announcement to make that the tee box has not already
 made.
 """
 from services.live_activity_registry import (hole_facts, hole_in_play,
-                                             strip_column, thru_line)
+                                             strip_column, surname, thru_line)
 
 KIND = 'wolf'
 
@@ -260,4 +260,81 @@ def wolf_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         'footer': {'context': _footer(summary, player_id, hole, real_ids),
                    'money': f'${unit:,.0f} a point' if unit else ''},
         'thru'  : thru_line(played, gross_to_par(summary, player_id)),
+    }
+
+
+def _cash(v) -> str:
+    sign = '+' if v > 0 else ('−' if v < 0 else '')
+    return f'{sign}${abs(v):,.0f}'
+
+
+def wolf_final_state(foursome, *, player_id=None) -> dict:
+    """Round sign-off — **points become money.**
+
+    The running card headlines the PRICE of the hole, which is the only number
+    on it that is not a standing, and the four totals sit in the strip. At the
+    end there is no hole and therefore no price, so the headline is free for
+    the first time all round — and what goes in it is what the strip has been
+    counting toward.
+
+    The strip stays and loses its furniture: no `WOLF` label, no side rules.
+    Both described the hole in front of you, and there isn't one. What is left
+    is four names and four totals, which is the leaderboard the round produced.
+    """
+    from services.wolf import wolf_summary
+    from services.live_activity_registry import gross_to_par
+
+    summary = wolf_summary(foursome)
+    players = summary.get('players') or []
+    if not players:
+        return {}
+    mine = next((p for p in players if p.get('player_id') == player_id), None)
+
+    best = max((p.get('points') or 0) for p in players)
+    seats = summary.get('wolf_order') or []
+    by_pid = {p.get('player_id'): p for p in players}
+    ordered = [by_pid[pid] for pid in seats if pid in by_pid]
+    ordered += [p for p in players if p.get('player_id') not in set(seats)]
+
+    strip = [strip_column(
+        name=p.get('name') or p.get('short_name') or '',
+        figure=f"{p.get('points') or 0:g}",
+        label='',
+        rule='',
+        is_reader=p.get('player_id') == player_id,
+        is_leader=(p.get('points') or 0) == best,
+    ) for p in ordered]
+
+    pts = (mine or {}).get('points') or 0
+    rest = [p.get('points') or 0 for p in players if p is not mine]
+    gap = pts - max(rest) if rest else 0
+    money = float((mine or {}).get('money') or 0)
+
+    if money > 0:
+        losers = [p for p in players if float(p.get('money') or 0) < 0]
+        names = ' & '.join(surname(p.get('name', '')).title() for p in losers)
+        collect = f'Collect from {names}' if names else ''
+    elif money < 0:
+        winners = [p for p in players if float(p.get('money') or 0) > 0]
+        names = ' & '.join(surname(p.get('name', '')).title() for p in winners)
+        collect = f'Pay {names}' if names else ''
+    else:
+        collect = 'Nothing to settle'
+
+    return {
+        'kind'  : KIND,
+        'header': {'game': _header(summary), 'segment': 'ROUND COMPLETE'},
+        'closed': True,
+        'number': {'text': _cash(money) if mine else '', 'colour': 'mint'},
+        'sides' : [],
+        'strip' : strip,
+        'state' : {'word': f'{pts:g} PTS',
+                   'to_play': (f'WON BY {gap:g}' if gap > 0
+                               else (f'{abs(gap):g} BEHIND' if gap < 0
+                                     else 'TIED')),
+                   'colour': 'mint'},
+        'pips'  : [],
+        'final' : None,
+        'footer': {'context': collect, 'money': ''},
+        'thru'  : thru_line(18, gross_to_par(summary, player_id)),
     }

@@ -262,6 +262,12 @@ def sequoya_final_state(foursome, *, player_id=None) -> dict:
         'state' : {'word': '', 'to_play': ''},
         'pips'  : [],
         'footer': {'context': detail, 'money': ''},
-        'final' : {'headline': _cash(money) if money else 'EVEN',
+        # **`amount`, not `headline`.** The Swift `Final` struct is
+        # {amount, detail, collect} with none of them optional, and a
+        # shape it cannot decode is not an error anyone sees: APNs takes
+        # the push and the phone drops the WHOLE content-state, so the
+        # board freezes on its last good frame and this card never
+        # appears. Both of these shipped saying `headline`.
+        'final' : {'amount': _cash(money) if money else 'EVEN',
                    'detail': detail, 'collect': collect},
     }

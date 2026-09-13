@@ -188,6 +188,22 @@ struct SixesActivityAttributes: ActivityAttributes {
 
         /// The reader, named — a micro label above the headline.
         var who: String? = nil
+        /// **The round is over and this is the closing frame.**
+        ///
+        /// Five of the newer cards sign off by keeping the BOARD and moving
+        /// the closing state into its slots, rather than by replacing it with
+        /// the three-line `final` card Sixes and Skins use. Both are in the
+        /// design record and they answer different questions: a match card's
+        /// last word is what you won, while a personal card's last word is
+        /// still the number the reader spent four hours on — replacing it
+        /// with a figure he cannot check is the thing he least wants at the
+        /// 18th.
+        ///
+        /// The widget needs to know because one size depends on it: Points'
+        /// headline is 21 while the rows are the live thing and 26 once the
+        /// money is in it. Nothing else reads it yet, and nothing should
+        /// unless it has the same kind of reason.
+        var closed: Bool = false
         /// `POPPING ON HOLE 13` — the gold band, when the reader gets a stroke
         /// on the hole in play. Gold appears nowhere else in the system, so it
         /// cannot be mistaken for a state. Running states only.

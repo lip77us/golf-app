@@ -255,14 +255,9 @@ class StablefordTests(TestCase):
         self.assertEqual(self._state(1)['sides'][0]['colour'], '')
 
 
-class PointsTests(TestCase):
-    """Points 5-3-1 — the third personal card, and the one that departs.
+class _PointsBase(TestCase):
+    """Three golfers, 5-3-1, gross."""
 
-    Three-handed only, nine points DIVIDED rather than earned, so a point you
-    took is a point neither of the others got. That is why three rows stay
-    where every other four-name card became a strip: the row count can never
-    grow, and a single number cannot describe the state.
-    """
 
     def setUp(self):
         from services.points_531 import setup_points_531
@@ -290,6 +285,16 @@ class PointsTests(TestCase):
         from services.live_activity_points import points_activity_state
         return points_activity_state(
             self.fs, player_id=self.pid[who] if who else None, thru=thru)
+
+
+class PointsTests(_PointsBase):
+    """Points 5-3-1 — the third personal card, and the one that departs.
+
+    Three-handed only, nine points DIVIDED rather than earned, so a point you
+    took is a point neither of the others got. That is why three rows stay
+    where every other four-name card became a strip: the row count can never
+    grow, and a single number cannot describe the state.
+    """
 
     # -- the shape ----------------------------------------------------------
 
@@ -450,3 +455,137 @@ class PointsTests(TestCase):
         self._play(1, 3, 4, 5)
         self.assertIn('a point', self._state(1, who=None)['footer']['context'])
         self.assertEqual(self._state(1, who=None)['footer']['money'], '')
+
+
+class FinalFrameTests(_Base):
+    """**These three keep the BOARD.**
+
+    Sixes and Skins sign off by replacing the card with three lines — what you
+    won, and who to see. The personal packet does not, and the reason is the
+    one that made the running card worth having: the number a golfer spent
+    four hours on is the last thing he wants replaced at the 18th by a figure
+    he cannot check.
+
+    So the slots are repurposed rather than dropped, and `closed` is what says
+    so.
+    """
+
+    def _play_out(self):
+        for h in range(1, 19):
+            self._play(h, 4, 5, 6)
+
+    # -- Stableford ---------------------------------------------------------
+
+    def _stableford_final(self, who='Tom Hayes'):
+        from services.live_activity_stableford import stableford_final_state
+        return stableford_final_state(self.round, self.fs,
+                                      player_id=self.pid[who])
+
+    def test_stableford_keeps_the_total_and_gains_the_gross(self):
+        """The state slot takes the figure the running card never had room
+        for — and it is the one a golfer is asked for in the car park."""
+        self._play_out()
+        s = self._stableford_final()
+        self.assertTrue(s['number']['text'].endswith('PTS'))
+        self.assertEqual(s['state']['to_play'], 'GROSS')
+        self.assertTrue(s['state']['word'].isdigit())
+        self.assertTrue(s['closed'])
+
+    def test_stableford_says_where_you_finished_and_in_what_field(self):
+        """Second of four and second of forty are not the same afternoon."""
+        self._play_out()
+        line = self._stableford_final()['sides'][0]['names']
+        self.assertIn(' of ', line)
+
+    def test_stableford_never_invents_a_man_to_collect_from(self):
+        """A pool pays the pot. The ante was already in, so there is nobody
+        to collect from — the same reason Skins' final says what was divided
+        rather than naming a debtor."""
+        self._play_out()
+        line = self._stableford_final()['sides'][0]['names']
+        self.assertNotIn(' from ', line)
+
+    # -- Stroke Play --------------------------------------------------------
+
+    def _stroke_final(self, who='Tom Hayes'):
+        from services.live_activity_stroke_play import stroke_play_final_state
+        return stroke_play_final_state(self.round, self.fs,
+                                       player_id=self.pid[who])
+
+    def test_stroke_play_swaps_its_two_slots(self):
+        """The running card headlines the score because that is what the
+        golfer is doing something about. When there is nothing left to do
+        about it, the PLACE becomes the question."""
+        self._play_out()
+        from services.live_activity_stroke_play import (
+            stroke_play_activity_state)
+        run = stroke_play_activity_state(
+            self.round, self.fs, player_id=self.pid['Tom Hayes'], thru=18)
+        fin = self._stroke_final()
+        self.assertEqual(fin['number']['text'], run['state']['word'])
+        self.assertEqual(fin['state']['word'], run['number']['text'])
+
+    def test_stroke_plays_locked_corner_becomes_the_gross_itself(self):
+        """The corner is the round behind you, and at the end that is all of
+        it — so it says the number rather than the shape."""
+        self._play_out()
+        self.assertTrue(self._stroke_final()['thru'].startswith('GROSS '))
+
+    def test_stroke_play_settles_at_the_desk_not_between_two_men(self):
+        self._play_out()
+        line = self._stroke_final()['sides'][0]['names']
+        self.assertNotIn('Collect from', line)
+
+
+class PointsFinalTests(_PointsBase):
+    """**Points is the one card where the money becomes the headline**, and it
+    is the same reason its footer was live from the first hole: here a hole IS
+    a settlement. The running card headlines a total because the money is
+    still moving; when it stops, the total has done its job.
+    """
+
+    def _final(self, who='Tom Hayes'):
+        from services.live_activity_points import points_final_state
+        return points_final_state(self.fs, player_id=self.pid[who])
+
+    def _play_out(self):
+        for h in range(1, 19):
+            self._play(h, 4, 5, 6)
+
+    def test_the_money_becomes_the_headline(self):
+        self._play_out()
+        s = self._final()
+        self.assertTrue(s['number']['text'].startswith(('+$', '−$', '$')))
+        self.assertTrue(s['closed'])
+
+    def test_the_total_moves_into_the_state_slot(self):
+        self._play_out()
+        st = self._final()['state']
+        self.assertTrue(st['word'].endswith('PTS'))
+        self.assertTrue(st['to_play'].startswith(('WON BY', 'TIED'))
+                        or st['to_play'].endswith('BEHIND'))
+        self.assertEqual(st['colour'], 'mint')
+
+    def test_the_award_column_turns_from_the_hole_into_the_round(self):
+        """It never changes meaning mid-round, only at the end of one — and
+        mint still marks who got paid, which is the same rule at a different
+        scale."""
+        self._play_out()
+        rows = self._final()['rows']
+        self.assertTrue(all('$' in r['award'] for r in rows))
+        for r in rows:
+            self.assertEqual(r['award_best'], r['award'].startswith('+'))
+
+    def test_all_three_rows_survive_the_closing_frame(self):
+        """The rows ARE the card. They gave nothing up when the headline
+        shrank and they give nothing up here."""
+        self._play_out()
+        self.assertEqual(len(self._final()['rows']), 3)
+
+    def test_it_says_who_to_settle_with(self):
+        """Three-handed and settled per point — there is no pot, so the money
+        genuinely moves between named men and the card can say which."""
+        self._play_out()
+        self.assertTrue(
+            self._final()['footer']['context'].startswith(
+                ('Collect from', 'Pay', 'Nothing')))

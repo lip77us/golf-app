@@ -840,8 +840,13 @@ private struct PointsBoardView: View {
             WhoRow(who: state.who)
 
             HStack(alignment: .lastTextBaseline, spacing: 9) {
+                // 21 while the rows are the live thing — the headline was
+                // duplicating the reader's own row, so it gave way rather
+                // than the rows. On the closing card it holds MONEY, which
+                // duplicates nothing, so it takes some of the size back. Not
+                // all of it: the three rows are still there.
                 Text(state.number.text)
-                    .font(Sixes.display(21, .bold))
+                    .font(Sixes.display(state.closed ? 26 : 21, .bold))
                     .tracking(-0.5)
                     .foregroundStyle(Sixes.side(state.number.colour))
                     .lineLimit(1)

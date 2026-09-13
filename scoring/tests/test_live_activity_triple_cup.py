@@ -491,3 +491,104 @@ class CupPushTests(_TeamCupBase):
                                     'body': '2 groups still out'})
         self.assertEqual(loud['aps']['alert']['title'],
                          'Blue take the lead — 5–4')
+
+
+class CasualFinalTests(_Base):
+    """**The headline does not move.** It has been the cup score since the
+    third tee and it is the cup score now — the one card in the set whose
+    closing frame changes least, because the thing it reports is the thing
+    that just finished. What changes is the right-hand slot.
+    """
+
+    def _final(self, who=None):
+        from services.live_activity_triple_cup import triple_cup_final_state
+        return triple_cup_final_state(
+            self.fs, player_id=self.pid[who] if who else None)
+
+    def _play_out(self, low='team1'):
+        for h in range(1, 19):
+            self._play(h, 3, 4, 5, 5) if low == 'team1' \
+                else self._play(h, 5, 5, 3, 4)
+
+    def test_the_headline_is_still_the_cup_score(self):
+        self._play_out()
+        s = self._final()
+        self.assertIn('–', s['number']['text'])
+        self.assertTrue(s['closed'])
+
+    def test_the_segment_slot_becomes_the_verdict(self):
+        self._play_out()
+        self.assertIn(self._final()['header']['segment'],
+                      ('CUP WON', 'CUP LOST', 'CUP HALVED'))
+
+    def test_it_never_says_retained(self):
+        """Retaining is a holder keeping a cup he already had, and nothing in
+        the app knows who held it last."""
+        self._play_out()
+        self.assertNotIn('RETAINED', self._final()['header']['segment'])
+
+    def test_the_state_slot_becomes_the_money(self):
+        self._play_out()
+        st = self._final()['state']
+        self.assertEqual(st['to_play'], 'WINNERS TAKE ALL')
+        self.assertEqual(st['colour'], 'mint')
+
+    def test_all_four_cells_are_readable_at_the_end(self):
+        """The segments won are readable off the strip, which is the strip
+        earning its place one last time."""
+        self._play_out()
+        cells = self._final()['pips']
+        self.assertEqual(len(cells), 4)
+        self.assertNotIn('out', cells)
+
+    def test_a_halved_cup_says_so_rather_than_printing_zero(self):
+        """A zero in a money slot reads as a round played for nothing."""
+        from services.live_activity_triple_cup import triple_cup_final_state
+        # Every hole halved: nobody takes a point, nothing changes hands.
+        for h in range(1, 19):
+            self._play(h, 4, 4, 4, 4)
+        s = triple_cup_final_state(self.fs)
+        self.assertNotIn('$0', s['state']['word'])
+        self.assertIn('nothing changes hands', s['sides'][0]['names'])
+
+
+class TeamFinalTests(_TeamCupBase):
+    """The team cup signs off on the CUP's verdict, not the group's.
+
+    Your four points are one twenty-fourth of it and the card has said so all
+    afternoon; it does not change its mind at the last.
+    """
+
+    def _final(self, who='A'):
+        from services.live_activity_triple_cup import triple_cup_final_state
+        return triple_cup_final_state(self.fs,
+                                      player_id=self.m[who].player_id)
+
+    def test_the_headline_is_the_cup_not_the_group(self):
+        self._sweep(self.groups[0], range(1, 19))     # 4–0 of eight
+        self._sweep(self.groups[1], range(1, 13))     # 6–0: decided
+        s = self._final()
+        self.assertEqual(s['number']['text'], '6–0')
+        self.assertEqual(s['state']['word'], 'BLUE')
+        self.assertEqual(s['state']['to_play'], 'TAKES IT')
+
+    def test_it_keeps_the_needle_rather_than_the_cells(self):
+        self._sweep(self.groups[0], range(1, 19))
+        self._sweep(self.groups[1], range(1, 13))
+        s = self._final()
+        self.assertEqual(s['pips'], [])
+        self.assertIsNotNone(s['needle'])
+
+    def test_the_sides_line_reports_your_own_match_as_a_result(self):
+        self._sweep(self.groups[0], range(1, 19))
+        self._sweep(self.groups[1], range(1, 13))
+        note = self._final()['sides'][0]['note']
+        self.assertTrue(note.startswith(('· won', '· lost', '· halved')), note)
+
+    def test_the_verdict_is_written_from_the_readers_side(self):
+        """A card that told half the group the wrong thing is the defect this
+        whole set keeps finding."""
+        self._sweep(self.groups[0], range(1, 19))
+        self._sweep(self.groups[1], range(1, 13))
+        self.assertEqual(self._final('A')['header']['segment'], 'CUP WON')
+        self.assertEqual(self._final('C')['header']['segment'], 'CUP LOST')

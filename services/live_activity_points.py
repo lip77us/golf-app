@@ -37,7 +37,8 @@ forecast.**
 
 One group, three men, everything witnessed.
 """
-from services.live_activity_registry import hole_facts, hole_in_play, thru_line
+from services.live_activity_registry import (hole_facts, hole_in_play,
+                                             surname, thru_line)
 
 KIND = 'points'
 
@@ -231,4 +232,96 @@ def points_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         'footer': {'context': context,
                    'money': _cash((mine or {}).get('money')) if mine else ''},
         'thru'  : thru_line(played, to_par),
+    }
+
+
+def _collect(rows, mine) -> str:
+    """`Collect from Naylor & Reid`, or what you owe.
+
+    Three-handed and settled per point, so there is no pot to divide and the
+    money genuinely moves between named men — which is why this card can say
+    who, where Stableford's pool cannot.
+    """
+    money = float((mine or {}).get('money') or 0)
+    if money > 0:
+        owe = [r for r in rows if float(r.get('money') or 0) < 0]
+        names = [surname(r.get('name', '')).title() for r in owe]
+        return f'Collect from {" & ".join(names)}' if names else ''
+    if money < 0:
+        owed = [r for r in rows if float(r.get('money') or 0) > 0]
+        names = [surname(r.get('name', '')).title() for r in owed]
+        return f'Pay {" & ".join(names)}' if names else ''
+    return 'Nothing to settle'
+
+
+def points_final_state(foursome, *, player_id=None) -> dict:
+    """Round sign-off — **the money becomes the headline.**
+
+    It is the one card in this family where that is the right closing move,
+    and for the same reason its footer was live from the first hole: in Points
+    a hole IS a settlement. The running card headlined a total because the
+    money was still moving; when it stops, the total has done its job and the
+    figure the golfer is standing there to hear is what he is owed.
+
+    The rows stay — all three, as they were — but their award column turns
+    from what a man won on the last hole into what he won on the round. The
+    column never changes meaning mid-round, only at the end of it.
+    """
+    from services.points_531 import points_531_summary
+    from services.live_activity_registry import gross_to_par
+
+    summary = points_531_summary(foursome)
+    rows = _rows(summary)
+    if not rows:
+        return {}
+    mine = next((r for r in rows if r.get('player_id') == player_id), None)
+
+    top = max((r.get('points') or 0) for r in rows)
+    leader = max(rows, key=lambda r: r.get('points') or 0)
+    headline_row = mine or leader
+
+    out_rows = []
+    for r in sorted(rows, key=lambda r: -(r.get('points') or 0)):
+        cash = float(r.get('money') or 0)
+        out_rows.append({
+            'label' : r.get('name', ''),
+            'text'  : _pts(r.get('points')),
+            'colour': 'mint' if (r.get('points') or 0) == top else 'dim',
+            'note'  : '',
+            'award' : _cash(cash),
+            # **Mint marks money WON**, which is the same rule the running
+            # column had: it marked the best award on the hole. Both answer
+            # *who got paid*, at the two scales the game has.
+            'award_best': cash > 0,
+            'is_reader': mine is not None
+                         and r.get('player_id') == player_id,
+        })
+
+    pts = headline_row.get('points') or 0
+    rest = [r.get('points') or 0 for r in rows if r is not headline_row]
+    gap = pts - max(rest) if rest else 0
+    state = {'word': f'{_pts(pts)} PTS',
+             'to_play': (f'WON BY {_pts(gap)}' if gap > 0
+                         else (f'{_pts(-gap)} BEHIND' if gap < 0 else 'TIED')),
+             'colour': 'mint'}
+
+    return {
+        'kind'  : KIND,
+        'header': {'game': f'POINTS · '
+                           f'{_MODEL.get((summary.get("money") or {}).get("per_point_mode") or "average", "")}',
+                   'segment': 'ROUND COMPLETE'},
+        'who'   : '',
+        'closed': True,
+        'number': {'text': _cash(float((mine or {}).get('money') or 0))
+                           if mine else _pts(pts) + ' PTS',
+                   'colour': 'mint'},
+        'rows'  : out_rows,
+        'sides' : [],
+        'state' : state,
+        'pips'  : [],
+        'final' : None,
+        'footer': {'context': _collect(rows, mine) if mine
+                              else 'dismisses in 5 min',
+                   'money': ''},
+        'thru'  : thru_line(18, gross_to_par(summary, player_id)),
     }

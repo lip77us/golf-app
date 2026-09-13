@@ -438,7 +438,7 @@ class BankerFinalCardTests(TestCase):
 
     def test_the_final_names_which_half_of_the_game_made_the_money(self):
         card = banker_final_state(self.fs, player_id=self.pid['Paul'])
-        self.assertEqual(card['final']['headline'], '−$30')
+        self.assertEqual(card['final']['amount'], '−$30')
         self.assertIn('banking −$30', card['final']['detail'])
         self.assertIn('betting $0', card['final']['detail'])   # not +$0
 

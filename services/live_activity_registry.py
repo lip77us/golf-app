@@ -431,43 +431,50 @@ def _sequoya(foursome, player_id, *, final):
 
 
 def _stableford(foursome, player_id, *, final):
-    from services.live_activity_stableford import stableford_activity_state
+    from services.live_activity_stableford import (stableford_activity_state,
+                                                   stableford_final_state)
     if final:
-        return {}   # TODO: the closing frame — the place becomes the money
+        return stableford_final_state(foursome.round, foursome,
+                                      player_id=player_id)
     return stableford_activity_state(
         foursome.round, foursome, player_id=player_id,
         thru=holes_played(foursome))
 
 
 def _stroke_play(foursome, player_id, *, final):
-    from services.live_activity_stroke_play import stroke_play_activity_state
+    from services.live_activity_stroke_play import (stroke_play_activity_state,
+                                                    stroke_play_final_state)
     if final:
-        return {}   # TODO: the closing frame — `78 · GROSS` beside the place
+        return stroke_play_final_state(foursome.round, foursome,
+                                       player_id=player_id)
     return stroke_play_activity_state(
         foursome.round, foursome, player_id=player_id,
         thru=holes_played(foursome))
 
 
 def _points(foursome, player_id, *, final):
-    from services.live_activity_points import points_activity_state
+    from services.live_activity_points import (points_activity_state,
+                                               points_final_state)
     if final:
-        return {}   # TODO: the closing frame — the money becomes the headline
+        return points_final_state(foursome, player_id=player_id)
     return points_activity_state(foursome, player_id=player_id,
                                  thru=holes_played(foursome))
 
 
 def _wolf(foursome, player_id, *, final):
-    from services.live_activity_wolf import wolf_activity_state
+    from services.live_activity_wolf import (wolf_activity_state,
+                                             wolf_final_state)
     if final:
-        return {}   # TODO: the closing frame — points become money
+        return wolf_final_state(foursome, player_id=player_id)
     return wolf_activity_state(foursome, player_id=player_id,
                                thru=holes_played(foursome))
 
 
 def _triple_cup(foursome, player_id, *, final):
-    from services.live_activity_triple_cup import triple_cup_activity_state
+    from services.live_activity_triple_cup import (triple_cup_activity_state,
+                                                   triple_cup_final_state)
     if final:
-        return {}   # TODO: the closing frame — `+$50 · WINNERS TAKE ALL`
+        return triple_cup_final_state(foursome, player_id=player_id)
     return triple_cup_activity_state(foursome, player_id=player_id,
                                      thru=holes_played(foursome))
 

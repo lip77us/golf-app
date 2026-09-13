@@ -183,3 +183,78 @@ def stroke_play_strip(round_obj, *, player_id=None) -> list:
         )
         for r in results
     ]
+
+
+def stroke_play_final_state(round_obj, foursome, *, player_id=None) -> dict:
+    """Flight sign-off — **the place becomes the headline.**
+
+    The running card headlines the score because that is what the golfer is
+    doing something about. When there is nothing left to do about it, the
+    score stops being the question and the PLACE starts being it — which is
+    also the only slot on this card that was ever about money.
+
+    So the two swap: `2ND` at 36px, and the figure that produced it moves to
+    the state slot beside the mode it was scored in. That is a deliberate
+    inversion of the running card, not a drift from it.
+    """
+    from services.low_net_round import low_net_round_summary
+    from services.live_activity_registry import gross_to_par, thru_line
+
+    summary = low_net_round_summary(round_obj)
+    results = _results(summary)
+    if not results:
+        return {}
+    mine = _row_for(results, player_id)
+    if mine is None:
+        return {}
+
+    mode = summary.get('primary_mode') or summary.get('handicap_mode') or 'net'
+    rank = mine.get('rank') or 0
+    mine_par = mine.get('net_to_par')
+    best = min((r.get('net_to_par') for r in results
+                if r.get('net_to_par') is not None), default=None)
+
+    # `2nd of 14, missed 1st by 1`. **Strokes, not places** — the gap is what
+    # the golfer will replay in his head, and it is the only part of a placing
+    # that says how close it was.
+    if rank == 1:
+        placed = f'1st of {len(results)}'
+    elif best is not None and mine_par is not None:
+        gap = mine_par - best
+        placed = (f'{_ordinal(rank).lower()} of {len(results)}, '
+                  f'missed 1st by {gap}')
+    else:
+        placed = f'{_ordinal(rank).lower()} of {len(results)}'
+
+    # A flight settles at the desk, not between two golfers — there is no
+    # transfer to name, and inventing one would send somebody looking for a
+    # man who does not owe him anything.
+    if float(mine.get('payout') or 0):
+        placed += ' · collect at the desk'
+
+    # The row carries `total_net` and the per-hole detail, not a gross
+    # total — the leaderboard has never needed one. Summed rather than added
+    # to the summary: this is the only surface that asks for it.
+    gross = sum((h.get('gross') or 0) for h in (mine.get('holes') or []))
+    return {
+        'kind'  : KIND,
+        'header': {'game': f'STROKE PLAY · {_MODE_LABEL.get(mode, mode.upper())}',
+                   'segment': 'FLIGHT COMPLETE'},
+        'who'   : mine.get('name', ''),
+        'closed': True,
+        'number': {'text': _ordinal(rank) if rank else '', 'colour': 'mint'},
+        'sides' : [{'names': placed, 'colour': '', 'leading': False}],
+        'state' : {'word': to_par(mine_par),
+                   'to_play': _MODE_LABEL.get(mode, mode.upper())},
+        'pips'  : [],
+        'final' : None,
+        'footer': {'context': f'Field of {len(results)} settled · '
+                              f'dismisses in 5 min',
+                   'money': ''},
+        # **`GROSS 79`, not `THRU 18 · +5`.** The locked corner is the round
+        # behind you, and on a net card that has been the gross all along —
+        # at the end the round behind you is all of it, so it says the number
+        # rather than the shape.
+        'thru'  : (f'GROSS {gross:g}' if gross else thru_line(
+            18, gross_to_par(summary.get('scorecard') or summary, player_id))),
+    }

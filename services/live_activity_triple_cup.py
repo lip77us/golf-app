@@ -448,3 +448,129 @@ def triple_cup_activity_state(foursome, *, player_id=None, thru=None) -> dict:
                    'money': ''},
         'thru'  : thru_line(played, gross_to_par(summary, player_id)),
     }
+
+
+def _cash(v) -> str:
+    sign = '+' if v > 0 else ('−' if v < 0 else '')
+    return f'{sign}${abs(v):,.0f}'
+
+
+def _cup_word(mine, theirs) -> str:
+    """`CUP WON` / `CUP LOST` / `CUP HALVED`, from the reader's side.
+
+    **Not the design's `CUP RETAINED`.** Retaining is a holder keeping a cup
+    he already had, and nothing in the app knows who held it last — a card
+    that said RETAINED would be guessing at the one moment it is most
+    obviously checkable.
+    """
+    if mine > theirs:
+        return 'CUP WON'
+    if theirs > mine:
+        return 'CUP LOST'
+    return 'CUP HALVED'
+
+
+def triple_cup_final_state(foursome, *, player_id=None) -> dict:
+    """Round sign-off, in whichever configuration the card has been in.
+
+    **The headline does not move.** It has been the cup score since the third
+    tee and it is the cup score now — the one card in the set whose closing
+    frame changes the least, because the thing it reports is the thing that
+    just finished. What changes is the right-hand slot: the segment you were
+    in becomes the money, or in a team cup the cup's own verdict.
+    """
+    from services.triple_cup import triple_cup_summary
+    from services.live_activity_registry import gross_to_par
+
+    summary = triple_cup_summary(foursome)
+    if not summary:
+        return {}
+
+    overall = summary.get('overall') or {}
+    t1 = float(overall.get('team1_points') or 0)
+    t2 = float(overall.get('team2_points') or 0)
+    mine_is_t1 = player_id in set(summary.get('team1_ids') or [])
+    mine, theirs = (t1, t2) if mine_is_t1 else (t2, t1)
+
+    thru = thru_line(18, gross_to_par(summary, player_id))
+    cup = _cup_standings(foursome)
+
+    if cup is not None:
+        # The team cup signs off on the CUP's verdict, not the group's. Your
+        # four points are one twenty-fourth of it and the card has said so all
+        # afternoon; it does not change its mind at the last.
+        palette = _cup_palette(cup)
+        c1 = float(cup.get('team1_points') or 0)
+        c2 = float(cup.get('team2_points') or 0)
+        winner = cup.get('winner_team')
+        if winner in (1, 2):
+            side = (cup.get('team1_name') if winner == 1
+                    else cup.get('team2_name')) or ''
+            state = {'word': side.upper(), 'to_play': 'TAKES IT',
+                     'colour': 'mint'}
+        else:
+            state = {'word': 'HALVED', 'to_play': 'CUP SHARED',
+                     'colour': 'mint'}
+        total = float(cup.get('total_possible') or 0)
+        return {
+            'kind'  : KIND,
+            'header': {'game': _cup_header(foursome, cup),
+                       'segment': _cup_word(mine, theirs)},
+            'closed': True,
+            'number': {'text': f'{_score(c1)}–{_score(c2)}',
+                       'colour': (palette[0] if c1 > c2
+                                  else (palette[1] if c2 > c1 else 'neutral'))},
+            'sides' : _team_sides(summary, overall, None, mine_is_t1, palette),
+            'state' : state,
+            'pips'  : [],
+            'needle': {palette[0]: (c1 / total) if total else 0.0,
+                       palette[1]: (c2 / total) if total else 0.0},
+            'final' : None,
+            'footer': {'context': 'Dismisses in 5 min', 'money': ''},
+            'thru'  : thru,
+        }
+
+    # The casual cup settles into money. **Winners take all** — the losing
+    # side gets nothing, which is why there is no running per-golfer figure to
+    # track all round and no `$0` to print on a halved cup.
+    money = summary.get('money') or {}
+    by_player = money.get('by_player') or []
+    losers = [e for e in by_player if float(e.get('amount') or 0) < 0]
+    winners = [e for e in by_player if float(e.get('amount') or 0) > 0]
+    # The reader's own figure follows his SIDE, which the cup score has
+    # already settled — `by_player` carries names and amounts but no
+    # player_id, so there is nothing to match him on directly.
+    amount = 0.0
+    if mine > theirs:
+        amount = abs(float((winners[0] or {}).get('amount') or 0)) if winners else 0.0
+    elif theirs > mine:
+        amount = -abs(float((losers[0] or {}).get('amount') or 0)) if losers else 0.0
+
+    if amount > 0:
+        names = ' and '.join(surname(e.get('name', '')).title() for e in losers)
+        line = f'Collect from {names}' if names else ''
+    elif amount < 0:
+        names = ' and '.join(surname(e.get('name', '')).title() for e in winners)
+        line = f'Pay {names}' if names else ''
+    else:
+        # **Not `$0`.** A halved cup means nothing changes hands, and a zero
+        # in a money slot reads as a round played for nothing.
+        line = 'Halved — nothing changes hands'
+
+    return {
+        'kind'  : KIND,
+        'header': {'game': 'TRIPLE CUP', 'segment': _cup_word(mine, theirs)},
+        'closed': True,
+        'number': {'text': f'{_score(t1)}–{_score(t2)}',
+                   'colour': ('blue' if t1 > t2
+                              else ('orange' if t2 > t1 else 'neutral'))},
+        'sides' : [{'names': line, 'colour': '', 'leading': False}],
+        'state' : {'word': _cash(amount) if amount else 'EVEN',
+                   'to_play': 'WINNERS TAKE ALL', 'colour': 'mint'},
+        # All four cells filled: **the segments won are readable off the
+        # strip**, which is the strip earning its place one last time.
+        'pips'  : _cells(summary),
+        'final' : None,
+        'footer': {'context': 'Dismisses in 5 min', 'money': ''},
+        'thru'  : thru,
+    }

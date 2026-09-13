@@ -228,3 +228,58 @@ class StripOrderTests(_Base):
     def test_and_that_order_is_the_rotation_the_group_set(self):
         self.assertEqual([c['name'] for c in self._state(0)['strip']],
                          ['MORAN', 'REID', 'NAYLOR', 'HAYES'])
+
+
+class FinalFrameTests(_Base):
+    """**Points become money**, and the headline is free for the first time
+    all round.
+
+    The running card headlines the PRICE of the hole — the only number on it
+    that is not a standing. At the end there is no hole and therefore no
+    price, and what goes in the slot is what the strip has been counting
+    toward.
+    """
+
+    def _final(self, who='Dave Moran'):
+        from services.live_activity_wolf import wolf_final_state
+        return wolf_final_state(self.fs, player_id=self.pid[who])
+
+    def _play_out(self):
+        for h in range(1, 19):
+            self._play(h, 4, 4, 5, 5)
+
+    def test_the_headline_is_money_not_a_price(self):
+        self._play_out()
+        s = self._final()
+        self.assertTrue(s['number']['text'].startswith(('+$', '−$', '$')))
+        self.assertTrue(s['closed'])
+
+    def test_the_state_slot_takes_the_points_total(self):
+        self._play_out()
+        st = self._final()['state']
+        self.assertTrue(st['word'].endswith('PTS'))
+        self.assertEqual(st['colour'], 'mint')
+
+    def test_the_strip_survives_and_loses_its_furniture(self):
+        """`WOLF` and the side rules both described the hole in front of you,
+        and there isn't one. Four names and four totals are left, which is the
+        leaderboard the round produced."""
+        self._play_out()
+        strip = self._final()['strip']
+        self.assertEqual(len(strip), 4)
+        self.assertEqual({c['label'] for c in strip}, {''})
+        self.assertEqual({c.get('rule') or '' for c in strip}, {''})
+
+    def test_the_strip_stays_in_rotation_order(self):
+        """Same finding as the running card and as Survivor's track: sorting
+        by money makes the rows disagree with every other surface."""
+        self._play_out()
+        from services.wolf import wolf_summary
+        order = wolf_summary(self.fs).get('wolf_order') or []
+        names = [c['name'] for c in self._final()['strip']]
+        self.assertEqual(len(names), len(order))
+
+    def test_it_says_who_to_settle_with(self):
+        self._play_out()
+        self.assertTrue(self._final()['footer']['context'].startswith(
+            ('Collect from', 'Pay', 'Nothing')))
