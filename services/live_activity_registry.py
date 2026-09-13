@@ -430,6 +430,15 @@ def _sequoya(foursome, player_id, *, final):
                                   thru=holes_played(foursome))
 
 
+def _stableford(foursome, player_id, *, final):
+    from services.live_activity_stableford import stableford_activity_state
+    if final:
+        return {}   # TODO: the closing frame — the place becomes the money
+    return stableford_activity_state(
+        foursome.round, foursome, player_id=player_id,
+        thru=holes_played(foursome))
+
+
 def _banker(foursome, player_id, *, final):
     from services.live_activity_banker import (banker_activity_state,
                                                banker_final_state)
@@ -453,6 +462,10 @@ BUILDERS = {
     # so both slugs land on the same one and it declares `kind = 'match'`.
     'match_18': _match,
     'fourball': _match,
+    # Stableford is a ROUND-level game — every foursome plays it — but the card
+    # is still built per foursome, because the locked corner is the reader's
+    # own hole and his own tee's yardage.
+    'stableford': _stableford,
     # nassau_nine still rides the NassauGame model as one match but is a
     # PARTIAL round — its holes-remaining is not 18 minus played, so it does
     # not fit this card's state slot and is not drawn. Triple Nassau is
@@ -500,7 +513,13 @@ CARD_KIND = {'match_18': 'match', 'fourball': 'match',
 # counter) and a blue tone on the stroke ribbon — and it left in the same
 # commit that bumped the build carrying them, 2.8.2+33. The set is empty again
 # and stays here for the card after it.
-UNSHIPPED_KINDS: set = set()
+# `stableford` is the first of five cards from the lock-screens bundle (Wolf,
+# Points, Stableford, Stroke Play, Triple Cup). Each goes in here the day its
+# builder is written and leaves in the commit that bumps the build carrying its
+# Swift layout — which for these five matters more than usual: they are games
+# that have NO card today, so an ungated kind would replace nothing at all with
+# a lock-screen nag pointing at an update that does not exist.
+UNSHIPPED_KINDS: set = {'stableford'}
 
 
 def card_kind(slug: str) -> str:

@@ -635,6 +635,14 @@ const List<GameMeta> kGameCatalog = [
     minPlayers   : 2,
     // Pure scoring overlay — usable as a leaderboard-only side game.
     canBeSideGame: true,
+    // The card is built and gated server-side. Declared here because the flag
+    // is what the client reads before calling Activity.request, and the three
+    // sides of that gate are easy to leave at two.
+    //
+    // **It cannot raise one yet, and not because of the gate**: an activity is
+    // owned by the round's PRIMARY game, and `canBePrimary: false` means
+    // Stableford never is one. See the note in services/live_activity_stableford.
+    hasLiveActivity: true,
     excludes     : {GameIds.points531},
   ),
 

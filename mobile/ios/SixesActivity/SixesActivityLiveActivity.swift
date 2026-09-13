@@ -154,6 +154,7 @@ private struct BoardView: View {
                              tone: state.kind == "banker" ? "blue" : "gold")
             }
             HeaderView(header: state.header)
+            WhoRow(who: state.who)
 
             HStack(alignment: .top, spacing: 12) {
                 // The number and both sides. The number wears the LEADING
@@ -177,6 +178,28 @@ private struct BoardView: View {
             TeeRow(tee: state.tee)
             FooterView(footer: state.footer, thru: state.thru,
                        isStale: isStale)
+        }
+    }
+}
+
+/// The reader, named — a micro label above the headline.
+///
+/// **Only on the cards that report a PERSON.** Stableford, Stroke Play and
+/// Points headline the reader's own number, and a phone handed round a cart
+/// otherwise breaks the assumption that the card is about whoever is holding
+/// it. Every card that names two sides sends nothing here and spends no
+/// height on it — Survivor's fitted card deleted this row on purpose, 19pt
+/// spent telling a man his own name on his own lock screen.
+private struct WhoRow: View {
+    let who: String?
+
+    var body: some View {
+        if let who, !who.isEmpty {
+            Text(who.uppercased())
+                .font(Sixes.body(9.5, .bold))
+                .tracking(0.5)
+                .foregroundStyle(.white.opacity(0.52))
+                .lineLimit(1)
         }
     }
 }
