@@ -2970,3 +2970,49 @@ existing card, not a new card kind, and Swift's `Codable` ignores keys an older
 build does not know.
 
 Tests: `scoring/tests/test_combo_tees.py` (26).
+
+
+## OUT / IN / TOT — every card that shows scores
+
+Reported from a fourball (13 Sep): the scorecard under score entry had no nine
+subtotals. The sweep that followed found eleven more cards in the same state.
+
+`utils/nine_totals.dart` holds the split, because three facts follow from it
+and two are easy to get subtly wrong: a `contentWidth` measured in hole cells
+alone leaves the rule stopping short of the grid it underlines, and a scroll
+target that ignores the OUT column lands a back-nine hole one column shy of the
+right edge. Both were about to be written by hand eleven more times.
+
+**A nine not in play has no column** — a back-nine round shows IN alone rather
+than an OUT that could only ever be blank — and the split is by hole NUMBER, so
+a shotgun round starting on the 7th still has a front nine meaning the same
+nine holes.
+
+**A subtotal is an em dash until every hole in that nine is scored**, the rule
+`_GridPlayerRow` already used: it appears once its nine is complete and never
+as a misleading partial.
+
+**Rows with no nine total get blank slots, not an invented one:** stroke index,
+per-hole verdicts (Won by, Top, Bot, a Triple Nassau match), a PHANTOM's row
+(no card of its own), and POINTS — Paul ruled points out with Wolf.
+
+Carrying them: `HoleGridScorecard` (which is the leaderboard's cards, **Banker,
+Sequoya and Sixes** in one change), score entry's fourball, Nassau, Stroke Play,
+Stableford, Irish Rumble and Points 5-3-1; the Nassau, Points 5-3-1, Quota
+Nassau, Rabbit, Survivor and match-play screens; the Triple Cup hole detail,
+the Triple Nassau card, the IR leaderboard card, and the landscape scorecard.
+
+**Deliberately without them:**
+- **Wolf** — its grid is POINTS, not gross. Paul excluded it twice.
+- **The Survivor rail** — a lane timeline, not a scorecard.
+- **Irish Rumble** (both grids) — shows net-to-par with a RUNNING team total on
+  every hole, so the figure at the 9th already is OUT and the one at the 18th is
+  TOT. Adding columns would print the same number twice.
+- **The Sixes grid in score entry** — a strip of 6-hole match cards. A segment
+  is six holes; the card's unit is the match, not the nine.
+
+**Quota Nassau was also never PINNED** — its labels come from a `labelCell`
+helper rather than a literal width, so the earlier pin sweep's regex missed it
+and "eighteen of eighteen" was really nineteen. Fixed here.
+
+Tests: `mobile/test/nine_totals_test.dart` (9).
