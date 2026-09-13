@@ -3142,9 +3142,33 @@ it, and wrote that the Stableford card could never appear. It can. **A flag with
 no reader is documentation, and a wrong one is invisible until somebody
 believes it.**
 
+### Triple Cup — one composition, two games
+
+The casual configuration is built. **The headline is the CUP SCORE, including
+`0–0`** — Triple Cup exists to produce one, and the match in front of you is a
+way of earning a point in it, which is a different question and gets the
+smaller slot. An earlier design pass swapped the slots for the Fourball to
+avoid `0–0` and it was wrong: *a headline that means one thing before the first
+point and another after is a slot nobody can learn.*
+
+The strip is four cells because **four points in a fixed order is the FORMAT,
+not a guess** — which is precisely why Sixes cut its pips, since a round there
+has no fixed number of matches.
+
+Two constraints in this packet are requirements rather than preferences, and
+both buy the strip's 16pt: the state slot is inline on one baseline, and **the
+sides line is one row everywhere.** A row each for the two live Singles
+measured 163pt, over the ceiling on its own; surnames buy both matches for
+nothing. Yours first, always.
+
+**The team-cup configuration is not built** — same composition, different view
+model (the whole cup as the headline, `12½ · TO WIN` in the right slot, one
+continuous needle instead of four cells) — and it is the only card in the
+bundle that pushes, on lead change and cup decided.
+
 ### Still to do
 
-Triple Cup (two configurations, and the only card in the bundle that pushes);
-the five Swift layouts; the final states, which are `{}` on all four builders.
+The team-cup configuration; the five Swift layouts; the final states, which are
+`{}` on all five builders.
 Eight designs in `changed-since-delivery/` are CSS-level and mostly already
 match how we built them — the Skins header fix was the part that applied.
