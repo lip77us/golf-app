@@ -52,6 +52,7 @@ import '../widgets/round_chat_button.dart';
 import '../widgets/team_splitter_4.dart';
 import '../widgets/stroke_dots.dart';
 import '../widgets/pinned_hole_grid.dart';
+import '../widgets/combo_tee_chip.dart';
 
 // ---------------------------------------------------------------------------
 // Handicap helpers (shared with nassau_screen.dart)
@@ -4404,24 +4405,7 @@ class _PlayerRow extends StatelessWidget {
                 // card already. It takes the slot `gets N` is vacating, so
                 // nothing new competes for width on the row, and the other
                 // golfers' rows are untouched.
-                if (comboTee != null && comboTee!.isNotEmpty) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 1),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: theme.colorScheme.outline),
-                    ),
-                    child: Text(
-                      comboTee!,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ],
+                ComboTeeChip(tee: comboTee),
                 if (withdrawn) ...[
                   const SizedBox(width: 6),
                   Container(

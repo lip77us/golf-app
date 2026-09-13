@@ -32,6 +32,7 @@ import '../utils/nassau_team_style.dart';
 import '../utils/round_complete.dart';
 import '../widgets/stroke_dots.dart';
 import '../widgets/pinned_hole_grid.dart';
+import '../widgets/combo_tee_chip.dart';
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -983,6 +984,7 @@ class _NassauHoleScoreCard extends StatelessWidget {
                 gross:               gross,
                 isHot:               isHot,
                 matchHcapLabel:      hcapLabel,
+                comboTee:            m.comboTeeOnHole(holeNumber),
                 strokesOnThisHole:   matchStrok,
                 team:                team,
                 onTap: (hasScore && !isHot) ? () => onEditTap(m) : null,
@@ -1216,6 +1218,8 @@ class _NassauPlayerRow extends StatelessWidget {
   final int?          gross;
   final bool          isHot;
   final String?       matchHcapLabel;
+  /// This golfer's tee for the hole being entered — combo sets only.
+  final String?       comboTee;
   final VoidCallback? onTap;
   final int           strokesOnThisHole;
   final int?          team; // 1 = Blue, 2 = Orange (null = unteamed)
@@ -1229,6 +1233,7 @@ class _NassauPlayerRow extends StatelessWidget {
     required this.gross,
     required this.isHot,
     this.matchHcapLabel,
+    this.comboTee,
     this.onTap,
     this.strokesOnThisHole = 0,
     this.team,
@@ -1310,6 +1315,7 @@ class _NassauPlayerRow extends StatelessWidget {
                 ),
               ),
             ],
+            ComboTeeChip(tee: comboTee),
           ]),
               if (spotsActive)
                 Padding(

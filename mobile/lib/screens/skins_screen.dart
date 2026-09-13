@@ -26,6 +26,7 @@ import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
 import '../utils/match_handicap.dart';
 import '../utils/round_complete.dart';
+import '../widgets/combo_tee_chip.dart';
 
 // ---------------------------------------------------------------------------
 // The screen
@@ -781,6 +782,7 @@ class _SkinsHoleScoreCard extends StatelessWidget {
                 gross:             gross,
                 isHot:             isHot,
                 matchHcapLabel:    hcapLabel,
+                comboTee:            m.comboTeeOnHole(holeNumber),
                 strokesOnThisHole: matchStrokes,
                 totalSkins:        totalSkins,
                 isHoleWinner:      isHoleWinner,
@@ -913,6 +915,8 @@ class _SkinsPlayerRow extends StatelessWidget {
   final int?         gross;
   final bool         isHot;
   final String?      matchHcapLabel;
+  /// This golfer's tee for the hole being entered — combo sets only.
+  final String?       comboTee;
   final VoidCallback? onTap;
   final int          strokesOnThisHole;
 
@@ -934,6 +938,7 @@ class _SkinsPlayerRow extends StatelessWidget {
     required this.gross,
     required this.isHot,
     this.matchHcapLabel,
+    this.comboTee,
     this.onTap,
     this.strokesOnThisHole = 0,
     required this.totalSkins,
@@ -999,6 +1004,7 @@ class _SkinsPlayerRow extends StatelessWidget {
                 ),
               ),
             ],
+            ComboTeeChip(tee: comboTee),
           ]),
         ),
 

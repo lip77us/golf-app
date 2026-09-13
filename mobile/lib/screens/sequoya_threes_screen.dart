@@ -32,6 +32,7 @@ import '../widgets/spots_capture.dart';
 import '../utils/match_handicap.dart';
 import '../utils/play_order.dart';
 import '../utils/round_complete.dart';
+import '../widgets/combo_tee_chip.dart';
 
 const Color _kBlue   = Color(0xFF1976D2);   // side 1 of match 1 — "Team A"
 const Color _kOrange = Color(0xFFEF6C00);   // side 2
@@ -1198,6 +1199,7 @@ class _HoleScoreCard extends StatelessWidget {
       spotsCount:    spotsActive ? spotsCountFor(pid) : 0,
       onSpotsAdd:    spotsActive ? () => onSpotsAdd(pid) : null,
       onSpotsRemove: spotsActive ? () => onSpotsRemove(pid) : null,
+      comboTee: m.comboTeeOnHole(holeData?.holeNumber ?? 0),
     );
     if (!isHot && !editing) return [row];
     return [
@@ -1240,13 +1242,15 @@ class _ScoreRow extends StatelessWidget {
   final int           spotsCount;
   final VoidCallback? onSpotsAdd;
   final VoidCallback? onSpotsRemove;
+  /// This golfer's tee for the hole being entered — combo sets only.
+  final String?       comboTee;
 
   const _ScoreRow({
     required this.member, required this.gross, required this.strokes,
     required this.showHcap, required this.hcap, required this.isHot,
     required this.colour, this.onTap,
     this.spotsActive = false, this.spotsCount = 0,
-    this.onSpotsAdd, this.onSpotsRemove,
+    this.onSpotsAdd, this.onSpotsRemove, this.comboTee,
   });
 
   @override
@@ -1285,6 +1289,8 @@ class _ScoreRow extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.onSurfaceVariant)),
                 ],
+                // Which tee he plays on THIS hole, combo sets only.
+                ComboTeeChip(tee: comboTee),
               ]),
               if (spotsActive)
                 Padding(

@@ -36,6 +36,7 @@ import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/spots_capture.dart';
 import '../widgets/pinned_hole_grid.dart';
+import '../widgets/combo_tee_chip.dart';
 
 // ---------------------------------------------------------------------------
 // The screen
@@ -881,6 +882,7 @@ class _P531HoleScoreCard extends StatelessWidget {
                 gross:          gross,
                 isHot:          isHot,
                 matchHcapLabel: hcapLabel,
+                comboTee:            m.comboTeeOnHole(holeNumber),
                 // Pass strokes so the score-box corner can render a dot
                 // for players receiving a stroke on the active hole.  In
                 // Net mode this duplicates the chip's stroke dots, which
@@ -950,6 +952,8 @@ class _P531PlayerRow extends StatelessWidget {
   final int?         gross;
   final bool         isHot;
   final String?      matchHcapLabel;
+  /// This golfer's tee for the hole being entered — combo sets only.
+  final String?       comboTee;
   final VoidCallback? onTap;
 
   /// Number of handicap strokes this player gets on the ACTIVE hole.
@@ -979,6 +983,7 @@ class _P531PlayerRow extends StatelessWidget {
     required this.gross,
     required this.isHot,
     this.matchHcapLabel,
+    this.comboTee,
     this.onTap,
     this.strokesOnThisHole = 0,
     required this.holePoints,
@@ -1053,6 +1058,7 @@ class _P531PlayerRow extends StatelessWidget {
                 ),
               ),
             ],
+            ComboTeeChip(tee: comboTee),
           ]),
               if (spotsActive)
                 Padding(
