@@ -23,6 +23,8 @@ import '../widgets/round_chat_button.dart';
 import '../widgets/spots_capture.dart';
 import '../utils/round_complete.dart';
 import '../widgets/combo_tee_chip.dart';
+import '../widgets/pinned_hole_grid.dart';
+import '../utils/nine_totals.dart';
 
 // Gross Stableford: eagle=4, birdie=3, par=2, bogey=1, dbl+=0
 int _gsf(int gross, int par) => (2 + par - gross).clamp(0, 99);
@@ -1361,35 +1363,89 @@ class _QNSummaryGridState extends State<_QNSummaryGrid> {
         Text(s,
             style: TextStyle(fontSize: fs, fontWeight: fw, color: fg));
 
+    // ── OUT / IN / TOT ──────────────────────────────────────────────────────
+    final split = NineSplit.of(holeRange);
+    const summaryW = 32.0;
+
+    Widget sumCell(String t) => SizedBox(
+          width: summaryW, height: _rowH,
+          child: Center(
+            child: Text(t,
+                style: const TextStyle(
+                    fontSize: 10, fontWeight: FontWeight.bold)),
+          ),
+        );
+
+    List<Widget> withTotals(Widget Function(int) cell,
+        {Widget Function(List<int>)? sum}) {
+      final f = sum ?? (List<int> _) => sumCell('');
+      return [
+        for (final h in split.front) cell(h),
+        if (split.showOut) f(split.front),
+        for (final h in split.back) cell(h),
+        if (split.showIn) f(split.back),
+        if (split.showTot) f(split.all),
+      ];
+    }
+
+    Widget grossTotal(Membership m, List<int> holes) {
+      var total = 0;
+      for (final h in holes) {
+        final g = _grossFor(m.player.id, h);
+        if (g == null) return sumCell('—');
+        total += g;
+      }
+      return sumCell('$total');
+    }
+
+    int parSum(List<int> hs) {
+      var t = 0;
+      for (final h in hs) {
+        t += widget.scorecard.holeData(h)?.par ?? 0;
+      }
+      return t;
+    }
+
+    // Still used by the footer below the grid. Its width follows the split now
+    // so it reaches the end of the summary columns rather than stopping at the
+    // last hole.
     Widget divider() => Container(
           height: 1,
-          width: _labelW + _cellW * 18,
+          width: _labelW + split.contentWidth(_cellW, summaryW),
           color: theme.colorScheme.outlineVariant,
           margin: const EdgeInsets.symmetric(vertical: 3),
         );
 
     // Gross score row for a player
-    Widget playerRow(Membership m, Color teamColor) => Row(children: [
+    HoleGridBand playerRow(Membership m, Color teamColor) => HoleGridBand(
           labelCell(m.player.displayShort,
               color: teamColor, fw: FontWeight.w600),
-          ...holeRange.map((h) {
-            final g = _grossFor(m.player.id, h);
-            return holeCell(
-              h,
-              txt(
-                g == null ? '–' : '$g',
-                fg: g == null ? theme.colorScheme.outlineVariant : null,
-                fw: g != null ? FontWeight.w600 : FontWeight.normal,
-              ),
-            );
-          }),
-        ]);
+          withTotals(
+            sum: (hs) => grossTotal(m, hs),
+            (h) {
+              final g = _grossFor(m.player.id, h);
+              return holeCell(
+                h,
+                txt(
+                  g == null ? '–' : '$g',
+                  fg: g == null ? theme.colorScheme.outlineVariant : null,
+                  fw: g != null ? FontWeight.w600 : FontWeight.normal,
+                ),
+              );
+            },
+          ),
+        );
 
     // Combined Stableford pts row for a team
-    Widget ptsRow(List<Membership> members, Color teamColor, String label) =>
-        Row(children: [
+    // The team's Stableford points per hole. No nine subtotal — the footer
+    // below already carries F9 / B9 / All against quota, which is the same
+    // quantity said better, and repeating it here would invite comparing two
+    // numbers that are the same.
+    HoleGridBand ptsRow(
+            List<Membership> members, Color teamColor, String label) =>
+        HoleGridBand(
           labelCell(label, color: teamColor, fw: FontWeight.bold),
-          ...holeRange.map((h) {
+          withTotals((h) {
             final sf = _teamSf(members, h);
             return holeCell(
               h,
@@ -1403,7 +1459,7 @@ class _QNSummaryGridState extends State<_QNSummaryGrid> {
               bg: _sfBg(sf),
             );
           }),
-        ]);
+        );
 
     // ── Footer totals ─────────────────────────────────────────────────────────
     // Compute F9 stpl, B9 stpl, and All stpl for each team.
@@ -1469,42 +1525,52 @@ class _QNSummaryGridState extends State<_QNSummaryGrid> {
                     color: theme.colorScheme.primary)),
             const SizedBox(height: 4),
 
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              controller: _ctrl,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header: hole numbers
-                  Row(children: [
-                    labelCell('Hole', fw: FontWeight.bold),
-                    ...holeRange.map((h) => holeCell(h,
-                        txt('$h', fw: FontWeight.bold))),
-                  ]),
-                  // Header: par
-                  Row(children: [
-                    labelCell('Par',
-                        color: theme.colorScheme.onSurfaceVariant),
-                    ...holeRange.map((h) => holeCell(h,
-                        txt(
-                          '${widget.scorecard.holeData(h)?.par ?? '—'}',
-                          fg: theme.colorScheme.onSurfaceVariant,
-                        ))),
-                  ]),
-
-                  divider(),
-
-                  // ── Team 1 ─────────────────────────────────────────────────
-                  ...t1.map((m) => playerRow(m, t1Color)),
-                  ptsRow(t1, t1Color, 'T1 stpl'),
-
-                  divider(),
-
-                  // ── Team 2 ─────────────────────────────────────────────────
-                  ...t2.map((m) => playerRow(m, t2Color)),
-                  ptsRow(t2, t2Color, 'T2 stpl'),
-                ],
-              ),
+            // The label column is PINNED — this grid was missed in the first
+            // sweep because its labels come from a `labelCell` helper rather
+            // than a literal width, so scrolling to the 14th still took the
+            // names away with the holes.
+            PinnedHoleGrid(
+              labelWidth  : _labelW,
+              cellWidth   : _cellW,
+              holeCount   : holeRange.length,
+              currentIndex: split.rightEdgeOf(
+                      widget.currentHole, _cellW, summaryW) == null ? -1 : 0,
+              currentRightEdge:
+                  split.rightEdgeOf(widget.currentHole, _cellW, summaryW),
+              contentWidth: split.contentWidth(_cellW, summaryW),
+              bands: [
+                // Header: hole numbers
+                HoleGridBand(
+                  labelCell('Hole', fw: FontWeight.bold),
+                  [
+                    for (final h in split.front)
+                      holeCell(h, txt('$h', fw: FontWeight.bold)),
+                    if (split.showOut) sumCell('OUT'),
+                    for (final h in split.back)
+                      holeCell(h, txt('$h', fw: FontWeight.bold)),
+                    if (split.showIn) sumCell('IN'),
+                    if (split.showTot) sumCell('TOT'),
+                  ],
+                ),
+                // Header: par
+                HoleGridBand(
+                  labelCell('Par', color: theme.colorScheme.onSurfaceVariant),
+                  withTotals(
+                    (h) => holeCell(h, txt(
+                        '${widget.scorecard.holeData(h)?.par ?? '—'}',
+                        fg: theme.colorScheme.onSurfaceVariant)),
+                    sum: (hs) => sumCell('${parSum(hs)}'),
+                  ),
+                ),
+                const HoleGridBand.rule(),
+                // ── Team 1 ───────────────────────────────────────────────────
+                ...t1.map((m) => playerRow(m, t1Color)),
+                ptsRow(t1, t1Color, 'T1 stpl'),
+                const HoleGridBand.rule(),
+                // ── Team 2 ───────────────────────────────────────────────────
+                ...t2.map((m) => playerRow(m, t2Color)),
+                ptsRow(t2, t2Color, 'T2 stpl'),
+              ],
             ),
 
             // ── Footer: running totals vs quota ───────────────────────────────
