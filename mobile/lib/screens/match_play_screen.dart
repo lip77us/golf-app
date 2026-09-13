@@ -30,6 +30,7 @@ import '../providers/round_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/pinned_hole_grid.dart';
+import '../utils/nine_totals.dart';
 
 // Colours used for Player-1 and Player-2 holes across all match cards.
 // Matches the score-entry name colours (GameColors.team1 / team2) so a player
@@ -549,11 +550,65 @@ class _MatchScoreDetail extends StatelessWidget {
           ),
         );
 
+    // ── OUT / IN / TOT ──────────────────────────────────────────────────────
+    // `holes` is a list of maps here, not hole numbers, so the split is taken
+    // over the numbers and the cells looked up by number.
+    final holeNums = [
+      for (final h in holes) ((h as Map<String, dynamic>)['hole'] as int?) ?? 0
+    ];
+    final byNum = {
+      for (final h in holes)
+        ((h as Map<String, dynamic>)['hole'] as int?) ?? 0: h
+    };
+    final split = NineSplit.of(holeNums);
+    const summaryW = 30.0;
+
+    Widget sumCell(String t) => SizedBox(
+          width: summaryW, height: _rowH,
+          child: Center(
+            child: Text(t,
+                style: const TextStyle(
+                    fontSize: 10, fontWeight: FontWeight.bold)),
+          ),
+        );
+
+    List<Widget> withTotals(Widget Function(Map<String, dynamic>) cellFor,
+        {Widget Function(List<int>)? sum}) {
+      final f = sum ?? (List<int> _) => sumCell('');
+      Widget at(int n) => cellFor(byNum[n] as Map<String, dynamic>);
+      return [
+        for (final n in split.front) at(n),
+        if (split.showOut) f(split.front),
+        for (final n in split.back) at(n),
+        if (split.showIn) f(split.back),
+        if (split.showTot) f(split.all),
+      ];
+    }
+
+    int parSum(List<int> ns) {
+      var t = 0;
+      for (final n in ns) {
+        t += ((byNum[n] as Map<String, dynamic>?)?['par'] as int?) ?? 0;
+      }
+      return t;
+    }
+
+    Widget grossTotal(int? pid, List<int> ns) {
+      var total = 0;
+      for (final n in ns) {
+        final g = _scoreOf(byNum[n] as Map<String, dynamic>, pid)['gross']
+            as int?;
+        if (g == null) return sumCell('—');
+        total += g;
+      }
+      return sumCell('$total');
+    }
+
     HoleGridBand playerRow(int? pid, Color color, String short) =>
         HoleGridBand(
           label(short, color: color),
-          [
-          for (final h in holes) Builder(builder: (_) {
+          withTotals(sum: (ns) => grossTotal(pid, ns), (h) =>
+            Builder(builder: (_) {
             final s       = _scoreOf(h, pid);
             final gross   = s['gross'] as int?;
             final strokes = (s['strokes'] as int?) ?? 0;
@@ -599,8 +654,8 @@ class _MatchScoreDetail extends StatelessWidget {
               ]),
               bg: isWin ? color.withValues(alpha: 0.14) : null,
             );
-          }),
-        ]);
+          })),
+        );
 
     return Padding(
       padding: const EdgeInsets.only(top: 10),
@@ -622,37 +677,51 @@ class _MatchScoreDetail extends StatelessWidget {
                 last = i;
               }
             }
+            final lastNum = last >= 0 && last < holeNums.length
+                ? holeNums[last] : -1;
             return PinnedHoleGrid(
               labelWidth  : _labelW,
               cellWidth   : _cellW,
               holeCount   : holes.length,
-              currentIndex: last,
+              currentIndex: split.rightEdgeOf(
+                      lastNum, _cellW, summaryW) == null ? -1 : 0,
+              currentRightEdge:
+                  split.rightEdgeOf(lastNum, _cellW, summaryW),
+              contentWidth: split.contentWidth(_cellW, summaryW),
               bands: [
                 HoleGridBand(
                   label('Hole', color: theme.colorScheme.onSurfaceVariant),
                   [
-                  for (final h in holes)
-                    cell(Text('${h['hole']}${h['is_sd'] == true ? '*' : ''}',
-                        style: const TextStyle(
-                            fontSize: 10, fontWeight: FontWeight.bold))),
+                    for (final n in split.front)
+                      cell(Text('$n${byNum[n]!['is_sd'] == true ? '*' : ''}',
+                          style: const TextStyle(
+                              fontSize: 10, fontWeight: FontWeight.bold))),
+                    if (split.showOut) sumCell('OUT'),
+                    for (final n in split.back)
+                      cell(Text('$n${byNum[n]!['is_sd'] == true ? '*' : ''}',
+                          style: const TextStyle(
+                              fontSize: 10, fontWeight: FontWeight.bold))),
+                    if (split.showIn) sumCell('IN'),
+                    if (split.showTot) sumCell('TOT'),
                 ]),
                 HoleGridBand(
                   label('Par', italic: true),
-                  [
-                  for (final h in holes)
-                    cell(Text('${h['par'] ?? '-'}',
+                  withTotals(
+                    (h) => cell(Text('${h['par'] ?? '-'}',
                         style: const TextStyle(fontSize: 10))),
-                ]),
+                    sum: (ns) => sumCell('${parSum(ns)}'),
+                  ),
+                ),
+                // A stroke index has no nine total.
                 HoleGridBand(
                   label('SI', italic: true,
                       color: theme.colorScheme.onSurfaceVariant),
-                  [
-                  for (final h in holes)
+                  withTotals((h) =>
                     cell(Text('${h['stroke_index'] ?? '-'}',
                         style: theme.textTheme.labelSmall?.copyWith(
                             fontSize: 9,
-                            color: theme.colorScheme.onSurfaceVariant))),
-                ]),
+                            color: theme.colorScheme.onSurfaceVariant)))),
+                ),
                 const HoleGridBand.rule(),
                 playerRow(p1id, _kP1Color, p1short),
                 playerRow(p2id, _kP2Color, p2short),
