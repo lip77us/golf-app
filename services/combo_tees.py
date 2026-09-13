@@ -46,7 +46,15 @@ Corica's `Team Match Combo` (Black + Blue + White), California GC's
 The spec's guarantee is unchanged by this: a fixed SET of size N either
 accounts for every hole or the feature turns off.
 """
+import logging
 from itertools import combinations
+
+logger = logging.getLogger(__name__)
+
+# Tees already reported this process. A course-data problem is worth saying
+# ONCE — the serializer runs on every round fetch, and a line per fetch buries
+# the thing it is trying to surface.
+_REPORTED: set = set()
 
 # How many parent sets a combo may blend. Three is what the data needs; four is
 # headroom, and the search is over a handful of tees so the cost is nothing.
@@ -167,9 +175,16 @@ def tee_map(tee) -> dict:
 
     Built ONCE and handed over whole. The indicator is present on all eighteen
     holes or none, which is what stops it appearing and disappearing mid-round.
+
+    **An empty map is the designed outcome, not an error.** The group reads the
+    physical card, exactly as they did before this existed, and nothing on
+    screen ever guesses a tee. What it is NOT is silent: a combo that cannot
+    resolve is a course-data problem, and one that nobody hears about gets
+    worked around eighteen holes at a time forever.
     """
     parents = resolve_parents(tee)
     if not parents:
+        _report(tee)
         return {}
     out = {}
     for hole in sorted(_yards(tee)):
@@ -177,7 +192,29 @@ def tee_map(tee) -> dict:
         if name:
             out[hole] = name
     # A partial answer is the failure the setup check exists to prevent.
-    return out if len(out) == len(_yards(tee)) else {}
+    if len(out) != len(_yards(tee)):
+        _report(tee)
+        return {}
+    return out
+
+
+def _report(tee) -> None:
+    """Say once, per process, why a combo turned itself off.
+
+    WARNING rather than INFO because somebody has to act on it: the fix is a
+    row of course data, not a code change, and it is invisible from the app —
+    the golfers just quietly stop getting an indicator they never knew was
+    coming.
+    """
+    if not is_combo(tee):
+        return
+    key = getattr(tee, 'pk', None)
+    if key in _REPORTED:
+        return
+    _REPORTED.add(key)
+    course = getattr(getattr(tee, 'course', None), 'name', '?')
+    logger.warning('combo tee unsupported — %s [tee %s]: %s',
+                   course, key, unsupported_reason(tee))
 
 
 def unsupported_reason(tee) -> str:

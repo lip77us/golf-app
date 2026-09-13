@@ -283,3 +283,57 @@ class SerializerTests(_Base):
 
     def test_the_keys_are_strings_because_JSON(self):
         self.assertTrue(all(isinstance(k, str) for k in self._rows()['Ann']))
+
+
+class FallbackTests(_Base):
+    """What an unsupported combo actually does to a round.
+
+    Paul, 12 Sep: don't apply it when the data is wrong — let them use the
+    physical card. So the promise is narrow and worth pinning: NOTHING is
+    drawn, and in particular nothing is guessed.
+    """
+
+    def setUp(self):
+        super().setUp()
+        yards = [BLUE[i] for i in range(18)]
+        yards[8] = 517                       # matches no tee on the card
+        self.broken = _tee(self.course, 'Blue/White Combo', yards)
+
+    def test_it_shows_nothing_rather_than_a_best_guess(self):
+        """Seventeen of the eighteen holes DO match a parent. Naming those and
+        leaving one blank is the shape the setup check exists to refuse — a
+        golfer cannot tell a missing hole from a hole he is not stroking on."""
+        self.assertEqual(tee_map(self.broken), {})
+        for h in range(1, 19):
+            self.assertIsNone(tee_name_for_hole(self.broken, h))
+
+    def test_the_round_is_otherwise_untouched(self):
+        """The tee still plays; only the indicator is absent. Nothing about
+        scoring, handicaps or the tee's own name depends on this."""
+        self.assertEqual(self.broken.tee_name, 'Blue/White Combo')
+        self.assertEqual(len(self.broken.holes), 18)
+
+    def test_it_says_why_once_in_the_log(self):
+        """Silent is the one thing it must not be. The fix is a row of course
+        data, invisible from the app — the golfers just quietly never get an
+        indicator they did not know was coming. Once per process, though: the
+        serializer runs on every round fetch, and a line per fetch buries the
+        thing it is trying to surface."""
+        from services import combo_tees
+        combo_tees._REPORTED.clear()
+        with self.assertLogs('services.combo_tees', level='WARNING') as cm:
+            tee_map(self.broken)
+        self.assertEqual(len(cm.output), 1)
+        self.assertIn('hole 9', cm.output[0])
+        # Asked again, it stays quiet.
+        tee_map(self.broken)
+        tee_map(self.broken)
+        combo_tees._REPORTED.discard(self.broken.pk)
+
+    def test_a_supported_combo_logs_nothing(self):
+        from services import combo_tees
+        combo_tees._REPORTED.clear()
+        good = self._combo('Blue/White Combo II', 'BWBWBWBWBWBWBWBWBW')
+        import logging
+        with self.assertNoLogs('services.combo_tees', level='WARNING'):
+            self.assertEqual(len(tee_map(good)), 18)
