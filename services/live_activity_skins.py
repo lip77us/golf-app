@@ -459,8 +459,14 @@ def skins_final_state(foursome, *, player_id=None) -> dict:
         fin   = {'value': f'{settled}', 'label': 'skins settled'}
 
     return {
+        # `16 GOLFERS`, not `18 HOLES · 16 GOLFERS`. The round-complete card is
+        # the worst state in this packet, and the header row is where it
+        # overflowed: the game name cannot shrink, so the corner is the only
+        # child that can afford to lose something — and the hole count is
+        # already implied by a card that says ROUND COMPLETE.
+        # (`~/Downloads/handoff-lock-screens 2/changed-since-delivery/`.)
         'header': {'game': _GAME_LABEL[_variation(summary)],
-                   'segment': f'{settled} HOLES · {len(_rows(summary))} GOLFERS'},
+                   'segment': f'{len(_rows(summary))} GOLFERS'},
         'number': {'text': fin['value'], 'colour': 'mint'},
         'sides' : [{'names': f'Winners: {winners}' if winners
                              else 'No skins were won',

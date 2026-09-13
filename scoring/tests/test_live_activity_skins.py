@@ -326,3 +326,37 @@ class ClosingFrameTests(_Base):
         f = self._final()
         self.assertEqual(f['sides'][0]['names'], 'No skins were won')
         self.assertEqual(f['number']['text'], '$0')
+
+
+class HeaderWidthTests(_Base):
+    """The header row is where the Skins card overflowed onto the bezel.
+
+    Design's height audit found `.lah` at 273px holding ~306px of children
+    with no wrap and no shrink, so the right-hand corner sat outside the
+    frosted panel. The game name cannot shrink — it is the card's identity —
+    so the corner is the only child that can afford to lose anything.
+    """
+
+    def configure(self):
+        setup_skins(self.fs, handicap_mode=HandicapMode.GROSS, carryover=True,
+                    allow_junk=False)
+
+    def test_the_round_complete_corner_names_the_field_not_the_holes(self):
+        """A card that already says ROUND COMPLETE does not need to say how
+        many holes that was."""
+        from services.live_activity_skins import skins_final_state
+        self._play(1, 3, 4, 4, 4)
+        seg = skins_final_state(self.fs, player_id=None)['header']['segment']
+        self.assertIn('GOLFERS', seg)
+        self.assertNotIn('HOLES', seg)
+
+    def test_the_running_corner_carries_hole_and_par_but_no_yardage(self):
+        """Skins is the one packet whose header corner is shorter than the
+        set's, and deliberately: net skins turn on par, but the yardage is on
+        the card in the golfer's hand."""
+        self._play(1, 3, 4, 4, 4)
+        seg = skins_activity_state(self.fs, player_id=None, thru=1)['header']['segment']
+        self.assertIn('HOLE', seg)
+        self.assertIn('PAR', seg)
+        # A yardage would be a bare 3-digit number on the end.
+        self.assertEqual(seg.count('·'), 1)
