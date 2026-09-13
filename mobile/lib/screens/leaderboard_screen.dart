@@ -9062,16 +9062,73 @@ class _TripleNassauGroupCard extends StatelessWidget {
                 fontSize: 10, color: muted))),
     ];
 
+    // ── OUT / IN / TOT ──────────────────────────────────────────────────────
+    const summaryW = 28.0;
+    final byNum = {for (final h in holes) h.hole: h};
+    final split = NineSplit.of([for (final h in holes) h.hole]);
+
+    Widget sumCell(String t) => SizedBox(
+          width: summaryW, height: rowH,
+          child: Center(
+            child: Text(t,
+                style: const TextStyle(
+                    fontSize: 10.5, fontWeight: FontWeight.w700)),
+          ),
+        );
+
+    /// A golfer's gross over a nine — an em dash until it is complete.
+    Widget grossTotal(int pid, List<int> ns) {
+      var total = 0;
+      for (final n in ns) {
+        final g = byNum[n]?.gross[pid];
+        if (g == null) return sumCell('—');
+        total += g;
+      }
+      return sumCell('$total');
+    }
+
+    int parSum(List<int> ns) {
+      var t = 0;
+      for (final n in ns) {
+        t += byNum[n]?.par ?? 0;
+      }
+      return t;
+    }
+
+    /// front · OUT · back · IN · TOT. Without `sum` the slots are blank, which
+    /// is right for the stroke-index row and for a match's per-hole verdict.
+    List<Widget> withTotals(Widget Function(int) cell,
+        {Widget Function(List<int>)? sum}) {
+      final f = sum ?? (List<int> _) => sumCell('');
+      return [
+        for (final n in split.front) cell(n),
+        if (split.showOut) f(split.front),
+        for (final n in split.back) cell(n),
+        if (split.showIn) f(split.back),
+        if (split.showTot) f(split.all),
+      ];
+    }
+
     // Scrollable cell rows (aligned 1:1 with the labels).
     final cellRows = <Widget>[
-      Row(children: [for (final h in holes) txt('${h.hole}', bold: true)]),
-      Row(children: [for (final h in holes) txt('${h.par ?? '-'}', c: muted)]),
-      Row(children: [for (final h in holes) txt('${h.strokeIndex ?? '-'}', c: muted, size: 10.5)]),
+      Row(children: [
+        for (final n in split.front) txt('$n', bold: true),
+        if (split.showOut) sumCell('OUT'),
+        for (final n in split.back) txt('$n', bold: true),
+        if (split.showIn) sumCell('IN'),
+        if (split.showTot) sumCell('TOT'),
+      ]),
+      Row(children: withTotals(
+          (n) => txt('${byNum[n]?.par ?? '-'}', c: muted),
+          sum: (ns) => sumCell('${parSum(ns)}'))),
+      Row(children: withTotals(
+          (n) => txt('${byNum[n]?.strokeIndex ?? '-'}', c: muted, size: 10.5))),
       for (final p in s.players)
-        Row(children: [for (final h in holes)
-          txt(h.gross[p.playerId]?.toString() ?? '–')]),
+        Row(children: withTotals(
+            (n) => txt(byNum[n]?.gross[p.playerId]?.toString() ?? '–'),
+            sum: (ns) => grossTotal(p.playerId, ns))),
       for (final m in s.matches)
-        Row(children: [for (final h in holes) wonCell(m, h.hole)]),
+        Row(children: withTotals((n) => wonCell(m, n))),
     ];
 
     return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
