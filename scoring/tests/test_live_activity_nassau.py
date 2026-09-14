@@ -61,11 +61,11 @@ class NassauActivityTests(TestCase):
         """The back nine has not been played but it is at stake.  Counting only
         the matches under way (-$10) is the mistake the slot exists to avoid."""
         self._play(1, 4, 4)
-        self.assertEqual(self._money(thru=1), '-$15 to +$15')
+        self.assertEqual(self._money(thru=1), '−$15 to +$15')
 
     def test_it_is_symmetric_about_zero_before_anything_settles(self):
         self._play(1, 3, 4)             # Paul 1 up, nothing settled
-        self.assertEqual(self._money(thru=1), '-$15 to +$15')
+        self.assertEqual(self._money(thru=1), '−$15 to +$15')
 
     # -- presses widen it -------------------------------------------------
 
@@ -79,7 +79,7 @@ class NassauActivityTests(TestCase):
         calculate_nassau(self.fs)
         after = self._money(thru=3)
         self.assertNotEqual(before, after)
-        self.assertEqual(after, '-$20 to +$20')
+        self.assertEqual(after, '−$20 to +$20')
 
     # -- settling moves the midpoint and narrows the span -----------------
 
@@ -88,13 +88,13 @@ class NassauActivityTests(TestCase):
         around zero."""
         for hole in range(1, 10):
             self._play(hole, 3, 4)      # Paul wins every hole — front is his
-        self.assertEqual(self._money(thru=9), '-$5 to +$15')
+        self.assertEqual(self._money(thru=9), '−$5 to +$15')
 
     def test_the_loser_reads_the_mirror_image(self):
         """The board is neutral; this one figure is not."""
         for hole in range(1, 10):
             self._play(hole, 3, 4)
-        self.assertEqual(self._money(thru=9, who='Dave'), '-$15 to +$5')
+        self.assertEqual(self._money(thru=9, who='Dave'), '−$15 to +$5')
 
     def test_it_converges_to_a_single_number(self):
         """Every bet that settles pulls the ends together, until on the 18th
@@ -115,7 +115,9 @@ class NassauActivityTests(TestCase):
         from services.nassau import nassau_summary
 
         def val(x):
-            return float(x.replace('$', '').replace(',', ''))
+            # U+2212, the set's minus sign — `float()` only reads a hyphen.
+            return float(x.replace('$', '').replace(',', '')
+                          .replace('−', '-'))
 
         for thru in (1, 5, 9, 12, 18):
             for hole in range(1, thru + 1):
@@ -147,7 +149,7 @@ class NassauActivityTests(TestCase):
         the midpoint and the span rather than being added to either."""
         for hole in range(1, 10):
             self._play(hole, 4, 4)      # every hole halved → front9 halved
-        self.assertEqual(self._money(thru=9), '-$10 to +$10')
+        self.assertEqual(self._money(thru=9), '−$10 to +$10')
 
     # -- a settled nine leaves the card -----------------------------------
 
@@ -233,7 +235,7 @@ class NassauLossCapTests(TestCase):
         _calc(self.fs)
         money = nassau_activity_state(self.fs, player_id=self.pid['Paul'],
                                       thru=1)['footer']['money']
-        self.assertEqual(money, '-$10 to +$10')
+        self.assertEqual(money, '−$10 to +$10')
 
 
 class NassauContractTests(TestCase):

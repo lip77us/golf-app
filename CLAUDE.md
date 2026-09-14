@@ -3498,6 +3498,82 @@ is least true of. The chip now requires a halved hole, and a settled hole that
 absorbed one says `THE CARRY DOUBLED` instead, which the packet leaves silent
 and which otherwise leaves a reader wondering why one hole was worth triple.
 
+## Triple Nassau lock screen — three matches, and never the word DOWN
+
+`services/live_activity_triple_nassau.py`, `TripleNassauBoardView`. Spec:
+`~/Downloads/handoff-triple-nassau-lock/`.
+
+Three golfers, no teams, every pair playing its own match — nine bets on the
+round. **The card exists for one confusion: a golfer knows he is two up and
+cannot remember two up on whom.** Two-player Nassau never has it (one opponent,
+so a bare number is unambiguous); here a bare number is worthless, and the
+whole design problem is attaching each score to its match inside the ceiling.
+122pt, second clearest in the set.
+
+The registry used to say three simultaneous pairings would not fit. **The grid
+version proved it** — three matches across, two bets down, six figures. It fit
+at 148pt and was unreadable: *a table of numbers on a phone held at a tee box
+is a thing you resolve to look at later.* What fits is one bet at a time.
+
+### Colour is load-bearing, not decoration
+
+A figure wears the colour of **whoever is winning that match**, and there is no
+`2 DN` anywhere on the card. That is not a style rule: a direction word is
+relative to a reader, and in `BEN·CAL` **there is no reader to be relative
+to** — `1 UP` between two other men is meaningless until you know which one.
+Colour answers it inside the same glyph that carries the number and costs no
+width.
+
+**The reader is blue on his own phone**, assigned per reader. Same question Las
+Vegas raised and sharper here, because three golfers in one group would
+otherwise read the same match in three different schemes.
+
+The third match — the two other men — is **held back and never dropped**,
+because Triple Nassau settles three ways and the question after the round is
+not *did I win* but *who owes whom*. **The dimming applies to the score, not
+the identity:** the label keeps 9.5pt/68%, since an earlier design had it at
+8pt/38%, measured 3.04:1 and went invisible under always-on — leaving a reader
+able to see a score with no way to know whose it was, which is the exact
+confusion the card exists to remove.
+
+### The bug: the bet key followed settlements, not holes
+
+The packet says the three matches are always on the same bet at the same time.
+**That is true of holes and false of results.** A front nine can be 5&4 in two
+matches and all square in the third.
+
+My first `_bet_key` skipped a nine whose `result` was set, so with two matches
+closed out it **jumped to the back nine on the eighth hole** — reporting a bet
+with no holes played while two of the front nine were still to come. It now
+keys on holes played. The clock is shared because the HOLES are shared; that is
+the only sense in which it is shared.
+
+A second one from the same root: a nine's `result` only appears once its ninth
+hole is in, but a match decided 4&2 has been over for two holes. `_figure()`
+reads `decided_margin` first, so a closed-out match goes quiet when it closes
+rather than when the nine ends.
+
+### Two reuse calls
+
+`exposure_range()` now takes `game=None` and falls back to the summary's own
+`play_front`/`play_back`/`play_overall` flags, so Triple Nassau sums the
+**tested** two-player arithmetic across the reader's six bets instead of
+carrying a second copy of it.
+
+And Nassau's money line was the one place in the set using a hyphen where
+everything else uses U+2212. Fixed, with the test helper taught to parse it —
+at 11px beside a `+` the hyphen is visibly the wrong length, and that row sets
+both within six characters of each other.
+
+### One departure worth flagging
+
+The packet specifies plum `#B48CF0` as "new to the set". **The set already has
+a plum** — `#C9A6E8`, Survivor's Zombieville colour, already tuned for
+lock-screen glass. Triple Nassau uses the existing token rather than
+introducing a second purple two shades away: they never appear on the same
+card, and two near-identical hexes for one semantic slot is how a palette
+drifts. Worth a design confirmation.
+
 ### Still outstanding across the set
 
 The rest of `changed-since-delivery/` is CSS-level and already matches how we

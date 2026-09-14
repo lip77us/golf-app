@@ -133,7 +133,8 @@ private struct LockScreenView: View {
     static let known: Set<String> = ["sixes", "rabbit", "nassau", "skins",
                                      "match", "survivor", "sequoya", "banker",
                                      "stableford", "stroke_play", "points",
-                                     "wolf", "triple_cup", "vegas"]
+                                     "wolf", "triple_cup", "vegas",
+                                     "triple_nassau"]
 
     let state: SixesActivityAttributes.ContentState
     var isStale: Bool = false
@@ -164,6 +165,8 @@ private struct LockScreenView: View {
                 TripleCupBoardView(state: state, isStale: isStale)
             } else if state.kind == "vegas" {
                 VegasBoardView(state: state, isStale: isStale)
+            } else if state.kind == "triple_nassau" {
+                TripleNassauBoardView(state: state, isStale: isStale)
             } else {
                 BoardView(state: state, isStale: isStale)
             }
@@ -974,6 +977,137 @@ private struct TripleCupBoardView: View {
             FooterView(footer: state.footer, thru: state.thru,
                        isStale: isStale)
         }
+    }
+}
+
+/// Triple Nassau — three golfers, three matches, and never the word `DOWN`
+/// (`handoff-triple-nassau-lock/HANDOFF.md`).
+///
+/// **The card exists for one confusion: a golfer knows he is two up, and
+/// cannot remember two up on whom.** Two-player Nassau never has that problem
+/// — one opponent, so a bare number is unambiguous. Here a bare number is
+/// worthless, and the whole design problem is attaching each score to its
+/// match inside the ceiling. It lands at 122pt.
+///
+/// An earlier pass drew the full six-figure grid — three matches across, two
+/// bets down. It FIT, at 148pt, and it was unreadable: *a table of numbers on
+/// a phone held at a tee box is a thing you resolve to look at later.* So the
+/// card carries one figure per match and the header names which bet they are
+/// all on, which works only because the three matches share a clock.
+///
+/// Colour is what lets it never say `DN`, and that is not a style choice: in
+/// `MORAN·REID` there is no reader for a direction word to be relative to.
+private struct TripleNassauBoardView: View {
+    let state: SixesActivityAttributes.ContentState
+    var isStale: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let ribbon = state.ribbon, !ribbon.isEmpty {
+                StrokeRibbon(text: ribbon, tone: "gold")
+            }
+            HeaderView(header: state.header)
+
+            // The headline exists only on the closing card. While the round
+            // is running the strip IS the content, and a single figure above
+            // three matches would be the bare number this card abolishes.
+            if !state.number.text.isEmpty {
+                HStack(alignment: .lastTextBaseline, spacing: 11) {
+                    Text(state.number.text)
+                        .font(Sixes.display(32, .bold))
+                        .tracking(-1)
+                        .foregroundStyle(Sixes.side(state.number.colour))
+                    Spacer(minLength: 8)
+                    StateView(state: state.state)
+                }
+            }
+
+            if let strip = state.strip, !strip.isEmpty {
+                HStack(alignment: .top, spacing: 8) {
+                    ForEach(Array(strip.enumerated()), id: \.offset) { _, c in
+                        MatchColumn(col: c)
+                    }
+                }
+            }
+
+            FooterView(footer: state.footer, thru: state.thru,
+                       isStale: isStale)
+        }
+    }
+}
+
+/// One match: two dots, the pairing, the figure, the rule.
+///
+/// The third column — the two other men playing each other — is **held back,
+/// never dropped.** It has to be on the card because Triple Nassau settles
+/// three ways and the question after the round is not *did I win* but **who
+/// owes whom**: a golfer four up on Moran wants to know whether Moran is also
+/// losing to Reid.
+///
+/// **The label does not dim with the figure.** 9.5pt at 68% is a floor, not a
+/// preference — an earlier design had it at 8pt/38%, which measured 3.04:1 and
+/// went invisible under `brightness(.74)`, leaving a reader able to see a
+/// score with no way to know whose match it was.
+private struct MatchColumn: View {
+    let col: SixesActivityAttributes.ContentState.StripCol
+
+    private var figureColour: Color {
+        // Empty means ALL SQ — white, because it belongs to neither man.
+        guard let c = col.colour, !c.isEmpty else { return .white.opacity(0.80) }
+        // A settled match goes QUIET, not away: white at 50%, and the rule
+        // goes grey rather than keeping the winner's colour. Removing the
+        // column would leave a gap the reader has to interpret, and the roster
+        // of three is the one thing on this card that never changes.
+        if c == "dim" { return .white.opacity(0.50) }
+        return Sixes.side(c).opacity(col.dim ? 0.62 : 1)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 3.5) {
+                ForEach(Array((col.dots ?? []).enumerated()), id: \.offset) {
+                    _, dot in
+                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                        .fill(Sixes.side(dot))
+                        .frame(width: 5, height: 5)
+                }
+                Text(col.label)
+                    .font(Sixes.body(9.5, .bold))
+                    .tracking(0.2)
+                    .foregroundStyle(.white.opacity(col.dim ? 0.68 : 0.78))
+                    .lineLimit(1)
+                    // The label truncates and the figure never does.
+                    .truncationMode(.tail)
+            }
+            .frame(height: 12, alignment: .leading)
+
+            HStack(alignment: .top, spacing: 1) {
+                Text(col.figure)
+                    .font(Sixes.display(col.dim ? 17 : 23, .bold))
+                    .tracking(-0.7)
+                    .foregroundStyle(figureColour)
+                    .lineLimit(1)
+                    .fixedSize()
+                // A press lands on a FIGURE, not on a row — which is the
+                // difference between *somebody pressed* and *Moran pressed
+                // the back nine against you*.
+                if let chip = col.chip, !chip.isEmpty {
+                    Text(chip)
+                        .font(Sixes.body(8.5, .bold))
+                        .foregroundStyle(Sixes.orange)
+                        .baselineOffset(8)
+                }
+            }
+            .padding(.top, 2)
+
+            RoundedRectangle(cornerRadius: 1, style: .continuous)
+                .fill((col.rule ?? "").isEmpty
+                        ? .white.opacity(0.16)
+                        : Sixes.side(col.rule!).opacity(col.dim ? 0.45 : 1))
+                .frame(height: 2)
+                .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

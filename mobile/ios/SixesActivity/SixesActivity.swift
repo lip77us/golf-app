@@ -259,11 +259,37 @@ struct SixesActivityAttributes: ActivityAttributes {
             var rule: String? = nil
             /// The reader: label brighter, name and figure at full weight.
             var isReader: Bool = false
+            /// Triple Nassau: the two dots in a column head, in pairing
+            /// order. **Wolf's columns are people and these are matches**,
+            /// which is the whole reason a head needs two of them.
+            var dots: [String]? = nil
+            /// The figure's own colour — **whoever is winning that match.**
+            ///
+            /// It is what lets the card never say `DN`. A direction word is
+            /// relative to a reader, and in `MORAN·REID` there is no reader
+            /// to be relative to: `1 UP` between two other men is meaningless
+            /// until you know which. Colour answers it inside the same glyph
+            /// that carries the number, and costs no width.
+            var colour: String? = nil
+            /// A press, as an orange superscript on the figure it doubles —
+            /// `+1`. Two-player Nassau put the chip on the row; the row is now
+            /// a cell, and that is the difference between *somebody pressed*
+            /// and *Moran pressed the back nine against you*. Two presses on
+            /// one bet read `+2`, never two chips.
+            var chip: String? = nil
+            /// Held back, never dropped: the match between the other two men.
+            /// **The dimming applies to the SCORE, not to the identity of the
+            /// match** — an earlier design had its label at 8px/38%, which
+            /// measured 3.04:1 and went invisible under the always-on
+            /// reduction, leaving a reader able to see a score with no way to
+            /// know whose it was. That is the confusion the card exists to
+            /// remove, so the label keeps its size and only the figure dims.
+            var dim: Bool = false
             /// Ahead — mint, the same rule as every card in the set.
             var isLeader: Bool = false
 
             enum CodingKeys: String, CodingKey {
-                case label, name, figure, note, rule
+                case label, name, figure, note, rule, dots, colour, chip, dim
                 case isReader = "is_reader"
                 case isLeader = "is_leader"
             }

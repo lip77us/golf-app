@@ -80,10 +80,21 @@ def _bet_rows(summary, game, hole, sign):
     return rows
 
 
-def _bet_is_played(game, key) -> bool:
-    return {'front9' : game.play_front,
-            'back9'  : game.play_back,
-            'overall': game.play_overall}.get(key, False)
+def _bet_is_played(game, key, summary=None) -> bool:
+    """Whether this bet is on at all.
+
+    Takes the summary as a fallback so a caller that has one and no game
+    object can still ask — Triple Nassau reads three child summaries and never
+    touches their games. The flags are on both, and the summary's ARE the
+    game's.
+    """
+    if game is not None:
+        return {'front9' : game.play_front,
+                'back9'  : game.play_back,
+                'overall': game.play_overall}.get(key, False)
+    return bool((summary or {}).get({'front9' : 'play_front',
+                                     'back9'  : 'play_back',
+                                     'overall': 'play_overall'}[key]))
 
 
 def _holes_left(key, bet) -> int:
@@ -143,7 +154,7 @@ def _live_press_count(summary, key) -> int:
 # The exposure range
 # ---------------------------------------------------------------------------
 
-def exposure_range(summary, game, player_id):
+def exposure_range(summary, game=None, player_id=None):
     """`settled ± the sum of every live stake`, presses included.
 
     Midpoint is money already banked; half-span is what is still on the table.
@@ -177,7 +188,7 @@ def exposure_range(summary, game, player_id):
 
     live = 0.0
     for key in ('front9', 'back9', 'overall'):
-        if not _bet_is_played(game, key):
+        if not _bet_is_played(game, key, summary):
             continue
         if (summary.get(key) or {}).get('result'):
             continue                      # settled, or halved and worth nothing
@@ -193,6 +204,8 @@ def exposure_range(summary, game, player_id):
     # the card shows the capped figure rather than a number the golfer cannot
     # actually lose.
     cap = getattr(game, 'loss_cap', None)
+    if cap is None:
+        cap = (summary.get('payouts') or {}).get('loss_cap')
     if cap is not None:
         cap = float(cap)
         low, high = max(low, -cap), min(high, cap)
@@ -201,8 +214,12 @@ def exposure_range(summary, game, player_id):
 
 
 def _money(low, high) -> str:
+    # A true minus sign (U+2212), not a hyphen — the rule the whole set
+    # follows and the one card that was not. At 11px beside a `+` the hyphen
+    # is visibly the wrong length, and this row sets both within six
+    # characters of each other.
     def fmt(v):
-        return f'{"+" if v > 0 else ("-" if v < 0 else "")}${abs(v):,.0f}'
+        return f'{"+" if v > 0 else ("−" if v < 0 else "")}${abs(v):,.0f}'
     if abs(high - low) < 0.005:
         return fmt(low)                   # converged — the final number
     return f'{fmt(low)} to {fmt(high)}'

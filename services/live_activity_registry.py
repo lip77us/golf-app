@@ -511,6 +511,15 @@ def _triple_cup(foursome, player_id, *, final):
                                      thru=holes_played(foursome))
 
 
+def _triple_nassau(foursome, player_id, *, final):
+    from services.live_activity_triple_nassau import (
+        triple_nassau_activity_state, triple_nassau_final_state)
+    if final:
+        return triple_nassau_final_state(foursome, player_id=player_id)
+    return triple_nassau_activity_state(foursome, player_id=player_id,
+                                        thru=holes_played(foursome))
+
+
 def _las_vegas(foursome, player_id, *, final):
     from services.live_activity_las_vegas import (las_vegas_activity_state,
                                                   las_vegas_final_state)
@@ -557,10 +566,14 @@ BUILDERS = {
     # head — the card carries arithmetic, not news, which puts it with
     # Stableford rather than with Sixes.
     'vegas'     : _las_vegas,
+    # Triple Nassau. The registry used to say three simultaneous pairings
+    # would not fit, and the grid version proved it at 148pt and unreadable.
+    # What fits is ONE bet at a time across three columns — 122pt, second
+    # clearest in the set.
+    'triple_nassau': _triple_nassau,
     # nassau_nine still rides the NassauGame model as one match but is a
     # PARTIAL round — its holes-remaining is not 18 minus played, so it does
-    # not fit this card's state slot and is not drawn. Triple Nassau is
-    # explicitly not designed: three simultaneous pairings will not fit.
+    # not fit this card's state slot and is not drawn.
 }
 
 # Builders that need to know which slug selected them, because one card serves
@@ -613,7 +626,7 @@ CARD_KIND = {'match_18': 'match', 'fourball': 'match',
 # that have NO card today, so an ungated kind would replace nothing at all with
 # a lock-screen nag pointing at an update that does not exist.
 UNSHIPPED_KINDS: set = {'stableford', 'stroke_play', 'points', 'wolf',
-                        'triple_cup', 'vegas'}
+                        'triple_cup', 'vegas', 'triple_nassau'}
 
 
 def card_kind(slug: str) -> str:

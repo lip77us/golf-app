@@ -369,6 +369,9 @@ const List<GameMeta> kGameCatalog = [
     hostsOverlaySideGames: true,
     // Exactly three players — the round-robin is the whole point.
     exactPlayers: 3,
+    // Three matches across, one bet at a time. The card exists for one
+    // confusion: a golfer knows he is two up and cannot remember on whom.
+    hasLiveActivity: true,
     excludes    : {GameIds.sixes, GameIds.nassau, GameIds.points531},
   ),
   GameMeta(
