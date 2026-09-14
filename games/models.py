@@ -3116,6 +3116,19 @@ class VegasHoleResult(models.Model):
     points              = models.PositiveSmallIntegerField(default=0)
     multiplier          = models.PositiveSmallIntegerField(default=1)
     carry_count         = models.PositiveSmallIntegerField(default=0)
+    # How the effective number came to be what it is — recorded here because
+    # this is where the inputs are. `team1_number` is post-flip and the flip is
+    # its own inverse, so the ORIGINAL is recoverable from the stored number
+    # and this flag; without the flag it is not recoverable at all, and a
+    # surface that re-derived it from gross scores would be a second copy of
+    # the birdie rule waiting to disagree with this one.
+    team1_flipped       = models.BooleanField(default=False)
+    team2_flipped       = models.BooleanField(default=False)
+    # A net score of 10 or worse, capped to a 9 digit so the number stays two
+    # digits. The card names the cap on the hole it held, which is the only
+    # place `49` reads as a 10 and a 4 rather than as a typo.
+    team1_capped        = models.BooleanField(default=False)
+    team2_capped        = models.BooleanField(default=False)
 
     class Meta:
         unique_together = ('game', 'hole_number')

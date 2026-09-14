@@ -35,6 +35,12 @@ struct SixesActivityAttributes: ActivityAttributes {
             let game: String
             /// `SEGMENT 2 · HOLES 7-12`, or `EXTRA HOLES · 5-6`.
             let segment: String
+            /// A small chip between the game and the hole — Las Vegas' `CARRY`
+            /// while a tie is actually carrying. **A state of the round, not a
+            /// setting:** the setting is already readable from the state slot
+            /// that created it, and a permanent chip would say the round has
+            /// carries without saying which hole is carrying one.
+            var chip: String? = nil
         }
 
         struct Number: Codable, Hashable {
@@ -65,6 +71,17 @@ struct SixesActivityAttributes: ActivityAttributes {
             /// sides row is 18pt and puts any card in that packet over the
             /// 160pt ceiling on its own.
             var note: String? = nil
+            /// Las Vegas' two-digit hole number, set beside its own side's
+            /// name. **The number IS the game** — it had never been drawn
+            /// anywhere in the app before the setup screen went in — so it
+            /// does not sit at footnote size. It does not get a row of its own
+            /// either: a dedicated number row is 24pt and the names were going
+            /// on the card regardless. Beside its side it needs no label, and
+            /// the pair read as the subtraction the headline came from.
+            var figure: String? = nil
+            /// The number as it was before a birdie flipped it — `67` struck
+            /// through, then `76`. **The swing is shown rather than asserted.**
+            var was: String? = nil
         }
 
         struct MatchState: Codable, Hashable {

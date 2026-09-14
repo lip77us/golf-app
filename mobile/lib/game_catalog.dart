@@ -286,6 +286,9 @@ const List<GameMeta> kGameCatalog = [
     casual       : true,
     exactPlayers : 4,
     allowsSideGames: false,
+    // Two fixed pairs and a two-digit number a golfer cannot work out between
+    // shots — the card carries arithmetic rather than news.
+    hasLiveActivity: true,
     // Individual-ball → can host leaderboard-only overlays (docs/parallel-games.md).
     hostsOverlaySideGames: true,
     // Vegas owns the 2-digit team-number scoring model for the whole

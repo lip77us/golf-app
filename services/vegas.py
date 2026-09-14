@@ -250,16 +250,24 @@ def calculate_vegas(foursome) -> list:
 
         num1 = _team_number(n1a, n1b)
         num2 = _team_number(n2a, n2b)
+        # The 9 cap: a net of 10 or worse becomes a 9 digit, so a 10 and a 4
+        # is 49 rather than 410. Recorded per side because the card names the
+        # cap on the hole it held — the one place `49` reads as a ten.
+        cap1 = max(n1a, n1b) > 9
+        cap2 = max(n2a, n2b) > 9
         birdie1 = best_under(t1_ids, hole) >= 1
         birdie2 = best_under(t2_ids, hole) >= 1
         multiplier = 1
+        flip1 = flip2 = False
 
         if game.birdie_mode == 'flip':
             # Any team's birdie flips the OTHER team's number, before deciding.
             if birdie1:
                 num2 = _flip(num2)
+                flip2 = True
             if birdie2:
                 num1 = _flip(num1)
+                flip1 = True
 
         if num1 < num2:
             winner, diff = 'team1', num2 - num1
@@ -278,14 +286,18 @@ def calculate_vegas(foursome) -> list:
             rows.append(VegasHoleResult(
                 game=game, hole_number=hole, team1_number=num1,
                 team2_number=num2, winner='halved', points=0,
-                multiplier=1, carry_count=carry))
+                multiplier=1, carry_count=carry,
+                team1_flipped=flip1, team2_flipped=flip2,
+                team1_capped=cap1, team2_capped=cap2))
         else:
             carry_mult = (carry + 1) if game.carryover else 1
             points = diff * multiplier * carry_mult
             rows.append(VegasHoleResult(
                 game=game, hole_number=hole, team1_number=num1,
                 team2_number=num2, winner=winner, points=points,
-                multiplier=multiplier, carry_count=carry))
+                multiplier=multiplier, carry_count=carry,
+                team1_flipped=flip1, team2_flipped=flip2,
+                team1_capped=cap1, team2_capped=cap2))
             carry = 0
 
     if rows:
@@ -318,7 +330,7 @@ def vegas_summary(foursome) -> dict:
             'carryover': False,
             'teams': [],
             'holes': [],
-            'money': {'bet_unit': bet_unit},
+            'money': {'bet_unit': bet_unit, 'loss_cap': None},
         }
 
     team_objs = {t.team_number: t for t in game.teams.prefetch_related('players')}
@@ -365,7 +377,9 @@ def vegas_summary(foursome) -> dict:
         {'hole': h.hole_number, 'team1_number': h.team1_number,
          'team2_number': h.team2_number, 'winner': h.winner,
          'points': h.points, 'multiplier': h.multiplier,
-         'carry': h.carry_count}
+         'carry': h.carry_count,
+         'team1_flipped': h.team1_flipped, 'team2_flipped': h.team2_flipped,
+         'team1_capped': h.team1_capped, 'team2_capped': h.team2_capped}
         for h in holes
     ]
     # Order the per-hole chips by PLAY ORDER (14,15,…,18,1) rather than hole
@@ -446,5 +460,10 @@ def vegas_summary(foursome) -> dict:
             'holes'        : scorecard_holes,
             'holes_in_play': order,
         },
-        'money': {'bet_unit': bet_unit},
+        # The per-side round cap. Surfaced because a frozen money figure with
+        # no explanation beside it is the one way the lock-screen card could
+        # mislead — a pair 212 points down is not tracking the arithmetic.
+        'money': {'bet_unit': bet_unit,
+                  'loss_cap': (float(game.loss_cap)
+                               if game.loss_cap is not None else None)},
     }

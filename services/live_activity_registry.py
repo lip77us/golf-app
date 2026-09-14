@@ -511,6 +511,15 @@ def _triple_cup(foursome, player_id, *, final):
                                      thru=holes_played(foursome))
 
 
+def _las_vegas(foursome, player_id, *, final):
+    from services.live_activity_las_vegas import (las_vegas_activity_state,
+                                                  las_vegas_final_state)
+    if final:
+        return las_vegas_final_state(foursome, player_id=player_id)
+    return las_vegas_activity_state(foursome, player_id=player_id,
+                                    thru=holes_played(foursome))
+
+
 def _banker(foursome, player_id, *, final):
     from services.live_activity_banker import (banker_activity_state,
                                                banker_final_state)
@@ -544,6 +553,10 @@ BUILDERS = {
     'points_531': _points,
     'wolf'      : _wolf,
     'triple_cup': _triple_cup,
+    # Las Vegas. Two fixed pairs and a number a golfer cannot work out in his
+    # head — the card carries arithmetic, not news, which puts it with
+    # Stableford rather than with Sixes.
+    'vegas'     : _las_vegas,
     # nassau_nine still rides the NassauGame model as one match but is a
     # PARTIAL round — its holes-remaining is not 18 minus played, so it does
     # not fit this card's state slot and is not drawn. Triple Nassau is
@@ -600,7 +613,7 @@ CARD_KIND = {'match_18': 'match', 'fourball': 'match',
 # that have NO card today, so an ungated kind would replace nothing at all with
 # a lock-screen nag pointing at an update that does not exist.
 UNSHIPPED_KINDS: set = {'stableford', 'stroke_play', 'points', 'wolf',
-                        'triple_cup'}
+                        'triple_cup', 'vegas'}
 
 
 def card_kind(slug: str) -> str:

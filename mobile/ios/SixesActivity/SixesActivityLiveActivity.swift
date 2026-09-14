@@ -133,7 +133,7 @@ private struct LockScreenView: View {
     static let known: Set<String> = ["sixes", "rabbit", "nassau", "skins",
                                      "match", "survivor", "sequoya", "banker",
                                      "stableford", "stroke_play", "points",
-                                     "wolf", "triple_cup"]
+                                     "wolf", "triple_cup", "vegas"]
 
     let state: SixesActivityAttributes.ContentState
     var isStale: Bool = false
@@ -162,6 +162,8 @@ private struct LockScreenView: View {
                 PointsBoardView(state: state, rows: rows, isStale: isStale)
             } else if state.kind == "triple_cup" {
                 TripleCupBoardView(state: state, isStale: isStale)
+            } else if state.kind == "vegas" {
+                VegasBoardView(state: state, isStale: isStale)
             } else {
                 BoardView(state: state, isStale: isStale)
             }
@@ -975,6 +977,118 @@ private struct TripleCupBoardView: View {
     }
 }
 
+/// Las Vegas — two fixed pairs, and a number a golfer cannot work out in his
+/// head (`handoff-las-vegas-lock/HANDOFF.md`).
+///
+/// Each hole a side's two net scores become digits, low as the tens: a 4 and a
+/// 5 is `45`. The lower number wins and the DIFFERENCE is the points. 45
+/// against 57 is twelve points at a quarter a point; a birdie against a bad
+/// hole is ninety. **This card carries arithmetic, not news**, which puts it
+/// with Stableford rather than with Sixes.
+///
+/// **The headline is SIGNED, which is a departure from every other match
+/// card.** Those headline a neutral margin and name both sides to fix the
+/// perspective problem — four golfers read the same string and the pairing
+/// changes at the turn. Vegas has no such problem: the sides are fixed at
+/// setup and never change, so a signed figure that agrees with the money two
+/// rows below is worth more than a neutral one that does not.
+///
+/// The same fact is why **the reader's own side is blue on his own phone**,
+/// assigned per reader rather than per team record. On a card whose headline
+/// is signed, two golfers in one group seeing the same hole in opposite
+/// colours is not a cosmetic difference.
+///
+/// At 129pt this is the clearest card in the set, and what leaves the room is
+/// **the sides line doing two jobs in 18pt.**
+private struct VegasBoardView: View {
+    let state: SixesActivityAttributes.ContentState
+    var isStale: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            if let ribbon = state.ribbon, !ribbon.isEmpty {
+                StrokeRibbon(text: ribbon, tone: "gold")
+            }
+            HeaderView(header: state.header)
+
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(alignment: .lastTextBaseline, spacing: 11) {
+                    Text(state.number.text)
+                        .font(Sixes.display(32, .bold))
+                        .tracking(-1)
+                        .monospacedDigit()
+                        .foregroundStyle(Sixes.side(state.number.colour))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Spacer(minLength: 8)
+                    StateView(state: state.state,
+                              colour: state.state.colour.map(Sixes.side))
+                }
+                VegasSidesView(sides: state.sides)
+            }
+
+            TeeRow(tee: state.tee)
+            FooterView(footer: state.footer, thru: state.thru,
+                       isStale: isStale)
+        }
+    }
+}
+
+/// `● Kelly & Moran 45   ● Reid & Naylor 57`.
+///
+/// **Names shrink, numbers never do.** If the row runs long the names take the
+/// truncation and the figures stay `fixedSize` — a truncated name is
+/// survivable and a truncated number is not. Same rule the Skins header
+/// arrived at from the other direction.
+///
+/// The winning side sits at full opacity and the other at 62%, and **that
+/// opacity difference is the only thing marking who won the hole**, so it has
+/// to survive the always-on reduction. It also replaces the *who took that
+/// one* sentence — two numbers and a weight difference say it without words,
+/// the same call the Points card makes with its award column.
+private struct VegasSidesView: View {
+    let sides: [SixesActivityAttributes.ContentState.Side]
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            ForEach(Array(sides.enumerated()), id: \.offset) { _, side in
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    if !side.colour.isEmpty {
+                        Circle()
+                            .fill(Sixes.side(side.colour))
+                            .frame(width: 5, height: 5)
+                    }
+                    Text(side.names)
+                        .font(Sixes.body(12.5, .semibold))
+                        .foregroundStyle(.white.opacity(side.leading
+                                                        ? 1 : 0.62))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    // The number as it was, struck through, before the number
+                    // it became — so a flip is visible rather than asserted.
+                    if let was = side.was, !was.isEmpty {
+                        Text(was)
+                            .font(Sixes.body(12, .semibold))
+                            .monospacedDigit()
+                            .strikethrough(true, color: .white.opacity(0.40))
+                            .foregroundStyle(.white.opacity(0.40))
+                            .fixedSize()
+                    }
+                    if let figure = side.figure, !figure.isEmpty {
+                        Text(figure)
+                            .font(Sixes.display(15, .bold))
+                            .monospacedDigit()
+                            .foregroundStyle(Sixes.side(side.colour)
+                                             .opacity(side.leading ? 1 : 0.72))
+                            .fixedSize()
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+}
+
 /// The sides line — entries ACROSS, never down.
 ///
 /// **This is where the card's height comes from.** Holes 13–18 run two
@@ -1251,6 +1365,20 @@ private struct HeaderView: View {
                 .font(Sixes.body(10, .bold))
                 .tracking(1.1)
                 .foregroundStyle(.white.opacity(0.82))
+            if let chip = header.chip, !chip.isEmpty {
+                // Orange, because across this set orange means *somebody did
+                // this* or *this is not the standard case*. A carry is the
+                // rules stepping in.
+                Text(chip)
+                    .font(Sixes.body(8.5, .bold))
+                    .tracking(0.6)
+                    .foregroundStyle(Sixes.orange)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Sixes.orange.opacity(0.20),
+                                in: RoundedRectangle(cornerRadius: 4,
+                                                     style: .continuous))
+            }
             Spacer(minLength: 4)
             Text(header.segment)
                 .font(Sixes.body(10, .semibold))

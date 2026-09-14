@@ -3432,6 +3432,72 @@ Survivor also keeps a private `_gross_to_par` returning `(to_par, played)` for
 the running card. Handing that tuple to the shared formatter is what drew
 nothing on the first run of the closing card.
 
+## Las Vegas lock screen — the card that carries arithmetic
+
+`services/live_activity_las_vegas.py`, `VegasBoardView`. Spec:
+`~/Downloads/handoff-las-vegas-lock/`.
+
+Each hole a side's two net scores become digits — low as the tens — so a 4 and
+a 5 is `45`. The lower number wins and the DIFFERENCE is the points. 45 against
+57 is twelve points at a quarter a point; a birdie against a bad hole is
+ninety. **Nothing else in the app swings like that, and nothing else asks a
+golfer to do two-digit subtraction between shots.** That is the whole case for
+the card, and it puts Vegas with Stableford rather than with Sixes.
+
+At **129pt** it is the clearest card in the set, and what leaves the room is
+the sides line doing two jobs in 18pt.
+
+### The headline is SIGNED — a real departure
+
+Every other match card headlines a *neutral* margin and names both sides,
+because four golfers read the same string and the pairing changes at the turn.
+**Vegas has no perspective problem to solve:** the sides are fixed at setup and
+never change. So a signed figure that agrees with the money two rows below
+beats a neutral one that does not.
+
+The same fact settles the packet's sharpest open question. **The reader's own
+side is blue, per phone** — assigned per reader, never per team record. On a
+card whose headline is signed, two golfers in one group seeing the same hole in
+opposite colours is not cosmetic.
+
+### The flip needed an engine change, and that was the point
+
+The card draws `67 → 76` with the old number struck through, so the swing is
+shown rather than asserted. `VegasHoleResult.team{1,2}_number` is stored
+POST-flip and the original was not recoverable — the flip is its own inverse,
+so all that was missing was a flag.
+
+`team{1,2}_flipped` and `team{1,2}_capped` now come off `calculate_vegas`
+(migration `games/0079`), which is where the net scores and the birdie test
+already are. **Re-deriving the birdie rule in the activity module would have
+been a second copy of it**, waiting to disagree — the same failure mode as the
+four `gross_total` implementations one commit earlier. Completed rounds show
+`False` and simply draw no strike-through; any live round self-heals, because
+the calculator deletes and rebuilds its rows on every score.
+
+### The four open questions, answered
+
+- **Which side is blue** — the reader's, per phone. Above.
+- **Three-digit numbers** — impossible, confirmed rather than assumed:
+  `_team_number()` caps each digit at 9 *before* composing, so 99 is the
+  ceiling whatever the blow-up guard is set to. The line is built for two.
+- **Multiply, drawn nowhere** — built anyway. Under multiply a birdie changes
+  what the hole is WORTH rather than what the numbers are, so the state reads
+  `24 PTS · DOUBLED` and the sides line carries no strike-through.
+- **Strokes off the low man** — deliberately NOT in the header. It changes the
+  inputs to the number; the birdie rule changes what a hole can be worth, and
+  the card cannot show that any other way. One slot, and it goes to the rule
+  that moves the money.
+
+### One thing the packet did not account for
+
+**A settled hole's `carry` is the carry it ABSORBED, not one pending.** The
+engine records it on the row that consumed it and then resets. Reading the flag
+alone put the `CARRY` chip up on the hole that *ended* the carry — the hole it
+is least true of. The chip now requires a halved hole, and a settled hole that
+absorbed one says `THE CARRY DOUBLED` instead, which the packet leaves silent
+and which otherwise leaves a reader wondering why one hole was worth triple.
+
 ### Still outstanding across the set
 
 The rest of `changed-since-delivery/` is CSS-level and already matches how we
