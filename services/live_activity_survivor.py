@@ -381,3 +381,111 @@ def survivor_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         'thru'   : thru_line(played_holes, to_par),
         'final'  : None,
     }
+
+
+def _won_survivors(summary, player_id) -> str:
+    """`Won Survivors 1, 3 and 5 of 5` — named and counted, because the
+    denominator is what makes the numerator mean anything.
+
+    **Two states here must not read like a loss**, and both were open
+    questions in the packet:
+
+    * A Survivor that reaches 18 unresolved — `no_blood`. Nobody was
+      eliminated, so nobody pays. A card that said *won 0 of 5* would be
+      telling four men they all lost a leg nobody lost.
+    * A Zombie win on 18 — `killed`. That credits the Zombie the trophy and
+      pays nothing, which the engine already does deliberately. The winner
+      genuinely won it, so it is named among the wins; what it does not do is
+      show up in the money, and the money slot says so on its own.
+    """
+    survivors = summary.get('survivors') or []
+    done = [s for s in survivors if s.get('complete')]
+    mine = [s for s in done if s.get('winner_id') == player_id]
+    total = len(survivors)
+
+    if not done:
+        return 'No Survivor was decided'
+    if not mine:
+        # Everything played out and none of it was his — which is a real
+        # result, unlike having nothing to report.
+        no_blood = [s for s in done if s.get('outcome') == 'no_blood']
+        if len(no_blood) == len(done):
+            return f'No blood in any of {total}'
+        return f'Won none of {total}'
+
+    nums = ', '.join(str(s.get('index')) for s in mine[:-1])
+    last = str(mine[-1].get('index'))
+    listed = f'{nums} and {last}' if nums else last
+    word = 'Survivor' if len(mine) == 1 else 'Survivors'
+    return f'Won {word} {listed} of {total}'
+
+
+def _settle_line(players, mine) -> str:
+    money = float((mine or {}).get('money') or 0)
+    if money > 0:
+        owe = [p for p in players if float(p.get('money') or 0) < 0]
+        names = ' and '.join((p.get('short_name') or p.get('name') or '')
+                             for p in owe)
+        return f'Collect from {names}' if names else ''
+    if money < 0:
+        owed = [p for p in players if float(p.get('money') or 0) > 0]
+        names = ' and '.join((p.get('short_name') or p.get('name') or '')
+                             for p in owed)
+        return f'Pay {names}' if names else ''
+    # **Never `$0` and never a loss.** A round where every Survivor ran out of
+    # holes is one where nothing changed hands, and that is a state the packet
+    # says explicitly must not read as a defeat.
+    return 'Nothing changed hands'
+
+
+def survivor_final_state(foursome, *, player_id=None) -> dict:
+    """Round sign-off — **the fitted card keeps its shape.**
+
+    Survivor's running card is a word, a state slot, a sides line and a track.
+    Three of those four still have something to say at the end, so the board
+    stays: the headline turns from *are you still in it* into what that was
+    worth, and the track — which was only ever about the Survivor being played
+    — comes off.
+
+    The `who` row comes BACK, which the fitted running card deleted on purpose
+    (19pt spent telling a man his own name). On the closing card it is doing a
+    different job: this is the frame that gets screenshotted and sent to the
+    group, and a money figure with no name on it is not evidence of anything.
+    """
+    from services.survivor import survivor_summary
+    from services.live_activity_registry import (gross_to_par, gross_total,
+                                                 par_total, thru_line)
+
+    summary = survivor_summary(foursome)
+    players = summary.get('players') or []
+    if not players:
+        return {}
+    mine = next((p for p in players if p.get('player_id') == player_id), None)
+
+    gross = gross_total(summary, player_id)
+    par = par_total(summary)
+
+    money = float((mine or {}).get('money') or 0)
+    return {
+        'kind'  : KIND,
+        'header': {'game': 'SURVIVOR', 'segment': 'ROUND COMPLETE'},
+        'who'   : (mine or {}).get('name', ''),
+        'closed': True,
+        'number': {'text': _cash(money) if money else 'EVEN',
+                   'colour': 'mint'},
+        'sides' : [
+            {'names': _won_survivors(summary, player_id),
+             'colour': '', 'leading': False},
+            {'names': _settle_line(players, mine),
+             'colour': '', 'leading': False},
+        ],
+        'state' : {'word': f'{gross:g}' if gross else '',
+                   'to_play': f'PAR {par}' if par else 'GROSS'},
+        'pips'  : [],
+        'final' : None,
+        'footer': {'context': 'Dismisses in 5 min', 'money': ''},
+        # The registry's, not this module's `_gross_to_par` — that one
+        # returns `(to_par, played)` for the running card's own use, and
+        # handing a tuple to the formatter is how it drew nothing.
+        'thru'  : thru_line(18, gross_to_par(summary, player_id)),
+    }

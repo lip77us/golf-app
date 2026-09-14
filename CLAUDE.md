@@ -3362,13 +3362,75 @@ Every per-card test asserted the *contents* of its own final. None asserted the
 owns it. `FinalStateShapeTests` now checks it across the set, in both
 directions — and one Banker test was pinning the bug, asserting `headline`.
 
-### Rabbit, Nassau and Survivor still have no closing frame
+### Rabbit, Nassau and Survivor — and the rule that decides which card ends how
 
-`{}` from the registry, which means `push_round` skips them entirely — **no end
-push at all**, so those activities linger until iOS times them out rather than
-settling under a result. Not fixed here; listed in
-`test_every_card_signs_off_with_something` so the gap is visible and so a
-fourth cannot join them quietly.
+All three now have one, so **every card in the set signs off**. The test that
+listed them as exceptions is now an assertion that the list is empty, which is
+the only version that keeps working: a card added tomorrow with a `{}` final
+fails there instead of being quietly appended to a set of allowances.
+
+Building these settled a question the two patterns had left open. It is not
+old cards versus new ones:
+
+> **A card keeps its board when the board still has something to say, and gets
+> the three-line replacement when it does not.**
+
+Nassau is the clean case for the replacement. Its running frame is two match
+rows and two named sides, and a settled nine *leaves the card* by the game's
+own rule — a row that cannot change spends space on history. When the last one
+settles there is no board with empty slots, there is nothing. Sixes, Skins,
+Match, Sequoya and Banker are the same shape.
+
+Rabbit and Survivor keep theirs: a headline, a state slot and a personal line
+all still have something to report. Rabbit's headline turns into the money and
+its state slot into `83 · GROSS`; Survivor's headline turns from *are you still
+in it* into what that was worth, and its track — only ever about the Survivor
+being played — comes off.
+
+**Survivor's `who` row comes back**, which the fitted running card deleted on
+purpose (19pt spent telling a man his own name). On the closing frame it is
+doing a different job: this is the card that gets screenshotted and sent to the
+group, and a money figure with no name on it is not evidence of anything.
+
+Three pieces of copy that are about not reading like a loss — two of them the
+Survivor packet's own open questions:
+
+- **A Survivor that reaches 18 unresolved** (`no_blood`). Nobody was
+  eliminated, so nobody pays. *Won 0 of 5* would be telling four men they all
+  lost a leg nobody lost.
+- **A Zombie win on 18** (`killed`) credits the trophy and pays nothing, which
+  the engine already does deliberately. He genuinely won it, so it is named
+  among the wins; it simply does not appear in the money.
+- **Nassau with everything halved** says `Nothing settled`, not silence — on a
+  card whose whole job was a money forecast, a blank reads as a failed fetch.
+
+Rabbit's wins name **the extras as extras**, never as rabbits four and five: a
+round that opens as three can finish as five, and a golfer told he won *rabbit
+5* would go looking for it on a card that shows three.
+
+`FinalView` also gained the footer it had been dropping. Every card signing off
+that way was sending one; Nassau's `The range has converged` is what made it
+visible, since it is that card's own argument for why it never needed a special
+final treatment until now.
+
+### The duplication lesson that did not take the first time
+
+`gross_to_par` carries a comment about three copies of one traversal, each
+guessing at the key a summary uses for per-hole scores, one of them guessing
+wrong and failing **invisibly**. Building these finals I wrote four more — and
+two of them read the `scorecard` block, which carries scores under `scores`
+where the `holes` block carries them under `entries`. Both returned 0 and drew
+an empty state slot. Exactly the failure the comment describes, in the same
+file, under the comment.
+
+There is now one `gross_total()` and one `par_total()` beside it, and every
+card calls them. The one genuine exception is Stroke Play, whose holes belong
+to the standings ROW rather than to the summary — noted at the call site so it
+does not read as another stray copy.
+
+Survivor also keeps a private `_gross_to_par` returning `(to_par, played)` for
+the running card. Handing that tuple to the shared formatter is what drew
+nothing on the first run of the closing card.
 
 ### Still outstanding across the set
 

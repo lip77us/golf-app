@@ -209,3 +209,58 @@ class RabbitDispatchTests(TestCase):
         from services.live_activity_registry import activity_state
         self.assertNotIn('accent', activity_state(self.round, self.user)
                          ['header'])
+
+
+class RabbitFinalTests(RabbitActivityTests):
+    """**Rabbit keeps its board.** A headline, a state slot and a personal
+    line all still have something to say when the round is over, so the slots
+    are repurposed rather than replaced — the newer packets' pattern, not the
+    three-line card Sixes signs off with.
+    """
+
+    def _final(self, who='Paul'):
+        from services.live_activity_rabbit import rabbit_final_state
+        return rabbit_final_state(self.fs, player_id=self.pid[who])
+
+    def _play_out(self):
+        for h in range(1, 19):
+            self._play(h, 5, 4, 6)      # Paul low every hole
+
+    def test_the_headline_becomes_the_money(self):
+        self._play_out()
+        s = self._final()
+        self.assertTrue(s['number']['text'].startswith(('+$', '−$')))
+        self.assertTrue(s['closed'])
+
+    def test_the_state_slot_is_the_gross_inline(self):
+        """Drawn stacked at 34px over 9px and inlined across every final in
+        the set by the height audit — it was restating the locked corner two
+        rows down anyway."""
+        self._play_out()
+        st = self._final()['state']
+        self.assertEqual(st['to_play'], 'GROSS')
+        self.assertTrue(st['word'].isdigit())
+
+    def test_it_names_what_was_won_and_who_to_see(self):
+        self._play_out()
+        sides = self._final()['sides']
+        self.assertEqual(len(sides), 2)
+        self.assertTrue(sides[0]['names'].startswith('Won'))
+        self.assertTrue(sides[1]['names'].startswith(
+            ('Collect from', 'Pay', 'Nothing')))
+
+    def test_the_extras_are_named_as_extras(self):
+        """A round that opens as three rabbits can finish as five, and a
+        golfer told he won *rabbit 5* would go looking for it on a card that
+        shows three."""
+        from services.live_activity_rabbit import _won_line
+        segs = [{'complete': True, 'holder_id': 1, 'index': 3,
+                 'is_extra': False},
+                {'complete': True, 'holder_id': 1, 'index': 4,
+                 'is_extra': True}]
+        self.assertEqual(_won_line(segs, 1),
+                         'Won rabbit 3 and the last extra')
+
+    def test_a_reader_who_won_nothing_is_not_left_blank(self):
+        self._play_out()
+        self.assertTrue(self._final('Sam')['sides'][0]['names'])

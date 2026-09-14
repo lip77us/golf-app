@@ -287,3 +287,65 @@ class NassauContractTests(TestCase):
                                  {'label', 'text', 'colour', 'note', 'chip'})
             self.assertGreaterEqual(set(row),
                                     {'label', 'text', 'colour', 'note'})
+
+
+class NassauFinalTests(NassauActivityTests):
+    """**The one card in the set with no board left to keep.**
+
+    Nassau's running frame is two match rows and two named sides. When the
+    matches settle the rows leave the card by the game's own rule — *a row
+    that cannot change spends space on history* — and what remains is not a
+    board with empty slots, it is nothing. So this is the three-line
+    replacement card, the same one Sixes signs off with.
+    """
+
+    def _final(self, who='Paul'):
+        from services.live_activity_nassau import nassau_final_state
+        return nassau_final_state(self.fs, player_id=self.pid[who])
+
+    def _play_out(self):
+        for h in range(1, 19):
+            self._play(h, 4, 5)         # Paul wins every hole
+
+    def test_it_is_the_replacement_card_not_the_board(self):
+        self._play_out()
+        s = self._final()
+        self.assertIsNotNone(s['final'])
+        self.assertEqual(s['sides'], [])
+        self.assertEqual(s['state'], {'word': '', 'to_play': ''})
+
+    def test_it_uses_the_keys_swift_decodes(self):
+        """`amount`, not `headline` — the mistake Banker and Sequoya both
+        shipped, which drops the whole content-state on the phone."""
+        self._play_out()
+        self.assertEqual(set(self._final()['final']),
+                         {'amount', 'detail', 'collect'})
+
+    def test_the_detail_names_the_bets_rather_than_counting_them(self):
+        """`Won 3 of 4` is the same sentence for a golfer who took both nines
+        and one who took the eighteen and a press, and those are very
+        different afternoons."""
+        self._play_out()
+        detail = self._final()['final']['detail']
+        self.assertIn('nine', detail)
+        self.assertIn('the eighteen', detail)
+
+    def test_the_loser_reads_the_same_bets_from_his_own_side(self):
+        self._play_out()
+        self.assertTrue(self._final('Dave')['final']['detail']
+                        .startswith('Lost '))
+
+    def test_the_footer_says_the_range_converged(self):
+        """The card's own argument for why it never needed a special final
+        until now: every bet that settles pulls the two ends of the exposure
+        figure together, and on the 18th green they meet."""
+        self._play_out()
+        self.assertEqual(self._final()['footer']['context'],
+                         'The range has converged')
+
+    def test_a_halved_round_is_not_a_loss(self):
+        for h in range(1, 19):
+            self._play(h, 4, 4)
+        s = self._final()
+        self.assertEqual(s['final']['amount'], 'EVEN')
+        self.assertIn('Nothing settled', s['final']['detail'])

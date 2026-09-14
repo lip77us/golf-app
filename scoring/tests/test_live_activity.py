@@ -573,9 +573,11 @@ class FinalStateShapeTests(TestCase):
         `push_round` skips an empty state — so the activity lingers until iOS
         times it out rather than settling under a result.
 
-        Rabbit, Nassau and Survivor are the three that still do this. They are
-        listed rather than fixed here so the gap is visible; the five cards
-        this packet added are not on it.
+        **Every card in the set now has one.** This began as a list of the
+        three that did not (Rabbit, Nassau, Survivor) and is now an assertion
+        that the list is empty, which is the only version of it that keeps
+        working: a card added tomorrow with a `{}` final fails here instead of
+        being quietly appended to an exceptions set.
         """
         from services.live_activity_registry import BUILDERS
         import inspect
@@ -584,6 +586,6 @@ class FinalStateShapeTests(TestCase):
             src = inspect.getsource(fn)
             if 'if final:' in src and 'return {}' in src:
                 blank.add(kind)
-        self.assertEqual(blank, {'rabbit', 'nassau', 'survivor'},
-                         'a card gained or lost a closing frame — if it '
-                         'gained one, take it off this list')
+        self.assertEqual(blank, set(),
+                         f'{blank} would leave an activity on a lock screen '
+                         f'with no closing frame and no end push')

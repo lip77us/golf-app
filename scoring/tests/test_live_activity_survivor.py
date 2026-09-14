@@ -449,3 +449,80 @@ class FittedCardTests(TestCase):
     def test_the_corner_becomes_a_real_count_once_a_hole_lands(self):
         self._play(1, 4, 4, 4)
         self.assertEqual(self._state()['thru'], 'THRU 1 · E')
+
+
+class SurvivorFinalTests(SurvivorCardTests):
+    """**The fitted card keeps its shape**, and the `who` row comes back.
+
+    The running card deleted that row on purpose — 19pt spent telling a man
+    his own name on his own lock screen. On the closing frame it is doing a
+    different job: this is the card that gets screenshotted and sent to the
+    group, and a money figure with no name on it is not evidence of anything.
+    """
+
+    def _final(self, who='Ann'):
+        from services.live_activity_survivor import survivor_final_state
+        return survivor_final_state(self.fs, player_id=self.pid[who])
+
+    def _play_out(self):
+        for h in range(1, 19):
+            self._play(h, 4, 5, 6)      # Ann low, Cal out first
+
+    def test_the_headline_turns_from_a_word_into_money(self):
+        """The running card headlines whether you are still in it. At the end
+        the question is what that was worth."""
+        self._play_out()
+        s = self._final()
+        self.assertTrue(s['number']['text'].startswith(('+$', '−$'))
+                        or s['number']['text'] == 'EVEN')
+        self.assertTrue(s['closed'])
+
+    def test_the_reader_is_named_again(self):
+        self._play_out()
+        self.assertEqual(self._final()['who'], 'Ann')
+
+    def test_the_track_comes_off(self):
+        """It was only ever about the Survivor being played, and there isn't
+        one."""
+        self._play_out()
+        self.assertIsNone(self._final().get('track'))
+
+    def test_the_state_slot_pairs_the_gross_with_the_par(self):
+        self._play_out()
+        st = self._final()['state']
+        self.assertTrue(st['word'].isdigit())
+        self.assertTrue(st['to_play'].startswith('PAR '))
+
+    def test_it_counts_the_wins_against_a_denominator(self):
+        """`Won Survivors 1, 3 and 5 of 5` — the denominator is what makes the
+        numerator mean anything."""
+        self._play_out()
+        line = self._final()['sides'][0]['names']
+        self.assertIn(' of ', line)
+
+    # -- the packet's two open questions, both "must not read like a loss" --
+
+    def test_a_survivor_that_ran_out_of_holes_is_not_a_defeat(self):
+        """No blood, nothing carried. A card saying *won 0 of 5* would be
+        telling four men they all lost a leg nobody lost."""
+        from services.live_activity_survivor import _won_survivors
+        done = [{'complete': True, 'winner_id': None, 'outcome': 'no_blood',
+                 'index': 1}]
+        self.assertIn('No blood', _won_survivors(
+            {'survivors': done}, self.pid['Ann']))
+
+    def test_nothing_changing_hands_is_stated_rather_than_printed_as_zero(self):
+        from services.live_activity_survivor import _settle_line
+        self.assertEqual(
+            _settle_line([{'player_id': 1, 'money': 0.0, 'name': 'Ann'}],
+                         {'player_id': 1, 'money': 0.0, 'name': 'Ann'}),
+            'Nothing changed hands')
+
+    def test_a_zombie_win_still_counts_as_a_win(self):
+        """`killed` credits the Zombie the trophy and pays nothing — the
+        engine's deliberate call. He genuinely won it, so it is named among
+        the wins; what it does not do is show up in the money."""
+        from services.live_activity_survivor import _won_survivors
+        s = {'survivors': [{'complete': True, 'winner_id': 7,
+                            'outcome': 'killed', 'index': 2}]}
+        self.assertIn('Survivor 2', _won_survivors(s, 7))

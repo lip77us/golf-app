@@ -108,6 +108,36 @@ def gross_to_par(summary, player_id):
     return total if played else None
 
 
+def gross_total(summary, player_id) -> int:
+    """The reader's gross TOTAL, from any game's summary — `83`, not `+11`.
+
+    Beside `gross_to_par` and reading the same holes by the same key-fallback,
+    for the reason written above it: four closing cards each grew their own
+    version of this while it was being built, and two of them read the
+    `scorecard` block — which carries the scores under `scores` where the
+    `holes` block carries them under `entries`. Both returned 0 and drew an
+    empty state slot, which is the invisible failure that comment is about.
+
+    **The lesson did not take the first time it was written down.** One
+    implementation, and every card calls it.
+    """
+    if player_id is None:
+        return 0
+    total = 0
+    for hole in (summary.get('holes') or []):
+        for e in (hole.get('scores') or hole.get('players')
+                  or hole.get('entries') or []):
+            if e.get('player_id') == player_id and e.get('gross'):
+                total += e['gross']
+    return total
+
+
+def par_total(summary) -> int:
+    """The par of the holes actually played — Survivor's closing card pairs
+    the gross with it rather than making the reader supply the course."""
+    return sum((h.get('par') or 0) for h in (summary.get('holes') or []))
+
+
 def fmt_to_par(v) -> str:
     """`+7` / `E` / `−2`, the way a scoreboard writes it."""
     if v is None:
@@ -379,18 +409,19 @@ def _sixes(foursome, player_id, *, final):
 # for every side game and for the shapes design has not drawn — Triple Nassau
 # among them, where three simultaneous pairings will not fit two rows.
 def _rabbit(foursome, player_id, *, final):
-    from services.live_activity_rabbit import rabbit_activity_state
+    from services.live_activity_rabbit import (rabbit_activity_state,
+                                               rabbit_final_state)
     if final:
-        # TODO: the closing frame — what you won and who to see.
-        return {}
+        return rabbit_final_state(foursome, player_id=player_id)
     return rabbit_activity_state(foursome, player_id=player_id,
                                  thru=holes_played(foursome))
 
 
 def _nassau(foursome, player_id, *, final):
-    from services.live_activity_nassau import nassau_activity_state
+    from services.live_activity_nassau import (nassau_activity_state,
+                                               nassau_final_state)
     if final:
-        return {}   # TODO: the closing frame
+        return nassau_final_state(foursome, player_id=player_id)
     return nassau_activity_state(foursome, player_id=player_id,
                                  thru=holes_played(foursome))
 
@@ -414,9 +445,10 @@ def _match(foursome, player_id, *, final, slug):
 
 
 def _survivor(foursome, player_id, *, final):
-    from services.live_activity_survivor import survivor_activity_state
+    from services.live_activity_survivor import (survivor_activity_state,
+                                                 survivor_final_state)
     if final:
-        return {}   # TODO: the closing frame — money becomes the headline
+        return survivor_final_state(foursome, player_id=player_id)
     return survivor_activity_state(foursome, player_id=player_id,
                                    thru=holes_played(foursome))
 

@@ -236,6 +236,9 @@ def stableford_final_state(round_obj, foursome, *, player_id=None) -> dict:
     pts = mine.get('total_points')
     rank = mine.get('rank') or 0
     best = max((r.get('total_points') or 0) for r in results)
+    # Stableford's row carries its own per-hole gross dict, which is the one
+    # shape `gross_total` does not read — the summary's `holes` block is the
+    # scorecard's, not this row's.
     gross = sum((mine.get('gross') or {}).values())
 
     # `1st of 4, won by 3` / `3rd of 4, 6 behind`. The field size is what makes

@@ -232,9 +232,10 @@ def stroke_play_final_state(round_obj, foursome, *, player_id=None) -> dict:
     if float(mine.get('payout') or 0):
         placed += ' · collect at the desk'
 
-    # The row carries `total_net` and the per-hole detail, not a gross
-    # total — the leaderboard has never needed one. Summed rather than added
-    # to the summary: this is the only surface that asks for it.
+    # The row carries `total_net` and the per-hole detail, not a gross total
+    # — the leaderboard has never needed one. Its holes are the ROW's, not the
+    # summary's, so this is the one card the shared `gross_total` cannot
+    # serve; the key it reads is the same one.
     gross = sum((h.get('gross') or 0) for h in (mine.get('holes') or []))
     return {
         'kind'  : KIND,

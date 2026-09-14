@@ -148,7 +148,8 @@ private struct LockScreenView: View {
             if let kind = state.kind, !Self.known.contains(kind) {
                 UnsupportedView(header: state.header)
             } else if let final = state.final {
-                FinalView(header: state.header, final: final)
+                FinalView(header: state.header, final: final,
+                          footer: state.footer)
             } else if state.kind == "rabbit" {
                 RabbitBoardView(state: state, isStale: isStale)
             } else if state.kind == "nassau", let rows = state.rows {
@@ -1425,9 +1426,20 @@ private struct UnsupportedView: View {
 }
 
 /// The last state is not a scoreboard. What you won, and who to see.
+///
+/// **The replacement card, and only five games use it.** Sixes, Skins, Match,
+/// Sequoya, Banker and Nassau end with nothing worth keeping — their running
+/// frames are match rows and named sides, and when the matches settle there is
+/// no board left, just empty slots. The other cards keep theirs: a headline, a
+/// state slot and a personal line all still have something to say.
 private struct FinalView: View {
     let header: SixesActivityAttributes.ContentState.Header
     let final: SixesActivityAttributes.ContentState.Final
+    /// Drawn when there is one. Every card that signs off this way has been
+    /// sending a footer and this view was dropping it — Nassau's `The range
+    /// has converged` is the line that made that visible, since it is the
+    /// card's own argument for why it never needed a special final until now.
+    var footer: SixesActivityAttributes.ContentState.Footer? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -1442,6 +1454,9 @@ private struct FinalView: View {
             Text(final.collect)
                 .font(Sixes.body(12, .semibold))
                 .foregroundStyle(.white.opacity(0.92))
+            if let footer, !footer.context.isEmpty || !footer.money.isEmpty {
+                FooterView(footer: footer)
+            }
         }
     }
 }

@@ -244,3 +244,106 @@ def rabbit_activity_state(foursome, *, player_id=None, thru=None) -> dict:
             'money'  : _money(summary, player_id),
         },
     }
+
+
+def _cash(v) -> str:
+    """A true minus sign, matching the headline everywhere else in the set."""
+    sign = '+' if v > 0 else ('−' if v < 0 else '')
+    return f'{sign}${abs(v):,.0f}'
+
+
+def _settle_line(players, mine) -> str:
+    """Who to see. **The holder takes the stake from each of the other two**,
+    so the money genuinely moves between named men and the card can say which.
+    """
+    money = float((mine or {}).get('money') or 0)
+    if money > 0:
+        owe = [p for p in players if float(p.get('money') or 0) < 0]
+        names = ' and '.join(_first(p) for p in owe)
+        return f'Collect from {names}' if names else ''
+    if money < 0:
+        owed = [p for p in players if float(p.get('money') or 0) > 0]
+        names = ' and '.join(_first(p) for p in owed)
+        return f'Pay {names}' if names else ''
+    return 'Nothing to settle'
+
+
+def _first(p) -> str:
+    return (p.get('short_name') or p.get('name') or '').split()[0] \
+        if (p.get('short_name') or p.get('name')) else ''
+
+
+def _won_line(segments, player_id) -> str:
+    """`Won rabbit 3 and the last extra`.
+
+    **The extras are named as extras**, not as rabbits four and five. A round
+    that opens as three rabbits can finish as five, and a golfer who was told
+    he won *rabbit 5* would go looking for it on a card that shows three.
+    """
+    mine = [s for s in segments
+            if s.get('complete') and s.get('holder_id') == player_id]
+    if not mine:
+        return 'Won no rabbits'
+    legs = [s for s in mine if not s.get('is_extra')]
+    extras = [s for s in mine if s.get('is_extra')]
+    bits = []
+    if legs:
+        nums = ', '.join(str(s.get('index')) for s in legs)
+        bits.append(f'Won rabbit{"s" if len(legs) > 1 else ""} {nums}')
+    if extras:
+        word = ('the last extra' if len(extras) == 1
+                else f'{len(extras)} extras')
+        bits.append(word if bits else f'Won {word}')
+    return ' and '.join(bits)
+
+
+def rabbit_final_state(foursome, *, player_id=None) -> dict:
+    """Round sign-off — **the card keeps its shape.**
+
+    Rabbit's running card is a headline, a state slot and a line naming who
+    holds it. All three still have something to say when the round is over —
+    the money, the gross, and what you won — so the board stays and the slots
+    are repurposed, the way the newer packets do it rather than the way Sixes
+    does.
+
+    Nassau is the opposite case and gets the three-line replacement card: its
+    running frame is two match rows and two sides, and when the matches settle
+    there is no board left to keep.
+    """
+    from services.rabbit import rabbit_summary
+    from services.live_activity_registry import (gross_to_par, gross_total,
+                                                 thru_line)
+
+    summary = rabbit_summary(foursome)
+    players = summary.get('players') or []
+    if not players:
+        return {}
+    mine = next((p for p in players if p.get('player_id') == player_id), None)
+
+    money = float((mine or {}).get('money') or 0)
+    gross = gross_total(summary, player_id)
+
+    return {
+        'kind'  : KIND,
+        'header': {'game': 'RABBIT', 'segment': 'ROUND COMPLETE'},
+        'closed': True,
+        # **Settled only, and never `$0`.** A rabbit pays when it closes; a
+        # zero would say the round was played for nothing rather than that
+        # nothing was won.
+        'number': {'text': _cash(money) if money else 'EVEN',
+                   'colour': 'mint'},
+        'sides' : [
+            {'names': _won_line(summary.get('segments') or [], player_id),
+             'colour': '', 'leading': False},
+            {'names': _settle_line(players, mine),
+             'colour': '', 'leading': False},
+        ],
+        # `83 · GROSS`, inline. The design drew it stacked at 34px over 9px
+        # and the height audit inlined it across every final in the set — it
+        # was restating the locked corner two rows down anyway.
+        'state' : {'word': f'{gross:g}' if gross else '', 'to_play': 'GROSS'},
+        'pips'  : [],
+        'final' : None,
+        'footer': {'context': 'Dismisses in 5 min', 'money': ''},
+        'thru'  : thru_line(18, gross_to_par(summary, player_id)),
+    }

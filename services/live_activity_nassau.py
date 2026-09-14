@@ -289,3 +289,104 @@ def nassau_activity_state(foursome, *, player_id=None, thru=None,
         'final' : None,
         'footer': {'context': ' · '.join(bits), 'money': _money(low, high)},
     }
+
+
+def _sides_names(summary, player_id) -> tuple:
+    """(my side's names, theirs) — first names, as the running card uses."""
+    teams = summary.get('teams') or {}
+    t1 = [p.get('short_name') or p.get('name') or '' for p in (teams.get('team1') or [])]
+    t2 = [p.get('short_name') or p.get('name') or '' for p in (teams.get('team2') or [])]
+    return (t1, t2) if _reader_sign(summary, player_id) > 0 else (t2, t1)
+
+
+def _won_bets(summary, player_id) -> str:
+    """`Won the back nine, the press and the eighteen`.
+
+    **Named, not counted.** `Won 3 of 4` is the same sentence for a golfer who
+    took both nines and one who took the eighteen and a press, and those are
+    very different afternoons — which bets fell is the whole story of a Nassau.
+
+    The press sits between the nines and the eighteen because that is where it
+    was played, and a reader walks the list in the order the round happened.
+    """
+    mine = 'team1' if _reader_sign(summary, player_id) > 0 else 'team2'
+    theirs = 'team2' if mine == 'team1' else 'team1'
+
+    def bets(side):
+        out = []
+        for key, label in (('front9', 'the front nine'),
+                           ('back9', 'the back nine')):
+            if (summary.get(key) or {}).get('result') == side:
+                out.append(label)
+        presses = [p for p in (summary.get('presses') or [])
+                   if p.get('result') == side]
+        if presses:
+            out.append('the press' if len(presses) == 1
+                       else f'{len(presses)} presses')
+        if (summary.get('overall') or {}).get('result') == side:
+            out.append('the eighteen')
+        return out
+
+    won, lost = bets(mine), bets(theirs)
+    if won:
+        return 'Won ' + _join(won)
+    if lost:
+        return 'Lost ' + _join(lost)
+    # Every bet halved, or none of them resolved. **Not a loss** — and not a
+    # silence either, which on a card whose whole job was a money forecast
+    # would read as a failure to load.
+    return 'Nothing settled'
+
+
+def _join(items) -> str:
+    if len(items) == 1:
+        return items[0]
+    return ', '.join(items[:-1]) + ' and ' + items[-1]
+
+
+def nassau_final_state(foursome, *, player_id=None) -> dict:
+    """Round sign-off — **the one card in the set with no board left to keep.**
+
+    Nassau's running frame is two match rows and two named sides. When the
+    matches settle the rows leave the card by the game's own rule — *a row
+    that cannot change spends space on history* — and what is left is not a
+    board with empty slots, it is nothing. So this is the three-line
+    replacement card, the same one Sixes signs off with.
+
+    Rabbit and Survivor are the opposite case and keep their boards: a
+    headline, a state slot and a personal line all still have something to
+    say when the round is over.
+    """
+    summary = nassau_summary(foursome)
+    if not summary:
+        return {}
+
+    sign = _reader_sign(summary, player_id)
+    money = sign * float((summary.get('payouts') or {}).get('total') or 0)
+    _, theirs = _sides_names(summary, player_id)
+
+    if money > 0:
+        collect = f'Collect from {_join(theirs)}' if theirs else ''
+    elif money < 0:
+        collect = f'Pay {_join(theirs)}' if theirs else ''
+    else:
+        collect = 'All square — nothing to settle'
+
+    amount = (f'{"+" if money > 0 else "−"}${abs(money):,.0f}'
+              if money else 'EVEN')
+    return {
+        'kind'  : KIND,
+        'header': {'game': 'NASSAU', 'segment': 'ROUND COMPLETE'},
+        'number': {'text': amount, 'colour': 'neutral'},
+        'sides' : [],
+        'state' : {'word': '', 'to_play': ''},
+        'pips'  : [],
+        # **The range has converged.** Every bet that settles pulls the two
+        # ends of the exposure figure together, and on the 18th green they
+        # meet at the single number above — which is the card's own argument
+        # for why it never needed a special final treatment until now.
+        'footer': {'context': 'The range has converged', 'money': ''},
+        'final' : {'amount': amount,
+                   'detail': _won_bets(summary, player_id),
+                   'collect': collect},
+    }
