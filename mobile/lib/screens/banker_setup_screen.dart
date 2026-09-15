@@ -322,56 +322,62 @@ class _BankerSetupScreenState extends State<BankerSetupScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Banker')),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
-          child: SizedBox(
-            height: 52,
-            width: double.infinity,
-            child: FilledButton(
-              onPressed:
-                  (_saving || _loading || _firstBanker == null) ? null : _save,
-              child: _saving
-                  ? const SizedBox(width: 20, height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : Text(
-                      _editing
-                          ? 'Save changes'
-                          : bankerName == null
-                              ? 'Start'
-                              : 'Start — $bankerName banks the 1st',
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold)),
+      body: Column(children: [
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
+            children: [
+              if (_error != null) ...[
+                ErrorView(message: friendlyError(_error!), onRetry: _save),
+                const SizedBox(height: 12),
+              ],
+              _explainer(),
+              const SizedBox(height: 12),
+              _bandCard(),
+              const SizedBox(height: 12),
+              _firstBankerCard(),
+              const SizedBox(height: 12),
+              _rotationCard(),
+              const SizedBox(height: 12),
+              _handicapCard(),
+              const SizedBox(height: 12),
+              _actionCard(),
+              const SizedBox(height: 12),
+              _exposureCard(),
+              const SizedBox(height: 12),
+              _lossCapCard(),
+            ],
+          ),
+        ),
+        // Persistent Start/Save button — in-body so it stays above the soft
+        // keyboard when the wager-band / loss-cap fields are open.
+        SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
+            child: SizedBox(
+              height: 52,
+              width: double.infinity,
+              child: FilledButton(
+                onPressed:
+                    (_saving || _loading || _firstBanker == null) ? null : _save,
+                child: _saving
+                    ? const SizedBox(width: 20, height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : Text(
+                        _editing
+                            ? 'Save changes'
+                            : bankerName == null
+                                ? 'Start'
+                                : 'Start — $bankerName banks the 1st',
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
             ),
           ),
         ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
-        children: [
-          if (_error != null) ...[
-            ErrorView(message: friendlyError(_error!), onRetry: _save),
-            const SizedBox(height: 12),
-          ],
-          _explainer(),
-          const SizedBox(height: 12),
-          _bandCard(),
-          const SizedBox(height: 12),
-          _firstBankerCard(),
-          const SizedBox(height: 12),
-          _rotationCard(),
-          const SizedBox(height: 12),
-          _handicapCard(),
-          const SizedBox(height: 12),
-          _actionCard(),
-          const SizedBox(height: 12),
-          _exposureCard(),
-          const SizedBox(height: 12),
-          _lossCapCard(),
-        ],
-      ),
+      ]),
     );
   }
 

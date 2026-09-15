@@ -258,18 +258,22 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
             ? const Center(child: CircularProgressIndicator())
             : _loadError != null
                 ? ErrorView(message: _loadError!, onRetry: _loadData)
-                : _stepBody(),
-        bottomNavigationBar: (_loading || _loadError != null)
-            ? null
-            : _BottomBar(
-                step      : _step,
-                canNext   : _step == 0 ? _canAdvanceStep0 : _canAdvanceStep1,
-                canCreate : _canCreate,
-                saving    : _saving,
-                onBack    : _back,
-                onNext    : _next,
-                onCreate  : _save,
-              ),
+                : Column(children: [
+                    Expanded(child: _stepBody()),
+                    // Persistent step nav — in-body so it stays above the soft
+                    // keyboard when the golfer search or an inline
+                    // add-a-golfer field is open.
+                    _BottomBar(
+                      step      : _step,
+                      canNext   : _step == 0 ? _canAdvanceStep0
+                                             : _canAdvanceStep1,
+                      canCreate : _canCreate,
+                      saving    : _saving,
+                      onBack    : _back,
+                      onNext    : _next,
+                      onCreate  : _save,
+                    ),
+                  ]),
       ),
     );
   }

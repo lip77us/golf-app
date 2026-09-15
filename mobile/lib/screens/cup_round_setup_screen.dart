@@ -853,10 +853,12 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
           : _error != null
               ? ErrorView(
                   message: _error!, isNetwork: _networkError, onRetry: _load)
-              : _buildBody(),
-      bottomNavigationBar: (_loading || _error != null)
-          ? null
-          : _buildBottomBar(),
+              : Column(children: [
+                  Expanded(child: _buildBody()),
+                  // Persistent bar — in-body so it stays above the soft
+                  // keyboard when a cup-name / stake field is open.
+                  _buildBottomBar(),
+                ]),
     );
   }
 

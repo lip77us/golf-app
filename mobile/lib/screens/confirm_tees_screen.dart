@@ -255,32 +255,35 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Tees & Handicaps')),
-      body: _buildBody(),
-      bottomNavigationBar: (_loading || _error != null)
-          ? null
-          : SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: FilledButton(
-                    onPressed: _saving ? null : _save,
-                    child: _saving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Text('Save',
-                            style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
+      body: Column(children: [
+        Expanded(child: _buildBody()),
+        // Persistent Save button — in-body so it stays above the soft
+        // keyboard when a Playing hcp field is open.
+        if (!_loading && _error == null)
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: FilledButton(
+                  onPressed: _saving ? null : _save,
+                  child: _saving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Save',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
             ),
+          ),
+      ]),
     );
   }
 

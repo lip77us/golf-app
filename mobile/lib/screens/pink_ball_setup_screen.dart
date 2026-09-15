@@ -228,206 +228,213 @@ class _PinkBallSetupScreenState extends State<PinkBallSetupScreen> {
             ? 'Pink Ball'
             : _nameCtrl.text.trim()),
       ),
-      bottomNavigationBar: _loading ? null : SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: FilledButton(
-              // Nothing is disabled without saying why: when Save cannot
-              // fire, the button itself names the missing input rather than
-              // going grey and silent.
-              onPressed: (_saving || _saveBlocker != null) ? null : _save,
-              child: _saving
-                  ? const SizedBox(
-                      width: 20, height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : Text(
-                      _saveBlocker ??
-                          (_configured ? 'Save Changes' : 'Save Setup'),
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-            ),
-          ),
-        ),
-      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                // ── Ball colour + entry fee ──────────────────────────────
-                Card(
-                  child: Padding(
+          : Column(children: [
+              Expanded(
+                child: ListView(
                     padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Game Settings',
-                            style: theme.textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 16),
+                    children: [
+                      // ── Ball colour + entry fee ──────────────────────────────
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Game Settings',
+                                  style: theme.textTheme.titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 16),
 
-                        GolfTextField(
-                          controller: _nameCtrl,
-                          label: 'What do you call it?',
-                          hint: 'Pink Ball',
-                          // 16 characters is the iPhone 13 mini cap the Cup
-                          // work derived — it fits a leaderboard tab without
-                          // truncating and a carrier badge on a score-entry
-                          // row that already holds a name and a CH chip. The
-                          // field stops accepting at the cap rather than
-                          // truncating later.
-                          maxLength: 16,
-                          textCapitalization: TextCapitalization.words,
-                          onChanged: (_) => setState(() {}),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'The name you type is used everywhere — the '
-                          'leaderboard tab, the carrier badge, the lost-ball '
-                          'switch, the chat line and settlement.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant),
-                        ),
-                        const SizedBox(height: 8),
-                        // One tap each — shortcuts, not a list to choose from.
-                        // Anything that fits is valid.
-                        Wrap(
-                          spacing: 8,
-                          children: [
-                            for (final s in const ['Pink Ball', 'Red Ball',
-                                                   'Devil Ball', 'Beer Ball'])
-                              ActionChip(
-                                label: Text(s),
-                                onPressed: () => setState(() {
-                                  _nameCtrl.text = s;
-                                }),
+                              GolfTextField(
+                                controller: _nameCtrl,
+                                label: 'What do you call it?',
+                                hint: 'Pink Ball',
+                                // 16 characters is the iPhone 13 mini cap the Cup
+                                // work derived — it fits a leaderboard tab without
+                                // truncating and a carrier badge on a score-entry
+                                // row that already holds a name and a CH chip. The
+                                // field stops accepting at the cap rather than
+                                // truncating later.
+                                maxLength: 16,
+                                textCapitalization: TextCapitalization.words,
+                                onChanged: (_) => setState(() {}),
                               ),
-                          ],
+                              const SizedBox(height: 6),
+                              Text(
+                                'The name you type is used everywhere — the '
+                                'leaderboard tab, the carrier badge, the lost-ball '
+                                'switch, the chat line and settlement.',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant),
+                              ),
+                              const SizedBox(height: 8),
+                              // One tap each — shortcuts, not a list to choose from.
+                              // Anything that fits is valid.
+                              Wrap(
+                                spacing: 8,
+                                children: [
+                                  for (final s in const ['Pink Ball', 'Red Ball',
+                                                         'Devil Ball', 'Beer Ball'])
+                                    ActionChip(
+                                      label: Text(s),
+                                      onPressed: () => setState(() {
+                                        _nameCtrl.text = s;
+                                      }),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+
+                              GolfTextField(
+                                controller: _entryCtrl,
+                                label: 'Entry fee per player (\$)',
+                                hint: '0',
+                                prefixText: '\$ ',
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(decimal: true),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Collected from each player. '
+                                'Total pool = entry fee × number of players.',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant),
+                              ),
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 12),
+                      ),
 
-                        GolfTextField(
-                          controller: _entryCtrl,
-                          label: 'Entry fee per player (\$)',
-                          hint: '0',
-                          prefixText: '\$ ',
-                          keyboardType:
-                              const TextInputType.numberWithOptions(decimal: true),
+                      const SizedBox(height: 16),
+
+                      // ── Payout structure ─────────────────────────────────────
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Payouts',
+                                  style: theme.textTheme.titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 8),
+
+                              // Shared payout construct. Each place is a GROUP TOTAL;
+                              // the per-player breakdown shows under each field since
+                              // Pink Ball is a foursome-vs-foursome/threesome game.
+                              PayoutConfigField(
+                                pool:                _pool.round(),
+                                numPayouts:          _payoutPlaces,
+                                payoutCtrls:         _payoutCtrls,
+                                onNumPayoutsChanged: (n) =>
+                                    setState(() => _payoutPlaces = n),
+                                onPayoutChanged:     () => setState(() {}),
+                                onSuggest:           _suggest,
+                                placeSubtitle:       (i) => _perPlayerHelperFor(
+                                    double.tryParse(_payoutCtrls[i].text.trim()) ?? 0.0),
+                              ),
+
+                              if (_numPlayers == 0 && (double.tryParse(_entryCtrl.text.trim()) ?? 0) > 0) ...[
+                                const SizedBox(height: 8),
+                                Row(children: [
+                                  Icon(Icons.info_outline, size: 16,
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      'Pool depends on number of players — set payouts manually '
+                                      'or use presets after players register.',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                    ),
+                                  ),
+                                ]),
+                              ],
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Collected from each player. '
-                          'Total pool = entry fee × number of players.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                      ),
 
-                const SizedBox(height: 16),
+                      const SizedBox(height: 16),
 
-                // ── Payout structure ─────────────────────────────────────
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Payouts',
-                            style: theme.textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-
-                        // Shared payout construct. Each place is a GROUP TOTAL;
-                        // the per-player breakdown shows under each field since
-                        // Pink Ball is a foursome-vs-foursome/threesome game.
-                        PayoutConfigField(
-                          pool:                _pool.round(),
-                          numPayouts:          _payoutPlaces,
-                          payoutCtrls:         _payoutCtrls,
-                          onNumPayoutsChanged: (n) =>
-                              setState(() => _payoutPlaces = n),
-                          onPayoutChanged:     () => setState(() {}),
-                          onSuggest:           _suggest,
-                          placeSubtitle:       (i) => _perPlayerHelperFor(
-                              double.tryParse(_payoutCtrls[i].text.trim()) ?? 0.0),
-                        ),
-
-                        if (_numPlayers == 0 && (double.tryParse(_entryCtrl.text.trim()) ?? 0) > 0) ...[
-                          const SizedBox(height: 8),
-                          Row(children: [
-                            Icon(Icons.info_outline, size: 16,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant),
-                            const SizedBox(width: 6),
+                      // ── Info note ────────────────────────────────────────────
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Row(children: [
+                            Icon(Icons.info_outline,
+                                size: 18,
+                                color: theme.colorScheme.onSurfaceVariant),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'Pool depends on number of players — set payouts manually '
-                                'or use presets after players register.',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                'Each group sets their own ball rotation when '
+                                'they open the scoring screen for the first time.',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant),
                               ),
                             ),
                           ]),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // ── Info note ────────────────────────────────────────────
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Row(children: [
-                      Icon(Icons.info_outline,
-                          size: 18,
-                          color: theme.colorScheme.onSurfaceVariant),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Each group sets their own ball rotation when '
-                          'they open the scoring screen for the first time.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant),
                         ),
                       ),
-                    ]),
+
+                      if (_error != null) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.errorContainer,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(children: [
+                            Icon(Icons.error_outline, color: theme.colorScheme.error),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(_error!,
+                                  style: TextStyle(
+                                      color: theme.colorScheme.onErrorContainer)),
+                            ),
+                          ]),
+                        ),
+                      ],
+
+                      const SizedBox(height: 24),
+                    ],
+                ),
+              ),
+              // Persistent Save button — in-body so it stays above the
+              // soft keyboard when the name / entry-fee / payout fields
+              // are open.
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: FilledButton(
+                      // Nothing is disabled without saying why: when Save cannot
+                      // fire, the button itself names the missing input rather than
+                      // going grey and silent.
+                      onPressed: (_saving || _saveBlocker != null) ? null : _save,
+                      child: _saving
+                          ? const SizedBox(
+                              width: 20, height: 20,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white))
+                          : Text(
+                              _saveBlocker ??
+                                  (_configured ? 'Save Changes' : 'Save Setup'),
+                              style: const TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                    ),
                   ),
                 ),
-
-                if (_error != null) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.errorContainer,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(children: [
-                      Icon(Icons.error_outline, color: theme.colorScheme.error),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(_error!,
-                            style: TextStyle(
-                                color: theme.colorScheme.onErrorContainer)),
-                      ),
-                    ]),
-                  ),
-                ],
-
-                const SizedBox(height: 24),
-              ],
-            ),
+              ),
+            ]),
     );
   }
 }

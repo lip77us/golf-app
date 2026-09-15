@@ -1588,21 +1588,24 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
               ? const Center(child: CircularProgressIndicator())
               : _dataError != null
                   ? ErrorView(message: _dataError!, onRetry: _loadReferenceData)
-                  : _stepBody(),
+                  : Column(children: [
+                      Expanded(child: _stepBody()),
+                      // Persistent step nav — in-body so it stays above the
+                      // soft keyboard when a course search, entry fee or
+                      // payout field is open.
+                      _BottomBar(
+                        step            : _step,
+                        totalSteps      : _totalSteps,
+                        canAdvance      : _canAdvance(),
+                        creating        : _creating,
+                        isCupTournament : _isCupTournament,
+                        onBack          : _back,
+                        onNext          : _next,
+                        onCreate        : _createRound,
+                        onDone          : () => Navigator.of(context).pop(true),
+                      ),
+                    ]),
         ),
-        bottomNavigationBar: _dataLoading || _dataError != null
-            ? null
-            : _BottomBar(
-                step            : _step,
-                totalSteps      : _totalSteps,
-                canAdvance      : _canAdvance(),
-                creating        : _creating,
-                isCupTournament : _isCupTournament,
-                onBack          : _back,
-                onNext          : _next,
-                onCreate        : _createRound,
-                onDone          : () => Navigator.of(context).pop(true),
-              ),
       ),
     );
   }

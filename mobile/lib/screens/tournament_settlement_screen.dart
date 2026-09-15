@@ -180,8 +180,12 @@ class _TournamentSettlementScreenState
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? ErrorView(message: _error!, onRetry: _load)
-              : _body(),
-      bottomNavigationBar: _data == null ? null : _settleBar(),
+              : Column(children: [
+                  Expanded(child: _body()),
+                  // Persistent Settle bar — in-body so it stays above the soft
+                  // keyboard when the "text the field" note is open.
+                  if (_data != null) _settleBar(),
+                ]),
     );
   }
 

@@ -887,8 +887,12 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         iconTheme: const IconThemeData(color: Halved.deepPine),
         title: Text(title, style: Halved.appBarTitle()),
       ),
-      body: _buildBody(),
-      bottomNavigationBar: (_loading || _error != null) ? null : _buildNav(),
+      body: Column(children: [
+        Expanded(child: _buildBody()),
+        // Persistent nav — in-body so it stays above the soft keyboard when
+        // the golfer search or an inline add-a-golfer field is open.
+        if (!_loading && _error == null) _buildNav(),
+      ]),
     );
   }
 

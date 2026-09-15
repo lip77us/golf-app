@@ -120,170 +120,176 @@ class _SequoyaThreesSetupScreenState extends State<SequoyaThreesSetupScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('Sequoya 3s')),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
-          child: SizedBox(
-            height: 52,
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: (_saving || _ordered.length != 4 || !_stakeOk)
-                  ? null : _save,
-              child: _saving
-                  ? const SizedBox(width: 20, height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Text('Start Match 1',
-                      style: TextStyle(fontSize: 16,
-                                       fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
-        children: [
-          if (_error != null) ...[
-            ErrorView(message: friendlyError(_error!), onRetry: _save),
-            const SizedBox(height: 12),
-          ],
+      body: Column(children: [
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
+            children: [
+              if (_error != null) ...[
+                ErrorView(message: friendlyError(_error!), onRetry: _save),
+                const SizedBox(height: 12),
+              ],
 
-          // Said BEFORE the teams: a group that does not know matches 2-6 are
-          // already decided will stand on the 4th tee expecting another draw.
-          _Card(
-            title: 'Six matches, three holes each',
-            child: Text(
-              'You only set match 1. Four golfers split two-a-side in exactly '
-              'three ways, so matches 2 and 3 are the other two pairings and '
-              'matches 4–6 repeat all three in the same order. Everyone '
-              'partners everyone else exactly twice.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant, height: 1.5),
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          _Card(
-            title: 'Match 1 · Holes 1–3',
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-              // Side 1 / Side 2, not Team A / Team B: the pairings rotate every
-              // third hole, so a side is a side for THIS match only. The play
-              // screen uses the same words.
-              TeamSplitter4(
-                players:   _ordered,
-                onChanged: (o) => setState(() => _ordered = o),
-                teamALabel: 'Side 1',
-                teamBLabel: 'Side 2',
-                teamAColor: _blue,
-                teamBColor: _orange,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Drag to set the first two teams. The convention is the two '
-                'long drives against the two short ones.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant),
-              ),
-            ]),
-          ),
-          const SizedBox(height: 12),
-
-          HandicapModeSelector(
-            mode: _mode,
-            netPercent: _netPercent,
-            onModeChanged: (m) => setState(() => _mode = m),
-            onPercentChanged: (p) => setState(() => _netPercent = p),
-          ),
-          const SizedBox(height: 12),
-
-          _Card(
-            title: 'Presses',
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-              Text(
-                'A press is a new bet at the same amount — not a doubling. It '
-                'runs over the holes left in that match and settles on its '
-                'own, so it can be halved while the match is won, or won by '
-                'the side that lost it.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant, height: 1.5),
-              ),
-              const SizedBox(height: 10),
-              Wrap(spacing: 8, runSpacing: 8, children: [
-                for (final o in const [
-                  ('none',        'None'),
-                  ('auto',        'Auto after 1st hole win'),
-                  ('manual_auto', 'Manual + Auto'),
-                ])
-                  ChoiceChip(
-                    label: Text(o.$2),
-                    selected: _pressMode == o.$1,
-                    onSelected: (_) => setState(() => _pressMode = o.$1),
-                  ),
-              ]),
-              if (_pressMode == 'manual_auto') ...[
-                const SizedBox(height: 8),
-                Text(
-                  'The two can both be running: an auto press over the tail of '
-                  'a match and a hand-called one over its last hole are '
-                  'different bets. What you cannot do is call one that merely '
-                  'repeats a bet already level over the same holes.',
+              // Said BEFORE the teams: a group that does not know matches 2-6 are
+              // already decided will stand on the 4th tee expecting another draw.
+              _Card(
+                title: 'Six matches, three holes each',
+                child: Text(
+                  'You only set match 1. Four golfers split two-a-side in exactly '
+                  'three ways, so matches 2 and 3 are the other two pairings and '
+                  'matches 4–6 repeat all three in the same order. Everyone '
+                  'partners everyone else exactly twice.',
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant, height: 1.5),
                 ),
-              ],
-              const Divider(height: 22),
-              Row(children: [
-                Expanded(
-                  child: Text('Bets a single match can carry',
+              ),
+              const SizedBox(height: 12),
+
+              _Card(
+                title: 'Match 1 · Holes 1–3',
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  // Side 1 / Side 2, not Team A / Team B: the pairings rotate every
+                  // third hole, so a side is a side for THIS match only. The play
+                  // screen uses the same words.
+                  TeamSplitter4(
+                    players:   _ordered,
+                    onChanged: (o) => setState(() => _ordered = o),
+                    teamALabel: 'Side 1',
+                    teamBLabel: 'Side 2',
+                    teamAColor: _blue,
+                    teamBColor: _orange,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Drag to set the first two teams. The convention is the two '
+                    'long drives against the two short ones.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 12),
+
+              HandicapModeSelector(
+                mode: _mode,
+                netPercent: _netPercent,
+                onModeChanged: (m) => setState(() => _mode = m),
+                onPercentChanged: (p) => setState(() => _netPercent = p),
+              ),
+              const SizedBox(height: 12),
+
+              _Card(
+                title: 'Presses',
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(
+                    'A press is a new bet at the same amount — not a doubling. It '
+                    'runs over the holes left in that match and settles on its '
+                    'own, so it can be halved while the match is won, or won by '
+                    'the side that lost it.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant, height: 1.5),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    for (final o in const [
+                      ('none',        'None'),
+                      ('auto',        'Auto after 1st hole win'),
+                      ('manual_auto', 'Manual + Auto'),
+                    ])
+                      ChoiceChip(
+                        label: Text(o.$2),
+                        selected: _pressMode == o.$1,
+                        onSelected: (_) => setState(() => _pressMode = o.$1),
+                      ),
+                  ]),
+                  if (_pressMode == 'manual_auto') ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'The two can both be running: an auto press over the tail of '
+                      'a match and a hand-called one over its last hole are '
+                      'different bets. What you cannot do is call one that merely '
+                      'repeats a bet already level over the same holes.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant, height: 1.5),
+                    ),
+                  ],
+                  const Divider(height: 22),
+                  Row(children: [
+                    Expanded(
+                      child: Text('Bets a single match can carry',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant)),
+                    ),
+                    Text('$_betsPerMatch',
+                        style: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.bold)),
+                  ]),
+                ]),
+              ),
+              const SizedBox(height: 12),
+
+              _Card(
+                title: 'Stake',
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text('A golfer a match, not a pair. Lose a match and you are down '
+                       'the stake and so is your partner.',
                       style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant)),
-                ),
-                Text('$_betsPerMatch',
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.bold)),
-              ]),
-            ]),
-          ),
-          const SizedBox(height: 12),
-
-          _Card(
-            title: 'Stake',
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-              Text('A golfer a match, not a pair. Lose a match and you are down '
-                   'the stake and so is your partner.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant)),
-              const SizedBox(height: 10),
-              StakeField(
-                controller: _betCtrl,
-                onChanged: (ok) => setState(() => _stakeOk = ok),
-                label: 'Stake (\$ per golfer, per bet)',
+                  const SizedBox(height: 10),
+                  StakeField(
+                    controller: _betCtrl,
+                    onChanged: (ok) => setState(() => _stakeOk = ok),
+                    label: 'Stake (\$ per golfer, per bet)',
+                  ),
+                ]),
               ),
-            ]),
-          ),
-          const SizedBox(height: 12),
+              const SizedBox(height: 12),
 
-          // The ceiling, stated in money rather than in rules.
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('🛡  '),
-            Expanded(
-              child: Text(
-                'Most you can lose: ${_money(_stake * 6 * _betsPerMatch)} per golfer — '
-                'all six matches lost with every bet live. No presses at all '
-                'tops out at ${_money(_stake * 6)}; Auto doubles that to '
-                '${_money(_stake * 12)} and Manual + Auto reaches '
-                '${_money(_stake * 18)}.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant),
+              // The ceiling, stated in money rather than in rules.
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('🛡  '),
+                Expanded(
+                  child: Text(
+                    'Most you can lose: ${_money(_stake * 6 * _betsPerMatch)} per golfer — '
+                    'all six matches lost with every bet live. No presses at all '
+                    'tops out at ${_money(_stake * 6)}; Auto doubles that to '
+                    '${_money(_stake * 12)} and Manual + Auto reaches '
+                    '${_money(_stake * 18)}.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ),
+              ]),
+            ],
+          ),
+        ),
+        // Persistent Start button — in-body so it stays above the soft
+        // keyboard when the stake field is open.
+        SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
+            child: SizedBox(
+              height: 52,
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: (_saving || _ordered.length != 4 || !_stakeOk)
+                    ? null : _save,
+                child: _saving
+                    ? const SizedBox(width: 20, height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Text('Start Match 1',
+                        style: TextStyle(fontSize: 16,
+                                         fontWeight: FontWeight.bold)),
               ),
             ),
-          ]),
-        ],
-      ),
+          ),
+        ),
+      ]),
     );
   }
 }
