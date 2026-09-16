@@ -327,12 +327,24 @@ class OwnershipTests(TestCase):
 
     def test_a_side_game_never_gets_one(self):
         """Sixes running alongside a primary with no card gets nothing — the
-        pick at setup decides, not which game happens to have a builder."""
-        self._set('stableford', ['stableford', 'sixes'])
+        pick at setup decides, not which game happens to have a builder.
+
+        **The primary here has to be a game that genuinely has no card**, and
+        that list shrinks every release: this test used `stableford` until
+        Stableford got one, at which point it was asserting the opposite of
+        what it says. `pink_ball` is the current example and the assertion
+        below keeps it honest if that changes too.
+        """
+        from services.live_activity_registry import BUILDERS
+        self.assertNotIn('pink_ball', BUILDERS,
+                         'pick a primary that still has no card')
+        self._set('pink_ball', ['pink_ball', 'sixes'])
         self.assertEqual(self._state(), {})
 
     def test_a_game_with_no_card_gets_nothing(self):
-        self._set('wolf', ['wolf'])
+        from services.live_activity_registry import BUILDERS
+        self.assertNotIn('pink_ball', BUILDERS)
+        self._set('pink_ball', ['pink_ball'])
         self.assertEqual(self._state(), {})
 
     def test_a_legacy_round_falls_back_to_the_active_set(self):

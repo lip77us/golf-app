@@ -260,11 +260,19 @@ class FinalTests(_Base):
 
 class ContractTests(_Base):
 
-    def test_the_kind_is_gated_until_a_build_carries_the_layout(self):
-        from services.live_activity_registry import (BUILDERS, card_kind,
-                                                     UNSHIPPED_KINDS)
+    def test_the_card_is_wired_end_to_end(self):
+        """Builder, and a layout that can draw what it builds.
+
+        This asserted the kind was IN `UNSHIPPED_KINDS`, which was true the
+        week it was written and false the moment the build shipped — a test
+        that has to be edited before a release can happen is testing the
+        calendar. The gate's real invariant is checked once for the whole set
+        in `ShippingGateTests`; what belongs here is that this card exists on
+        both sides of the wire.
+        """
+        from services.live_activity_registry import BUILDERS, card_kind
         self.assertIn('triple_nassau', BUILDERS)
-        self.assertIn(card_kind('triple_nassau'), UNSHIPPED_KINDS)
+        self.assertEqual(card_kind('triple_nassau'), 'triple_nassau')
 
     def test_the_widget_can_already_draw_it(self):
         import re
