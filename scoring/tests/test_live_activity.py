@@ -453,13 +453,21 @@ class ShippingGateTests(TestCase):
             self.assertIn(kind, buildable,
                           f'`{kind}` has a layout and no builder')
 
-    def test_a_gated_kind_may_already_have_its_layout(self):
+    def test_a_gated_kind_already_has_its_layout(self):
         """Because that is the order: the Swift lands first, and the gate comes
-        off in the commit that bumps the build carrying it. A test that read
-        the gate as *not yet drawn* would forbid the only safe sequence."""
+        off in the commit that bumps the build carrying it.
+
+        **The invariant, not the census.** This asserted that the gate was
+        non-empty, which was true of the week it was written and false the
+        moment the seven came off — a test that has to be edited to let a
+        release happen is a test measuring the calendar. What must always hold
+        is the other direction: nothing sits in the gate that the widget could
+        not draw if it were let out, which is trivially true of an empty gate
+        and the real check on a full one.
+        """
         from services.live_activity_registry import UNSHIPPED_KINDS
-        self.assertTrue(UNSHIPPED_KINDS & self._known(),
-                        'the five layouts added ahead of their gate')
+        self.assertEqual(UNSHIPPED_KINDS - self._known(), set(),
+                         'a kind is gated with no layout waiting behind it')
 
 
 class WidgetLayoutTests(TestCase):

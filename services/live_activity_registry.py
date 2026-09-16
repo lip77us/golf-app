@@ -625,8 +625,10 @@ CARD_KIND = {'match_18': 'match', 'fourball': 'match',
 # Swift layout — which for these five matters more than usual: they are games
 # that have NO card today, so an ungated kind would replace nothing at all with
 # a lock-screen nag pointing at an update that does not exist.
-UNSHIPPED_KINDS: set = {'stableford', 'stroke_play', 'points', 'wolf',
-                        'triple_cup', 'vegas', 'triple_nassau'}
+# Empty as of 2.9.0+37, the build that draws all seven. They came off
+# together because they went on together — the layouts landed across one
+# stretch of work and no build carried any of them until this one.
+UNSHIPPED_KINDS: set = set()
 
 
 def card_kind(slug: str) -> str:
