@@ -3311,21 +3311,30 @@ class _StepScoring extends StatelessWidget {
   // ── Flights — drawn, not hidden ───────────────────────────────────────
   /// Nothing is disabled without saying why. Flights are a real intention and
   /// a real absence, so the row states both rather than vanishing.
+  /// **Not the control, a pointer to it.** The plan had the real controls
+  /// here, but this wizard runs before the tournament exists and before
+  /// pairings are set — so it has neither an id to cut nor a field to cut.
+  /// Equal-sized flights are sized off the whole field, so the freeze has to
+  /// happen once the field is final, which is the championship screen.
+  ///
+  /// The card stays because stating the absence beats hiding it: a TD who
+  /// wants flights should find out here that they exist, not discover them by
+  /// accident three screens away.
   Widget _flightsDeferred(BuildContext context) {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
     return SectionCard(
       title: 'Flights',
       trailing: Chip(
-        label: const Text('NOT YET', style: TextStyle(fontSize: 9.5)),
+        label: const Text('LATER', style: TextStyle(fontSize: 9.5)),
         visualDensity: VisualDensity.compact,
         padding: EdgeInsets.zero,
       ),
       child: Text(
-        'One board for everyone. Splitting the field into flights would give '
-        'each its own board and its own payout — it changes what the '
-        'leaderboard IS, so it is not something to switch on halfway. Not '
-        'built yet, and nothing else on this step depends on it.',
+        'One board for everyone, for now. Splitting the field gives each '
+        'flight its own board and its own payout — set it on the championship '
+        'screen once pairings are final, because equal-sized flights are '
+        'sized off the whole field and every late entry resizes them.',
         style: theme.textTheme.bodySmall?.copyWith(color: muted, height: 1.45),
       ),
     );

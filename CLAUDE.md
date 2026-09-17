@@ -1445,7 +1445,9 @@ the field is derived from `FoursomeMembership`. Endpoint
 `GET/POST/DELETE /api/tournaments/{id}/flights/`.
 
 **Unflighted is the same code path**, one flight holding everybody — so the
-shipped behaviour is the degenerate case and cannot drift.
+shipped behaviour is the degenerate case and cannot drift. The client half
+holds the same shape: `flights` is empty and `index` is null on a one-board
+event, so every unflighted board is on exactly the path it was already on.
 
 **Settlement and the receipt needed no change**: they iterate the standings rows
 and read `row['payout']`. Keep flights inside the two `*_championship_standings()`
@@ -1466,10 +1468,43 @@ UP a paid place. **No client renders the `excluded` flag** (not even Stableford,
 which has had it for ages), so an excluded golfer shows an empty money column
 with no marking.
 
-**Phase 2, needing a build:** real flight headers, showing the INDEX rather than
-the playing handicap on a flighted board, and a marker for an excluded golfer.
-The setup UI already has its home — `_flightsDeferred()` in `new_round_wizard.dart`
-draws a `Flights` card with a `NOT YET` chip.
+### Phase 2 — built, and one departure from the plan
+
+**The stopgap is deleted.** `prefixed_name` is gone and the row's `name` is a
+name again: `FlightHeader` (`widgets/flight_header.dart`) draws the band, on
+both the Low Net and Stableford boards. The summaries carry a `flights` list —
+one block per flight with its label, size and **purse** — and the purse is the
+full table because every flight pays the same one. Summing what a flight has
+actually paid would read as `$0` before anybody scores.
+
+**A flighted board shows the INDEX the cut was made on**, not the playing
+handicap and not today's index. Flights are cut on index while CH moves with
+tee and course, so the two side by side invited the question; and an index that
+has moved since the cut would sit in a flight it no longer justifies and read
+as a bug rather than as history. `cut_index_map()` reads
+`TournamentFlight.index_at_assignment`, which is exactly that record.
+
+**The excluded marker is `NOT PAID`**, on both boards. Stableford has carried
+the flag for ages and no client ever drew it, so an excluded golfer showed an
+empty money column with nothing saying why.
+
+**Where Set flights lives — a departure.** The plan put the controls in
+`new_round_wizard.dart`, replacing the `NOT YET` card. That cannot work: the
+wizard runs *before the tournament exists* and before pairings are set, so it
+has neither an id to cut nor a field to cut — and the plan's own freeze rule is
+"once the field is final". `FlightsCard` (`widgets/flights_card.dart`) sits on
+both championship setup screens instead, below the payouts, because a flight's
+purse IS the table above it. The wizard keeps a card, now pointing at that home
+rather than claiming the feature does not exist.
+
+**The preview is the feature.** The GET already previewed a cut without
+writing; Phase 2 added the roster to it so the TD can *name the guesses* from a
+list. A cut is frozen once taken, so seeing the split first is the difference
+between a decision and a discovery.
+
+**Headers are interleaved, not grouped.** The server already returns rows
+flight by flight with ranks restarting at 1; re-grouping them client-side would
+be a second ordering authority and the two would eventually disagree.
 
 **Known, pre-existing:** `services/payout.split_tied_places` rounds each share to
 the cent, so a three-way tie over $200 pays $66.67 each and invents a cent.

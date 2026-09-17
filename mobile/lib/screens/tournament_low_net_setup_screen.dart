@@ -16,6 +16,7 @@ import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
+import '../widgets/flights_card.dart';
 import '../widgets/payout_config_field.dart';
 import '../widgets/section_card.dart';
 
@@ -330,6 +331,14 @@ class _TournamentLowNetSetupScreenState
               ],
             ),
           ),
+
+          const SizedBox(height: 16),
+
+          // ── Flights ───────────────────────────────────────────────────────
+          // Below the payouts on purpose: a flight's purse IS the table above,
+          // paid once per flight, so the number has to be set before the
+          // question of how many boards it pays means anything.
+          FlightsCard(tournamentId: widget.tournamentId),
 
           // ── Error banner ──────────────────────────────────────────────────
           if (_error != null && _saving == false) ...[

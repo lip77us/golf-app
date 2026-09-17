@@ -13,7 +13,7 @@ allocation right there — so the per-round hole detail carries gross + strokes 
 points and no net column.
 """
 from core.models import HandicapMode
-from services.flights import prefixed_name
+from services.flights import cut_index_map, flight_blocks
 from services.round_counting import select_counting_rounds
 from services.stableford import _build_stableford_totals
 
@@ -147,6 +147,13 @@ def stableford_championship_summary(tournament) -> dict:
     config = _config(tournament)
     standings = stableford_championship_standings(tournament)
     entry_fee = float(config.entry_fee) if config else 0.0
+    # The configured table, in the `[{place, amount}]` shape `flight_blocks`
+    # reads — the standings function keeps its own `{place: amount}` form for
+    # lookup, and the two must not be confused.
+    payouts_cfg = (config.payouts or []) if config is not None else []
+    # The index each golfer was CUT on, for the flighted board's handicap
+    # column. Empty on an unflighted event.
+    _index_at_cut = cut_index_map(tournament)
     table = None
     if config is not None:
         table = {'albatross': config.pts_albatross, 'eagle': config.pts_eagle,
@@ -162,14 +169,19 @@ def stableford_championship_summary(tournament) -> dict:
         'rounds_to_count': tournament.rounds_to_count,
         'counting_rule': tournament.counting_rule_label,
         'flight_count' : tournament.flight_count or 0,
+        # The headers a flighted board draws, in board order. Empty on a
+        # one-board event, which keeps the unflighted client on exactly the
+        # path it was already on.
+        'flights'      : flight_blocks(tournament, standings, payouts_cfg),
         'table'        : table,
-        # COPIES, not the standings rows themselves. The stopgap flight prefix
-        # is a display concern; mutating these in place would put `A · ` into
-        # settlement and the receipt, which read the standings directly.
+        # COPIES, not the standings rows themselves. `index` is a display
+        # concern and settlement reads the standings directly, so mutating
+        # these in place would push it into the receipt.
+        #
+        # The name is the PLAIN name again: it carried `A · ` only while no
+        # build could draw a flight header, and 2.9.0 draws them.
         'results'      : [
-            {**s_, 'player_name': prefixed_name(
-                s_['player_name'], s_.get('flight'),
-                bool(tournament.flight_count > 1))}
+            {**s_, 'index': _index_at_cut.get(s_.get('player_id'))}
             for s_ in standings
         ],
     }

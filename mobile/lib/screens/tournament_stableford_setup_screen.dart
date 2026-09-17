@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/handicap_mode_selector.dart';
+import '../widgets/flights_card.dart';
 import '../widgets/payout_config_field.dart';
 
 const _kBuckets = ['albatross', 'eagle', 'birdie', 'par', 'bogey', 'double'];
@@ -247,6 +248,12 @@ class _TournamentStablefordSetupScreenState
           onPayoutChanged: () => setState(() {}),
           onSuggest: _suggest,
         ),
+        const SizedBox(height: 24),
+
+        // Below the payouts on purpose: a flight's purse IS the table above,
+        // paid once per flight, so the number has to be set before the
+        // question of how many boards it pays means anything.
+        FlightsCard(tournamentId: widget.tournamentId),
       ],
     );
   }

@@ -616,6 +616,49 @@ class ApiClient {
       Map<String, dynamic>.from(await _post(
           '/tournaments/$tournamentId/mini-singles/sync-day2/', {}) as Map);
 
+  // ---- Flights ----------------------------------------------------------
+
+  /// The current cut, the roster, and **what a cut would look like if taken
+  /// now** — the preview is the point. A cut is frozen once taken, so seeing
+  /// the split first is the difference between a decision and a discovery.
+  ///
+  /// `nFlights` and `unindexed` only steer the preview; neither writes.
+  Future<Map<String, dynamic>> getFlights(
+    int tournamentId, {
+    int? nFlights,
+    List<int>? unindexed,
+  }) async {
+    final q = <String>[];
+    if (nFlights != null) q.add('n_flights=$nFlights');
+    if (unindexed != null && unindexed.isNotEmpty) {
+      q.add('unindexed=${unindexed.join(',')}');
+    }
+    final qs = q.isEmpty ? '' : '?${q.join('&')}';
+    return Map<String, dynamic>.from(
+        await _get('/tournaments/$tournamentId/flights/$qs') as Map);
+  }
+
+  /// Cut the field and FREEZE it. Re-running is a fresh cut, not a patch —
+  /// equal sizing is a function of the whole field, so a late entry resizes
+  /// everything.
+  ///
+  /// `unindexed` names the golfers whose entered index is a guess. They drop
+  /// out of the sizing and go to the bottom flight, while the index they hold
+  /// keeps giving them strokes.
+  Future<Map<String, dynamic>> setFlights(
+    int tournamentId, {
+    required int nFlights,
+    List<int> unindexed = const [],
+  }) async =>
+      Map<String, dynamic>.from(await _post(
+          '/tournaments/$tournamentId/flights/',
+          {'n_flights': nFlights, 'unindexed': unindexed}) as Map);
+
+  /// Back to one board.
+  Future<void> clearFlights(int tournamentId) async {
+    await _delete('/tournaments/$tournamentId/flights/');
+  }
+
   // ---- Day bet ----------------------------------------------------------
 
   Future<Map<String, dynamic>> getDayBetSetup(int roundId) async =>

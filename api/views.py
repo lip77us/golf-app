@@ -2401,10 +2401,24 @@ class TournamentFlightsView(APIView):
         n = int(request.query_params.get('n_flights') or tournament.flight_count or 2)
         preview_field = tournament_field(tournament, unindexed=preview_unindexed)
         preview = flight_sizes(assign_flights(preview_field, n), n)
+        # The roster, so the TD can NAME the guesses. He is the only one who
+        # knows whose number is invented — the database cannot tell an entered
+        # index from an estimated one — so the picker has to show him the field
+        # and let him point. Sorted by index, which is the order the cut reads
+        # in and so the order a TD checks it in.
+        from core.models import Player
+        roster = {p.id: p.name for p in Player.objects.filter(
+            id__in=[pid for pid, _ in field])}
         return Response({
             'flight_count': tournament.flight_count or 0,
             'field_size'  : len(field),
             'unindexed'   : sum(1 for _pid, idx in field if idx is None),
+            'field'       : [
+                {'player_id': pid, 'name': roster.get(pid, ''),
+                 'index': str(idx) if idx is not None else None}
+                for pid, idx in sorted(
+                    field, key=lambda r: (r[1] is None, r[1] or 0))
+            ],
             'preview_flights': n,
             'preview_sizes': preview,
             # Whose index was treated as a guess when the cut was made — a NULL

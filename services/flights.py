@@ -251,20 +251,47 @@ def flight_label(flight: int) -> str:
     return _LETTERS[flight - 1] if 1 <= flight <= len(_LETTERS) else str(flight)
 
 
-def prefixed_name(name: str, flight, flighted: bool) -> str:
-    """``A · Paul L`` — the STOPGAP until a client build draws flight headers.
+def cut_index_map(tournament) -> dict:
+    """``{player_id: index_at_assignment}`` — the index the cut was MADE on.
 
-    The shipped app renders the leaderboard in server order and prints the row's
-    name verbatim, so flighting works end to end with no build; what it cannot
-    do is announce where one flight ends and the next begins. Carrying the
-    letter in the name is ugly and unambiguous, which beats two anonymous blocks.
+    Not the golfer's index today. A flighted board shows this because it is the
+    number that explains where he is: an index that has moved since the cut
+    would sit in a flight it no longer justifies and read as a bug.
 
-    It is applied ONLY in the summary (the client-facing payload), never in
-    `*_championship_standings`, so it cannot leak into settlement or a receipt —
-    those read `player_name` off the standings rows.
-
-    Delete this the moment headers ship.
+    ``None`` for a golfer the TD named as unindexed, which is the record that
+    his entered number was a guess.
     """
-    if not flighted or not flight:
-        return name
-    return f'{flight_label(flight)} · {name}'
+    if not tournament.flight_count or tournament.flight_count < 2:
+        return {}
+    return dict(tournament.flights.values_list('player_id',
+                                               'index_at_assignment'))
+
+
+def flight_blocks(tournament, standings, payouts_cfg) -> list:
+    """One entry per flight, in board order — what a client draws headers from.
+
+    **Every flight pays the same table**, which is the settled decision that
+    makes this cheap: the purse is the sum of the configured amounts, identical
+    for every flight, and the event's budget is that times the flight count.
+    A client that summed each flight's actual payouts would instead report what
+    a flight PAID, which drops to zero before anybody has scored and reads as a
+    flight with no prize.
+
+    Sized from the standings rather than from the frozen rows so the header
+    counts what the board actually shows — a late entry with no frozen row is
+    in the bottom flight on both, and the two must not disagree.
+    """
+    n = tournament.flight_count or 0
+    if n < 2:
+        return []
+    purse = sum(float(p.get('amount') or 0) for p in (payouts_cfg or []))
+    sizes = {}
+    for row in standings:
+        f = row.get('flight')
+        if f:
+            sizes[f] = sizes.get(f, 0) + 1
+    return [{'flight': f,
+             'label' : flight_label(f),
+             'size'  : sizes.get(f, 0),
+             'purse' : purse}
+            for f in sorted(sizes)]

@@ -17,6 +17,7 @@ import '../widgets/error_view.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/stroke_play_strip.dart';
 import '../widgets/synced_scroll_group.dart';
+import '../widgets/flight_header.dart';
 import 'tournament_settlement_screen.dart';
 import 'tournament_low_net_setup_screen.dart';
 import 'tournament_stableford_setup_screen.dart';
@@ -490,6 +491,11 @@ class _StablefordChampView extends StatelessWidget {
     final netPct      = data['net_percent'] as int? ?? 100;
     final entry       = (data['entry_fee'] as num?)?.toDouble() ?? 0.0;
     final totalRounds = data['total_rounds'] as int? ?? 0;
+    final flightBlocks = {
+      for (final b in (data['flights'] as List? ?? []))
+        (b as Map)['flight'] as int: b,
+    };
+    final flighted = flightBlocks.isNotEmpty;
     if (results.isEmpty) {
       return const Center(child: Text('No Stableford scores yet.'));
     }
@@ -511,23 +517,56 @@ class _StablefordChampView extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 8),
-        ...results.map((e) {
-          final r        = e as Map<String, dynamic>;
+        // Headers are interleaved rather than grouping the rows, for the
+        // reason the Low Net board gives: the server already returns them
+        // flight by flight and a second ordering authority here would drift.
+        ...results.asMap().entries.map((entry) {
+          final i = entry.key;
+          final r = entry.value as Map<String, dynamic>;
+          final flight     = r['flight'] as int?;
+          final prevFlight = i == 0
+              ? null
+              : (results[i - 1] as Map<String, dynamic>)['flight'] as int?;
+          final showHeader = flighted && flight != null && flight != prevFlight;
+          final block      = showHeader ? flightBlocks[flight] : null;
+
           final pts      = r['total_points'] as int? ?? 0;
           final payout   = (r['payout'] as num?)?.toDouble();
           final thru     = r['current_thru'] as int? ?? 0;
           final curRound = r['current_round'] as int? ?? 0;
           final thruStr  = thru >= 18 ? 'F' : '$thru';
-          final subtitle = totalRounds > 1
+          // On a flighted board the index the cut was made on, which is what
+          // explains the flight he is in; CH moves with tee and course.
+          final index    = r['index'];
+          final excluded = r['excluded'] == true;
+          final flightBit = !flighted
+              ? ''
+              : (index == null ? ' · no index' : ' · idx $index');
+          final subtitle = (totalRounds > 1
               ? 'Thru $thruStr · Round $curRound of $totalRounds'
-              : 'Thru $thruStr';
-          return Card(
+              : 'Thru $thruStr') + flightBit;
+          final card = Card(
             margin: const EdgeInsets.only(bottom: 6),
             child: ListTile(
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
               leading: CircleAvatar(radius: 16, child: Text('${r['rank'] ?? ''}')),
-              title: Text(r['player_name']?.toString() ?? '—'),
+              title: Text.rich(TextSpan(children: [
+                TextSpan(text: r['player_name']?.toString() ?? '—'),
+                // Ranked but not paid — Stableford has carried this flag for
+                // ages and no client has ever drawn it, so an excluded golfer
+                // showed an empty money column with nothing saying why.
+                if (excluded)
+                  TextSpan(
+                    text: '  NOT PAID',
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.4,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+              ])),
               subtitle: Text(subtitle, style: theme.textTheme.bodySmall),
               trailing: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -544,6 +583,19 @@ class _StablefordChampView extends StatelessWidget {
                 ],
               ),
             ),
+          );
+
+          if (!showHeader) return card;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              FlightHeader(
+                label: block?['label']?.toString() ?? '',
+                size : (block?['size'] as int?) ?? 0,
+                purse: (block?['purse'] as num?)?.toDouble(),
+              ),
+              card,
+            ],
           );
         }),
       ],
@@ -656,6 +708,13 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
     // Money is a PROJECTION until the round closes. A golfer thru 1 showing
     // \$48 in green was the single most misleading thing on the live board.
     final projected   = (widget.data['rounds_played'] as int? ?? 0) < totalRounds;
+    // One block per flight, in board order. Empty on a one-board event, which
+    // is what keeps the unflighted path exactly as it was.
+    final flightBlocks = {
+      for (final b in (widget.data['flights'] as List? ?? []))
+        (b as Map)['flight'] as int: b,
+    };
+    final flighted = flightBlocks.isNotEmpty;
 
     if (results.isEmpty) {
       return const Center(
@@ -720,10 +779,25 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
         ),
 
         // ── Standing rows ──────────────────────────────────────────────────
-        ...results.map((r) {
+        // Headers are INTERLEAVED rather than grouping the rows into sections:
+        // the server already returns them flight by flight with ranks
+        // restarting at 1, so re-grouping here would be a second ordering
+        // authority and the two would eventually disagree.
+        ...results.asMap().entries.map((entry) {
+          final i = entry.key;
+          final r = entry.value;
+          final flight     = r['flight'] as int?;
+          final prevFlight = i == 0 ? null : results[i - 1]['flight'] as int?;
+          final showHeader = flighted && flight != null && flight != prevFlight;
+          final block      = showHeader ? flightBlocks[flight] : null;
+
           final rank        = r['rank']         as int?;
           final name        = r['name']?.toString() ?? '—';
           final handicap    = r['handicap']     as int? ?? 0;
+          // The index the cut was made on — null for a golfer the TD named as
+          // unindexed, and null throughout on an unflighted event.
+          final index       = r['index'];
+          final excluded    = r['excluded'] == true;
           final ntp         = r['net_to_par']   as int?;
           final holesPlayed = r['holes_played'] as int? ?? 0;
           final roundNtps   = (r['round_ntps']  as List? ?? [])
@@ -746,7 +820,7 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
           final key         = '$rank:$name';
           final isExpanded  = _expanded.contains(key);
 
-          return Card(
+          final card = Card(
             margin   : const EdgeInsets.only(bottom: 6),
             elevation: isLeading ? 1 : 0,
             clipBehavior: Clip.antiAlias,
@@ -780,11 +854,33 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
                           TextSpan(children: [
                             TextSpan(text: name,
                                 style: const TextStyle(fontWeight: FontWeight.w500)),
+                            // Ranked but not paid. Without this the row shows
+                            // an empty money column and nothing saying why,
+                            // which reads as a board that forgot him.
+                            if (excluded)
+                              TextSpan(
+                                text: '  NOT PAID',
+                                style: TextStyle(
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.4,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
                             TextSpan(
                               // CH everywhere — the card, the rotation sheet
                               // and this board all showed a different label
                               // for one number.
-                              text: '  CH $handicap',
+                              //
+                              // **Except on a flighted board**, which shows the
+                              // INDEX the cut was made on. Flights are cut on
+                              // index and CH moves with tee and course, so the
+                              // two sitting together invited the question of
+                              // why a golfer was in the flight he was in.
+                              text: flighted
+                                  ? (index == null ? '  NO INDEX'
+                                                   : '  IDX $index')
+                                  : '  CH $handicap',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.normal,
@@ -930,6 +1026,19 @@ class _LowNetChampViewState extends State<_LowNetChampView> {
                   ),
               ],
             ),
+          );
+
+          if (!showHeader) return card;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              FlightHeader(
+                label: block?['label']?.toString() ?? '',
+                size : (block?['size'] as int?) ?? 0,
+                purse: (block?['purse'] as num?)?.toDouble(),
+              ),
+              card,
+            ],
           );
         }),
 

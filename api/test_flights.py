@@ -114,7 +114,7 @@ class TournamentFlightsEndpointTests(APITestCase):
 
     # -- the board it produces ----------------------------------------------
 
-    def test_the_leaderboard_carries_the_flight_and_the_stopgap_prefix(self):
+    def test_the_leaderboard_carries_the_flight_and_its_headers(self):
         from games.models import LowNetChampionshipConfig
         from scoring.tests._helpers import submit_hole
         from services.low_net_championship import (
@@ -137,13 +137,59 @@ class TournamentFlightsEndpointTests(APITestCase):
         self.assertEqual(summary['flight_count'], 2)
         self.assertEqual([row['flight'] for row in summary['results']],
                          [1] * 4 + [2] * 4)
-        self.assertTrue(summary['results'][0]['name'].startswith('A · '))
-        self.assertTrue(summary['results'][4]['name'].startswith('B · '))
+        # **The name is a name again.** It carried `A · ` only while no build
+        # could draw a flight header; 2.9.0 draws them, so the letter went back
+        # to being a header's job.
+        self.assertFalse(any('·' in row['name'] for row in summary['results']))
 
-        # The prefix is display only — settlement reads the standings, which
-        # must still carry the plain name.
+        # What replaced it: one header block per flight, in board order.
+        self.assertEqual([b['label'] for b in summary['flights']], ['A', 'B'])
+        self.assertEqual([b['size'] for b in summary['flights']], [4, 4])
+        # **Every flight pays the same table**, so each purse is the full
+        # table and the event's budget is that times the flight count.
+        self.assertEqual([b['purse'] for b in summary['flights']],
+                         [100.0, 100.0])
+
+        # Settlement reads the standings, which never carried the prefix.
         standings = low_net_championship_standings(self.tournament)
         self.assertFalse(any('·' in s['player_name'] for s in standings))
+
+    def test_a_flighted_row_shows_the_index_it_was_cut_on(self):
+        """Flights are cut on INDEX. A flighted board that showed playing
+        handicap put the two numbers side by side and invited the question —
+        and an index that has moved since the cut would sit in a flight it no
+        longer justifies, which reads as a bug rather than as history."""
+        from games.models import LowNetChampionshipConfig
+        from scoring.tests._helpers import submit_hole
+        from services.low_net_championship import low_net_championship_summary
+
+        LowNetChampionshipConfig.objects.create(
+            tournament=self.tournament, entry_fee=0, payouts=[])
+        par = {h['number']: h['par'] for h in DEFAULT_HOLES}
+        for fs in self.round.foursomes.all():
+            ids = [m.player_id for m in fs.memberships.all()
+                   if not m.player.is_phantom]
+            for h in range(1, 19):
+                submit_hole(fs, h, [(pid, par[h]) for pid in ids])
+        self.client.post(self.url, {'n_flights': 2}, format='json')
+        self.tournament.refresh_from_db()
+        summary = low_net_championship_summary(self.tournament)
+        self.assertTrue(summary['results'], 'no rows to check')
+        self.assertTrue(all(row.get('index') is not None
+                            for row in summary['results']),
+                        'every cut golfer carries the index he was cut on')
+
+    def test_an_unflighted_board_has_no_headers_and_no_index(self):
+        """The degenerate case stays exactly the path it was on."""
+        from games.models import LowNetChampionshipConfig
+        from services.low_net_championship import low_net_championship_summary
+
+        LowNetChampionshipConfig.objects.create(
+            tournament=self.tournament, entry_fee=0, payouts=[])
+        summary = low_net_championship_summary(self.tournament)
+        self.assertEqual(summary['flights'], [])
+        self.assertTrue(all(row.get('index') is None
+                            for row in summary['results']))
 
     def test_an_unflighted_board_carries_no_prefix(self):
         from games.models import LowNetChampionshipConfig
@@ -269,3 +315,30 @@ class UnindexedAtCutTests(APITestCase):
         r = self.client.post(
             self.url, {'n_flights': 2, 'unindexed': 'abc'}, format='json')
         self.assertEqual(r.status_code, 400)
+
+    def test_the_get_carries_the_roster_so_the_td_can_name_guesses(self):
+        """**The TD is the only one who knows whose number is invented** — the
+        database cannot tell an entered index from an estimated one — so the
+        picker has to show him the field and let him point.
+
+        Sorted by index, which is the order the cut reads in and therefore the
+        order a TD checks it in; unindexed golfers sort last.
+        """
+        res = self.client.get(self.url)
+        field = res.data['field']
+        self.assertEqual(len(field), res.data['field_size'])
+        self.assertTrue(all(row['name'] for row in field),
+                        'a picker cannot show a golfer with no name')
+        indexes = [float(r['index']) for r in field if r['index'] is not None]
+        self.assertEqual(indexes, sorted(indexes))
+
+    def test_the_preview_costs_nothing_and_writes_nothing(self):
+        """A TD gets to see the split before committing to it — the cut is
+        frozen once taken, so seeing it first is the difference between a
+        decision and a discovery."""
+        before = self.tournament.flights.count()
+        res = self.client.get(self.url, {'n_flights': 2})
+        self.assertEqual(sum(res.data['preview_sizes']), res.data['field_size'])
+        self.assertEqual(self.tournament.flights.count(), before)
+        self.tournament.refresh_from_db()
+        self.assertEqual(self.tournament.flight_count, 0)

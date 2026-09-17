@@ -23,7 +23,7 @@ Public API
     summary   = low_net_championship_summary(tournament)
 """
 
-from services.flights import prefixed_name
+from services.flights import cut_index_map, flight_blocks
 from services.low_net_round import _build_ln_player_totals
 from services.round_counting import select_counting_rounds
 
@@ -315,6 +315,11 @@ def low_net_championship_summary(tournament, round_id: int | None = None) -> dic
     else:
         standings = low_net_championship_standings(tournament)
 
+    # The index each golfer was CUT on, for the flighted board's handicap
+    # column. Empty on an unflighted event, so `.get` returns None and the
+    # column falls back to the playing handicap it has always shown.
+    _index_at_cut = cut_index_map(tournament)
+
     if round_id is not None:
         total_rounds  = 1
         played_rounds = 1 if standings else 0
@@ -339,16 +344,25 @@ def low_net_championship_summary(tournament, round_id: int | None = None) -> dic
         'counting_rule' : (None if round_id is not None
                            else tournament.counting_rule_label),
         'flight_count'  : tournament.flight_count or 0,
+        # The headers a flighted board draws, in board order. Empty when the
+        # event is one board, which is what keeps the unflighted client on
+        # exactly the path it was on.
+        'flights'       : flight_blocks(tournament, standings, payouts_cfg),
         'results'       : [
             {
                 'rank'          : s['rank'],
                 'flight'        : s.get('flight'),
                 'excluded'      : s.get('excluded', False),
-                # `A · Paul L` until a build draws flight headers — see
-                # services.flights.prefixed_name. Summary only; the standings
-                # rows settlement reads keep the plain name.
-                'name'          : prefixed_name(s['player_name'], s.get('flight'),
-                                                bool(tournament.flight_count > 1)),
+                # **The plain name.** It carried `A · ` as a stopgap while no
+                # build could draw a flight header; 2.9.0 draws them, so the
+                # letter is a header's job again and a name is a name.
+                'name'          : s['player_name'],
+                # The index the CUT was made on — not today's, and not the
+                # playing handicap the unflighted board shows. Flights are cut
+                # on index, so a flighted board that showed playing handicap
+                # put the two numbers side by side and invited the question.
+                # `None` for a golfer the TD named as unindexed.
+                'index'         : _index_at_cut.get(s['player_id']),
                 'net_total'     : s['net_total'],
                 'net_to_par'    : s['net_to_par'],
                 'holes_played'  : s['holes_played'],

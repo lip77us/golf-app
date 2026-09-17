@@ -237,7 +237,25 @@ Stableford equivalents), so extend rather than start over.
 
 ---
 
-## Phase 2 — the client, whenever a build next ships
+## Phase 2 — BUILT (2026-09-16)
+
+Everything below shipped, with one departure recorded at the end.
+
+- Real section headers per flight, each stating its own purse — `FlightHeader`.
+- The **index the cut was made on** replaces playing handicap on a flighted
+  board, on both games.
+- `NOT PAID` marks a golfer who is ranked but excluded.
+- The `A · ` prefix and `prefixed_name` are deleted.
+- `FlightsCard` gives the TD the cut itself: count, live preview, naming the
+  guesses from the roster, and Clear.
+
+**Departure: the Set-flights control is NOT in the wizard.** The section below
+put it there. That cannot work — the wizard runs before the tournament exists
+and before pairings are set, so it has no id to cut and no field to cut, while
+this document's own freeze rule is "once the field is final". The controls live
+on the two championship setup screens; the wizard keeps its card as a pointer.
+
+### The original Phase 2 note, as written
 
 **The setup UI already has its home.** `_flightsDeferred()` in
 `new_round_wizard.dart` draws a `Flights` card with a `NOT YET` chip on the
