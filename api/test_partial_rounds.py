@@ -247,3 +247,80 @@ class LowNetProspectiveStrokePlanTests(TestCase):
         # Scratch Amy gets no strokes anywhere, and (unscored) wins no money.
         self.assertEqual(rows['Amy']['total_strokes'], 0)
         self.assertEqual(rows['Amy']['stroke_plan'], {})
+
+
+class ShotgunProgressTests(TestCase):
+    """**"Through N" is a COUNT of holes played, not the highest hole number.**
+
+    The two are the same figure on a round that starts on the 1st, which is
+    why this survived: on a shotgun from 13 a group that has played six holes
+    has scored hole 18, and the rounds list said "Through 18" on a round with
+    twelve holes still to go — a round that reads as finished.
+    """
+
+    def setUp(self):
+        from scoring.tests._helpers import (make_tee, make_round,
+                                            make_foursome, _test_account)
+        self.tee = make_tee()
+        self.round = make_round(self.tee.course)
+        self.round.starting_hole = 13
+        self.round.num_holes = 18
+        self.round.save(update_fields=['starting_hole', 'num_holes'])
+        self.fs = make_foursome(
+            self.round, [('A', 0), ('B', 0), ('C', 0), ('D', 0)], tee=self.tee)
+        self.fs.starting_hole = 13
+        self.fs.save(update_fields=['starting_hole'])
+        self.pids = [m.player_id for m in self.fs.memberships.all()]
+
+    def _play(self, holes):
+        from scoring.tests._helpers import submit_hole
+        for h in holes:
+            submit_hole(self.fs, h, [(p, 4) for p in self.pids])
+
+    def test_six_holes_of_a_shotgun_is_through_six(self):
+        from api.views import _round_current_hole
+        from services.hole_plan import play_order
+        order = play_order(self.round, self.fs)
+        self.assertEqual(order[:6], [13, 14, 15, 16, 17, 18])
+        self._play(order[:6])
+        self.assertEqual(_round_current_hole(self.round), 6,
+                         'the highest hole number scored is 18; the group has '
+                         'played six')
+
+    def test_fifteen_played_is_through_fifteen(self):
+        from api.views import _round_current_hole
+        from services.hole_plan import play_order
+        self._play(play_order(self.round, self.fs)[:15])
+        self.assertEqual(_round_current_hole(self.round), 15)
+
+    def test_a_round_from_the_first_is_unchanged(self):
+        """The shipped behaviour is the degenerate case and must not move."""
+        from api.views import _round_current_hole
+        self.round.starting_hole = 1
+        self.round.save(update_fields=['starting_hole'])
+        self.fs.starting_hole = 1
+        self.fs.save(update_fields=['starting_hole'])
+        self._play(range(1, 8))
+        self.assertEqual(_round_current_hole(self.round), 7)
+
+    def test_two_groups_are_not_added_together(self):
+        """Counting distinct hole numbers across the round would report twelve
+        for a round where every group has played six."""
+        from api.views import _round_current_hole
+        from scoring.tests._helpers import make_foursome
+        from services.hole_plan import play_order
+        other = make_foursome(
+            self.round, [('E', 0), ('F', 0), ('G', 0), ('H', 0)],
+            tee=self.tee, group_number=2)
+        other.starting_hole = 1
+        other.save(update_fields=['starting_hole'])
+        self._play(play_order(self.round, self.fs)[:6])
+        from scoring.tests._helpers import submit_hole
+        opids = [m.player_id for m in other.memberships.all()]
+        for h in play_order(self.round, other)[:6]:
+            submit_hole(other, h, [(p, 4) for p in opids])
+        self.assertEqual(_round_current_hole(self.round), 6)
+
+    def test_nothing_scored_is_not_started(self):
+        from api.views import _round_current_hole
+        self.assertEqual(_round_current_hole(self.round), 0)

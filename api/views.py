@@ -3017,17 +3017,38 @@ class CasualRoundListView(APIView):
 # playing/scoring/watching feeds so they all describe a round the same way).
 
 def _round_current_hole(rnd):
-    """Highest hole a real (non-phantom) player has scored; 0 = not started.
-    Phantom scores are pre-filled for all 18 holes, so they're excluded."""
+    """How many holes the leading group has played; 0 = not started.
+
+    **A COUNT, not a hole number.** This returned the highest hole number any
+    real player had scored, which is the same figure on a round that starts on
+    the 1st and a wrong one on every shotgun: a group starting on 13 and
+    playing six holes has scored hole 18, so the rounds list said "Through 18"
+    on a round with twelve holes still to play — a round that looks finished.
+    Found on a shotgun from 13 at Ranch Solano, 17 Sep 2026.
+
+    The leaderboard already carries a note about this exact class of mistake
+    ("the summary reported Through 18 on a round two holes old"); it was fixed
+    there and not here.
+
+    Counted PER FOURSOME and maxed, because on a shotgun each group is on its
+    own six holes — counting distinct hole numbers across the round would add
+    two groups' progress together and report twelve for a round where every
+    group has played six.
+
+    Phantom scores are pre-filled for all 18 holes, so they are excluded.
+    """
     from scoring.models import HoleScore as HS
-    return (
+    rows = (
         HS.objects
         .filter(foursome__round=rnd, gross_score__isnull=False,
                 player__is_phantom=False)
-        .order_by('-hole_number')
-        .values_list('hole_number', flat=True)
-        .first()
-    ) or 0
+        .values_list('foursome_id', 'hole_number')
+        .distinct()
+    )
+    per_group = {}
+    for fs_id, hole in rows:
+        per_group.setdefault(fs_id, set()).add(hole)
+    return max((len(h) for h in per_group.values()), default=0)
 
 
 def _round_is_eighteen_hole_match(rnd, foursome=None):

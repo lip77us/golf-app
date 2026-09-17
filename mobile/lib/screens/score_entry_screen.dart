@@ -1025,6 +1025,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// Names up to two golfers, then falls back to a count — four names would
   /// wrap onto three lines on the narrowest screen, and at that point the
   /// group has not started the hole anyway.
+  ///
+  /// **The count names the hole, because a bare number reads as holes.**
+  /// `4 scores to go` was read as *four holes left to enter* on a shotgun
+  /// round sitting on the 16th hole of the group's order — the golfer had
+  /// three holes to play and the line looked off by one (Ranch Solano,
+  /// 17 Sep 2026). It was right; it just dropped the only word that said what
+  /// it was counting. The named form never had that problem, which is why
+  /// only the fallback needed fixing.
   Widget _missingScoresNote(
       BuildContext ctx, List<Membership> players, Map<int, int> scores) {
     final waiting = players
@@ -1041,7 +1049,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final theme = Theme.of(ctx);
     final text = waiting.length <= 2
         ? 'Waiting on ${waiting.join(" and ")}'
-        : '${waiting.length} scores to go';
+        : '${waiting.length} scores to go on hole $_selectedHole';
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Text(
