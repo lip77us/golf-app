@@ -1086,7 +1086,21 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             selected: _selectedCourse,
             onSelected: _onCourseSelected,
           ),
-          const SizedBox(height: 26),
+          const SizedBox(height: 10),
+
+          // **Directly under the course, above Games.** It sat at the bottom
+          // of the step, below Games and below Side games — so a group
+          // playing no side game had no reason to scroll past the games they
+          // had just chosen, and found the starting hole only after the round
+          // was created. Reported after a shotgun from 13 (17 Sep 2026).
+          //
+          // Above Games is also the right ORDER, not just the visible one:
+          // the hole count is what hides Nassau, Sixes, Triple Cup and the
+          // match brackets, so choosing the shape of the round before the
+          // games means the list is already filtered rather than quietly
+          // losing a chip the golfer had picked.
+          _buildAdvanced(),
+          const SizedBox(height: 22),
 
           Text('Games', style: Halved.sectionHead()),
           const SizedBox(height: 8),
@@ -1167,8 +1181,6 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               ),
             ),
           ],
-          const SizedBox(height: 12),
-          _buildAdvanced(),
           ], // ── end step 1
 
           // ── Step 2: players ──
