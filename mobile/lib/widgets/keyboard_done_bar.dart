@@ -19,6 +19,19 @@
 /// reliable way to ask which keyboard is up from outside the focused field, and
 /// a redundant Done above a keyboard that already has a return key costs a row
 /// of chrome — while a missing one costs the user the screen.
+///
+/// **The bar OCCUPIES its row; it does not steal it.** The first version drew
+/// itself at `bottom: viewInsets` over the whole app, which is exactly where
+/// the keyboard's top edge is — and therefore exactly where a screen that
+/// PINS content to the keyboard puts that content. On a form you scroll, so it
+/// only ever covered chrome. On the round chat it covered the message field,
+/// and a golfer typed a reply he could not read (found playing Ranch Solano,
+/// 17 Sep 2026).
+///
+/// So the wrapper reports a bottom inset 44 larger than the real one: every
+/// Scaffold underneath resizes to leave that row free, and the bar fills it.
+/// Nothing is ever painted over, on any screen, including screens nobody has
+/// written yet — which was the whole point of wrapping the app once.
 library;
 
 import 'package:flutter/material.dart';
@@ -30,15 +43,39 @@ class KeyboardDismissal extends StatelessWidget {
 
   static void dismiss() => FocusManager.instance.primaryFocus?.unfocus();
 
+  /// The bar's height, and the extra bottom inset the app is told about. One
+  /// constant: if the two ever disagree the bar either floats or covers.
+  static const double barHeight = 44;
+
   @override
   Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    final inset = mq.viewInsets.bottom;
+    // Tell everything below that the keyboard is 44 taller than it is. That is
+    // what turns the bar from an overlay into a row: Scaffold already resizes
+    // its body by `viewInsets.bottom`, so it now stops 44 short and the bar
+    // sits in the gap instead of on top of whatever was there.
+    //
+    // Only while a keyboard is actually up — with no keyboard there is no bar
+    // and nothing to make room for.
+    final lifted = inset <= 0
+        ? mq
+        : mq.copyWith(
+            viewInsets: mq.viewInsets.copyWith(bottom: inset + barHeight),
+          );
     // `translucent` so the tap still reaches whatever is underneath — a button
     // under the finger wins the gesture arena, so this only fires on taps that
     // nothing else wanted.
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: dismiss,
-      child: Stack(children: [child, const _DoneBar()]),
+      child: Stack(children: [
+        MediaQuery(data: lifted, child: child),
+        // OUTSIDE the lifted MediaQuery on purpose: the bar positions against
+        // the REAL keyboard edge, and reading the inflated inset would push it
+        // 44 up into the space it just asked for.
+        const _DoneBar(),
+      ]),
     );
   }
 }
@@ -63,7 +100,7 @@ class _DoneBar extends StatelessWidget {
           top: false,
           bottom: false,
           child: SizedBox(
-            height: 44,
+            height: KeyboardDismissal.barHeight,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [

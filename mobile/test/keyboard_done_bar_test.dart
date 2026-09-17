@@ -72,4 +72,55 @@ void main() {
     await t.pump();
     expect(pressed, isTrue);
   });
+
+  // ── The regression from the 17 Sep round ────────────────────────────────
+  //
+  // The bar was `Positioned(bottom: inset)` over the whole app — it painted a
+  // 44pt opaque strip exactly where the keyboard's top edge is. On a form you
+  // scroll, so it only ever hid chrome; on a screen whose content is PINNED
+  // to the keyboard it hid the content. The round chat composer is pinned
+  // there by construction, so the bar sat on top of the text field and a
+  // golfer could type a message he could not read.
+  //
+  // The fix is that the bar occupies space rather than stealing it: the
+  // wrapper reports a bottom inset 44 larger, every Scaffold resizes to leave
+  // the row free, and the bar fills it.
+  group('it must never cover the content above the keyboard', () {
+    Widget chatLike({required double inset}) => MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(viewInsets: EdgeInsets.only(bottom: inset)),
+            child: KeyboardDismissal(
+              child: Scaffold(
+                body: Column(children: [
+                  const Expanded(child: SizedBox.expand()),
+                  // The composer: pinned to the bottom of the resized body,
+                  // which is exactly where the bar used to be drawn.
+                  Container(
+                    key: const Key('composer'),
+                    height: 56,
+                    color: const Color(0xFFEEEEEE),
+                    child: const TextField(),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+        );
+
+    testWidgets('the composer is clear of the Done bar', (t) async {
+      await t.pumpWidget(chatLike(inset: 300));
+      final composer = t.getRect(find.byKey(const Key('composer')));
+      final bar = t.getRect(find.text('Done'));
+      expect(composer.bottom, lessThanOrEqualTo(bar.top),
+          reason: 'the Done bar is painted over the message field — a golfer '
+              'can type what he cannot read');
+    });
+
+    testWidgets('and the bar is still on the keyboard edge', (t) async {
+      await t.pumpWidget(chatLike(inset: 300));
+      final screen = t.getRect(find.byType(MaterialApp));
+      final bar = t.getRect(find.text('Done'));
+      expect(screen.bottom - bar.bottom, greaterThanOrEqualTo(300.0));
+    });
+  });
 }
