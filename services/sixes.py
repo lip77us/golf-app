@@ -169,7 +169,7 @@ def setup_sixes(
     handicap_mode: str = HandicapMode.NET,
     net_percent: int = 100,
     scoring_format: str = 'classic',
-    handicap_allocation: str = 'per_segment',
+    handicap_allocation: str = 'full_round',
 ) -> list:
     """
     Create SixesSegment and SixesTeam rows for the given foursome.
@@ -189,10 +189,18 @@ def setup_sixes(
     2 pts/hole, 3 segments only, strict point-based closeout, all 18 holes
     played but post-closeout holes don't count toward segment points).
 
-    handicap_allocation selects between 'per_segment' (Sixes-style
-    SO spreading across the 3 matches — only meaningful in STROKES_OFF
-    mode) and 'full_round' (allocate strokes by round-wide stroke index,
-    same as a normal NET round).  Both modes are no-ops in NET / GROSS.
+    handicap_allocation selects between 'full_round' (allocate strokes by
+    round-wide stroke index, same as a normal NET round — 'Straight up' on
+    the setup screen, and THE DEFAULT) and 'per_segment' (Sixes-style SO
+    spreading across the 3 matches).  Both are no-ops in NET / GROSS, so this
+    only bites in STROKES_OFF.
+
+    **The default changed on 17 Sep 2026.** Per-segment was the original Sixes
+    rule and it surprises people: a golfer's strokes are re-spread over each
+    six-hole match, so where he gets them moves with the segment bounds rather
+    than following the card's stroke index. Round-wide is what a golfer expects
+    from every other game in the app. Existing rows keep whatever they were
+    created with — this changes new games only.
 
     Returns a list of SixesSegment instances.
     """
@@ -252,7 +260,7 @@ def setup_sixes(
     if scoring_format not in ('classic', 'high_low'):
         scoring_format = 'classic'
     if handicap_allocation not in ('per_segment', 'full_round'):
-        handicap_allocation = 'per_segment'
+        handicap_allocation = 'full_round'
 
     segments = []
     for i, td in enumerate(team_data, start=1):
@@ -1129,7 +1137,13 @@ def sixes_summary(foursome) -> dict:
     handicap_mode       = getattr(first, 'handicap_mode', HandicapMode.NET) if first else HandicapMode.NET
     net_percent         = getattr(first, 'net_percent', 100) if first else 100
     scoring_format      = getattr(first, 'scoring_format', 'classic') if first else 'classic'
-    handicap_allocation = getattr(first, 'handicap_allocation', 'per_segment') if first else 'per_segment'
+    # **The `else` branch is the DEFAULT FOR A NEW GAME**, not a legacy
+    # fallback: with no segment yet this summary is what the setup screen
+    # opens on, so it has to be Straight up or the screen would show the old
+    # default and quietly send it back. An existing row keeps its own value —
+    # `getattr` finds the field on every real row.
+    handicap_allocation = (getattr(first, 'handicap_allocation', 'full_round')
+                           if first else 'full_round')
 
     # Per-player running money total for this foursome.  One unit per
     # decided match — winners +bet_unit, losers -bet_unit, halved = 0.

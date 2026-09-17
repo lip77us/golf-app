@@ -102,12 +102,20 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
   // only, strict closeout, all 18 holes played).  Default to classic.
   String _scoringFormat = 'classic';
 
-  // Handicap allocation: 'per_segment' splits Strokes-Off across the 3
-  // matches (legacy Sixes behavior).  'full_round' allocates strokes by
-  // round-wide stroke index (a player with N strokes gets one on every
-  // hole where SI <= N).  Only meaningful when handicap_mode is
-  // 'strokes_off'.  Default to per_segment for backward compatibility.
-  String _handicapAllocation = 'per_segment';
+  // Handicap allocation. 'full_round' — "Straight up" on screen — allocates
+  // strokes by round-wide stroke index, so a player with N strokes gets one
+  // on every hole where SI <= N, exactly as every other game in the app does.
+  // 'per_segment' re-spreads Strokes-Off across the 3 matches, which was the
+  // original Sixes rule.
+  //
+  // Only meaningful when handicap_mode is 'strokes_off'; a no-op in net and
+  // gross.
+  //
+  // **Straight up is the default as of 17 Sep 2026.** Per-segment surprises
+  // people: where a golfer's strokes fall moves with the segment bounds
+  // rather than following the card he is looking at. Existing games keep
+  // whatever they were created with.
+  String _handicapAllocation = 'full_round';
 
   // Bet unit for this round (editable inline).  Pre-filled from the
   // round's current bet_unit after the round loads.  On Start Match we

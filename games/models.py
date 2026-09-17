@@ -99,12 +99,14 @@ class SixesSegment(models.Model):
     handicap_allocation = models.CharField(
                             max_length=20,
                             choices=HCAP_ALLOCATION_CHOICES,
-                            default='per_segment',
+                            default='full_round',
                             help_text=(
                                 "Only meaningful for handicap_mode='strokes_off'. "
-                                "'per_segment' splits SO across the 3 matches "
-                                "(legacy default); 'full_round' allocates strokes "
-                                "by round-wide stroke index instead."
+                                "'full_round' (the default) allocates strokes by "
+                                "round-wide stroke index — 'Straight up' on the "
+                                "setup screen; 'per_segment' splits SO across the "
+                                "3 matches, which was the original Sixes rule and "
+                                "the default until 17 Sep 2026."
                             ),
                         )
     created_at          = models.DateTimeField(auto_now_add=True)

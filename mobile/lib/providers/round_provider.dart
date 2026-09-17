@@ -621,7 +621,10 @@ class RoundProvider extends ChangeNotifier {
     String handicapMode       = 'net',
     int    netPercent         = 100,
     String scoringFormat      = 'classic',
-    String handicapAllocation = 'per_segment',
+    // Straight up (round-wide SI) — the Sixes default since
+    // 17 Sep 2026. Rabbit keeps per-segment; the two games share the
+    // mechanic but not the default.
+    String handicapAllocation = 'full_round',
   }) async {
     _submitting = true;
     _clearError();

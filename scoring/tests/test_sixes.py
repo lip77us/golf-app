@@ -320,7 +320,12 @@ class SixesRessegmentTests(TestCase):
         )
         self.pid = {m.player.name: m.player_id
                     for m in self.fs.memberships.select_related('player')}
-        setup_sixes(self.fs, self._td(), handicap_mode='strokes_off')
+        # PER-SEGMENT explicitly: this test is about that mechanic, and it
+        # stopped being the default on 17 Sep 2026. A test that relies on a
+        # default to select the behaviour it is testing breaks the day the
+        # default moves, which is exactly what happened here.
+        setup_sixes(self.fs, self._td(), handicap_mode='strokes_off',
+                    handicap_allocation='per_segment')
         # Only the first hole (16) is played.
         par = self.tee.hole(16)['par']
         submit_hole(self.fs, 16, [
@@ -674,3 +679,63 @@ class SixesTeamLockTests(TestCase):
         seg = self.fs.sixes_segments.order_by('segment_number').first()
         t1 = seg.teams.get(team_number=1)
         self.assertEqual({p.id for p in t1.players.all()}, {self.A, self.C})
+
+
+class SixesAllocationDefaultTests(TestCase):
+    """**Straight up (round-wide) is the default**, as of 17 Sep 2026.
+
+    Per-segment was the original Sixes rule and it surprises people: a
+    golfer's strokes are re-spread over each six-hole match, so where he gets
+    them moves with the segment bounds rather than following the stroke index
+    on the card in his hand. Round-wide is what every other game in the app
+    does.
+    """
+
+    def setUp(self):
+        self.tee = make_tee()
+        self.round = make_round(self.tee.course)
+        self.fs = make_foursome(
+            self.round, [('A', 0), ('B', 0), ('C', 0), ('D', 6)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+
+    def _td(self):
+        p = self.pid
+        return [{'team_select_method': 'long_drive',
+                 'team1_player_ids': [p['A'], p['B']],
+                 'team2_player_ids': [p['C'], p['D']],
+                 'start_hole': s, 'end_hole': s + 5}
+                for s in (1, 7, 13)]
+
+    def test_a_new_game_allocates_round_wide(self):
+        from games.models import SixesSegment
+        setup_sixes(self.fs, self._td(), handicap_mode='strokes_off')
+        segs = SixesSegment.objects.filter(foursome=self.fs, is_extra=False)
+        self.assertTrue(segs.exists())
+        self.assertEqual({s.handicap_allocation for s in segs}, {'full_round'})
+
+    def test_the_setup_screen_opens_on_it_before_a_game_exists(self):
+        """The summary with no segment yet is what the setup screen reads —
+        so the default has to live there too, or the screen would show the old
+        one and quietly send it back."""
+        s = sixes_summary(self.fs)
+        self.assertEqual(s['handicap']['allocation'], 'full_round')
+
+    def test_per_segment_is_still_available(self):
+        """The mechanic is not removed — it stops being the default."""
+        from games.models import SixesSegment
+        setup_sixes(self.fs, self._td(), handicap_mode='strokes_off',
+                    handicap_allocation='per_segment')
+        segs = SixesSegment.objects.filter(foursome=self.fs, is_extra=False)
+        self.assertEqual({s.handicap_allocation for s in segs}, {'per_segment'})
+
+    def test_round_wide_follows_the_cards_stroke_index(self):
+        """A player with N strokes gets one on every hole where SI <= N —
+        the same rule he reads off the scorecard, and the whole point of the
+        change."""
+        setup_sixes(self.fs, self._td(), handicap_mode='strokes_off')
+        strokes = sixes_player_hole_strokes(self.fs)
+        got = {h for h, n in strokes.get(self.pid['D'], {}).items() if n}
+        want = {h for h in range(1, 19)
+                if (self.tee.hole(h)['stroke_index'] or 99) <= 6}
+        self.assertEqual(got, want)
