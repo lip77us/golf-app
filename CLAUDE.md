@@ -3657,6 +3657,38 @@ A closeout margin is now computed server-side (`holes_to_play` on the cup
 singles summary) because only the server knows the order; the client prefers it
 and keeps `18 - finished_on_hole` as a fallback for older payloads.
 
+### The `&M` rule (second pass, 17 Sep 2026)
+
+**The `M` in "3&2" ships from the server or it is wrong.** It is holes left in
+the match's own window counted along the group's play order, and the client
+cannot derive it from anything it holds. Every card now reads a
+`holes_to_play` field; none of them subtract a hole number.
+
+`fourball_summary`, `cup_singles_summary`, `cup_round_live_summary` and
+`triple_cup_summary` all emit it (plus `f9_holes_to_play` / `b9_holes_to_play`
+per nine). The two Dart helpers that took an `endHole` argument for the sole
+purpose of computing `endHole - finishedOn` now take the count instead, so the
+wrong sum is no longer expressible at those call sites.
+
+Three things this pass turned up that the first sweep missed:
+
+- **A segment can wrap the turn.** A Triple Cup third off a shotgun on the 8th
+  is holes 14..1, where the last hole has the SMALLEST number. Every
+  "finished early?" test of the form `finished_on_hole < end_hole` answered no,
+  which dropped the `&M` and made the card claim the match ran to its scheduled
+  end. Positions in `_match_hole_list`, never numbers.
+- **`_compute_sub_match` takes the order, and five callers were not passing
+  it** — including `services/ryder_cup.py`, which awards the cup POINTS from
+  the result. A group's back nine runs 13..18,10,11,12 off a shotgun from the
+  13th, so the leg went dormie a hole early: closed on 16 with two left when
+  five of nine had been played with four to go. `test_cup_sub_match.py` pins
+  the behaviour and greps the call sites, because the argument defaults and a
+  caller who forgets it gets a plausible wrong answer rather than an error.
+- **Sorting hole rows by `hole_number` un-does the sweep.** Both hole-result
+  models order by number in their Meta, so `rows[-1]` is the highest number
+  and not the last hole played: `cup_standings` read the running margin from a
+  hole played nine holes earlier. Sort by play-order position.
+
 ### Checked and correct
 
 `multi_skins` and `points_531` (no carry — order-independent), `irish_rumble`
@@ -3673,10 +3705,15 @@ bracket whose two rounds ARE the two nines cannot mean the same thing off a
 shotgun, and deciding what it should mean (first nine played? still holes 1–9?)
 is a rules call rather than a code one. Flagged rather than guessed.
 
-**`score_entry_screen.dart:10234`** still does `18 - finishedOnHole` for the
-fourball status line. Fourball's ENGINE already computes `holes_to_play` from
-play order — the value just is not on that payload yet, so the client
-recomputes it. Worth plumbing through the same way cup singles now is.
+**`services/tournament_match_play.py`'s two client labels** (`score_entry_
+screen.dart:7381` and `:8177`) still read `round == 1 ? 9 : 18` to get a
+scheduled end. They cannot be fixed before the format question above is
+answered: the bracket's rounds ARE the two nines, so there is no correct
+number to put there off a shotgun.
+
+**`pink_ball_screen.dart:1564`** does `18 - lastHole` for a devil-ball match
+result, and its payload has no `holes_to_play` yet. Same fix as fourball,
+different engine.
 
 ### Still outstanding across the set
 

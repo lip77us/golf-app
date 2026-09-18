@@ -363,6 +363,11 @@ def _compute_sub_match(holes_data: list, start_hole: int, end_hole: int,
         holes_up         – int (positive = p1 ahead) | None when pending
         finished_on_hole – hole number where sub-match closed, or None
         holes_played     – count of scored holes in this range
+        holes_to_play    – holes of this range still left when it closed
+                           (the `&M` in "3&2"), or None while undecided.
+                           Counted along the play order, which is why the
+                           caller cannot do it with `end_hole - finished`:
+                           a back nine begun on the 13th closes on hole 12.
     """
     walk = [h for h in (order or list(range(1, 19)))
             if start_hole <= h <= end_hole]
@@ -377,6 +382,7 @@ def _compute_sub_match(holes_data: list, start_hole: int, end_hole: int,
         return {
             'status': 'pending', 'result': None,
             'holes_up': None, 'finished_on_hole': None, 'holes_played': 0,
+            'holes_to_play': None,
         }
 
     margin = 0
@@ -395,6 +401,7 @@ def _compute_sub_match(holes_data: list, start_hole: int, end_hole: int,
                 'holes_up'        : margin,
                 'finished_on_hole': h['hole_number'],
                 'holes_played'    : idx + 1,
+                'holes_to_play'   : remaining,
             }
 
     holes_played = len(relevant)
@@ -403,7 +410,7 @@ def _compute_sub_match(holes_data: list, start_hole: int, end_hole: int,
         return {
             'status': 'in_progress', 'result': None,
             'holes_up': margin, 'finished_on_hole': None,
-            'holes_played': holes_played,
+            'holes_played': holes_played, 'holes_to_play': None,
         }
 
     # All holes played, no dormie close
@@ -417,6 +424,8 @@ def _compute_sub_match(holes_data: list, start_hole: int, end_hole: int,
         # nine that began on the 13th, not hole 18.
         'finished_on_hole': walk[-1] if walk else end_hole,
         'holes_played'    : holes_played,
+        # Went the distance, so nothing was left — "1 up", never "1&0".
+        'holes_to_play'   : 0,
     }
 
 
@@ -540,12 +549,18 @@ def cup_singles_summary(foursome) -> dict | None:
             'f9_result'          : f9['result'],
             'f9_holes_up'        : f9['holes_up'],
             'f9_finished_on_hole': f9['finished_on_hole'],
+            # Holes of the NINE left at close-out. `9 - finished_on_hole` and
+            # `18 - finished_on_hole` are both wrong on a shotgun: a back nine
+            # begun on the 13th runs 13..18,10,11,12, so a match clinched on
+            # hole 11 has ONE hole left, not seven.
+            'f9_holes_to_play'   : f9['holes_to_play'],
 
             # B9 sub-match (holes 10-18)
             'b9_status'          : b9['status'],
             'b9_result'          : b9['result'],
             'b9_holes_up'        : b9['holes_up'],
             'b9_finished_on_hole': b9['finished_on_hole'],
+            'b9_holes_to_play'   : b9['holes_to_play'],
 
             'holes': holes,
             'hole_plan': hole_plan,

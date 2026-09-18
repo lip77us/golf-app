@@ -668,6 +668,41 @@ class TripleCupShotgunTests(TestCase):
         fourball = next(m for m in s['matches'] if m['segment'] == 'fourball')
         self.assertEqual(fourball['result'], 'team1', fourball)
 
+    def test_a_wrapping_segment_closes_out_in_play_order(self):
+        """The foursomes third here is holes 14..1 — it crosses the turn, so
+        its last hole has the SMALLEST number. Every "did it finish early"
+        test that compared hole numbers ("17 < 1") answered no, which dropped
+        the `&M` from the label and left the card claiming the match ran to
+        its scheduled end."""
+        setup_triple_cup(
+            self.fs,
+            team1_ids=[self.pid['T1A'], self.pid['T1B']],
+            team2_ids=[self.pid['T2A'], self.pid['T2B']],
+            handicap_mode='gross',
+        )
+        # Foursomes = 14,15,16,17,18,1 in play order. Team 1 wins the first
+        # four → 4 up with 2 left → clinched ON HOLE 17, a "4&2".
+        for h in [14, 15, 16, 17]:
+            par = self.tee.hole(h)['par']
+            _score_hole(self.fs, self.pid, h, par, [
+                ('T1A', par), ('T2A', par + 1),
+            ])
+        calculate_triple_cup(self.fs)
+        s = triple_cup_summary(self.fs)
+        foursomes = next(m for m in s['matches'] if m['segment'] == 'foursomes')
+
+        self.assertEqual(foursomes['result'], 'team1', foursomes)
+        self.assertEqual(foursomes['finished_on_hole'], 17)
+        # Two holes of the SEGMENT were left: 18 and 1.
+        self.assertEqual(foursomes['holes_to_play'], 2)
+        # The card's last column is the hole it actually ended on.
+        self.assertEqual(foursomes['display_end_hole'], 17)
+        # Both arithmetics the clients used to do, for the record: one goes
+        # negative, the other counts the whole round.
+        self.assertNotEqual(foursomes['end_hole'] - 17,
+                            foursomes['holes_to_play'])
+        self.assertNotEqual(18 - 17, foursomes['holes_to_play'])
+
 
 class TripleCupDetailProspectiveStrokesTests(TestCase):
     """The leaderboard detail grid (`match['holes']`) lists EVERY hole in a

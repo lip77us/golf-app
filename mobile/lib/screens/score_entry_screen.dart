@@ -9415,17 +9415,20 @@ class _CupSinglesStatusBar extends StatelessWidget {
     // status:     'pending' | 'in_progress' | 'complete'
     // holesUp:    margin (positive = p1 leads); null when pending
     // finishedOn: hole number where this sub-match closed (null if not complete)
-    // endHole:    last hole of this segment (9 for F9, 18 for B9/All)
+    // toPlay:     holes of the segment left at close-out, counted by the SERVER
+    //             along the play order. This replaced an `endHole` argument
+    //             used only for `endHole - finishedOn`, which is right on a
+    //             round from the 1st and wrong on every shotgun.
     //
     // Display rules:
     //   pending                          → "Pend"   (dim)
     //   in_progress, AS                  → "AS"     (neutral)
     //   in_progress, leading             → "Xup"    (leader color)
     //   complete, halved / margin==0     → "AS"     (neutral)
-    //   complete, finishedOn < endHole   → "X&Y"    (leader color)
-    //   complete, finishedOn == endHole  → "Xup"    (leader color)
+    //   complete, holes left             → "X&Y"    (leader color)
+    //   complete, went the distance      → "Xup"    (leader color)
     Widget segChip(String label, String status, int? holesUp,
-        int? finishedOn, int endHole) {
+        int? finishedOn, int? toPlay) {
       String txt;
       Color  color;
 
@@ -9437,8 +9440,8 @@ class _CupSinglesStatusBar extends StatelessWidget {
         color = neutral;
       } else {
         color = holesUp > 0 ? t1Color : t2Color;
-        if (status == 'complete' && finishedOn != null && finishedOn < endHole) {
-          final remaining = endHole - finishedOn;
+        final remaining = toPlay ?? 0;
+        if (status == 'complete' && finishedOn != null && remaining > 0) {
           txt = '${holesUp.abs()}&$remaining';
         } else {
           txt = '${holesUp.abs()}up';
@@ -9478,14 +9481,17 @@ class _CupSinglesStatusBar extends StatelessWidget {
       final f9Status  = m['f9_status']  as String? ?? 'pending';
       final f9Up      = m['f9_holes_up']         as int?;
       final f9FinOn   = m['f9_finished_on_hole']  as int?;
+      final f9ToPlay  = m['f9_holes_to_play']    as int?;
 
       final b9Status  = m['b9_status']  as String? ?? 'pending';
       final b9Up      = m['b9_holes_up']         as int?;
       final b9FinOn   = m['b9_finished_on_hole']  as int?;
+      final b9ToPlay  = m['b9_holes_to_play']    as int?;
 
       final allStatus = m['status']     as String? ?? 'pending';
       final allUp     = m['overall_holes_up']    as int?;
       final allFinOn  = m['finished_on_hole']    as int?;
+      final allToPlay = m['holes_to_play']       as int?;
 
       // Red player first, then blue — always show both names in their colors.
       final redName  = t1IsRed ? p1Name : p2Name;
@@ -9528,11 +9534,11 @@ class _CupSinglesStatusBar extends StatelessWidget {
             const SizedBox(height: 5),
             // F9 · B9 · All — each uses its own sub-match status
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              segChip('F9',  f9Status,  f9Up,  f9FinOn,  9),
+              segChip('F9',  f9Status,  f9Up,  f9FinOn,  f9ToPlay),
               const SizedBox(width: 10),
-              segChip('B9',  b9Status,  b9Up,  b9FinOn,  18),
+              segChip('B9',  b9Status,  b9Up,  b9FinOn,  b9ToPlay),
               const SizedBox(width: 10),
-              segChip('All', allStatus, allUp, allFinOn, 18),
+              segChip('All', allStatus, allUp, allFinOn, allToPlay),
             ]),
           ],
         ),

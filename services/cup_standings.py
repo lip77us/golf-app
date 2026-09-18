@@ -379,6 +379,7 @@ def cup_round_live_summary(round_obj) -> dict | None:
                         'holes_played'   : int,
                         'overall_holes_up': int,
                         'finished_on_hole': int | None,
+                        'holes_to_play'  : int | None,  # left at close-out
                         'is_resolved'    : bool,
                     }
                 ],
@@ -650,6 +651,10 @@ def cup_round_live_summary(round_obj) -> dict | None:
                     ),
                     'overall_holes_up': tcm.get('holes_up_final', 0),
                     'finished_on_hole': tcm.get('finished_on_hole'),
+                    # Holes left in the SEGMENT at close-out — the `&M`. The
+                    # segment is the match's own window, so this is not
+                    # `18 - hole` and not `end_hole - hole` either.
+                    'holes_to_play'   : tcm.get('holes_to_play'),
                     'is_resolved'     : result is not None,
                 })
 
@@ -739,11 +744,22 @@ def cup_round_live_summary(round_obj) -> dict | None:
             # singles_18 awards pv for the single overall result.
             # possible is accumulated inside the loop.
             from services.cup_singles import _compute_sub_match
+            # The group's PLAY ORDER. A shotgun group plays 13..18,1..12, so
+            # "the last hole" is a position in this list and never the highest
+            # hole number — and the dormie maths inside _compute_sub_match
+            # needs the same order to know what is still left.
+            from services.hole_plan import play_order as _play_order
+            _order = _play_order(round_obj, fs) or list(range(1, 19))
+            _pos   = {h: i for i, h in enumerate(_order)}
 
             for mp in bracket.matches.all():
-                # Derive holes-played & current margin from hole results
+                # Holes played & current margin, walked in PLAY ORDER. Sorting
+                # by hole_number put 18 last for a group that started on 10 and
+                # had already turned, so the margin on the card came from a hole
+                # played nine holes earlier.
                 hole_results = sorted(
-                    mp.hole_results.all(), key=lambda r: r.hole_number
+                    mp.hole_results.all(),
+                    key=lambda r: _pos.get(r.hole_number, r.hole_number),
                 )
                 holes_played     = len(hole_results)
                 overall_holes_up = (
@@ -758,9 +774,9 @@ def cup_round_live_summary(round_obj) -> dict | None:
 
                 if gtype == GameType.SINGLES_NASSAU:
                     # Award pv per segment independently as each completes.
-                    f9    = _compute_sub_match(holes_data, 1,  9)
-                    b9    = _compute_sub_match(holes_data, 10, 18)
-                    all18 = _compute_sub_match(holes_data, 1,  18)
+                    f9    = _compute_sub_match(holes_data, 1,  9,  order=_order)
+                    b9    = _compute_sub_match(holes_data, 10, 18, order=_order)
+                    all18 = _compute_sub_match(holes_data, 1,  18, order=_order)
 
                     f9_t1p,    f9_t2p    = _seg_result_pts(_mp_result_to_cup(f9['result']),    pv)
                     b9_t1p,    b9_t2p    = _seg_result_pts(_mp_result_to_cup(b9['result']),    pv)
@@ -777,8 +793,8 @@ def cup_round_live_summary(round_obj) -> dict | None:
                     finished_on  = all18['finished_on_hole']
                 else:
                     # singles_18: single overall result
-                    f9  = _compute_sub_match(holes_data, 1,  9)
-                    b9  = _compute_sub_match(holes_data, 10, 18)
+                    f9  = _compute_sub_match(holes_data, 1,  9,  order=_order)
+                    b9  = _compute_sub_match(holes_data, 10, 18, order=_order)
                     all18 = {'status': mp.status, 'result': mp.result,
                              'holes_up': None, 'finished_on_hole': mp.finished_on_hole}
                     ovr_result   = _mp_result_to_cup(mp.result)
@@ -802,17 +818,27 @@ def cup_round_live_summary(round_obj) -> dict | None:
                     'holes_played'       : holes_played,
                     'overall_holes_up'   : ovr_holes_up,
                     'finished_on_hole'   : finished_on,
+                    # Holes left when it closed out — the `&M` in "3&2". Only
+                    # the server knows the play order, so a client doing
+                    # `18 - finished_on_hole` is right on a round from the 1st
+                    # and wrong on every shotgun. None while the match is live.
+                    'holes_to_play'      : (
+                        len(_order) - 1 - _pos[finished_on]
+                        if finished_on in _pos else None),
                     'is_resolved'        : ovr_result is not None,
                     # F9 sub-match
                     'f9_status'          : f9['status'],
                     'f9_result'          : f9['result'],
                     'f9_holes_up'        : f9['holes_up'],
                     'f9_finished_on_hole': f9['finished_on_hole'],
+                    # Holes of the nine left at close-out — see cup_singles.
+                    'f9_holes_to_play'   : f9['holes_to_play'],
                     # B9 sub-match
                     'b9_status'          : b9['status'],
                     'b9_result'          : b9['result'],
                     'b9_holes_up'        : b9['holes_up'],
                     'b9_finished_on_hole': b9['finished_on_hole'],
+                    'b9_holes_to_play'   : b9['holes_to_play'],
                 })
 
             total_all   += possible

@@ -105,3 +105,47 @@ class CupSinglesShotgunTests(TestCase):
         self.assertEqual(m['holes_to_play'], 8,
                          'ten of eighteen played leaves eight, whatever the '
                          'hole is numbered')
+
+    def test_a_back_nine_closeout_counts_the_nine_in_play_order(self):
+        """The back nine is the half a shotgun scrambles: from the 13th it
+        runs 13..18 then 10,11,12, so hole 17 is its FIFTH hole and hole 12
+        its last. Cards drew this `&M` as `18 - finished_on_hole` (and the
+        F9 chip as `9 - …`), which is a different number every time."""
+        for h in (13, 14, 15, 16, 17):
+            self._play(h, 4, 4, 5, 5)        # A wins each
+        m = self._match_a_v_c()
+        # Five wins into a nine-hole leg with four left → clinched on 17.
+        self.assertEqual(m['b9_status'], 'complete')
+        self.assertEqual(m['b9_finished_on_hole'], 17)
+        self.assertEqual(m['b9_holes_to_play'], 4,
+                         'holes 18, 10, 11 and 12 were still to play')
+        # What the cards used to compute from the same hole number.
+        self.assertNotEqual(18 - 17, m['b9_holes_to_play'])
+        # The front nine has not started, so it reports nothing to play.
+        self.assertEqual(m['f9_status'], 'pending')
+        self.assertIsNone(m['f9_holes_to_play'])
+
+    def test_going_the_distance_leaves_nothing_to_play(self):
+        """A leg that runs to its last hole is "1 up", never "1&0" — so the
+        count is 0 and not None, and the cards branch on it.
+
+        Note what it takes to get here: this group's back nine does not
+        finish until the round does, because 10, 11 and 12 are the last
+        three holes it plays."""
+        order = [13, 14, 15, 16, 17, 18] + list(range(1, 13))
+        for i, h in enumerate(order):
+            # Alternate the winner by POSITION so no leg ever goes dormie
+            # early — every one of them runs to its own last hole.
+            if i % 2 == 0:
+                self._play(h, 4, 4, 5, 5)    # A wins
+            else:
+                self._play(h, 5, 5, 4, 4)    # C wins
+        m = self._match_a_v_c()
+        self.assertEqual(m['holes_played'], 18)
+        self.assertEqual(m['b9_status'], 'complete')
+        self.assertEqual(m['b9_finished_on_hole'], 12,
+                         'hole 12 closes a back nine begun on the 13th')
+        self.assertEqual(m['b9_holes_to_play'], 0)
+        # And the front nine, which this group played in the middle.
+        self.assertEqual(m['f9_finished_on_hole'], 9)
+        self.assertEqual(m['f9_holes_to_play'], 0)

@@ -1970,6 +1970,11 @@ class TripleCupMatch {
   final String status;         // 'pending' | 'in_progress' | 'complete' | 'halved'
   final String? result;        // 'team1' | 'team2' | 'halved' | null
   final int? finishedOnHole;
+  /// Holes left IN THIS SEGMENT when the match closed out — the `&M` in "3&2".
+  /// The server counts it along the group's play order; `endHole -
+  /// finishedOnHole` is right on a round from the 1st and wrong on a shotgun
+  /// segment, which can wrap the turn (holes 14..1). Null while live.
+  final int? holesToPlay;
   final int holesUpFinal;      // signed, +ve = team1
   final String winnerLabel;    // 'Team 1' | 'Team 2' | 'Halved' | '—'
   final TripleCupTeamInfo team1;
@@ -1993,6 +1998,7 @@ class TripleCupMatch {
     required this.status,
     this.result,
     this.finishedOnHole,
+    this.holesToPlay,
     required this.holesUpFinal,
     required this.winnerLabel,
     required this.team1,
@@ -2013,6 +2019,7 @@ class TripleCupMatch {
         status:          j['status']            as String? ?? 'pending',
         result:          j['result']            as String?,
         finishedOnHole:  j['finished_on_hole']  as int?,
+        holesToPlay:     j['holes_to_play']     as int?,
         holesUpFinal:    j['holes_up_final']    as int? ?? 0,
         winnerLabel:     j['winner_label']      as String? ?? '—',
         team1FirstTeeId: j['team1_first_tee_id'] as int?,
@@ -2077,11 +2084,9 @@ class TripleCupMatch {
       // Authoritative signed final margin (NOT holes.last.margin).
       final margin = holesUpFinal.abs();
       if (margin == 0) return 'Halved';
-      // Clinched early → "X and Y" (Y = holes left when it ended).
-      final leftAtClinch =
-          (finishedOnHole != null && finishedOnHole! < endHole)
-              ? endHole - finishedOnHole!
-              : 0;
+      // Clinched early → "X and Y" (Y = holes left when it ended, counted by
+      // the server along the play order — see holesToPlay).
+      final leftAtClinch = holesToPlay ?? 0;
       if (leftAtClinch > 0) return '$margin and $leftAtClinch';
       return '$margin UP';
     }

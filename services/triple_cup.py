@@ -1469,6 +1469,7 @@ def triple_cup_summary(foursome) -> dict | None:
                 'status'         : str,
                 'result'         : 'team1'|'team2'|'halved'|None,
                 'finished_on_hole': int|None,
+                'holes_to_play'   : int|None,   # left in the segment at close-out
                 'holes_up_final' : int,   # signed, +ve = team1
                 'winner_label'   : 'Team 1'|'Team 2'|'Halved'|'—',
                 'team1'          : {'players': [names], 'shorts': [shorts]},
@@ -1569,14 +1570,33 @@ def triple_cup_summary(foursome) -> dict | None:
             t2_points += pv / 2
             winner_label = 'Halved'
 
+        # The segment's holes IN PLAY ORDER — every "last hole" and "holes
+        # left" below is a position in this list, never a hole number. A
+        # shotgun segment can wrap the turn (holes 14..1), where comparing
+        # numbers ("18 < 1") gets the answer exactly backwards.
+        seg_holes = _match_hole_list(match)
+        seg_pos   = {h: i for i, h in enumerate(seg_holes)}
+        hole_rows = sorted(
+            match.hole_results.all(),
+            key=lambda r: seg_pos.get(r.hole_number, r.hole_number),
+        )
+
         # Display end hole = actually played hole if clinched early.
-        hole_rows = list(match.hole_results.all())
+        _last_pos = seg_pos.get(hole_rows[-1].hole_number) if hole_rows else None
         if (match.status in (MatchStatus.COMPLETE, MatchStatus.HALVED)
-                and hole_rows
-                and hole_rows[-1].hole_number < match.end_hole):
+                and _last_pos is not None
+                and _last_pos < len(seg_holes) - 1):
             display_end = hole_rows[-1].hole_number
         else:
             display_end = match.end_hole
+
+        # Holes left in the SEGMENT when it closed out — the `&M` in "3&2".
+        # None while the match is live. Computed here because only the server
+        # knows the play order; `end_hole - finished_on_hole` is right on a
+        # round from the 1st and wrong on every shotgun.
+        _fin_pos      = seg_pos.get(match.finished_on_hole)
+        holes_to_play = (len(seg_holes) - 1 - _fin_pos
+                         if _fin_pos is not None else None)
 
         # Per-hole rows include par + stroke index + each player's
         # gross/strokes/net + team-level alt-shot strokes so the
@@ -1600,7 +1620,7 @@ def triple_cup_summary(foursome) -> dict | None:
         t1_team_strokes_by_hole: dict = {}
         t2_team_strokes_by_hole: dict = {}
         if match.segment == 'foursomes':
-            seg_range = _match_hole_list(match)
+            seg_range = seg_holes
             t1_team_strokes_by_hole, t2_team_strokes_by_hole = (
                 _foursomes_team_strokes(
                     game, team1_pids, team2_pids, members_by_pid, seg_range,
@@ -1620,7 +1640,7 @@ def triple_cup_summary(foursome) -> dict | None:
         # played; unplayed holes carry null gross with the stroke dots still on.
         hr_by_hole = {hr.hole_number: hr for hr in hole_rows}
         holes_out = []
-        for hole_num in _match_hole_list(match):
+        for hole_num in seg_holes:
             hr = hr_by_hole.get(hole_num)
             if hr is None:
                 hole_winner = None
@@ -1737,6 +1757,7 @@ def triple_cup_summary(foursome) -> dict | None:
             'status'          : match.status,
             'result'          : match.result,
             'finished_on_hole': match.finished_on_hole,
+            'holes_to_play'   : holes_to_play,
             'holes_up_final'  : match.holes_up_after_final,
             'winner_label'    : winner_label,
             # Alt-shot first-tee assignments — only set for foursomes

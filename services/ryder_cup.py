@@ -191,6 +191,13 @@ def _extract_foursome_points(
         except MatchPlayBracket.DoesNotExist:
             return []
 
+        # The group's PLAY ORDER. This is not cosmetic here: _compute_sub_match
+        # decides DORMIE from it, so a shotgun group's back nine (13..18 then
+        # 10..12) closed on the wrong hole without it — and these rows are the
+        # cup POINTS, not a label.
+        from services.hole_plan import play_order as _play_order
+        _order = _play_order(foursome.round, foursome) or list(range(1, 19))
+
         for mp_match in bracket.matches.all():
             if gtype == GameType.SINGLES_NASSAU:
                 # Derive F9 / B9 / Overall results from hole-by-hole data.
@@ -205,9 +212,9 @@ def _extract_foursome_points(
                         key=lambda r: r.hole_number,
                     )
                 ]
-                f9    = _compute_sub_match(holes_data, 1,  9)
-                b9    = _compute_sub_match(holes_data, 10, 18)
-                all18 = _compute_sub_match(holes_data, 1,  18)
+                f9    = _compute_sub_match(holes_data, 1,  9,  order=_order)
+                b9    = _compute_sub_match(holes_data, 10, 18, order=_order)
+                all18 = _compute_sub_match(holes_data, 1,  18, order=_order)
 
                 for seg, sub in [
                     ('front9',  f9),

@@ -7724,13 +7724,17 @@ class _SinglesLiveRows extends StatelessWidget {
     final holesPlayed  = m['holes_played']    as int?    ?? 0;
     final overallUp    = m['overall_holes_up'] as int?   ?? 0;
     final finishedOn   = m['finished_on_hole'] as int?;
+    // Holes left at close-out comes from the server, which walks the group's
+    // play order. `18 - finished_on_hole` is right on a round from the 1st and
+    // wrong on every shotgun: off 10, a match clinched on hole 1 has 8 left.
+    final remaining    = m['holes_to_play']   as int?;
     final p1           = m['player1']         as String? ?? '?';
     final p2           = m['player2']         as String? ?? '?';
 
     if (result == 'halved')  return 'Halved';
     if (result == 'team1' || result == 'player1') {
       if (finishedOn != null) {
-        final rem = 18 - finishedOn;
+        final rem = remaining ?? 0;
         final mag = overallUp.abs();
         return rem > 0 ? '$p1 ${mag}&$rem' : '$p1 ${mag}Up';
       }
@@ -7738,7 +7742,7 @@ class _SinglesLiveRows extends StatelessWidget {
     }
     if (result == 'team2' || result == 'player2') {
       if (finishedOn != null) {
-        final rem = 18 - finishedOn;
+        final rem = remaining ?? 0;
         final mag = overallUp.abs();
         return rem > 0 ? '$p2 ${mag}&$rem' : '$p2 ${mag}Up';
       }
@@ -7856,7 +7860,12 @@ class _CupSinglesLiveRows extends StatelessWidget {
     String? segResult,
     int?    holesUp,
     int?    finishedOn,
-    int     endHole,
+    /// Holes of this segment left at close-out, counted by the server along
+    /// the play order. This replaced an `endHole` parameter that existed only
+    /// to compute `endHole - finishedOn` — right on a round from the 1st and
+    /// wrong on every shotgun (a back nine begun on the 13th runs
+    /// 13..18,10,11,12, so clinching on 11 leaves ONE hole, not seven).
+    int?    holesToPlay,
     Color   leftColor,
     Color   rightColor,
     ThemeData theme, {
@@ -7884,10 +7893,9 @@ class _CupSinglesLiveRows extends StatelessWidget {
       } else {
         final p1Leads = up > 0;
         final String text;
-        if (segStatus == 'complete' &&
-            finishedOn != null &&
-            finishedOn < endHole) {
-          text = '${up.abs()}&${endHole - finishedOn}';
+        final rem = holesToPlay ?? 0;
+        if (segStatus == 'complete' && finishedOn != null && rem > 0) {
+          text = '${up.abs()}&$rem';
         } else {
           text = '${up.abs()} UP';
         }
@@ -8000,19 +8008,22 @@ class _CupSinglesLiveRows extends StatelessWidget {
             m['f9_result']           as String?,
             m['f9_holes_up']         as int?,
             m['f9_finished_on_hole'] as int?,
-            9,  leftColour, rightColour, theme, p1OnLeft: leftIsT1),
+            m['f9_holes_to_play']    as int?,
+            leftColour, rightColour, theme, p1OnLeft: leftIsT1),
           _segRow('B9',
             m['b9_status']           as String?,
             m['b9_result']           as String?,
             m['b9_holes_up']         as int?,
             m['b9_finished_on_hole'] as int?,
-            18, leftColour, rightColour, theme, p1OnLeft: leftIsT1),
+            m['b9_holes_to_play']    as int?,
+            leftColour, rightColour, theme, p1OnLeft: leftIsT1),
           _segRow('All',
             m['status']              as String?,
             m['result']              as String?,
             m['overall_holes_up']    as int?,
             m['finished_on_hole']    as int?,
-            18, leftColour, rightColour, theme, p1OnLeft: leftIsT1),
+            m['holes_to_play']       as int?,
+            leftColour, rightColour, theme, p1OnLeft: leftIsT1),
         ];
       }).toList(),
     );
@@ -8142,7 +8153,8 @@ class _Singles18GroupCard extends StatelessWidget {
       if (result == 'halved') return 'Halved';
       final winner = result == 'player1' ? p1 : p2;
       if (finishedOn != null) {
-        final rem = 18 - finishedOn;
+        // Server-computed holes left — see _SinglesLiveRows._statusLabel.
+        final rem = m['holes_to_play'] as int? ?? 0;
         final mag = overallUp.abs();
         return rem > 0 ? '$winner ${mag}&$rem' : '$winner wins $mag Up';
       }
@@ -8309,7 +8321,7 @@ class _CupSinglesGroupCard extends StatelessWidget {
     String? segResult,    // null | 'player1' | 'player2' | 'halved'
     int?    holesUp,      // positive = player1 leads
     int?    finishedOn,   // hole number segment was decided on (if early)
-    int     endHole,      // 9 for F9/B9-segment, 18 for All
+    int?    holesToPlay,  // holes of the segment left at close-out (server)
     Color   leftColor,
     Color   rightColor,
     ThemeData theme, {
@@ -8338,11 +8350,9 @@ class _CupSinglesGroupCard extends StatelessWidget {
       } else {
         final p1Leads = up > 0;
         final String text;
-        if (segStatus == 'complete' &&
-            finishedOn != null &&
-            finishedOn < endHole) {
-          // Decided before last hole → X&Y notation
-          final rem = endHole - finishedOn;
+        final rem = holesToPlay ?? 0;
+        if (segStatus == 'complete' && finishedOn != null && rem > 0) {
+          // Decided before the segment's last hole → X&Y notation
           text = '${up.abs()}&$rem';
         } else {
           text = '${up.abs()} UP';
@@ -8624,7 +8634,7 @@ class _CupSinglesGroupCard extends StatelessWidget {
                 m['f9_result']           as String?,
                 m['f9_holes_up']         as int?,
                 m['f9_finished_on_hole'] as int?,
-                9,
+                m['f9_holes_to_play']    as int?,
                 leftColor, rightColor, theme, p1OnLeft: p1OnLeft,
               ),
               // B9 segment
@@ -8634,7 +8644,7 @@ class _CupSinglesGroupCard extends StatelessWidget {
                 m['b9_result']           as String?,
                 m['b9_holes_up']         as int?,
                 m['b9_finished_on_hole'] as int?,
-                18,
+                m['b9_holes_to_play']    as int?,
                 leftColor, rightColor, theme, p1OnLeft: p1OnLeft,
               ),
               // All segment
@@ -8644,7 +8654,7 @@ class _CupSinglesGroupCard extends StatelessWidget {
                 m['result']              as String?,
                 m['overall_holes_up']    as int?,
                 m['finished_on_hole']    as int?,
-                18,
+                m['holes_to_play']       as int?,
                 leftColor, rightColor, theme, p1OnLeft: p1OnLeft,
               ),
               // Round progress — per-hole nets + hole winner, from the match's
@@ -8677,6 +8687,10 @@ class _CupSingles18GroupCard extends StatelessWidget {
     String? result,
     int?    holesUp,
     int?    finishedOn,
+    /// Holes left at close-out, from the server's play-order walk. Never
+    /// `18 - finishedOn`: off a shotgun on 10 a match clinched on hole 1 has
+    /// 8 holes left, and the badge read "10&17".
+    int?    holesToPlay,
     Color   leftColor,
     Color   rightColor,
     ThemeData theme, {
@@ -8704,8 +8718,9 @@ class _CupSingles18GroupCard extends StatelessWidget {
       } else {
         final p1Leads = up > 0;
         final String text;
-        if (status == 'complete' && finishedOn != null && finishedOn < 18) {
-          text = '${up.abs()}&${18 - finishedOn}';
+        final rem = holesToPlay ?? 0;
+        if (status == 'complete' && finishedOn != null && rem > 0) {
+          text = '${up.abs()}&$rem';
         } else {
           text = '${up.abs()} UP';
         }
@@ -8843,6 +8858,7 @@ class _CupSingles18GroupCard extends StatelessWidget {
                 m['result']           as String?,
                 m['overall_holes_up'] as int?,
                 m['finished_on_hole'] as int?,
+                m['holes_to_play']    as int?,
                 leftColor, rightColor, theme, p1OnLeft: p1OnLeft,
               ),
             ];
