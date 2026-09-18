@@ -265,6 +265,39 @@ class FourballMidCourseTests(FourballBase):
         else:
             self.fail('match never closed out')
 
+    def test_holes_to_play_is_a_play_order_walk_not_18_minus_the_number(self):
+        """The `&M` in "3&2" is holes LEFT IN PLAY ORDER, and the server is the
+        only side that knows that order. Two screens used to recompute it as
+        `18 - finished_on_hole`, which is right on a round from the 1st and
+        wrong on every shotgun."""
+        self._mid_course_round(start_hole=10)   # play order 10..18,1..9
+        order = [10, 11, 12, 13, 14, 15, 16, 17, 18, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        for h in order:
+            self._play(h, 4, 4, 6, 6)           # Team 1 wins every hole
+            s = fourball_summary(self.fs)
+            if s['status'] == 'complete':
+                break
+        else:
+            self.fail('match never closed out')
+
+        # 10 holes played (up 10) vs 8 left → clinched on the 10th played hole,
+        # which in this play order is hole NUMBER 1.
+        self.assertEqual(s['holes_played'], 10)
+        self.assertEqual(s['finished_on_hole'], 1)
+        self.assertEqual(s['holes_to_play'], 8)
+        self.assertIn('10&8', s['result_label'])
+        # The invariant that makes this safe to render anywhere.
+        self.assertEqual(s['holes_played'] + s['holes_to_play'], 18)
+        # And the arithmetic the client used to do, for the record.
+        self.assertNotEqual(18 - s['finished_on_hole'], s['holes_to_play'])
+
+    def test_holes_to_play_is_none_while_the_match_is_live(self):
+        self._mid_course_round(start_hole=10)
+        self._play(10, 4, 4, 6, 6)
+        s = fourball_summary(self.fs)
+        self.assertEqual(s['status'], 'in_progress')
+        self.assertIsNone(s['holes_to_play'])
+
 
 class FourballScorecardTests(FourballBase):
     """The leaderboard scorecard block: stroke index + hole-winner team +

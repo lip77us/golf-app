@@ -1679,6 +1679,10 @@ class FourballSummary {
   final String? result;           // 'team1' | 'team2' | 'halved' | null
   final String  resultLabel;      // '3&2', 'All Square', '—'
   final int?    finishedOnHole;
+  /// Holes left when the match closed out — the `&M` in "3&2". The SERVER
+  /// computes this from the group's play order; `18 - finishedOnHole` is right
+  /// only on a round from the 1st and wrong on every shotgun. Null while live.
+  final int?    holesToPlay;
   final String  handicapMode;     // 'net' | 'gross' | 'strokes_off'
   final int     netPercent;
   final int     holesUp;          // positive = team 1 up
@@ -1700,6 +1704,7 @@ class FourballSummary {
     this.result,
     required this.resultLabel,
     this.finishedOnHole,
+    this.holesToPlay,
     required this.handicapMode,
     required this.netPercent,
     required this.holesUp,
@@ -1736,6 +1741,7 @@ class FourballSummary {
       result:         j['result'] as String?,
       resultLabel:    j['result_label'] as String? ?? '—',
       finishedOnHole: j['finished_on_hole'] as int?,
+      holesToPlay:    j['holes_to_play'] as int?,
       handicapMode:   hcap['mode'] as String? ?? 'net',
       netPercent:     hcap['net_percent'] as int? ?? 100,
       holesUp:        overall['holes_up'] as int? ?? 0,

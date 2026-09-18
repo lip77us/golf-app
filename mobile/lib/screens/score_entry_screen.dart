@@ -10231,11 +10231,12 @@ class _FourballStatusCard extends StatelessWidget {
     //   "Paul & Mike 2 UP thru 5" / "All Square thru 5" / "Paul & Mike win 3&2".
     final String statusLine;
     if (summary.status == 'complete') {
-      // Holes remaining at close-out = holes AFTER finished_on_hole (a hole
-      // NUMBER), mirroring the leaderboard. Recomputing "18 − holesPlayed" (a
-      // COUNT) here gave a bogus "3&11" on a back-9 — 16 played thru 7 → 18−16=2.
-      final toPlay =
-          summary.finishedOnHole != null ? 18 - summary.finishedOnHole! : 0;
+      // Holes remaining at close-out comes from the SERVER (`holes_to_play`),
+      // which walks the group's play order. Doing `18 - finishedOnHole` here
+      // read right on a round from the 1st and wrong on every shotgun: off a
+      // shotgun on 13, a match closing on hole 7 (the 13th played, 5 left)
+      // printed "3&11".
+      final toPlay = summary.holesToPlay ?? 0;
       statusLine = toPlay > 0
           ? '${shortNames(leadTeam)} win $margin&$toPlay'
           : '${shortNames(leadTeam)} win $margin UP';

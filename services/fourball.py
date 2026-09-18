@@ -319,6 +319,7 @@ def fourball_summary(foursome) -> dict | None:
       'result'       : 'team1'|'team2'|'halved'|None,
       'result_label' : '3&2' / 'All Square' / '—',
       'finished_on_hole': int|None,
+      'holes_to_play': int|None,   # holes left at close-out, in PLAY ORDER
       'handicap'     : {'mode': str, 'net_percent': int},
       'overall'      : {'holes_up': int, 'leader': 'team1'|'team2'|None},
       'team1' / 'team2': {'players':[names], 'short_names':[...],
@@ -468,6 +469,11 @@ def fourball_summary(foursome) -> dict | None:
         'result'           : game.result,
         'result_label'     : _result_label(game, _holes_to_play),
         'finished_on_hole' : game.finished_on_hole,
+        # Holes left when it closed out — the `&M` in "3&2". Computed HERE
+        # because only the server knows the group's play order; a client doing
+        # `18 - finished_on_hole` is right on a round from the 1st and wrong on
+        # every shotgun. None while the match is still live.
+        'holes_to_play'    : _holes_to_play,
         # Holes COMPLETED (match-play "thru N") — a count, not a hole number, so
         # it reads right for a mid-course / shotgun start (played 7–12 = thru 6).
         'holes_played'     : len(holes_out),

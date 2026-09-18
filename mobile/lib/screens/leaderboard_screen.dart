@@ -10504,9 +10504,9 @@ class _FourballGroupCardState extends State<_FourballGroupCard> {
     } else if (decided && margin == 0) {
       status = 'All Square';
     } else if (decided) {
-      final left = summary.finishedOnHole != null
-          ? 18 - summary.finishedOnHole!
-          : 0;
+      // Holes left at close-out, from the server's play-order walk — see
+      // FourballSummary.holesToPlay. Never recompute it as `18 - hole number`.
+      final left = summary.holesToPlay ?? 0;
       status = left > 0
           ? '$leaderName wins ${margin.abs()}&$left'
           : '$leaderName wins ${margin.abs()} up';
