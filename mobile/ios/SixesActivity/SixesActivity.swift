@@ -19,6 +19,20 @@ import ActivityKit
 import SwiftUI
 
 // MARK: - The contract
+//
+// **Every additive field is Optional, and that is not a style choice.**
+// Swift's synthesized `init(from:)` IGNORES a property's default value: a
+// non-optional `var closed: Bool = false` is a REQUIRED key, and a payload
+// without it throws `keyNotFound` — which on a Live Activity is invisible.
+// APNs accepts the push, the phone cannot decode the content-state, and iOS
+// drops it. No card, no error, nothing in any log.
+//
+// `closed` shipped that way in 2.9.0 and took down EVERY card on the build,
+// for every game, because it sits on ContentState itself. Five more fields
+// had the same shape and would have taken down the cards that omit them.
+//
+// If a field can ever be absent from a payload, it is Optional here. There is
+// no second way to spell that.
 
 struct SixesActivityAttributes: ActivityAttributes {
 
@@ -154,7 +168,7 @@ struct SixesActivityAttributes: ActivityAttributes {
             /// It sets its own alpha rather than inheriting the row's — a
             /// dimmed row multiplying a dimmed numeral put losing awards near
             /// 30% white, illegible at 10.5px and worse under always-on.
-            var awardBest: Bool = false
+            var awardBest: Bool? = nil
             /// The reader's own row — full weight, where the others sit at
             /// 62%. **Separate from `colour` because they mark different
             /// men:** mint on the total is the LEADER, and the two are usually
@@ -164,7 +178,7 @@ struct SixesActivityAttributes: ActivityAttributes {
             /// A WATCHER sets it nowhere, and nothing on his card is bold —
             /// which is the tell that none of it is about him. That falls out
             /// of this rather than needing a case of its own.
-            var isReader: Bool = false
+            var isReader: Bool? = nil
 
             enum CodingKeys: String, CodingKey {
                 case label, text, colour, note, chip, award
@@ -220,7 +234,7 @@ struct SixesActivityAttributes: ActivityAttributes {
         /// headline is 21 while the rows are the live thing and 26 once the
         /// money is in it. Nothing else reads it yet, and nothing should
         /// unless it has the same kind of reason.
-        var closed: Bool = false
+        var closed: Bool? = nil
         /// `POPPING ON HOLE 13` — the gold band, when the reader gets a stroke
         /// on the hole in play. Gold appears nowhere else in the system, so it
         /// cannot be mistaken for a state. Running states only.
@@ -258,7 +272,7 @@ struct SixesActivityAttributes: ActivityAttributes {
             /// which already means *leads*.
             var rule: String? = nil
             /// The reader: label brighter, name and figure at full weight.
-            var isReader: Bool = false
+            var isReader: Bool? = nil
             /// Triple Nassau: the two dots in a column head, in pairing
             /// order. **Wolf's columns are people and these are matches**,
             /// which is the whole reason a head needs two of them.
@@ -284,9 +298,9 @@ struct SixesActivityAttributes: ActivityAttributes {
             /// reduction, leaving a reader able to see a score with no way to
             /// know whose it was. That is the confusion the card exists to
             /// remove, so the label keeps its size and only the figure dims.
-            var dim: Bool = false
+            var dim: Bool? = nil
             /// Ahead — mint, the same rule as every card in the set.
-            var isLeader: Bool = false
+            var isLeader: Bool? = nil
 
             enum CodingKeys: String, CodingKey {
                 case label, name, figure, note, rule, dots, colour, chip, dim

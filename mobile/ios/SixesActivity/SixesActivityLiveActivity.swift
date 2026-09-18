@@ -298,12 +298,12 @@ private struct StripColumn: View {
     /// The reader's label is brighter than the rest without being mint —
     /// mint means *leads* on these cards and must not come to mean two things.
     private var labelColour: Color {
-        col.isLeader ? Sixes.mint
-            : .white.opacity(col.isReader ? 0.70 : 0.42)
+        (col.isLeader ?? false) ? Sixes.mint
+            : .white.opacity((col.isReader ?? false) ? 0.70 : 0.42)
     }
 
     private var figureColour: Color {
-        if col.isLeader || col.isReader { return Sixes.mint }
+        if (col.isLeader ?? false) || (col.isReader ?? false) { return Sixes.mint }
         return .white.opacity(0.72)
     }
 
@@ -320,7 +320,7 @@ private struct StripColumn: View {
                 .frame(height: 11, alignment: .leading)
             Text(col.name)
                 .font(Sixes.body(10.5, .bold))
-                .foregroundStyle(.white.opacity(col.isReader ? 1 : 0.62))
+                .foregroundStyle(.white.opacity((col.isReader ?? false) ? 1 : 0.62))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             Text(col.figure)
@@ -852,7 +852,7 @@ private struct PointsBoardView: View {
                 // duplicates nothing, so it takes some of the size back. Not
                 // all of it: the three rows are still there.
                 Text(state.number.text)
-                    .font(Sixes.display(state.closed ? 26 : 21, .bold))
+                    .font(Sixes.display((state.closed ?? false) ? 26 : 21, .bold))
                     .tracking(-0.5)
                     .foregroundStyle(Sixes.side(state.number.colour))
                     .lineLimit(1)
@@ -885,7 +885,7 @@ private struct PointsBoardView: View {
 private struct PointsRowView: View {
     let row: SixesActivityAttributes.ContentState.Row
 
-    private var mine: Bool { row.isReader }
+    private var mine: Bool { row.isReader ?? false }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -913,7 +913,7 @@ private struct PointsRowView: View {
             Text(row.award ?? "")
                 .font(Sixes.body(10.5, .bold))
                 .monospacedDigit()
-                .foregroundStyle(row.awardBest ? Sixes.mint
+                .foregroundStyle((row.awardBest ?? false) ? Sixes.mint
                                                : .white.opacity(0.62))
                 .frame(width: 26, alignment: .trailing)
         }
@@ -1059,7 +1059,7 @@ private struct MatchColumn: View {
         // column would leave a gap the reader has to interpret, and the roster
         // of three is the one thing on this card that never changes.
         if c == "dim" { return .white.opacity(0.50) }
-        return Sixes.side(c).opacity(col.dim ? 0.62 : 1)
+        return Sixes.side(c).opacity((col.dim ?? false) ? 0.62 : 1)
     }
 
     var body: some View {
@@ -1074,7 +1074,7 @@ private struct MatchColumn: View {
                 Text(col.label)
                     .font(Sixes.body(9.5, .bold))
                     .tracking(0.2)
-                    .foregroundStyle(.white.opacity(col.dim ? 0.68 : 0.78))
+                    .foregroundStyle(.white.opacity((col.dim ?? false) ? 0.68 : 0.78))
                     .lineLimit(1)
                     // The label truncates and the figure never does.
                     .truncationMode(.tail)
@@ -1083,7 +1083,7 @@ private struct MatchColumn: View {
 
             HStack(alignment: .top, spacing: 1) {
                 Text(col.figure)
-                    .font(Sixes.display(col.dim ? 17 : 23, .bold))
+                    .font(Sixes.display((col.dim ?? false) ? 17 : 23, .bold))
                     .tracking(-0.7)
                     .foregroundStyle(figureColour)
                     .lineLimit(1)
@@ -1103,7 +1103,7 @@ private struct MatchColumn: View {
             RoundedRectangle(cornerRadius: 1, style: .continuous)
                 .fill((col.rule ?? "").isEmpty
                         ? .white.opacity(0.16)
-                        : Sixes.side(col.rule!).opacity(col.dim ? 0.45 : 1))
+                        : Sixes.side(col.rule!).opacity((col.dim ?? false) ? 0.45 : 1))
                 .frame(height: 2)
                 .padding(.top, 4)
         }

@@ -506,7 +506,9 @@ class WidgetLayoutTests(TestCase):
     def test_the_two_row_marks_are_separate_fields_in_swift_too(self):
         """Conflating them on either side of the wire is the same bug."""
         contract = self._swift('SixesActivity.swift')
-        self.assertIn('var isReader: Bool = false', contract)
+        # Optional, not defaulted — a default does not make a key optional
+        # to Swift's decoder, which is what took every card down in 2.9.0.
+        self.assertIn('var isReader: Bool? = nil', contract)
 
     def test_every_cup_cell_the_server_emits_has_a_rendering(self):
         """Four cells, and one of them is drawn by a branch rather than the
@@ -597,3 +599,66 @@ class FinalStateShapeTests(TestCase):
         self.assertEqual(blank, set(),
                          f'{blank} would leave an activity on a lock screen '
                          f'with no closing frame and no end push')
+
+
+class ContentStateDecodabilityTests(TestCase):
+    """**A field that can be absent must be Optional, not defaulted.**
+
+    Swift's synthesized `init(from:)` ignores a property's default value: a
+    non-optional `var closed: Bool = false` is a REQUIRED key, and a payload
+    without it throws `keyNotFound`. On a Live Activity that is invisible —
+    APNs accepts the push, the phone cannot decode the content-state, and iOS
+    drops it. No card, no error, nothing in any log.
+
+    `closed` shipped that way and took down EVERY card on the build, for every
+    game, because it sits on ContentState itself. Five more fields had the same
+    shape. The only thing that caught it was decoding a real production payload
+    with the real struct, by hand, after the round.
+
+    This is the cheap version of that check: the defect has one spelling in the
+    source, so look for the spelling.
+    """
+
+    SWIFT = 'mobile/ios/SixesActivity/SixesActivity.swift'
+
+    def _source(self):
+        import os
+        from django.conf import settings
+        with open(os.path.join(settings.BASE_DIR, self.SWIFT)) as fh:
+            return fh.read()
+
+    def test_no_property_is_non_optional_with_a_default(self):
+        import re
+        bad = re.findall(r'^\s*var\s+(\w+):\s*([A-Za-z<>\[\], ]+?)\s*=\s*\S',
+                         self._source(), re.M)
+        offenders = [f'{name}: {typ}' for name, typ in bad
+                     if not typ.strip().endswith('?')]
+        self.assertEqual(
+            offenders, [],
+            'a default does NOT make a key optional to Swift\'s decoder — '
+            'these are required keys, and a payload without one is dropped '
+            'silently by iOS: ' + ', '.join(offenders))
+
+    def test_the_required_keys_are_the_ones_every_builder_sends(self):
+        """The other half: what the struct demands, the server must supply.
+
+        `let` with no default is required by construction, which is correct for
+        the five slots every card has — but it means adding one is a breaking
+        change to every builder at once.
+        """
+        import re
+        src = self._source()
+        # ContentState runs to the attributes struct that follows it. The
+        # first cut of this stopped at `\n        }`, which is the end of the
+        # first NESTED struct — it parsed 982 characters and found nothing.
+        body = src[src.index('public struct ContentState'):
+                   src.index('var roundId: Int')]
+        # Its own slots sit at exactly eight spaces; nested struct members are
+        # deeper, so the indent does the filtering.
+        names = {m for m in re.findall(r'^        let (\w+):[^\n]*$', body, re.M)
+                 if not re.search(rf'let {m}:[^\n]*\?', body)}
+        self.assertEqual(
+            names, {'header', 'number', 'sides', 'state', 'pips', 'footer'},
+            'the required slots changed — every builder in BUILDERS has to '
+            'send the new one, and a card that misses it goes dark with no '
+            'error anywhere')
