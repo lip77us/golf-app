@@ -59,17 +59,46 @@ def foursome_for(rnd, user, slug):
 
 
 def holes_played(foursome) -> int:
-    """Holes the group has finished — the highest hole EVERY golfer has a score
-    on, not the highest anyone has.  A card reads 'thru 7' when the group is
-    through 7; one player running ahead does not move it."""
+    """Holes the group has finished — a COUNT, walked in play order.
+
+    Every golfer must have a score for a hole to count: a card reads 'thru 7'
+    when the GROUP is through 7, and one player running ahead does not move it.
+
+    **A count, not a hole number, and that distinction is the whole function.**
+    It used to return `max(hole_number)`, which is the same integer on a round
+    starting at the 1st and wrong on every other shape — and `hole_in_play()`
+    consumes this as an INDEX into play order (`order[n]`), so the two
+    disagreed silently:
+
+    * A shotgun from 13, fifteen holes in, returned 18. `order[18]` is past the
+      end of an eighteen-hole order, so `hole_in_play` returned None and every
+      card decided the round was **finished** with three holes still to play.
+    * A back-nine round broke sooner: three holes in returns 12, and a nine-hole
+      order has nine entries, so the card gave up after three holes.
+
+    Every lock-screen card in the app calls this, so it was wrong on all of
+    them at once.
+
+    Counted as a RUN from the start of play order rather than a bare tally: it
+    is the group's position, and `order[n]` has to be the hole they are
+    standing on. The no-gaps rule in score entry means the two agree in
+    practice; stopping at the first gap is what keeps them agreeing if it ever
+    does not.
+    """
     from scoring.models import HoleScore
+    from services.hole_plan import play_order
     counts = {}
     for hs in HoleScore.objects.filter(foursome=foursome,
                                        gross_score__isnull=False):
         counts[hs.hole_number] = counts.get(hs.hole_number, 0) + 1
     size = foursome.memberships.count()
-    done = [h for h, n in counts.items() if n >= size]
-    return max(done) if done else 0
+    done = {h for h, n in counts.items() if n >= size}
+    played = 0
+    for hole in (play_order(foursome.round, foursome) or list(range(1, 19))):
+        if hole not in done:
+            break
+        played += 1
+    return played
 
 
 def gross_to_par(summary, player_id):
