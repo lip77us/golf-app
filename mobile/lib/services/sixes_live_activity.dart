@@ -69,7 +69,18 @@ class SixesLiveActivity {
   /// with nothing and no activity starts.
   Future<void> start({required int roundId}) async {
     if (_started.contains(roundId)) return;
-    if (!await isSupported) return;
+    // **Say why when the answer is "nothing happens".** This returned silently
+    // when Live Activities are switched off for Halved in iOS Settings, which
+    // is indistinguishable from the feature being broken — and it cost a long
+    // hunt through server payloads, gates and round data before anyone thought
+    // to look at a toggle on the phone. A card that never appears and never
+    // explains itself is the worst shape a feature can have.
+    if (!await isSupported) {
+      debugPrint('[LA] not starting round $roundId — Live Activities are off '
+          'for this app (Settings > Halved > Live Activities) or unsupported '
+          'on this OS');
+      return;
+    }
 
     // Claim the round before the await, so two scores landing together cannot
     // both get past the guard and raise two activities for one round.
@@ -77,9 +88,12 @@ class SixesLiveActivity {
     try {
       final frame = await _client.getLiveActivityState(roundId: roundId);
       if (frame == null) {
+        // The round has no board — a game with no card, or nothing scored yet.
+        debugPrint('[LA] no board for round $roundId — server sent nothing');
         _started.remove(roundId);
         return;
       }
+      debugPrint('[LA] starting round $roundId');
       await _channel.invokeMethod('start', {
         'roundId'    : roundId,
         'courseName' : frame['course_name'] ?? '',
