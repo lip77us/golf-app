@@ -123,4 +123,55 @@ void main() {
       expect(screen.bottom - bar.bottom, greaterThanOrEqualTo(300.0));
     });
   });
+
+
+  // ── The nesting, which is where the first fix went wrong ────────────────
+  //
+  // The widget was right and the app still had the bug: main.dart wrapped
+  // KeyboardDismissal AROUND a MediaQuery that rebuilt its data from the
+  // original `mq`, so the inflated inset was discarded before any Scaffold
+  // saw it. The test above passed because it drove the widget directly.
+  //
+  // This one mirrors the app's composition instead.
+  testWidgets('a MediaQuery INSIDE the wrapper cannot undo the row',
+      (t) async {
+    const raw = 300.0;
+    await t.pumpWidget(MaterialApp(
+      home: Builder(builder: (ctx) {
+        final mq = MediaQuery.of(ctx);
+        return MediaQuery(
+          data: mq.copyWith(viewInsets: const EdgeInsets.only(bottom: raw)),
+          child: Builder(builder: (ctx2) {
+            final outer = MediaQuery.of(ctx2);
+            // The app's shape: a text-scale MediaQuery and the dismissal
+            // wrapper, in whichever order main.dart uses.
+            // The nesting main.dart HAD when the bug shipped: the wrapper
+            // outside, a MediaQuery rebuilt from the ambient data inside. It
+            // discarded an inflated inset; it cannot discard a Padding.
+            return KeyboardDismissal(
+              child: MediaQuery(
+                data: outer.copyWith(textScaler: const TextScaler.linear(1.0)),
+                child: Scaffold(
+                  body: Column(children: [
+                    const Expanded(child: SizedBox.expand()),
+                    Container(
+                      key: const Key('composer'),
+                      height: 56,
+                      color: const Color(0xFFEEEEEE),
+                      child: const TextField(),
+                    ),
+                  ]),
+                ),
+              ),
+            );
+          }),
+        );
+      }),
+    ));
+    final composer = t.getRect(find.byKey(const Key('composer')));
+    final bar = t.getRect(find.text('Done'));
+    expect(composer.bottom, lessThanOrEqualTo(bar.top),
+        reason: 'a MediaQuery between the wrapper and the Scaffold threw the '
+            'inflated inset away and the bar covered the composer');
+  });
 }

@@ -384,16 +384,22 @@ class _GolfAppState extends State<GolfApp> {
           // the bottom traps the user with no way to dismiss it. Wrapped here
           // rather than on the 34 screens that raise a numeric keyboard, so no
           // screen can have the bug, including ones not written yet.
-          final Widget scaled = KeyboardDismissal(
-            child: MediaQuery(
-              data: mq.copyWith(
-                textScaler: mq.textScaler.clamp(
-                  minScaleFactor: 1.0,
-                  maxScaleFactor: 1.3,
-                ),
+          //
+          // **Order matters here.** KeyboardDismissal reports a bottom inset
+          // 44 larger so every Scaffold leaves a row free for the Done bar
+          // instead of being painted over. It has to be the INNER wrapper: the
+          // text-scale MediaQuery below rebuilds its data from `mq`, so with
+          // the two the other way round it threw the inflated inset away and
+          // the bar covered the round-chat composer again — the exact bug the
+          // inset was added to fix, reintroduced by nesting.
+          final Widget scaled = MediaQuery(
+            data: mq.copyWith(
+              textScaler: mq.textScaler.clamp(
+                minScaleFactor: 1.0,
+                maxScaleFactor: 1.3,
               ),
-              child: child!,
             ),
+            child: KeyboardDismissal(child: child!),
           );
           // Which backend this build is talking to, named on screen.
           //

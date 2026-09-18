@@ -49,20 +49,23 @@ class KeyboardDismissal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mq = MediaQuery.of(context);
-    final inset = mq.viewInsets.bottom;
-    // Tell everything below that the keyboard is 44 taller than it is. That is
-    // what turns the bar from an overlay into a row: Scaffold already resizes
-    // its body by `viewInsets.bottom`, so it now stops 44 short and the bar
-    // sits in the gap instead of on top of whatever was there.
+    final inset = MediaQuery.viewInsetsOf(context).bottom;
+    // **The row is taken out of the LAYOUT, not announced in a MediaQuery.**
     //
-    // Only while a keyboard is actually up — with no keyboard there is no bar
-    // and nothing to make room for.
-    final lifted = inset <= 0
-        ? mq
-        : mq.copyWith(
-            viewInsets: mq.viewInsets.copyWith(bottom: inset + barHeight),
-          );
+    // The first attempt reported a bottom inset 44 larger and let each Scaffold
+    // resize itself. That is the tidier idea and it did not survive the app:
+    // `main.dart` had a MediaQuery between this wrapper and the screens, and it
+    // rebuilt its data from the ambient `mq` — so the inflated inset was thrown
+    // away before any Scaffold saw it, and the bar went straight back over the
+    // round-chat composer. Anything anyone nests below could do that again.
+    //
+    // Padding cannot be undone from below. The subtree is given a box 44
+    // shorter, the Scaffold inside insets ITS body by the real keyboard height
+    // from that shorter bottom, and the result is one bar's height of clear
+    // space with the bar sitting in it.
+    //
+    // Only while a keyboard is up: with none there is no bar and nothing to
+    // make room for.
     // `translucent` so the tap still reaches whatever is underneath — a button
     // under the finger wins the gesture arena, so this only fires on taps that
     // nothing else wanted.
@@ -70,10 +73,10 @@ class KeyboardDismissal extends StatelessWidget {
       behavior: HitTestBehavior.translucent,
       onTap: dismiss,
       child: Stack(children: [
-        MediaQuery(data: lifted, child: child),
-        // OUTSIDE the lifted MediaQuery on purpose: the bar positions against
-        // the REAL keyboard edge, and reading the inflated inset would push it
-        // 44 up into the space it just asked for.
+        Padding(
+          padding: EdgeInsets.only(bottom: inset > 0 ? barHeight : 0),
+          child: child,
+        ),
         const _DoneBar(),
       ]),
     );
