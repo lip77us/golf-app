@@ -37,6 +37,7 @@ import '../utils/nassau_team_style.dart';
 import '../utils/sixes_handicap.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'sixes_segment_draw_screen.dart';
+import '../utils/sixes_draw.dart';
 import '../utils/round_complete.dart';
 import '../utils/golf_colors.dart';
 import '../widgets/score_mark.dart';
@@ -1690,12 +1691,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final s = rp.sixesSummary;
     final roundId = rp.round?.id;
     if (s == null || roundId == null) return;
+    // Segment 1 settled, both pairings assigned, and the group has NOT played
+    // on — see shouldRevealSixesSegmentTwoDraw for why the last clause is the
+    // one that matters.
+    if (!shouldRevealSixesSegmentTwoDraw(s)) return;
     final segs = s.segments.where((x) => !x.isExtra).toList();
-    if (segs.length < 3) return;
     final seg1 = segs[0], seg2 = segs[1], seg3 = segs[2];
-    // Only once Segment 1 is settled and both remaining pairings are assigned.
-    final seg1Done = seg1.status == 'complete' || seg1.status == 'halved';
-    if (!seg1Done || !seg2.team1.hasPlayers || !seg3.team1.hasPlayers) return;
 
     _sixesDrawHandled = true;   // guard re-entry for this build session
     final prefs = await SharedPreferences.getInstance();
