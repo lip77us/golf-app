@@ -1,6 +1,30 @@
-# Halved 2.9.1 (build 38) — Release notes
+# Halved 2.9.1 (build 39) — Release notes
 
-Version in `mobile/pubspec.yaml` → `2.9.1+38`. Previous: `2.9.0+37`.
+Version in `mobile/pubspec.yaml` → `2.9.1+39`. Previous public: `2.9.0+37`.
+**Build 38 was never distributed** — it was replaced by 39 before it went out.
+
+## Build 39 — the lock screens come back
+
+**2.9.0 turned off every lock screen, and nothing said so.** A single field in
+the widget's shared contract — `var closed: Bool = false` — was added with the
+new cards. Swift's synthesized decoder IGNORES a default value, so that is a
+REQUIRED key, and no card sends it except the five closing frames. Every other
+payload failed to decode.
+
+The failure is invisible from every side: APNs accepts the push and reports
+success, the server records the start as sent, the phone cannot decode the
+content-state, and iOS drops it. No card, no error, and the server's own
+records say it worked.
+
+Five more fields had the same shape and would each have taken down the cards
+that omit them. All six are Optional now, which is what the rest of the struct
+already did.
+
+Build 38 also carried a keyboard fix that did not survive the app's own widget
+nesting — the Done bar was still covering the round-chat message field. It now
+reserves its row in the layout instead, which nothing nested below can undo.
+
+---
 
 **A fix release, and all of it came out of one round.** Six commits: three
 things reported from a tournament at Ranch Solano on 17 September, one
