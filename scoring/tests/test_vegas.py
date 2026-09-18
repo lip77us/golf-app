@@ -282,3 +282,55 @@ class VegasScorecardTests(TestCase):
         sc = vegas_summary(self.fs)['scorecard']
         self.assertTrue(all(
             r['strokes'] == 0 for h in sc['holes'] for r in h['scores']))
+
+
+class VegasShotgunCarryTests(VegasBase):
+    """**A carried tie passes to the next hole PLAYED.**
+
+    The calculation looped 1..18 while the summary ordered its chips by play
+    order, so the two disagreed on a shotgun: a group starting on 13 that ties
+    the 18th carries into the 1st, but a hole-number loop reaches 18 last and
+    drops the carry.
+    """
+
+    def _shotgun(self, start):
+        self.round.starting_hole = start
+        self.round.num_holes = 18
+        self.round.save(update_fields=['starting_hole', 'num_holes'])
+
+    def test_a_tie_carries_across_the_wrap(self):
+        from services.vegas import vegas_summary
+        self._shotgun(13)
+        self._setup(carryover=True)
+        # 18 is the 6th hole played and 1 is the 7th. Tie the 18th, win the 1st.
+        self._play(18, 4, 5, 4, 5)        # identical numbers → halved
+        self._play(1, 4, 5, 5, 7)         # 45 v 57 → team1 by 12
+        s = vegas_summary(self.fs)
+        h18 = next(h for h in s['holes'] if h['hole'] == 18)
+        h1  = next(h for h in s['holes'] if h['hole'] == 1)
+        self.assertEqual(h18['winner'], 'halved')
+        self.assertEqual(h18['carry'], 1, 'the 18th carries on a shotgun')
+        self.assertEqual(h1['points'], 24,
+                         'the 1st is the next hole PLAYED, so it pays double')
+
+    def test_the_last_hole_of_the_order_does_not_carry_into_nothing(self):
+        """12 is the final hole of a 13-start order — a tie there carries to
+        no hole at all, which is the same as not carrying."""
+        from services.vegas import vegas_summary
+        self._shotgun(13)
+        self._setup(carryover=True)
+        self._play(12, 4, 5, 4, 5)
+        s = vegas_summary(self.fs)
+        h12 = next(h for h in s['holes'] if h['hole'] == 12)
+        self.assertEqual(h12['winner'], 'halved')
+        self.assertEqual(h12['points'], 0)
+
+    def test_a_round_from_the_first_is_unchanged(self):
+        """The shipped behaviour is the degenerate case and must not move."""
+        from services.vegas import vegas_summary
+        self._setup(carryover=True)
+        self._play(1, 4, 5, 4, 5)         # halved, carries
+        self._play(2, 4, 5, 5, 7)         # doubled
+        s = vegas_summary(self.fs)
+        h2 = next(h for h in s['holes'] if h['hole'] == 2)
+        self.assertEqual(h2['points'], 24)

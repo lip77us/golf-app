@@ -9343,7 +9343,11 @@ String _cupSinglesWonByText(Map<String, dynamic> m) {
     if (result == 'halved') return 'Halved';
     final winner = result == 'player1' ? p1 : p2;
     if (finishedOn != null) {
-      final rem = 18 - finishedOn;
+      // The SERVER's count when it sends one: only it knows the group's play
+      // order, and `18 - finishedOn` is right on a round from the 1st and
+      // wrong on every shotgun. The subtraction stays as the fallback for a
+      // payload from before the engine sent it.
+      final rem = (m['holes_to_play'] as int?) ?? (18 - finishedOn);
       final mag = overallUp.abs();
       return rem > 0 ? '$winner $mag&$rem' : '$winner wins $mag Up';
     }

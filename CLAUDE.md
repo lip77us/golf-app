@@ -3609,6 +3609,75 @@ introducing a second purple two shades away: they never appear on the same
 card, and two near-identical hexes for one semantic slot is how a palette
 drifts. Worth a design confirmation.
 
+## The shotgun sweep — one mistake, six places
+
+Run 17 Sep 2026 after a round at Ranch Solano turned up three shotgun bugs in
+one afternoon. **The pattern is a single mistake made repeatedly:** the
+play-order helpers (`services/hole_plan.play_order`) are correct and widely
+used, but the code that SUMMARISES or SCORES a round keeps reaching for the
+hole NUMBER where it means position in play order. On a round starting at the
+1st the two are the same integer, which is exactly why it survives review.
+
+Three shapes, and every finding is one of them:
+
+| Shape | Reads | Should read |
+|---|---|---|
+| **Progress** | highest hole number scored | count of holes played |
+| **Remaining** | `18 - hole_number` | holes left in the group's order |
+| **Walk** | `for h in range(1, 19)` + `break` | the group's play order |
+
+The third is the dangerous one, because `break` on the first unscored hole
+means a shotgun group scores NOTHING — the walk starts at hole 1, finds no
+score and stops — and then, as the back of the round comes in, scores those
+holes while ignoring the ones already played.
+
+### Fixed
+
+- **`_round_current_hole`** (`api/views.py`) — the rounds list said "Through
+  18" six holes into a shotgun. A round that looks finished.
+- **`share_card.holes_played`** — the same bug one file over, on the share
+  card and its link preview.
+- **`calculate_vegas`** — the summary already ordered its chips by play order
+  while the calculation carried ties by hole number, so a tie on the 18th lost
+  its carry instead of doubling the 1st. **The display half was right and the
+  money half was wrong.**
+- **`cup_singles._play_18_hole_match`** — walked 1..18 with a `break`.
+- **`cup_singles._compute_sub_match`** — its own copy of the remaining-count
+  mistake, and the one that reached the card: six straight wins from the 13th
+  reported "4 up, complete, finished on 16", because 18 − 16 = 2 while
+  fourteen holes were still to come. **A cup point decided that was not.**
+- **`quota_nassau`** — both the walk and the quota proration, which divided by
+  hole number: six holes ending on the 18th demanded 18/18 of the quota.
+
+Cup singles and Quota Nassau are **cup formats, and a cup day is very often a
+shotgun** — the two places it matters most were the two with no test file at
+all. Both have one now.
+
+A closeout margin is now computed server-side (`holes_to_play` on the cup
+singles summary) because only the server knows the order; the client prefers it
+and keeps `18 - finished_on_hole` as a fallback for older payloads.
+
+### Checked and correct
+
+`multi_skins` and `points_531` (no carry — order-independent), `irish_rumble`
+(accumulates with `continue`, not `break`), `triple_cup` and `fourball` (both
+already count by play position), `sixes` (uses `pos_of` throughout), and the
+client's `.reduce(max)` calls, which compute the course SIZE rather than
+progress.
+
+### Deliberately not fixed
+
+**`services/tournament_match_play.py` hardcodes semis on holes 1–9 and the
+final on 10–18.** That is not an off-by-one to patch but a format question: a
+bracket whose two rounds ARE the two nines cannot mean the same thing off a
+shotgun, and deciding what it should mean (first nine played? still holes 1–9?)
+is a rules call rather than a code one. Flagged rather than guessed.
+
+**`score_entry_screen.dart:10234`** still does `18 - finishedOnHole` for the
+fourball status line. Fourball's ENGINE already computes `holes_to_play` from
+play order — the value just is not on that payload yet, so the client
+recomputes it. Worth plumbing through the same way cup singles now is.
+
 ### Still outstanding across the set
 
 The rest of `changed-since-delivery/` is CSS-level and already matches how we

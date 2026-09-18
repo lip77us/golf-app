@@ -182,6 +182,11 @@ def calculate_quota_nassau(foursome) -> 'QuotaNassauGame | None':
         return None
 
     pts_index = _stableford_index(foursome)
+
+    # The group's play order — every match in this game is played by this
+    # foursome, so one lookup serves them all.
+    from services.hole_plan import play_order
+    walk = play_order(foursome.round, foursome) or list(range(1, 19))
     any_complete   = False
     any_in_progress = False
 
@@ -204,41 +209,52 @@ def calculate_quota_nassau(foursome) -> 'QuotaNassauGame | None':
         hole_result_objs = []
         holes_played = 0
 
-        for hole_num in range(1, 19):
+        # **PLAY ORDER, and counts rather than hole numbers.** This walked
+        # 1..18 and stopped at the first unscored hole, so a group starting on
+        # 13 stopped at the 1st and scored nothing for its first six holes.
+        # And the quota is pro-rated by how much golf has been PLAYED, which
+        # is a count — `hole_num / 18` reads 18/18 after six holes of a
+        # shotgun and demands the whole quota.
+        f9_played = b9_played = 0
+        for pos, hole_num in enumerate(walk):
             h1 = p1_pts.get(hole_num)
             h2 = p2_pts.get(hole_num)
             if h1 is None or h2 is None:
                 break   # stop at first incomplete hole — no partial-hole results
 
-            holes_played = hole_num
+            holes_played = pos + 1
             h1, h2 = Decimal(h1), Decimal(h2)
 
             p1_total += h1
             p2_total += h2
 
-            # Pro-rated quota through hole H:  quota × H / 18
-            p1_vs_q_overall = p1_total - q1 * hole_num / 18
-            p2_vs_q_overall = p2_total - q2 * hole_num / 18
+            # Pro-rated quota through H holes PLAYED:  quota × H / 18
+            p1_vs_q_overall = p1_total - q1 * holes_played / 18
+            p2_vs_q_overall = p2_total - q2 * holes_played / 18
             overall_margin  = p1_vs_q_overall - p2_vs_q_overall
 
             f9m = b9m = None
 
+            # A nine is still a nine BY NUMBER — the front nine is holes
+            # 1-9 whenever they get played — but how much of it is behind you
+            # is a count of the ones played, not the hole's own number.
             if hole_num <= 9:
+                f9_played += 1
                 p1_f9 += h1
                 p2_f9 += h2
-                # Pro-rated quota within front 9: quota × hole / 18
-                # (so after hole 9, quota thru = quota × 9/18 = quota/2 ✓)
-                p1_f9_vs_q = p1_f9 - q1 * hole_num / 18
-                p2_f9_vs_q = p2_f9 - q2 * hole_num / 18
+                # Pro-rated within the front 9: quota × played / 18
+                # (so after all nine, quota thru = quota × 9/18 = quota/2 ✓)
+                p1_f9_vs_q = p1_f9 - q1 * f9_played / 18
+                p2_f9_vs_q = p2_f9 - q2 * f9_played / 18
                 f9_margin  = p1_f9_vs_q - p2_f9_vs_q
                 f9m        = f9_margin
             else:
-                back_hole = hole_num - 9           # 1-based within back 9
+                b9_played += 1
                 p1_b9 += h1
                 p2_b9 += h2
-                # Pro-rated quota within back 9: same scale as front (quota × k/18)
-                p1_b9_vs_q = p1_b9 - q1 * back_hole / 18
-                p2_b9_vs_q = p2_b9 - q2 * back_hole / 18
+                # Same scale as the front (quota × k/18).
+                p1_b9_vs_q = p1_b9 - q1 * b9_played / 18
+                p2_b9_vs_q = p2_b9 - q2 * b9_played / 18
                 b9_margin  = p1_b9_vs_q - p2_b9_vs_q
                 b9m        = b9_margin
 

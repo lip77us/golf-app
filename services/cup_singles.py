@@ -204,6 +204,12 @@ def calculate_cup_singles(foursome):
     except MatchPlayBracket.DoesNotExist:
         return None
 
+    # The group's play order — a cup day is very often a shotgun, and every
+    # match in this bracket is played by this foursome, so one lookup serves
+    # them all.
+    from services.hole_plan import play_order
+    play_order_ = play_order(foursome.round, foursome) or list(range(1, 19))
+
     # Rebuild all hole results from scratch
     MatchPlayHoleResult.objects.filter(match__bracket=bracket).delete()
 
@@ -217,7 +223,7 @@ def calculate_cup_singles(foursome):
         score_index = build_match_play_score_index(
             foursome, match.player1_id, match.player2_id
         )
-        results = _play_18_hole_match(match, score_index)
+        results = _play_18_hole_match(match, score_index, order=play_order_)
         all_hole_results.extend(results)
         if match.status != 'complete':
             all_complete = False
@@ -236,7 +242,8 @@ def calculate_cup_singles(foursome):
     return bracket
 
 
-def _play_18_hole_match(match: MatchPlayMatch, score_index: dict) -> list:
+def _play_18_hole_match(match: MatchPlayMatch, score_index: dict,
+                        order: list | None = None) -> list:
     """
     Score a single 18-hole 1-v-1 match play match.
 
@@ -249,6 +256,16 @@ def _play_18_hole_match(match: MatchPlayMatch, score_index: dict) -> list:
     decided by dormie so that Nassau sub-match calculations (_compute_sub_match
     for F9 / B9) have the full 18-hole dataset.  In practice golfers play out
     all remaining holes for the side bets even after the overall match is over.
+
+    **`order` is the group's PLAY order, and on a shotgun it is the whole
+    correctness of this function.** It used to walk 1..18 and stop at the first
+    unscored hole — so a group starting on 13 with six holes in stopped at the
+    1st, reported a match that had not started, and then as holes 1..5 came in
+    scored THOSE while ignoring the six already played. A cup day is very often
+    a shotgun, which is where this matters most.
+
+    The nines are still nines by NUMBER — a front-nine bet is holes 1–9
+    whenever they get played — so only the walk and the dormie count move.
     """
     p1 = match.player1
     p2 = match.player2
@@ -263,7 +280,8 @@ def _play_18_hole_match(match: MatchPlayMatch, score_index: dict) -> list:
     match.result          = None
     match.finished_on_hole = None
 
-    for hole_num in range(1, 19):
+    walk = order or list(range(1, 19))
+    for pos, hole_num in enumerate(walk):
         p1_net = p1_scores.get(hole_num)
         p2_net = p2_scores.get(hole_num)
 
@@ -291,7 +309,8 @@ def _play_18_hole_match(match: MatchPlayMatch, score_index: dict) -> list:
         # Dormie: overall match decided when lead > holes remaining.
         # Lock in the overall result but keep looping so all scored holes are
         # captured for Nassau sub-match (B9) accounting.
-        remaining = 18 - hole_num
+        # Holes left in the group's own order, not 18 minus the number.
+        remaining = len(walk) - 1 - pos
         if not match_decided and abs(holes_up) > remaining:
             match.result          = 'player1' if holes_up > 0 else 'player2'
             match.status          = 'complete'
@@ -315,13 +334,28 @@ def _play_18_hole_match(match: MatchPlayMatch, score_index: dict) -> list:
 # Summary
 # ---------------------------------------------------------------------------
 
-def _compute_sub_match(holes_data: list, start_hole: int, end_hole: int) -> dict:
+def _compute_sub_match(holes_data: list, start_hole: int, end_hole: int,
+                       order: list | None = None) -> dict:
     """
     Compute a Nassau sub-match result for holes [start_hole..end_hole].
 
     Each sub-match is tracked independently: the margin starts at 0 for the
     first hole of the range, and dormie is checked against holes remaining
     *within this range*.
+
+    **`order` is the group's play order, and the range is walked in it.**
+    Dormie counted `end_hole - hole_number`, which is holes remaining only
+    when the range is played in numbering order. On a shotgun from 13 the
+    OVERALL range 1..18 starts at the 13th, so after six straight wins this
+    returned "4 up, complete, finished on 16" — 18 minus 16 is two, while
+    fourteen holes were still to come. The card would have shown a cup point
+    decided that was not.
+
+    The FRONT NINE is unaffected on that example (1..9 are played in numbering
+    order however late they start), but the BACK NINE is not: 13..18 come
+    first and 10..12 come last, so its remaining count needs the same
+    treatment. Which is why this takes the order rather than special-casing
+    the overall.
 
     Returns a dict:
         status           – 'pending' | 'in_progress' | 'complete'
@@ -330,10 +364,13 @@ def _compute_sub_match(holes_data: list, start_hole: int, end_hole: int) -> dict
         finished_on_hole – hole number where sub-match closed, or None
         holes_played     – count of scored holes in this range
     """
-    total    = end_hole - start_hole + 1
+    walk = [h for h in (order or list(range(1, 19)))
+            if start_hole <= h <= end_hole]
+    pos_of = {h: i for i, h in enumerate(walk)}
+    total    = len(walk)
     relevant = sorted(
-        [h for h in holes_data if start_hole <= h['hole_number'] <= end_hole],
-        key=lambda h: h['hole_number'],
+        [h for h in holes_data if h['hole_number'] in pos_of],
+        key=lambda h: pos_of[h['hole_number']],
     )
 
     if not relevant:
@@ -349,7 +386,7 @@ def _compute_sub_match(holes_data: list, start_hole: int, end_hole: int) -> dict
         elif h['p2_net'] < h['p1_net']:
             margin -= 1
 
-        remaining = end_hole - h['hole_number']
+        remaining = total - 1 - pos_of[h['hole_number']]
         if abs(margin) > remaining:
             # Dormie — sub-match over
             return {
@@ -376,7 +413,9 @@ def _compute_sub_match(holes_data: list, start_hole: int, end_hole: int) -> dict
                              else 'player2' if margin < 0
                              else 'halved'),
         'holes_up'        : margin,
-        'finished_on_hole': end_hole,
+        # The last hole of the range IN PLAY ORDER — hole 12 closes a back
+        # nine that began on the 13th, not hole 18.
+        'finished_on_hole': walk[-1] if walk else end_hole,
         'holes_played'    : holes_played,
     }
 
@@ -422,6 +461,12 @@ def cup_singles_summary(foursome) -> dict | None:
     except MatchPlayBracket.DoesNotExist:
         return None
 
+    # The group's play order — every sub-match range is walked in it, because
+    # "holes remaining" is a play-order question even when the range itself is
+    # defined by hole number.
+    from services.hole_plan import play_order
+    play_order_ = play_order(foursome.round, foursome) or list(range(1, 19))
+
     matches_out = []
     for match in bracket.matches.order_by('id'):
         holes = list(
@@ -461,9 +506,9 @@ def cup_singles_summary(foursome) -> dict | None:
         ]
 
         # Compute each Nassau sub-match independently.
-        f9  = _compute_sub_match(holes, 1,  9)
-        b9  = _compute_sub_match(holes, 10, 18)
-        all18 = _compute_sub_match(holes, 1, 18)
+        f9  = _compute_sub_match(holes, 1,  9,  order=play_order_)
+        b9  = _compute_sub_match(holes, 10, 18, order=play_order_)
+        all18 = _compute_sub_match(holes, 1, 18, order=play_order_)
 
         matches_out.append({
             'match_id'      : match.id,
@@ -481,6 +526,13 @@ def cup_singles_summary(foursome) -> dict | None:
             'result'          : match.result,
             'overall_holes_up': all18['holes_up'] or 0,
             'finished_on_hole': match.finished_on_hole,
+            # Holes left when it closed out — the `&M` in "3&2". Computed
+            # HERE because only the server knows the group's play order; a
+            # client doing `18 - finished_on_hole` is right on a round from
+            # the 1st and wrong on every shotgun.
+            'holes_to_play'   : (
+                len(play_order_) - 1 - play_order_.index(match.finished_on_hole)
+                if match.finished_on_hole in play_order_ else None),
             'holes_played'    : len(holes),
 
             # F9 sub-match (holes 1-9)

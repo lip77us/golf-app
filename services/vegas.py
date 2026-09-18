@@ -239,7 +239,13 @@ def calculate_vegas(foursome) -> list:
     rows = []
     carry = 0
     scored = 0
-    for hole in range(1, 19):
+    # **PLAY ORDER, not hole number.** A carried tie passes to the NEXT HOLE
+    # PLAYED, and on a shotgun those are different sequences: a group starting
+    # on 13 that ties the 18th carries into the 1st, while a 1..18 loop reaches
+    # 18 last and drops the carry on the floor. The summary has always ordered
+    # its chips by play order — this is the half that decides the money.
+    from services.hole_plan import play_order
+    for hole in (play_order(foursome.round, foursome) or list(range(1, 19))):
         n1a = net_index.get(t1_ids[0], {}).get(hole)
         n1b = net_index.get(t1_ids[1], {}).get(hole)
         n2a = net_index.get(t2_ids[0], {}).get(hole)

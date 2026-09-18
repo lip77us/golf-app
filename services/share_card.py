@@ -302,15 +302,26 @@ def _first_name(full: str) -> str:
 
 def holes_played(round_obj) -> int:
     """
-    The round's 'thru' — the highest hole number anyone in it has a gross
-    score for. Deliberately the MAX rather than a per-group figure: the card
-    answers "is something happening right now", and the furthest group along
-    is the truest answer to that.
+    The round's 'thru' — how many holes the furthest-along group has PLAYED.
+    Deliberately the max across groups rather than a per-group figure: the card
+    answers "is something happening right now", and the leading group is the
+    truest answer to that.
+
+    **A count, not a hole number.** This took the highest hole number anyone
+    had scored, which is the same figure on a round starting at the 1st and
+    wrong on every shotgun: a group starting on 13 that has played six holes
+    has scored hole 18, so a share card six holes into a round announced
+    "Thru 18". Same mistake as the rounds list carried, one file over.
     """
     from scoring.models import HoleScore
-    return HoleScore.objects.filter(
-        foursome__round=round_obj, gross_score__isnull=False,
-    ).order_by('-hole_number').values_list('hole_number', flat=True).first() or 0
+    rows = (HoleScore.objects
+            .filter(foursome__round=round_obj, gross_score__isnull=False)
+            .values_list('foursome_id', 'hole_number')
+            .distinct())
+    per_group = {}
+    for fs_id, hole in rows:
+        per_group.setdefault(fs_id, set()).add(hole)
+    return max((len(h) for h in per_group.values()), default=0)
 
 
 def build_context(round_obj) -> dict:
