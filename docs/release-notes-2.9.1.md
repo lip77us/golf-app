@@ -1,7 +1,56 @@
-# Halved 2.9.1 (build 39) — Release notes
+# Halved 2.9.1 (builds 39–40) — Release notes
 
-Version in `mobile/pubspec.yaml` → `2.9.1+39`. Previous public: `2.9.0+37`.
+Version in `mobile/pubspec.yaml` → `2.9.1+40`. Previous public: `2.9.0+37`.
 **Build 38 was never distributed** — it was replaced by 39 before it went out.
+**Build 39 went out and the lock screens came back on a real phone.**
+
+## Build 40 — the `&M` in "3&2", and one of them was points
+
+**Three cards printed the wrong close-out margin on a shotgun, and one service
+awarded the wrong cup points.** The `M` in "3&2" is holes LEFT, counted along
+the group's own play order — and the clients were computing it by subtracting a
+hole number. Off a shotgun on the 10th, a match clinched on hole 1 has eight
+holes left; the card said "10&17".
+
+- **Fourball** — the score-entry card and the leaderboard card. The engine had
+  computed the right number all along and simply never put it on the payload.
+- **Cup singles and Triple Cup** — the same sum in five more places, including
+  the per-nine chips, where `9 - hole` and `18 - hole` are both wrong: a back
+  nine begun on the 13th runs 13..18 then 10, 11, 12.
+- **A Triple Cup segment can WRAP.** A third off the 8th is holes 14..1, where
+  the last hole has the smallest number. Every "did it finish early?" test of
+  the form `finished_on_hole < end_hole` — "17 < 1" — answered no, so the `&M`
+  silently vanished and the card claimed the match ran to its scheduled end.
+- **`services/ryder_cup.py` awards cup POINTS** from the same helper and was
+  calling it without the play order. A leg went dormie a hole early: closed on
+  16 with two left, when five of nine had been played with four to go. This is
+  a scoreboard, not a label.
+- **A margin read from a hole played nine holes ago.** Hole rows order by hole
+  NUMBER in the model's Meta, so `rows[-1]` is the highest number and not the
+  last hole played. A group that had turned showed a stale margin.
+
+Every card now reads a `holes_to_play` field that the server counts. The two
+Dart helpers that took an `endHole` argument solely to compute
+`endHole - finishedOn` take the count instead, so the wrong sum is no longer
+expressible at those call sites.
+
+### Sixes — the slot machine stops interrupting the back nine
+
+**Reopening a sixes round popped the Segment-2 draw on the 13th**, and
+dismissing it sent the card back to the 7th to announce partners the group had
+been playing with for six holes.
+
+The spinner never changed anything: all three pairings are created at setup and
+the draw screen's result is discarded. It is a REVEAL, which is exactly why its
+timing is the whole feature. It fired off a device-local "have I shown this?"
+flag — lost on a reinstall or a second phone — instead of the fact the payload
+already carried: whether the group has played on. Now it needs Segment 1
+settled, both pairings assigned, and no scored hole in Segment 2 or 3.
+
+**No migration.** Build 40 is summary and display code plus one points fix;
+nothing changed shape in the database.
+
+---
 
 ## Build 39 — the lock screens come back
 
