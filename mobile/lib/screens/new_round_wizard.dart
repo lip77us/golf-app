@@ -594,6 +594,10 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   List<PlayerProfile> _allPlayers = [];
   final Set<int>      _selectedIds = {};
   String              _search = '';
+  /// The player-search field. Owned here rather than by the step widget so it
+  /// survives the step being rebuilt as the wizard moves.
+  final TextEditingController _playerSearchCtrl  = TextEditingController();
+  final FocusNode             _playerSearchFocus = FocusNode();
 
   // ---- Step 3: Drag-and-drop group assignment + per-player tee ----
   List<int>           _orderedPlayerIds = [];
@@ -671,6 +675,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
 
   @override
   void dispose() {
+    _playerSearchCtrl.dispose();
+    _playerSearchFocus.dispose();
     _nameCtrl.dispose();
     for (final c in _teamNameCtrls) c.dispose();
     for (final c in _teamBadgeCtrls) c.dispose();
@@ -1869,6 +1875,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             _groupSizesOverride = null;
           }),
           onSearch   : (s) => setState(() => _search = s),
+          searchController: _playerSearchCtrl,
+          searchFocusNode : _playerSearchFocus,
           onSelectAll: () => setState(() {
             _selectedIds.addAll(_allPlayers.map((p) => p.id));
             _groupSizesOverride = null;
@@ -4260,6 +4268,9 @@ class _Step2Players extends StatelessWidget {
   final VoidCallback onClearAll;
   final VoidCallback onAddByPhone;
   final VoidCallback onAddGolfer;
+  /// Owned by the wizard so it survives step changes.
+  final TextEditingController searchController;
+  final FocusNode             searchFocusNode;
 
   const _Step2Players({
     required this.players,
@@ -4271,7 +4282,29 @@ class _Step2Players extends StatelessWidget {
     required this.onClearAll,
     required this.onAddByPhone,
     required this.onAddGolfer,
+    required this.searchController,
+    required this.searchFocusNode,
   });
+
+  /// After ticking a name, leave the query up but SELECTED, so the next
+  /// keystroke replaces it.
+  ///
+  /// Clearing would be wrong: one search often matches two people worth
+  /// taking, and the list has to stay narrowed while both get ticked.
+  /// Selecting keeps the filter and still costs nothing to move on.
+  ///
+  /// Focus comes back only when the keyboard is already up — a TD scrolling
+  /// the roster to read it is not typing, and the keyboard springing back over
+  /// the list would be worse than the thing this fixes.
+  void _reselectSearch(BuildContext context) {
+    if (searchController.text.isEmpty) return;
+    if (MediaQuery.viewInsetsOf(context).bottom > 0 &&
+        !searchFocusNode.hasFocus) {
+      searchFocusNode.requestFocus();
+    }
+    searchController.selection = TextSelection(
+      baseOffset: 0, extentOffset: searchController.text.length);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -4305,6 +4338,8 @@ class _Step2Players extends StatelessWidget {
             child: GolfTextField(
               hint: 'Search players…',
               prefixIcon: Icons.search,
+              controller: searchController,
+              focusNode: searchFocusNode,
               // Give the keyboard a working "done" — otherwise it can't be
               // closed from the keyboard and covers the bottom action button.
               textInputAction: TextInputAction.search,
@@ -4344,7 +4379,12 @@ class _Step2Players extends StatelessWidget {
                   final sel = selectedIds.contains(p.id);
                   return CheckboxListTile(
                     value    : sel,
-                    onChanged: (_) => onToggle(p.id),
+                    onChanged: (_) {
+                      onToggle(p.id);
+                      // Only on the way IN. Unchecking by mistake should not
+                      // disturb the search that found them.
+                      if (!sel) _reselectSearch(context);
+                    },
                     title    : Text(p.name),
                     subtitle : Text('Index ${p.handicapIndex}'),
                     secondary: CircleAvatar(
