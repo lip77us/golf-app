@@ -62,6 +62,8 @@ class UnifiedPlayerSearch extends StatefulWidget {
     this.onQueryChanged,
     this.belowField,
     this.showLocalMatches = true,
+    this.controller,
+    this.focusNode,
   });
 
   /// My Golfers — already loaded by the host screen.
@@ -98,6 +100,16 @@ class UnifiedPlayerSearch extends StatefulWidget {
   /// produces results.
   final Widget? belowField;
 
+  /// Let the HOST own the field, when the host also draws a roster list that
+  /// narrows to the same query.
+  ///
+  /// Ticking a name in that list never reaches this widget, so only the host
+  /// can leave the query selected afterwards — and it has to be the same
+  /// controller, or it would be selecting text in a field nobody is looking
+  /// at. Omit both and the widget owns its own, as it does standalone.
+  final TextEditingController? controller;
+  final FocusNode?             focusNode;
+
   /// Whether the ladder's own YOUR GOLFERS rung is drawn.
   ///
   /// False where the host's roster list ALSO narrows to the query: your own
@@ -112,7 +124,12 @@ class UnifiedPlayerSearch extends StatefulWidget {
 }
 
 class _UnifiedPlayerSearchState extends State<UnifiedPlayerSearch> {
-  final _ctrl = TextEditingController();
+  late final TextEditingController _ctrl =
+      widget.controller ?? TextEditingController();
+  late final FocusNode _focus = widget.focusNode ?? FocusNode();
+  /// Only tear down what we made. A host's controller outlives this widget.
+  late final bool _ownsField =
+      widget.controller == null && widget.focusNode == null;
   Timer? _localTimer;
   Timer? _halvedTimer;
 
@@ -126,7 +143,10 @@ class _UnifiedPlayerSearchState extends State<UnifiedPlayerSearch> {
   void dispose() {
     _localTimer?.cancel();
     _halvedTimer?.cancel();
-    _ctrl.dispose();
+    if (_ownsField) {
+      _ctrl.dispose();
+      _focus.dispose();
+    }
     super.dispose();
   }
 
@@ -167,11 +187,14 @@ class _UnifiedPlayerSearchState extends State<UnifiedPlayerSearch> {
 
   /// Empty the field and everything it was showing.
   ///
-  /// Called once a golfer is in the round: the query has done its job, and
-  /// leaving it up means the next name gets typed after the last one, or worse,
-  /// the picked golfer stays on screen looking like they still need adding.
-  /// Clearing returns you to the roster list and the progress row, which is
-  /// where the answer to "who else?" actually is.
+  /// Now only for the two rungs that CREATE somebody — a guest who did not
+  /// exist, or a stranger pulled onto your roster off Halved. Those are
+  /// one-shot: the person now exists, the same query would find them in the
+  /// roster rung instead, and the field really has done its job.
+  ///
+  /// Ticking a name off the roster no longer comes through here — it selects
+  /// the query instead of dropping it, so a search matching two people can be
+  /// worked through. See `_reselectSearch`.
   void _clearSearch() {
     _localTimer?.cancel();
     _halvedTimer?.cancel();
@@ -181,6 +204,29 @@ class _UnifiedPlayerSearchState extends State<UnifiedPlayerSearch> {
       _searchingHalved = false;
     });
     _setQuery('');
+  }
+
+  /// Leave the query up, but SELECTED, so the next keystroke replaces it.
+  ///
+  /// This is what ticking a name off the roster does now, and it replaces
+  /// clearing. The old argument for clearing was that the next name would
+  /// otherwise get typed onto the end of the last one — true, and selecting
+  /// fixes it without the cost that came with it: one query often has two
+  /// people worth ticking, and clearing threw the filter away between them.
+  ///
+  /// The other half of that argument — that the picked golfer stays on screen
+  /// looking unadded — does not apply to this rung. These rows are checkboxes
+  /// bound to `selectedIds`, so a picked golfer reads as picked.
+  ///
+  /// Focus is only reclaimed when the keyboard is already up, so scrolling the
+  /// list to read it does not get interrupted by the keyboard springing back.
+  void _reselectSearch() {
+    if (_ctrl.text.isEmpty) return;
+    if (MediaQuery.viewInsetsOf(context).bottom > 0 && !_focus.hasFocus) {
+      _focus.requestFocus();
+    }
+    _ctrl.selection =
+        TextSelection(baseOffset: 0, extentOffset: _ctrl.text.length);
   }
 
   Future<void> _searchHalved(String q) async {
@@ -312,6 +358,7 @@ class _UnifiedPlayerSearchState extends State<UnifiedPlayerSearch> {
         const SizedBox(height: GolfTokens.s12),
         TextField(
           controller: _ctrl,
+          focusNode: _focus,
           onChanged: _onChanged,
           textInputAction: TextInputAction.search,
           // Without a handler the keyboard's "search" key does nothing, so
@@ -366,8 +413,8 @@ class _UnifiedPlayerSearchState extends State<UnifiedPlayerSearch> {
             onChanged: (v) {
               widget.onToggle(p.id, v ?? false);
               // Only on the way IN. Unchecking someone by mistake shouldn't
-              // also throw away the search that found them.
-              if (v == true) _clearSearch();
+              // also disturb the search that found them.
+              if (v == true) _reselectSearch();
             },
             secondary: _Monogram(name: p.name, short: p.shortName),
             title: Text(p.name),

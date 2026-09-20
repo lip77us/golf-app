@@ -60,6 +60,8 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
   // ── Step 1: Player selection ──────────────────────────────────────────────
   final Set<int> _selectedIds = {};
   String         _search      = '';
+  final TextEditingController _searchCtrl  = TextEditingController();
+  final FocusNode             _searchFocus = FocusNode();
 
   // ── Step 2: Groups + tees ─────────────────────────────────────────────────
   List<int>          _orderedIds = [];
@@ -93,6 +95,35 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  /// After ticking a name, leave the search text in place but SELECTED, so the
+  /// next keystroke replaces it.
+  ///
+  /// Clearing it outright would be wrong — one search often has two people
+  /// worth ticking ("Robert" catching both Roberts), and the list has to stay
+  /// filtered while the TD works through it. Selecting instead keeps the
+  /// filter up and still costs nothing to move on: type, and Robert is gone.
+  ///
+  /// Focus is only taken back when the keyboard is already up. A TD who
+  /// scrolled the roster to dismiss it is reading, not typing, and having the
+  /// keyboard jump back over the list on every tick would be worse than the
+  /// problem this fixes.
+  void _reselectSearch() {
+    if (_searchCtrl.text.isEmpty) return;
+    final keyboardUp = MediaQuery.viewInsetsOf(context).bottom > 0;
+    if (keyboardUp && !_searchFocus.hasFocus) {
+      _searchFocus.requestFocus();
+    }
+    _searchCtrl.selection = TextSelection(
+      baseOffset: 0, extentOffset: _searchCtrl.text.length);
   }
 
   Future<void> _loadData() async {
@@ -374,6 +405,8 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
             child: GolfTextField(
               hint: 'Search players…',
               prefixIcon: Icons.search,
+              controller: _searchCtrl,
+              focusNode: _searchFocus,
               // Give the keyboard a working "done" — otherwise it can't be
               // closed from the keyboard and covers the bottom action button.
               textInputAction: TextInputAction.search,
@@ -428,9 +461,14 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
                   final sel = _selectedIds.contains(p.id);
                   return CheckboxListTile(
                     value    : sel,
-                    onChanged: (_) => setState(() {
-                      sel ? _selectedIds.remove(p.id) : _selectedIds.add(p.id);
-                    }),
+                    onChanged: (_) {
+                      setState(() {
+                        sel
+                            ? _selectedIds.remove(p.id)
+                            : _selectedIds.add(p.id);
+                      });
+                      _reselectSearch();
+                    },
                     title    : Row(
                       children: [
                         Flexible(child: Text(p.name,

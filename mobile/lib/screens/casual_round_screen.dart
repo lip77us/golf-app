@@ -41,6 +41,12 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   /// below narrows with it — search and filter compose.
   String _playerSearch = '';
 
+  /// The search field itself, owned HERE rather than inside
+  /// UnifiedPlayerSearch, because the list that gets ticked is this screen's
+  /// and the widget never hears about it.
+  final TextEditingController _searchCtrl  = TextEditingController();
+  final FocusNode             _searchFocus = FocusNode();
+
   /// Which cut of the roster the list is showing.  Always [RosterFilter.all]
   /// on entry: a filter does not survive into the next round's setup.
   RosterFilter _rosterFilter = RosterFilter.all;
@@ -174,6 +180,32 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  /// After ticking a name, leave the query up but SELECTED, so the next
+  /// keystroke replaces it.
+  ///
+  /// Clearing would be wrong: one search often matches two people worth
+  /// taking, and the list has to stay narrowed while both get ticked.
+  /// Selecting keeps the filter and still costs nothing to move on.
+  ///
+  /// Focus comes back only when the keyboard is already up — someone who
+  /// scrolled the roster to read it is not typing, and the keyboard springing
+  /// back over the list would be worse than the thing this fixes.
+  void _reselectSearch() {
+    if (_searchCtrl.text.isEmpty) return;
+    if (MediaQuery.viewInsetsOf(context).bottom > 0 && !_searchFocus.hasFocus) {
+      _searchFocus.requestFocus();
+    }
+    _searchCtrl.selection = TextSelection(
+      baseOffset: 0, extentOffset: _searchCtrl.text.length);
   }
 
 
@@ -631,7 +663,12 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               onChanged:
                   (isLockedIn || (blockedNonHalved && !isSelected))
                       ? null
-                      : (v) => _onPlayerToggle(player.id, v ?? false),
+                      : (v) {
+                          _onPlayerToggle(player.id, v ?? false);
+                          // Only on the way IN. Unchecking by mistake should
+                          // not disturb the search that found them.
+                          if (v == true) _reselectSearch();
+                        },
               fillColor: isLockedIn
                   ? WidgetStateProperty.all(scheme.primary)
                   : null,
@@ -1215,6 +1252,8 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                   ? ''
                   : gameDisplayName(_primaryGame!),
               onQueryChanged: (q) => setState(() => _playerSearch = q),
+              controller: _searchCtrl,
+              focusNode: _searchFocus,
               // The chips belong under the search box, not below whatever the
               // ladder happens to be showing — otherwise they slide down the
               // screen the moment a query returns a result.
