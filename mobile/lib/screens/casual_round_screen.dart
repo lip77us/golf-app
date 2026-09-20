@@ -629,137 +629,118 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   /// One golfer in the picker: the round checkbox at the leading edge, the
   /// name / badge / index in the middle, the favorites flag at the trailing
   /// edge.
+  /// One golfer, laid out like the tournament wizard's Select Players step —
+  /// flat row, monogram, name over index, control on the trailing edge.
+  ///
+  /// The two screens do the same job and used to look nothing alike: this one
+  /// drew bordered cards with the checkbox on the left, the wizard drew a plain
+  /// list with it on the right. Everything casual has that the wizard does not
+  /// — the favourites flag, invite, the You lock, the skins block — is kept;
+  /// only the arrangement moved.
   Widget _playerRow(PlayerProfile player) {
     final isSelected = _playerTees.containsKey(player.id);
     // The logged-in player is always locked in as a participant.
     final authPlayer = context.read<AuthProvider>().player;
     final isLockedIn = authPlayer != null && player.id == authPlayer.id;
-    // Multi-Group Skins is Halved-only — a login-less golfer can't
-    // join (they'd have no way to be matched / to score). Grey them
-    // out; the invite button stays so they can be brought on.
+    // Multi-Group Skins is Halved-only — a login-less golfer can't join
+    // (they'd have no way to be matched / to score). Grey them out; the invite
+    // button stays so they can be brought on.
     final blockedNonHalved =
         _multiGroup && !player.isOnApp && !isLockedIn;
 
     final scheme = Theme.of(context).colorScheme;
+    // Blocked golfers can't be ADDED, but one selected before the round
+    // switched to skins can still be taken off.
+    final locked = isLockedIn || (blockedNonHalved && !isSelected);
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(4),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Per D-06: the logged-in user's checkbox is
-            // *locked*, not disabled.  Use the active brand-
-            // green fill (not the default disabled gray) so
-            // the row reads "you're in" — and tag the You
-            // chip with a lock icon to show why it can't be
-            // toggled off.
-            Checkbox(
-              value:    isSelected,
-              // Blocked golfers can't be ADDED, but one that was
-              // already selected before switching to skins can still
-              // be unchecked.
-              onChanged:
-                  (isLockedIn || (blockedNonHalved && !isSelected))
-                      ? null
-                      : (v) {
-                          _onPlayerToggle(player.id, v ?? false);
-                          // Only on the way IN. Unchecking by mistake should
-                          // not disturb the search that found them.
-                          if (v == true) _reselectSearch();
-                        },
-              fillColor: isLockedIn
-                  ? WidgetStateProperty.all(scheme.primary)
-                  : null,
-              checkColor: isLockedIn ? Colors.white : null,
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Line 1: name + badge.  The name gets the full
-                  // row width (selectors live on line 2) so it never
-                  // overflows on a narrow phone.
-                  Row(children: [
-                    Flexible(
-                      child: Text(
-                        player.name,
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: blockedNonHalved
-                                ? scheme.onSurfaceVariant
-                                : null),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (player.isOnApp) ...[
-                      const SizedBox(width: 6),
-                      const HalvedMark(size: 18),
-                    ] else if (!isLockedIn) ...[
-                      const SizedBox(width: 6),
-                      // Invite a golfer who isn't on the app yet.
-                      // Plain tappable icon (not IconButton) so its
-                      // footprint matches the Halved mark and rows
-                      // stay the same height.
-                      Builder(
-                        builder: (btnCtx) => Tooltip(
-                          message: 'Invite ${player.name}',
-                          child: InkResponse(
-                            onTap: () =>
-                                inviteGolfer(btnCtx, player),
-                            child: Icon(
-                                Icons.person_add_alt_1_outlined,
-                                size: 18,
-                                color: scheme.primary),
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (isLockedIn) ...[
-                      const SizedBox(width: 6),
-                      Chip(
-                        avatar: Icon(Icons.lock_outline,
-                            size: 12,
-                            color: scheme.onSecondaryContainer),
-                        label: const Text('You',
-                            style: TextStyle(fontSize: 11)),
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
-                        materialTapTargetSize:
-                            MaterialTapTargetSize.shrinkWrap,
-                        backgroundColor: scheme.secondaryContainer,
-                      ),
-                    ],
-                  ]),
-                  // Line 2: handicap index — or, for a login-less
-                  // golfer in a Halved-only skins round, why they're
-                  // greyed out. (Tees are set on their own step;
-                  // Multi-Group Skins auto-seats each player in their
-                  // own group, so there's no group picker here.)
-                  Text(
-                      blockedNonHalved
-                          ? 'Not on Halved — invite to add'
-                          : 'Index ${player.handicapIndex}',
-                      style: Theme.of(context)
-                          .textTheme.bodySmall),
-                ],
+    void toggle() {
+      _onPlayerToggle(player.id, !isSelected);
+      // Only on the way IN. Unchecking by mistake should not disturb the
+      // search that found them.
+      if (!isSelected) _reselectSearch();
+    }
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+      // The whole row is the target, as it is in the wizard — the flag and the
+      // invite icon are their own buttons and swallow their own taps.
+      onTap: locked ? null : toggle,
+      leading: CircleAvatar(
+        backgroundColor: isSelected
+            ? scheme.primary
+            : scheme.surfaceContainerHighest,
+        child: Text(
+          player.name.isNotEmpty ? player.name[0].toUpperCase() : '?',
+          style: TextStyle(
+              color: isSelected ? Colors.white : null, fontSize: 14),
+        ),
+      ),
+      title: Row(children: [
+        Flexible(
+          child: Text(
+            player.name,
+            style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: blockedNonHalved ? scheme.onSurfaceVariant : null),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (player.isOnApp) ...[
+          const SizedBox(width: 6),
+          const HalvedMark(size: 18),
+        ] else if (!isLockedIn) ...[
+          const SizedBox(width: 6),
+          // Invite a golfer who isn't on the app yet. A plain tappable icon
+          // rather than an IconButton, so its footprint matches the Halved
+          // mark and rows stay the same height.
+          Builder(
+            builder: (btnCtx) => Tooltip(
+              message: 'Invite ${player.name}',
+              child: InkResponse(
+                onTap: () => inviteGolfer(btnCtx, player),
+                child: Icon(Icons.person_add_alt_1_outlined,
+                    size: 18, color: scheme.primary),
               ),
             ),
-          // The flag sits at the trailing edge with its own 44pt target, so
-          // adding a golfer to the ROUND (leading checkbox) and adding him to
-          // your SHORTLIST can never be confused.  Tapping it does not select
-          // the row — it is its own button, not part of the row's gesture.
-          FavoriteFlag(
-            isFavorite: _isFavorite(player.id),
-            golferName: player.name,
-            onPressed: () => _toggleFavorite(player),
           ),
         ],
-      ),
-    ),
-  );
+        if (isLockedIn) ...[
+          const SizedBox(width: 6),
+          Chip(
+            avatar: Icon(Icons.lock_outline,
+                size: 12, color: scheme.onSecondaryContainer),
+            label: const Text('You', style: TextStyle(fontSize: 11)),
+            padding: EdgeInsets.zero,
+            visualDensity: VisualDensity.compact,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            backgroundColor: scheme.secondaryContainer,
+          ),
+        ],
+      ]),
+      subtitle: Text(blockedNonHalved
+          ? 'Not on Halved — invite to add'
+          : 'Index ${player.handicapIndex}'),
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        // Adding a golfer to the ROUND and adding him to your SHORTLIST are
+        // different things, so the flag keeps its own 44pt target and its own
+        // gesture — it never selects the row.
+        FavoriteFlag(
+          isFavorite: _isFavorite(player.id),
+          golferName: player.name,
+          onPressed: () => _toggleFavorite(player),
+        ),
+        // Per D-06: the logged-in user's checkbox is LOCKED, not disabled —
+        // the active brand green rather than a dead grey, so the row reads
+        // "you're in", with the You chip saying why it cannot come off.
+        Checkbox(
+          value: isSelected,
+          onChanged: locked ? null : (v) => toggle(),
+          fillColor:
+              isLockedIn ? WidgetStateProperty.all(scheme.primary) : null,
+          checkColor: isLockedIn ? Colors.white : null,
+        ),
+      ]),
+    );
   }
 
   void _onPlayerToggle(int playerId, bool selected) {
