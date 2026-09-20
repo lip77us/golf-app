@@ -117,3 +117,35 @@ every decision.
 - Wolf has the most configuration and the most per-hole decision-making of any
   casual game, and neither its setup nor its play screen has been through a
   design pass.
+
+---
+
+# Leaderboard
+
+Card: `_WolfGroupCard`, one per group. Web view: **yes** (`_has_casual_wolf`).
+Lock screen: **yes** (`wolf` → `_wolf`).
+
+## What the card draws
+
+| Block | Content |
+|---|---|
+| Header | `Group N` (suppressed on a single-group round), then `Wolf — Gross` / `Net n%` / `SO` |
+| Status | The raw slug with underscores swapped for spaces — `in progress` |
+| One row per golfer | Name, `(hp)` playing handicap, signed points, money — `—` at zero, else `±$X` |
+| **Wolf by hole** | A wrapping strip, one chip per scored hole: `7: Sam` plus a tag for the variant played (lone wolf, blind, partnered) |
+| Scorecard | `HoleGridScorecard` with stroke dots and the SI row |
+
+## Decisions taken with no rule to follow — Leaderboard
+
+| # | Decision | Why | Worth revisiting? |
+|---|---|---|---|
+| 1 | **The card names the wolf per hole, not the partnership** | The chip is `hole: wolf` with a tag; who partnered whom is not on the board | ⚠ Worth revisiting. Wolf's whole shape is who took whom, and a round is unreconstructable from the leaderboard without it |
+| 2 | **Playing handicap sits in the row, in brackets** | A points game where strokes decide holes; the reader needs to see who is getting them | Good, and the only card in the set that does it — worth copying or dropping deliberately |
+| 3 | **`_single_group` is honoured** | A casual round has one group and does not need it labelled | Correct. Spots, Honors and Vegas do not do this |
+| 4 | **Status is a raw slug** | `in progress`, lower case, from `replaceAll('_', ' ')` | Drift — shared with Points, Spots and Honors |
+
+## Still open — Leaderboard
+
+- **Show the partnership per hole** (decision 1) — the tag says which variant
+  was played but not who was taken.
+- Status casing (decision 4), shared across four cards.

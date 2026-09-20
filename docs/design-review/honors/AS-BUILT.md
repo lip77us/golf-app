@@ -120,3 +120,37 @@ argument for building one:
 
 Everything. The smallest useful thing is a one-line strip under score entry:
 who holds it, for how long, and a word when it changes hands or dies.
+
+---
+
+# Leaderboard
+
+Card: `_HonorsGroupCard`, one per group. Web view: **no**. Lock screen: no.
+
+## What the card draws
+
+| Block | Content |
+|---|---|
+| Header | `Group N`, and right-aligned `Honors · Pool` (or `Pay leader` / `Above you` / `vs Average`) |
+| Status line | The raw slug, and right-aligned **`Holds honor: SR`** in the primary colour when somebody does |
+| One row per golfer | Name, `N pts`, money — always signed `+$X` / `−$X` in win/loss colour, including `+$0.00` |
+| Field average | `Field average: 4.5 pts` — the number the `vs Average` payout settles against |
+| **Honor by hole** | `_HonorsHoleStrip` — one chip per hole that had a holder: hole number and who held it after that hole. A hole **won outright** is bold and tinted; a **carried** hole (tie, held on) is muted. Holes with no holder are dropped entirely |
+
+## Decisions taken with no rule to follow — Leaderboard
+
+| # | Decision | Why | Worth revisiting? |
+|---|---|---|---|
+| 1 | **Who currently holds the honor is in the header, not just the strip** | It is the one live fact in the game and the strip is history | Good |
+| 2 | **Won outright and carried are drawn differently** | Bold-tinted against muted. Holding by tie is not the same achievement as taking it | ⚠ The best per-hole treatment in the set, and undocumented anywhere — there is no legend saying what muted means |
+| 3 | **Field average is printed** | `vs Average` settles against it, and otherwise the reader cannot check the money | Good, and the same argument as Stableford's points table |
+| 4 | **Money is always signed, even at zero** | `+$0.00` | Drift — three cards, three treatments of zero (umbrella finding 2) |
+| 5 | **Holes with no holder vanish from the strip** | Only `holder_short != null` holes are kept | Worth revisiting: a gap in the hole numbers is unexplained, and a hole nobody took is a fact about the round |
+| 6 | **`Group 1` prints on a one-group round** | No `_single_group` | Fix |
+
+## Still open — Leaderboard
+
+- **A legend for the muted chips** (decision 2). The distinction is the best
+  thing on the card and nothing tells the reader it exists.
+- **No web view.**
+- Holes with no holder (decision 5), zero money (4), `_single_group` (6).

@@ -49,3 +49,65 @@ points play a nine-hole final.
 - **The carved pot** (decision 4) — the money card should probably say what was
   carved and why.
 - **`3&2` is never explained** anywhere in the app.
+
+---
+
+# Leaderboard — the standalone bracket
+
+**Two unrelated things share this name.** The tournament Mini Singles
+(`MiniSinglesConfig`, a bracket in every group on day 1 and a winners'
+foursome on day 2, funded by a carve-out of the championship pool) does **not**
+appear on the round leaderboard. What does is the **standalone** game — a
+bracket inside one foursome, picked from the New Round wizard as
+**"Mini Singles Bracket"** and stored as the game key `match_play`.
+
+Engine: `services/match_play.py`. 4 golfers = two semis on the front 9, then
+the winners' final and the losers' consolation on the back. 3 golfers = three
+parallel 9-hole round-robin matches, then a 9-hole final between the top two on
+points.
+
+Card: `_MatchPlayGroupCard`. Web view: **yes** (`_has_casual_match_play`).
+Lock screen: no.
+
+## What the card draws
+
+The card is a header and nothing else — it delegates the whole body to
+**`MatchPlayDetailView`**, the same widget the dedicated Match Play screen
+uses, so the leaderboard reads at exactly the depth of the play screen. The
+source comment records this as deliberate, replacing a condensed one-line
+summary per match.
+
+Observed, on a 4-player round before any score:
+
+| Block | Content |
+|---|---|
+| Status banner | `Waiting for scores to be entered.` in a pill |
+| Handicap | A flag icon and `Strokes-Off-Low` |
+| Round heading | `Front 9 — Semis`, sub-line `Holes 1–9 · Seed 1 vs 4 · Seed 2 vs 3` |
+| Per-match card | A mint `Semi 1` chip, a `Pending` pill right-aligned |
+| The pairing | Blue dot + name `vs` orange dot + name |
+| State | `Waiting for scores` |
+| Hole boxes | Nine empty boxes numbered 1–9 |
+| Scorecard | `Scorecard · dots = strokes`, then Hole / Par / SI rows and an `OUT` column, one row per golfer with stroke dots and a `—` total |
+
+Unconfigured groups get their own state: **`Mini Singles Bracket not set up for
+this group. Use the Game Setup card on the round screen.`**
+
+## Decisions taken with no rule to follow — Leaderboard
+
+| # | Decision | Why | Worth revisiting? |
+|---|---|---|---|
+| 1 | **The leaderboard reuses the play screen's view wholesale** | One layout, one depth, no second thing to keep in step | ⚠ The best structural decision on this screen, and the only game that does it. Every other card is a second, shallower rendering of a game that already has a screen |
+| 2 | **The empty state names the fix** | "Use the Game Setup card on the round screen" rather than "No data" | Good, and the only empty state in the set that tells the reader what to do |
+| 3 | **Seeds are spelled out in the sub-line** | `Seed 1 vs 4 · Seed 2 vs 3` — the bracket's shape before it has any results | Good |
+| 4 | **`_single_group` is honoured** | A casual bracket is one group by definition | Correct |
+| 5 | **Empty hole boxes are drawn before any score** | The nine boxes are the shape of the match waiting to be filled | Worth a look — it is a lot of empty furniture above a scorecard that is also empty, and the card is tall before it says anything |
+
+## Still open — Leaderboard
+
+- **The name collision** with the tournament game. Two different objects,
+  different economics, one label — and the wizard chip, the tab and this card
+  all read `Mini Singles Bracket`.
+- **Scorecard names mix first names and initials** — `Glenn` above `GL` in the
+  same column (umbrella drift 5).
+- Vertical cost of the pre-score state (decision 5).

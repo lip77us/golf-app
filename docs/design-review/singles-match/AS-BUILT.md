@@ -109,3 +109,42 @@ score entry. As with setup, this game has no surface of its own.
 
 - **The F9 / B9 chips** (decision 6) — hide them, or say why they are dark.
 - The whole screen has never been drawn in this mode, only in Nassau's.
+
+---
+
+# Leaderboard
+
+Card: `_NassauGroupCard` — Singles Match, Nassau Nine and the parent Nassau all
+share one card, which reads the game's live bets and draws only those. Web
+view: **no** (`_has_casual_nassau` tests the literal string `'nassau'`, so the
+two variants are excluded). Lock screen: yes.
+
+## What the card draws
+
+A Singles Match is an 18-hole Overall-only Nassau, so of the card's three
+possible bet rows **only `Overall` is drawn** — `playFront` and `playBack` are
+false and their rows are skipped rather than rendered empty.
+
+| Block | Content |
+|---|---|
+| Header | Both sides, short names, in team colours — or the cup team names and colours when the match is a cup match |
+| `Overall` row | The margin, `All Square` when level, `Not started` before play |
+| Presses | `Auto` / `Manual` markers where presses exist |
+| Money | Signed `+$X` / `−$X`, green above zero and red below, `$0.00` at zero; a loss cap truncates the figure when set |
+| Thru | From `overall.holesPlayed` |
+| Scorecard | `HoleGridScorecard` with stroke dots and the SI row |
+
+## Decisions taken with no rule to follow — Leaderboard
+
+| # | Decision | Why | Worth revisiting? |
+|---|---|---|---|
+| 1 | **Only live bets get a row** | An Overall-only game is an 18-hole match and two empty nine rows would be furniture | Correct, and the source comment says so |
+| 2 | **The card is shared across three games** | Nassau, Nassau Nine and Singles Match are one engine with different bets switched on | Good — and the reason all three behave identically, which is worth keeping |
+| 3 | **Cup matches recolour to the cup teams** | A cup singles match belongs to a side, not to a blue/orange convention | Correct |
+| 4 | **Zero money prints `$0.00`** | Unlike Vegas and Points, which print `—` | Drift (umbrella finding 2) |
+
+## Still open — Leaderboard
+
+- **No web view**, purely because the gate tests `'nassau'` and this game's key
+  is `match_18`. That looks like an oversight rather than a decision.
+- Zero money (decision 4).

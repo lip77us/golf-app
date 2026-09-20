@@ -104,3 +104,46 @@ Under shared score entry, as a `_VegasStatusCard`. No dedicated screen.
 - **Show the number** (decision 7), per hole, per side. Everything else about
   this game is secondary to it.
 - A per-hole grid to put it in (decision 8).
+
+---
+
+# Leaderboard
+
+Card: `_VegasGroupCard`, one per group. Web view: **yes**
+(`_has_casual_vegas`). Lock screen: **yes** (`vegas` → `_las_vegas`).
+
+## 10. What the card draws
+
+| Block | Content |
+|---|---|
+| Header | `Group N`, `Thru n` (holes **played**, not the hole number), the birdie rule (`Flip` / `Multiply`), and `Carryover` when on |
+| Two team rows | Colour bar, short names in the team colour, `N pts`, money right — `—` at zero, else `±$X.XX` in win/loss colour |
+| **Biggest hole** | A tinted callout in the winner's colour: `Hole 7 · Sam & Lee · +18 pts · $18 (×2)`. Only when a hole has been won |
+| **Hole by hole** | `_VegasHoleGrid` — horizontally scrollable, auto-scrolls to the latest hole. Per hole: hole number, **team 1's number**, **team 2's number**, and the points (`0` on a halve, not `½`) |
+| Scorecard | `HoleGridScorecard` with stroke dots and the SI row, so a strokes-off golfer can see the whole-round stroke plan before playing it |
+
+## 11. The §7 finding is out of date
+
+> **Play §7 says the number "appears nowhere in the app, on any screen, at any
+> time" and calls it the one to fix. That is no longer true.** The leaderboard's
+> hole-by-hole grid prints `team1Number` and `team2Number` per hole — a 45 above
+> a 56 — which is exactly the missing thing. Play §7 and §9 should be read as
+> closed, and the remaining gap is narrower: the number is on the leaderboard
+> but still not on the score-entry card, which is where a group standing on the
+> next tee is actually looking.
+
+## 12. Decisions taken with no rule to follow — Leaderboard
+
+| # | Decision | Why | Worth revisiting? |
+|---|---|---|---|
+| 11 | **`Thru n` counts holes played, not the hole number** | A group that skipped a hole would otherwise read as further along than it is | Settled, and the right call |
+| 12 | **A halved hole prints `0`, not `½`** | Vegas is a points game, not match play; a halve is a push worth nothing | Settled |
+| 13 | **"Biggest hole" replaced a wall of per-hole bubbles** | The comment in the source says so outright. One callout carries what eighteen bubbles did | Good, and the only card in the set with a superlative — worth copying |
+| 14 | **Money shows cents here and nowhere else** | Points × stake rarely lands on a dollar | Settled, but it is drift on a screen where other cards round (umbrella drift 3) |
+| 15 | **`Group 1` prints on a one-group round** | The card does not read `_single_group` | Fix — Points and Wolf already honour it |
+
+## 13. Still open — Leaderboard
+
+- **Move the number onto the score-entry card** (§11). The leaderboard has it;
+  the place a golfer checks between holes does not.
+- `_single_group` (decision 15), and the cents/zero-money drift (14).

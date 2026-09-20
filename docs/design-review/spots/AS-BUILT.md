@@ -112,3 +112,34 @@ board, no strip, no card.
   `N sandies`, which is the whole difference between a tally and a game.
 - No running total is visible while playing — a golfer sees their count for
   *this hole* and nothing else.
+
+---
+
+# Leaderboard
+
+Card: `_SpotsGroupCard`, one per group. Web view: **no**. Lock screen: no.
+
+## What the card draws
+
+| Block | Content |
+|---|---|
+| Header | `Group N`, and right-aligned `N spots · Pool` (or `Pay leader` / `vs Average` / `Pay around`) |
+| Status | The raw slug with underscores swapped for spaces — `in progress` |
+| One row per golfer | Name, `N spots`, payout — always `$X.XX`, and `$0.00` when nothing has been won |
+| **Spots by hole** | `_SpotsHoleStrip` — wrapping pills, one per scored hole: hole number plus short name with a green `+` or red `−` count. Sparse: only scored holes appear |
+
+## Decisions taken with no rule to follow — Leaderboard
+
+| # | Decision | Why | Worth revisiting? |
+|---|---|---|---|
+| 1 | **The hole strip wraps rather than scrolling** | The source comment says it outright: you can see many holes at once instead of swiping | Good, and a genuine contrast with Vegas and Fourball, which scroll. Worth a rule on which shape applies when |
+| 2 | **Spots can be negative, and the strip shows both** | Green `+`, red `−` | Correct — a spot taken away is the half of this game a running total hides |
+| 3 | **Zero money prints `$0.00`** | The payout is formatted unconditionally | Drift — Vegas prints `—` for the same state (umbrella finding 2) |
+| 4 | **`Group 1` prints on a one-group round** | The card does not read `_single_group` | Fix |
+| 5 | **No scorecard** | Spots is not a stroke game | Defensible, but a net-spots round gives strokes and there is nowhere to see where they fall |
+
+## Still open — Leaderboard
+
+- **No web view** — a group cannot share a Spots round with anyone not playing.
+- Zero money (decision 3) and `_single_group` (decision 4).
+- **A stroke plan for net Spots** (decision 5).

@@ -103,3 +103,38 @@ into shared score entry. Both exist; neither has been drawn.
 - **Nothing explains 9 points a hole** on the play screen. The strip shows
   `4 4 1` and a first-time golfer has to work out why.
 - **The duplicated grid** (decision 10).
+
+---
+
+# Leaderboard
+
+Card: `_Points531GroupCard`, one per group. Web view: **yes**
+(`_has_casual_points_531`). Lock screen: **yes** (`points_531` → `_points`).
+
+## What the card draws
+
+| Block | Content |
+|---|---|
+| Header | `Group N` (suppressed on a single-group round), handicap chip (`Gross` / `Net n%` / `SO`) and payout chip (`Pool` / per-point mode) |
+| Status | The raw slug with underscores swapped for spaces |
+| One row per golfer | Name, `N pts` (halves render as `.5`, whole numbers unpadded), money — `—` at zero |
+| Per-hole grid | `_Points531HoleGrid`, when any hole is scored |
+| Footer | The stake line, only when a bet unit is set |
+
+`par_per_hole` and the loss cap are read from the summary and available to the
+card.
+
+## Decisions taken with no rule to follow — Leaderboard
+
+| # | Decision | Why | Worth revisiting? |
+|---|---|---|---|
+| 1 | **Half points print as `.5`, whole ones without a decimal** | A 5-3-1 split across a tie produces halves; padding every whole number to `5.0` would be noise | Good |
+| 2 | **Zero money prints `—`** | Matches Vegas | Correct in itself — but Spots prints `$0.00` and Honors `+$0.00` for the same state (umbrella finding 2) |
+| 3 | **`_single_group` is honoured** | One group needs no label | Correct |
+| 4 | **The stake line is suppressed at zero stake** | A points-only game has no money to report | Good, and worth copying |
+| 5 | **No scorecard** | Points has a per-hole grid instead | Worth revisiting — a net game gives strokes and the grid does not show where they fall. Wolf, which is also a points game, draws both |
+
+## Still open — Leaderboard
+
+- **A stroke plan** (decision 5) — Wolf's card is the precedent.
+- Zero money (decision 2).

@@ -51,3 +51,37 @@ so nobody ever has to scroll right to find the hole they just entered.
   somewhere in play.
 - **The auto-scroll offset** (decision 3) on a small screen.
 - No dedicated play screen, and none obviously needed — the grid is the game.
+
+---
+
+# Leaderboard
+
+View: `_StablefordView`. **Not a per-group card** — Stableford is one of only
+two games on this screen where the field is the unit, so there are no `Group N`
+cards and everyone ranks together. Web view: **yes**, and it is the only game
+in this set with both a casual and a championship gate
+(`_has_casual_stableford`, `_has_stableford_championship`). Lock screen:
+**yes** (`stableford` → `_stableford`).
+
+## What the view draws
+
+| Block | Content |
+|---|---|
+| Chip row | `Gross` / `Net n%`, then the money shape: `Pool $X/player`, or `$X/pt · vs Average` (`Just first` / `Everyone above`) and `Cap $X/player` when set |
+| Points table | The whole table spelled out in one line: `Alb 5 · Eag 4 · Bird 3 · Par 2 · Bog 1 · Dbl 0` |
+| Points grid | `_StablefordPointsGrid` — rank, per-hole points, running total, payout |
+| Gross scorecard | `HoleGridScorecard` below it |
+
+## Decisions taken with no rule to follow — Leaderboard
+
+| # | Decision | Why | Worth revisiting? |
+|---|---|---|---|
+| 1 | **The points table is printed on the board** | A modified table is a house rule, and a `3` means nothing without it | ⚠ Good — and the only card in the set that states its own scoring rule. Worth copying to every game with a configurable table |
+| 2 | **The gross scorecard sits under the points grid** | The source comment gives the reason: a `3` could be a net birdie or a gross par, and the points grid alone cannot tell them apart | Correct, and the argument generalises |
+| 3 | **One card, not per-player standing cards** | The comment records that the old shape overlapped | Settled |
+| 4 | **Whole-field, no group cards** | The game is played against the field | Correct — and the reason this view is shaped unlike the other nine |
+
+## Still open — Leaderboard
+
+- Nothing pressing. This is the most complete board in the set, and decisions 1
+  and 2 are the two worth propagating to the others.

@@ -108,3 +108,40 @@ are the bet count and the hole range.
 - **Marking the match's nine on the grid** (decision 6).
 - Whether this and Singles Match are games or modes — three coverage rows
   currently describe one screen, one engine and one play surface.
+
+---
+
+# Leaderboard
+
+Card: `_NassauGroupCard`, shared with Nassau and Singles Match. Web view:
+**no** (`_has_casual_nassau` tests the literal string `'nassau'`). Lock screen:
+no.
+
+## What the card draws
+
+Nassau Nine is one match over the holes actually played, with no front/back
+split — it rides the `front` bet with `singleMatch` set, and the card
+**relabels that row `Match`** rather than `Front 9`. The back and overall rows
+are skipped.
+
+| Block | Content |
+|---|---|
+| Header | Both sides, short names, in team colours |
+| `Match` row | The margin, `All Square` when level, `Not started` before play |
+| Presses | `Auto` / `Manual` where they exist — Nassau Nine keeps presses, which is most of why it exists |
+| Money | Signed, coloured, `$0.00` at zero, truncated by a loss cap when set |
+| Scorecard | `HoleGridScorecard` with stroke dots and the SI row |
+
+## Decisions taken with no rule to follow — Leaderboard
+
+| # | Decision | Why | Worth revisiting? |
+|---|---|---|---|
+| 1 | **The row is relabelled `Match`, not `Front 9`** | The bet is carried on the front slot for implementation reasons; calling it "Front 9" on a 9-hole round would be wrong twice over | ⚠ Exactly right, and a good example of the UI refusing to leak a storage decision |
+| 2 | **Claremont shortens the labels to `F9` / `B9` / `All`** | A Claremont game draws top and bottom rows and needs the width | Settled |
+| 3 | **Zero money prints `$0.00`** | Shared with the rest of the Nassau family | Drift (umbrella finding 2) |
+
+## Still open — Leaderboard
+
+- **No web view** — the same `'nassau'` string check that excludes Singles
+  Match. One gate would fix both.
+- Zero money (decision 3).

@@ -132,3 +132,37 @@ this is the detail.
   holes exactly as it drew the live ones.
 - This pair of widgets is the model for a game with no screen of its own, and
   is worth drawing as a reusable pattern rather than as Fourball's furniture.
+
+---
+
+# Leaderboard
+
+Card: `_FourballGroupCard`, one per group — and the only one in this set that
+is a `StatefulWidget`, because it auto-scrolls. Web view: **no**. Lock screen:
+yes (the Live Activity family covers it).
+
+## What the card draws
+
+| Block | Content |
+|---|---|
+| Header | Both partnerships, short names, in `GameColors.team1` / `team2` |
+| Match state | The margin (`holesUp`, positive = team 1), `Thru n`, holes to play, and whether the match is `complete` or `halved` |
+| Leader | The leading side's short names in its own colour; nobody when all square |
+| Per-hole grid | Horizontally scrollable, auto-scrolling to the current hole — the offset is `(thru - 7) × cellW`, so the live hole sits near the right edge with six behind it |
+| Scorecard | `HoleGridScorecard` with stroke dots, the SI row, **and hole-winner tint** |
+| Stake | `betAmount` |
+
+## Decisions taken with no rule to follow — Leaderboard
+
+| # | Decision | Why | Worth revisiting? |
+|---|---|---|---|
+| 1 | **The grid auto-scrolls to the current hole** | A live round shows what just happened without a swipe | Good — and the same `(hole − 7)` offset the team scorecard uses, so the behaviour is already de facto shared. Worth naming as a component |
+| 2 | **The scorecard tints the hole winner** | Fourball is a best-ball game; which ball won is the thing a partner wants to see | ⚠ The only card in the set that tints the scorecard itself, and the best idea on it. Worth propagating to every match-play-shaped game |
+| 3 | **`holesToPlay` comes from the server, not `18 − hole`** | A shotgun start or a partial round makes the subtraction wrong | Correct, and the subject of a past fix — do not undo it |
+| 4 | **Margin is signed, positive = team 1** | One number for both sides | Settled |
+
+## Still open — Leaderboard
+
+- **No web view.** Fourball is a partners game and the pair not scoring cannot
+  follow it anywhere but the app.
+- **Propagate the hole-winner tint** (decision 2).
