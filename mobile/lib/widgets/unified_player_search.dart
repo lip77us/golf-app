@@ -360,6 +360,11 @@ class _UnifiedPlayerSearchState extends State<UnifiedPlayerSearch> {
           controller: _ctrl,
           focusNode: _focus,
           onChanged: _onChanged,
+          // Names are not words. iOS otherwise offers to "correct" a surname
+          // to a dictionary word — the bubble with the ✕ under the field — and
+          // Steuernagel is not in the dictionary.
+          autocorrect: false,
+          enableSuggestions: false,
           textInputAction: TextInputAction.search,
           // Without a handler the keyboard's "search" key does nothing, so
           // there is no way to close the keyboard from the keyboard — and it

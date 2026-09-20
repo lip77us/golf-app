@@ -63,6 +63,30 @@ void main() {
           filter: RosterFilter.all, roster: roster, shortlist: const {});
       expect(sections.map((s) => s.label), ['All golfers']);
     });
+
+    test('but NOT while searching — the shortcut has nothing left to shorten',
+        () {
+      // Pinning exists so a long roster does not have to be scrolled. A query
+      // has already done that, so the pinned copy would only print the same
+      // golfer twice in a list of two.
+      final sections = rosterSections(
+          filter: RosterFilter.all,
+          roster: roster,
+          shortlist: favorites,
+          query: 'moran');
+
+      expect(sections.map((s) => s.label), ['All golfers']);
+      expect(namesIn(sections.single), ['Dave Moran']);
+    });
+
+    test('and it comes back the moment the query is cleared', () {
+      final sections = rosterSections(
+          filter: RosterFilter.all,
+          roster: roster,
+          shortlist: favorites,
+          query: '   ');
+      expect(sections.map((s) => s.label), ['Favorites', 'All golfers']);
+    });
   });
 
   group('the two filters', () {

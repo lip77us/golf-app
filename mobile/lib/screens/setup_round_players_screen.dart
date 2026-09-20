@@ -407,6 +407,23 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
               prefixIcon: Icons.search,
               controller: _searchCtrl,
               focusNode: _searchFocus,
+              // Names are not words. iOS otherwise offers to "correct"
+              // a surname to a dictionary word — the bubble with the ✕ under
+              // the field — and Steuernagel is not in the dictionary.
+              autocorrect: false,
+              enableSuggestions: false,
+              // One tap back to the whole roster. Typing over the query
+              // only re-filters it; this is the way out of a filter.
+              suffix: _search.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.clear),
+                      tooltip: 'Clear',
+                      onPressed: () {
+                        _searchCtrl.clear();
+                        setState(() => _search = '');
+                      },
+                    ),
               // Give the keyboard a working "done" — otherwise it can't be
               // closed from the keyboard and covers the bottom action button.
               textInputAction: TextInputAction.search,

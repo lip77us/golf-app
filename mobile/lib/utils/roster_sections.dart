@@ -47,12 +47,19 @@ List<RosterSection> rosterSections({
 
   switch (filter) {
     case RosterFilter.all:
-      // Favorites appear TWICE — once pinned, once in their alphabetical
-      // place.  Deliberate: somebody scrolling to M for Dave Moran should find
-      // him under M, not discover he has been moved.  The pinned section is a
-      // shortcut, not a relocation.
-      final favorites =
-          visible.where((p) => shortlist.contains(p.id)).toList();
+      // Favorites appear TWICE while BROWSING — once pinned, once in their
+      // alphabetical place.  Deliberate: somebody scrolling to M for Dave
+      // Moran should find him under M, not discover he has been moved.  The
+      // pinned section is a shortcut, not a relocation.
+      //
+      // While SEARCHING it does not appear at all.  That argument is about
+      // scrolling a roster of a couple of hundred names, and a query has
+      // already done the scrolling — in a list of four the shortcut buys
+      // nothing and costs the same golfer printed twice, which just reads as
+      // a bug.
+      final favorites = q.isEmpty
+          ? visible.where((p) => shortlist.contains(p.id)).toList()
+          : const <PlayerProfile>[];
       return [
         if (favorites.isNotEmpty)
           RosterSection('Favorites', '${favorites.length}', favorites),
