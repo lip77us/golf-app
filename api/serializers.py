@@ -523,12 +523,19 @@ class FoursomeSerializer(serializers.ModelSerializer):
         that pre-populate phantom rows (Sixes phantoms, Pink Ball
         rotation, etc.) don't lock out tee editing for 3-somes before
         any real round has begun."""
+        from games.models import TeamHoleScore
         from scoring.models import HoleScore
-        return HoleScore.objects.filter(
-            foursome=obj,
-            gross_score__isnull=False,
-            player__is_phantom=False,
-        ).exists()
+        if HoleScore.objects.filter(
+                foursome=obj,
+                gross_score__isnull=False,
+                player__is_phantom=False).exists():
+            return True
+        # A one-ball game — a scramble, alternate shot, Chapman — records ONE
+        # team score a hole and no per-golfer HoleScore at all.  Counting only
+        # HoleScore left those foursomes reading as unstarted however far in
+        # they were, so the hub said "Start Match" on the back nine.
+        return TeamHoleScore.objects.filter(
+            foursome=obj, gross_score__isnull=False).exists()
 
     # Map RyderCupFoursomeConfig.game_type → active_games key.
     # GameType enum values (strings) as stored in the DB.

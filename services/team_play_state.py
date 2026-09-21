@@ -335,9 +335,44 @@ def sync_teams(tournament):
 # ---------------------------------------------------------------------------
 
 def hole_data(foursome):
-    """The tee's hole list — par and stroke index for all eighteen."""
-    membership = foursome.memberships.select_related('tee').first()
-    return (membership.tee.holes if membership and membership.tee else []) or []
+    """The hole list the TEAM plays — par and stroke index for all eighteen.
+
+    Taken from the tee most of the team is on.  It used to be the tee of
+    whichever golfer happened to be entered first, which is arbitrary: at
+    Tilden the women's par is 71 and the men's 70, so a team of three men and
+    one woman played par 71 with the women's stroke indexes whenever she was
+    the first name typed in, and par 70 otherwise.  A team is one ball and one
+    card, so it needs one tee, and the honest one is the tee the team mostly
+    plays.
+
+    Phantoms do not vote.  A short team's fourth slot is an arithmetic
+    stand-in, not a golfer standing on a tee box.
+
+    **A tie takes the tee with the lower par** — the harder standard, so a
+    team cannot lower the bar it is measured against by who it adds.  Two and
+    two is the only way to reach it in a foursome.
+    """
+    from collections import Counter
+
+    members = [m for m in foursome.memberships.select_related('tee', 'player')
+               if m.tee_id is not None and not m.player.is_phantom]
+    if not members:
+        # Nobody real has a tee yet; fall back to anyone who does, so a card
+        # built before tees are assigned still has holes to draw.
+        m = foursome.memberships.select_related('tee').exclude(
+            tee__isnull=True).first()
+        return (m.tee.holes if m and m.tee else []) or []
+
+    votes = Counter(m.tee_id for m in members)
+    tees  = {m.tee_id: m.tee for m in members}
+    top   = max(votes.values())
+    tied  = [tees[tid] for tid, n in votes.items() if n == top]
+
+    def total_par(tee):
+        return sum((h.get('par') or 0) for h in (tee.holes or []))
+
+    chosen = min(tied, key=lambda t: (total_par(t), t.id))
+    return chosen.holes or []
 
 
 def resolved_counts(foursome, config):
