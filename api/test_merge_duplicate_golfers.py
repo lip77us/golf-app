@@ -154,3 +154,114 @@ class MergeDuplicateGolfersTests(TestCase):
         self._run(pairs=f'{self.keep.id}:{self.drop.id}', apply=True)
         self.keep.refresh_from_db()
         self.assertEqual(self.keep.email, 'already@known.com')
+
+
+class RepointTests(TestCase):
+    """`--repoint`: a duplicate that has ALREADY been played with.
+
+    Shaped on the Heart Health Scramble. Jim Diederich (#90) had months of
+    rounds and the phone his Halved login uses. The Golf Genius import made
+    James Diederich (#364) off a different number, and James is who got put in
+    the scramble — so Jim could not see it. Both have history, so the plain
+    merge refuses; --repoint moves the scramble onto Jim and then deletes James.
+    """
+
+    def setUp(self):
+        from games.models import TeamHoleScore
+        from tournament.models import TeamPlayTeamState
+
+        self.account = Account.objects.create(name='Tilden')
+        self.jim = Player.objects.create(
+            account=self.account, name='Jim Diederich',
+            phone='5107344842', handicap_index=Decimal('16.8'))
+        self.james = Player.objects.create(
+            account=self.account, name='James Diederich',
+            phone='+15105256417', ghin='9876543',
+            handicap_index=Decimal('16.5'))
+
+        course = Course.objects.create(account=self.account, name='Tilden Park')
+        self.tee = Tee.objects.create(course=course, tee_name='White',
+                                      slope=113, course_rating=Decimal('69.4'),
+                                      par=72, holes=_holes())
+
+        # Jim's own history, elsewhere.
+        old = Round.objects.create(account=self.account, course=course)
+        self._seat(Foursome.objects.create(round=old, group_number=1), self.jim)
+
+        # The scramble, with James in it.
+        self.scramble = Round.objects.create(account=self.account, course=course)
+        self.fs = Foursome.objects.create(round=self.scramble, group_number=1)
+        self.mate = Player.objects.create(account=self.account, name='Mate',
+                                          handicap_index=Decimal('10'))
+        self._seat(self.fs, self.james)
+        self._seat(self.fs, self.mate)
+        TeamHoleScore.objects.create(foursome=self.fs, hole_number=1,
+                                     gross_score=4, chosen_player=self.james)
+        self.state = TeamPlayTeamState.objects.create(
+            foursome=self.fs,
+            drive_pairs=[[self.james.id, self.mate.id]])
+
+    def _seat(self, fs, player):
+        FoursomeMembership.objects.create(
+            foursome=fs, player=player, tee=self.tee,
+            course_handicap=16, playing_handicap=16)
+
+    def _run(self, **kwargs):
+        out = StringIO()
+        call_command('merge_duplicate_golfers', stdout=out, **kwargs)
+        return out.getvalue()
+
+    def _pair(self):
+        return f'{self.jim.id}:{self.james.id}'
+
+    def test_without_repoint_it_still_refuses(self):
+        with self.assertRaises(CommandError) as ctx:
+            self._run(pairs=self._pair(), apply=True)
+        self.assertIn('--repoint', str(ctx.exception))
+
+    def test_dry_run_lists_what_moves_and_writes_nothing(self):
+        out = self._run(pairs=self._pair(), repoint=True)
+        self.assertIn('tournament.FoursomeMembership.player', out)
+        self.assertIn('games.TeamHoleScore.chosen_player', out)
+        self.assertIn('drive_pairs', out)
+        self.assertTrue(Player.objects.filter(pk=self.james.pk).exists())
+
+    def test_the_scramble_now_has_jim(self):
+        self._run(pairs=self._pair(), repoint=True, apply=True)
+        members = set(self.fs.memberships.values_list('player_id', flat=True))
+        self.assertIn(self.jim.id, members)
+        self.assertNotIn(self.james.id, members)
+
+    def test_the_team_score_and_drive_pairs_follow(self):
+        from games.models import TeamHoleScore
+        self._run(pairs=self._pair(), repoint=True, apply=True)
+        self.assertEqual(
+            TeamHoleScore.objects.get(foursome=self.fs).chosen_player_id,
+            self.jim.id)
+        self.state.refresh_from_db()
+        self.assertEqual(self.state.drive_pairs, [[self.jim.id, self.mate.id]])
+
+    def test_james_is_gone_and_jim_keeps_his_own_history(self):
+        self._run(pairs=self._pair(), repoint=True, apply=True)
+        self.assertFalse(Player.objects.filter(pk=self.james.pk).exists())
+        self.assertEqual(self.jim.memberships.count(), 2)
+
+    def test_jims_phone_is_never_replaced(self):
+        """The trap: James carries the number Golf Genius had. Copying it over
+        Jim's would unlink him from his own login."""
+        self._run(pairs=self._pair(), repoint=True, apply=True)
+        self.jim.refresh_from_db()
+        self.assertEqual(self.jim.phone, '5107344842')
+
+    def test_but_a_ghin_jim_lacked_is_taken(self):
+        self._run(pairs=self._pair(), repoint=True, apply=True)
+        self.jim.refresh_from_db()
+        self.assertEqual(self.jim.ghin, '9876543')
+
+    def test_two_golfers_in_the_same_group_are_refused(self):
+        """Both would own a score on the same hole of the same card."""
+        self._seat(self.fs, self.jim)
+        with self.assertRaises(CommandError) as ctx:
+            self._run(pairs=self._pair(), repoint=True, apply=True)
+        self.assertIn('cannot be the same golfer', str(ctx.exception))
+        self.assertTrue(Player.objects.filter(pk=self.james.pk).exists())
