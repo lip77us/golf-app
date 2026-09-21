@@ -163,3 +163,37 @@ naming whose index is a guess, on both championship setup screens. It is not in
 the new-round wizard, which runs before the tournament exists and before
 pairings are final; equal-sized flights are sized off the whole field, so the
 cut has to happen once the field is.
+
+## Picking players
+
+**Ticking a name no longer costs you the search.** Type "Robert", tick him, and
+the query stayed in the box — so the next name got typed onto the end of the
+last one unless you cleared it by hand. Clearing it automatically is the
+obvious fix and the wrong one: one search often matches two people worth
+taking, and the list has to stay narrowed while both get ticked. The query now
+stays and is *selected*, so the filter survives and typing replaces it. In all
+three pickers — the New Tournament wizard, a tournament round's setup, and a
+casual round.
+
+**The casual roster reads like the tournament wizard's.** Two screens doing the
+same job looked nothing alike: bordered cards with the checkbox on the left
+against a plain list with the monogram on the left and the checkbox on the
+right. Casual now uses the wizard's arrangement, and the whole row is a tap
+target rather than just the checkbox. Everything casual has that the wizard
+does not is untouched — the favourites flag, invite, the You lock, the
+Multi-Group Skins block, the filter chips and the roster sections.
+
+**The autocorrect bubble is gone.** iOS was offering to replace what you typed
+with a dictionary word — the little pill with the ✕ under the field. On a box
+whose entire content is surnames that is worse than useless; it will happily
+correct Steuernagel.
+
+**The clear ✕ is in every picker**, not just the casual one. Typing over a
+query only re-filters it, so this is the one tap back to the whole roster.
+
+**Favourites stop appearing twice once you search.** A favourite is pinned at
+the top *and* left in their alphabetical place, which is deliberate: scrolling
+to M for Dave Moran should find him under M rather than discover he has been
+moved. That argument is about scrolling a couple of hundred names, and a query
+has already done the scrolling — so in a list of four the pinned copy was just
+the same golfer printed twice. Browsing is unchanged.
