@@ -6630,7 +6630,7 @@ class RabbitSetupView(APIView):
             net_percent         = d.get('net_percent', 100),
             accumulate          = d.get('accumulate', True),
             num_segments        = d.get('num_segments', 1),
-            handicap_allocation = d.get('handicap_allocation', 'per_segment'),
+            handicap_allocation = d.get('handicap_allocation', 'full_round'),
             extra_rabbits       = d.get('extra_rabbits', False),
         )
         calculate_rabbit(foursome)

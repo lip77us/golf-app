@@ -27,8 +27,17 @@ class GolfAppBar extends StatelessWidget implements PreferredSizeWidget {
   /// we can change the default app-wide later by editing this one line.
   final bool centerTitle;
 
-  /// Optional bottom widget (e.g. TabBar).  Forwarded as-is.
+  /// Optional bottom widget (e.g. TabBar, or the D2 standing row).  Forwarded
+  /// as-is.
   final PreferredSizeWidget? bottom;
+
+  /// Overrides the theme's title style.
+  ///
+  /// Exists for the standing row: a screen carrying one demotes its title to a
+  /// centred bold 14, because a golfer knows which game he is playing and does
+  /// not know where he stands. Still a title — just no longer the loudest
+  /// thing in the bar.
+  final TextStyle? titleStyle;
 
   /// Optional leading widget.  Defaults to the automatic back button.
   final Widget? leading;
@@ -43,6 +52,7 @@ class GolfAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.actions,
     this.centerTitle = true,
     this.bottom,
+    this.titleStyle,
     this.leading,
     this.automaticallyImplyLeading = true,
   });
@@ -61,7 +71,7 @@ class GolfAppBar extends StatelessWidget implements PreferredSizeWidget {
       // unchanged. Paired with a tighter titleSpacing for a touch more room.
       title: FittedBox(
         fit: BoxFit.scaleDown,
-        child: Text(title, maxLines: 1, softWrap: false),
+        child: Text(title, maxLines: 1, softWrap: false, style: titleStyle),
       ),
       centerTitle: centerTitle,
       titleSpacing: 8,

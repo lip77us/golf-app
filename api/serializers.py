@@ -1835,7 +1835,7 @@ class RabbitSetupSerializer(serializers.Serializer):
     num_segments  = serializers.ChoiceField(choices=[1, 2, 3], default=1)
     handicap_allocation = serializers.ChoiceField(
                         choices=['per_segment', 'full_round'],
-                        default='per_segment')
+                        default='full_round')
     extra_rabbits = serializers.BooleanField(default=False)
 
 

@@ -18,7 +18,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
+import '../providers/auth_provider.dart';
+import '../theme/halved_brand.dart';
 import '../providers/round_provider.dart';
+import '../widgets/standing_ribbon.dart';
+import '../utils/rabbit_standing.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
@@ -336,6 +340,30 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
     ));
   }
 
+  /// **Rabbit has one distinguished party, not two sides.** There is no
+  /// margin, no place and no team — the question the game asks all afternoon
+  /// is who is holding it, and mint is free to mean *holds it* here in a way
+  /// it could never mean on a card with two sides. That is the lock-screen
+  /// card's own ruling, and the row follows it.
+  StandingRibbon? _standingRibbon(RoundProvider rp) {
+    final round = rp.round;
+    if (round == null || !round.isCasual) return null;
+    final me = context.read<AuthProvider>().player?.id;
+    final standing = rabbitStanding(rp.rabbitSummary, me,
+        hole: _selectedHole, playOrder: _playOrder(rp));
+    if (standing == null) return null;
+    return StandingRibbon(
+      kind: StandingKind.result,
+      standing: standing.standing,
+      // Mint when it is HIS — the one thing this game's colour says. Grey when
+      // it is somebody else's or loose, because there is no side to name.
+      standingColor: standing.mine ? Halved.mint : null,
+      figure: standing.figure,
+      onOpenLeaderboard: () => Navigator.of(context)
+          .pushNamed('/leaderboard', arguments: round.id),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final rp   = context.watch<RoundProvider>();
@@ -365,9 +393,22 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
         (rp.round?.foursomes.length ?? 1) == 1;
     final showExit = isCasualSingle && _hasAnyScore;
 
+    // D2 — the standing row. Casual only for now, like the other
+
+    // games carrying it.
+
+    final ribbon = _standingRibbon(rp);
+
+
     return Scaffold(
       appBar: GolfAppBar(
         title: 'Rabbit',
+        // D2: the standing becomes the bar's second line, and the pill in it
+        // replaces the leaderboard ICON below.
+        bottom: ribbon,
+        titleStyle: ribbon == null
+            ? null
+            : const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.close),
@@ -398,19 +439,28 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
             ),
           if (rp.round != null)
             RoundChatButton(roundId: rp.round!.id),
-          IconButton(
-            tooltip: 'Leaderboard',
-            icon: const Icon(Icons.leaderboard_outlined),
-            onPressed: rp.round == null ? null
-                : () => Navigator.of(context).pushNamed(
-                    '/leaderboard', arguments: rp.round!.id),
-          ),
+          // The named pill in the ribbon is this, done properly — so the icon
+          // stands down wherever the ribbon draws.
+          if (ribbon == null)
+            IconButton(
+              tooltip: 'Leaderboard',
+              icon: const Icon(Icons.leaderboard_outlined),
+              onPressed: rp.round == null ? null
+                  : () => Navigator.of(context).pushNamed(
+                      '/leaderboard', arguments: rp.round!.id),
+            ),
           // Overflow: end the round early (soft gate) + the icon-legend help.
           PopupMenuButton<String>(
             tooltip: 'More',
             icon: const Icon(Icons.more_vert),
             onSelected: (v) {
               switch (v) {
+                case 'leaderboard':
+                  if (rp.round != null) {
+                    Navigator.of(context)
+                        .pushNamed('/leaderboard', arguments: rp.round!.id);
+                  }
+                  break;
                 case 'end':
                   _finishRound(context, _realMembers(rp.round));
                   break;
@@ -420,6 +470,18 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
               }
             },
             itemBuilder: (_) => [
+              // A second way in, and it costs nothing: the overflow is a menu
+              // rather than a competing visible control. Listed first — it is
+              // the highest-frequency destination in here.
+              const PopupMenuItem(
+                value: 'leaderboard',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.leaderboard_outlined),
+                  title: Text('Leaderboard'),
+                ),
+              ),
               if (!isComplete)
                 const PopupMenuItem(
                   value: 'end',
@@ -479,27 +541,13 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
     // Rabbit state for the SELECTED hole's segment (not the globally last
     // scored hole) — the segment resets, so on the first hole of a new
     // segment the rabbit is loose until someone catches it.
-    int    rabSegment    = holeInfo?.segment ?? 1;
-    int?   rabHolderId;
-    String? rabHolderShort;
-    int    rabLead = 0;
-    if (summary != null) {
-      // Walk backwards from the selected hole in PLAY ORDER (back-9 / shotgun
-      // aware) to find the holder state at this point in its segment.
-      final order = _playOrder(rp);
-      final startIdx = order.indexOf(_selectedHole);
-      for (int i = startIdx; i >= 0; i--) {
-        final hi = summary.holeFor(order[i]);
-        if (hi == null) continue;
-        if (hi.segment != rabSegment) break;   // crossed into the prior segment
-        if (hi.isScored) {
-          rabHolderId    = hi.holderId;
-          rabHolderShort = hi.holderShort;
-          rabLead        = hi.lead;
-          break;
-        }
-      }
-    }
+    //
+    // The walk itself moved to `utils/rabbit_standing.rabbitHolderAt` so the
+    // standing row names the same holder this tints. Two walks would disagree
+    // about who has it, on the one screen showing both.
+    final rabHolderId = summary == null
+        ? null
+        : rabbitHolderAt(summary, _selectedHole, _playOrder(rp)).id;
 
     return Column(children: [
       Expanded(
@@ -509,15 +557,6 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            if (summary != null)
-              _RabbitBanner(
-                holderShort: rabHolderShort,
-                lead:        rabLead,
-                segment:     rabSegment,
-                accumulate:  summary.accumulate,
-                numSegments: summary.numSegments,
-              ),
-            const SizedBox(height: 12),
             _HoleHeader(holeNumber: _selectedHole, holeData: holeData,
                 onHelp: () => _showRabbitLegend(context)),
             const SizedBox(height: 12),
@@ -548,10 +587,6 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
               _OutcomeLine(hole: holeInfo),
             ],
             const SizedBox(height: 12),
-            if (summary != null && summary.numSegments > 1) ...[
-              _SegmentStrip(summary: summary),
-              const SizedBox(height: 12),
-            ],
             if (summary != null)
               _RabbitGrid(
                 summary: summary, players: players, scorecard: sc,
@@ -678,58 +713,10 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
 // Rabbit banner — who holds it + lead, and the active segment
 // ===========================================================================
 
-class _RabbitBanner extends StatelessWidget {
-  final String? holderShort;
-  final int     lead;
-  final int     segment;
-  final bool    accumulate;
-  final int     numSegments;
-  const _RabbitBanner({
-    required this.holderShort,
-    required this.lead,
-    required this.segment,
-    required this.accumulate,
-    required this.numSegments,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final loose = holderShort == null;
-    final color = loose ? theme.colorScheme.onSurfaceVariant
-                        : theme.colorScheme.primary;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(loose ? 0.06 : 0.12),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.4)),
-      ),
-      child: Row(children: [
-        Icon(Icons.directions_run, color: color),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(
-              loose
-                  ? 'Rabbit is loose — up for grabs'
-                  : 'Rabbit: $holderShort'
-                    '${accumulate ? '  (+$lead)' : ''}',
-              style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold, color: color),
-            ),
-            if (numSegments > 1)
-              Text('Segment $segment of $numSegments',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant)),
-          ]),
-        ),
-      ]),
-    );
-  }
-}
+// `_RabbitBanner` was here — `Rabbit is loose — up for grabs` across the
+// top, or the holder and his lead. **Removed 22 Sep 2026**: the standing
+// row says the same thing in the bar, and the banner was pushing the hole
+// header down the screen to repeat it.
 
 // ===========================================================================
 // Hole header
@@ -1143,76 +1130,10 @@ class _OutcomeLine extends StatelessWidget {
 // Segment strip
 // ===========================================================================
 
-class _SegmentStrip extends StatelessWidget {
-  final RabbitSummary summary;
-  const _SegmentStrip({required this.summary});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Segments',
-              style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
-          const SizedBox(height: 6),
-          Column(children: [
-            for (final s in summary.segments)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(children: [
-                  SizedBox(
-                    width: 118,
-                    child: Text(
-                        s.isExtra
-                            ? (s.holes == 1
-                                ? 'Hole ${s.startHole} · extra'
-                                : 'Holes ${s.startHole}–${s.endHole} · extra')
-                            : 'Holes ${s.startHole}–${s.endHole}',
-                        style: theme.textTheme.bodySmall),
-                  ),
-                  Expanded(
-                    child: Text(
-                      s.holderShort == null
-                          ? (s.complete ? 'Halved' : 'Loose')
-                          : 'Rabbit: ${s.holderShort}'
-                            '${summary.accumulate ? ' (+${s.lead})' : ''}'
-                            '${s.isHalf ? ' · ½' : ''}'
-                            // Settled before its last hole: the rest are still
-                            // played but can't change the result, so say where
-                            // it was won instead of reading as all-live.
-                            '${s.decidedEarly ? ' · won on ${s.decidedOn}' : ''}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: s.holderShort == null
-                              ? theme.colorScheme.onSurfaceVariant
-                              : theme.colorScheme.primary),
-                    ),
-                  ),
-                  if (s.complete && s.payout > 0)
-                    Text('\$${s.payout.toStringAsFixed(2)}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.green.shade700,
-                            fontWeight: FontWeight.w600))
-                  else if (!s.complete)
-                    Text('in play',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant)),
-                ]),
-              ),
-          ]),
-        ]),
-      ),
-    );
-  }
-}
+// `_SegmentStrip` was here — a row per leg with its holder and payout.
+// **Removed 22 Sep 2026.** The standing row in the app bar reports the leg
+// the hole on screen belongs to, and the full list is the leaderboard's
+// job: somebody wanting all three at once is asking a board question.
 
 // ===========================================================================
 // 18-hole grid — winner + rabbit holder per hole

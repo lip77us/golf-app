@@ -55,7 +55,12 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
   int    _segments   = 3;
   // Strokes-Off allocation (Sixes-style): 'per_segment' (default) spreads a
   // golfer's SO strokes across the matches; 'full_round' allocates round-wide.
-  String _allocation = 'per_segment';
+  /// **Straight up by default** (22 Sep 2026), matching Sixes, which moved on
+  /// 17 Sep. Spreading a golfer's strokes across the legs allocates them to
+  /// each leg's own hardest holes, so the same handicap lands on different
+  /// holes depending on how the round is cut — round-wide stroke index is the
+  /// answer a golfer can check against his card.
+  String _allocation = 'full_round';
   // Extra rabbits (accumulate only): leftover holes from an early-decided leg
   // start a fresh rabbit; a single-hole rabbit pays half the stake.
   bool _extraRabbits = false;

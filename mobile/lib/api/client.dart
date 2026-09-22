@@ -2001,7 +2001,7 @@ class ApiClient {
     int    netPercent   = 100,
     bool   accumulate   = true,
     int    numSegments  = 1,
-    String handicapAllocation = 'per_segment',
+    String handicapAllocation = 'full_round',
     bool   extraRabbits = false,
   }) async {
     final data = await _post('/foursomes/$foursomeId/rabbit/setup/', {

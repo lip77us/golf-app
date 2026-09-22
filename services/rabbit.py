@@ -58,7 +58,7 @@ def setup_rabbit(
     net_percent: int = 100,
     accumulate: bool = True,
     num_segments: int = 1,
-    handicap_allocation: str = RabbitGame.ALLOC_PER_SEGMENT,
+    handicap_allocation: str = RabbitGame.ALLOC_FULL_ROUND,
     extra_rabbits: bool = False,
 ) -> 'RabbitGame':
     """Create (or replace) the Rabbit game for a foursome.  Safe to call
@@ -609,7 +609,7 @@ def rabbit_summary(foursome) -> dict:
         return {
             'status'      : 'pending',
             'handicap'    : {'mode': HandicapMode.STROKES_OFF, 'net_percent': 100,
-                             'allocation': RabbitGame.ALLOC_PER_SEGMENT},
+                             'allocation': RabbitGame.ALLOC_FULL_ROUND},
             'accumulate'   : True,
             'num_segments' : 1,
             'extra_rabbits': False,

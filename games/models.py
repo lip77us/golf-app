@@ -834,12 +834,15 @@ class RabbitGame(models.Model):
     handicap_allocation = models.CharField(
                         max_length=20,
                         choices=ALLOCATION_CHOICES,
-                        default=ALLOC_PER_SEGMENT,
-                        help_text="Strokes-Off only: 'per_segment' splits each "
-                                  "golfer's strokes evenly across the matches, "
-                                  "allocated to the hardest holes in each range; "
-                                  "'full_round' allocates round-wide by stroke "
-                                  "index.  No effect for net/gross or 1 segment.",
+                        default=ALLOC_FULL_ROUND,
+                        help_text="Strokes-Off only: 'full_round' (the default) "
+                                  "allocates strokes round-wide by stroke index "
+                                  "— 'Straight up' on the setup screen; "
+                                  "'per_segment' splits each golfer's strokes "
+                                  "evenly across the matches, allocated to the "
+                                  "hardest holes in each range.  No effect for "
+                                  "net/gross or 1 segment.  Defaulted per_segment "
+                                  "until 22 Sep 2026, when it followed Sixes.",
                     )
     extra_rabbits = models.BooleanField(
                         default=False,

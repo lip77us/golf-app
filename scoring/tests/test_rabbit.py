@@ -52,9 +52,18 @@ class RabbitTests(TestCase):
             s = rabbit_summary(self.fs)
             assert s['handicap']['allocation'] == alloc, s['handicap']
 
-    def test_setup_defaults_to_per_segment(self):
+    def test_setup_defaults_to_straight_up(self):
+        """**Round-wide stroke index by default** (22 Sep 2026), matching
+        Sixes, which moved on 17 Sep.
+
+        Spreading a golfer's strokes across the legs allocates them to each
+        leg's OWN hardest holes, so the same handicap lands on different holes
+        depending on how the round is cut. Round-wide is the answer he can
+        check against his card. `per_segment` is still offered and still
+        scored; it is no longer what a TD gets without asking.
+        """
         g = setup_rabbit(self.fs, handicap_mode='strokes_off', num_segments=3)
-        assert g.handicap_allocation == 'per_segment'
+        assert g.handicap_allocation == 'full_round'
 
     def _cal_so9(self):
         """Foursome where Cal gets SO=9 — splits 3·3·3 across the three 6-hole
