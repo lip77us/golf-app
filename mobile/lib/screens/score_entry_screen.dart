@@ -1706,14 +1706,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     if (summary == null) return null;
 
     final me = context.read<AuthProvider>().player?.id;
-    // The segment whose teams are colouring the player rows right now. The
-    // standing keeps its colour only while it is about that same match —
-    // between segments it is reporting the one just finished, and the rows
-    // below have already repaired.
-    final standing = sixesStanding(
-      summary, me,
-      onScreen: segmentForHole(summary, _selectedHole, _playOrderFor(rp)),
-    );
+    final standing = sixesStanding(summary, me);
 
     // **The pill is the point, so it never depends on identifying a reader.**
     // When the phone's golfer is not in this group — a watcher, or a friend's
@@ -1734,11 +1727,6 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       standing: standing?.standing ??
           'Match $n of ${real.isEmpty ? 3 : real.length}',
       figure: standing?.figure ?? '',
-      // His side this segment, in the colour his row already wears below.
-      // Null before the pairing is known, which leaves the row ink.
-      standingColor: standing == null
-          ? null
-          : (standing.team == 1 ? GameColors.team1 : GameColors.team2),
       onOpenLeaderboard: () => Navigator.of(context)
           .pushNamed('/leaderboard', arguments: round.id),
     );

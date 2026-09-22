@@ -9,6 +9,8 @@
 /// from looking fine.
 library;
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
 import 'package:golf_mobile/utils/sixes_standing.dart';
@@ -64,7 +66,7 @@ void main() {
         _seg(team1: [_me, _partner], team2: [_themA, _themB],
              holes: [_hole(1, 1), _hole(2, 2)]),
       ]);
-      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim 2 up thru 2');
+      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim 2UP thru 2');
     });
 
     test('a reader on team 2 takes it flipped — the rotation case', () {
@@ -74,7 +76,7 @@ void main() {
         _seg(team1: [_themA, _themB], team2: [_me, _partner],
              holes: [_hole(1, 1), _hole(2, 2)]),
       ]);
-      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim 2 down thru 2');
+      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim 2DN thru 2');
     });
 
     test('the same round reads opposite ways to the two sides', () {
@@ -82,8 +84,8 @@ void main() {
         _seg(team1: [_me, _partner], team2: [_themA, _themB],
              holes: [_hole(1, 1)]),
       ]);
-      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim 1 up thru 1');
-      expect(sixesStanding(s, _themA)!.standing, 'Larry, GL 1 down thru 1');
+      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim 1UP thru 1');
+      expect(sixesStanding(s, _themA)!.standing, 'Larry, GL 1DN thru 1');
     });
 
     test('a reader who changed sides between segments follows his own', () {
@@ -97,7 +99,7 @@ void main() {
         _seg(team1: [_partner, _themB], team2: [_me, _themA],
              startHole: 7, endHole: 12, holes: [_hole(7, 1)]),
       ]);
-      expect(sixesStanding(s, _me)!.standing, 'Paul, Larry 1 down thru 1');
+      expect(sixesStanding(s, _me)!.standing, 'Paul, Larry 1DN thru 1');
     });
 
     test('all square says so rather than showing a nought', () {
@@ -166,7 +168,7 @@ void main() {
              startHole: 7, endHole: 12,
              holes: [_hole(7, 1), _hole(8, 1), _hole(9, 1)]),
       ]);
-      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim 1 up thru 3');
+      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim 1UP thru 3');
     });
 
     test('a segment that does not start at hole 1 still counts from 1', () {
@@ -186,7 +188,7 @@ void main() {
              holes: [for (var h = 1; h <= 6; h++) _hole(h, 1)],
              status: 'complete', winner: 'Team 1'),
       ]);
-      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim won 1 up');
+      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim won 1UP');
     });
 
     test('a halved match says so rather than counting to nothing', () {
@@ -199,49 +201,19 @@ void main() {
     });
   });
 
-  group('the colour is a second signal, never the only one', () {
-    test('it reports his side when that match is the one on screen', () {
-      final seg = _seg(team1: [_me, _partner], team2: [_themA, _themB],
-                       holes: [_hole(1, 1)]);
-      final s = _summary([seg]);
-      expect(sixesStanding(s, _me, onScreen: seg)!.team, 1);
-      expect(sixesStanding(s, _themA, onScreen: seg)!.team, 2);
-    });
-
-    test('it follows him across the re-draw', () {
-      final seg2 = _seg(team1: [_partner, _themB], team2: [_me, _themA],
-                        startHole: 7, endHole: 12, holes: [_hole(7, 1)]);
-      final s = _summary([
-        _seg(team1: [_me, _partner], team2: [_themA, _themB],
-             holes: [_hole(1, 1)], status: 'complete', winner: 'Team 1'),
-        seg2,
-      ]);
-      expect(sixesStanding(s, _me, onScreen: seg2)!.team, 2);
-    });
-
-    test('**it is withheld between segments**', () {
-      // Reported from the course on the 7th: the row said `WON 1 UP` in blue
-      // while the player rows had already repaired, so blue was no longer the
-      // pair that won it. The standing is about match 1; the screen is showing
-      // match 2. No colour — the names carry it.
-      final seg1 = _seg(team1: [_me, _partner], team2: [_themA, _themB],
-                        holes: [_hole(1, 1)], status: 'complete',
-                        winner: 'Team 1');
-      final seg2 = _seg(team1: [_partner, _themB], team2: [_me, _themA],
-                        startHole: 7, endHole: 12, holes: const [],
-                        status: 'pending');
-      final s = _summary([seg1, seg2]);
-      final standing = sixesStanding(s, _me, onScreen: seg2)!;
-      expect(standing.team, isNull);
-      expect(standing.standing, 'Paul, Jim won 1 and 5');
-    });
-
-    test('it is withheld when nothing says what is on screen', () {
-      final s = _summary([
-        _seg(team1: [_me, _partner], team2: [_themA, _themB],
-             holes: [_hole(1, 1)]),
-      ]);
-      expect(sixesStanding(s, _me)!.team, isNull);
+  group('the row carries no colour at all', () {
+    test('it is grey, and the names are what identify the pair', () {
+      // The standing was drawn in the reader's team colour and it was
+      // WITHDRAWN: blue is a different pair in match two than in match one, so
+      // the colour is misleading even where it is technically current — a
+      // golfer has to remember which draw he is looking at before he can
+      // trust it, and a signal you have to qualify is worse than none.
+      //
+      // Pinned on the widget, because the absence is the decision.
+      final src = File('lib/widgets/standing_ribbon.dart').readAsStringSync();
+      expect(src.contains('standingColor'), isFalse,
+             reason: 'the standing must not take a colour hook');
+      expect(src, contains('color: Halved.muted'));
     });
   });
 
@@ -293,7 +265,7 @@ void main() {
              startHole: 7, endHole: 12, holes: [_hole(7, 1)]),
       ]);
       // Segment 1 finished 3 up; the row reports the ONE being played.
-      expect(sixesStanding(s, _me)!.standing, 'Paul, Larry 1 up thru 1');
+      expect(sixesStanding(s, _me)!.standing, 'Paul, Larry 1UP thru 1');
     });
 
     test('between segments it holds the match just finished', () {

@@ -66,15 +66,6 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
   /// is the reason the row exists.
   final String standing;
 
-  /// The standing's own colour, where the game HAS a side to name.
-  ///
-  /// Ink by default, which is D2 as drawn. Sixes overrides it with the
-  /// reader's team colour because its pairings rotate every six holes — the
-  /// row is then the one element that says which side he is on this match
-  /// without spending a word, and it matches the blue and orange bars already
-  /// on the player rows below. A game with no sides leaves it alone.
-  final Color? standingColor;
-
   /// The figure beside it — `+$10 so far`, `−1 · thru 4`, `4½ to win`. Muted,
   /// because it qualifies the standing rather than competing with it.
   final String figure;
@@ -87,7 +78,6 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
     required this.standing,
     required this.figure,
     required this.onOpenLeaderboard,
-    this.standingColor,
   });
 
   /// 27px — the pill's 24 plus its breathing room, and the whole cost of the
@@ -116,9 +106,14 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
               standing,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
+              // **Grey, and never a side's colour.** It was drawn in the
+              // reader's team colour; withdrawn because a colour cannot mean
+              // one thing all round in a game whose teams repair every six
+              // holes, and a signal you have to qualify is worse than none.
+              // Bold is what makes it lead — it does not need a hue too.
+              style: const TextStyle(
                   fontSize: 12.5, fontWeight: FontWeight.w700,
-                  color: standingColor ?? Halved.deepPine),
+                  color: Halved.muted),
             ),
           ),
           if (figure.isNotEmpty) ...[
