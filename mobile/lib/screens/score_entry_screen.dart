@@ -1713,13 +1713,16 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // copy of a roster — the row falls back to a fact that is true for
     // everybody and keeps the way in. Losing the target because we cannot
     // personalise the line would give up the whole reason D2 was chosen.
+    final real = summary.segments.where((x) => !x.isExtra).toList();
     final live = liveSegment(summary);
-    final n = live == null
-        ? 0
-        : summary.segments.where((x) => !x.isExtra).toList().indexOf(live) + 1;
+    // Before the first score there is no live segment — and the fallback has
+    // to be MATCH 1 rather than the game's name, which is already centred in
+    // the line above. A row that repeats the title says nothing twice.
+    final n = live == null ? 1 : real.indexOf(live) + 1;
     return StandingRibbon(
       kind: StandingKind.money,
-      standing: standing?.standing ?? (n > 0 ? 'Match $n of 3' : 'Sixes'),
+      standing: standing?.standing ??
+          'Match $n of ${real.isEmpty ? 3 : real.length}',
       figure: standing?.figure ?? '',
       onOpenLeaderboard: () => Navigator.of(context)
           .pushNamed('/leaderboard', arguments: round.id),
@@ -1847,9 +1850,16 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         (rp.round?.foursomes.length ?? 1) == 1;
     final showExit = isCasualSingle && _hasAnyScore;
 
+    // D2: the standing becomes the bar's second line, and the pill in it
+    // replaces the leaderboard ICON below — a bare glyph was the weak
+    // target the whole proposal exists to fix, and keeping both would put
+    // two ways in at the same corner.
+    final ribbon = _standingRibbon(rp, games);
+
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
+        bottom: ribbon,
         leading: IconButton(
           icon: const Icon(Icons.close),
           tooltip: showExit ? 'Exit to rounds' : 'Close',
@@ -1860,7 +1870,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         ),
         title: Text(
           _appBarTitle(games, nas, skins),
-          style: const TextStyle(fontSize: 15),
+          // **Demoted to 14 bold when the ribbon is there.** A golfer
+          // knows which game he is playing; he does not know where he
+          // stands. Still a title — just no longer the loudest thing.
+          style: TextStyle(
+              fontSize: ribbon != null ? 14 : 15,
+              fontWeight: ribbon != null ? FontWeight.w700 : null),
         ),
         centerTitle: true,
         actions: [
@@ -1892,14 +1907,18 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           // is the (push-less) notification that a message arrived.
           if (rp.round != null)
             RoundChatButton(roundId: rp.round!.id),
-          IconButton(
-            tooltip: 'Leaderboard',
-            icon: const Icon(Icons.leaderboard_outlined),
-            onPressed: rp.round == null
-                ? null
-                : () => Navigator.of(context)
-                    .pushNamed('/leaderboard', arguments: rp.round!.id),
-          ),
+          // The named pill in the ribbon is this, done properly — so the
+          // icon stands down wherever the ribbon draws rather than
+          // competing with it two rows apart.
+          if (ribbon == null)
+            IconButton(
+              tooltip: 'Leaderboard',
+              icon: const Icon(Icons.leaderboard_outlined),
+              onPressed: rp.round == null
+                  ? null
+                  : () => Navigator.of(context)
+                      .pushNamed('/leaderboard', arguments: rp.round!.id),
+            ),
           // Overflow: low-frequency actions — finishing the round early (soft
           // gate) and the icon-legend help sheet.
           PopupMenuButton<String>(
@@ -4819,22 +4838,8 @@ class _GameStatusSection extends StatelessWidget {
           const SizedBox(height: 12),
         ],
 
-        // Sixes match grid
+        // The match strip is gone — the app-bar standing row replaced it.
         if (games.contains('sixes')) ...[
-          if (sixesSummary != null)
-            _SixesMatchGrid(
-              summary:     sixesSummary!,
-              members:     players,
-              currentHole: currentHole,
-              holesInPlay: holesInPlay,
-            )
-          else if (loadingSixes)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
           // The card the leaderboard shows, under the match scores. Same
           // widget, same payload, same green hole-winner cell — the group
           // reads the holes it just played without leaving score entry.
@@ -7626,289 +7631,15 @@ String _sixesInitials(String name) {
   return parts.take(2).map((p) => p.isEmpty ? '' : p[0].toUpperCase()).join();
 }
 
-class _SixesMatchGrid extends StatefulWidget {
-  final SixesSummary     summary;
-  final List<Membership> members;
-  final int              currentHole;
-  /// Play order (shotgun-aware) so we can tell which match the current hole is
-  /// in — used to auto-scroll that card into view.
-  final List<int>        holesInPlay;
-
-  const _SixesMatchGrid({
-    required this.summary,
-    required this.members,
-    required this.currentHole,
-    this.holesInPlay = const [],
-  });
-
-  @override
-  State<_SixesMatchGrid> createState() => _SixesMatchGridState();
-}
-
-class _SixesMatchGridState extends State<_SixesMatchGrid> {
-  final ScrollController _scroll = ScrollController();
-  final GlobalKey        _activeKey = GlobalKey();
-
-  SixesSummary     get summary     => widget.summary;
-  List<Membership> get members     => widget.members;
-  int              get currentHole => widget.currentHole;
-
-  @override
-  void initState() {
-    super.initState();
-    _scheduleScrollToActive();
-  }
-
-  @override
-  void didUpdateWidget(_SixesMatchGrid old) {
-    super.didUpdateWidget(old);
-    if (old.currentHole != widget.currentHole) _scheduleScrollToActive();
-  }
-
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
-
-  void _scheduleScrollToActive() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctx = _activeKey.currentContext;
-      if (ctx == null || !mounted) return;
-      Scrollable.ensureVisible(
-        ctx,
-        alignment: 0.5,               // centre the active match card
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-      );
-    });
-  }
-
-  /// True when [seg] is the match the current hole is being played in — by
-  /// POSITION in play order, so a wrapped shotgun segment matches correctly.
-  bool _isActive(SixesSegment seg) {
-    final order = widget.holesInPlay;
-    if (order.isEmpty) {
-      return currentHole >= seg.startHole && currentHole <= seg.endHole;
-    }
-    final sp = order.indexOf(seg.startHole);
-    final ep = order.indexOf(seg.endHole);
-    final hp = order.indexOf(currentHole);
-    if (sp < 0 || ep < 0 || hp < 0 || ep < sp) {
-      return currentHole >= seg.startHole && currentHole <= seg.endHole;
-    }
-    return hp >= sp && hp <= ep;
-  }
-
-  String _shortFor(String name) {
-    final m = members.cast<Membership?>().firstWhere(
-      (m) => m?.player.name == name,
-      orElse: () => null,
-    );
-    return m?.player.displayShort ?? _sixesInitials(name);
-  }
-
-  /// Initials only — "PL/JS". The seat numbers this used to carry on a
-  /// second line ("(1/2)") cost the card a row per team and told nobody
-  /// anything they couldn't read off the names.
-  String _teamLabel(SixesTeamInfo team) {
-    if (!team.hasPlayers) return '??/??';
-    return team.players.map(_shortFor).join('/');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final allSegs = summary.segments;
-    if (allSegs.isEmpty) return const SizedBox.shrink();
-
-    final standardSegs = allSegs.where((s) => !s.isExtra).toList();
-    final extraSegs    = allSegs.where((s) => s.isExtra).toList();
-
-    // Progressive reveal: next match shows only once the current one is done.
-    final visible = <SixesSegment>[];
-    for (final seg in standardSegs) {
-      visible.add(seg);
-      final done = seg.status == 'complete' || seg.status == 'halved';
-      if (!done) break;
-    }
-    visible.addAll(extraSegs);
-
-    // P1 = player who appears in team1 of every standard segment.
-    String p1Name = '';
-    if (standardSegs.length >= 2) {
-      var intersection = standardSegs[0].team1.players.toSet();
-      for (final s in standardSegs.skip(1)) {
-        intersection = intersection.intersection(s.team1.players.toSet());
-      }
-      if (intersection.isNotEmpty) p1Name = intersection.first;
-    }
-    if (p1Name.isEmpty && members.isNotEmpty) {
-      p1Name = members[0].player.name;
-    }
-
-    // The first visible segment the current hole falls in gets the key we
-    // scroll into view (so on later holes the active/extra match isn't
-    // stranded off-screen).
-    final activeSeg = visible.firstWhere(_isActive, orElse: () => visible.last);
-
-    return SingleChildScrollView(
-      controller: _scroll,
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: visible.map((seg) {
-          final matchNum   = allSegs.indexOf(seg) + 1;
-          final p1InTeam2  = seg.team2.players.contains(p1Name);
-          final topTeam    = p1InTeam2 ? seg.team2 : seg.team1;
-          final bottomTeam = p1InTeam2 ? seg.team1 : seg.team2;
-          // Colour by the actual Django team so it matches the hole rows.
-          final topColor    = p1InTeam2 ? GameColors.team2 : GameColors.team1;
-          final bottomColor = p1InTeam2 ? GameColors.team1 : GameColors.team2;
-          return _SixesSegmentCard(
-            key:          identical(seg, activeSeg) ? _activeKey : null,
-            matchNumber:  matchNum,
-            segment:      seg,
-            team1Label:   _teamLabel(topTeam),
-            team2Label:   _teamLabel(bottomTeam),
-            team1Color:   topColor,
-            team2Color:   bottomColor,
-            teamsSwapped: p1InTeam2,
-            currentHole:  currentHole,
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-class _SixesSegmentCard extends StatelessWidget {
-  final int           matchNumber;
-  final SixesSegment  segment;
-  final String        team1Label;
-  final String        team2Label;
-  final Color?        team1Color;
-  final Color?        team2Color;
-  final bool          teamsSwapped;
-  final int           currentHole;
-
-  const _SixesSegmentCard({
-    super.key,
-    required this.matchNumber,
-    required this.segment,
-    required this.team1Label,
-    required this.team2Label,
-    this.team1Color,
-    this.team2Color,
-    this.teamsSwapped = false,
-    required this.currentHole,
-  });
-
-  String _statusLabel() {
-    final raw = segment.statusDisplay;
-    if (raw == '—') return 'Pending';
-    return raw.replaceAll('All Square', 'AS');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme       = Theme.of(context);
-    final noTeams     = !segment.team1.hasPlayers || !segment.team2.hasPlayers;
-    final rawMargin   = segment.holes.isNotEmpty ? segment.holes.last.margin : 0;
-    final lastMargin  = teamsSwapped ? -rawMargin : rawMargin;
-    final t1Leading   = lastMargin > 0;
-    final t2Leading   = lastMargin < 0;
-    // Colour the "N UP / wins" status in the LEADING team's colour so it's clear
-    // WHICH side is up (blue = team1, orange = team2). Green/primary read as a
-    // generic "positive" and never said who. Neutral when All Square / halved.
-    final statusColor = t1Leading
-        ? (team1Color ?? Colors.blue.shade700)
-        : t2Leading
-            ? (team2Color ?? Colors.orange.shade800)
-            : theme.colorScheme.onSurfaceVariant;
-
-    final lastPlayed = segment.holes.isNotEmpty ? segment.holes.last.hole : null;
-    final decided    = segment.status == 'complete' || segment.status == 'halved';
-    final displayEnd = (decided && lastPlayed != null && lastPlayed < segment.endHole)
-        ? lastPlayed
-        : segment.endHole;
-
-    return Card(
-      margin: const EdgeInsets.only(right: 8),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outlineVariant),
-      ),
-      child: Container(
-        width: 120,
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Match $matchNumber',
-              style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary),
-            ),
-            if (segment.isExtra)
-              Text('(extra)',
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: theme.colorScheme.tertiary)),
-            const SizedBox(height: 6),
-
-            if (noTeams) ...[
-              Text('Teams TBD',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-            ] else ...[
-              Text(team1Label,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: team1Color,
-                    fontWeight: t1Leading ? FontWeight.bold : FontWeight.normal,
-                  )),
-              // "v." rides on the front of the second team instead of owning
-              // a row of its own. It's a separator, not a line of the card.
-              RichText(
-                text: TextSpan(
-                  style: theme.textTheme.bodySmall,
-                  children: [
-                    TextSpan(
-                      text: 'v. ',
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                    ),
-                    TextSpan(
-                      text: team2Label,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: team2Color,
-                        fontWeight:
-                            t2Leading ? FontWeight.bold : FontWeight.normal,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                _statusLabel(),
-                style: theme.textTheme.labelMedium?.copyWith(
-                    color: statusColor, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Holes ${segment.startHole}–$displayEnd',
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
+// `_SixesMatchGrid` and `_SixesSegmentCard` lived here — the strip of
+// per-segment match cards under the player rows. **Removed 22 Sep 2026**
+// when the standing moved into the app bar: that row answers the same
+// question in one line, and the pairings this also carried are already on
+// the player rows as the blue/orange team bars. Two statements of one
+// fact, and the taller one was costing the hole its screen.
+//
+// The leaderboard's Sixes tab still shows all three segments, which is
+// where somebody who wants every match at once should be looking.
 
 // ---------------------------------------------------------------------------
 // Triple Cup (One Round Ryder Cup) match grid — mirrors _SixesMatchGrid

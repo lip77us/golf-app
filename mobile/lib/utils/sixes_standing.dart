@@ -13,7 +13,9 @@
 ///   * **the standing** is the segment being PLAYED, from the reader's side.
 ///     Not the segment tally: a golfer on the fourth hole of match two is
 ///     asking how match two is going, and "1–0 up on segments" is the thing
-///     the leaderboard is for.
+///     the leaderboard is for. It carries `thru N` because Sixes cuts the
+///     round into six-hole matches and can add EXTRA ones, so the hole number
+///     in the header does not say how far into THIS match he is.
 ///   * **the money** is what is SETTLED — decided segments only, straight off
 ///     the engine's own per-segment settlement. A segment in progress
 ///     contributes nothing, which is what lets the row say `so far` and mean
@@ -27,7 +29,8 @@ import '../api/models.dart';
 
 /// The two strings the ribbon draws, or null when there is nothing to say yet.
 class SixesStanding {
-  /// `2 UP`, `1 DOWN`, `ALL SQUARE` — the live segment, reader-relative.
+  /// `2 UP thru 4`, `ALL SQUARE thru 1`, `WON 3 AND 2` — the live segment,
+  /// reader-relative, with how far into the MATCH he is.
   final String standing;
 
   /// `+$10 so far`, `−$5 so far`, or `Even so far`.
@@ -91,15 +94,33 @@ SixesStanding? sixesStanding(SixesSummary? summary, int? playerId) {
   // negated when he is on team 2. This is the whole reason this file exists.
   final margin = played.last.margin * (side == 1 ? 1 : -1);
 
+  // **`thru N` rides the standing.** Sixes cuts the round into six-hole
+  // matches and can add EXTRA segments, so the hole number in the header does
+  // not tell a golfer how far into the match he is — `1 UP` on its own leaves
+  // him counting backwards to work out how many holes are left to play it in.
+  // N is holes played in THIS match, not on the course.
+  final thru = played.length;
+
   final String standing;
-  if (margin == 0) {
-    standing = 'ALL SQUARE';
-  } else if (segment.status == 'complete' || segment.status == 'halved') {
+  if (segment.status == 'complete' || segment.status == 'halved') {
     // A decided segment reports the RESULT, not a running margin — `2 UP` on
-    // a match that is over reads as a match still to play.
-    standing = margin > 0 ? 'WON ${margin.abs()} UP' : 'LOST ${margin.abs()}';
+    // a match that is over reads as a match still to play. Early close-outs
+    // take golf's own notation, so `3 AND 2` rather than `3 UP thru 4`.
+    final left = segment.totalHoles - thru;
+    if (margin == 0) {
+      standing = 'HALVED';
+    } else {
+      final verb = margin > 0 ? 'WON' : 'LOST';
+      standing = left > 0
+          ? '$verb ${margin.abs()} AND $left'
+          : '$verb ${margin.abs()} UP';
+    }
+  } else if (margin == 0) {
+    standing = 'ALL SQUARE thru $thru';
   } else {
-    standing = margin > 0 ? '${margin.abs()} UP' : '${margin.abs()} DOWN';
+    standing = margin > 0
+        ? '${margin.abs()} UP thru $thru'
+        : '${margin.abs()} DOWN thru $thru';
   }
   return SixesStanding(standing, money);
 }
