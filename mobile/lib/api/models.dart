@@ -1575,6 +1575,16 @@ class SixesSummary {
   /// Holes in play order — shotgun-aware column order for the grid.
   final List<int> holesInPlay;
 
+  /// `{player_id: settled amount}` — what each golfer is up or down on the
+  /// segments DECIDED so far. The server has always sent it under
+  /// `money.by_player`; nothing parsed it until the standing ribbon needed a
+  /// money figure, and deriving one from the win tally here would have been a
+  /// second implementation of a rule the engine already applies per segment.
+  ///
+  /// **Settled, not forecast.** A segment in progress contributes nothing,
+  /// which is why the ribbon can say `so far` and mean it.
+  final Map<int, double> moneyByPlayer;
+
   const SixesSummary({
     required this.segments,
     required this.team1Wins,
@@ -1582,6 +1592,7 @@ class SixesSummary {
     required this.halves,
     required this.handicapMode,
     required this.netPercent,
+    this.moneyByPlayer = const {},
     this.handicapAllocation = 'per_segment',
     this.scoringFormat      = 'classic',
     this.holes       = const [],
@@ -1618,6 +1629,12 @@ class SixesSummary {
       holesInPlay: (j['holes_in_play'] as List? ?? const [])
           .map((e) => (e as num).toInt())
           .toList(),
+      moneyByPlayer: {
+        for (final e in ((j['money'] as Map?)?['by_player'] as List? ?? const []))
+          if ((e as Map)['player_id'] != null)
+            (e['player_id'] as num).toInt():
+                ((e['amount'] as num?) ?? 0).toDouble(),
+      },
     );
   }
 }

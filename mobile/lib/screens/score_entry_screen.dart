@@ -25,7 +25,9 @@ import 'package:provider/provider.dart';
 
 import '../api/models.dart';
 import '../game_catalog.dart';
+import '../utils/sixes_standing.dart';
 import '../widgets/banker_entry_strip.dart';
+import '../widgets/standing_ribbon.dart';
 import '../game_colors.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
@@ -1684,6 +1686,45 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   // overflow with long full names.
   String _firstNames(List<String> names) =>
       names.map((n) => n.trim().split(RegExp(r'\s+')).first).join(' / ');
+
+  /// **D2 — the standing folded into the app bar's second line.**
+  ///
+  /// Scoped to a CASUAL SIXES round to start. The design says the strip
+  /// appears in every round carrying whatever that round's standing is, and
+  /// that is where this goes — but each game has to be asked its own question
+  /// (a place, a cup score, a money figure), and getting one right is how the
+  /// shape gets proved before it is repeated eleven times.
+  ///
+  /// Sixes is a good first one because it is the awkward case: the pairings
+  /// rotate every six holes, so "your side" is not a fixed thing and a
+  /// standing read off team 1 would be wrong two segments in three.
+  StandingRibbon? _standingRibbon(RoundProvider rp, List<String> games) {
+    final round = rp.round;
+    if (round == null || !round.isCasual) return null;
+    if (resolvePrimary(round.primaryGame, games) != GameIds.sixes) return null;
+    final summary = rp.sixesSummary;
+    if (summary == null) return null;
+
+    final me = context.read<AuthProvider>().player?.id;
+    final standing = sixesStanding(summary, me);
+
+    // **The pill is the point, so it never depends on identifying a reader.**
+    // When the phone's golfer is not in this group — a watcher, or a friend's
+    // copy of a roster — the row falls back to a fact that is true for
+    // everybody and keeps the way in. Losing the target because we cannot
+    // personalise the line would give up the whole reason D2 was chosen.
+    final live = liveSegment(summary);
+    final n = live == null
+        ? 0
+        : summary.segments.where((x) => !x.isExtra).toList().indexOf(live) + 1;
+    return StandingRibbon(
+      kind: StandingKind.money,
+      standing: standing?.standing ?? (n > 0 ? 'Match $n of 3' : 'Sixes'),
+      figure: standing?.figure ?? '',
+      onOpenLeaderboard: () => Navigator.of(context)
+          .pushNamed('/leaderboard', arguments: round.id),
+    );
+  }
 
   Future<void> _maybeShowSixesDraw(RoundProvider rp, List<String> games) async {
     if (_sixesDrawHandled) return;
