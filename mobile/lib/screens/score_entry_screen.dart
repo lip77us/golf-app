@@ -2369,9 +2369,6 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     }
 
     return Column(children: [
-      // Nassau team banner
-      if (nas != null) _TeamBanner(summary: nas),
-
       // Nassau presses strip (top + bottom combined)
       if (nas != null &&
           (nas.presses.isNotEmpty || nas.bottomPresses.isNotEmpty))
@@ -6871,55 +6868,15 @@ class _SkinsStandingsCardState extends State<_SkinsStandingsCard> {
 // Nassau-specific status widgets (reused from nassau_screen.dart)
 // ===========================================================================
 
-class _TeamBanner extends StatelessWidget {
-  final NassauSummary summary;
-  const _TeamBanner({required this.summary});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    // Full names across the header (short names like "PL"/"DP" are cryptic and
-    // inconsistent); the row ellipsises if a 2-v-2 side runs long.
-    String label(List<NassauPlayerInfo> team) => team
-        .map((p) => p.name.isNotEmpty ? p.name : p.shortName)
-        .join(' & ');
-    final t1 = label(summary.team1);
-    final t2 = label(summary.team2);
-
-    return Container(
-      color: theme.colorScheme.surfaceContainerHighest,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(children: [
-        // Blue (team 1) on the left — matches the team-1-first player rows + setup.
-        nassauTeamDot(1),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(t1,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: GameColors.team1,
-              ),
-              overflow: TextOverflow.ellipsis),
-        ),
-        Text(' vs ',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        // Orange (team 2) on the right.
-        Expanded(
-          child: Text(t2,
-              textAlign: TextAlign.right,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: GameColors.team2,
-              ),
-              overflow: TextOverflow.ellipsis),
-        ),
-        const SizedBox(width: 6),
-        nassauTeamDot(2),
-      ]),
-    );
-  }
-}
+// `_TeamBanner` lived here — `Paul Lipkin  vs  Jim Diederich` across the
+// top, each side in its team's colour. **Removed 22 Sep 2026**, for the
+// same reason the Sixes match strip went: the player rows below are
+// already colour-coded by side, so the banner was the colours again in
+// words, and the standing row in the app bar now names the match state it
+// was standing in for.
+//
+// `nassau_screen.dart` keeps its own copy — that screen is cup-only and has
+// no standing row yet.
 
 /// Compact running-points band shown between the score-entry box and the
 /// points table: each player's running total with the current hole's points
