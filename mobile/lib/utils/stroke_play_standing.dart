@@ -92,15 +92,21 @@ class StrokePlayStanding {
   const StrokePlayStanding(this.place, this.score);
 }
 
-/// `1st`, `2nd`, `3rd`, `T4th`.
+/// `1st`, `2nd`, `3rd` — and `T-1` when the place is shared.
 ///
 /// **The `T` is in the layout, not bolted on** — a net stroke-play field ties
 /// constantly, and a place that cannot show a tie is wrong most weeks.
+///
+/// **A tie drops the ordinal.** `T1st` is the tie marker and the ordinal
+/// fighting for the same two characters, and it reads as a word nobody says;
+/// `T-1` is how a leaderboard writes it. The untied form keeps its ordinal,
+/// because there is nothing in front of it to collide with.
 String placeLabel(int rank, bool tied) {
+  if (tied) return 'T-$rank';
   final suffix = (rank % 100 >= 11 && rank % 100 <= 13)
       ? 'th'
       : {1: 'st', 2: 'nd', 3: 'rd'}[rank % 10] ?? 'th';
-  return '${tied ? "T" : ""}$rank$suffix';
+  return '$rank$suffix';
 }
 
 /// `+3` / `E` / `−2`, with U+2212 rather than a hyphen — the same minus the

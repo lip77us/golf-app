@@ -94,7 +94,7 @@ void main() {
 
     test('**a tie shows the T** — a net field ties constantly', () {
       final card = _card({_me: [4, 4], _b: [4, 4], _c: [5, 5]});
-      expect(_standing(card, [_m(_me), _m(_b), _m(_c)])!.place, 'T1st of 3');
+      expect(_standing(card, [_m(_me), _m(_b), _m(_c)])!.place, 'T-1 of 3');
     });
 
     test('the suffixes are right, including the teens', () {
@@ -106,7 +106,11 @@ void main() {
       expect(placeLabel(12, false), '12th');
       expect(placeLabel(13, false), '13th');
       expect(placeLabel(21, false), '21st');
-      expect(placeLabel(3, true), 'T3rd');
+      // A tie drops the ordinal: `T3rd` is the marker and the suffix fighting
+      // for the same two characters, and it reads as a word nobody says.
+      expect(placeLabel(3, true), 'T-3');
+      expect(placeLabel(1, true), 'T-1');
+      expect(placeLabel(12, true), 'T-12');
     });
 
     test('a golfer with no score is not last — he is not on the board', () {
