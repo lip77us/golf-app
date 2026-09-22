@@ -255,6 +255,85 @@ class _TeamCupBase(TestCase):
             self.fs, player_id=self.m[who].player_id, thru=thru)
 
 
+class TeamCupThroughTheRegistryTests(_TeamCupBase):
+    """The team-cup card, reached the way a phone reaches it.
+
+    Every other test in this file calls `triple_cup_activity_state` DIRECTLY,
+    which skips the one decision a real round has to get right first: which
+    card the round is. `activity_state` picks ONE game per round — the stored
+    primary, else the first entry in `active_games` — and a tournament round
+    has no stored primary. So the card a cup round draws is decided by the
+    ORDER of that list, and until this class nothing had ever built one the
+    way the cup wizard does.
+
+    The wizard writes a Triple-Cup-only round as `['triple_cup']` and APPENDS
+    a field-wide side game after it, so the realistic list is below.
+
+    **The headline is the whole cup, and it moves when a point lands in a
+    group you are not in.** `push_round` rebuilds the card for every phone
+    registered on the round rather than for the group that scored, so this is
+    what a captain in group 1 sees when group 2 wins its fourball.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from django.contrib.auth import get_user_model
+        self.round.active_games = ['triple_cup', 'irish_rumble']
+        self.round.primary_game = None
+        self.round.save(update_fields=['active_games', 'primary_game'])
+        User = get_user_model()
+        self.users = {}
+        for group, who in ((0, 'A'), (1, 'E')):
+            u = User.objects.create_user(username=f'cup_{who}',
+                                         account=self.round.account)
+            player = self.groups[group][1][who].player
+            player.user = u
+            player.save(update_fields=['user'])
+            self.users[who] = u
+
+    def _card(self, who='A'):
+        from services.live_activity_registry import activity_state
+        return activity_state(self.round, self.users[who])
+
+    def test_a_triple_cup_only_cup_round_draws_the_team_cup_card(self):
+        self._sweep(self.groups[0], range(1, 7))
+        card = self._card()
+        self.assertEqual(card['kind'], 'triple_cup')
+        self.assertIn('SHELDON CUP', card['header']['game'])
+        self.assertEqual(card['state']['to_play'], 'TO WIN')
+
+    def test_a_point_in_another_group_moves_your_headline(self):
+        self._sweep(self.groups[0], range(1, 7))       # your group banks one
+        self.assertEqual(self._card('A')['number']['text'], '1–0')
+        # You play nothing more. Group 2 wins its first six.
+        self._sweep(self.groups[1], range(1, 7))
+        self.assertEqual(self._card('A')['number']['text'], '2–0',
+                         "group 2's point must reach group 1's lock screen")
+
+    def test_every_group_reads_the_same_cup(self):
+        self._sweep(self.groups[0], range(1, 13))      # group 1 banks two
+        self._sweep(self.groups[1], range(1, 7))       # group 2 banks one
+        self.assertEqual(self._card('A')['number']['text'], '3–0')
+        self.assertEqual(self._card('E')['number']['text'], '3–0')
+
+    def test_the_team_cup_payload_decodes_against_the_swift_contract(self):
+        """The `closed` outage, guarded for this card: a key the Swift does
+        not declare is ignored, but a REQUIRED key the payload lacks throws
+        and iOS drops the whole update with no error anywhere. So both
+        directions, on the payload the registry actually dispatches."""
+        import pathlib
+        swift = (pathlib.Path(__file__).resolve().parents[2] / 'mobile' / 'ios'
+                 / 'SixesActivity' / 'SixesActivity.swift').read_text()
+        self._sweep(self.groups[0], range(1, 7))
+        self._sweep(self.groups[1], range(1, 7))
+        card = self._card()
+        for key in card:
+            self.assertTrue(f'let {key}:' in swift or f'var {key}:' in swift,
+                            f'`{key}` has no field in ContentState')
+        for key in ('header', 'number', 'sides', 'state', 'pips', 'footer'):
+            self.assertIn(key, card, f'required key `{key}` missing')
+
+
 class TeamCupTests(_TeamCupBase):
     """The **team** configuration — same composition, a different view model.
 
