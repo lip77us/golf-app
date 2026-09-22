@@ -1934,6 +1934,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
             icon: const Icon(Icons.more_vert),
             onSelected: (v) {
               switch (v) {
+                case 'leaderboard':
+                  if (rp.round != null) {
+                    Navigator.of(context)
+                        .pushNamed('/leaderboard', arguments: rp.round!.id);
+                  }
+                  break;
                 case 'refresh':
                   if (rp.round != null) _refresh();
                   break;
@@ -1959,6 +1965,25 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               }
             },
             itemBuilder: (_) => [
+              // **A second way in, and it costs nothing.** The pill is the
+              // target the wayfinding work exists to provide — a named one,
+              // where a bare glyph was not — but the overflow is a menu rather
+              // than a competing visible control, so duplicating the
+              // destination here spends no screen and no attention. A golfer
+              // who has learned to look under ⋮ for everything else finds it
+              // where he looked.
+              //
+              // Listed first: it is the highest-frequency destination in this
+              // menu by a distance, whatever the rest of it is for.
+              const PopupMenuItem(
+                value: 'leaderboard',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.leaderboard_outlined),
+                  title: Text('Leaderboard'),
+                ),
+              ),
               const PopupMenuItem(
                 value: 'refresh',
                 child: ListTile(
