@@ -707,3 +707,33 @@ class TeamFinalTests(_TeamCupBase):
         self._sweep(self.groups[1], range(1, 13))
         self.assertEqual(self._final('A')['header']['segment'], 'CUP WON')
         self.assertEqual(self._final('C')['header']['segment'], 'CUP LOST')
+
+    def test_winning_your_group_on_a_halved_cup_is_not_cup_won(self):
+        """The verdict is the cup's. Group 1 goes 4–0 to team 1 and group 2
+        goes 4–0 the other way: the cup is 4–4, and a card that said CUP WON
+        above HALVED · CUP SHARED would contradict itself in the frame that
+        gets screenshotted."""
+        self._sweep(self.groups[0], range(1, 19))
+        self._sweep(self.groups[1], range(1, 19), winner='team2')
+        s = self._final('A')
+        self.assertEqual(s['number']['text'], '4–4')
+        self.assertEqual(s['state']['word'], 'HALVED')
+        self.assertEqual(s['header']['segment'], 'CUP HALVED')
+
+    def test_a_cup_with_rounds_left_is_not_called_halved(self):
+        """Finishing round 1 of 2 at 5–3 is a lead, not a shared cup. The
+        undecided case used to fall into the HALVED branch."""
+        from unittest import mock
+        self._sweep(self.groups[0], range(1, 19))
+        undecided = {'team1_points': 5, 'team2_points': 3,
+                     'total_possible': 16, 'to_win': 8.5,
+                     'cup_status': 'in_progress', 'winner_team': None,
+                     'team1_name': 'Red', 'team2_name': 'Blue',
+                     'team1_colour': 'Red', 'team2_colour': 'Blue'}
+        with mock.patch('services.live_activity_triple_cup._cup_standings',
+                        return_value=undecided):
+            s = self._final('A')
+        self.assertEqual(s['header']['segment'], 'ROUND COMPLETE')
+        self.assertEqual(s['state']['to_play'], 'TO WIN')
+        self.assertEqual(s['state']['word'], '8½')
+        self.assertNotEqual(s['state']['word'], 'HALVED')

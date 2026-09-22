@@ -517,19 +517,35 @@ def triple_cup_final_state(foursome, *, player_id=None) -> dict:
         c1 = float(cup.get('team1_points') or 0)
         c2 = float(cup.get('team2_points') or 0)
         winner = cup.get('winner_team')
+        status = cup.get('cup_status')
+        # **The verdict is the CUP's, from the reader's cup side.** This used
+        # to pass the GROUP's points to `_cup_word`, so a foursome that won
+        # its four on a cup that finished 4–4 signed off `CUP WON` directly
+        # above `HALVED · CUP SHARED` — the card contradicting itself in the
+        # one frame people screenshot.
+        my_team = 1 if mine_is_t1 else 2
         if winner in (1, 2):
             side = (cup.get('team1_name') if winner == 1
                     else cup.get('team2_name')) or ''
             state = {'word': side.upper(), 'to_play': 'TAKES IT',
                      'colour': 'mint'}
-        else:
+            verdict = 'CUP WON' if winner == my_team else 'CUP LOST'
+        elif status == 'tied':
             state = {'word': 'HALVED', 'to_play': 'CUP SHARED',
                      'colour': 'mint'}
+            verdict = 'CUP HALVED'
+        else:
+            # **Not decided yet — a cup with rounds still to play.** This fell
+            # into the HALVED branch too, so Red finishing round 1 of 2 at 5–3
+            # would have been told the cup was shared. The running card's
+            # slot still answers the question a captain has now.
+            state = {'word': _score(cup.get('to_win')), 'to_play': 'TO WIN'}
+            verdict = 'ROUND COMPLETE'
         total = float(cup.get('total_possible') or 0)
         return {
             'kind'  : KIND,
             'header': {'game': _cup_header(foursome, cup),
-                       'segment': _cup_word(mine, theirs)},
+                       'segment': verdict},
             'closed': True,
             'number': {'text': f'{_score(c1)}–{_score(c2)}',
                        'colour': (palette[0] if c1 > c2
