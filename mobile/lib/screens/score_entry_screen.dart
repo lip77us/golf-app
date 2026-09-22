@@ -1706,7 +1706,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     if (summary == null) return null;
 
     final me = context.read<AuthProvider>().player?.id;
-    final standing = sixesStanding(summary, me);
+    // The match the hole on screen belongs to. It is what the row REPORTS —
+    // back up to a hole in match 1 and you get match 1 — and what decides
+    // whether the row may wear a colour: on the hole after a match concludes
+    // the rows below have re-drawn and the row has not, so blue would name
+    // two different pairs at once.
+    final onScreen = segmentForHole(summary, _selectedHole, _playOrderFor(rp));
+    final standing = sixesStanding(summary, me, onScreen: onScreen);
 
     // **The pill is the point, so it never depends on identifying a reader.**
     // When the phone's golfer is not in this group — a watcher, or a friend's
@@ -1714,11 +1720,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // everybody and keeps the way in. Losing the target because we cannot
     // personalise the line would give up the whole reason D2 was chosen.
     final real = summary.segments.where((x) => !x.isExtra).toList();
-    final live = liveSegment(summary);
-    // Before the first score there is no live segment — and the fallback has
-    // to be MATCH 1 rather than the game's name, which is already centred in
-    // the line above. A row that repeats the title says nothing twice.
-    final n = live == null ? 1 : real.indexOf(live) + 1;
+    // Which match the row is about — the one on screen, so backing up to an
+    // earlier hole reports that hole's match rather than the live one.
+    final shown = standingSegment(summary, onScreen);
+    // Before the first score there is no match to report — and the fallback
+    // has to be MATCH 1 rather than the game's name, which is already centred
+    // in the line above. A row that repeats the title says nothing twice.
+    final n = shown == null ? 1 : real.indexOf(shown) + 1;
     return StandingRibbon(
       // **A trophy, not a money bag.** Sixes is a casual money game, but the
       // standing it reports is a MATCH STATUS — the glyph follows what the
@@ -1727,6 +1735,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       standing: standing?.standing ??
           'Match $n of ${real.isEmpty ? 3 : real.length}',
       figure: standing?.figure ?? '',
+      // Grey unless the row and the rows below are about the same match.
+      standingColor: standing?.team == null
+          ? null
+          : (standing!.team == 1 ? GameColors.team1 : GameColors.team2),
       onOpenLeaderboard: () => Navigator.of(context)
           .pushNamed('/leaderboard', arguments: round.id),
     );

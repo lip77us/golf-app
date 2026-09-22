@@ -66,6 +66,14 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
   /// is the reason the row exists.
   final String standing;
 
+  /// The standing's own colour, where the game has a side to name AND that
+  /// side still means on this row what it means everywhere else on the screen.
+  ///
+  /// Grey when null, which is the safe default and what D2 draws. A caller
+  /// passes a colour only when it can say the row and the screen are about the
+  /// same thing — see `SixesStanding.team` for the state where they are not.
+  final Color? standingColor;
+
   /// The figure beside it — `+$10 so far`, `−1 · thru 4`, `4½ to win`. Muted,
   /// because it qualifies the standing rather than competing with it.
   final String figure;
@@ -78,6 +86,7 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
     required this.standing,
     required this.figure,
     required this.onOpenLeaderboard,
+    this.standingColor,
   });
 
   /// 27px — the pill's 24 plus its breathing room, and the whole cost of the
@@ -106,14 +115,14 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
               standing,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              // **Grey, and never a side's colour.** It was drawn in the
-              // reader's team colour; withdrawn because a colour cannot mean
-              // one thing all round in a game whose teams repair every six
-              // holes, and a signal you have to qualify is worse than none.
-              // Bold is what makes it lead — it does not need a hue too.
-              style: const TextStyle(
+              // **Grey unless the caller can vouch for the colour.** Bold is
+              // what makes the row lead; the hue is a second signal that has
+              // to be earned, and in a game whose teams re-draw it is earned
+              // only while this row and the rows below are about the same
+              // match.
+              style: TextStyle(
                   fontSize: 12.5, fontWeight: FontWeight.w700,
-                  color: Halved.muted),
+                  color: standingColor ?? Halved.muted),
             ),
           ),
           if (figure.isNotEmpty) ...[

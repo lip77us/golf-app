@@ -43,7 +43,21 @@ class SixesStanding {
   /// as a money game.
   final String figure;
 
-  const SixesStanding(this.standing, this.figure);
+  /// Which side he is on — 1 or 2 — or **null when the colour would lie.**
+  ///
+  /// Colour is right while the standing is about the match whose teams are
+  /// colouring the player rows: blue on the row and blue below are then the
+  /// same two golfers. It is wrong for exactly one state — **the hole after a
+  /// match concludes and the teams re-draw** — where the row still reports the
+  /// match just finished while the rows below have already repaired. That is
+  /// the state this is null for, and the names carry it alone.
+  ///
+  /// The rule went through three passes: coloured always (wrong between
+  /// segments), dropped entirely (lost a true signal on every other hole),
+  /// and now conditioned on the one thing that actually decides it.
+  final int? team;
+
+  const SixesStanding(this.standing, this.figure, this.team);
 }
 
 /// Which side of a segment the reader is on — 1, 2, or null when he is in
@@ -98,21 +112,38 @@ String pairNames(SixesTeamInfo team) {
       .join(', ');
 }
 
-/// The segment the group is standing in, or the last one that was played.
+bool _played(SixesSegment s) => s.holes.any((h) => h.winner != null);
+
+/// The match the group is standing in, or the last one that was played.
 ///
 /// **In progress first, then the last one with holes in it.** Between
 /// segments — the draw is up but nobody has teed off — the honest answer is
 /// the match just finished rather than a match with no holes, which would
-/// read `ALL SQUARE` about golf nobody has played.
+/// read `all square` about golf nobody has played.
 SixesSegment? liveSegment(SixesSummary summary) {
   final real = summary.segments.where((s) => !s.isExtra).toList();
   for (final s in real) {
     if (s.status == 'in_progress') return s;
   }
   for (final s in real.reversed) {
-    if (s.holes.any((h) => h.winner != null)) return s;
+    if (_played(s)) return s;
   }
   return null;
+}
+
+/// **The match the row is about: the one the reader is LOOKING AT.**
+///
+/// Not the live one. Backing up to a hole in match 1 while match 2 is running
+/// should report match 1 — the header, the player rows and the scores on
+/// screen are all that match, and a standing row describing a different one is
+/// the only thing on the screen disagreeing with the rest of it.
+///
+/// It falls back to the last match that was played when the hole on screen
+/// belongs to one nobody has teed off in — which is the between-segments
+/// case, on the hole after a match concludes.
+SixesSegment? standingSegment(SixesSummary summary, SixesSegment? onScreen) {
+  if (onScreen != null && _played(onScreen)) return onScreen;
+  return liveSegment(summary);
 }
 
 /// `1UP` / `2DN` — tight and capitalised, the way a margin is written on a
@@ -134,12 +165,16 @@ String _money(double v) {
 
 /// The ribbon's two strings for this reader, or null when the round has not
 /// said anything yet.
-SixesStanding? sixesStanding(SixesSummary? summary, int? playerId) {
+/// [onScreen] is the segment the score card is showing — the one whose teams
+/// are colouring the player rows. It is what tells the standing whether its
+/// own colour still means what those rows mean.
+SixesStanding? sixesStanding(SixesSummary? summary, int? playerId,
+                             {SixesSegment? onScreen}) {
   if (summary == null || playerId == null) return null;
 
   final money = _money(summary.moneyByPlayer[playerId] ?? 0);
 
-  final segment = liveSegment(summary);
+  final segment = standingSegment(summary, onScreen);
   if (segment == null) return null;
   final side = readerTeamIn(segment, playerId);
   if (side == null) return null;
@@ -174,15 +209,16 @@ SixesStanding? sixesStanding(SixesSummary? summary, int? playerId) {
   final names = pairNames(mine);
   final prefix = names.isEmpty ? '' : '$names ';
 
-  // **No colour at all, and the row is grey.** It was drawn in the reader's
-  // team colour; that was withdrawn once the re-draw problem was understood
-  // properly. Blue is a different pair in match two than in match one, so the
-  // colour is misleading even where it is technically current — a golfer has
-  // to remember which draw he is looking at before he can trust it, and a
-  // signal you have to qualify is worse than none. The names carry identity
-  // and nothing else has to.
+  // A segment is identified by its hole RANGE: the objects are rebuilt on
+  // every poll, so object identity would be false every time.
+  final sameAsScreen = onScreen != null &&
+      onScreen.startHole == segment.startHole &&
+      onScreen.endHole == segment.endHole;
+
+  final decided = segment.status == 'complete' || segment.status == 'halved';
+
   final String standing;
-  if (segment.status == 'complete' || segment.status == 'halved') {
+  if (decided) {
     // A decided segment reports the RESULT, not a running margin — `2 UP` on
     // a match that is over reads as a match still to play. Early close-outs
     // take golf's own notation, so `3 and 2` rather than `3 UP thru 4`.
@@ -199,5 +235,11 @@ SixesStanding? sixesStanding(SixesSummary? summary, int? playerId) {
   } else {
     standing = '$prefix${_margin(margin)} thru $thru';
   }
-  return SixesStanding(standing, money);
+  // **The money shows on the decision holes and nowhere else.** It only moves
+  // when a match concludes, so a figure repeated under every live hole is
+  // furniture — and `so far` beside a margin that is still moving invites
+  // reading it as a forecast. It appears when it changed, beside the result
+  // that changed it, and goes when the next match starts.
+  return SixesStanding(standing, decided ? money : '',
+                       sameAsScreen ? side : null);
 }

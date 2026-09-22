@@ -125,9 +125,11 @@ void main() {
 
   group('the money is settled, never forecast', () {
     test('it reads the engine\'s own per-segment settlement', () {
+      // On a DECIDED segment — see the decision-holes group below for when it
+      // is drawn at all.
       final s = _summary([
         _seg(team1: [_me, _partner], team2: [_themA, _themB],
-             holes: [_hole(1, 1)]),
+             holes: [_hole(1, 1)], status: 'complete', winner: 'Team 1'),
       ], money: {_me: 10.0, _themA: -10.0});
       expect(sixesStanding(s, _me)!.figure, '+\$10 so far');
       expect(sixesStanding(s, _themA)!.figure, '−\$10 so far');
@@ -150,7 +152,7 @@ void main() {
       // two appear within a few characters of each other on this row.
       final s = _summary([
         _seg(team1: [_me, _partner], team2: [_themA, _themB],
-             holes: [_hole(1, 1)]),
+             holes: [_hole(1, 1)], status: 'complete', winner: 'Team 2'),
       ], money: {_me: -5.0});
       expect(sixesStanding(s, _me)!.figure.startsWith('−'), isTrue);
     });
@@ -201,19 +203,135 @@ void main() {
     });
   });
 
-  group('the row carries no colour at all', () {
-    test('it is grey, and the names are what identify the pair', () {
-      // The standing was drawn in the reader's team colour and it was
-      // WITHDRAWN: blue is a different pair in match two than in match one, so
-      // the colour is misleading even where it is technically current — a
-      // golfer has to remember which draw he is looking at before he can
-      // trust it, and a signal you have to qualify is worse than none.
-      //
-      // Pinned on the widget, because the absence is the decision.
-      final src = File('lib/widgets/standing_ribbon.dart').readAsStringSync();
-      expect(src.contains('standingColor'), isFalse,
-             reason: 'the standing must not take a colour hook');
-      expect(src, contains('color: Halved.muted'));
+  group('the colour, and the one state it is withheld for', () {
+    test('a live match is coloured — the rows below are the same pair', () {
+      final seg = _seg(team1: [_me, _partner], team2: [_themA, _themB],
+                       holes: [_hole(1, 1)]);
+      final s = _summary([seg]);
+      expect(sixesStanding(s, _me, onScreen: seg)!.team, 1);
+      expect(sixesStanding(s, _themA, onScreen: seg)!.team, 2);
+    });
+
+    test('it follows him across the re-draw', () {
+      final seg2 = _seg(team1: [_partner, _themB], team2: [_me, _themA],
+                        startHole: 7, endHole: 12, holes: [_hole(7, 1)]);
+      final s = _summary([
+        _seg(team1: [_me, _partner], team2: [_themA, _themB],
+             holes: [_hole(1, 1)], status: 'complete', winner: 'Team 1'),
+        seg2,
+      ]);
+      expect(sixesStanding(s, _me, onScreen: seg2)!.team, 2);
+    });
+
+    test('**withheld on the hole after a match concludes**', () {
+      // The one state it is wrong for, reported from the course on the 7th:
+      // the row still reports the match just finished while the rows below
+      // have already re-drawn, so blue on the row and blue below are two
+      // different pairs. The names carry it alone there.
+      final seg1 = _seg(team1: [_me, _partner], team2: [_themA, _themB],
+                        holes: [_hole(1, 1)], status: 'complete',
+                        winner: 'Team 1');
+      final seg2 = _seg(team1: [_partner, _themB], team2: [_me, _themA],
+                        startHole: 7, endHole: 12, holes: const [],
+                        status: 'pending');
+      final standing = sixesStanding(_summary([seg1, seg2]), _me,
+                                     onScreen: seg2)!;
+      expect(standing.team, isNull);
+      expect(standing.standing, 'Paul, Jim won 1 and 5');
+    });
+
+    test('a concluded match still on screen KEEPS its colour', () {
+      // Before the group moves on, the rows below are still that match's
+      // teams — so the colour is true and there is nothing to withhold.
+      final seg = _seg(team1: [_me, _partner], team2: [_themA, _themB],
+                       holes: [_hole(1, 1)], status: 'complete',
+                       winner: 'Team 1');
+      expect(sixesStanding(_summary([seg]), _me, onScreen: seg)!.team, 1);
+    });
+
+    test('withheld when nothing says what is on screen', () {
+      final s = _summary([
+        _seg(team1: [_me, _partner], team2: [_themA, _themB],
+             holes: [_hole(1, 1)]),
+      ]);
+      expect(sixesStanding(s, _me)!.team, isNull);
+    });
+  });
+
+  group('the row is about the match ON SCREEN', () {
+    test('**backing up to match 1 reports match 1**', () {
+      // Reported from the course. The header, the player rows and the scores
+      // on screen are all match 1; a standing row describing match 2 is the
+      // only thing on the screen disagreeing with the rest of it.
+      final seg1 = _seg(team1: [_me, _partner], team2: [_themA, _themB],
+                        holes: [_hole(1, 2)], status: 'complete',
+                        winner: 'Team 1');
+      final seg2 = _seg(team1: [_partner, _themB], team2: [_me, _themA],
+                        startHole: 7, endHole: 12, holes: [_hole(7, 1)]);
+      final s = _summary([seg1, seg2]);
+
+      // Standing on hole 7 — the live match.
+      expect(sixesStanding(s, _me, onScreen: seg2)!.standing,
+             'Paul, Larry 1DN thru 1');
+      // Backed up to hole 3 — match 1, and its own pairing.
+      expect(sixesStanding(s, _me, onScreen: seg1)!.standing,
+             'Paul, Jim won 2 and 5');
+    });
+
+    test('it keeps its colour there, because the rows below back up too', () {
+      final seg1 = _seg(team1: [_me, _partner], team2: [_themA, _themB],
+                        holes: [_hole(1, 2)], status: 'complete',
+                        winner: 'Team 1');
+      final seg2 = _seg(team1: [_partner, _themB], team2: [_me, _themA],
+                        startHole: 7, endHole: 12, holes: [_hole(7, 1)]);
+      final s = _summary([seg1, seg2]);
+      expect(sixesStanding(s, _me, onScreen: seg1)!.team, 1);
+      expect(sixesStanding(s, _me, onScreen: seg2)!.team, 2);
+    });
+
+    test('a match nobody has teed off in falls back to the last played', () {
+      // The between-segments case: the draw for match 2 is up, no scores in
+      // it. Reporting match 2 would read `all square` about golf nobody has
+      // played, so the row holds the match just finished.
+      final seg1 = _seg(team1: [_me, _partner], team2: [_themA, _themB],
+                        holes: [_hole(1, 2)], status: 'complete',
+                        winner: 'Team 1');
+      final seg2 = _seg(team1: [_partner, _themB], team2: [_me, _themA],
+                        startHole: 7, endHole: 12, holes: const [],
+                        status: 'pending');
+      expect(standingSegment(_summary([seg1, seg2]), seg2)?.startHole, 1);
+    });
+  });
+
+  group('the money shows on the decision holes only', () {
+    test('a live match carries no figure', () {
+      // It only moves when a match concludes, so a figure repeated under every
+      // live hole is furniture — and `so far` beside a margin that is still
+      // moving invites reading it as a forecast.
+      final s = _summary([
+        _seg(team1: [_me, _partner], team2: [_themA, _themB],
+             holes: [_hole(1, 1)]),
+      ], money: {_me: 2.0});
+      expect(sixesStanding(s, _me)!.figure, '');
+    });
+
+    test('a concluded match carries it, beside the result that moved it', () {
+      final s = _summary([
+        _seg(team1: [_me, _partner], team2: [_themA, _themB],
+             holes: [_hole(1, 1)], status: 'complete', winner: 'Team 1'),
+      ], money: {_me: 2.0, _themA: -2.0});
+      expect(sixesStanding(s, _me)!.figure, '+\$2 so far');
+      expect(sixesStanding(s, _themA)!.figure, '−\$2 so far');
+    });
+
+    test('and goes again once the next match has a hole in it', () {
+      final s = _summary([
+        _seg(team1: [_me, _partner], team2: [_themA, _themB],
+             holes: [_hole(1, 1)], status: 'complete', winner: 'Team 1'),
+        _seg(team1: [_partner, _themB], team2: [_me, _themA],
+             startHole: 7, endHole: 12, holes: [_hole(7, 1)]),
+      ], money: {_me: 2.0});
+      expect(sixesStanding(s, _me)!.figure, '');
     });
   });
 
