@@ -27,6 +27,7 @@ import '../api/models.dart';
 import '../game_catalog.dart';
 import '../utils/nassau_standing.dart';
 import '../utils/sixes_standing.dart';
+import '../utils/stroke_play_standing.dart';
 import '../widgets/banker_entry_strip.dart';
 import '../widgets/standing_ribbon.dart';
 import '../game_colors.dart';
@@ -1713,9 +1714,46 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       case GameIds.match18:
       case GameIds.nassauNine:
         return _nassauRibbon(rp, me, leaderboard);
+      case GameIds.strokePlay:
+        return _strokePlayRibbon(rp, me, leaderboard);
       default:
         return null;
     }
+  }
+
+  /// **Stroke Play has no sides**, so the row stays grey throughout and both
+  /// slots are plain facts: where you are, and what put you there.
+  ///
+  /// The place is withheld on a multi-group round. Score entry holds ONE
+  /// foursome's scorecard, so a rank computed here would be a place among four
+  /// golfers wearing the words of a place in the field — and there is no
+  /// round-level Stroke Play result to ask instead, because the standings come
+  /// through the leaderboard.
+  StandingRibbon? _strokePlayRibbon(
+      RoundProvider rp, int? me, VoidCallback onOpen) {
+    final round = rp.round!;
+    final sc = rp.scorecard;
+    if (sc == null) return null;
+    final (mode, pct) = _handicapParams(rp, round.activeGames);
+    final standing = strokePlayStanding(
+      scorecard:        sc,
+      players:          _orderedPlayers(sc, round, rp.nassauSummary),
+      playerId:         me,
+      handicapMode:     mode,
+      netPercent:       pct,
+      holesInPlay:      _playOrderFor(rp),
+      fieldIsThisGroup: round.foursomes.length == 1,
+    );
+    if (standing == null) return null;
+    // The place leads when there is one; otherwise the score does, rather than
+    // the row leading with an empty slot.
+    final hasPlace = standing.place.isNotEmpty;
+    return StandingRibbon(
+      kind: StandingKind.result,
+      standing: hasPlace ? standing.place : standing.score,
+      figure: hasPlace ? standing.score : '',
+      onOpenLeaderboard: onOpen,
+    );
   }
 
   /// **Nassau's teams are FIXED**, which is the whole difference from Sixes:
@@ -6399,45 +6437,19 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
   // explicit right edge rather than a column index — a back-nine hole sits one
   // summary column further right than its position suggests.
 
-  // Strokes this player gets on hole [h] under the active handicap mode —
-  // mirrors the per-game logic so the dots match what the calculator used.
-  int _strokesOnHoleFor(Membership m, int h) {
-    if (widget.handicapMode == 'gross') return 0;
-
-    final hole = widget.scorecard.holeData(h);
-    if (hole == null) return 0;
-    final entry = hole.scoreFor(m.player.id);
-
-    final universe = widget.scorecard.holes.isEmpty
-        ? 18
-        : widget.scorecard.holes
-            .map((x) => x.holeNumber)
-            .reduce((a, b) => a > b ? a : b);
-    int siFor(int hh) =>
-        widget.scorecard.holeData(hh)?.scoreFor(m.player.id)?.strokeIndex ??
-        widget.scorecard.holeData(hh)?.strokeIndex ??
-        18;
-
-    if (widget.handicapMode == 'net') {
-      if (widget.netPercent == 100 && entry != null) {
-        return entry.handicapStrokes;
-      }
-      final effective =
-          roundHalfUp(m.playingHandicap * widget.netPercent / 100.0);
-      return partialStrokesOnHole(
-          effective, h, widget.holesInPlay, universe, siFor);
-    }
-    // strokes_off — anchored on the foursome low.
-    if (widget.players.isEmpty) return 0;
-    final low = widget.players
-        .map((p) => p.playingHandicap)
-        .reduce((a, b) => a < b ? a : b);
-    final rawSo = m.playingHandicap - low;
-    if (rawSo <= 0) return 0;
-    final so = roundHalfUp(rawSo * widget.netPercent / 100.0);
-    if (so <= 0) return 0;
-    return partialStrokesOnHole(so, h, widget.holesInPlay, universe, siFor);
-  }
+  /// Strokes this player gets on hole [h] under the active handicap mode.
+  ///
+  /// Moved to `utils/stroke_play_standing.dart` so the standing row reports
+  /// the net these dots produce. Two implementations would eventually disagree
+  /// about a golfer's score on the one screen showing both.
+  int _strokesOnHoleFor(Membership m, int h) => strokePlayStrokesOnHole(
+        m, h,
+        scorecard:    widget.scorecard,
+        players:      widget.players,
+        handicapMode: widget.handicapMode,
+        netPercent:   widget.netPercent,
+        holesInPlay:  widget.holesInPlay,
+      );
 
   @override
   Widget build(BuildContext context) {
