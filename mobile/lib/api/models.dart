@@ -1451,16 +1451,22 @@ class SixesHoleResult {
 
 class SixesTeamInfo {
   final List<String> players;   // player display names
+  /// The app's own short-name field — what the golfer set, or his initials.
+  /// The server has always sent it beside `players`; nothing parsed it until
+  /// the standing row needed to NAME a pairing rather than colour it.
+  final List<String> playersShort;
   final List<int>    playerIds; // matching player ids (for team coloring)
   final String method;
 
   const SixesTeamInfo(
-      {required this.players, this.playerIds = const [], required this.method});
+      {required this.players, this.playersShort = const [],
+       this.playerIds = const [], required this.method});
 
   factory SixesTeamInfo.fromJson(Map<String, dynamic> j) => SixesTeamInfo(
-        players:   List<String>.from(j['players'] as List? ?? []),
-        playerIds: List<int>.from(j['player_ids'] as List? ?? []),
-        method:    j['method'] as String? ?? '',
+        players:      List<String>.from(j['players'] as List? ?? []),
+        playersShort: List<String>.from(j['players_short'] as List? ?? []),
+        playerIds:    List<int>.from(j['player_ids'] as List? ?? []),
+        method:       j['method'] as String? ?? '',
       );
 
   bool get hasPlayers => players.isNotEmpty;

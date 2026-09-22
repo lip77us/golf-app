@@ -43,13 +43,23 @@ class SixesStanding {
   /// as a money game.
   final String figure;
 
-  /// Which side the reader is on in the live segment — 1 or 2.
+  /// Which side the reader is on — 1 or 2 — or **null when the colour would
+  /// lie**.
   ///
-  /// The row wears his team's colour because **the pairings rotate every six
-  /// holes**: it is the one screen element that can say which side he is on
-  /// this match without spending a word on it, and it matches the blue and
-  /// orange bars already on the player rows below.
-  final int team;
+  /// The row wears his team's colour because the pairings rotate every six
+  /// holes: it is the one element that can say which side he is on without
+  /// spending a word, and it matches the blue and orange bars on the player
+  /// rows below.
+  ///
+  /// **That only holds while the standing is about the match on screen.**
+  /// Between segments the row reports the match just finished while the rows
+  /// below have already repaired for the next one — so blue on the standing
+  /// and blue on the players are two different pairs of golfers. Reported from
+  /// the course on the 7th: `WON 1 UP` in blue, when blue was no longer the
+  /// pair that won it.
+  ///
+  /// Null there, and the standing names the winners instead.
+  final int? team;
 
   const SixesStanding(this.standing, this.figure, this.team);
 }
@@ -60,6 +70,50 @@ int? readerTeamIn(SixesSegment segment, int playerId) {
   if (segment.team1.playerIds.contains(playerId)) return 1;
   if (segment.team2.playerIds.contains(playerId)) return 2;
   return null;
+}
+
+/// Which segment a given hole belongs to.
+///
+/// **By POSITION in play order**, so a wrapped shotgun segment (start 14 → end
+/// 1) matches correctly; falls back to the hole-number range when the order is
+/// unknown, which on a normal round is identical. Extras are checked first
+/// because an extra segment's holes sit inside a regular one's range.
+///
+/// Shared rather than private to the score card: it is what colours the player
+/// rows AND what tells the standing row whether its colour still means the
+/// same thing, and those two must never disagree.
+SixesSegment? segmentForHole(SixesSummary summary, int hole,
+                             List<int> holesInPlay) {
+  bool inSeg(SixesSegment s) {
+    if (holesInPlay.isEmpty) return hole >= s.startHole && hole <= s.endHole;
+    final sp = holesInPlay.indexOf(s.startHole);
+    final ep = holesInPlay.indexOf(s.endHole);
+    final hp = holesInPlay.indexOf(hole);
+    if (sp < 0 || ep < 0 || hp < 0 || ep < sp) {
+      return hole >= s.startHole && hole <= s.endHole;
+    }
+    return hp >= sp && hp <= ep;
+  }
+
+  for (final s in summary.segments) {
+    if (s.isExtra && inSeg(s)) return s;
+  }
+  for (final s in summary.segments.where((s) => !s.isExtra).toList().reversed) {
+    if (inSeg(s)) return s;
+  }
+  return null;
+}
+
+/// `Paul, Jim` — the app's short-name field, which is what the golfer set for
+/// himself and what every other narrow surface in the app already shows.
+/// Falls back to first names on an older payload that does not send it.
+String pairNames(SixesTeamInfo team) {
+  final short = team.playersShort.where((n) => n.trim().isNotEmpty).toList();
+  if (short.isNotEmpty) return short.join(', ');
+  return team.players
+      .map((n) => n.trim().split(RegExp(r'\s+')).first)
+      .where((n) => n.isNotEmpty)
+      .join(', ');
 }
 
 /// The segment the group is standing in, or the last one that was played.
@@ -93,7 +147,11 @@ String _money(double v) {
 
 /// The ribbon's two strings for this reader, or null when the round has not
 /// said anything yet.
-SixesStanding? sixesStanding(SixesSummary? summary, int? playerId) {
+/// [onScreen] is the segment the SCORE CARD is currently showing — the one
+/// whose teams are colouring the player rows. Pass it and the row can tell
+/// whether its own colour still means what those rows mean.
+SixesStanding? sixesStanding(SixesSummary? summary, int? playerId,
+                             {SixesSegment? onScreen}) {
   if (summary == null || playerId == null) return null;
 
   final money = _money(summary.moneyByPlayer[playerId] ?? 0);
@@ -117,26 +175,46 @@ SixesStanding? sixesStanding(SixesSummary? summary, int? playerId) {
   // N is holes played in THIS match, not on the course.
   final thru = played.length;
 
+  // **The row NAMES his pairing, on every state.**
+  //
+  // Colour cannot carry identity in this game: the teams repair every six
+  // holes, so blue is a different pair of golfers in match two than it was in
+  // match one. It broke first between segments — the row reported the match
+  // just finished while the player rows had already repaired, so `WON 1 UP` in
+  // blue credited a pair that had not won it — but the same reasoning applies
+  // inside a segment, where a golfer reading a colour has to remember which
+  // draw he is looking at. Names never need that.
+  //
+  // Always the READER's side, so the row is about him from end to end — the
+  // money beside it is his, and the verb carries whether his pair won.
+  final mine = side == 1 ? segment.team1 : segment.team2;
+  final names = pairNames(mine);
+  final prefix = names.isEmpty ? '' : '$names ';
+
+  // The colour is kept only while the standing is about the match whose teams
+  // are on screen; it is a second, quieter signal and never the only one. A
+  // segment is identified by its hole range, because the objects are rebuilt
+  // on every poll and identity would be false every time.
+  final sameAsScreen = onScreen != null &&
+      onScreen.startHole == segment.startHole &&
+      onScreen.endHole == segment.endHole;
+
   final String standing;
   if (segment.status == 'complete' || segment.status == 'halved') {
     // A decided segment reports the RESULT, not a running margin — `2 UP` on
     // a match that is over reads as a match still to play. Early close-outs
-    // take golf's own notation, so `3 AND 2` rather than `3 UP thru 4`.
+    // take golf's own notation, so `3 and 2` rather than `3 UP thru 4`.
     final left = segment.totalHoles - thru;
-    if (margin == 0) {
-      standing = 'HALVED';
-    } else {
-      final verb = margin > 0 ? 'WON' : 'LOST';
-      standing = left > 0
-          ? '$verb ${margin.abs()} AND $left'
-          : '$verb ${margin.abs()} UP';
-    }
+    final result = left > 0 ? '${margin.abs()} and $left' : '${margin.abs()} up';
+    standing = margin == 0
+        ? '${prefix}halved'
+        : '$prefix${margin > 0 ? "won" : "lost"} $result';
   } else if (margin == 0) {
-    standing = 'ALL SQUARE thru $thru';
+    standing = '${prefix}all square thru $thru';
   } else {
     standing = margin > 0
-        ? '${margin.abs()} UP thru $thru'
-        : '${margin.abs()} DOWN thru $thru';
+        ? '$prefix${margin.abs()} up thru $thru'
+        : '$prefix${margin.abs()} down thru $thru';
   }
-  return SixesStanding(standing, money, side);
+  return SixesStanding(standing, money, sameAsScreen ? side : null);
 }

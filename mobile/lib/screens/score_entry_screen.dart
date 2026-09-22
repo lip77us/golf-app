@@ -1706,7 +1706,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     if (summary == null) return null;
 
     final me = context.read<AuthProvider>().player?.id;
-    final standing = sixesStanding(summary, me);
+    // The segment whose teams are colouring the player rows right now. The
+    // standing keeps its colour only while it is about that same match —
+    // between segments it is reporting the one just finished, and the rows
+    // below have already repaired.
+    final standing = sixesStanding(
+      summary, me,
+      onScreen: segmentForHole(summary, _selectedHole, _playOrderFor(rp)),
+    );
 
     // **The pill is the point, so it never depends on identifying a reader.**
     // When the phone's golfer is not in this group — a watcher, or a friend's
@@ -2809,29 +2816,13 @@ class _HoleScoreCard extends StatelessWidget {
 
   /// The Sixes segment that owns [hole] — extras own overlapping holes, and a
   /// later (shifted) standard segment wins, mirroring the strokes logic.
-  SixesSegment? _sixesSegmentForHole(SixesSummary sx, int hole) {
-    // Membership by POSITION in play order, so a wrapped shotgun segment
-    // (e.g. start 14 → end 1) matches correctly. Falls back to the hole-number
-    // range when play order is unknown (normal round → identical).
-    final order = holesInPlay;
-    bool inSeg(SixesSegment s) {
-      if (order.isEmpty) return hole >= s.startHole && hole <= s.endHole;
-      final sp = order.indexOf(s.startHole);
-      final ep = order.indexOf(s.endHole);
-      final hp = order.indexOf(hole);
-      if (sp < 0 || ep < 0 || hp < 0 || ep < sp) {
-        return hole >= s.startHole && hole <= s.endHole;
-      }
-      return hp >= sp && hp <= ep;
-    }
-    for (final s in sx.segments) {
-      if (s.isExtra && inSeg(s)) return s;
-    }
-    for (final s in sx.segments.where((s) => !s.isExtra).toList().reversed) {
-      if (inSeg(s)) return s;
-    }
-    return null;
-  }
+  /// Delegates to `utils/sixes_standing.segmentForHole`. It used to be a copy
+  /// living here; the standing row needs the same answer to know whether its
+  /// colour still means what these rows mean, and two implementations of
+  /// "which match is this hole in" would eventually disagree about exactly
+  /// that.
+  SixesSegment? _sixesSegmentForHole(SixesSummary sx, int hole) =>
+      segmentForHole(sx, hole, holesInPlay);
 
   /// Returns a playerId → team color map for the active games that
   /// pin players to a side: cup singles brackets and Triple Cup.  Cup
