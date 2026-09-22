@@ -1,0 +1,299 @@
+<title>Team Cup Lock Screen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700;800&family=Spline+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#F3F5F1; --paper:#FFFFFF; --ink:#13201B; --ink-2:#3C4A43; --muted:#5C6B62;
+  --rule:#D9E0DA; --pine:#0F6E56; --pine-wash:#E3EFE9; --flag:#9A5B12; --flag-wash:#FBF0DF;
+  --code:#EEF2EE;
+  --glass-1:#152420; --glass-2:#0B1512;
+  --blue:#5AA7F5; --orange:#F3A059; --mint:#3BD89A; --cream:#F3F1EA;
+  --display:"Schibsted Grotesk",ui-sans-serif,system-ui,sans-serif;
+  --body:"Spline Sans",ui-sans-serif,system-ui,sans-serif;
+  --mono:"Spline Sans Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --sf:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1513; --paper:#141D1A; --ink:#E7ECE8; --ink-2:#B9C4BE; --muted:#8C9A92;
+    --rule:#26332E; --pine:#4FC79A; --pine-wash:#16302A; --flag:#E9B26A; --flag-wash:#2E2416; --code:#1A2521;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1513; --paper:#141D1A; --ink:#E7ECE8; --ink-2:#B9C4BE; --muted:#8C9A92;
+  --rule:#26332E; --pine:#4FC79A; --pine-wash:#16302A; --flag:#E9B26A; --flag-wash:#2E2416; --code:#1A2521;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font:15px/1.6 var(--body);padding-inline:20px;padding-block:40px 80px}
+.wrap{max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:56px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(34px,6vw,52px);font-weight:800;letter-spacing:-.02em}
+h2{font-size:24px;font-weight:700;letter-spacing:-.01em}
+h3{font-size:16px;font-weight:700}
+p{margin:0;max-width:66ch}
+.eyebrow{font:600 11.5px/1 var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--pine)}
+.lede{font-size:18px;color:var(--ink-2);max-width:60ch}
+header{display:flex;flex-direction:column;gap:16px}
+.meta{display:flex;flex-wrap:wrap;gap:8px 22px;font:500 12.5px/1.4 var(--mono);color:var(--muted)}
+.meta b{color:var(--ink);font-weight:500}
+section{display:flex;flex-direction:column;gap:18px}
+section>header{gap:6px}
+code,.mono{font-family:var(--mono);font-size:.88em}
+code{background:var(--code);padding:1px 5px;border-radius:4px}
+.callout{border:1px solid var(--rule);background:var(--paper);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:6px}
+.callout.flag{background:var(--flag-wash);border-color:transparent}
+.callout.flag .k{color:var(--flag)}
+.callout.ok{background:var(--pine-wash);border-color:transparent}
+.callout .k{font:600 11px/1 var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--pine)}
+/* anatomy */
+.anatomy{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:28px;align-items:start}
+@media (max-width:760px){.anatomy{grid-template-columns:1fr}}
+.stage{background:
+  radial-gradient(120% 90% at 20% 0%,#2C4A40 0%,#16261F 48%,#0A120F 100%);
+  border-radius:18px;padding:28px 10px;display:flex;justify-content:center}
+.legend{display:flex;flex-direction:column;gap:0;margin:0;padding:0;list-style:none;border-top:1px solid var(--rule)}
+.legend li{display:grid;grid-template-columns:26px 1fr;gap:10px;padding:11px 0;border-bottom:1px solid var(--rule)}
+.legend .n{font:700 12px/22px var(--mono);color:var(--pine)}
+.legend .t{display:flex;flex-direction:column;gap:2px}
+.legend .t b{font-family:var(--display);font-weight:700;font-size:14.5px}
+.legend .t span{font-size:13.5px;color:var(--ink-2)}
+.legend .spec{font:12px/1.45 var(--mono);color:var(--muted)}
+/* the card: 1 CSS px = 1 pt */
+.card{width:360px;max-width:100%;border-radius:22px;padding:13px 16px;
+  background:linear-gradient(180deg,rgba(38,52,47,.92),rgba(22,31,28,.94));
+  box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 10px 30px rgba(0,0,0,.35);
+  color:#fff;font-family:var(--sf);display:flex;flex-direction:column;gap:9px;position:relative}
+.c-ribbon{background:linear-gradient(90deg,#E9C063,#D9A63F);color:#3A2703;border-radius:7px;
+  font:700 10px/1 var(--sf);letter-spacing:.9px;padding:6px 9px;text-transform:uppercase}
+.c-head{display:flex;align-items:center;gap:7px}
+.c-mark{width:12px;height:12px;border-radius:3px;background:var(--cream);color:#0B1F1A;font:800 8.5px/12px var(--sf);text-align:center;flex:none}
+.c-game{font:700 10px/1 var(--sf);letter-spacing:1.1px;color:rgba(255,255,255,.82)}
+.c-seg{margin-left:auto;font:600 10px/1 var(--sf);letter-spacing:.6px;color:rgba(255,255,255,.5);white-space:nowrap}
+.c-block{display:flex;flex-direction:column;gap:6px}
+.c-line{display:flex;align-items:baseline;gap:11px}
+.c-num{font:700 32px/1 var(--sf);letter-spacing:-1px;white-space:nowrap}
+.c-state{margin-left:auto;display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+.c-word{font:700 15px/1 var(--sf);letter-spacing:.2px}
+.c-toplay{font:700 9px/1 var(--sf);letter-spacing:.4px;color:rgba(255,255,255,.55)}
+.c-sides{display:flex;align-items:baseline;gap:4px;font:12.5px/1.2 var(--sf);white-space:nowrap;overflow:hidden}
+.c-dot{width:5px;height:5px;border-radius:50%;flex:none;align-self:center}
+.c-note{font-weight:600;color:rgba(255,255,255,.55)}
+.c-needle{position:relative;height:7px;border-radius:4px;background:rgba(255,255,255,.17);overflow:visible}
+.c-needle .fill{position:absolute;top:0;bottom:0}
+.c-needle .l{left:0;border-radius:4px 0 0 4px}
+.c-needle .r{right:0;border-radius:0 4px 4px 0}
+.c-needle .tick{position:absolute;left:50%;top:-4px;width:2px;height:15px;margin-left:-1px;border-radius:1px;background:rgba(255,255,255,.85)}
+.c-foot{display:flex;gap:8px;font:11px/1.2 var(--sf);color:rgba(255,255,255,.66)}
+.c-thru{margin-left:auto;font-weight:600;color:rgba(255,255,255,.72);white-space:nowrap}
+.pin{position:absolute;width:18px;height:18px;border-radius:50%;background:var(--pine);color:#fff;
+  font:700 10px/18px var(--mono);text-align:center;box-shadow:0 0 0 2px #fff}
+/* states */
+.states{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,380px),1fr));gap:22px}
+.state{display:flex;flex-direction:column;gap:10px}
+.state .stage{padding:18px 10px}
+.state h3 small{display:block;font:500 12.5px/1.4 var(--body);color:var(--muted);margin-top:3px}
+.state .why{font-size:13.5px;color:var(--ink-2)}
+/* tables */
+.tablewrap{overflow-x:auto;border:1px solid var(--rule);border-radius:10px;background:var(--paper)}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:600px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font:600 11px/1.3 var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);background:var(--code)}
+tr:last-child td{border-bottom:0}
+td .mono{color:var(--ink-2)}
+.sw{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:6px;box-shadow:0 0 0 1px rgba(0,0,0,.15) inset}
+.qs{display:flex;flex-direction:column;gap:14px;counter-reset:q}
+.q{border-left:3px solid var(--flag);background:var(--paper);border-radius:0 10px 10px 0;padding:14px 18px;display:flex;flex-direction:column;gap:6px}
+.q.done{border-left-color:var(--pine)}
+.q h3{display:flex;gap:10px;align-items:baseline}
+.q .tag{font:600 10.5px/1 var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--flag);white-space:nowrap}
+.q.done .tag{color:var(--pine)}
+.q p{font-size:14px;color:var(--ink-2)}
+.q p b{color:var(--ink)}
+ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;max-width:68ch}
+footer{font-size:12.5px;color:var(--muted);border-top:1px solid var(--rule);padding-top:18px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">Design handoff · Halved · iOS Live Activity</span>
+  <h1>Team Cup Lock Screen</h1>
+  <p class="lede">The one card every golfer carries on the lock screen during a Triple-Cup cup. The big number is <b>the whole cup</b>: Red against Blue, across every foursome, updating whichever group wins a point. Your own group's four points ride underneath as a sub-total.</p>
+  <div class="meta">
+    <span>kind <b>triple_cup</b> · team configuration</span>
+    <span>as shipped <b>2.9.1 (40)</b></span>
+    <span>for <b>October Cup · 10 Oct 2026</b></span>
+    <span>written <b>22 Sep 2026</b></span>
+  </div>
+</header>
+
+<section>
+  <header><span class="eyebrow">How to read this</span><h2>This documents what is built</h2></header>
+  <p>Every mockup below is drawn from a real payload generated by the server, for a two-group Red v. Blue cup, not from a design file. Sizes are the Swift's own: <b>1 CSS pixel here is 1 point on the phone</b>, and the card is 360pt wide. The widget renders in <b>SF</b>, so the mockups do too; the packet's Schibsted Grotesk and Spline Sans are not in the widget bundle yet (see the constraints section).</p>
+  <div class="callout ok"><span class="k">The configuration follows the cup</span><p>There is no setting. The same <code>triple_cup</code> builder draws a casual four-point Triple Cup or this team card, and it switches to the team card whenever the round carries a cup config. Six slots change meaning; none change position.</p></div>
+</section>
+
+<section>
+  <header><span class="eyebrow">Anatomy</span><h2>Six slots, top to bottom</h2></header>
+  <div class="anatomy">
+    <div class="stage" id="anatomy-stage"></div>
+    <ol class="legend">
+      <li><span class="n">1</span><div class="t"><b>Header</b><span>Cup name left, the locked corner right: the hole in front of you, its par, and <i>your</i> tee's yardage.</span><span class="spec">10pt bold · tracking 1.1 · 82% white / 50% white · <code>header.game</code>, <code>header.segment</code></span></div></li>
+      <li><span class="n">2</span><div class="t"><b>Headline: the cup score</b><span>Team 1 first, always. It wears the <i>leader's</i> colour; white when level. Never mint.</span><span class="spec">32pt bold · tracking −1 · <code>number.text</code>, <code>number.colour</code></span></div></li>
+      <li><span class="n">3</span><div class="t"><b>State: points to win</b><span>What the leader still needs. Replaced by <code>RED TAKES IT</code> the moment the cup is clinched, even mid-round.</span><span class="spec">15pt bold + 9pt bold 55% · one baseline with the headline · <code>state</code></span></div></li>
+      <li><span class="n">4</span><div class="t"><b>Your group</b><span>A sub-total of the cup, never a match margin: <code>2–0, in the singles 1</code>. The dot is your team's colour.</span><span class="spec">12.5pt bold in team colour + 12.5pt semibold 55% · one row · <code>sides[0]</code></span></div></li>
+      <li><span class="n">5</span><div class="t"><b>The needle</b><span>Both fills are shares of points <i>available</i>. Grey is what is still out; the tick is half the cup.</span><span class="spec">7pt capsule · 17% white track · tick 2×15pt 85% · <code>needle</code></span></div></li>
+      <li><span class="n">6</span><div class="t"><b>Footer</b><span>Groups still out, not money. Cup money settles in the team room. The other locked corner: <code>THRU 12</code>.</span><span class="spec">11pt 66% / 11pt semibold 72% · <code>footer.context</code>, <code>thru</code></span></div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <header><span class="eyebrow">States</span><h2>What the card says, through the day</h2></header>
+  <p>Group 1's Red player is the reader unless noted. One Blue reader is included, because the only personal slot is your-group line and its dot; everything else is identical on every phone.</p>
+  <div class="states" id="states"></div>
+</section>
+
+<section>
+  <header><span class="eyebrow">Colour</span><h2>Two side colours, and the rules that pick them</h2></header>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Token</th><th>Hex</th><th>Means</th><th>Never</th></tr></thead>
+    <tbody>
+      <tr><td><span class="sw" style="background:#5AA7F5"></span>blue</td><td class="mono">#5AA7F5</td><td>A side.</td><td>Mixed with orange in one side's element.</td></tr>
+      <tr><td><span class="sw" style="background:#F3A059"></span>orange</td><td class="mono">#F3A059</td><td>The other side. <b>Red teams wear it.</b></td><td>—</td></tr>
+      <tr><td><span class="sw" style="background:#3BD89A"></span>mint</td><td class="mono">#3BD89A</td><td>The app speaking: a verdict (<code>TAKES IT</code>, <code>HALVED</code>).</td><td>A side, or the headline. A mint number above a blue and an orange leaves the reader guessing who is up.</td></tr>
+      <tr><td><span class="sw" style="background:rgba(255,255,255,.9)"></span>neutral</td><td class="mono">90% white</td><td>Level. Belongs to neither team.</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+  <ul class="plain">
+    <li><b>Declared colours win when the widget can draw both and they differ.</b> Otherwise the card falls back to position: team 1 blue, team 2 orange.</li>
+    <li><b>Red is an alias for orange</b> (decided 22 Sep). Red v. Blue is the app's default cup, and red was not drawable, so the default fell back on position: Red's points drawn in blue, the Blue team in orange. Red now wears orange, server-side, so every installed build gets it with no release.</li>
+    <li>Red v. Orange collides (both would wear orange) and still falls back on position.</li>
+    <li>The widget draws no red at all. Adding one was started and backed out: see the contract rule below.</li>
+  </ul>
+</section>
+
+<section>
+  <header><span class="eyebrow">Alerts</span><h2>Two pushes, and nothing else</h2></header>
+  <p>Every other score moves the card silently. In a cup, points land in groups an hour ahead, which is the one case a push is worth its interruption. But a cup can carry many points, and a golfer who switches alerts off loses the few that mattered, so there are exactly two.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Event</th><th>Title (real output)</th><th>Body</th></tr></thead>
+    <tbody id="alerts"></tbody>
+  </table></div>
+  <ul class="plain">
+    <li><b>Decided outranks lead change.</b> A clinch is also a lead change; one push, not two.</li>
+    <li>Level counts as a lead change (from somebody to nobody). A second point that keeps it level does not.</li>
+    <li>Fires once per posted score, not once per phone, and remembers the last score it saw, so the clinch fires exactly once.</li>
+    <li>The body says what is still out rather than narrating. <i>Group 2 took their Foursomes</i> cannot be derived from the data, and a push that guesses is wrong on a lock screen.</li>
+  </ul>
+</section>
+
+<section>
+  <header><span class="eyebrow">Constraints</span><h2>What a redesign has to live inside</h2></header>
+  <ul class="plain">
+    <li><b>~160pt tall.</b> iOS clips a lock-screen Live Activity beyond roughly 160pt. The sides line is one row everywhere for this reason: a row for each live Singles measured 163pt on its own.</li>
+    <li><b>The contract is a set of required keys.</b> <code>header</code>, <code>number</code>, <code>sides</code>, <code>state</code>, <code>pips</code>, <code>footer</code>, and inside the needle <code>blue</code> and <code>orange</code>. A payload missing one of them does not fail loudly: APNs accepts it, the phone cannot decode it, and iOS drops the whole update. That is what took every card down in 2.9.0. <b>Rename or remove any of these and every installed phone goes dark.</b> New fields must be optional.</li>
+    <li><b>The needle keys are positional.</b> <code>blue</code> is the share drawn from the left, <code>orange</code> from the right. Changing which colour sits where is a Swift change and needs a build.</li>
+    <li><b>Always-on dims the whole card</b> to roughly 74% brightness. Anything that carries meaning at 55% white or below is at risk under it.</li>
+    <li><b>Fonts.</b> The widget is a separate process with its own bundle and cannot reach the app's downloaded Google Fonts, so it renders SF. Shipping the packet's faces means bundling the .ttf files into the widget target; both families are routed through one function, so the swap is two lines.</li>
+    <li><b>The stroke ribbon.</b> When the reader gets a stroke on the hole in play, a gold <code>POPPING ON HOLE 7</code> band sits above the header. It is shared by every card, and on a net cup it will fire often.</li>
+  </ul>
+</section>
+
+<section>
+  <header><span class="eyebrow">For design</span><h2>Open questions</h2></header>
+  <div class="qs">
+    <div class="q"><h3>Headline order and needle side disagree <span class="tag">Decide</span></h3>
+      <p>The headline reads team 1 first (Red–Blue: <code>2–1</code>, Red on the left). The needle draws blue from the left, so on a Red v. Blue cup <b>Red's number is on the left and Red's bar is on the right</b>. Colour still carries the meaning, but the two elements point opposite ways. Options: order the headline to match the needle (server only, but team 1 then reads second), or teach the needle to follow the headline (needs a build). <b>For 10 Oct: set Blue up as team 1</b> and both line up with no change.</p></div>
+    <div class="q"><h3>The push writes the score team-1-first <span class="tag">Decide</span></h3>
+      <p><code>Blue take the lead — 0–1</code> reads backwards: the leader's name, then a score that looks like they are losing. Writing the score leader-first (<code>Blue lead 1–0</code>) is a server-only copy change. Same fix as above if Blue is team 1.</p></div>
+    <div class="q"><h3>Ribbon plus team card is unmeasured <span class="tag">Measure</span></h3>
+      <p>No height has been recorded for this card. The Survivor card grew 18pt when the ribbon appeared (135 to 153). If the team card sits in the mid-140s, which is an estimate from the layout code and not a measurement, the ribbon could push it past 160 and clip the footer. <b>Measure on a device before 10 Oct, with and without a stroke on the hole.</b></p></div>
+    <div class="q"><h3>Which number is whose? <span class="tag">Decide</span></h3>
+      <p>The headline carries no team label. <code>2–1</code> in orange says <i>orange leads</i>, but a golfer has to know team 1 is written first to know which digit is his. Team initials or colouring each digit separately would answer it, at some width.</p></div>
+    <div class="q done"><h3>Red wears orange <span class="tag">Decided · shipped</span></h3>
+      <p>Confirmed 22 Sep 2026: orange reads better on the glass than a lifted red, and needs no build.</p></div>
+  </div>
+</section>
+
+<section>
+  <header><span class="eyebrow">Changed while writing this</span><h2>Fixed on the server</h2></header>
+  <ul class="plain">
+    <li><b>Red v. Blue drew Red in blue.</b> Fixed by the alias above.</li>
+    <li><b>The closing frame's verdict used your group's result, not the cup's.</b> A foursome that won its four on a 4–4 cup signed off <code>CUP WON</code> directly above <code>HALVED · CUP SHARED</code>. It now reads the cup.</li>
+    <li><b>An undecided cup signed off <code>HALVED</code>.</b> A cup with rounds still to play now signs off <code>ROUND COMPLETE</code> with points-to-win.</li>
+    <li><b>The card was never tested the way a phone reaches it.</b> Four new tests go through the round-level selection: a Triple-Cup-only round draws this card, a point won in another group moves your headline, every group reads the same cup, and the payload satisfies the contract.</li>
+  </ul>
+</section>
+
+<footer>Source: <span class="mono">services/live_activity_triple_cup.py</span> (server) · <span class="mono">mobile/ios/SixesActivity/SixesActivityLiveActivity.swift</span>, <span class="mono">TripleCupBoardView</span> (widget) · payloads generated from the test fixture in <span class="mono">scoring/tests/test_live_activity_triple_cup.py</span>.</footer>
+</div>
+
+<script>
+const P = {"level": {"kind": "triple_cup", "header": {"game": "OCTOBER CUP", "segment": "HOLE 3 · PAR 3 · 175"}, "number": {"text": "0–0", "colour": "neutral"}, "sides": [{"names": "Your Triple Cup", "note": "· 0–0, in the fourball", "colour": "orange", "leading": true}], "state": {"word": "4½", "to_play": "TO WIN"}, "pips": [], "needle": {"orange": 0.0, "blue": 0.0}, "final": null, "footer": {"context": "2 groups still out", "money": ""}, "thru": "THRU 2"}, "alert_level": null, "alert_blue_lead": {"title": "Blue take the lead — 0–1", "body": "2 groups still out"}, "blue_leads_reader_red": {"kind": "triple_cup", "header": {"game": "OCTOBER CUP", "segment": "HOLE 3 · PAR 3 · 175"}, "number": {"text": "0–1", "colour": "blue"}, "sides": [{"names": "Your Triple Cup", "note": "· 0–0, in the fourball", "colour": "orange", "leading": true}], "state": {"word": "4½", "to_play": "TO WIN"}, "pips": [], "needle": {"orange": 0.0, "blue": 0.125}, "final": null, "footer": {"context": "2 groups still out", "money": ""}, "thru": "THRU 2"}, "alert_red_lead": {"title": "Red take the lead — 2–1", "body": "2 groups still out"}, "red_leads": {"kind": "triple_cup", "header": {"game": "OCTOBER CUP", "segment": "HOLE 13 · PAR 5 · 530"}, "number": {"text": "2–1", "colour": "orange"}, "sides": [{"names": "Your Triple Cup", "note": "· 2–0, in the singles 1", "colour": "orange", "leading": true}], "state": {"word": "4½", "to_play": "TO WIN"}, "pips": [], "needle": {"orange": 0.25, "blue": 0.125}, "final": null, "footer": {"context": "2 groups still out", "money": ""}, "thru": "THRU 12"}, "red_leads_reader_blue": {"kind": "triple_cup", "header": {"game": "OCTOBER CUP", "segment": "HOLE 13 · PAR 5 · 530"}, "number": {"text": "2–1", "colour": "orange"}, "sides": [{"names": "Your Triple Cup", "note": "· 0–2, in the singles 1", "colour": "blue", "leading": true}], "state": {"word": "4½", "to_play": "TO WIN"}, "pips": [], "needle": {"orange": 0.25, "blue": 0.125}, "final": null, "footer": {"context": "2 groups still out", "money": ""}, "thru": "THRU 12"}, "alert_final": {"title": "The October Cup is halved — 4–4", "body": "Nothing left that can separate them."}, "final_halved": {"kind": "triple_cup", "header": {"game": "OCTOBER CUP", "segment": "CUP HALVED"}, "closed": true, "number": {"text": "4–4", "colour": "neutral"}, "sides": [{"names": "Your Triple Cup", "note": "· won 4–0", "colour": "orange", "leading": true}], "state": {"word": "HALVED", "to_play": "CUP SHARED", "colour": "mint"}, "pips": [], "needle": {"orange": 0.5, "blue": 0.5}, "final": null, "footer": {"context": "Dismisses in 5 min", "money": ""}, "thru": "THRU 18"}, "alert_clinch": {"title": "Red take the October Cup — 5–0", "body": "The half-point that put it out of reach."}, "clinched_on_course": {"kind": "triple_cup", "header": {"game": "OCTOBER CUP", "segment": "HOLE 7 · PAR 3 · 165"}, "number": {"text": "5–0", "colour": "orange"}, "sides": [{"names": "Your Triple Cup", "note": "· 1–0, in the foursomes", "colour": "orange", "leading": true}], "state": {"word": "RED", "to_play": "TAKES IT", "colour": "mint"}, "pips": [], "needle": {"orange": 0.625, "blue": 0.0}, "final": null, "footer": {"context": "1 group still out", "money": ""}, "thru": "THRU 6"}, "final_won": {"kind": "triple_cup", "header": {"game": "OCTOBER CUP", "segment": "CUP WON"}, "closed": true, "number": {"text": "8–0", "colour": "orange"}, "sides": [{"names": "Your Triple Cup", "note": "· won 4–0", "colour": "orange", "leading": true}], "state": {"word": "RED", "to_play": "TAKES IT", "colour": "mint"}, "pips": [], "needle": {"orange": 1.0, "blue": 0.0}, "final": null, "footer": {"context": "Dismisses in 5 min", "money": ""}, "thru": "THRU 18"}, "final_lost": {"kind": "triple_cup", "header": {"game": "OCTOBER CUP", "segment": "CUP LOST"}, "closed": true, "number": {"text": "8–0", "colour": "orange"}, "sides": [{"names": "Your Triple Cup", "note": "· lost 0–4", "colour": "blue", "leading": true}], "state": {"word": "RED", "to_play": "TAKES IT", "colour": "mint"}, "pips": [], "needle": {"orange": 1.0, "blue": 0.0}, "final": null, "footer": {"context": "Dismisses in 5 min", "money": ""}, "thru": "THRU 18"}};
+const SIDE = {blue:'#5AA7F5', orange:'#F3A059', mint:'#3BD89A', dim:'rgba(255,255,255,.55)'};
+const side = c => SIDE[c] || 'rgba(255,255,255,.9)';
+const esc = s => String(s ?? '').replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+
+function card(s, opts = {}) {
+  const el = document.createElement('div');
+  el.className = 'card';
+  const st = s.state || {};
+  const sd = (s.sides || [])[0] || {};
+  const n = s.needle || {blue:0, orange:0};
+  el.innerHTML = `
+    ${opts.ribbon ? `<div class="c-ribbon">${esc(opts.ribbon)}</div>` : ''}
+    <div class="c-head"><span class="c-mark">H</span><span class="c-game">${esc(s.header.game)}</span><span class="c-seg">${esc(s.header.segment)}</span></div>
+    <div class="c-block">
+      <div class="c-line"><span class="c-num" style="color:${side(s.number.colour)}">${esc(s.number.text)}</span>
+        <span class="c-state"><span class="c-word" style="color:${st.colour ? side(st.colour) : 'rgba(255,255,255,.92)'}">${esc(st.word)}</span><span class="c-toplay">${esc(st.to_play)}</span></span></div>
+      <div class="c-sides">${sd.colour ? `<span class="c-dot" style="background:${side(sd.colour)}"></span>` : ''}<b style="color:${side(sd.colour)}">${esc(sd.names)}</b><span class="c-note">${esc(sd.note)}</span></div>
+    </div>
+    <div class="c-needle"><span class="fill l" style="width:${(n.blue||0)*100}%;background:${SIDE.blue}"></span><span class="fill r" style="width:${(n.orange||0)*100}%;background:${SIDE.orange}"></span><span class="tick"></span></div>
+    <div class="c-foot"><span>${esc(s.footer.context)}</span><span class="c-thru">${esc(s.thru)}</span></div>`;
+  return el;
+}
+
+// Anatomy: the red-leads frame with numbered pins.
+(function(){
+  const stage = document.getElementById('anatomy-stage');
+  const c = card(P.red_leads);
+  const pins = [[1,-9,4],[2,-9,34],[3,322,34],[4,-9,70],[5,-9,92],[6,-9,113]];
+  for (const [n,x,y] of pins) {
+    const p = document.createElement('span'); p.className='pin'; p.textContent=n;
+    p.style.left = x+'px'; p.style.top = y+'px'; c.appendChild(p);
+  }
+  stage.appendChild(c);
+})();
+
+const STATES = [
+  ['level', 'First tee', 'Level, nothing decided', 'White headline: it belongs to neither team. Points-to-win is 4½ of 8 on this two-group cup; your group is in its fourball.'],
+  ['blue_leads_reader_red', 'Blue takes the lead', 'Group 2 wins its fourball while you are on the 3rd', 'You scored nothing. The point landed in another group and your card moved anyway: the push rebuilds the card for every phone on the round.'],
+  ['red_leads', 'Red leads 2–1', 'Reader on Red, on the 13th', 'Headline in orange, the leader. Your group is 2–0 up and into the singles.'],
+  ['red_leads_reader_blue', 'The same moment, a Blue reader', 'Only one slot differs', 'Identical headline, state, needle and footer. The personal line flips: 0–2, blue dot.'],
+  ['clinched_on_course', 'Red clinches on the 7th', 'Your group still has twelve to play', 'A clinch outranks the hole you are standing on. The state slot turns to the verdict in mint; the round carries on underneath it.'],
+  ['final_won', 'Closing frame: won', 'Red 8–0', 'The headline does not move. It has been the cup score since the first point and it is the cup score now.'],
+  ['final_lost', 'Closing frame: lost', 'Same cup, a Blue reader', 'The verdict corner is written from the reader’s side.'],
+  ['final_halved', 'Closing frame: halved', 'Your group won 4–0, the cup finished 4–4', 'The case that was wrong until today: it said CUP WON here. The verdict now comes from the cup.'],
+];
+const grid = document.getElementById('states');
+for (const [key, title, sub, why] of STATES) {
+  const s = P[key]; if (!s) continue;
+  const box = document.createElement('div'); box.className = 'state';
+  box.innerHTML = `<h3>${esc(title)}<small>${esc(sub)}</small></h3>`;
+  const stage = document.createElement('div'); stage.className = 'stage'; stage.appendChild(card(s));
+  box.appendChild(stage);
+  const w = document.createElement('p'); w.className='why'; w.textContent = why; box.appendChild(w);
+  grid.appendChild(box);
+}
+
+const tb = document.getElementById('alerts');
+for (const [key, label] of [['alert_blue_lead','Lead change'],['alert_red_lead','Lead change'],['alert_clinch','Cup decided'],['alert_final','Cup decided (halved)']]) {
+  const a = P[key]; if (!a) continue;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td>${esc(label)}</td><td class="mono">${esc(a.title)}</td><td>${esc(a.body)}</td>`;
+  tb.appendChild(tr);
+}
+</script>
