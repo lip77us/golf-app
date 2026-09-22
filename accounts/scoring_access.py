@@ -84,7 +84,14 @@ def foursome_for_reader(user, pk, *, base=None):
         .prefetch_related('memberships__player')
     )
     fs = qs.filter(pk=pk).first()
+    # A golfer playing ANYWHERE in the round may read every group's card in it.
+    # This is what round_for_reader already grants for the leaderboard, and
+    # what the docstring always claimed; the check was missing, so a watcher
+    # could open every team's scorecard while the man playing could open only
+    # his own. READ only — entering scores is still foursome_for_scorer, which
+    # stays limited to the golfer's own group.
     if fs is not None and (_user_watches_round(user, fs.round)
+                           or _round_player_phones_match(user, fs.round)
                            or getattr(user, 'is_support', False)):
         return fs
     raise Http404('No such foursome.')

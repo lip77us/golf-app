@@ -123,9 +123,20 @@ class DelegatedScoringTests(TestCase):
         self.assertEqual(
             self.b_client.get(reverse('api-round-detail', args=[self.round.id]))
             .status_code, 200)
-        # But NOT a group he isn't in (fs2 has no member matching his phone).
+        # He may READ a group he isn't in — every group's scores are already
+        # on the round leaderboard he can open, so the card hides nothing, and
+        # a watcher could always read it. (This used to assert 404, which let
+        # a spectator open every team's card while the man playing could open
+        # only his own.)
         self.assertEqual(
             self.b_client.get(reverse('api-scorecard', args=[self.fs2.id]))
+            .status_code, 200)
+        # But he may NOT score it — which is what this test is really about.
+        # fs2 has no member carrying his phone.
+        self.assertEqual(
+            self.b_client.post(
+                reverse('api-score-submit', args=[self.fs2.id]),
+                {'hole_number': 1, 'scores': []}, format='json')
             .status_code, 404)
         # scoring-for-me stays scorer-only (no designation yet → empty).
         self.assertEqual(self.b_client.get(reverse('api-scoring-for-me')).data, [])
