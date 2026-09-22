@@ -122,12 +122,16 @@ void main() {
       expect(sixesStanding(s, _themA)!.figure, '−\$10 so far');
     });
 
-    test('nothing settled says Even rather than printing a zero', () {
+    test('nothing settled says nothing at all', () {
       final s = _summary([
         _seg(team1: [_me, _partner], team2: [_themA, _themB],
              holes: [_hole(1, 1)]),
       ]);
-      expect(sixesStanding(s, _me)!.figure, 'Even so far');
+      // **Nothing settled says nothing.** It read `Even so far`, which is
+      // true and reads as a contradiction beside a live margin: the row said
+      // `1 UP · Even so far` on the second hole, and a golfer who is one up
+      // does not think of himself as even.
+      expect(sixesStanding(s, _me)!.figure, '');
     });
 
     test('the minus is U+2212, not a hyphen', () {
@@ -183,6 +187,29 @@ void main() {
              status: 'halved', winner: 'Halved'),
       ]);
       expect(sixesStanding(s, _me)!.standing, 'HALVED');
+    });
+  });
+
+  group('the row wears the side he is on', () {
+    test('it reports his team in the live segment', () {
+      final s = _summary([
+        _seg(team1: [_me, _partner], team2: [_themA, _themB],
+             holes: [_hole(1, 1)]),
+      ]);
+      expect(sixesStanding(s, _me)!.team, 1);
+      expect(sixesStanding(s, _themA)!.team, 2);
+    });
+
+    test('it follows him across the re-draw', () {
+      // The point of colouring it: the pairings rotate, so the side he is on
+      // is not a fact he can carry over from the last six holes.
+      final s = _summary([
+        _seg(team1: [_me, _partner], team2: [_themA, _themB],
+             holes: [_hole(1, 1)], status: 'complete', winner: 'Team 1'),
+        _seg(team1: [_partner, _themB], team2: [_me, _themA],
+             startHole: 7, endHole: 12, holes: [_hole(7, 1)]),
+      ]);
+      expect(sixesStanding(s, _me)!.team, 2);
     });
   });
 

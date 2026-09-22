@@ -33,10 +33,25 @@ class SixesStanding {
   /// reader-relative, with how far into the MATCH he is.
   final String standing;
 
-  /// `+$10 so far`, `−$5 so far`, or `Even so far`.
+  /// `+$10 so far` / `−$5 so far`, or **empty until a segment settles.**
+  ///
+  /// It was `Even so far`, which is true and reads as a contradiction: the
+  /// row said `1 UP · Even so far` on the second hole, and a golfer who is one
+  /// up does not think of himself as even. Sixes settles per SEGMENT, so
+  /// through the first six holes there is genuinely no money to report — and
+  /// saying nothing is the honest version of that. The 💰 icon still marks it
+  /// as a money game.
   final String figure;
 
-  const SixesStanding(this.standing, this.figure);
+  /// Which side the reader is on in the live segment — 1 or 2.
+  ///
+  /// The row wears his team's colour because **the pairings rotate every six
+  /// holes**: it is the one screen element that can say which side he is on
+  /// this match without spending a word on it, and it matches the blue and
+  /// orange bars already on the player rows below.
+  final int team;
+
+  const SixesStanding(this.standing, this.figure, this.team);
 }
 
 /// Which side of a segment the reader is on — 1, 2, or null when he is in
@@ -65,7 +80,8 @@ SixesSegment? liveSegment(SixesSummary summary) {
 }
 
 String _money(double v) {
-  if (v.abs() < 0.005) return 'Even so far';
+  // **Nothing settled says nothing.** See `SixesStanding.figure`.
+  if (v.abs() < 0.005) return '';
   // U+2212, not a hyphen: beside a `+` at this size the hyphen is visibly the
   // wrong length, and the two appear within a few characters of each other.
   final sign = v > 0 ? '+' : '−';
@@ -122,5 +138,5 @@ SixesStanding? sixesStanding(SixesSummary? summary, int? playerId) {
         ? '${margin.abs()} UP thru $thru'
         : '${margin.abs()} DOWN thru $thru';
   }
-  return SixesStanding(standing, money);
+  return SixesStanding(standing, money, side);
 }

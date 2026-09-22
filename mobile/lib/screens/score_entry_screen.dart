@@ -1720,10 +1720,18 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // the line above. A row that repeats the title says nothing twice.
     final n = live == null ? 1 : real.indexOf(live) + 1;
     return StandingRibbon(
-      kind: StandingKind.money,
+      // **A trophy, not a money bag.** Sixes is a casual money game, but the
+      // standing it reports is a MATCH STATUS — the glyph follows what the
+      // number is, not what the round is.
+      kind: StandingKind.result,
       standing: standing?.standing ??
           'Match $n of ${real.isEmpty ? 3 : real.length}',
       figure: standing?.figure ?? '',
+      // His side this segment, in the colour his row already wears below.
+      // Null before the pairing is known, which leaves the row ink.
+      standingColor: standing == null
+          ? null
+          : (standing.team == 1 ? GameColors.team1 : GameColors.team2),
       onOpenLeaderboard: () => Navigator.of(context)
           .pushNamed('/leaderboard', arguments: round.id),
     );

@@ -30,31 +30,50 @@
 ///
 /// ## The icon says which KIND of standing it is
 ///
-/// A trophy for a place or a cup, money for a casual game — so one glance
-/// tells you whether the number beside it is a rank or a dollar figure. The
+/// **A trophy when the standing is a RESULT, money when it is a dollar
+/// figure** — so one glance tells you what kind of number you are reading. The
 /// strip appears in EVERY round and carries whatever that round's standing is;
 /// this reverses design's earlier rule that it was a tournament-only feature.
+///
+/// The design writes the trophy case as "a place or a cup" and the money case
+/// as "a casual game", which mapped the glyph to the round TYPE. Sixes is why
+/// that is the wrong axis: it is a casual money game whose standing is a match
+/// status — `1 UP thru 2` — and a money bag over a match score labels it as
+/// the one thing it is not. The distinction is what the number IS.
 library;
 
 import 'package:flutter/material.dart';
 
 import '../theme/halved_brand.dart';
 
-/// Which kind of standing the row is reporting.
+/// Which kind of standing the row is reporting — and so which glyph marks it.
 enum StandingKind {
-  /// A casual money game — `1 DOWN · +$10 so far`.
+  /// The standing IS a money figure — `1 DOWN · +$10 so far`. 💰
   money,
 
-  /// A place in a field, or a cup score — `2nd of 38 · −1 · thru 4`.
-  place,
+  /// The standing is a result: a place in a field, a cup score, or a match
+  /// status — `2nd of 38`, `Red 2–1`, `1 UP thru 2`. 🏆
+  ///
+  /// A money QUALIFIER beside it does not change the glyph. What the icon
+  /// answers is what the headline number is, not whether the round has stakes.
+  result,
 }
 
 class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
   final StandingKind kind;
 
-  /// Where you stand — `1 DOWN`, `2nd of 38`, `Red 2–1`. Full weight: it is
-  /// the reason the row exists.
+  /// Where you stand — `1 UP thru 2`, `2nd of 38`, `Red 2–1`. Full weight: it
+  /// is the reason the row exists.
   final String standing;
+
+  /// The standing's own colour, where the game HAS a side to name.
+  ///
+  /// Ink by default, which is D2 as drawn. Sixes overrides it with the
+  /// reader's team colour because its pairings rotate every six holes — the
+  /// row is then the one element that says which side he is on this match
+  /// without spending a word, and it matches the blue and orange bars already
+  /// on the player rows below. A game with no sides leaves it alone.
+  final Color? standingColor;
 
   /// The figure beside it — `+$10 so far`, `−1 · thru 4`, `4½ to win`. Muted,
   /// because it qualifies the standing rather than competing with it.
@@ -68,6 +87,7 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
     required this.standing,
     required this.figure,
     required this.onOpenLeaderboard,
+    this.standingColor,
   });
 
   /// 27px — the pill's 24 plus its breathing room, and the whole cost of the
@@ -96,9 +116,9 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
               standing,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 12.5, fontWeight: FontWeight.w700,
-                  color: Halved.deepPine),
+                  color: standingColor ?? Halved.deepPine),
             ),
           ),
           if (figure.isNotEmpty) ...[
