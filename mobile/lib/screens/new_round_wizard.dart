@@ -31,6 +31,7 @@ import '../widgets/course_search_field.dart';
 import '../widgets/payout_config_field.dart';
 import '../widgets/section_card.dart';
 import '../widgets/tee_assignment.dart';
+import 'better_ball_setup_screen.dart';
 import 'irish_rumble_setup_screen.dart'; // also exports LowNetSetupScreen
 import 'pink_ball_setup_screen.dart';
 import 'player_form_screen.dart';
@@ -1991,7 +1992,20 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
               .where((a) => a > 0)
               .length,
           onToggle   : (g, on) => setState(() {
-            on ? _activeGames.add(g) : _activeGames.remove(g);
+            if (on) {
+              _activeGames.add(g);
+              // **Turning one on turns the other off**, rather than greying
+              // it out. Better Ball and Irish Rumble are the same competition
+              // scored two ways, so a round runs one of them — and a TD who
+              // has picked the second one has changed his mind, not made a
+              // mistake to be blocked. The server refuses the pair in both
+              // services; this is the half that keeps him out of a form he
+              // cannot save.
+              _activeGames.removeAll(
+                  gameMeta(g)?.excludes ?? const <String>{});
+            } else {
+              _activeGames.remove(g);
+            }
           }),
           miniCarvePct     : _miniCarvePct,
           miniEmptySeatRule: _miniEmptySeatRule,
@@ -3662,6 +3676,18 @@ class _StepSideGames extends StatelessWidget {
           moneyNote: 'Entry and payouts are set on the Irish Rumble screen, '
                      'right after you create the tournament.',
           onToggle: (v) => onToggle(GameIds.irishRumble, v),
+        ),
+        const SizedBox(height: 12),
+        _GameToggleCard(
+          on      : activeGames.contains(GameIds.betterBall),
+          title   : 'Better Ball',
+          blurb   : "The same board as Irish Rumble with the count held "
+                    'still — you pick how many of a group\'s four nets count, '
+                    'and it is that many on every hole.',
+          moneyNote: 'Entry, payouts and how many balls count are set on the '
+                     'Better Ball screen, right after you create the '
+                     'tournament.',
+          onToggle: (v) => onToggle(GameIds.betterBall, v),
         ),
         const SizedBox(height: 12),
         _GameToggleCard(
@@ -6651,6 +6677,11 @@ class _Step5Review extends StatelessWidget {
   /// chat line. "Mini Singles Bracket", never "Match Play Foursome".
   static String _sideGameLabel(String id) => switch (id) {
         'irish_rumble' => 'Irish Rumble',
+        // The catalog name, not the round's. The app titles each round's game
+        // from its ball count and the TD can rename it, but the review step is
+        // showing what he just turned ON — at which point no count has been
+        // set and no name exists to show.
+        'better_ball'  => 'Better Ball',
         'pink_ball'    => 'Pink Ball',
         'match_play'   => 'Mini Singles Bracket',
         'day_bet'      => 'Day bet · final round',
@@ -7036,6 +7067,7 @@ class _Step6GameSetupState extends State<_Step6GameSetup> {
     final matchPlayConfigured = widget.matchPlayConfigured;
     final roundId        = round.id;
     final hasIrishRumble = activeGames.contains(GameIds.irishRumble);
+    final hasBetterBall  = activeGames.contains(GameIds.betterBall);
     final hasStrokePlay  = activeGames.contains(GameIds.strokePlay);
     final hasPinkBall    = activeGames.contains(GameIds.pinkBall);
     // hasMatchPlay covers both the cup-style singles game and the new
@@ -7103,6 +7135,21 @@ class _Step6GameSetupState extends State<_Step6GameSetup> {
               onTap: () => _openSetup(
                 GameIds.irishRumble,
                 IrishRumbleSetupScreen(roundId: roundId),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          if (hasBetterBall) ...[
+            _SetupButton(
+              icon : Icons.filter_2_outlined,
+              label: 'Better Ball',
+              configured: _savedConfigs.contains(GameIds.betterBall),
+              stateLabel: _savedConfigs.contains(GameIds.betterBall)
+                  ? 'Set' : 'Rules not set',
+              onTap: () => _openSetup(
+                GameIds.betterBall,
+                BetterBallSetupScreen(roundId: roundId),
               ),
             ),
             const SizedBox(height: 12),

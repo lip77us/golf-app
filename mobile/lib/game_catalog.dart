@@ -75,6 +75,12 @@ class GameIds {
 
   // Tournament-only, multi-foursome
   static const String irishRumble    = 'irish_rumble';
+  // Better Ball — the same competition as Irish Rumble with the ball
+  // count FIXED for all eighteen. Rumble's count moves and the movement
+  // is the game; a count that never moves is a different game a golfer
+  // plays differently. Mutually exclusive with Rumble: they rank the same
+  // groups the same way into the same kind of pool.
+  static const String betterBall     = 'better_ball';
   // Cup singles formats — two 1v1 matches per foursome.
   // singlesNassau: each match has F9/B9/Overall (pv × 6/foursome).
   // singles18:     each match is 18-hole overall only  (pv × 2/foursome).
@@ -689,6 +695,21 @@ const List<GameMeta> kGameCatalog = [
     tournament           : true,
     requiresMultiFoursome: true,
     minPlayers           : 2,
+    excludes             : {GameIds.betterBall},
+  ),
+  GameMeta(
+    id                   : GameIds.betterBall,
+    // The catalog name is the GAME, not what a given round calls it. The app
+    // titles each round's game from its ball count (`Best 2 of 4`) and the TD
+    // can rename it, but that is a property of the config — the picker is
+    // choosing the format, and at that point no count has been set.
+    displayName          : 'Better Ball',
+    tournament           : true,
+    requiresMultiFoursome: true,
+    minPlayers           : 2,
+    // One round runs one of them. Enforced on the server in both services
+    // too — this is the half that stops the TD reaching a form he cannot save.
+    excludes             : {GameIds.irishRumble},
   ),
   GameMeta(
     id                   : GameIds.pinkBall,

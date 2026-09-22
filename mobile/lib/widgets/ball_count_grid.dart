@@ -24,6 +24,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../theme/halved_brand.dart';
 import 'section_card.dart';
 
 /// Group a per-hole list into contiguous same-value runs, so the preview reads
@@ -59,12 +60,26 @@ class BallCountPreview extends StatelessWidget {
   /// read as character rather than difficulty.
   final bool      showTotals;
 
+  /// The all-four line, for a caller whose count is CONSTANT.
+  ///
+  /// The default warning names the holes, which is right when a grid has a 4
+  /// somewhere in it — the TD wants to know which hole. Better Ball counts the
+  /// same N on all eighteen, so enumerating them lists every hole on the
+  /// course: the "eighteen red cells" the design rules out in favour of one
+  /// line. A caller that knows its count never moves supplies that line.
+  ///
+  /// It also changes what the line MEANS, which is why it changes colour with
+  /// it: an all-four hole inside an escalating grid is usually an accident, and
+  /// an all-four Better Ball is a game somebody chose. Amber, not red.
+  final String?   allFourNote;
+
   const BallCountPreview({
     super.key,
     required this.perHole,
     this.title = 'Segment Preview',
     this.subjectSuffix = 'per group',
     this.showTotals = false,
+    this.allFourNote,
   });
 
   @override
@@ -111,17 +126,21 @@ class BallCountPreview extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(Icons.warning_amber_rounded,
-                     size: 16, color: theme.colorScheme.error),
+                     size: 16,
+                     color: allFourNote != null
+                         ? Halved.caution : theme.colorScheme.error),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    allFour.length == 1
-                        ? 'Hole ${allFour.first} counts all four — no drop '
-                          'score, so one blow-up is the team\'s.'
-                        : 'Holes ${allFour.join(', ')} count all four — no '
-                          'drop score, so one blow-up is the team\'s.',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.error),
+                    allFourNote ??
+                        (allFour.length == 1
+                            ? 'Hole ${allFour.first} counts all four — no drop '
+                              'score, so one blow-up is the team\'s.'
+                            : 'Holes ${allFour.join(', ')} count all four — no '
+                              'drop score, so one blow-up is the team\'s.'),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: allFourNote != null
+                            ? Halved.caution : theme.colorScheme.error),
                   ),
                 ),
               ],

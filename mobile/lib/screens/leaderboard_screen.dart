@@ -938,6 +938,10 @@ class _GameView extends StatelessWidget {
         // Standard mode: show segment ranking table.
         if (data['is_cup'] == true) return _CupIrishRumbleView(data: data);
         return _IrishRumbleView(data: data);
+      case 'better_ball':
+        // The same board — see _IrishRumbleView. No cup branch: a cup round
+        // scores head-to-head, and Better Ball is a field competition.
+        return _IrishRumbleView(data: data, betterBall: true);
       default:
         return _RawJsonView(data: data);
     }
@@ -2003,9 +2007,19 @@ class _LowNetViewState extends State<_LowNetView> {
 
 // ---- Irish Rumble ----
 
+/// The group-vs-field board — Irish Rumble's and Better Ball's.
+///
+/// **One view, because it is one board.** The rows come off the same server
+/// helper (`services/group_field.py`), rank the same way and pay the same way;
+/// what differs is two lines at the top — what to call the count, and the one
+/// sentence explaining the game. A second copy of two hundred rows to change
+/// a chip is how two boards start paying different money.
 class _IrishRumbleView extends StatelessWidget {
   final Map<String, dynamic> data;
-  const _IrishRumbleView({required this.data});
+  /// Better Ball's count is FIXED, so it can be named in a chip; Rumble's
+  /// moves by segment, which is why that chip names the variant instead.
+  final bool betterBall;
+  const _IrishRumbleView({required this.data, this.betterBall = false});
 
   static String _ntpLabel(int? ntp) {
     if (ntp == null) return '—';
@@ -2064,12 +2078,18 @@ class _IrishRumbleView extends StatelessWidget {
           // already surfaces "Best N count this hole" per hole.
           Chip(
             label: Text(
-              switch (variant) {
-                'arizona_shuffle' => 'Arizona Shuffle',
-                'shuffle'         => 'Shuffle (par-based)',
-                'custom'          => 'Custom',
-                _                 => 'Classic',
-              },
+              betterBall
+                  // The count never moves, so the chip can state it — and it
+                  // is the one number that says what the group was playing.
+                  ? (data['name']?.toString().isNotEmpty == true
+                      ? data['name'].toString()
+                      : 'Best ${data['balls_to_count'] ?? 2} of 4')
+                  : switch (variant) {
+                      'arizona_shuffle' => 'Arizona Shuffle',
+                      'shuffle'         => 'Shuffle (par-based)',
+                      'custom'          => 'Custom',
+                      _                 => 'Classic',
+                    },
               style: const TextStyle(fontSize: 11),
             ),
             visualDensity: VisualDensity.compact,
@@ -2097,11 +2117,22 @@ class _IrishRumbleView extends StatelessWidget {
             ),
         ]),
         const SizedBox(height: 8),
-        // The ranking is SURVIVAL, not score — so say so above the rows.
+        // **This said "one ball per group, no replacements — the last
+        // group still holding it wins", which is PINK BALL.** It had been
+        // describing a different game on a different tab since it was
+        // written, and it is the kind of wrong that reads as plausible: a
+        // golfer on a group board would believe it and go looking for a
+        // ball nobody is carrying. (_RedBallView says the same thing 600
+        // lines up, where it is true.)
         Text(
-          'One ball per group, no replacements. The last group still holding '
-          'it wins; if more than one finishes 18 with it alive, the lowest '
-          'ball net takes the money.',
+          betterBall
+              ? 'Each group plays its own balls and the best '
+                '${data['balls_to_count'] ?? 2} nets count on every hole — '
+                'the same number all eighteen. Lowest group total against '
+                'the field wins.'
+              : 'Each group plays its own balls and the best nets count — '
+                'how many changes as the round goes on. Lowest group total '
+                'against the field wins.',
           style: theme.textTheme.bodySmall
               ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),

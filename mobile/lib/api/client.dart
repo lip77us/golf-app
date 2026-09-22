@@ -2220,6 +2220,51 @@ class ApiClient {
     return data as Map<String, dynamic>;
   }
 
+  // ---- Better Ball setup (round-level) ----
+
+  /// The config, or the defaults this round WOULD get — plus the name and
+  /// allowance at every count, so the stepper renames its readback on the tap
+  /// rather than after a round trip.
+  ///
+  /// Also carries `irish_rumble_configured`: the two games are mutually
+  /// exclusive, and the screen says why it is closed rather than letting the
+  /// TD fill a form that cannot be saved.
+  Future<Map<String, dynamic>> getBetterBallConfig(int roundId) async {
+    final data = await _get('/rounds/$roundId/better-ball/setup/');
+    return data as Map<String, dynamic>;
+  }
+
+  /// The group-vs-field board, including each group's borrowed-4th donor
+  /// status (`overall[].phantom`), the way Irish Rumble's does.
+  Future<Map<String, dynamic>> getBetterBallResult(int roundId) async {
+    final data = await _get('/rounds/$roundId/better-ball/');
+    return data as Map<String, dynamic>;
+  }
+
+  /// [name] empty means "follow the count"; [netPercent] null means the same.
+  /// Both are values rather than omissions — clearing a name he typed is how
+  /// a TD hands the naming back to the app, and an omitted field could not
+  /// say that.
+  Future<Map<String, dynamic>> postBetterBallSetup(
+    int roundId, {
+    required int                         ballsToCount,
+    required String                      handicapMode,
+    required double                      entryFee,
+    required List<Map<String, dynamic>>  payouts,
+    String                               name        = '',
+    int?                                 netPercent,
+  }) async {
+    final data = await _post('/rounds/$roundId/better-ball/setup/', {
+      'balls_to_count': ballsToCount,
+      'name'          : name,
+      'handicap_mode' : handicapMode,
+      'net_percent'   : netPercent,
+      'entry_fee'     : entryFee.toStringAsFixed(2),
+      'payouts'       : payouts,
+    });
+    return data as Map<String, dynamic>;
+  }
+
   // ---- Course import (GolfCourseAPI) ----
 
   /// Search golf courses by name via GolfCourseAPI.

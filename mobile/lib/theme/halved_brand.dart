@@ -37,6 +37,15 @@ class Halved {
   static const owe     = Color(0xFFF0916E);
   static const warning = Color(0xFFB24225);
 
+  // **Amber is "read this", not "you got this wrong".** `warning` above is the
+  // app's red and reads as an error; a legal setting with a consequence worth
+  // naming — Better Ball at four balls, where no golfer can drop a bad hole —
+  // is not an error and must not wear one. Ground and ink as a pair, because
+  // the ink is chosen to sit on that ground
+  // (`handoff-foursome-formats/HANDOFF.md`, design tokens).
+  static const cautionGround = Color(0xFFFDF3E7);
+  static const caution       = Color(0xFF8A5216);
+
   // ── Disabled (buttons) ────────────────────────────────────────────────────
   /// The Zombie Option's one colour (docs/design-review/handoff-survivor-zombie).
   /// Deliberately neither the win green nor the out red: a Zombie is out of the

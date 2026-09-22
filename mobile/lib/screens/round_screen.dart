@@ -204,6 +204,7 @@ class _RoundScreenState extends State<RoundScreen> {
     final canManage = round.canManage;
 
     final hasIrishRumble = round.activeGames.contains('irish_rumble');
+    final hasBetterBall  = round.activeGames.contains('better_ball');
     final hasPinkBall    = round.activeGames.contains('pink_ball');
     final hasMatchPlay   = round.activeGames.contains('match_play');
     final hasMultiSkins  = round.activeGames.contains('multi_skins');
@@ -225,7 +226,8 @@ class _RoundScreenState extends State<RoundScreen> {
         !roundHasAnyScore && multiFoursome;
     final showStableford = round.activeGames.contains('stableford') &&
         !roundHasAnyScore && multiFoursome;
-    final hasSetupGames  = hasIrishRumble || showLowNet || hasPinkBall ||
+    final hasSetupGames  = hasIrishRumble || hasBetterBall ||
+        showLowNet || hasPinkBall ||
         showMatchPlaySetup || showStableford;
 
     return RefreshIndicator(
@@ -277,6 +279,7 @@ class _RoundScreenState extends State<RoundScreen> {
             _GameSetupCard(
               roundId:        widget.roundId,
               hasIrishRumble: hasIrishRumble,
+              hasBetterBall : hasBetterBall,
               showLowNet:     showLowNet,
               hasPinkBall:    hasPinkBall,
               hasMatchPlay:   showMatchPlaySetup,
@@ -619,6 +622,7 @@ class _RoundInfoCard extends StatelessWidget {
 class _GameSetupCard extends StatelessWidget {
   final int            roundId;
   final bool           hasIrishRumble;
+  final bool           hasBetterBall;
   final bool           showLowNet;
   final bool           hasPinkBall;
   final bool           hasMatchPlay;
@@ -628,6 +632,7 @@ class _GameSetupCard extends StatelessWidget {
   const _GameSetupCard({
     required this.roundId,
     required this.hasIrishRumble,
+    required this.hasBetterBall,
     required this.showLowNet,
     required this.hasPinkBall,
     required this.hasMatchPlay,
@@ -649,10 +654,13 @@ class _GameSetupCard extends StatelessWidget {
 
     final theme = Theme.of(context);
     // Spacer helpers: only add gaps between sections that are actually present
-    final beforeLowNet    = hasIrishRumble;
-    final beforeStableford = hasIrishRumble || showLowNet;
-    final beforePinkBall  = hasIrishRumble || showLowNet || showStableford;
-    final beforeMatchPlay = hasIrishRumble || showLowNet || showStableford ||
+    // Better Ball and Irish Rumble occupy one slot — a round runs one of
+    // them — so they share every spacer below rather than each adding one.
+    final hasGroupBoard   = hasIrishRumble || hasBetterBall;
+    final beforeLowNet    = hasGroupBoard;
+    final beforeStableford = hasGroupBoard || showLowNet;
+    final beforePinkBall  = hasGroupBoard || showLowNet || showStableford;
+    final beforeMatchPlay = hasGroupBoard || showLowNet || showStableford ||
         hasPinkBall;
 
     return Card(
@@ -667,6 +675,13 @@ class _GameSetupCard extends StatelessWidget {
                     .pushNamed('/irish-rumble-setup', arguments: roundId),
                 icon: const Icon(Icons.tune, size: 18),
                 label: const Text('Configure Irish Rumble'),
+              ),
+            if (hasBetterBall)
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context)
+                    .pushNamed('/better-ball-setup', arguments: roundId),
+                icon: const Icon(Icons.tune, size: 18),
+                label: const Text('Configure Better Ball'),
               ),
             if (showLowNet) ...[
               if (beforeLowNet) const SizedBox(height: 8),
@@ -1159,7 +1174,7 @@ class _FoursomeCard extends StatelessWidget {
   static const _perFoursomeGames = {
     'skins', 'sixes', 'nassau', 'match_play', 'points_531', 'wolf', 'rabbit',
     'survivor', 'sequoya_threes', 'banker',
-    'irish_rumble', 'pink_ball',
+    'irish_rumble', 'better_ball', 'pink_ball',
   };
 
   /// Team chip: the side's colour + its initial, so team membership survives

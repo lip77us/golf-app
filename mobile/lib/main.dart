@@ -65,6 +65,7 @@ import 'screens/support_lookup_screen.dart';
 import 'screens/game_suggestion_screen.dart';
 import 'utils/deep_links.dart';
 import 'utils/route_observer.dart';
+import 'screens/better_ball_setup_screen.dart';
 import 'screens/irish_rumble_setup_screen.dart';
 import 'screens/pink_ball_setup_screen.dart';
 import 'screens/pink_ball_screen.dart';
@@ -769,6 +770,9 @@ class _GolfAppState extends State<GolfApp> {
       case '/irish-rumble-setup':
         final roundId = settings.arguments as int;
         return page((_) => IrishRumbleSetupScreen(roundId: roundId));
+      case '/better-ball-setup':
+        return page((_) =>
+            BetterBallSetupScreen(roundId: settings.arguments as int));
       case '/low-net-setup':
         return page((_) => LowNetSetupScreen(
               roundId: _routeId(settings.arguments),
