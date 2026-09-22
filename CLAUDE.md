@@ -181,9 +181,21 @@ legacy/tournament rounds (null `primary_game`).
 
 ## Phone-first login (SMS OTP) — implemented (identity layer only)
 
-Implements the phone-first identity from `docs/freemium-design.md` §12 as an
-**additive** path. Account-name + username + password login still works
-unchanged (legacy accounts + App Store reviewer rely on it).
+Implements the phone-first identity from `docs/freemium-design.md` §12.
+
+> **Phone-OTP is now the SOLE sign-in path** (`d5c38ad`, 16 Jun 2026). It
+> started additive, alongside account-name + username + password; that half is
+> gone. `PasswordLoginScreen`, the `/login-password` route and the "Sign in
+> with a username instead" link were all deleted, and `LoginView` returns
+> **403** unless `PASSWORD_LOGIN_ENABLED=true` — so an older build that still
+> draws the password screen fails closed with a clear message rather than
+> authenticating. The App Store reviewer signs in through the phone screen via
+> the demo-phone bypass below.
+>
+> **There is no way into the app without a phone code.** Against a local
+> server that is free (`DEBUG=True` echoes `debug_code`, and the console SMS
+> backend prints it); against production it needs real SMS or the bypass. The
+> paragraphs below describe the phone half, which is all of it.
 
 **Model:** a verified phone maps to one `User` → one `Account` (account name is
 now just a display label). Added to `accounts.User`: `phone` (E.164, globally
@@ -212,16 +224,36 @@ stub that posts via the `twilio` package if installed.)
   `LoginView` plus `is_new_account`. `name` seeds a new account/player.
 `DeleteAccountView` now also clears `User.phone` so the number is freed.
 
-**Mobile:** `LoginScreen` (login_screen.dart, route `/login`) is now the phone
+**Mobile:** `LoginScreen` (login_screen.dart, route `/login`) is the phone
 screen → `OtpVerifyScreen` (`/verify-otp`) → `ProfileSetupScreen`
-(`/profile-setup`, new accounts only). Legacy form moved verbatim to
-`PasswordLoginScreen` (`/login-password`), linked as "Sign in with a username
-instead". API: `ApiClient.requestOtp/verifyOtp`; `AuthProvider.requestOtp/
-verifyOtp/isNewAccount/applyPlayer`; `AuthResult.isNewAccount`.
+(`/profile-setup`, new accounts only). **That is the whole flow** — there is no
+password screen and no second route. API: `ApiClient.requestOtp/verifyOtp`;
+`AuthProvider.requestOtp/verifyOtp/isNewAccount/applyPlayer`;
+`AuthResult.isNewAccount`.
+
+`ApiClient.login()` and `AuthProvider.login()` survive and are unreachable from
+the UI — the endpoint they call 403s. Left in place because re-enabling is an
+env var rather than a rebuild; **do not wire a screen back to them without
+flipping `PASSWORD_LOGIN_ENABLED` first**, or it fails closed on every tap.
 
 **Demo:** `seed_demo` sets verified phones on the 4 login users
-(`+1310555010{1-4}`, reviewer = ...0101) so phone login is testable locally.
-Reviewers still use password login in prod (console SMS can't reach Apple).
+(`+1310555010{1-4}`, reviewer = ...0101) so phone login is testable locally —
+the code prints in the runserver terminal (console SMS backend) and comes back
+as `debug_code` under `DEBUG`.
+
+**The reviewer goes through the phone screen too**, via the demo-phone bypass:
+set BOTH `REVIEW_BYPASS_PHONE` (comma-separated; reviewer + reviewer_delete)
+and `REVIEW_BYPASS_CODE` on Railway, and `request_code` skips real SMS for
+those numbers while `verify_code` accepts that code without contacting Twilio.
+Each must map to a seeded User. Empty = disabled; keep the values only in the
+App Store review notes and rotate at will (`accounts/otp.py`
+`_review_bypass_phones` / `_is_review_bypass`).
+
+**Testing against a local server needs the right build.** `flutter run` with no
+flags points at RAILWAY, where `DEBUG=False` — so no `debug_code` appears and
+nothing reaches your console. Use
+`flutter run --dart-define=USE_LOCAL=true`, and check the on-screen debug
+ribbon reads `LOCAL` rather than `PROD` (`mobile/lib/config.dart`).
 
 **NOT in scope** (deferred per §12): billing/IAP, metered free tier,
 claimable-pending-player merge, device-initiated Messages invites.
@@ -427,7 +459,10 @@ day-of, not enforced at setup).
 
 Tests: `accounts/test_otp.py` (normalization, request→verify happy paths,
 self-signup, wrong/expired/too-many-attempts, rate-limit, phone uniqueness, and
-legacy password login still works).
+the reviewer demo-phone bypass). The password-login test asserted that the
+legacy path **still works**; the behaviour inverted when `LoginView` started
+403ing, so what is pinned now is that it is off by default and that
+`PASSWORD_LOGIN_ENABLED` turns it back on.
 
 ### One-tap SMS invite for a just-added golfer — implemented (mobile only)
 When you inline-add a login-less golfer **with a phone number** during round
