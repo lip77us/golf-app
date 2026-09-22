@@ -62,6 +62,13 @@ enum StandingKind {
 class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
   final StandingKind kind;
 
+  /// The grey word in front of the standing — `F9`, `B9`, `Overall`.
+  ///
+  /// **The label is not the news.** Which bet this is stays quiet so the
+  /// margin can carry the colour and the weight; `F9` in a team colour would
+  /// make the row's loudest element the one thing that never changes.
+  final String standingLabel;
+
   /// Where you stand — `1 UP thru 2`, `2nd of 38`, `Red 2–1`. Full weight: it
   /// is the reason the row exists.
   final String standing;
@@ -74,9 +81,20 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
   /// same thing — see `SixesStanding.team` for the state where they are not.
   final Color? standingColor;
 
+  /// The grey word in front of the figure — `Overall`.
+  final String figureLabel;
+
   /// The figure beside it — `+$10 so far`, `−1 · thru 4`, `4½ to win`. Muted,
-  /// because it qualifies the standing rather than competing with it.
+  /// because it qualifies the standing rather than competing with it — unless
+  /// [figureColor] says it is a second standing with a side of its own, which
+  /// is Nassau's case: the eighteen can be going the other way from the nine.
   final String figure;
+
+  /// The figure's own colour. Grey when null, which is money and every other
+  /// qualifier. **Separate from [standingColor] because they are separate
+  /// matches** — a golfer can be 1 UP on the back nine and 1 DOWN overall, and
+  /// one colour for both would be wrong half the time.
+  final Color? figureColor;
 
   final VoidCallback onOpenLeaderboard;
 
@@ -86,8 +104,16 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
     required this.standing,
     required this.figure,
     required this.onOpenLeaderboard,
+    this.standingLabel = '',
+    this.figureLabel = '',
     this.standingColor,
+    this.figureColor,
   });
+
+  /// The quiet word in front of a figure. Grey and a shade smaller, so the
+  /// eye lands on the number rather than on which bet it belongs to.
+  static const _labelStyle = TextStyle(
+      fontSize: 11.5, fontWeight: FontWeight.w600, color: Halved.muted);
 
   /// 27px — the pill's 24 plus its breathing room, and the whole cost of the
   /// feature. Measured in the design; matched here rather than rounded, since
@@ -117,6 +143,10 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
           // while a third of the row was blank. The money is a short fixed
           // string and belongs beside the pill; only this one ellipsises, and
           // only once there is genuinely nothing left.
+          if (standingLabel.isNotEmpty) ...[
+            Text(standingLabel, style: _labelStyle),
+            const SizedBox(width: 5),
+          ],
           Flexible(
             child: Text(
               standing,
@@ -133,13 +163,21 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
             ),
           ),
           const Spacer(),
+          if (figureLabel.isNotEmpty) ...[
+            Text(figureLabel, style: _labelStyle),
+            const SizedBox(width: 5),
+          ],
           if (figure.isNotEmpty) ...[
             Text(
               figure,
               maxLines: 1,
-              style: const TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w500,
-                  color: Halved.muted),
+              style: TextStyle(
+                  fontSize: 12,
+                  // A figure with a side of its own carries the weight to go
+                  // with it; a qualifier stays light.
+                  fontWeight:
+                      figureColor == null ? FontWeight.w500 : FontWeight.w700,
+                  color: figureColor ?? Halved.muted),
             ),
             const SizedBox(width: 8),
           ],

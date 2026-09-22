@@ -68,8 +68,10 @@ void main() {
         overall: _bet(margin: 1, holesPlayed: 5),
       );
       final st = nassauStanding(s, _me, hole: 5)!;
-      expect(st.standing, 'F9 2 UP thru 5');
-      expect(st.figure, 'Overall 1 UP');
+      expect(st.main.label, 'F9');
+      expect(st.main.value, '2 UP thru 5');
+      expect(st.second!.label, 'Overall');
+      expect(st.second!.value, '1 UP');
     });
 
     test('each is written from the reader\'s side', () {
@@ -78,8 +80,8 @@ void main() {
         overall: _bet(margin: 1, holesPlayed: 5),
       );
       final them = nassauStanding(s, _themA, hole: 5)!;
-      expect(them.standing, 'F9 2 DOWN thru 5');
-      expect(them.figure, 'Overall 1 DOWN');
+      expect(them.main.value, '2 DOWN thru 5');
+      expect(them.second!.value, '1 DOWN');
     });
 
     test('the back nine takes over after the turn', () {
@@ -89,10 +91,11 @@ void main() {
         overall: _bet(margin: 1, holesPlayed: 12),
       );
       final st = nassauStanding(s, _me, hole: 12)!;
-      expect(st.standing, 'B9 1 DOWN thru 3');
+      expect(st.main.label, 'B9');
+      expect(st.main.value, '1 DOWN thru 3');
       // **Both counts on the back nine.** Three holes into this bet, twelve
       // into the eighteen — two different questions, both worth answering.
-      expect(st.figure, 'Overall 1 UP thru 12');
+      expect(st.second!.value, '1 UP thru 12');
     });
 
     test('the front nine drops the second count, because it repeats', () {
@@ -100,7 +103,7 @@ void main() {
         front9:  _bet(margin: 2, holesPlayed: 5),
         overall: _bet(margin: 1, holesPlayed: 5),
       );
-      expect(nassauStanding(s, _me, hole: 5)!.figure, 'Overall 1 UP');
+      expect(nassauStanding(s, _me, hole: 5)!.second!.value, '1 UP');
     });
 
     test('**backing up to the front nine reports the front nine**', () {
@@ -113,8 +116,8 @@ void main() {
         back9:   _bet(margin: -1, holesPlayed: 3),
         overall: _bet(margin: 1, holesPlayed: 12),
       );
-      expect(nassauStanding(s, _me, hole: 4)!.standing, 'F9 won 3&2');
-      expect(nassauStanding(s, _me, hole: 12)!.standing, 'B9 1 DOWN thru 3');
+      expect(nassauStanding(s, _me, hole: 4)!.main.value, 'won 3&2');
+      expect(nassauStanding(s, _me, hole: 12)!.main.value, '1 DOWN thru 3');
     });
   });
 
@@ -124,8 +127,8 @@ void main() {
         front9: _bet(margin: 3, holesPlayed: 7, result: 'team1',
                      decidedMargin: 3, decidedRemaining: 2),
       );
-      expect(nassauStanding(s, _me, hole: 8)!.standing, 'F9 won 3&2');
-      expect(nassauStanding(s, _themA, hole: 8)!.standing, 'F9 lost 3&2');
+      expect(nassauStanding(s, _me, hole: 8)!.main.value, 'won 3&2');
+      expect(nassauStanding(s, _themA, hole: 8)!.main.value, 'lost 3&2');
     });
 
     test('played to the last hole it is 1 UP, not 1&0', () {
@@ -133,14 +136,14 @@ void main() {
         front9: _bet(margin: 1, holesPlayed: 9, result: 'team1',
                      decidedRemaining: 0),
       );
-      expect(nassauStanding(s, _me, hole: 9)!.standing, 'F9 won 1 UP');
+      expect(nassauStanding(s, _me, hole: 9)!.main.value, 'won 1 UP');
     });
 
     test('a halved nine says All Square', () {
       final s = _summary(
         front9: _bet(margin: 0, holesPlayed: 9, result: 'halved'),
       );
-      expect(nassauStanding(s, _me, hole: 9)!.standing, 'F9 All Square');
+      expect(nassauStanding(s, _me, hole: 9)!.main.value, 'All Square');
     });
   });
 
@@ -155,9 +158,10 @@ void main() {
         overall: _bet(margin: 2, holesPlayed: 9),
       );
       final st = nassauStanding(s, _me, hole: 10)!;
-      expect(st.standing, 'Overall 2 UP thru 9',
+      expect(st.main.label, 'Overall');
+      expect(st.main.value, '2 UP thru 9',
              reason: 'as the leading slot it keeps its own count');
-      expect(st.figure, '');
+      expect(st.second, isNull);
     });
 
     test('before any score at all, nothing', () {
@@ -176,8 +180,9 @@ void main() {
         front9: _bet(margin: 1, holesPlayed: 4), singleMatch: true,
       );
       final st = nassauStanding(s, _me, hole: 4)!;
-      expect(st.standing, '1 UP thru 4');
-      expect(st.figure, '', reason: 'there is no second bet to report');
+      expect(st.main.label, '', reason: 'no nine to name on a single bet');
+      expect(st.main.value, '1 UP thru 4');
+      expect(st.second, isNull, reason: 'no second bet to report');
     });
 
     test('an 18-hole match play rides the overall alone', () {
@@ -186,16 +191,45 @@ void main() {
         playFront: false, playBack: false,
       );
       final st = nassauStanding(s, _me, hole: 12)!;
-      expect(st.standing, '2 UP thru 12');
-      expect(st.figure, '');
+      expect(st.main.label, '');
+      expect(st.main.value, '2 UP thru 12');
+      expect(st.second, isNull);
+    });
+  });
+
+  group('the label is grey and the value is coloured', () {
+    test('which bet it is never carries the colour', () {
+      // The label cannot change, so making it the loudest element would
+      // spend the row's one hue on the one thing that never moves.
+      final s = _summary(
+        front9:  _bet(margin: 2, holesPlayed: 5),
+        overall: _bet(margin: 1, holesPlayed: 5),
+      );
+      final st = nassauStanding(s, _me, hole: 5)!;
+      expect(st.main.label, 'F9');
+      expect(st.main.value, startsWith('2 UP'),
+             reason: 'the margin is the news, and carries the tint');
+    });
+
+    test('**the eighteen gets its OWN colour, not the nine\'s**', () {
+      // A golfer can be up on the back nine and down overall; one tint for
+      // both would be wrong half the time.
+      final s = _summary(
+        front9:  _bet(margin: 2, holesPlayed: 9, result: 'team1'),
+        back9:   _bet(margin: 1, holesPlayed: 3),
+        overall: _bet(margin: -2, holesPlayed: 12),
+      );
+      final st = nassauStanding(s, _me, hole: 12)!;
+      expect(st.main.team, 1, reason: 'his side leads the back nine');
+      expect(st.second!.team, 2, reason: 'and trails the eighteen');
     });
   });
 
   group('the colour', () {
     test('it is his side while he is up, and theirs while he is down', () {
       final up = _summary(front9: _bet(margin: 1, holesPlayed: 2));
-      expect(nassauStanding(up, _me, hole: 2)!.team, 1);
-      expect(nassauStanding(up, _themA, hole: 2)!.team, 1,
+      expect(nassauStanding(up, _me, hole: 2)!.main.team, 1);
+      expect(nassauStanding(up, _themA, hole: 2)!.main.team, 1,
              reason: 'team 1 is up whoever is reading it');
     });
 
@@ -203,7 +237,7 @@ void main() {
       // Neither side is up, so there is no side for the colour to be about;
       // picking one would read as a lead.
       final level = _summary(front9: _bet(margin: 0, holesPlayed: 2));
-      expect(nassauStanding(level, _me, hole: 2)!.team, isNull);
+      expect(nassauStanding(level, _me, hole: 2)!.main.team, isNull);
     });
 
     test('it never has to be withheld — the teams do not re-draw', () {
@@ -215,7 +249,7 @@ void main() {
         overall: _bet(margin: 3, holesPlayed: 12),
       );
       for (final hole in [4, 9, 10, 12]) {
-        expect(nassauStanding(s, _me, hole: hole)!.team, isNotNull,
+        expect(nassauStanding(s, _me, hole: hole)!.main.team, isNotNull,
                reason: 'hole $hole');
       }
     });

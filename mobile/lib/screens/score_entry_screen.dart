@@ -1731,13 +1731,23 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final summary = rp.nassauSummary;
     if (summary == null) return null;
     final standing = nassauStanding(summary, me, hole: _selectedHole);
+    Color? tint(int? team) => team == null
+        ? null
+        : (team == 1 ? GameColors.team1 : GameColors.team2);
     return StandingRibbon(
       kind: StandingKind.result,
-      standing: standing?.standing ?? 'Nassau',
-      figure: standing?.figure ?? '',
-      standingColor: standing?.team == null
-          ? null
-          : (standing!.team == 1 ? GameColors.team1 : GameColors.team2),
+      // The bet's name stays grey and the margin carries the colour: which
+      // nine this is never changes, and the row's loudest element should not
+      // be the one thing that cannot move.
+      standingLabel: standing?.main.label ?? '',
+      standing: standing?.main.value ?? 'Nassau',
+      standingColor: tint(standing?.main.team),
+      // **The eighteen gets its own colour**, not the nine's. A golfer can be
+      // 1 UP on the back nine and 1 DOWN overall, and one tint for both would
+      // be wrong half the time.
+      figureLabel: standing?.second?.label ?? '',
+      figure: standing?.second?.value ?? '',
+      figureColor: tint(standing?.second?.team),
       onOpenLeaderboard: onOpen,
     );
   }
@@ -7221,27 +7231,24 @@ class _MatchStatusBar extends StatelessWidget {
       ),
     ]);
 
+    // Nothing left to draw: no Claremont second series, and no press to call.
+    // The bar used to always have the bet chips in it, so it always had a
+    // reason to exist; now it has to earn one.
+    if (!hasBottom && onPress == null) return const SizedBox.shrink();
+
     return Container(
       color: theme.colorScheme.surfaceContainerHighest,
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        // Top bet row — labelled "Top" only when Claremont is active.
-        // An 18-hole match has a single bet: show one "Match" chip.
-        betRow(
-          hasBottom ? 'Top' : null,
-          summary.singleMatch
-              ? [_betChip(context, 'Match', summary.front9, isNine: false)]
-              : summary.isEighteenHoleMatch
-                  ? [_betChip(context, 'Match', summary.overall, isNine: false)]
-                  : [
-                      _betChip(context, 'F9',  summary.front9,  isNine: true),
-                      _betChip(context, 'B9',  summary.back9,   isNine: true),
-                      _betChip(context, 'ALL', summary.overall, isNine: false),
-                    ],
-        ),
-        // Bottom bet row (Claremont only).
+        // **The top bet row came off (22 Sep 2026).** `F9 1 UP · B9 — · ALL
+        // 1 UP` was the same three bets the standing row in the app bar now
+        // reports, one of them twice over — and it was the tallest thing
+        // between the hole header and the scores.
+        //
+        // Claremont's BOTTOM row stays. It is a second bet series the standing
+        // row does not carry, so removing it would lose the only statement of
+        // it on the screen rather than a duplicate one.
         if (hasBottom) ...[
-          const SizedBox(height: 4),
           betRow(
             'Bot',
             summary.singleMatch
@@ -7268,72 +7275,8 @@ class _MatchStatusBar extends StatelessWidget {
     );
   }
 
-  Widget _betChip(BuildContext context, String label, NassauBetResult bet,
-      {required bool isNine}) {
-    final theme    = Theme.of(context);
-    final result   = bet.result;
-    final nineLen  = isNine ? 9 : 18;
-    final holesLeft = nineLen - bet.holesPlayed;
-    final t1Leads  = bet.margin > 0;
-    // Team colours used both for the chip fill and the subtitle text,
-    // so a glance tells you who's ahead in F9/B9/ALL.
-    final t1Color = GameColors.team1;
-    final t2Color = GameColors.team2;
-    Color  bg;
-    String subtitle;
-    Color? subtitleColor;
-
-    if (result != null) {
-      if (result == 'halved') {
-        bg       = Colors.grey.shade200;
-        subtitle = 'AS';
-      } else {
-        final winsT1 = result == 'team1';
-        bg            = winsT1 ? GameColors.team1Bg : GameColors.team2Bg;
-        subtitleColor = winsT1 ? t1Color : t2Color;
-        final dm = bet.decidedMargin;
-        final dr = bet.decidedRemaining;
-        if (dm != null && dr != null && dr > 0) {
-          subtitle = '${dm.abs()}&$dr';
-        } else {
-          subtitle = 'wins';
-        }
-      }
-    } else if (bet.holesPlayed == 0) {
-      bg       = theme.colorScheme.surfaceContainer;
-      subtitle = '—';
-    } else if (bet.margin == 0) {
-      bg       = theme.colorScheme.surfaceContainer;
-      subtitle = 'AS';
-    } else if (holesLeft >= 0 && bet.margin.abs() > holesLeft) {
-      bg            = t1Leads ? GameColors.team1Bg : GameColors.team2Bg;
-      subtitleColor = t1Leads ? t1Color : t2Color;
-      subtitle      = '${bet.margin.abs()}&$holesLeft';
-    } else {
-      bg            = t1Leads ? GameColors.team1Bg : GameColors.team2Bg;
-      subtitleColor = t1Leads ? t1Color : t2Color;
-      subtitle      = '${bet.margin.abs()}UP';
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text(label,
-            style: theme.textTheme.labelSmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        const SizedBox(height: 2),
-        Text(subtitle,
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: subtitleColor,
-            )),
-      ]),
-    );
-  }
+  // `_betChip` was here — the F9 / B9 / ALL chip. It went with the top bet
+  // row; `_bottomChip` below is Claremont's and is still drawn.
 
   /// Compact chip for Claremont bottom bets (points margin, +N / AS / —).
   Widget _bottomChip(
