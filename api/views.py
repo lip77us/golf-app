@@ -90,6 +90,7 @@ from .serializers import (
     TripleNassauSetupSerializer, TripleNassauPressSerializer,
     SixesSetupSerializer, CourseSerializer,
     Points531SetupSerializer, CasualRoundSummarySerializer,
+    BetterBallSetupSerializer,
     IrishRumbleSetupSerializer, LowNetSetupSerializer,
     ThreePersonMatchSetupSerializer, MessageSerializer, VegasSetupSerializer,
     FourballSetupSerializer, HonorsSetupSerializer,
@@ -234,6 +235,10 @@ def _recalculate_games(foursome: Foursome) -> None:
     if 'irish_rumble' in active_games:
         from services.irish_rumble import calculate_irish_rumble
         calculate_irish_rumble(round_obj)
+
+    if 'better_ball' in active_games:
+        from services.better_ball import calculate_better_ball
+        calculate_better_ball(round_obj)
 
     if 'scramble' in active_games:
         from services.scramble import calculate_scramble
@@ -642,6 +647,18 @@ def _build_leaderboard(round_obj: Round) -> dict:
                 'label': 'Irish Rumble',
                 **summary,
             }
+
+    if 'better_ball' in active_games:
+        # **The label is the game's own name**, not the slug's — the app titles
+        # it from the ball count (`Best 2 of 4`) and a TD may have renamed it,
+        # and a board headed `Better Ball` above rows counting two nets would
+        # be the one surface disagreeing with every other.
+        from services.better_ball import better_ball_summary
+        summary = better_ball_summary(round_obj)
+        games['better_ball'] = {
+            'label': summary.get('name') or 'Better Ball',
+            **summary,
+        }
 
     if 'scramble' in active_games:
         from services.scramble import scramble_summary
@@ -7705,6 +7722,17 @@ class IrishRumbleSetupView(APIView):
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
 
+        # Better Ball ranks the same groups the same way into the same kind of
+        # pool, so a round runs one or the other. Guarded in both directions,
+        # because the TD can reach the two setups in either order.
+        from services.irish_rumble import (IrishRumbleExcluded,
+                                           refuse_if_better_ball)
+        try:
+            refuse_if_better_ball(round_obj)
+        except IrishRumbleExcluded as exc:
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
+
         # For tournament rounds, the handicap mode is set at the round level
         # and cannot be overridden per-game.
         if round_obj.tournament_id:
@@ -7752,6 +7780,117 @@ class IrishRumbleSetupView(APIView):
             pass  # No scores yet — calculation will run after first score save
 
         return Response(self._config_dict(config), status=status.HTTP_201_CREATED)
+
+
+class BetterBallSetupView(APIView):
+    """
+    GET  /api/rounds/{id}/better-ball/setup/  — current config or defaults
+    POST /api/rounds/{id}/better-ball/setup/  — create or update
+
+    The GET carries what the screen needs to READ BACK a choice the TD has not
+    made yet: the name and allowance this count would give him, so the `Auto`
+    tags show a real value rather than a blank waiting on a save.
+    """
+
+    def _config_dict(self, config):
+        from services.better_ball import default_allowance, default_name
+        return {
+            'configured'    : True,
+            'balls_to_count': config.balls_to_count,
+            'name'          : config.display_name(),
+            'name_is_auto'  : not config.name,
+            'handicap_mode' : config.handicap_mode,
+            'net_percent'   : config.net_percent,
+            'recommended_net_percent': default_allowance(config.balls_to_count),
+            'entry_fee'     : float(config.entry_fee),
+            'payouts'       : config.payouts or [],
+        }
+
+    def get(self, request, pk):
+        from games.models import BetterBallConfig, IrishRumbleConfig
+        from services.better_ball import default_allowance, default_name
+        round_obj = get_object_or_404(
+            Round.objects.prefetch_related('foursomes__memberships__player'),
+            pk=pk,
+        )
+        try:
+            data = self._config_dict(round_obj.better_ball_config)
+        except BetterBallConfig.DoesNotExist:
+            data = {
+                'configured'    : False,
+                'balls_to_count': 2,
+                'name'          : default_name(2),
+                'name_is_auto'  : True,
+                'handicap_mode' : round_obj.handicap_mode,
+                'net_percent'   : default_allowance(2),
+                'recommended_net_percent': default_allowance(2),
+                'entry_fee'     : 0.00,
+                'payouts'       : [],
+            }
+        # The name and allowance at every count, so the stepper renames the
+        # field on the tap rather than after a round trip. Four strings and
+        # four integers is not a thing to build a request for.
+        data['names_by_count']     = {n: default_name(n) for n in range(1, 5)}
+        data['allowance_by_count'] = {n: default_allowance(n)
+                                      for n in range(1, 5)}
+        data['num_players'] = sum(
+            1 for fs in round_obj.foursomes.all()
+            for m in fs.memberships.all() if not m.player.is_phantom)
+        data['is_tournament_round'] = round_obj.tournament_id is not None
+        # Per-group real-player counts, so a payout field can say "splits to
+        # $23.33 each (3 ways)" under a levelled threesome.
+        data['group_sizes'] = [
+            sum(1 for m in fs.memberships.all() if not m.player.is_phantom)
+            for fs in round_obj.foursomes.all()]
+        # The game this one excludes, so the screen can say why it is closed
+        # instead of failing on save.
+        data['irish_rumble_configured'] = IrishRumbleConfig.objects.filter(
+            round=round_obj).exists()
+        return Response(data)
+
+    def post(self, request, pk):
+        from services.better_ball import (BetterBallExcluded,
+                                          calculate_better_ball,
+                                          setup_better_ball)
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
+        ser = BetterBallSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        # A tournament round sets the handicap mode at round level; a game
+        # cannot override it. Same rule Irish Rumble follows.
+        mode = (round_obj.handicap_mode if round_obj.tournament_id
+                else d['handicap_mode'])
+        try:
+            config = setup_better_ball(
+                round_obj,
+                balls_to_count = d['balls_to_count'],
+                name           = d.get('name') or '',
+                handicap_mode  = mode,
+                net_percent    = d.get('net_percent'),
+                entry_fee      = d['entry_fee'],
+                payouts        = d['payouts'],
+            )
+        except BetterBallExcluded as exc:
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        calculate_better_ball(round_obj)
+        return Response(self._config_dict(config),
+                        status=status.HTTP_201_CREATED)
+
+
+class BetterBallResultView(APIView):
+    """GET /api/rounds/{id}/better-ball/ → the group-vs-field board.
+
+    Carries each group's borrowed-4th donor status (`overall[].phantom`) the
+    way Irish Rumble's does, so score entry can show a threesome its pending
+    borrowed holes without parsing the whole leaderboard payload.
+    """
+    def get(self, request, pk):
+        from services.better_ball import better_ball_summary
+        round_obj = round_for_reader(request.user, pk)
+        return Response(better_ball_summary(round_obj))
 
 
 class IrishRumbleResultView(APIView):

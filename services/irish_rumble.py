@@ -133,6 +133,25 @@ def _balls_per_hole(variant, par_by_hole, custom_balls=None):
     return classic
 
 
+class IrishRumbleExcluded(Exception):
+    """Irish Rumble and Better Ball are the same competition scored two ways.
+
+    The mirror of :class:`services.better_ball.BetterBallExcluded` — see there
+    for the argument. Both directions are guarded because a TD can reach the
+    two setups in either order, and a rule enforced on one side only is a rule
+    that holds until somebody clicks the other button first.
+    """
+
+
+def refuse_if_better_ball(round_obj) -> None:
+    from games.models import BetterBallConfig
+    if BetterBallConfig.objects.filter(round=round_obj).exists():
+        raise IrishRumbleExcluded(
+            'This round is already running Better Ball. Irish Rumble ranks '
+            'the same groups the same way, so a round runs one or the other '
+            '— turn Better Ball off first.')
+
+
 def compute_segments(variant, par_by_hole, custom_balls=None):
     """
     Return the segments list for a given variant.  Contiguous holes
@@ -202,13 +221,24 @@ def ensure_irish_rumble_phantom(round_obj) -> int:
 
     No-op unless the round has an :class:`IrishRumbleConfig`.
     """
+    if not IrishRumbleConfig.objects.filter(round=round_obj).exists():
+        return 0
+    return _ensure_borrowed_fourth(round_obj)
+
+
+def _ensure_borrowed_fourth(round_obj) -> int:
+    """The borrowed 4th itself, with no opinion about which game asked.
+
+    Split out of :func:`ensure_irish_rumble_phantom` because **Better Ball owes
+    a threesome the same ball**: a group of three counts a ball short on every
+    hole against a field of foursomes whichever of the two games is being
+    played, and levelling it is a property of the competition rather than of
+    Rumble. The gate stays with each caller, since each knows its own config.
+    """
     from tournament.models import FoursomeMembership
     from scoring.models import HoleScore
     from scoring.phantom import get_algorithm, CROSS_FOURSOME_ALGORITHM_ID
     from services.round_setup import _get_or_create_phantom
-
-    if not IrishRumbleConfig.objects.filter(round=round_obj).exists():
-        return 0
 
     foursomes = list(
         Foursome.objects
@@ -327,7 +357,8 @@ def ensure_irish_rumble_phantom(round_obj) -> int:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _build_ir_score_index(round_obj, handicap_mode, net_percent):
+def _build_ir_score_index(round_obj, handicap_mode, net_percent, *,
+                          force_cap=False):
     """
     Build {foursome_id: {player_id: {hole_number: capped_score}}} for all
     real players in the round.
@@ -336,8 +367,13 @@ def _build_ir_score_index(round_obj, handicap_mode, net_percent):
     net par + 2) is only applied when the round's `net_max_double_bogey`
     flag is on.  For strokes_off mode, SO strokes are relative to the
     lowest playing_handicap across ALL foursomes in the round.
+
+    `force_cap` applies it regardless — for Better Ball, where the cap is a
+    RULE of individual play rather than the round's own opt-in setting. Same
+    call `low_net_round` makes. Rumble does not pass it, so its behaviour is
+    unchanged.
     """
-    cap_enabled = bool(round_obj.net_max_double_bogey)
+    cap_enabled = force_cap or bool(round_obj.net_max_double_bogey)
     foursomes = list(
         Foursome.objects
         .filter(round=round_obj)
@@ -714,179 +750,30 @@ def irish_rumble_summary(round_obj) -> dict:
             ],
         })
 
-    # ── Overall: running totals built directly from per-hole scores ───────────
-    # Correct Irish Rumble scoring:
-    #   For each hole played, take the N best (lowest) net scores from the
-    #   group (N = balls_to_count for that hole's segment).  Sum those across
-    #   all holes played to get the running total.  net_to_par is compared
-    #   against the par contribution for the same holes (balls × hole_par).
+    # ── Overall: the shared group-vs-field board ─────────────────────────────
+    # The running total, the tie rule and the pool split live in
+    # `services.group_field` because Better Ball owes every one of them too,
+    # and the thing two copies would eventually disagree about is money.
     #
-    # This means the leaderboard is live from hole 1 — no need to wait for
-    # a full segment to complete.
+    # The board is live from hole 1 — built from per-hole scores rather than
+    # from completed segments, so a group ranks after one hole instead of six.
+    from services.group_field import (balls_by_hole_from_segments, field_pool,
+                                      group_standings)
 
-    foursomes = {fs.pk: fs for fs in Foursome.objects.filter(round=round_obj)}
-
-    # player count per foursome (includes phantom)
-    player_counts_dict = {
-        fs.pk: fs.memberships.filter(player__is_phantom=False).count()
-               + (1 if fs.has_phantom else 0)
-        for fs in foursomes.values()
-    }
-
-    # hole → balls_to_count (from config segments)
-    balls_by_hole: dict = {}
-    for seg in config.segments:
-        n = seg['balls_to_count']
-        for h in range(seg['start_hole'], seg['end_hole'] + 1):
-            balls_by_hole[h] = n
-
-    # Build capped per-hole score index for the whole round
     score_index = _build_ir_score_index(
         round_obj, config.handicap_mode, config.net_percent
     )
-
-    # Current (furthest) hole scored per foursome
-    from django.db.models import Max
-    hole_progress = {
-        row['foursome_id']: row['max_hole']
-        for row in (
-            HoleScore.objects
-            .filter(foursome__round=round_obj, player__is_phantom=False)
-            .exclude(gross_score=None)
-            .values('foursome_id')
-            .annotate(max_hole=Max('hole_number'))
-        )
-    }
-
-    # Compute running total for every foursome
-    running: dict = {}  # fid → {'score': int, 'par': int}
-    for fid in foursomes:
-        fs_scores = score_index.get(fid, {})
-        n_players = player_counts_dict.get(fid, 4)
-        score_acc = 0
-        par_acc   = 0
-        has_any   = False
-        for hole_num in range(1, 19):
-            configured_n = balls_by_hole.get(hole_num, 1)
-            balls        = min(configured_n, n_players)
-            scores_on_hole = sorted([
-                ph[hole_num]
-                for ph in fs_scores.values()
-                if hole_num in ph
-            ])
-            if not scores_on_hole:
-                continue  # not yet scored
-            score_acc += sum(scores_on_hole[:balls])
-            par_acc   += par_by_hole.get(hole_num, 4) * balls
-            has_any    = True
-        if has_any:
-            running[fid] = {'score': score_acc, 'par': par_acc}
-
-    # Payout: entry_fee × num_players pool; split per explicit payouts list.
-    from tournament.models import FoursomeMembership
-    num_players  = FoursomeMembership.objects.filter(
-                       foursome__round=round_obj, player__is_phantom=False
-                   ).count()
-    pool         = round(float(config.entry_fee) * num_players, 2)
+    pool         = field_pool(round_obj, config.entry_fee)
     payouts_list = config.payouts or []
-
-    # Sort: teams with scores first (lowest net-to-par wins), then unstarted
-    def _ntp(fid):
-        if fid not in running:
-            return None
-        r = running[fid]
-        return r['score'] - r['par']
-
-    scored   = sorted(
-        [fid for fid in foursomes if fid in running],
-        key=lambda fid: _ntp(fid),
+    overall_out  = group_standings(
+        round_obj,
+        balls_by_hole = balls_by_hole_from_segments(config.segments),
+        score_index   = score_index,
+        par_by_hole   = par_by_hole,
+        entry_fee     = config.entry_fee,
+        payouts       = payouts_list,
+        net_percent   = config.net_percent,
     )
-    unscored = [fid for fid in foursomes if fid not in running]
-
-    rank = 1
-    ranked_rows = []
-    for i, fid in enumerate(scored):
-        if i > 0 and _ntp(fid) > _ntp(scored[i - 1]):
-            rank = i + 1
-        ranked_rows.append({'foursome_id': fid, 'rank': rank})
-    for fid in unscored:
-        ranked_rows.append({'foursome_id': fid, 'rank': None})
-
-    # Tied groups split the money for the PLACES THEY OCCUPY — two groups tied
-    # for 1st share 1st and 2nd, rather than halving 1st and leaving 2nd
-    # unclaimed. No countback: a tie can be no action, and an arbitrary
-    # tiebreak decides real money on a rule nobody agreed to.
-    from services.payout import (payouts_by_place, per_person_share,
-                                 split_tied_places)
-    rank_payout = split_tied_places(
-        payouts_by_place(payouts_list), [row['rank'] for row in ranked_rows])
-
-    overall_out = []
-    for row in ranked_rows:
-        fid      = row['foursome_id']
-        fs       = foursomes[fid]
-        r        = running.get(fid)
-        ntp      = (r['score'] - r['par']) if r else None
-        n_players = player_counts_dict.get(fid, 4)
-        real_members = list(
-            fs.memberships.filter(player__is_phantom=False)
-                          .select_related('player')
-                          .order_by('player__name')
-        )
-        players      = ', '.join(m.player.name for m in real_members)
-        short_names  = ' / '.join(m.player.short_name or m.player.name
-                                  for m in real_members)
-        group_payout = rank_payout.get(row['rank'], 0.0)
-        # Borrowed-4th donor status (which donor feeds each hole + whether they
-        # have posted yet → the "provisional total" lag).  None for full groups
-        # and legacy intra-foursome phantoms.
-        phantom_info = None
-        if fs.has_phantom:
-            from scoring.phantom import build_phantom_info
-            phantom_info = build_phantom_info(fs, config.net_percent)
-
-        # "Thru" — for a leveled threesome the borrowed-4th lags, so a hole
-        # isn't complete until its donor has also posted.  Cap "thru" at the
-        # last hole (contiguous from 1) where the phantom has a score too;
-        # otherwise a group shows "thru 2" while still waiting on hole 2.
-        current_hole = hole_progress.get(fid)
-        if fs.has_phantom and current_hole:
-            fs_scores  = score_index.get(fid, {})
-            real_pids  = {m.player_id for m in real_members}
-            phantom_scores = next(
-                (h for pid, h in fs_scores.items() if pid not in real_pids), {}
-            )
-            complete_thru = 0
-            for h in range(1, current_hole + 1):
-                if h in phantom_scores:
-                    complete_thru = h
-                else:
-                    break
-            current_hole = complete_thru or None
-
-        overall_out.append({
-            'rank'             : row['rank'],
-            'foursome_id'      : fid,
-            'group'            : fs.display_name,
-            'players'          : players,
-            'short_names'      : short_names,
-            # n_players counts the borrowed 4th, because the group really does
-            # put four balls on the hole. n_real_players does not, because the
-            # borrowed 4th cannot be PAID — so a levelled group's place splits
-            # three ways at $23.33 rather than four ways at $17.50.
-            'n_players'        : n_players,
-            'n_real_players'   : len(real_members),
-            'has_phantom'      : fs.has_phantom,
-            'phantom'          : phantom_info,
-            'total_score'      : r['score'] if r else None,
-            'net_to_par'       : ntp,
-            'current_hole'     : current_hole,
-            'payout'           : group_payout,
-            'per_person_payout': per_person_share(group_payout, len(real_members)),
-            # How the group's share reads on the payout row and in settlement:
-            # "1st — foursome, splits to $23.33 each (3 ways)".
-            'split_ways'       : len(real_members),
-        })
 
     # Extract balls_to_count from first segment (all segments may differ, but
     # expose the dominant value so the UI can show e.g. "Best 2 of 4 count").

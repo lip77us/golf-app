@@ -12,6 +12,18 @@ from core.handicap_math import round_half_up
 
 class GameType(models.TextChoices):
     IRISH_RUMBLE    = 'irish_rumble',    'Irish Rumble'
+    # Better Ball: the same competition as Irish Rumble — every group's best N
+    # nets ranked against the whole field — with the count FIXED for all
+    # eighteen holes instead of moving as the round goes on.
+    #
+    # **Not a variant of Rumble, and the difference is not a setting.** Rumble's
+    # moving count IS the game; a count that never moves is a different game a
+    # golfer plays differently, so it is its own entry in the list with its own
+    # setup (`handoff-foursome-formats/HANDOFF.md` §1). It shares Rumble's
+    # engine — one flat segment through the same best-N-per-hole walk — and
+    # Rumble's money model unchanged: a field pool paid to the winning GROUP
+    # and split among its REAL golfers, since a borrowed 4th cannot be paid.
+    BETTER_BALL     = 'better_ball',     'Better Ball'
     NASSAU          = 'nassau',          'Nassau'
     # Nassau over the holes actually played, as ONE match (no F9/B9 split) with
     # presses — the Nassau to reach for on a 9-hole / partial round.

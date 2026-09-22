@@ -204,6 +204,8 @@ urlpatterns = [
     path('foursomes/<int:pk>/three-person-match/setup/',  views.ThreePersonMatchSetupView.as_view(),  name='api-three-person-match-setup'),
 
     # ---- Irish Rumble setup (round-level) ----
+    path('rounds/<int:pk>/better-ball/setup/', views.BetterBallSetupView.as_view(), name='api-better-ball-setup'),
+    path('rounds/<int:pk>/better-ball/', views.BetterBallResultView.as_view(), name='api-better-ball-result'),
     path('rounds/<int:pk>/irish-rumble/setup/', views.IrishRumbleSetupView.as_view(), name='api-irish-rumble-setup'),
     path('rounds/<int:pk>/irish-rumble/', views.IrishRumbleResultView.as_view(), name='api-irish-rumble-result'),
 

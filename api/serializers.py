@@ -663,6 +663,15 @@ class FoursomeSerializer(serializers.ModelSerializer):
             games.append('low_net_round')
         except ObjectDoesNotExist:
             pass
+        # **Configured is the CONFIG here, not a result row.** Irish Rumble
+        # above reports off `irish_rumble_results` because it has some; Better
+        # Ball persists nothing (one segment, board computed live), so the row
+        # that says the TD has set it up is the config itself.
+        try:
+            rnd.better_ball_config
+            games.append('better_ball')
+        except ObjectDoesNotExist:
+            pass
         try:
             rnd.stableford_config
             games.append('stableford')
@@ -798,12 +807,24 @@ class RoundSerializer(serializers.ModelSerializer):
 
     def get_ir_balls_config(self, obj):
         """
-        Irish Rumble balls-per-segment config — list of
+        The round's balls-to-count plan — list of
         {start_hole, end_hole, balls_to_count} dicts, or [] if not configured.
         Consumed by the score-entry screen to show "Best N of M" per hole.
+
+        **It answers for Better Ball too**, which asks the same question with
+        one flat segment. The two games are mutually exclusive on a round, so
+        there is exactly one answer and no ordering to arbitrate.
+
+        The key keeps its Irish Rumble name on purpose: the shipped client
+        reads `ir_balls_config`, and renaming it would take the banner down on
+        every installed phone to buy nothing a comment cannot say.
         """
         try:
             return obj.irish_rumble_config.segments or []
+        except Exception:
+            pass
+        try:
+            return obj.better_ball_config.segments()
         except Exception:
             return []
 
@@ -1528,6 +1549,34 @@ class IrishRumbleSetupSerializer(serializers.Serializer):
                     'custom_balls': 'Must be 18 integers for the custom variant.',
                 })
         return attrs
+
+
+class BetterBallSetupSerializer(serializers.Serializer):
+    """POST /api/rounds/{id}/better-ball/setup/
+
+    One control — the ball count — and everything else is money or the two
+    fields that follow it until the TD takes them over.
+    """
+    balls_to_count = serializers.IntegerField(min_value=1, max_value=4,
+                                              default=2)
+    # **Blank means "follow the count", and that is a value, not a missing
+    # one.** `allow_blank` is what lets a TD clear a name he typed and get the
+    # app's naming back; without it, a cleared field would read as "no change".
+    name           = serializers.CharField(max_length=40, allow_blank=True,
+                                           required=False, default='')
+    handicap_mode  = serializers.ChoiceField(
+                        choices=['net', 'gross', 'strokes_off'], default='net')
+    # **Null means "follow the count"** and resolves off the published table;
+    # a number pins it. Distinguishable from a TD who genuinely typed a
+    # figure, which an omitted-means-default field could not be.
+    net_percent    = serializers.IntegerField(min_value=0, max_value=200,
+                                              required=False, allow_null=True,
+                                              default=None)
+    entry_fee      = serializers.DecimalField(max_digits=8, decimal_places=2,
+                                              default='0.00')
+    payouts        = serializers.ListField(
+                        child=serializers.DictField(), default=list,
+                        help_text="[{'place': 1, 'amount': '70.00'}]")
 
 
 def _validate_subset_participants(data):

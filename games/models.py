@@ -1587,6 +1587,87 @@ class IrishRumbleSegmentResult(models.Model):
 
 
 # ---------------------------------------------------------------------------
+# BETTER BALL CONFIG (best N of 4, fixed for all eighteen)
+# ---------------------------------------------------------------------------
+
+class BetterBallConfig(models.Model):
+    """
+    Better Ball for a round — one control, and everything else is a read-back.
+
+    The same competition as Irish Rumble (every group's best N nets ranked
+    against the whole field, a pool paid to the winning group) with the count
+    **fixed for all eighteen holes**. That single difference is the game:
+    Rumble's count moves as the round goes on and the movement is what the
+    group plays around; Better Ball's is chosen once and never changes, so a
+    group knows on the first tee exactly how many balls it needs all day.
+
+    **Its own row rather than a flag on IrishRumbleConfig.** The side-games
+    step toggles each game independently, so a TD can run both — two boards off
+    one set of cards, which is a thing events do. One OneToOne row could not
+    hold two.
+
+    **No `segments` field.** Rumble stores a derived segment list because its
+    count varies by hole and the engine walks a generic list; here the list is
+    always one entry spanning the round, so storing it would be storing
+    `balls_to_count` twice and inviting the two to disagree. `segments()`
+    derives it.
+
+    The net double-bogey cap is a RULE here, not the round's setting — see
+    `services.better_ball`.
+    """
+    round           = models.OneToOneField(
+                        Round, on_delete=models.CASCADE,
+                        related_name='better_ball_config')
+    balls_to_count  = models.PositiveSmallIntegerField(
+                        default=2,
+                        validators=[MinValueValidator(1), MaxValueValidator(4)],
+                        help_text=('Nets counted per group per hole, 1-4. '
+                                   'Fixed for all eighteen holes — a count '
+                                   'that moves is Irish Rumble.'),
+                    )
+    # **A field the TD can overwrite, not a label.** The app titles the game
+    # from the count and keeps doing so until he types something; after that it
+    # stops renaming it, because a name somebody chose should not move when he
+    # changes his mind about the count. Blank means "still following the
+    # count" — the `Auto` tag on the setup screen is this field being empty.
+    name            = models.CharField(
+                        max_length=40, blank=True, default='',
+                        help_text=('TD-chosen name. Blank = derived from the '
+                                   'ball count (see services.better_ball).'),
+                    )
+    handicap_mode   = models.CharField(
+                        max_length=20, choices=HandicapMode.choices,
+                        default=HandicapMode.NET)
+    # **Set here, not inherited.** Better Ball is the main game, so the
+    # allowance is a property of the format rather than something handed down.
+    # The default follows the count off the published table
+    # (services.team_handicap.SHAMBLE_PCT_BY_BALLS) and stops following once
+    # the TD moves it.
+    net_percent     = models.PositiveSmallIntegerField(
+                        default=85,
+                        help_text='Percentage of playing handicap in net mode.')
+    entry_fee       = models.DecimalField(
+                        max_digits=8, decimal_places=2, default=0.00,
+                        help_text='Entry per GOLFER; pool = fee × field size.')
+    payouts         = models.JSONField(
+                        default=list,
+                        help_text=("Payout per finishing place, e.g. "
+                                   "[{'place': 1, 'amount': 70.00}]"))
+
+    def segments(self) -> list:
+        """The one segment, in the shape Rumble's engine already walks."""
+        return [{'start_hole': 1, 'end_hole': 18,
+                 'balls_to_count': self.balls_to_count}]
+
+    def display_name(self) -> str:
+        from services.better_ball import default_name
+        return self.name or default_name(self.balls_to_count)
+
+    def __str__(self):
+        return f'Better Ball config — {self.round}'
+
+
+# ---------------------------------------------------------------------------
 # LOW NET ROUND CONFIG (individual low-net game within a round)
 # ---------------------------------------------------------------------------
 
