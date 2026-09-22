@@ -90,7 +90,17 @@ void main() {
       );
       final st = nassauStanding(s, _me, hole: 12)!;
       expect(st.standing, 'B9 1 DOWN thru 3');
-      expect(st.figure, 'Overall 1 UP');
+      // **Both counts on the back nine.** Three holes into this bet, twelve
+      // into the eighteen — two different questions, both worth answering.
+      expect(st.figure, 'Overall 1 UP thru 12');
+    });
+
+    test('the front nine drops the second count, because it repeats', () {
+      final s = _summary(
+        front9:  _bet(margin: 2, holesPlayed: 5),
+        overall: _bet(margin: 1, holesPlayed: 5),
+      );
+      expect(nassauStanding(s, _me, hole: 5)!.figure, 'Overall 1 UP');
     });
 
     test('**backing up to the front nine reports the front nine**', () {
@@ -145,7 +155,8 @@ void main() {
         overall: _bet(margin: 2, holesPlayed: 9),
       );
       final st = nassauStanding(s, _me, hole: 10)!;
-      expect(st.standing, 'Overall 2 UP');
+      expect(st.standing, 'Overall 2 UP thru 9',
+             reason: 'as the leading slot it keeps its own count');
       expect(st.figure, '');
     });
 

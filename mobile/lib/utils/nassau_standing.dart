@@ -61,11 +61,13 @@ int? readerSide(NassauSummary s, int playerId) {
 /// `null` when the bet is not in play, or when nothing has been scored in it —
 /// an unplayed nine reporting `All Square` would be describing golf nobody has
 /// hit yet, the same rule Sixes needed.
-/// [showThru] belongs to the LEADING slot only. `F9 2 UP thru 5 · Overall
-/// 1 UP thru 5` says how far in twice, and on the back nine the second number
-/// is the round's total rather than the bet's — two different counts a golfer
-/// has to tell apart at a glance. The nine he is playing is the one whose
-/// progress he is asking about; the overall's is derivable from the header.
+/// [showThru] is dropped only where it would REPEAT the other slot's.
+///
+/// On the front nine the two bets have played the same holes, so `F9 2 UP thru
+/// 5 · Overall 1 UP thru 5` says how far in twice. On the back they have not —
+/// `B9 1 DOWN thru 3 · Overall 1 UP thru 12` — and each number answers its own
+/// question: how far into this nine's bet, and how far into the eighteen. Both
+/// are wanted there.
 String? _bet(NassauBetResult bet, {required int side, required String label,
                                    bool showThru = true}) {
   if (bet.holesPlayed == 0) return null;
@@ -127,17 +129,25 @@ NassauStanding? nassauStanding(NassauSummary? summary, int? playerId,
 
   final ninePart = inPlay ? _bet(nine, side: side, label: onBack ? 'B9' : 'F9')
                           : null;
+  // Derived rather than keyed off which nine it is: the two counts are equal
+  // exactly when they would repeat, whatever put them there — a front nine, a
+  // nine still on its first hole, a bet switched off mid-round.
   final overallPart = summary.playOverall
-      ? _bet(summary.overall, side: side, label: 'Overall', showThru: false)
+      ? _bet(summary.overall, side: side, label: 'Overall',
+             showThru: summary.overall.holesPlayed != nine.holesPlayed)
       : null;
 
   // Before the nine on screen has a score, the overall leads the row rather
   // than the row saying nothing — on the 10th tee the front nine is history
-  // and the eighteen is the live bet.
+  // and the eighteen is the live bet. As the leading slot it keeps its own
+  // count, because there is no second one for it to repeat.
   if (ninePart == null) {
-    return overallPart == null
+    final lead = summary.playOverall
+        ? _bet(summary.overall, side: side, label: 'Overall')
+        : null;
+    return lead == null
         ? null
-        : NassauStanding(overallPart, '', _side(summary.overall, side));
+        : NassauStanding(lead, '', _side(summary.overall, side));
   }
   return NassauStanding(ninePart, overallPart ?? '', _side(nine, side));
 }
