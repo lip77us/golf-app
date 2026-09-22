@@ -453,6 +453,42 @@ class TeamCupTests(_TeamCupBase):
                      {}):
             self.assertEqual(_cup_palette(pair), ('blue', 'orange'), pair)
 
+    def test_red_wears_orange_so_the_default_cup_is_not_inverted(self):
+        """Red v. Blue is the app's own default cup. Before the alias it fell
+        back on position — Red's points in blue, the Blue team in orange —
+        which is the inversion this whole palette exists to prevent."""
+        from services.live_activity_triple_cup import _cup_palette
+        self.assertEqual(_cup_palette({'team1_colour': 'Red',
+                                       'team2_colour': 'Blue'}),
+                         ('orange', 'blue'))
+        self.assertEqual(_cup_palette({'team1_colour': 'Blue',
+                                       'team2_colour': 'Red'}),
+                         ('blue', 'orange'))
+
+    def test_red_against_orange_is_a_collision_not_a_match(self):
+        """Both would wear orange, so neither can have its own colour —
+        position keeps the two halves apart."""
+        from services.live_activity_triple_cup import _cup_palette
+        self.assertEqual(_cup_palette({'team1_colour': 'Red',
+                                       'team2_colour': 'Orange'}),
+                         ('blue', 'orange'))
+
+    def test_a_red_v_blue_cup_draws_each_team_in_its_own_half(self):
+        """Through the real card: Red leads, so the headline is orange and
+        Red's share of the needle sits under `orange`, with the Blue team's
+        under `blue`. Both required needle keys stay present, which is what
+        keeps this decodable on every installed build."""
+        self.t1.name, self.t1.colour = 'Red', 'Red'
+        self.t1.save(update_fields=['name', 'colour'])
+        self.t2.name, self.t2.colour = 'Blue', 'Blue'
+        self.t2.save(update_fields=['name', 'colour'])
+        self._sweep(self.groups[0], range(1, 7))     # one point, to Red
+        s = self._state(6)
+        self.assertEqual(s['number']['colour'], 'orange')
+        self.assertAlmostEqual(s['needle']['orange'], 1 / 8)
+        self.assertAlmostEqual(s['needle']['blue'], 0.0)
+        self.assertEqual(set(s['needle']), {'blue', 'orange'})
+
     # -- and the casual card is untouched -----------------------------------
 
     def test_a_round_with_no_cup_config_still_gets_the_casual_card(self):

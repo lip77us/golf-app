@@ -252,10 +252,24 @@ def _cup_palette(cup) -> tuple:
     else — a Red/Green cup, a cup where both picked blue, a cup with no
     colours set — falls back to position, where at least the two halves of
     the needle are always distinguishable.
+
+    **Red wears orange.** Red v. Blue is the app's own DEFAULT cup
+    (`cup_standings` fills team 1 as Red), and before this alias it was the
+    case that fell back on position: Red's points drawn in BLUE and the Blue
+    team in orange — the exact inversion this function exists to prevent, on
+    the most common cup there is. The widget draws two side colours and red
+    is not one of them; orange is the nearest hue and can never be mistaken
+    for blue. Mapping it here, on the server, means every installed build
+    gets it — adding a red to the widget would have needed a release, and a
+    needle payload that stopped carrying its required `orange` key would have
+    taken the whole card down on every older phone. (Paul, 22 Sep 2026:
+    orange is the better read on the glass anyway.)
     """
     known = {'blue', 'orange'}
+    alias = {'red': 'orange'}
     one = (cup.get('team1_colour') or '').strip().lower()
     two = (cup.get('team2_colour') or '').strip().lower()
+    one, two = alias.get(one, one), alias.get(two, two)
     if one in known and two in known and one != two:
         return one, two
     return 'blue', 'orange'
