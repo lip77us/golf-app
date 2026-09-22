@@ -56,6 +56,25 @@ def _leader(t1: float, t2: float) -> str:
     return 'level'
 
 
+def _line(t1: float, t2: float, leader: str) -> str:
+    """`1–0` from the LEADER's side, whichever team number he is.
+
+    **Card order is colour; push order is the sentence**
+    (`RULINGS-team-cup-lock.md` §2). On the card, order is the only thing
+    saying whose number is whose, so it has to be a fixed axis. In a push the
+    sentence names the leader before the score, so the order carries no
+    information — it is free to be the one that reads naturally, and the
+    natural one is the leader's number first. `Blue take the lead — 0–1` is a
+    title that names a team and then shows them losing, which the only
+    audience that matters reads as a bug.
+
+    Level is symmetrical, so `level` and the halved cup keep team order and
+    nothing about them moves.
+    """
+    return (f'{_score(t2)}–{_score(t1)}' if leader == 'team2'
+            else f'{_score(t1)}–{_score(t2)}')
+
+
 def _team_tournament(round_obj):
     """The cup this round belongs to, or None if it is not a cup round.
 
@@ -127,17 +146,19 @@ def cup_alert(round_obj) -> dict | None:
 
     name1 = cup.get('team1_name') or 'Team 1'
     name2 = cup.get('team2_name') or 'Team 2'
-    line = f'{_score(t1)}–{_score(t2)}'
 
     # **Decided outranks lead change**, and it fires once. A clinch is by
     # definition also a lead change, and two pushes for one half-point is the
     # noise this whole design is avoiding.
     if decided and not was.get('decided'):
         if cup.get('cup_status') == 'tied':
-            return {'title': f'The {tt.cup_name} is halved — {line}',
+            return {'title': (f'The {tt.cup_name} is halved — '
+                              f'{_line(t1, t2, "level")}'),
                     'body': 'Nothing left that can separate them.'}
-        winner = name1 if cup.get('winner_team') == 1 else name2
-        return {'title': f'{winner} take the {tt.cup_name} — {line}',
+        winning_team = 'team1' if cup.get('winner_team') == 1 else 'team2'
+        winner = name1 if winning_team == 'team1' else name2
+        return {'title': (f'{winner} take the {tt.cup_name} — '
+                          f'{_line(t1, t2, winning_team)}'),
                 'body': 'The half-point that put it out of reach.'}
 
     before = _leader(float(was.get('team1') or 0), float(was.get('team2') or 0))
@@ -145,6 +166,7 @@ def cup_alert(round_obj) -> dict | None:
     if after == before:
         return None
 
+    line = _line(t1, t2, after)
     if after == 'level':
         return {'title': f'All square — {line}', 'body': _still_out(round_obj)}
     taker = name1 if after == 'team1' else name2

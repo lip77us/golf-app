@@ -422,6 +422,84 @@ def stroke_ribbon(foursome, player_id, hole, alloc) -> str:
             if ((alloc or {}).get(player_id) or {}).get(hole) else '')
 
 
+# The band's second form — `POPPING  YOU · DAN · CHRIS`
+# (`handoff-foursome-formats/HANDOFF.md` §5, decided 22 Sep 2026).
+#
+# `POPPING ON HOLE 7` is about the reader alone, and it sits directly above a
+# header that already says `HOLE 7`. **One golfer in the group is holding a
+# phone**, so what the band should carry is what the group asks on the tee:
+# who gets a stroke on this hole, all of them. Dropping the hole number is what
+# buys the room for the names.
+#
+# Three rules, all of them the design's:
+#
+# 1. **The reader is `YOU` and is always first** — he knows his name, and it is
+#    shorter than any surname.
+# 2. **Short names, capped at 5 characters**, so four golfers fit the band's
+#    ~44pt and there is no truncation rule to write.
+# 3. **Filled means a stroke of yours is in play**; a gold outline means there
+#    are strokes in your group and none of them is yours. One hue, two fills,
+#    and the case that is not about him is the quieter row. That is what
+#    `filled` carries — the widget owns the two treatments.
+#
+# **No band at all when nobody in the group pops** — not an empty one. The card
+# is shorter on those holes and that is correct.
+#
+# **Scope: `triple_cup` only.** The band is shared and the other cards are not
+# all as comfortable — Survivor, Skins and Nassau are over the 160pt ceiling
+# already. Every other card keeps `stroke_ribbon` above.
+
+BAND_NAME_CAP = 5
+
+
+def group_stroke_band(foursome, player_id, hole, alloc) -> dict | None:
+    """`{'text': 'POPPING  YOU ×2 · DAN', 'filled': True}`, or None.
+
+    Same three rules as `stroke_ribbon` — read the game's own allocator, only
+    a playing golfer is a reader, running states only — and the same argument
+    for living here: only the game knows how it spreads strokes, everything
+    else about the band is the same wherever it is drawn.
+
+    A phantom padding a group is never named: it has no card and gets no
+    strokes anybody in the group can use on the tee.
+    """
+    if player_id is None or not hole:
+        return None
+
+    members = [m for m in foursome.memberships.select_related('player')
+               if not getattr(m.player, 'is_phantom', False)]
+    if not any(m.player_id == player_id for m in members):
+        return None        # a watcher is not playing, so nothing pops for him
+
+    def strokes(pid) -> int:
+        return int(((alloc or {}).get(pid) or {}).get(hole) or 0)
+
+    # Reader first; everyone else in the group's card order.
+    ordered = ([m for m in members if m.player_id == player_id]
+               + [m for m in members if m.player_id != player_id])
+
+    names = []
+    for m in ordered:
+        n = strokes(m.player_id)
+        if n <= 0:
+            continue
+        if m.player_id == player_id:
+            label = 'YOU'
+        else:
+            short = (m.player.short_name or m.player.name or '').strip()
+            label = short[:BAND_NAME_CAP].upper()
+        names.append(f'{label} ×{n}' if n > 1 else label)
+
+    if not names:
+        return None        # nobody pops — no band, rather than an empty one
+
+    # Two spaces after the label: it is a separate span in the drawing, at
+    # reduced opacity, and a build that has not learnt that still reads it as
+    # a label rather than as the first name.
+    return {'text': 'POPPING  ' + ' · '.join(names),
+            'filled': strokes(player_id) > 0}
+
+
 # ---------------------------------------------------------------------------
 # The registry
 # ---------------------------------------------------------------------------

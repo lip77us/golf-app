@@ -167,6 +167,214 @@ class SidesLineTests(_Base):
             self.assertIn(side['colour'], ('blue', 'orange'))
 
 
+class SplitDigitTests(_Base):
+    """`2–1` entirely in orange says *orange leads*. It does not say which
+    digit is his, and the golfer has to hold a convention to work it out
+    (`RULINGS-team-cup-lock.md` §4)."""
+
+    def test_each_digit_wears_its_own_teams_colour(self):
+        self._play(1, 3, 4, 5, 5)
+        for h in range(2, 7):
+            self._play(h, 3, 4, 5, 5)
+        num = self._state(6)['number']
+        self.assertEqual([p['colour'] for p in num['parts']],
+                         ['blue', 'sep', 'orange'])
+        self.assertEqual(''.join(p['text'] for p in num['parts']), num['text'])
+
+    def test_text_stays_authoritative_and_parts_ride_alongside(self):
+        """**An optional field, never a rename.** `text` stays exactly as it
+        was and stays authoritative for every installed phone; old builds
+        ignore `parts`, so no phone goes dark and the server can start sending
+        them before the build that draws them."""
+        num = self._state(0)['number']
+        self.assertEqual(num['text'], '0–0')
+        self.assertIn('colour', num)
+        self.assertEqual(len(num['parts']), 3)
+
+    def test_level_needs_no_special_case(self):
+        """`0–0` with one digit of each colour is self-evidently level, so the
+        split does not have to know about it."""
+        num = self._state(0)['number']
+        self.assertEqual(num['colour'], 'neutral')
+        self.assertEqual([p['colour'] for p in num['parts']],
+                         ['blue', 'sep', 'orange'])
+
+    def test_the_separator_is_neither_sides_colour(self):
+        self.assertEqual(self._state(0)['number']['parts'][1],
+                         {'text': '–', 'colour': 'sep'})
+
+
+class _BandBase(TestCase):
+    """A net cup with a handicap spread — the case the band exists for.
+
+    Hole 1 is SI 7, hole 2 SI 3, hole 3 SI 15. A 3-handicap strokes on 2 and
+    not on 1 or 3; an 8 strokes on 1 and 2 and not on 3. That asymmetry is the
+    point — a band firing on every hole would tell nobody anything.
+    """
+
+    def setUp(self):
+        from services.triple_cup import setup_triple_cup
+        from ._helpers import (make_tee, make_round, make_foursome,
+                               make_player)
+        self.tee = make_tee()
+        self.round = make_round(self.tee.course, active_games=['triple_cup'])
+        self.round.primary_game = 'triple_cup'
+        self.round.save(update_fields=['primary_game'])
+        self.people = {
+            'reader': make_player('Tom Hayes', 3,  short_name='TOMMY'),
+            'mate'  : make_player('Lee Naylor', 0, short_name='LEE'),
+            'opp1'  : make_player('Sam Reid', 8,   short_name='SANDY'),
+            'opp2'  : make_player('Dave Moran', 0, short_name='DAN'),
+        }
+        self.fs = make_foursome(
+            self.round,
+            [(self.people['reader'], 3), (self.people['mate'], 0),
+             (self.people['opp1'], 8), (self.people['opp2'], 0)],
+            tee=self.tee)
+        self.pid = {k: p.id for k, p in self.people.items()}
+        setup_triple_cup(
+            self.fs,
+            team1_ids=[self.pid['reader'], self.pid['mate']],
+            team2_ids=[self.pid['opp1'], self.pid['opp2']],
+            handicap_mode='net')
+
+    def _band(self, thru, who='reader'):
+        from services.live_activity_triple_cup import triple_cup_activity_state
+        state = triple_cup_activity_state(
+            self.fs, player_id=self.pid[who] if who else None, thru=thru)
+        return state.get('ribbon'), state.get('ribbon_filled')
+
+    def _play(self, hole, a=4, b=4, c=4, d=4):
+        from services.triple_cup import calculate_triple_cup
+        from ._helpers import submit_hole
+        submit_hole(self.fs, hole, [
+            (self.pid['reader'], a), (self.pid['mate'], b),
+            (self.pid['opp1'], c), (self.pid['opp2'], d)])
+        calculate_triple_cup(self.fs)
+
+
+class PoppingBandTests(_BandBase):
+    """`POPPING  YOU · DAN · CHRIS` — the band carries the GROUP's strokes.
+
+    One golfer in the group is holding a phone, so the band should answer what
+    the group asks on the tee: who gets a stroke on this hole, all of them
+    (`handoff-foursome-formats/HANDOFF.md` §5).
+    """
+
+    def test_the_reader_is_YOU_and_is_always_first(self):
+        """He knows his name, and it is shorter than any surname."""
+        self._play(1)                       # hole in play is now 2, SI 3
+        text, filled = self._band(1)
+        self.assertTrue(text.startswith('POPPING  YOU'), text)
+        self.assertTrue(filled)
+
+    def test_the_hole_number_comes_off_the_band(self):
+        """The header says `HOLE 2` two rows below, and dropping it is what
+        buys the room for the names."""
+        self._play(1)
+        text, _ = self._band(1)
+        self.assertNotIn('HOLE', text)
+
+    def test_the_others_are_short_names_capped_at_five(self):
+        self._play(1)
+        text, _ = self._band(1)
+        self.assertIn('SANDY', text)
+        for part in text.replace('POPPING  ', '').split(' · '):
+            self.assertLessEqual(len(part.split(' ')[0]), 5, text)
+
+    def test_two_strokes_ride_the_name(self):
+        """A 21-handicap on the segment's SI-3 hole — SI + 18 <= 21, so the
+        second cycle lands. The multiplier rides the name rather than adding a
+        row."""
+        self.fs.memberships.filter(player_id=self.pid['opp1']).update(
+            playing_handicap=21)
+        self._play(1)
+        text, _ = self._band(1)
+        self.assertIn('SANDY ×2', text)
+
+    def test_outlined_when_the_strokes_are_in_the_group_but_none_are_his(self):
+        """One hue, two fills — the case that is not about him is the quieter
+        row, and the missing fill says so without him reading a name."""
+        text, filled = self._band(0)        # hole 1, SI 7: only the 21 strokes
+        self.assertEqual(text, 'POPPING  SANDY')
+        self.assertFalse(filled)
+
+    def test_no_band_at_all_when_nobody_in_the_group_pops(self):
+        """Not an empty one. The card is shorter on those holes and that is
+        correct."""
+        for h in (1, 2):
+            self._play(h)                   # hole in play is now 3, SI 15
+        self.assertEqual(self._band(2), (None, None))
+
+    def test_a_watcher_gets_no_band(self):
+        """A watcher has no strokes, so nothing pops for him."""
+        from services.live_activity_triple_cup import triple_cup_activity_state
+        self._play(1)
+        state = triple_cup_activity_state(self.fs, player_id=None, thru=1)
+        self.assertIsNone(state.get('ribbon'))
+
+    def test_a_finished_round_has_no_band(self):
+        """Running states only — a finished round has no hole in play, so the
+        band comes down rather than inventing a HOLE 19."""
+        from services.live_activity_triple_cup import triple_cup_final_state
+        for h in range(1, 19):
+            self._play(h)
+        state = triple_cup_final_state(self.fs, player_id=self.pid['reader'])
+        self.assertIsNone(state.get('ribbon'))
+
+    def test_the_foursomes_segment_falls_back_to_the_personal_band(self):
+        """**The one shape this form cannot describe.** Alternate shot
+        allocates a TEAM stroke and mirrors it onto both partners, so naming
+        golfers there would put two names up for one stroke on the ball — and
+        four names when both sides pop, which says nothing. The segment keeps
+        the shared personal band, which stays true.
+
+        Driven off a synthetic summary rather than a scored round: team
+        allowance on a level cup allocates nothing, so a played fixture would
+        assert on a branch it never entered.
+        """
+        from services.live_activity_triple_cup import _band
+        summary = {'matches': [{
+            'segment': 'foursomes', 'label': 'Foursomes',
+            'start_hole': 7, 'end_hole': 12,
+            'players': [
+                # Both partners carry the same TEAM map — which is exactly
+                # what makes naming golfers wrong here.
+                {'player_id': self.pid['reader'], 'strokes_by_hole': {10: 1}},
+                {'player_id': self.pid['mate'],   'strokes_by_hole': {10: 1}},
+                {'player_id': self.pid['opp1'],   'strokes_by_hole': {10: 0}},
+                {'player_id': self.pid['opp2'],   'strokes_by_hole': {10: 0}},
+            ],
+        }]}
+        band = _band(self.fs, summary, self.pid['reader'], 10)
+        self.assertEqual(band, {'text': 'POPPING ON HOLE 10', 'filled': True})
+
+    def test_the_foursomes_band_stays_down_when_the_readers_ball_has_none(self):
+        from services.live_activity_triple_cup import _band
+        summary = {'matches': [{
+            'segment': 'foursomes', 'label': 'Foursomes',
+            'start_hole': 7, 'end_hole': 12,
+            'players': [
+                {'player_id': self.pid['reader'], 'strokes_by_hole': {10: 0}},
+                {'player_id': self.pid['mate'],   'strokes_by_hole': {10: 0}},
+                {'player_id': self.pid['opp1'],   'strokes_by_hole': {10: 1}},
+                {'player_id': self.pid['opp2'],   'strokes_by_hole': {10: 1}},
+            ],
+        }]}
+        self.assertIsNone(_band(self.fs, summary, self.pid['reader'], 10))
+
+    def test_both_live_singles_are_read_not_just_the_readers(self):
+        """Holes 13–18 run two matches at once, so the group's allocation is
+        the union of whatever is live — not one match's."""
+        from services.live_activity_triple_cup import _group_alloc
+        from services.triple_cup import triple_cup_summary
+        for h in range(1, 14):
+            self._play(h)
+        alloc = _group_alloc(triple_cup_summary(self.fs), 14)
+        self.assertEqual(set(alloc), set(self.pid.values()),
+                         'every golfer live on the hole is in the allocation')
+
+
 class FooterTests(_Base):
 
     def test_the_stake_is_per_man(self):
@@ -397,6 +605,55 @@ class TeamCupTests(_TeamCupBase):
         self.assertIn('–', sides[0]['note'])
         self.assertNotIn('up', sides[0]['note'])
 
+    def test_it_names_the_segment_without_numbering_it(self):
+        """`in the singles 1` becomes `Playing singles` (RULINGS §4b).
+
+        The ordinal named which singles match inside the segment, which is not
+        something the reader needs on a lock screen — he knows which match he
+        is in, he is standing in it. Naming the segment is useful; numbering
+        it is not.
+        """
+        self._sweep(self.groups[0], range(1, 14))
+        note = self._state(13)['sides'][0]['note']
+        self.assertIn('Playing singles', note)
+        self.assertNotIn('in the', note)
+        self.assertNotIn('singles 1', note)
+
+    def test_the_group_sub_total_splits_the_same_way_as_the_headline(self):
+        """`2–0` in one colour has the identical defect one row down —
+        monochrome, so it does not say which figure is the reader's group.
+        One rule, both rows (RULINGS §4)."""
+        self._sweep(self.groups[0], range(1, 7))
+        side = self._state(6)['sides'][0]
+        self.assertEqual([p['colour'] for p in side['sub']['parts']],
+                         ['blue', 'sep', 'orange'])
+        self.assertEqual(''.join(p['text'] for p in side['sub']['parts']),
+                         side['sub']['text'])
+
+    def test_the_old_note_stays_whole_for_a_build_that_cannot_split_it(self):
+        """Additive, like `number.parts`. `note` stays authoritative and an
+        old build draws it whole; a build that knows `sub` and `note_short`
+        draws `names · sub · note_short`, which is the drawing."""
+        self._sweep(self.groups[0], range(1, 7))
+        side = self._state(6)['sides'][0]
+        self.assertIn(side['sub']['text'], side['note'])
+        self.assertIn(side['note_short'].lstrip('· '), side['note'])
+        self.assertTrue(side['note_short'].startswith('· Playing'))
+        # Nothing is said twice: the full note is the two halves joined, which
+        # is what makes either rendering complete on its own.
+        self.assertEqual(
+            side['note'],
+            f"· {side['sub']['text']}, {side['note_short'].lstrip('· ')}")
+
+    def test_leading_is_driven_rather_than_always_true(self):
+        """It was `True` in every fixture including the one where the reader's
+        group lost 0–4 (RULINGS §6). A field that is always true is a trap for
+        the next person who believes it, and this is a contract where
+        believing the wrong thing takes cards down."""
+        self._sweep(self.groups[0], range(1, 7), winner='team2')
+        self.assertFalse(self._state(6, who='A')['sides'][0]['leading'])
+        self.assertTrue(self._state(6, who='C')['sides'][0]['leading'])
+
     # -- the needle ---------------------------------------------------------
 
     def test_the_needle_replaces_the_cells_and_never_joins_them(self):
@@ -420,19 +677,33 @@ class TeamCupTests(_TeamCupBase):
 
     # -- the footer ---------------------------------------------------------
 
-    def test_the_footer_counts_groups_rather_than_money(self):
-        """Cup money settles in the team room, not on a lock screen."""
+    def test_the_footer_is_thru_alone(self):
+        """`2 groups still out` comes off the footer (RULINGS §4b).
+
+        It is real information and it is on the leaderboard, which is where
+        somebody who wants it will look. On the card it was competing for the
+        widest row with the one thing that has to be there. Cup money settles
+        in the team room, so neither slot has anything to say and the footer
+        keeps its row for `THRU` alone.
+        """
         self._sweep(self.groups[0], range(1, 7))
-        foot = self._state(6)['footer']
-        self.assertEqual(foot['context'], '2 groups still out')
+        state = self._state(6)
+        foot = state['footer']
+        self.assertEqual(foot['context'], '')
         self.assertEqual(foot['money'], '')
+        self.assertTrue(state['thru'].startswith('THRU '),
+                        'the locked corner is what the row is kept for')
 
     def test_a_group_is_counted_once_however_many_points_it_owes(self):
-        """Two Singles still on the course are one group still out."""
+        """Two Singles still on the course are one group still out.
+
+        Off the card now, but the cup pushes use this line for their body —
+        a sentence rather than a corner — so the counting rule still ships.
+        """
+        from services.live_activity_triple_cup import _groups_still_out
         self._sweep(self.groups[0], range(1, 19))
         self._sweep(self.groups[1], range(1, 7))
-        self.assertEqual(self._state(18)['footer']['context'],
-                         '1 group still out')
+        self.assertEqual(_groups_still_out(self.round), '1 group still out')
 
     # -- the palette --------------------------------------------------------
 
@@ -529,6 +800,35 @@ class CupPushTests(_TeamCupBase):
         alert = self._alert()
         self.assertIsNotNone(alert)
         self.assertIn('–', alert['title'])
+
+    def test_the_push_writes_the_score_leader_first(self):
+        """**Card order is colour; push order is the sentence** (RULINGS §2).
+
+        On the card, order is the only thing saying whose number is whose. In
+        a push the sentence names the leader before the score, so the order
+        carries nothing and is free to read naturally. A title that names a
+        team and then shows them losing is read as a bug by the only audience
+        that matters. Team 2 taking the lead 0–1 must read `1–0`.
+        """
+        self._sweep(self.groups[0], range(1, 7))                   # 1–0, blue
+        self._alert()
+        self._sweep(self.groups[1], range(1, 7), winner='team2')   # 1–1
+        self._alert()
+        self._sweep(self.groups[1], range(7, 13), winner='team2')  # 1–2
+        alert = self._alert()
+        self.assertEqual(alert['title'], 'Orange take the lead — 2–1')
+
+    def test_a_clinch_also_writes_the_winner_first(self):
+        self._sweep(self.groups[0], range(1, 7), winner='team2')
+        self._alert()
+        self._sweep(self.groups[0], range(7, 19), winner='team2')
+        self._sweep(self.groups[1], range(1, 13), winner='team2')
+        alert = self._alert()
+        self.assertIsNotNone(alert)
+        self.assertIn('take the Sheldon Cup', alert['title'])
+        won, lost = alert['title'].rsplit('— ', 1)[1].split('–')
+        self.assertGreater(float(won.replace('½', '.5')),
+                           float(lost.replace('½', '.5')))
 
     def test_extending_a_lead_fires_nothing(self):
         """The point is already on the card. This is the case that would have

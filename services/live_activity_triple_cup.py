@@ -50,6 +50,23 @@ matches, not four.** Both go on ONE sides line, surnames, yours first always.
 A row each measured 163pt, over the ceiling on its own. **The sides line is one
 row everywhere in this packet**, and that is a requirement rather than a
 preference.
+
+## Reserved and unused by this card
+
+Three keys are part of the required set and are always empty here. They cannot
+be removed without a build, and that is fine — but they are **reserved, not
+features that are switched off**, and nobody should fill them in to be helpful
+(`RULINGS-team-cup-lock.md` §6):
+
+* **`pips`** — `[]` in the team configuration, which draws the needle instead.
+  The casual configuration does use it, for four cells.
+* **`final`** — `null` in every state including the closing frame. This card
+  keeps its BOARD on sign-off; `closed` is what tells the widget.
+* **`footer.money`** — empty by design. **Cup money settles in the team room**,
+  so the personal slot the casual cards carry has nothing to say here.
+
+`footer.context` joined them on 22 Sep: `2 groups still out` is on the
+leaderboard, and the footer keeps its row for `THRU` alone.
 """
 from services.live_activity_registry import (hole_facts, hole_in_play,
                                              surname, thru_line)
@@ -66,6 +83,36 @@ def _score(v) -> str:
     """`3`, `2½`. Halves are real points here and a `.5` reads as a decimal."""
     whole, half = divmod(round(float(v or 0) * 2), 2)
     return f'{whole}½' if half else f'{whole}'
+
+
+def _number(a, b, colour_a, colour_b) -> dict:
+    """The headline, with each digit wearing its own team's colour.
+
+    `2–1` entirely in orange says *orange leads*. It does not say which digit
+    is his, and the golfer has to hold a convention to work it out. Colouring
+    them separately is strictly more information in the same pixels: it says
+    whose each number is, and it still says who leads — more plainly than the
+    old rule did, because the larger number now wears the leader's colour on
+    its own. `0–0` with one digit of each colour is self-evidently level, so
+    the neutral-white headline retires (`RULINGS-team-cup-lock.md` §4).
+
+    **It ships as an optional field, never a rename.** `text` stays exactly as
+    it was and stays authoritative for every installed phone; `parts` sits
+    alongside it, which old builds ignore and new builds prefer. No phone goes
+    dark, and the server can send parts before the build that draws them.
+
+    `colour` is kept too, for the same reason — it is what an old build paints
+    the whole string with.
+    """
+    lead = colour_a if a > b else (colour_b if b > a else 'neutral')
+    return {
+        'text'  : f'{_score(a)}–{_score(b)}',
+        'colour': lead,
+        # The separator is neither side's, so it is neither side's colour.
+        'parts' : [{'text': _score(a), 'colour': colour_a},
+                   {'text': '–',       'colour': 'sep'},
+                   {'text': _score(b), 'colour': colour_b}],
+    }
 
 
 def _live_match(summary, hole):
@@ -286,19 +333,100 @@ def _team_sides(summary, overall, hole, mine_is_t1, palette) -> list:
     t1 = float(overall.get('team1_points') or 0)
     t2 = float(overall.get('team2_points') or 0)
     mine, theirs = (t1, t2) if mine_is_t1 else (t2, t1)
+    my_colour, their_colour = ((palette[0], palette[1]) if mine_is_t1
+                               else (palette[1], palette[0]))
+    # **`leading` is driven, not hardcoded** (`RULINGS-team-cup-lock.md` §6).
+    # It was `True` in every fixture including the one where the reader's group
+    # lost 0–4, and the widget appears not to read it — a field that is always
+    # true is a trap for the next person who believes it, and this is a
+    # contract where believing the wrong thing takes cards down. It is a
+    # required key, so it cannot be dropped without a build; it is driven
+    # instead, and it means what the row is about: your group ahead in its own
+    # four points.
+    entry = {'names': 'Your Triple Cup',
+             'colour': my_colour,
+             'leading': mine > theirs}
+
     live = _live_match(summary, hole)
     if live is not None:
-        label = (live.get('label') or live.get('segment') or '').lower()
-        note = f'· {_score(mine)}–{_score(theirs)}, in the {label}'
-    elif mine > theirs:
-        note = f'· won {_score(mine)}–{_score(theirs)}'
+        # **`Playing singles`, not `in the singles 1`.** The ordinal named
+        # which singles match inside the segment, which is not something the
+        # reader needs on a lock screen — he knows which match he is in, he is
+        # standing in it. Naming the segment is useful; numbering it is not
+        # (`RULINGS-team-cup-lock.md` §4b). `segment` rather than `label` is
+        # what carries that: the segment name is the unnumbered one.
+        label = (live.get('segment') or live.get('label') or '').lower()
+        entry['note'] = f'· {_score(mine)}–{_score(theirs)}, Playing {label}'
+        # **The same split-digit rule, one row down** — `2–0` in one colour has
+        # the identical defect the headline had: monochrome, so it does not say
+        # which figure is the reader's group. Additive, like `number.parts`:
+        # `note` above stays authoritative and an old build draws it whole,
+        # while a build that knows these two draws `names · sub · note_short`,
+        # which is the drawing.
+        entry['sub'] = {
+            'text' : f'{_score(mine)}–{_score(theirs)}',
+            'parts': [{'text': _score(mine),   'colour': my_colour},
+                      {'text': '–',            'colour': 'sep'},
+                      {'text': _score(theirs), 'colour': their_colour}],
+        }
+        entry['note_short'] = f'· Playing {label}'
+        return [entry]
+
+    # The round is over. **No `sub` here, and that is not an oversight**: the
+    # verb already says which figure is the reader's, so the defect §4 exists
+    # to fix is absent, and every build draws this frame identically.
+    if mine > theirs:
+        entry['note'] = f'· won {_score(mine)}–{_score(theirs)}'
     elif theirs > mine:
-        note = f'· lost {_score(mine)}–{_score(theirs)}'
+        entry['note'] = f'· lost {_score(mine)}–{_score(theirs)}'
     else:
-        note = f'· halved {_score(mine)}–{_score(theirs)}'
-    return [{'names': 'Your Triple Cup', 'note': note,
-             'colour': palette[0] if mine_is_t1 else palette[1],
-             'leading': True}]
+        entry['note'] = f'· halved {_score(mine)}–{_score(theirs)}'
+    return [entry]
+
+
+def _group_alloc(summary, hole) -> dict:
+    """`{player_id: {hole: strokes}}` for every golfer live on this hole.
+
+    Triple Cup allocates per MATCH, and holes 13–18 have two matches running
+    at once, so the group's allocation is the union of whatever is live — not
+    one match's. `strokes_by_hole` is the same prospective map the score-entry
+    dots read, which is what lets the band fire on a hole nobody has scored.
+    """
+    out: dict = {}
+    for m in (summary.get('matches') or []):
+        if not ((m.get('start_hole') or 0) <= hole <= (m.get('end_hole') or 0)):
+            continue
+        for p in (m.get('players') or []):
+            pid = p.get('player_id')
+            by_hole = p.get('strokes_by_hole') or {}
+            if pid is None or not by_hole:
+                continue
+            # The summary's keys can arrive as strings through a cache.
+            out.setdefault(pid, {}).update(
+                {int(k): int(v or 0) for k, v in by_hole.items()})
+    return out
+
+
+def _band(foursome, summary, player_id, hole) -> dict | None:
+    """The popping band, or None — `triple_cup` only, for now.
+
+    **The foursomes segment is the one shape this form cannot describe.**
+    Alternate shot allocates a TEAM stroke and mirrors it onto both partners,
+    so naming golfers there would put two names up for one stroke on the ball
+    — and four names when both sides pop, which says nothing. The segment
+    falls back to the shared personal band, which stays true: the reader's own
+    ball gets a stroke on this hole. Design has not drawn the team form.
+    """
+    from services.live_activity_registry import (group_stroke_band,
+                                                 stroke_ribbon)
+    if not hole:
+        return None
+    alloc = _group_alloc(summary, hole)
+    live = _live_match(summary, hole)
+    if live is not None and live.get('segment') == 'foursomes':
+        text = stroke_ribbon(foursome, player_id, hole, alloc)
+        return {'text': text, 'filled': True} if text else None
+    return group_stroke_band(foursome, player_id, hole, alloc)
 
 
 def _cup_header(foursome, cup) -> str:
@@ -339,12 +467,6 @@ def _team_state(foursome, summary, cup, *, player_id, thru, mine_is_t1):
     total = float(cup.get('total_possible') or 0)
 
     palette = _cup_palette(cup)
-    if t1 > t2:
-        colour = palette[0]
-    elif t2 > t1:
-        colour = palette[1]
-    else:
-        colour = 'neutral'
 
     # **Your own match cannot go in this slot.** The headline now counts
     # twenty-four points and eleven other golfers, and a `1 up` beside it
@@ -363,11 +485,19 @@ def _team_state(foursome, summary, cup, *, player_id, thru, mine_is_t1):
     else:
         state = {'word': _score(cup.get('to_win')), 'to_play': 'TO WIN'}
 
+    band = _band(foursome, summary, player_id, hole)
+
     return {
         'kind'  : KIND,
         'header': {'game': _cup_header(foursome, cup),
                    'segment': hole_facts(foursome, player_id, hole)},
-        'number': {'text': f'{_score(t1)}–{_score(t2)}', 'colour': colour},
+        # The band names the group's strokes rather than the reader's alone
+        # — see `live_activity_registry.group_stroke_band`. `ribbon_filled` is
+        # optional and additive: an old build draws the text in the shipped
+        # solid gold, which is right for the case it is most often in.
+        **({'ribbon': band['text'],
+            'ribbon_filled': band['filled']} if band else {}),
+        'number': _number(t1, t2, palette[0], palette[1]),
         'sides' : _team_sides(summary, overall, hole, mine_is_t1, palette),
         'state' : state,
         # **The needle instead of the cells.** Twenty-four points as discrete
@@ -379,7 +509,14 @@ def _team_state(foursome, summary, cup, *, player_id, thru, mine_is_t1):
         'needle': {palette[0]: (t1 / total) if total else 0.0,
                    palette[1]: (t2 / total) if total else 0.0},
         'final' : None,
-        'footer': {'context': _groups_still_out(foursome.round), 'money': ''},
+        # **`2 groups still out` comes off** (`RULINGS-team-cup-lock.md` §4b).
+        # It is real information and it is on the leaderboard, which is where
+        # somebody who wants it will look. On the card it was competing for the
+        # widest row with the one thing that has to be there, and `THRU` is the
+        # locked corner. The footer keeps its row and its height — `THRU`
+        # alone, right-aligned. `_groups_still_out` stays: the cup pushes use
+        # it for their body, which is a sentence rather than a corner.
+        'footer': {'context': '', 'money': ''},
         'thru'  : thru_line(played, gross_to_par(summary, player_id)),
     }
 
@@ -417,15 +554,6 @@ def triple_cup_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         return _team_state(foursome, summary, cup, player_id=player_id,
                            thru=thru, mine_is_t1=mine_is_t1)
 
-    # The headline is the CUP, and it wears the leader's colour. Never mint —
-    # mint is the app's colour, not a side's.
-    if t1 > t2:
-        colour = 'blue'
-    elif t2 > t1:
-        colour = 'orange'
-    else:
-        colour = 'neutral'
-
     # The right-hand slot: the live segment and how its point is going, unless
     # the cup can no longer be lost.
     if _cannot_lose(t1, t2, available):
@@ -447,11 +575,18 @@ def triple_cup_activity_state(foursome, *, player_id=None, thru=None) -> dict:
     sides = _casual_sides(summary, live, hole, player_id, mine_is_t1)
 
     unit = float((summary.get('money') or {}).get('bet_unit') or 0)
+    band = _band(foursome, summary, player_id, hole)
     return {
         'kind'  : KIND,
         'header': {'game': 'TRIPLE CUP',
                    'segment': hole_facts(foursome, player_id, hole)},
-        'number': {'text': f'{_score(t1)}–{_score(t2)}', 'colour': colour},
+        **({'ribbon': band['text'],
+            'ribbon_filled': band['filled']} if band else {}),
+        # The casual cup's headline has the identical defect and comes off the
+        # same builder, so it gets the same split. Position is the palette here
+        # — team 1 blue — which is the app's own convention everywhere else on
+        # this card.
+        'number': _number(t1, t2, 'blue', 'orange'),
         'sides' : sides,
         'state' : state,
         # Four cells are the FORMAT, not a guess — which is why this card can
@@ -547,9 +682,7 @@ def triple_cup_final_state(foursome, *, player_id=None) -> dict:
             'header': {'game': _cup_header(foursome, cup),
                        'segment': verdict},
             'closed': True,
-            'number': {'text': f'{_score(c1)}–{_score(c2)}',
-                       'colour': (palette[0] if c1 > c2
-                                  else (palette[1] if c2 > c1 else 'neutral'))},
+            'number': _number(c1, c2, palette[0], palette[1]),
             'sides' : _team_sides(summary, overall, None, mine_is_t1, palette),
             'state' : state,
             'pips'  : [],
@@ -591,9 +724,7 @@ def triple_cup_final_state(foursome, *, player_id=None) -> dict:
         'kind'  : KIND,
         'header': {'game': 'TRIPLE CUP', 'segment': _cup_word(mine, theirs)},
         'closed': True,
-        'number': {'text': f'{_score(t1)}–{_score(t2)}',
-                   'colour': ('blue' if t1 > t2
-                              else ('orange' if t2 > t1 else 'neutral'))},
+        'number': _number(t1, t2, 'blue', 'orange'),
         'sides' : [{'names': line, 'colour': '', 'leading': False}],
         'state' : {'word': _cash(amount) if amount else 'EVEN',
                    'to_play': 'WINNERS TAKE ALL', 'colour': 'mint'},
