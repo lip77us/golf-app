@@ -1865,7 +1865,19 @@ class _FoursomeCard extends StatelessWidget {
             // one.  Cup rounds also hide "configure games" since games
             // are fixed at tournament setup — for them the menu is
             // empty and we hide the more-vert icon entirely.
-            if (canManage && !isComplete && !isCupRound) ...[
+            // **A team names itself.** The rest of this menu is the TD's, but
+            // on a Foursome Play round the group IS the team, and asking the
+            // organiser to type six names for men standing on the tee with
+            // their own phones is work nobody wanted. The server already
+            // allowed it — `foursome_for_scorer` takes any phone-matched
+            // MEMBER of the foursome, not only a designated scorer — so this
+            // menu was the whole of the restriction.
+            //
+            // Your own group only: `isMyGroup`. A golfer renaming the group
+            // behind him is not a thing to leave open, and the TD keeps the
+            // reach to rename any of them.
+            if ((canManage || (isTeamPlayRound && isMyGroup))
+                && !isComplete && !isCupRound) ...[
               const Spacer(),
               PopupMenuButton<String>(
                 icon: Icon(
@@ -1873,7 +1885,9 @@ class _FoursomeCard extends StatelessWidget {
                   size: 20,
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
-                tooltip: 'Tournament director actions',
+                tooltip: canManage
+                    ? 'Tournament director actions'
+                    : 'Name your team',
                 padding: EdgeInsets.zero,
                 onSelected: (action) {
                   switch (action) {
@@ -1889,7 +1903,10 @@ class _FoursomeCard extends StatelessWidget {
                   }
                 },
                 itemBuilder: (_) => [
-                  PopupMenuItem(
+                  // Configuring games and moving a start hole change what the
+                  // whole round is playing, so they stay with the organiser
+                  // even though a team member can now open this menu.
+                  if (canManage) PopupMenuItem(
                     value: 'configure_games',
                     child: Row(children: [
                       Icon(Icons.sports_golf, size: 18,
@@ -1913,7 +1930,7 @@ class _FoursomeCard extends StatelessWidget {
                   // Shotgun start — per-group starting hole. Only meaningful
                   // with more than one group (casual single-foursome rounds set
                   // the start on the round's Advanced tab instead).
-                  if (allFoursomes.length > 1)
+                  if (canManage && allFoursomes.length > 1)
                     PopupMenuItem(
                       value: 'set_start',
                       child: Row(children: [

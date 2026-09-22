@@ -15,6 +15,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import Account
@@ -352,6 +353,69 @@ class TeamPlayEndpointTests(TestCase):
         r = self.client.post(reverse('api-team-play-team', args=[pine.id]),
                              {'name': 'A' * 40}, format='json')
         self.assertEqual(len(r.json()['name']), 16)
+
+    # -- who may name a team ---------------------------------------------
+
+    def _golfer_on(self, foursome, username):
+        """A golfer with their OWN Halved account, phone-matched onto a
+        membership in `foursome` — the ordinary case: the TD owns the
+        tournament and the players are in accounts of their own."""
+        phone = '+13105550111' if username == 'pine_player' else '+13105550222'
+        their_acct = Account.objects.create(name=f'{username} account')
+        user = User.objects.create_user(username=username, account=their_acct)
+        user.phone = phone
+        user.phone_verified_at = timezone.now()
+        user.save(update_fields=['phone', 'phone_verified_at'])
+        member = foursome.memberships.first()
+        member.player.phone = phone
+        member.player.save(update_fields=['phone'])
+        client = APIClient()
+        client.force_authenticate(user)
+        return client
+
+    def test_a_golfer_can_name_his_own_team(self):
+        """Asking the organiser to type a name for every team, for men
+        standing on the tee holding their own phones, is work nobody wanted.
+        The player is in a DIFFERENT account — the server reaches him as a
+        phone-matched member of the foursome, not as an account member."""
+        self._configure()
+        pine = self.teams['Pine']
+        client = self._golfer_on(pine, 'pine_player')
+        r = client.post(reverse('api-team-play-team', args=[pine.id]),
+                        {'name': 'The Sandbaggers'}, format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['name'], 'The Sandbaggers')
+        self.assertEqual(r.json()['colour'], 'Pine')
+
+    def test_a_golfer_cannot_name_the_team_behind_him(self):
+        self._configure()
+        pine, dune = self.teams['Pine'], self.teams['Dune']
+        client = self._golfer_on(pine, 'pine_player')
+        r = client.post(reverse('api-team-play-team', args=[dune.id]),
+                        {'name': 'Not Their Name'}, format='json')
+        self.assertEqual(r.status_code, 404)
+        dune.refresh_from_db()
+        self.assertEqual(dune.name, '')
+
+    def test_a_stranger_cannot_name_anybody(self):
+        self._configure()
+        pine = self.teams['Pine']
+        outsider_acct = Account.objects.create(name='Someone else')
+        outsider = User.objects.create_user(username='outsider',
+                                            account=outsider_acct)
+        client = APIClient()
+        client.force_authenticate(outsider)
+        r = client.post(reverse('api-team-play-team', args=[pine.id]),
+                        {'name': 'Hello'}, format='json')
+        self.assertEqual(r.status_code, 404)
+
+    def test_the_organiser_can_still_name_any_team(self):
+        self._configure()
+        for colour in ('Pine', 'Dune'):
+            fs = self.teams[colour]
+            r = self.client.post(reverse('api-team-play-team', args=[fs.id]),
+                                 {'name': f'{colour} XI'}, format='json')
+            self.assertEqual(r.status_code, 200, r.content)
 
 
 class WizardEndToEndTests(TestCase):
