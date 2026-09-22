@@ -645,6 +645,23 @@ def _banker(foursome, player_id, *, final):
                                  thru=holes_played(foursome))
 
 
+def _foursome(foursome, player_id, *, final, slug):
+    """Scramble, Shamble, Better Ball and Irish Rumble — one card.
+
+    All four put a GROUP on the board against a field of groups, and the three
+    figures a golfer wants off the tee are the same in every one of them: his
+    team's net to par, his place, and the leader with the gap. Four builders
+    differing by a title would drift apart within a release, so the slug picks
+    an adapter and the composition is shared.
+    """
+    from services import live_activity_foursome as fs
+    build = {'scramble'    : fs.scramble_state,
+             'better_ball' : fs.better_ball_state,
+             'irish_rumble': fs.irish_rumble_state}[slug]
+    return build(foursome, player_id=player_id, final=final,
+                 thru=None if final else holes_played(foursome))
+
+
 BUILDERS = {
     'sixes'   : _sixes,
     'banker'  : _banker,
@@ -681,18 +698,44 @@ BUILDERS = {
     # nassau_nine still rides the NassauGame model as one match but is a
     # PARTIAL round — its holes-remaining is not 18 minus played, so it does
     # not fit this card's state slot and is not drawn.
+    #
+    # The four foursome formats land on ONE card, the way singles and fourball
+    # land on `match`. What differs between them is a title and one header
+    # corner; what they share is the whole composition.
+    'scramble'    : _foursome,
+    'better_ball' : _foursome,
+    'irish_rumble': _foursome,
+    #
+    # **Shamble is drawn but not registered, and the reason is not this card.**
+    # The packet lists it as the fourth game on this layout, and the layout
+    # would serve it unchanged — but a shamble in this app is a TEAM PLAY
+    # format, and `team_play` is a marker on `tournament.active_games` with no
+    # `GameMeta` and no round-level slug. `primary_game(rnd)` can therefore
+    # never return `shamble`, so a builder keyed on it is a branch nothing can
+    # reach.
+    #
+    # Giving it a card needs the prior question answered first: what slug owns
+    # a Team Play ROUND's lock screen. That is a Team Play decision, not a
+    # foursome-formats one, and guessing it here would put a dead key in the
+    # contract that reads as a shipped feature.
+    # `services.live_activity_foursome.shamble_state` is written and tested
+    # against the Team Play board, so registering it is one line on the day
+    # that question is answered.
 }
 
 # Builders that need to know which slug selected them, because one card serves
 # more than one game.
-_SLUG_AWARE = {'match_18', 'fourball'}
+_SLUG_AWARE = {'match_18', 'fourball',
+               'scramble', 'better_ball', 'irish_rumble'}
 
 # slug -> the card `kind` its builder declares, where that differs from the
 # slug. Only needed for a builder serving several games.
 CARD_KIND = {'match_18': 'match', 'fourball': 'match',
              'sequoya_threes': 'sequoya',
              'low_net_round': 'stroke_play',
-             'points_531': 'points'}
+             'points_531': 'points',
+             'scramble': 'foursome',
+             'better_ball': 'foursome', 'irish_rumble': 'foursome'}
 
 # Cards no client in the wild can draw yet.
 #
@@ -735,7 +778,13 @@ CARD_KIND = {'match_18': 'match', 'fourball': 'match',
 # Empty as of 2.9.0+37, the build that draws all seven. They came off
 # together because they went on together — the layouts landed across one
 # stretch of work and no build carried any of them until this one.
-UNSHIPPED_KINDS: set = set()
+# `foursome` is the next one, and it goes in the day its builder is written —
+# which is the shape this set exists for. Scramble, Shamble, Better Ball and
+# Irish Rumble have NO card today, so an ungated kind would replace nothing at
+# all with a lock-screen nag pointing at an update that does not exist. It
+# comes out in the commit that bumps the build carrying `FoursomeBoardView`,
+# and not before.
+UNSHIPPED_KINDS: set = {'foursome'}
 
 
 def card_kind(slug: str) -> str:

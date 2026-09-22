@@ -696,6 +696,10 @@ const List<GameMeta> kGameCatalog = [
     requiresMultiFoursome: true,
     minPlayers           : 2,
     excludes             : {GameIds.betterBall},
+    // The group-vs-field card: the team's net to par, your place, and the
+    // leader with the gap. The header's yardage becomes the ball count, which
+    // is the one number that changes what the group does on the tee.
+    hasLiveActivity      : true,
   ),
   GameMeta(
     id                   : GameIds.betterBall,
@@ -710,6 +714,10 @@ const List<GameMeta> kGameCatalog = [
     // One round runs one of them. Enforced on the server in both services
     // too — this is the half that stops the TD reaching a form he cannot save.
     excludes             : {GameIds.irishRumble},
+    // The same card as Irish Rumble's, with the count in the title instead of
+    // the header — it cannot change mid-round, so a corner repeating it would
+    // be the same three words eighteen times.
+    hasLiveActivity      : true,
   ),
   GameMeta(
     id                   : GameIds.pinkBall,
@@ -731,6 +739,12 @@ const List<GameMeta> kGameCatalog = [
     requiresMultiFoursome: true,
     enabled              : false,   // not yet implemented
     isAltShot            : true,    // one team ball → no individual side games
+    // The card is written and the engine behind it (services/scramble.py) is
+    // complete, so this is true the day the picker entry is enabled — and
+    // inert until then, because a game nobody can start starts no activity.
+    // It is set now rather than later so the three-sided gate stays honest:
+    // a slug with a builder and no flag is a card the phone never asks for.
+    hasLiveActivity      : true,
   ),
 ];
 

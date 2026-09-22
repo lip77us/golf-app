@@ -242,7 +242,7 @@ class _BandBase(TestCase):
         from services.live_activity_triple_cup import triple_cup_activity_state
         state = triple_cup_activity_state(
             self.fs, player_id=self.pid[who] if who else None, thru=thru)
-        return state.get('ribbon'), state.get('ribbon_filled')
+        return state.get('ribbon'), state.get('filled')
 
     def _play(self, hole, a=4, b=4, c=4, d=4):
         from services.triple_cup import calculate_triple_cup

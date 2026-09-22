@@ -492,11 +492,14 @@ def _team_state(foursome, summary, cup, *, player_id, thru, mine_is_t1):
         'header': {'game': _cup_header(foursome, cup),
                    'segment': hole_facts(foursome, player_id, hole)},
         # The band names the group's strokes rather than the reader's alone
-        # — see `live_activity_registry.group_stroke_band`. `ribbon_filled` is
+        # — see `live_activity_registry.group_stroke_band`. `filled` is
         # optional and additive: an old build draws the text in the shipped
-        # solid gold, which is right for the case it is most often in.
+        # solid gold, which is right for the case it is most often in. The key
+        # is one word because a snake_case one would force a `CodingKeys` enum
+        # onto the Swift `ContentState`, where a missed case takes the whole
+        # card down.
         **({'ribbon': band['text'],
-            'ribbon_filled': band['filled']} if band else {}),
+            'filled': band['filled']} if band else {}),
         'number': _number(t1, t2, palette[0], palette[1]),
         'sides' : _team_sides(summary, overall, hole, mine_is_t1, palette),
         'state' : state,
@@ -581,7 +584,7 @@ def triple_cup_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         'header': {'game': 'TRIPLE CUP',
                    'segment': hole_facts(foursome, player_id, hole)},
         **({'ribbon': band['text'],
-            'ribbon_filled': band['filled']} if band else {}),
+            'filled': band['filled']} if band else {}),
         # The casual cup's headline has the identical defect and comes off the
         # same builder, so it gets the same split. Position is the palette here
         # — team 1 blue — which is the app's own convention everywhere else on

@@ -49,12 +49,31 @@ struct SixesActivityAttributes: ActivityAttributes {
             let game: String
             /// `SEGMENT 2 · HOLES 7-12`, or `EXTRA HOLES · 5-6`.
             let segment: String
+            /// The gold TAIL on the locked corner — Irish Rumble's `ALL 4` on
+            /// the closer, where all four balls count and the format's whole
+            /// shape arrives at once. Gold because gold means **the stakes
+            /// just went up**, the same rule that keeps Skins' carry and
+            /// Banker's counter-double amber.
+            ///
+            /// It is the first use of gold outside the popping band, which
+            /// design raises as a question rather than a ruling — so it is its
+            /// own field, and answering it the other way is deleting this
+            /// rather than unpicking a string.
+            var tail: String? = nil
             /// A small chip between the game and the hole — Las Vegas' `CARRY`
             /// while a tie is actually carrying. **A state of the round, not a
             /// setting:** the setting is already readable from the state slot
             /// that created it, and a permanent chip would say the round has
             /// carries without saying which hole is carrying one.
             var chip: String? = nil
+        }
+
+        /// One run of a split headline — a digit, or the separator between
+        /// two of them.
+        struct Part: Codable, Hashable {
+            let text: String
+            /// A side's name, or `sep` for the dash, which belongs to neither.
+            let colour: String
         }
 
         struct Number: Codable, Hashable {
@@ -70,9 +89,34 @@ struct SixesActivityAttributes: ActivityAttributes {
             let text: String
             /// `blue` | `orange` | `neutral`.
             let colour: String
+            /// **Each digit in its own team's colour**, where a card has two
+            /// of them (`RULINGS-team-cup-lock.md` §4).
+            ///
+            /// `2–1` entirely in orange says *orange leads*. It does not say
+            /// which digit is his, and the golfer has to hold a convention to
+            /// work it out. This is strictly more information in the same
+            /// pixels: it says whose each number is, and it still says who
+            /// leads — more plainly than the old rule did, because the larger
+            /// number now wears the leader's colour on its own. `0–0` with one
+            /// digit of each colour is self-evidently level, so the
+            /// neutral-white headline retires with no special case.
+            ///
+            /// **Optional, and `text` stays authoritative.** The server sends
+            /// both; a build that does not know this field draws the string as
+            /// it always did, which is what let the server start sending parts
+            /// before this build shipped.
+            var parts: [Part]? = nil
         }
 
         struct Side: Codable, Hashable {
+            /// `LEADER` / `NEXT` / `WON BY` — the foursome card's one row,
+            /// which is a label, a team, their score and the gap.
+            ///
+            /// **The label flips rather than the row moving.** A reader in
+            /// second is told who leads; a reader leading is told who is
+            /// coming, because the number he needs is the same one seen from
+            /// the other side.
+            var label: String? = nil
             let names: String
             let colour: String
             let leading: Bool
@@ -96,6 +140,30 @@ struct SixesActivityAttributes: ActivityAttributes {
             /// The number as it was before a birdie flipped it — `67` struck
             /// through, then `76`. **The swing is shown rather than asserted.**
             var was: String? = nil
+            /// The group's sub-total on the team cup's sides line — `2–0`,
+            /// split the same way as the headline. `2–0` in one colour has the
+            /// identical defect one row down: monochrome, so it does not say
+            /// which figure is the reader's group. One rule, both rows.
+            var sub: Sub? = nil
+            /// The qualifier WITHOUT the sub-total in it — `· Playing
+            /// singles`.
+            ///
+            /// `note` above still carries the whole string and stays
+            /// authoritative, so an old build draws `· 2–0, Playing singles`
+            /// exactly as it always did. A build that knows `sub` draws
+            /// `names · sub · noteShort` instead, and must use this rather
+            /// than `note` or the score appears twice.
+            var noteShort: String? = nil
+
+            struct Sub: Codable, Hashable {
+                let text: String
+                let parts: [Part]
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case label, names, colour, leading, note, figure, was, sub
+                case noteShort = "note_short"
+            }
         }
 
         struct MatchState: Codable, Hashable {
@@ -238,7 +306,30 @@ struct SixesActivityAttributes: ActivityAttributes {
         /// `POPPING ON HOLE 13` — the gold band, when the reader gets a stroke
         /// on the hole in play. Gold appears nowhere else in the system, so it
         /// cannot be mistaken for a state. Running states only.
+        ///
+        /// On `triple_cup` it carries the GROUP's strokes instead —
+        /// `POPPING  YOU · DAN · CHRIS` — because one golfer in the group is
+        /// holding the phone and what the group asks on the tee is who gets a
+        /// stroke here, all of them. The hole number comes off there; the
+        /// header says it two rows below, and dropping it is what buys the
+        /// room for the names.
         var ribbon: String? = nil
+        /// **Solid gold means a stroke of YOURS is in play.** The same band as
+        /// a gold outline means there are strokes in your group and none of
+        /// them is his — one hue, two fills, and the case that is not about
+        /// him is the quieter row. He knows which it is without reading a
+        /// name.
+        ///
+        /// Absent means filled, which is right for every card that still sends
+        /// the personal band: that one only appears when it IS about him.
+        ///
+        /// **`filled`, not `ribbon_filled`**, and the one word is the whole
+        /// reason: a snake_case key at this level would force a `CodingKeys`
+        /// enum onto `ContentState`, where one missed case silently stops the
+        /// WHOLE state decoding — the same argument that named `ruler` rather
+        /// than `track_holes`. The cost is a key that has to say in a comment
+        /// what it belongs to; the alternative is a card that goes dark.
+        var filled: Bool? = nil
         /// The locked LOWER-RIGHT corner: `THRU 12 · +7`. Survives the
         /// always-on state, where the stake half of the footer is dropped.
         /// (The locked UPPER-RIGHT rides in `header.segment`.)
@@ -395,6 +486,10 @@ enum Sixes {
         // appears in no other card.
         case "gold":   return gold
         case "amber":  return amber
+        // The dash between two split digits. It belongs to neither side, so
+        // it is neither side's colour — and it is the thing that keeps the
+        // pair reading as one score rather than two numbers.
+        case "sep":    return .white.opacity(0.50)
         case "dim":    return .white.opacity(0.55)
         default:       return .white.opacity(0.90)
         }

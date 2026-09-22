@@ -134,7 +134,10 @@ private struct LockScreenView: View {
                                      "match", "survivor", "sequoya", "banker",
                                      "stableford", "stroke_play", "points",
                                      "wolf", "triple_cup", "vegas",
-                                     "triple_nassau"]
+                                     "triple_nassau",
+                                     // Scramble, Shamble, Better Ball and
+                                     // Irish Rumble — four games, one card.
+                                     "foursome"]
 
     let state: SixesActivityAttributes.ContentState
     var isStale: Bool = false
@@ -167,12 +170,27 @@ private struct LockScreenView: View {
                 VegasBoardView(state: state, isStale: isStale)
             } else if state.kind == "triple_nassau" {
                 TripleNassauBoardView(state: state, isStale: isStale)
+            } else if state.kind == "foursome" {
+                FoursomeBoardView(state: state, isStale: isStale)
             } else {
                 BoardView(state: state, isStale: isStale)
             }
         }
+        // **12, not 13** — the slot budget's figure
+        // (`handoff-foursome-formats/HANDOFF.md` §6), taken across the set
+        // rather than on one card, because the budget is the shared spec and a
+        // card with its own padding is a card that has to be measured on its
+        // own. It is mechanical and cuts nothing: 2pt back, on every card.
+        //
+        // Worth recording what it does NOT buy. The ruling costs the cup card
+        // at 147 against a 136 budget and calls the gap 11pt of padding and
+        // rhythm; the rhythm here was already 9, with 6 inside the headline
+        // block, which is exactly what the budget allows. So the only
+        // deviation was this 1pt a side, and the remaining ~9pt is in the
+        // audit rather than in the layout. Measure on a device before trusting
+        // the headroom.
         .padding(.horizontal, 16)
-        .padding(.vertical, 13)
+        .padding(.vertical, 12)
     }
 }
 
@@ -499,6 +517,41 @@ private struct SurvivorSidesView: View {
     }
 }
 
+/// A headline whose digits each wear their own team's colour.
+///
+/// `2–1` entirely in orange says *orange leads*. It does not say which digit
+/// is his, and the golfer has to hold a convention to work it out. Split, it
+/// is strictly more information in the same pixels — whose each number is, and
+/// still who leads, more plainly than before because the larger number now
+/// wears the leader's colour on its own (`RULINGS-team-cup-lock.md` §4).
+///
+/// **It falls back to the plain string whenever `parts` is absent**, which is
+/// every card but the cup and every payload written before this build.
+private struct SplitNumber: View {
+    let number: SixesActivityAttributes.ContentState.Number
+    var size: CGFloat = 32
+    var tracking: CGFloat = -1
+
+    var body: some View {
+        Group {
+            if let parts = number.parts, !parts.isEmpty {
+                // One concatenated Text, not an HStack: the digits and the
+                // dash have to sit on one baseline with the font's own
+                // kerning between them, and a stack would space them itself.
+                parts.reduce(Text("")) { acc, part in
+                    acc + Text(part.text).foregroundColor(Sixes.side(part.colour))
+                }
+            } else {
+                Text(number.text).foregroundColor(Sixes.side(number.colour))
+            }
+        }
+        .font(Sixes.display(size, .bold))
+        .tracking(tracking)
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+    }
+}
+
 /// `POPPING ON HOLE 13`. Gold is used nowhere else in the system, which is what
 /// stops the band being read as a state.
 ///
@@ -511,6 +564,14 @@ private struct SurvivorSidesView: View {
 private struct StrokeRibbon: View {
     let text: String
     var tone: String = "gold"
+    /// **Solid means a stroke of YOURS is in play**; a gold outline means the
+    /// strokes are in your group and none of them is his. One hue, two fills,
+    /// and the case that is not about him is the quieter row — he knows which
+    /// it is without reading a name.
+    ///
+    /// Defaults to true, which is right for every card still sending the
+    /// personal band: that one only appears when it IS about him.
+    var filled: Bool = true
 
     private var fill: [Color] {
         tone == "blue"
@@ -519,7 +580,8 @@ private struct StrokeRibbon: View {
     }
 
     private var ink: Color {
-        Color(hex: tone == "blue" ? 0x0C2438 : 0x3A2703)
+        filled ? Color(hex: tone == "blue" ? 0x0C2438 : 0x3A2703)
+               : Color(hex: tone == "blue" ? 0xBBD9F7 : 0xE9C063)
     }
 
     var body: some View {
@@ -535,17 +597,36 @@ private struct StrokeRibbon: View {
         // restructured, which every card would feel. A gold band that is
         // visible beats a perfectly specified one that is not; the bleed can
         // come back with that refactor.
+        // **Drawn at the height of its own label** — 12pt, no vertical
+        // padding (`handoff-foursome-formats/HANDOFF.md` §5). It was a 22pt
+        // padded capsule, which with the 9pt rhythm above it cost 31pt: more
+        // than the whole headroom under the 160pt ceiling, and the reason the
+        // band could not go on the cup card at all. At label height it is 21
+        // with its rhythm, and the card lands inside.
         Text(text)
-            .font(Sixes.body(9.5, .bold))
-            .tracking(0.5)
+            .font(Sixes.body(10, .bold))
+            .tracking(0.9)
             .foregroundStyle(ink)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, minHeight: 12, alignment: .leading)
+            .padding(.horizontal, 7)
             .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(LinearGradient(colors: fill,
-                                         startPoint: .top, endPoint: .bottom))
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(filled
+                          ? AnyShapeStyle(LinearGradient(
+                                colors: fill,
+                                // **Left to right, not top to bottom.** At
+                                // twelve points a vertical gradient is two
+                                // bands of colour in six pixels each; across
+                                // the card it reads as one piece of gold.
+                                startPoint: .leading, endPoint: .trailing))
+                          : AnyShapeStyle(Color.clear))
+            )
+            .overlay(
+                // Unfilled is thinner ink by definition, so this is the one
+                // value here a drawing cannot settle — check it on a device
+                // under always-on (~74% dim) before the cup.
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .strokeBorder(filled ? Color.clear : ink, lineWidth: 1)
             )
     }
 }
@@ -943,7 +1024,8 @@ private struct TripleCupBoardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             if let ribbon = state.ribbon, !ribbon.isEmpty {
-                StrokeRibbon(text: ribbon, tone: "gold")
+                StrokeRibbon(text: ribbon, tone: "gold",
+                             filled: state.filled ?? true)
             }
             HeaderView(header: state.header)
 
@@ -951,13 +1033,10 @@ private struct TripleCupBoardView: View {
                 HStack(alignment: .lastTextBaseline, spacing: 11) {
                     // Never mint. Mint is the app's colour, not a side's, and
                     // this number belongs to whichever side is ahead — or to
-                    // neither, which is what `neutral` draws.
-                    Text(state.number.text)
-                        .font(Sixes.display(32, .bold))
-                        .tracking(-1)
-                        .foregroundStyle(Sixes.side(state.number.colour))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                    // neither, which is what `neutral` draws. With `parts` it
+                    // belongs to BOTH, one digit each, which is more than the
+                    // single colour could say.
+                    SplitNumber(number: state.number)
                     Spacer(minLength: 8)
                     StateView(state: state.state,
                               colour: state.state.colour.map(Sixes.side))
@@ -968,9 +1047,9 @@ private struct TripleCupBoardView: View {
             // **Four cells or one needle, never both.** Which one is the
             // difference between the two games this card serves, and the
             // server sends exactly the one that applies.
-            if let needle = state.needle {
+            if let needle = state.needle, needle.blue + needle.orange > 0 {
                 CupNeedleView(needle: needle)
-            } else {
+            } else if !state.pips.isEmpty {
                 CupCellsView(cells: state.pips)
             }
             TeeRow(tee: state.tee)
@@ -1253,10 +1332,31 @@ private struct CupSidesView: View {
                         .foregroundStyle(side.leading
                                          ? Sixes.side(side.colour)
                                          : .white.opacity(0.62))
-                    // The standing, at 55% beside a name at full weight. That
-                    // difference is what lets one line carry two matches and
-                    // still read as two things rather than one long string.
-                    if let note = side.note, !note.isEmpty {
+                    // **The sub-total, split the same way as the headline.**
+                    // `2–0` in one colour has the identical defect one row
+                    // down: monochrome, so it does not say which figure is the
+                    // reader's group. One rule, both rows (RULINGS §4).
+                    //
+                    // When `sub` is present the qualifier MUST come from
+                    // `noteShort`, not `note` — `note` still carries the whole
+                    // string for a build that cannot split it, and drawing
+                    // both would print the score twice.
+                    if let sub = side.sub, !sub.parts.isEmpty {
+                        sub.parts.reduce(Text("")) { acc, part in
+                            acc + Text(part.text)
+                                .foregroundColor(Sixes.side(part.colour))
+                        }
+                        .font(Sixes.body(12.5, .bold))
+                        if let tail = side.noteShort, !tail.isEmpty {
+                            Text(tail)
+                                .font(Sixes.body(12.5, .semibold))
+                                .foregroundStyle(.white.opacity(0.55))
+                        }
+                    } else if let note = side.note, !note.isEmpty {
+                        // The standing, at 55% beside a name at full weight.
+                        // That difference is what lets one line carry two
+                        // matches and still read as two things rather than one
+                        // long string.
                         Text(note)
                             .font(Sixes.body(12.5, .semibold))
                             .foregroundStyle(.white.opacity(0.55))
@@ -1514,14 +1614,123 @@ private struct HeaderView: View {
                                                      style: .continuous))
             }
             Spacer(minLength: 4)
-            Text(header.segment)
-                .font(Sixes.body(10, .semibold))
-                .tracking(0.6)
-                // Both labels stay on one line: the variant strings here are
-                // longer than Sixes' and wrapped the row before it was pinned.
-                .fixedSize(horizontal: true, vertical: false)
-                .foregroundStyle(header.accent.map(Sixes.side)
-                                 ?? .white.opacity(0.50))
+            Group {
+                if let tail = header.tail, !tail.isEmpty {
+                    // The tail carries the gold on its own, so the rest of
+                    // the corner stays the quiet 50% every other card uses.
+                    //
+                    // `foregroundColor` rather than `foregroundStyle`: the
+                    // style form that returns a `Text` — the one a `+`
+                    // concatenation needs — is iOS 17, and this widget targets
+                    // 16.2. Same reason `SplitNumber` uses it.
+                    Text(header.segment)
+                        .foregroundColor(header.accent.map(Sixes.side)
+                                         ?? .white.opacity(0.50))
+                    + Text(tail).foregroundColor(Sixes.gold)
+                } else {
+                    Text(header.segment)
+                        .foregroundStyle(header.accent.map(Sixes.side)
+                                         ?? .white.opacity(0.50))
+                }
+            }
+            .font(Sixes.body(10, .semibold))
+            .tracking(0.6)
+            // Both labels stay on one line: the variant strings here are
+            // longer than Sixes' and wrapped the row before it was pinned.
+            .fixedSize(horizontal: true, vertical: false)
+        }
+    }
+}
+
+/// Scramble, Shamble, Better Ball and Irish Rumble — **one card, four games**
+/// (`handoff-foursome-formats/HANDOFF.md` §6).
+///
+/// All four put a GROUP on the board against a field of groups, and the three
+/// figures a golfer wants off the tee are the same in every one of them: his
+/// team's net to par, his place, and the leader with the gap. What differs is
+/// a title and one header corner, which the SERVER has already resolved — so
+/// there is one layout, the way singles and fourball share `match`.
+///
+/// **No needle**, which is what makes it 120pt — the shortest card in the set,
+/// 40pt clear of the ceiling. The row can only say *two sides splitting a
+/// pool*, and a field of nine groups has neither. The payload still sends
+/// `needle: {blue: 0, orange: 0}` because the key is required, and reading
+/// those zeros as "no track" rather than drawing an empty one is this view's
+/// job, not the server's.
+///
+/// **The score and the place are both mint** — the two figures the card exists
+/// to answer, on one baseline. Mint is safe here for the reason it is not safe
+/// on a cup card: there are no side colours to be confused with, and gold
+/// keeps its separate job.
+private struct FoursomeBoardView: View {
+    let state: SixesActivityAttributes.ContentState
+    var isStale: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HeaderView(header: state.header)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .lastTextBaseline, spacing: 11) {
+                    // **White on the closing frame**, where the state slot
+                    // keeps the mint: the score has stopped being a question
+                    // and the place is the result.
+                    SplitNumber(number: state.number)
+                    Spacer(minLength: 8)
+                    StateView(state: state.state,
+                              colour: state.state.colour.map(Sixes.side))
+                }
+                FoursomeSidesView(sides: state.sides)
+            }
+
+            // Deliberately no needle and no pips row — see above.
+            TeeRow(tee: state.tee)
+            FooterView(footer: state.footer, thru: state.thru,
+                       isStale: isStale)
+        }
+    }
+}
+
+/// `LEADER  Gunst · Maiolini…  −10        3 BACK`
+///
+/// A label, a team, their score, and the gap pushed to the far edge — the gap
+/// is the figure a golfer acts on, so it gets the corner rather than trailing
+/// a name of unpredictable length.
+private struct FoursomeSidesView: View {
+    let sides: [SixesActivityAttributes.ContentState.Side]
+
+    var body: some View {
+        if let side = sides.first {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if let label = side.label, !label.isEmpty {
+                    Text(label)
+                        .font(Sixes.body(9.5, .bold))
+                        .tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.50))
+                }
+                Text(side.names)
+                    .font(Sixes.body(12.5, .semibold))
+                    .foregroundStyle(.white.opacity(0.90))
+                    .lineLimit(1)
+                    // The server has already cut this to whole names with an
+                    // ellipsis; shrinking is the second line of defence, not
+                    // the plan.
+                    .minimumScaleFactor(0.85)
+                if let score = side.note, !score.isEmpty {
+                    Text(score)
+                        .font(Sixes.body(12.5, .bold))
+                        .foregroundStyle(.white.opacity(0.62))
+                }
+                Spacer(minLength: 6)
+                if let gap = side.figure, !gap.isEmpty {
+                    Text(gap)
+                        .font(Sixes.body(9.5, .bold))
+                        .tracking(0.8)
+                        .foregroundStyle(.white.opacity(0.50))
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+            }
+            .frame(minHeight: 15)
         }
     }
 }
