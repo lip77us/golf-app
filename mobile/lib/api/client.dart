@@ -533,8 +533,15 @@ class ApiClient {
 
   // ---- Tournaments ----
 
-  Future<List<Tournament>> getTournaments() async {
-    final data = await _get('/tournaments/');
+  /// Your account's events — plus, with [includePlaying], any other account's
+  /// event you are playing in.
+  ///
+  /// Off by default, and only the Tournaments tab turns it on. Anywhere that
+  /// picks an event to ACT on — the wizard's "Existing" list, which adds a
+  /// round — must never be offered one it does not own.
+  Future<List<Tournament>> getTournaments({bool includePlaying = false}) async {
+    final data = await _get(
+        includePlaying ? '/tournaments/?include=playing' : '/tournaments/');
     return (data as List)
         .map((t) => Tournament.fromJson(t as Map<String, dynamic>))
         .toList();

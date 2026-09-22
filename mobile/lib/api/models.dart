@@ -586,6 +586,13 @@ class Tournament {
   final List<RoundSummary> rounds;
   final int totalRounds;
   final List<String> activeGames;
+  /// False for another account's event you are PLAYING in. The card uses it
+  /// to withhold the TD's controls: a guest is often an admin of his own
+  /// account, so admin alone would put Delete on somebody else's tournament.
+  /// Defaults to true, so an older server reads exactly as it always did.
+  final bool isOwn;
+  /// Whose event it is, for a guest. Null on your own.
+  final String? hostName;
 
   const Tournament({
     required this.id,
@@ -595,6 +602,8 @@ class Tournament {
     required this.rounds,
     this.totalRounds = 1,
     this.activeGames = const [],
+    this.isOwn = true,
+    this.hostName,
   });
 
   factory Tournament.fromJson(Map<String, dynamic> j) => Tournament(
@@ -609,6 +618,8 @@ class Tournament {
         activeGames: (j['active_games'] as List? ?? [])
             .map((g) => g as String)
             .toList(),
+        isOwn: j['is_own'] as bool? ?? true,
+        hostName: j['host_name'] as String?,
       );
 }
 

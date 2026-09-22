@@ -891,11 +891,36 @@ class TournamentSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'start_date', 'end_date', 'total_rounds',
                   'rounds_to_count', 'active_games', 'rounds',
                   'scoring_method', 'handicap_mode', 'net_percent',
-                  'mini_singles_carve_pct', 'counting_rule']
+                  'mini_singles_carve_pct', 'counting_rule',
+                  'is_own', 'host_name']
         read_only_fields = ['id']
 
     # The chip-strip string the boards render — "All 2 rounds" / "Best 3 of 4".
     counting_rule = serializers.CharField(read_only=True)
+
+    # Whether the reader's own account runs this event.  The Tournaments tab
+    # also lists events the reader is PLAYING in for another account, and the
+    # card must not offer a guest the TD's controls — he is often an admin of
+    # his own account, so "is admin" alone would put Edit tee times and Delete
+    # on somebody else's tournament.  Absent a request (a serializer used
+    # outside a view) it reads as own, which is the old behaviour.
+    is_own    = serializers.SerializerMethodField()
+    host_name = serializers.SerializerMethodField()
+
+    def _reader_account_id(self):
+        req = self.context.get('request')
+        user = getattr(req, 'user', None)
+        return getattr(user, 'account_id', None)
+
+    def get_is_own(self, obj):
+        acct = self._reader_account_id()
+        return acct is None or obj.account_id == acct
+
+    def get_host_name(self, obj):
+        """Whose event it is, for a guest — null on your own."""
+        if self.get_is_own(obj):
+            return None
+        return obj.account.name if obj.account_id else None
 
 
 # ===========================================================================

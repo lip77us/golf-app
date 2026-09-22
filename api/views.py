@@ -1951,15 +1951,54 @@ class TeeDetailView(APIView):
 # Tournaments
 # ---------------------------------------------------------------------------
 
+def _tournaments_i_play_in(user) -> set:
+    """Ids of OTHER accounts' tournaments with a golfer carrying my verified
+    phone in any round.
+
+    The same identity rule PlayingRoundsView uses to put those rounds in my
+    Rounds list, so the two lists cannot disagree about whether I am in an
+    event.  The last four digits prefilter in SQL — they survive every format a
+    phone arrives in, so they can only drop rows that cannot match — and
+    normalize() makes the real decision.
+    """
+    from accounts.phone import normalize
+    my_phone = getattr(user, 'phone', None)
+    if not my_phone:
+        return set()
+    rows = (FoursomeMembership.objects
+            .exclude(foursome__round__account=user.account)
+            .filter(foursome__round__tournament__isnull=False,
+                    player__phone__contains=my_phone[-4:])
+            .values_list('player__phone', 'foursome__round__tournament_id'))
+    return {tid for phone, tid in rows if normalize(phone) == my_phone}
+
+
 class TournamentListView(APIView):
     def get(self, request):
+        # Your own account's events, plus any other account's event you are
+        # PLAYING in.  This used to be own-account only, so a golfer added to a
+        # TD's tournament saw its round in Rounds but never the event itself
+        # here — the Heart Health Scramble was invisible to the man who played
+        # it.  Watching is deliberately not enough: followed events live in
+        # Shared with me, as followed rounds do.
+        ids = set(Tournament.objects.for_account(request.user.account)
+                  .values_list('id', flat=True))
+        # Opt-in, because the app sends no version with a request. A build
+        # that predates `is_own` would draw a guest event with the TD's
+        # controls — Edit tee times, Delete — gated on the reader being an
+        # admin of HIS OWN account. The server refuses those actions, so
+        # nothing breaks, but it offers them. Only a build that asks for
+        # playing events knows how to withhold them.
+        if request.query_params.get('include') == 'playing':
+            ids |= _tournaments_i_play_in(request.user)
         tournaments = (
-            Tournament.objects
-            .for_account(request.user.account)
+            Tournament.objects.filter(id__in=ids)
+            .select_related('account')
             .prefetch_related('rounds__course')
             .order_by('-start_date')
         )
-        return Response(TournamentSerializer(tournaments, many=True).data)
+        return Response(TournamentSerializer(
+            tournaments, many=True, context={'request': request}).data)
 
     def post(self, request):
         """POST /api/tournaments/ — create a new tournament (staff only)."""

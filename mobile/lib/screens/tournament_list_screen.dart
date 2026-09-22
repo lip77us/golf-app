@@ -84,7 +84,7 @@ class _TournamentListScreenState extends State<TournamentListScreen>
     if (!silent) setState(() { _loading = true; _error = null; });
     try {
       final client = context.read<AuthProvider>().client;
-      final data   = await client.getTournaments();
+      final data   = await client.getTournaments(includePlaying: true);
       // Tournament rounds a friend/TD added me to (cross-account). Best-effort.
       List<ScoringRound> shared = [];
       try {
@@ -505,7 +505,9 @@ class _TournamentListScreenState extends State<TournamentListScreen>
   Widget _tournamentCard(Tournament t) {
     return _TournamentCard(
             tournament       : t,
-            isStaff          : context.read<AuthProvider>().isAdmin,
+            // Admin of YOUR account is not admin of this one: a golfer playing
+            // in a TD's event sees it here too, and must not get its controls.
+            isStaff          : context.read<AuthProvider>().isAdmin && t.isOwn,
             isComplete       : _isComplete(t),
             onRoundTap       : (roundId) =>
                 Navigator.of(context).pushNamed('/round', arguments: roundId),
@@ -677,6 +679,17 @@ class _TournamentCard extends StatelessWidget {
                           : tournament.startDate,
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
+                    // Somebody else's event you are playing in. Without it the
+                    // card is indistinguishable from your own — and the missing
+                    // Edit and Delete controls would read as a bug.
+                    if (tournament.hostName != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Hosted by ${tournament.hostName}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.primary),
+                      ),
+                    ],
                   ],
                 ),
               ),
