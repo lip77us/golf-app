@@ -110,6 +110,13 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
           Text(kind == StandingKind.money ? '💰' : '🏆',
                style: const TextStyle(fontSize: 12)),
           const SizedBox(width: 7),
+          // **The standing takes the width it needs; the slack goes in the
+          // MIDDLE.** It used to sit before a `Spacer`, so the qualifier and
+          // the pill were packed against it and the empty space sat to their
+          // right — which truncated `Paul, Jim won 1 UP` to `Paul, Jim won…`
+          // while a third of the row was blank. The money is a short fixed
+          // string and belongs beside the pill; only this one ellipsises, and
+          // only once there is genuinely nothing left.
           Flexible(
             child: Text(
               standing,
@@ -125,20 +132,17 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
                   color: standingColor ?? Halved.muted),
             ),
           ),
-          if (figure.isNotEmpty) ...[
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                figure,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w500,
-                    color: Halved.muted),
-              ),
-            ),
-          ],
           const Spacer(),
+          if (figure.isNotEmpty) ...[
+            Text(
+              figure,
+              maxLines: 1,
+              style: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w500,
+                  color: Halved.muted),
+            ),
+            const SizedBox(width: 8),
+          ],
           _LeaderboardPill(onTap: onOpenLeaderboard),
         ],
       ),

@@ -146,10 +146,12 @@ SixesSegment? standingSegment(SixesSummary summary, SixesSegment? onScreen) {
   return liveSegment(summary);
 }
 
-/// `1UP` / `2DN` — tight and capitalised, the way a margin is written on a
-/// card. Set against the lower-case words around it so the number reads as the
-/// figure in the row rather than as part of the sentence.
-String _margin(int m) => '${m.abs()}${m > 0 ? "UP" : "DN"}';
+/// `1 UP` / `1 DOWN` — **the app's own notation**, which score entry's
+/// fourball card already writes as `2 UP thru 5` / `All Square thru 5` /
+/// `Paul & Mike win 3&2`. The space and the caps are that standard; an earlier
+/// pass here invented `1UP` and `1DN`, which is the same fact in a second
+/// vocabulary on a screen that already had one.
+String _margin(int m) => '${m.abs()} ${m > 0 ? "UP" : "DOWN"}';
 
 String _money(double v) {
   // **Nothing settled says nothing.** See `SixesStanding.figure`.
@@ -193,22 +195,6 @@ SixesStanding? sixesStanding(SixesSummary? summary, int? playerId,
   // N is holes played in THIS match, not on the course.
   final thru = played.length;
 
-  // **The row NAMES his pairing, on every state.**
-  //
-  // Colour cannot carry identity in this game: the teams repair every six
-  // holes, so blue is a different pair of golfers in match two than it was in
-  // match one. It broke first between segments — the row reported the match
-  // just finished while the player rows had already repaired, so `WON 1 UP` in
-  // blue credited a pair that had not won it — but the same reasoning applies
-  // inside a segment, where a golfer reading a colour has to remember which
-  // draw he is looking at. Names never need that.
-  //
-  // Always the READER's side, so the row is about him from end to end — the
-  // money beside it is his, and the verb carries whether his pair won.
-  final mine = side == 1 ? segment.team1 : segment.team2;
-  final names = pairNames(mine);
-  final prefix = names.isEmpty ? '' : '$names ';
-
   // A segment is identified by its hole RANGE: the objects are rebuilt on
   // every poll, so object identity would be false every time.
   final sameAsScreen = onScreen != null &&
@@ -217,29 +203,67 @@ SixesStanding? sixesStanding(SixesSummary? summary, int? playerId,
 
   final decided = segment.status == 'complete' || segment.status == 'halved';
 
+  // **Identity comes from the colour OR from the names, never both.**
+  //
+  // While the row and the player rows below are about the same match, the
+  // colour already says which pair this is — blue on the row and blue below
+  // are the same two golfers — and repeating them in words is the row saying
+  // one thing twice on its narrowest surface. The names step in for the one
+  // state the colour cannot cover: the hole after a match concludes, where
+  // the rows below have re-drawn and this one has not.
+  //
+  // So they are exactly complementary, and `named` is the same condition as a
+  // grey row.
+  final named = !sameAsScreen;
+  // **A named row is written from the LEADER's side, a coloured one from the
+  // reader's.** Score entry's fourball card sets the idiom — `Paul & Mike 2 UP
+  // thru 5` — and it is the only one that works with a name in front: `Jim, GL
+  // 1 DOWN` says the pair named is losing by one, which is the opposite of
+  // what happened. Naming somebody means reporting THEIR margin.
+  //
+  // A coloured row has no name to contradict, so it keeps the reader's own
+  // signed margin and can say DOWN.
+  //
+  // The RAW margin picks the leader, not the reader-relative one above: this
+  // asks which TEAM is up, which is a fact about the match rather than about
+  // whoever is reading it. Using the flipped one named the losing pair —
+  // caught by the test, which is what that test is for.
+  final rawMargin = played.last.margin;
+  final leaders = rawMargin == 0
+      ? ''
+      : pairNames(rawMargin > 0 ? segment.team1 : segment.team2);
+  final lead = named ? margin.abs() : margin;
+
   final String standing;
   if (decided) {
-    // A decided segment reports the RESULT, not a running margin — `2 UP` on
-    // a match that is over reads as a match still to play. Early close-outs
-    // take golf's own notation, so `3 and 2` rather than `3 UP thru 4`.
+    // A decided match reports the RESULT, not a running margin — `2 UP` on a
+    // match that is over reads as one still to play. A close-out takes the
+    // app's `3&2`; played to the last hole it is `1 UP`. Two notations for two
+    // different facts: how many holes were left, or that there were none.
     final left = segment.totalHoles - thru;
-    // A close-out keeps golf's own `2 and 1`; a match played to the last hole
-    // is `1UP`. Two notations because they are two different facts — one says
-    // how many holes were left, the other that there were none.
-    final result = left > 0 ? '${margin.abs()} and $left' : _margin(margin);
-    standing = margin == 0
-        ? '${prefix}halved'
-        : '$prefix${margin > 0 ? "won" : "lost"} $result';
+    if (margin == 0) {
+      standing = 'All Square';
+    } else if (named && leaders.isNotEmpty) {
+      standing = left > 0
+          ? '$leaders win ${margin.abs()}&$left'
+          : '$leaders win ${_margin(lead)}';
+    } else {
+      final result = left > 0 ? '${margin.abs()}&$left' : _margin(lead);
+      standing = '${margin > 0 ? "Won" : "Lost"} $result';
+    }
   } else if (margin == 0) {
-    standing = '${prefix}all square thru $thru';
+    standing = 'All Square thru $thru';
   } else {
-    standing = '$prefix${_margin(margin)} thru $thru';
+    final m = '${_margin(lead)} thru $thru';
+    standing = named && leaders.isNotEmpty ? '$leaders $m' : m;
   }
   // **The money shows on the decision holes and nowhere else.** It only moves
   // when a match concludes, so a figure repeated under every live hole is
   // furniture — and `so far` beside a margin that is still moving invites
   // reading it as a forecast. It appears when it changed, beside the result
   // that changed it, and goes when the next match starts.
+  // **All Square is grey.** Neither side is up, so there is no side for the
+  // colour to be about — picking one would be arbitrary and read as a lead.
   return SixesStanding(standing, decided ? money : '',
-                       sameAsScreen ? side : null);
+                       (sameAsScreen && margin != 0) ? side : null);
 }

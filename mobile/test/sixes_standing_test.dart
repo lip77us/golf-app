@@ -66,7 +66,8 @@ void main() {
         _seg(team1: [_me, _partner], team2: [_themA, _themB],
              holes: [_hole(1, 1), _hole(2, 2)]),
       ]);
-      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim 2UP thru 2');
+      expect(sixesStanding(s, _me, onScreen: s.segments.first)!.standing,
+             '2 UP thru 2');
     });
 
     test('a reader on team 2 takes it flipped — the rotation case', () {
@@ -76,7 +77,8 @@ void main() {
         _seg(team1: [_themA, _themB], team2: [_me, _partner],
              holes: [_hole(1, 1), _hole(2, 2)]),
       ]);
-      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim 2DN thru 2');
+      expect(sixesStanding(s, _me, onScreen: s.segments.first)!.standing,
+             '2 DOWN thru 2');
     });
 
     test('the same round reads opposite ways to the two sides', () {
@@ -84,8 +86,10 @@ void main() {
         _seg(team1: [_me, _partner], team2: [_themA, _themB],
              holes: [_hole(1, 1)]),
       ]);
-      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim 1UP thru 1');
-      expect(sixesStanding(s, _themA)!.standing, 'Larry, GL 1DN thru 1');
+      final seg = s.segments.first;
+      expect(sixesStanding(s, _me, onScreen: seg)!.standing, '1 UP thru 1');
+      expect(sixesStanding(s, _themA, onScreen: seg)!.standing,
+             '1 DOWN thru 1');
     });
 
     test('a reader who changed sides between segments follows his own', () {
@@ -99,7 +103,8 @@ void main() {
         _seg(team1: [_partner, _themB], team2: [_me, _themA],
              startHole: 7, endHole: 12, holes: [_hole(7, 1)]),
       ]);
-      expect(sixesStanding(s, _me)!.standing, 'Paul, Larry 1DN thru 1');
+      expect(sixesStanding(s, _me, onScreen: s.segments.last)!.standing,
+             '1 DOWN thru 1');
     });
 
     test('all square says so rather than showing a nought', () {
@@ -107,7 +112,8 @@ void main() {
         _seg(team1: [_me, _partner], team2: [_themA, _themB],
              holes: [_hole(1, 0, winner: 'Halved')]),
       ]);
-      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim all square thru 1');
+      expect(sixesStanding(s, _me, onScreen: s.segments.first)!.standing,
+             'All Square thru 1');
     });
 
     test('a decided segment reports the result, not a running margin', () {
@@ -118,8 +124,9 @@ void main() {
       ]);
       // One hole played of six, so five were conceded — golf's own
       // notation, not `2 UP thru 1` about a match that is over.
-      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim won 2 and 5');
-      expect(sixesStanding(s, _themA)!.standing, 'Larry, GL lost 2 and 5');
+      final seg = s.segments.first;
+      expect(sixesStanding(s, _me, onScreen: seg)!.standing, 'Won 2&5');
+      expect(sixesStanding(s, _themA, onScreen: seg)!.standing, 'Lost 2&5');
     });
   });
 
@@ -170,7 +177,8 @@ void main() {
              startHole: 7, endHole: 12,
              holes: [_hole(7, 1), _hole(8, 1), _hole(9, 1)]),
       ]);
-      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim 1UP thru 3');
+      expect(sixesStanding(s, _me, onScreen: s.segments.last)!.standing,
+             '1 UP thru 3');
     });
 
     test('a segment that does not start at hole 1 still counts from 1', () {
@@ -181,7 +189,8 @@ void main() {
         _seg(team1: [_me, _partner], team2: [_themA, _themB],
              startHole: 13, endHole: 18, holes: [_hole(13, 0, winner: 'Halved')]),
       ]);
-      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim all square thru 1');
+      expect(sixesStanding(s, _me, onScreen: s.segments.first)!.standing,
+             'All Square thru 1');
     });
 
     test('a match played out to the end says UP, not AND 0', () {
@@ -190,7 +199,8 @@ void main() {
              holes: [for (var h = 1; h <= 6; h++) _hole(h, 1)],
              status: 'complete', winner: 'Team 1'),
       ]);
-      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim won 1UP');
+      expect(sixesStanding(s, _me, onScreen: s.segments.first)!.standing,
+             'Won 1 UP');
     });
 
     test('a halved match says so rather than counting to nothing', () {
@@ -199,7 +209,8 @@ void main() {
              holes: [for (var h = 1; h <= 6; h++) _hole(h, 0, winner: 'Halved')],
              status: 'halved', winner: 'Halved'),
       ]);
-      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim halved');
+      expect(sixesStanding(s, _me, onScreen: s.segments.first)!.standing,
+             'All Square');
     });
   });
 
@@ -237,7 +248,7 @@ void main() {
       final standing = sixesStanding(_summary([seg1, seg2]), _me,
                                      onScreen: seg2)!;
       expect(standing.team, isNull);
-      expect(standing.standing, 'Paul, Jim won 1 and 5');
+      expect(standing.standing, 'Paul, Jim win 1&5');
     });
 
     test('a concluded match still on screen KEEPS its colour', () {
@@ -272,10 +283,9 @@ void main() {
 
       // Standing on hole 7 — the live match.
       expect(sixesStanding(s, _me, onScreen: seg2)!.standing,
-             'Paul, Larry 1DN thru 1');
-      // Backed up to hole 3 — match 1, and its own pairing.
-      expect(sixesStanding(s, _me, onScreen: seg1)!.standing,
-             'Paul, Jim won 2 and 5');
+             '1 DOWN thru 1');
+      // Backed up to hole 3 — match 1, and its own result.
+      expect(sixesStanding(s, _me, onScreen: seg1)!.standing, 'Won 2&5');
     });
 
     test('it keeps its colour there, because the rows below back up too', () {
@@ -347,7 +357,9 @@ void main() {
              startHole: 7, endHole: 12, holes: [_hole(7, 1)]),
       ]);
       // His pair changed; so does the name on the row.
-      expect(sixesStanding(s, _me)!.standing, startsWith('Paul, Larry '));
+      // Named rows are written from the LEADER's side: his pair is 1 down,
+      // so the row credits Jim and GL with being 1 up.
+      expect(sixesStanding(s, _me)!.standing, 'Jim, GL 1 UP thru 1');
     });
 
     test('it uses the short-name field, not first names', () {
@@ -383,7 +395,8 @@ void main() {
              startHole: 7, endHole: 12, holes: [_hole(7, 1)]),
       ]);
       // Segment 1 finished 3 up; the row reports the ONE being played.
-      expect(sixesStanding(s, _me)!.standing, 'Paul, Larry 1UP thru 1');
+      expect(sixesStanding(s, _me, onScreen: s.segments.last)!.standing,
+             '1 UP thru 1');
     });
 
     test('between segments it holds the match just finished', () {
@@ -395,7 +408,8 @@ void main() {
         _seg(team1: [_me, _themA], team2: [_partner, _themB],
              startHole: 7, endHole: 12, holes: const [], status: 'pending'),
       ]);
-      expect(sixesStanding(s, _me)!.standing, 'Paul, Jim won 2 and 5');
+      expect(sixesStanding(s, _me, onScreen: s.segments.first)!.standing,
+             'Won 2&5');
     });
 
     test('an extra segment is not the live one', () {
