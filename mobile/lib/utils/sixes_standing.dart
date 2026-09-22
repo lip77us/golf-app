@@ -26,6 +26,7 @@
 library;
 
 import '../api/models.dart';
+import 'match_notation.dart';
 
 /// The two strings the ribbon draws, or null when there is nothing to say yet.
 class SixesStanding {
@@ -146,13 +147,6 @@ SixesSegment? standingSegment(SixesSummary summary, SixesSegment? onScreen) {
   return liveSegment(summary);
 }
 
-/// `1 UP` / `1 DOWN` — **the app's own notation**, which score entry's
-/// fourball card already writes as `2 UP thru 5` / `All Square thru 5` /
-/// `Paul & Mike win 3&2`. The space and the caps are that standard; an earlier
-/// pass here invented `1UP` and `1DN`, which is the same fact in a second
-/// vocabulary on a screen that already had one.
-String _margin(int m) => '${m.abs()} ${m > 0 ? "UP" : "DOWN"}';
-
 String _money(double v) {
   // **Nothing settled says nothing.** See `SixesStanding.figure`.
   if (v.abs() < 0.005) return '';
@@ -242,19 +236,16 @@ SixesStanding? sixesStanding(SixesSummary? summary, int? playerId,
     // different facts: how many holes were left, or that there were none.
     final left = segment.totalHoles - thru;
     if (margin == 0) {
-      standing = 'All Square';
+      standing = kAllSquare;
     } else if (named && leaders.isNotEmpty) {
-      standing = left > 0
-          ? '$leaders win ${margin.abs()}&$left'
-          : '$leaders win ${_margin(lead)}';
+      standing = '$leaders win ${closeOut(lead, left)}';
     } else {
-      final result = left > 0 ? '${margin.abs()}&$left' : _margin(lead);
-      standing = '${margin > 0 ? "Won" : "Lost"} $result';
+      standing = '${margin > 0 ? "Won" : "Lost"} ${closeOut(lead, left)}';
     }
   } else if (margin == 0) {
-    standing = 'All Square thru $thru';
+    standing = '$kAllSquare thru $thru';
   } else {
-    final m = '${_margin(lead)} thru $thru';
+    final m = '${marginLabel(lead)} thru $thru';
     standing = named && leaders.isNotEmpty ? '$leaders $m' : m;
   }
   // **The money shows on the decision holes and nowhere else.** It only moves

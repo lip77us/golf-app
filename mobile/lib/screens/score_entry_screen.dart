@@ -25,6 +25,7 @@ import 'package:provider/provider.dart';
 
 import '../api/models.dart';
 import '../game_catalog.dart';
+import '../utils/nassau_standing.dart';
 import '../utils/sixes_standing.dart';
 import '../widgets/banker_entry_strip.dart';
 import '../widgets/standing_ribbon.dart';
@@ -1701,11 +1702,51 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   StandingRibbon? _standingRibbon(RoundProvider rp, List<String> games) {
     final round = rp.round;
     if (round == null || !round.isCasual) return null;
-    if (resolvePrimary(round.primaryGame, games) != GameIds.sixes) return null;
+    final me = context.read<AuthProvider>().player?.id;
+    final leaderboard = () => Navigator.of(context)
+        .pushNamed('/leaderboard', arguments: round.id);
+
+    switch (resolvePrimary(round.primaryGame, games)) {
+      case GameIds.sixes:
+        return _sixesRibbon(rp, me, leaderboard);
+      case GameIds.nassau:
+      case GameIds.match18:
+      case GameIds.nassauNine:
+        return _nassauRibbon(rp, me, leaderboard);
+      default:
+        return null;
+    }
+  }
+
+  /// **Nassau's teams are FIXED**, which is the whole difference from Sixes:
+  /// a pairing is chosen once and never re-drawn, so blue means the same two
+  /// golfers on the first tee and the eighteenth green. The colour carries
+  /// identity and the row never spends width on names.
+  ///
+  /// Two slots for the two bets that are always live — the nine being played
+  /// and the eighteen. That is the lock-screen card's own ruling: there is no
+  /// honest way to nominate one of them as the headline.
+  StandingRibbon? _nassauRibbon(
+      RoundProvider rp, int? me, VoidCallback onOpen) {
+    final summary = rp.nassauSummary;
+    if (summary == null) return null;
+    final standing = nassauStanding(summary, me, hole: _selectedHole);
+    return StandingRibbon(
+      kind: StandingKind.result,
+      standing: standing?.standing ?? 'Nassau',
+      figure: standing?.figure ?? '',
+      standingColor: standing?.team == null
+          ? null
+          : (standing!.team == 1 ? GameColors.team1 : GameColors.team2),
+      onOpenLeaderboard: onOpen,
+    );
+  }
+
+  StandingRibbon? _sixesRibbon(
+      RoundProvider rp, int? me, VoidCallback onOpen) {
     final summary = rp.sixesSummary;
     if (summary == null) return null;
 
-    final me = context.read<AuthProvider>().player?.id;
     // The match the hole on screen belongs to. It is what the row REPORTS —
     // back up to a hole in match 1 and you get match 1 — and what decides
     // whether the row may wear a colour: on the hole after a match concludes
@@ -1739,8 +1780,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       standingColor: standing?.team == null
           ? null
           : (standing!.team == 1 ? GameColors.team1 : GameColors.team2),
-      onOpenLeaderboard: () => Navigator.of(context)
-          .pushNamed('/leaderboard', arguments: round.id),
+      onOpenLeaderboard: onOpen,
     );
   }
 
