@@ -35,3 +35,16 @@ String closeOut(int margin, int remaining) => remaining > 0
 
 /// Level. Title case, as every screen in the app already writes it.
 const String kAllSquare = 'All Square';
+
+/// Nothing played yet.
+///
+/// **The standing row must not vanish before the first score.** The pill is
+/// the way in and the whole reason D2 was chosen; losing it because there is
+/// no standing to report yet would give up the feature for the stretch of the
+/// round where a first-time player is most likely to go looking for the
+/// leaderboard. So every game falls back to a state rather than to nothing.
+///
+/// `TEE OFF` is the lock screen's own word for this
+/// (`services/live_activity_registry.thru_line`), which is where it comes
+/// from rather than being invented here.
+const String kTeeOff = 'Tee off';

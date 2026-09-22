@@ -25,6 +25,7 @@ import 'package:provider/provider.dart';
 
 import '../api/models.dart';
 import '../game_catalog.dart';
+import '../utils/match_notation.dart';
 import '../utils/nassau_standing.dart';
 import '../utils/sixes_standing.dart';
 import '../utils/stroke_play_standing.dart';
@@ -1744,13 +1745,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       holesInPlay:      _playOrderFor(rp),
       fieldIsThisGroup: round.foursomes.length == 1,
     );
-    if (standing == null) return null;
     // The place leads when there is one; otherwise the score does, rather than
     // the row leading with an empty slot.
-    final hasPlace = standing.place.isNotEmpty;
+    final hasPlace = standing != null && standing.place.isNotEmpty;
     return StandingRibbon(
       kind: StandingKind.result,
-      standing: hasPlace ? standing.place : standing.score,
+      standing: hasPlace ? standing.place : (standing?.score ?? kTeeOff),
       figure: hasPlace ? standing.score : '',
       onOpenLeaderboard: onOpen,
     );
@@ -1778,7 +1778,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       // nine this is never changes, and the row's loudest element should not
       // be the one thing that cannot move.
       standingLabel: standing?.main.label ?? '',
-      standing: standing?.main.value ?? 'Nassau',
+      standing: standing?.main.value ?? kTeeOff,
       standingColor: tint(standing?.main.team),
       // **The eighteen gets its own colour**, not the nine's. A golfer can be
       // 1 UP on the back nine and 1 DOWN overall, and one tint for both would
