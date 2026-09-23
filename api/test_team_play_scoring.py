@@ -596,15 +596,25 @@ class CardStandingTests(TeamPlayScoringTests):
         st = self._card('Clay')['teams'][0]['standing']
         self.assertIsNone(st['rank'])
         self.assertEqual(st['thru'], 0)
-        # ...and the field counts who has a SCORE, not who is entered: you
-        # cannot be 2nd of six when five have not teed off.
-        self.assertEqual(st['field'], 1)
+        # ...and the field counts every team ENTERED. Six teams are six teams
+        # from the first tee, and that is how many rows the board draws all
+        # day — a denominator that grew as groups teed off would disagree with
+        # it, and would move under a TD who had just read it.
+        self.assertEqual(st['field'], len(FIELD))
 
-    def test_the_field_grows_as_teams_start(self):
+    def test_the_field_does_not_move_as_teams_start(self):
+        """The denominator is the event, not the turnout so far.
+
+        It was the count of teams with a score, which grew all morning: a TD
+        who read `2nd of 3` on the 4th tee found himself `2nd of 6` on the 5th
+        having done nothing, and the board beside it said six the whole time.
+        """
         self._post_round('Pine', 64, holes=3)
-        self.assertEqual(self._card('Pine')['teams'][0]['standing']['field'], 1)
+        self.assertEqual(
+            self._card('Pine')['teams'][0]['standing']['field'], len(FIELD))
         self._post_round('Clay', 66, holes=3)
-        self.assertEqual(self._card('Pine')['teams'][0]['standing']['field'], 2)
+        self.assertEqual(
+            self._card('Pine')['teams'][0]['standing']['field'], len(FIELD))
 
     def test_a_live_place_is_ranked_on_net_to_par(self):
         """A team thru 3 and a team thru 18 are on the same scale.

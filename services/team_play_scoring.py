@@ -440,9 +440,12 @@ def field_standing(tournament, config=None) -> dict:
     It ranks through :func:`rank_rows`, so the row and the board it links to
     cannot disagree about where a team stands.
 
-    ``field`` counts the teams with a SCORE rather than the teams entered: you
-    cannot be 2nd of six when four of them have not teed off, and it is the
-    board's own ranked set.
+    ``field`` counts every team ENTERED, not the ones with a score. A pairs
+    event of four twosomes is four twosomes from the first tee, and that is
+    the number of rows the board draws all day — a denominator that grew as
+    groups teed off would disagree with it, and would move under a TD who had
+    just read it. An unstarted team is still unranked; it is only the
+    denominator that counts the whole field.
     """
     config = config or getattr(tournament, 'team_play_config', None)
     if config is None:
@@ -462,8 +465,8 @@ def field_standing(tournament, config=None) -> dict:
                 'thru'        : rnd['thru'],
             })
 
-    scored = rank_rows(rows)
-    field = len(scored)
+    rank_rows(rows)
+    field = len(rows)
     return {
         r['key']: {
             'rank'      : r['rank'],

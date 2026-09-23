@@ -32,11 +32,11 @@
 ///
 /// ## No colour, and no side to have one
 ///
-/// A pairs card draws its two teams in their own colours, but the row reports
-/// ONE team — the reader's — so a tint would be naming a side nobody is
-/// playing against. This is Stroke Play's case rather than Sixes': the
-/// contest is the field, not the other block on the card. The team's name is
-/// already the screen's title.
+/// A pairs card draws its two teams in their own colours, and the row reports
+/// BOTH — so a tint would have to name two sides at once, in a slot that
+/// holds one. This is Stroke Play's case rather than Sixes': the contest is
+/// the field, not the other block on the card, and each place is already
+/// tagged with its side's initials.
 ///
 /// ## Money stays off it
 ///
@@ -60,42 +60,75 @@ class TeamPlayStandingText {
   const TeamPlayStandingText(this.place, this.score);
 }
 
-/// The team on this card the reader plays for — his own, else the first.
-///
-/// A foursome event sends exactly one block, so this is the only team there
-/// is. A pairs group sends two and he is in one of them.
-///
-/// **The fallback is the first block, not nothing.** A TD or a scorer opening
-/// a group he is not playing in gets a screen entirely about that group, and
-/// a row that went blank there would report nothing about the thing on
-/// screen. Same ruling Triple Cup's row needed.
-TeamPlayCardTeam? readersTeam(List<TeamPlayCardTeam> teams, int? playerId) {
-  if (teams.isEmpty) return null;
-  if (playerId == null) return teams.first;
-  for (final t in teams) {
-    if (t.playerIds.contains(playerId)) return t;
-    // An own-ball format's rows carry the golfers too, and an older server
-    // sends those without `player_ids`.
-    if (t.golfersByHole.any((g) => !g.isPhantom && g.playerId == playerId)) {
-      return t;
-    }
-  }
-  return teams.first;
-}
-
-/// The row's two strings, or null before the team has a score.
+/// The row's two strings, or null before anything on the card has a score.
 ///
 /// Null rather than a zero: a team with nothing entered is not level par, it
 /// is not on the board — and the row draws `Tee off` for exactly that state,
 /// which is the caller's job and not a string to invent here.
-TeamPlayStandingText? teamPlayStanding(TeamPlayCardTeam? team) {
-  final st = team?.standing;
-  if (st == null || st.netToPar == null || st.thru == 0) return null;
-  final score = '${toParLabel(st.netToPar!)} thru ${st.thru}';
-  // A place needs a rank AND somebody to be ranked against. `1st of 1` on the
-  // first group out is true and says nothing, so the score carries the row
-  // until a second team has a number.
-  if (st.rank == null || st.field < 2) return TeamPlayStandingText('', score);
-  return TeamPlayStandingText(
-      '${placeLabel(st.rank!, st.tied)} of ${st.field}', score);
+TeamPlayStandingText? teamPlayStanding(TeamPlayCardTeam? team) =>
+    teamPlayCardStanding(team == null ? const [] : [team]);
+
+/// **Every team on the card, not just the reader's.**
+///
+/// A foursome event puts one team on a card and this is the ordinary row:
+/// `2nd of 6` then `−4 thru 12`.
+///
+/// A PAIRS event puts two. One person enters for both of them — that is what
+/// the card is for — so reporting one and hiding the other picks a favourite
+/// among two teams the same thumb is scoring. Reported from a two-man
+/// scramble, 23 Sep 2026: *it should have both places for the 2 twosomes.*
+///
+/// With two teams the places are tagged with each side's initials and the
+/// field is said once at the end, since both share it:
+///
+///     B&P 1st · D&D 2nd of 4          thru 1
+///
+/// **The score leaves the row when there are two of them.** Two places, two
+/// to-par figures and a field do not fit 27px, and the place is the money —
+/// so the shared `thru` carries the progress and the board carries the rest.
+/// A one-team card keeps its score, because there is room.
+TeamPlayStandingText? teamPlayCardStanding(List<TeamPlayCardTeam> teams) {
+  final rows = [
+    for (final t in teams)
+      if (t.standing != null) (team: t, st: t.standing!),
+  ];
+  if (rows.isEmpty) return null;
+  // Nothing on the card has started. `Tee off`, which is the caller's string.
+  if (rows.every((r) => r.st.thru == 0 || r.st.netToPar == null)) return null;
+
+  final field = rows.first.st.field;
+
+  if (rows.length == 1) {
+    final st = rows.first.st;
+    final score = '${toParLabel(st.netToPar!)} thru ${st.thru}';
+    // A place needs a rank AND somebody to be ranked against. `1st of 1` in a
+    // one-team event is true and says nothing, so the score carries the row.
+    if (st.rank == null || field < 2) return TeamPlayStandingText('', score);
+    return TeamPlayStandingText(
+        '${placeLabel(st.rank!, st.tied)} of $field', score);
+  }
+
+  // `B & P` is the scorecard's label, sized for its own column. The row is
+  // tighter and there are two of them, so the spaces around the ampersand go.
+  String tag(TeamPlayCardTeam t) =>
+      (t.shortName.isEmpty ? t.name : t.shortName).replaceAll(' & ', '&');
+
+  final parts = [
+    for (final r in rows)
+      // An em dash for a team that has not started: it is on the card and on
+      // the board, so leaving it out would read as one twosome in a pairs
+      // event. This is transient — the scorer enters both on the same hole.
+      '${tag(r.team)} ${r.st.rank == null
+          ? '—'
+          : placeLabel(r.st.rank!, r.st.tied)}',
+  ];
+  final place = field < 2
+      ? parts.join(' · ')
+      : '${parts.join(' · ')} of $field';
+
+  // Both teams are on the same hole, so `thru` is one fact. If a hole is only
+  // half entered they differ for a moment, and the places already carry it.
+  final thrus = rows.map((r) => r.st.thru).toSet();
+  final score = thrus.length == 1 ? 'thru ${thrus.first}' : '';
+  return TeamPlayStandingText(place, score);
 }

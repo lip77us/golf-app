@@ -15,12 +15,14 @@ import 'package:golf_mobile/utils/team_play_standing.dart';
 TeamPlayCardTeam _team({
   int slot = 1,
   String name = 'Team',
+  String shortName = 'Team',
   List<int> playerIds = const [1, 2, 3, 4],
   TeamPlayStanding? standing,
   List<TeamPlayGolferCard> golfers = const [],
 }) =>
     TeamPlayCardTeam(
-      slot: slot, name: name, colour: '#123456',
+      slot: slot, name: name, shortName: shortName,
+      colour: '#123456',
       round: const TeamPlayRound(thru: 0, complete: false, par: 72, penalty: 0),
       drive: const TeamPlayDrive(
           rule: 'none', required: 0, perGolfer: 0, holes: 0, free: 0,
@@ -89,54 +91,83 @@ void main() {
     });
   });
 
-  group('**which team on the card the row reports**', () {
-    test('a pairs card reports the reader OWN team', () {
-      final a = _team(slot: 1, name: 'B & P', playerIds: const [1, 2]);
-      final b = _team(slot: 2, name: 'M & S', playerIds: const [3, 4]);
-      expect(readersTeam([a, b], 3)!.name, 'M & S');
-      expect(readersTeam([a, b], 1)!.name, 'B & P');
+  // ── A pairs card reports BOTH twosomes ──────────────────────────────────
+  //
+  // One person enters for both teams on the card — that is what the card is
+  // for — so reporting one of them picks a favourite between two teams the
+  // same thumb is scoring. Reported from a two-man scramble, 23 Sep 2026:
+  // *it should have both places for the 2 twosomes.*
+  group('**both twosomes, and the whole field**', () {
+    TeamPlayCardTeam pair(String short, int? rank, int thru,
+            {int field = 4, int ntp = 0, bool tied = false}) =>
+        _team(
+            name: short, shortName: short,
+            standing: TeamPlayStanding(
+                rank: rank, tied: tied, field: field,
+                netToPar: rank == null ? null : ntp, thru: thru));
+
+    test('two places, tagged, over one field', () {
+      final st = teamPlayCardStanding([
+        pair('B & P', 1, 1, ntp: -1),
+        pair('D & D', 2, 1, ntp: 0),
+      ])!;
+      expect(st.place, 'B&P 1st · D&D 2nd of 4');
+      // Both are on the same hole, so `thru` is one fact and is said once.
+      expect(st.score, 'thru 1');
     });
 
-    test('a foursome card has one team and it is his', () {
-      final only = _team(playerIds: const [7, 8, 9, 10]);
-      expect(readersTeam([only], 9), same(only));
+    test('the field is every team ENTERED, not the ones that have started',
+        () {
+      // Four twosomes are four twosomes from the first tee, and that is how
+      // many rows the board draws all day.
+      final st = teamPlayCardStanding([
+        pair('B & P', 1, 1, ntp: -1),
+        pair('D & D', 2, 1, ntp: 0),
+      ])!;
+      expect(st.place, endsWith('of 4'));
     });
 
-    test('a TD not playing gets the GROUP, not a blank row', () {
-      // He opened a screen entirely about this group; a row that went blank
-      // would report nothing about the thing on screen.
-      final a = _team(slot: 1, name: 'B & P', playerIds: const [1, 2]);
-      final b = _team(slot: 2, name: 'M & S', playerIds: const [3, 4]);
-      expect(readersTeam([a, b], 999)!.name, 'B & P');
-      expect(readersTeam([a, b], null)!.name, 'B & P');
+    test('a twosome that has not started is marked, not dropped', () {
+      // It is on the card and on the board; leaving it out would read as one
+      // twosome in a pairs event.
+      final st = teamPlayCardStanding([
+        pair('B & P', 1, 1, ntp: -1),
+        pair('D & D', null, 0),
+      ])!;
+      expect(st.place, 'B&P 1st · D&D — of 4');
+      // Their hole counts differ for the moment between the two entries, so
+      // there is no one `thru` to state.
+      expect(st.score, isEmpty);
     });
 
-    test('an own-ball card matches on its golfer rows too', () {
-      // An older server sends no `player_ids`; a shamble still carries its
-      // golfers, so the reader is findable either way.
-      final a = _team(slot: 1, name: 'B & P', playerIds: const []);
-      final b = _team(slot: 2, name: 'M & S', playerIds: const [], golfers: [
-        const TeamPlayGolferCard(
-            playerId: 42, name: 'Moran', shortName: 'Moran',
-            isPhantom: false, handicap: 9,
-            scores: const {}, strokes: const {}, counted: const {}),
-      ]);
-      expect(readersTeam([a, b], 42)!.name, 'M & S');
+    test('a tie is marked on a pairs row too', () {
+      final st = teamPlayCardStanding([
+        pair('B & P', 1, 2, ntp: -1, tied: true),
+        pair('D & D', 1, 2, ntp: -1, tied: true),
+      ])!;
+      expect(st.place, 'B&P T-1 · D&D T-1 of 4');
     });
 
-    test('a phantom fourth is nobody, so it never claims the row', () {
-      final a = _team(slot: 1, name: 'B & P', playerIds: const []);
-      final b = _team(slot: 2, name: 'M & S', playerIds: const [], golfers: [
-        const TeamPlayGolferCard(
-            playerId: 42, name: 'Phantom', shortName: 'PH',
-            isPhantom: true, handicap: 0,
-            scores: const {}, strokes: const {}, counted: const {}),
-      ]);
-      expect(readersTeam([a, b], 42)!.name, 'B & P');
+    test('neither has started — the row says Tee off, which is the screen\'s',
+        () {
+      expect(
+          teamPlayCardStanding([pair('B & P', null, 0), pair('D & D', null, 0)]),
+          isNull);
     });
 
-    test('an empty card has no team', () {
-      expect(readersTeam(const [], 1), isNull);
+    test('a foursome card is unchanged — one team, and it keeps its score',
+        () {
+      final st = teamPlayCardStanding([
+        _team(standing: const TeamPlayStanding(
+            rank: 2, field: 6, netToPar: -4, thru: 12)),
+      ])!;
+      expect(st.place, '2nd of 6');
+      expect(st.score, '−4 thru 12');
+    });
+
+    test('an empty card has no row', () {
+      expect(teamPlayCardStanding(const []), isNull);
     });
   });
 }
+

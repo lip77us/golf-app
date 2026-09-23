@@ -287,10 +287,12 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
   /// whole field. A pairs card draws two teams; the row reports the reader's.
   StandingRibbon? _standingRibbon(TeamPlayCard? card) {
     if (card == null || widget.tournamentId == null) return null;
-    final me = context.read<AuthProvider>().player?.id;
-    final team = readersTeam(_teams(card), me);
-    if (team?.standing == null) return null;
-    final standing = teamPlayStanding(team);
+    final teams = _teams(card);
+    if (teams.every((t) => t.standing == null)) return null;
+    // **Every team on the card, not the reader's alone.** A pairs card holds
+    // two twosomes and ONE person enters for both; reporting one of them
+    // picks a favourite between two teams the same thumb is scoring.
+    final standing = teamPlayCardStanding(teams);
     final place = standing?.place ?? '';
     final score = standing?.score ?? '';
     return StandingRibbon(
