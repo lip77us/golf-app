@@ -2,10 +2,12 @@
 /// --------------------------------
 /// The standing ribbon's strings on a Survivor round.
 ///
-/// **Survivor is measured in whether you are still in it**, so the subject
-/// here is a word rather than a number — and the two rules that decide which
-/// word: the state is read at the hole on screen, and a Zombie is not merely
-/// out.
+/// **The row inverts when two are left.** While all three are in, `Alive` is
+/// true of everybody and says nothing, so the row reports what the HOLE does;
+/// once it is down to two, being in the finals is the whole question. That
+/// inversion is the main subject here, along with the two rules that decide
+/// the word: the state is read at the hole on screen, and a Zombie is not
+/// merely out.
 library;
 
 import 'package:flutter_test/flutter_test.dart';
@@ -76,31 +78,59 @@ SurvivorStanding? _st(SurvivorSummary? s, {int who = _me, int hole = 1,
     survivorStanding(s, who, hole: hole, playerIds: _all, isLastHole: last);
 
 void main() {
-  group('the word, and the hole it belongs to', () {
-    test('still in it reads Alive, with what the hole does', () {
+  group('**while all three are in, the row is about the HOLE**', () {
+    test('it states what the hole costs, not that he is alive', () {
+      // `Alive` is true of everybody on an elimination hole — that is what
+      // makes it one — so it spends the loud half of the row on a word the
+      // reader could work out from standing on the tee.
       final s = _summary(holes: [_hole(1)]);
       final st = _st(s)!;
-      expect(st.standing, 'Alive · elimination');
-      expect(st.label, 'Survivor 1');
+      expect(st.standing, 'Low golfer out');
+      expect(st.label, 'Surv. 1');
+    });
+
+    test('and it is grey, because it is not about him', () {
+      // Mint would read as *you are fine*, which is not what it says. The
+      // colour arrives when the finals do, which makes its arrival mean
+      // something.
+      expect(_st(_summary(holes: [_hole(1)]))!.tint, SurvivorTint.none);
+    });
+
+    test('**the LAST hole cannot put anybody out**', () {
+      // There is no hole left to decide on afterwards, so it settles outright
+      // and nobody goes. `Low golfer out` would name a consequence the hole
+      // cannot have.
+      final s = _summary(holes: [_hole(1)]);
+      expect(_st(s, last: true)!.standing, 'Low ball wins');
+    });
+
+    test('the Survivor number is the quiet slot, abbreviated', () {
+      final s = _summary(holes: [_hole(4, survivor: 3)], currentSurvivor: 3);
+      expect(_st(s, hole: 4)!.label, 'Surv. 3');
+    });
+  });
+
+  group('**once two are left it inverts**', () {
+    test('being in the finals is now the whole question', () {
+      final s = _summary(holes: [_hole(1, out: [_c])]);
+      final st = _st(s)!;
+      expect(st.standing, 'Alive · finals');
       expect(st.tint, SurvivorTint.alive);
     });
 
-    test('two left makes it a decider', () {
+    test('**finals, not the engine\'s decider**', () {
+      // `decider` describes the hole's JOB, which was the right word on a
+      // banner explaining the rules and the wrong one on a row reporting where
+      // the reader stands. A golfer says he made the finals.
       final s = _summary(holes: [_hole(1, out: [_c])]);
-      expect(_st(s)!.standing, 'Alive · decider');
+      expect(_st(s)!.standing.contains('decider'), isFalse);
     });
 
-    test('**the last hole is its own phase**', () {
-      // It can host neither an elimination nor a carry, so it settles whatever
-      // is standing — a different hole from the one in front of it, and worth
-      // saying before they play it.
+    test('and the last hole does not rename it', () {
+      // It is still the finals, played on the last hole. The tie rule that
+      // makes it different is a legend fact, not a 27px one.
       final s = _summary(holes: [_hole(1, out: [_c])]);
-      expect(_st(s, last: true)!.standing, 'Alive · last hole');
-    });
-
-    test('the Survivor number is the quiet slot', () {
-      final s = _summary(holes: [_hole(4, survivor: 3)], currentSurvivor: 3);
-      expect(_st(s, hole: 4)!.label, 'Survivor 3');
+      expect(_st(s, last: true)!.standing, 'Alive · finals');
     });
   });
 
@@ -110,7 +140,7 @@ void main() {
       // saves its reds for the HOLE that did it — an event, not a state.
       final s = _summary(holes: [_hole(1, out: [_me])]);
       final st = _st(s)!;
-      expect(st.standing, 'Out · decider');
+      expect(st.standing, 'Out · finals');
       expect(st.tint, SurvivorTint.none);
     });
 
@@ -119,14 +149,14 @@ void main() {
       // back in. The same plum the player row wears.
       final s = _summary(holes: [_hole(1, out: [_me])], zombie: true);
       final st = _st(s)!;
-      expect(st.standing, 'Zombie · decider');
+      expect(st.standing, 'Zombie · finals');
       expect(st.tint, SurvivorTint.zombie);
     });
 
     test('somebody ELSE being the Zombie leaves the reader alive', () {
       final s = _summary(holes: [_hole(1, out: [_c])], zombie: true);
       final st = _st(s)!;
-      expect(st.standing, 'Alive · decider');
+      expect(st.standing, 'Alive · finals');
       expect(st.tint, SurvivorTint.alive);
     });
 
@@ -137,7 +167,7 @@ void main() {
       final s = _summary(
         holes: [_hole(1, out: [_c], resurrected: _me)], zombie: true);
       final st = _st(s)!;
-      expect(st.standing, 'Back in · decider');
+      expect(st.standing, 'Back in · finals');
       expect(st.tint, SurvivorTint.alive);
     });
   });
@@ -151,8 +181,8 @@ void main() {
           _hole(2, survivor: 2),
         ],
         currentSurvivor: 2);
-      expect(_st(s, hole: 1)!.standing, 'Out · decider');
-      expect(_st(s, hole: 2)!.standing, 'Alive · elimination');
+      expect(_st(s, hole: 1)!.standing, 'Out · finals');
+      expect(_st(s, hole: 2)!.standing, 'Low golfer out');
     });
 
     test('an UNSCORED hole reads the engine, never a walk back', () {
@@ -167,8 +197,8 @@ void main() {
         ],
         zombie: true,
         currentAlive: [_me, _b], currentZombieId: _c);
-      expect(_st(s, hole: 2)!.standing, 'Alive · decider');
-      expect(_st(s, who: _c, hole: 2)!.standing, 'Zombie · decider');
+      expect(_st(s, hole: 2)!.standing, 'Alive · finals');
+      expect(_st(s, who: _c, hole: 2)!.standing, 'Zombie · finals');
     });
 
     test('the state read returns what the screen tints its rows with', () {

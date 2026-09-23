@@ -6,22 +6,26 @@
 /// reading the lock-screen card arrived at and the reason its headline is a
 /// WORD where every other card carries a number. The row follows it:
 ///
-///   * **the standing** is the reader's own state and the hole's job —
-///     `Alive · decider`, `Zombie · elimination`, `Out · last hole`
+///   * **the standing** is what the hole does while all three are in, and the
+///     reader's own state once two are — `Low golfer out`, then `Alive · finals`
 ///   * **the figure** is what has been won — `+$4 so far`, settled legs only
 ///
-/// ## Two facts, and the quiet one is which Survivor
+/// ## On an elimination hole, `Alive` is not news
 ///
-/// A round yields up to nine Survivors, so `Survivor 3` is the identity the
-/// rest of the screen is about — the same role `F9` plays on Nassau, and it
-/// goes in the same quiet slot. The news is not which leg is running; it is
-/// whether the reader is still in it and what this hole does about that.
+/// All three are in — that is what makes it an elimination hole — so saying so
+/// tells the reader nothing he could not work out from the fact that he is
+/// standing on the tee. The row states what the HOLE does instead:
+/// **`Low golfer out`**. Once two are left it inverts: being in the finals is
+/// the whole question, and the word earns its place.
 ///
-/// **The phase rides with the state rather than with the number** because the
-/// two are read together: alive on an elimination hole means somebody is going
-/// out, and alive on a decider means it can be won right now. Splitting them
-/// across the two slots would put half the sentence in the grey half of the
-/// row.
+/// That is why the two states read differently rather than being one template
+/// with a phase swapped in. `Alive · elimination` was the template version, and
+/// it spent the loud half of the row on a word that was true of everybody.
+///
+/// `Surv. 2` is the quiet slot — the same role `F9` plays on Nassau. A round
+/// yields up to nine Survivors, so the leg number is the identity the rest of
+/// the screen is about, and it is abbreviated because the sentence beside it is
+/// the part worth the width.
 ///
 /// ## Out is grey, not red
 ///
@@ -33,16 +37,21 @@
 /// Mint is alive and plum is the Zombie, which is the vocabulary of the player
 /// rows six lines below and of the track on the lock screen. Three surfaces,
 /// one meaning per colour.
+///
+/// **An elimination hole is grey too**, because `Low golfer out` is a fact
+/// about the hole and not about the reader. Mint on it would read as *you are
+/// fine*, which is not what the sentence says. The colour arrives when the
+/// finals do, which makes its arrival mean something.
 library;
 
 import '../api/models.dart';
 import 'match_notation.dart';
 
 class SurvivorStanding {
-  /// `Survivor 3` — the leg the hole on screen belongs to. Grey.
+  /// `Surv. 3` — the leg the hole on screen belongs to. Grey.
   final String label;
 
-  /// `Alive · decider`, `Zombie · elimination`, `Out · last hole`, `Tee off`.
+  /// `Low golfer out`, `Alive · finals`, `Zombie · finals`, `Tee off`.
   final String standing;
 
   /// `+$4 so far` — settled Survivors only. Empty until one settles.
@@ -130,7 +139,7 @@ SurvivorStanding? survivorStanding(SurvivorSummary? summary, int? playerId,
 
   final money = survivorMoney(summary, playerId);
   final at = survivorStateAt(summary, hole, playerIds);
-  final label = 'Survivor ${at.survivor}';
+  final label = 'Surv. ${at.survivor}';
 
   // **Before the first score the row still draws.** The pill is the way in,
   // and losing it here gives the feature up exactly when a first-time player
@@ -139,12 +148,26 @@ SurvivorStanding? survivorStanding(SurvivorSummary? summary, int? playerId,
     return SurvivorStanding(label, kTeeOff, money, SurvivorTint.none);
   }
 
-  // What this hole does. `elimination` and `decider` are the engine's own
-  // words and the banner's; the last hole is the screen's, because only it
-  // knows the group's play order.
-  final phase = isLastHole
-      ? 'last hole'
-      : (at.aliveIds.length == 2 ? 'decider' : 'elimination');
+  // **All three in — so the row is about the HOLE, not about the reader.**
+  // Everybody is alive on an elimination hole by definition; what he does not
+  // already know is what it costs.
+  if (at.aliveIds.length > 2) {
+    // The LAST hole can host no elimination: there is no hole left to decide
+    // on afterwards, so it settles outright and nobody goes out. Saying `Low
+    // golfer out` there would name a consequence the hole cannot have.
+    return SurvivorStanding(
+        label, isLastHole ? 'Low ball wins' : 'Low golfer out', money,
+        SurvivorTint.none);
+  }
+
+  // Two left. Now whether the reader is one of them IS the question, so the
+  // word leads and the phase follows it.
+  //
+  // `finals`, not the engine's `decider`: the reader's question is whether he
+  // made it, and *the finals* is how a golfer says that. `decider` describes
+  // the hole's job, which was the right word on a banner explaining the rules
+  // and the wrong one on a row reporting where he stands.
+  const phase = 'finals';
 
   // **A resurrection outranks the state it produced.** He is alive, but on
   // this hole the news is that he came back — and the Survivor carries on

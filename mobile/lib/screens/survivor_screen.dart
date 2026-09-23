@@ -530,17 +530,14 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
     // The read itself moved to `utils/survivor_standing.survivorStateAt` so
     // the standing row reports the same state these rows are tinted with. Two
     // copies would disagree about who is plum, on the one screen showing both.
-    int     svIndex   = summary?.currentSurvivor ?? 1;
     Set<int> aliveIds = players.map((m) => m.player.id).toSet();
     int?    outId;
     if (summary != null) {
       final at = survivorStateAt(summary, _selectedHole,
           players.map((m) => m.player.id).toList());
-      svIndex  = at.survivor;
       aliveIds = at.aliveIds;
       outId    = at.outId;
     }
-    final isDecider = aliveIds.length == 2;
 
     return Column(children: [
       Expanded(
@@ -550,27 +547,6 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            if (summary != null)
-              _SurvivorBanner(
-                survivorIndex: svIndex,
-                isDecider:     isDecider,
-                aliveShorts:   players
-                    .where((m) => aliveIds.contains(m.player.id))
-                    .map((m) => m.player.displayShort)
-                    .toList(),
-                outShort: outId == null ? null : players
-                    .where((m) => m.player.id == outId)
-                    .map((m) => m.player.displayShort)
-                    .firstOrNull,
-                zombieShort: !(summary.zombieOption) || outId == null
-                    ? null
-                    : players
-                        .where((m) => m.player.id == outId)
-                        .map((m) => m.player.displayShort)
-                        .firstOrNull,
-                isLastHole: _selectedHole == _playOrder(rp).lastOrNull,
-              ),
-            const SizedBox(height: 12),
             _HoleHeader(holeNumber: _selectedHole, holeData: holeData,
                 onHelp: () => _showSurvivorLegend(context)),
             const SizedBox(height: 12),
@@ -1168,93 +1144,15 @@ class _PlayerRow extends StatelessWidget {
 }
 
 
-// ===========================================================================
-// Survivor banner
-// ===========================================================================
-
-class _SurvivorBanner extends StatelessWidget {
-  final int          survivorIndex;
-  /// Two left standing — this hole decides it.
-  final bool         isDecider;
-  final List<String> aliveShorts;
-  final String?      outShort;
-  /// Named on a decider when the Zombie Option is on — his score decides
-  /// something too, so leaving him out of the banner hides half the hole.
-  final String?      zombieShort;
-  /// No room on the last hole to eliminate AND decide, so it settles whatever
-  /// is standing — worth saying out loud before they play it.
-  final bool         isLastHole;
-
-  const _SurvivorBanner({
-    required this.survivorIndex,
-    required this.isDecider,
-    required this.aliveShorts,
-    required this.outShort,
-    required this.isLastHole,
-    this.zombieShort,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = isDecider ? Colors.green.shade700 : theme.colorScheme.primary;
-
-    final String headline;
-    final String detail;
-    if (isLastHole) {
-      headline = 'Survivor $survivorIndex — last hole';
-      detail = isDecider
-          ? (zombieShort != null
-              ? 'Low of the two takes it. A tie splits '
-                '${outShort ?? 'the loser'}’s entry — and if $zombieShort goes '
-                'low outright the Survivor is killed and pays nothing.'
-              : 'Low score takes it. A tie splits '
-                '${outShort ?? 'the loser'}’s entry.')
-          : 'Low ball wins outright. Any tie for low and nobody pays.';
-    } else if (isDecider) {
-      headline = 'Survivor $survivorIndex — decider';
-      // With a Zombie on the hole the sentence has to carry HIS stake too:
-      // he is not merely "out", he is one low-outright hole from being back in.
-      detail = zombieShort != null
-          ? '${aliveShorts.join(' v ')} for it · $zombieShort is the Zombie. '
-            'Low of the two takes it — unless $zombieShort goes low outright '
-            'and comes back in.'
-          : '${aliveShorts.join(' v ')} for it'
-            '${outShort == null ? '' : ' · $outShort is out'}'
-            '. Low score wins; a tie carries to the next hole.';
-    } else {
-      headline = 'Survivor $survivorIndex — elimination';
-      detail = 'Worst score goes out. If the two worst tie, nobody goes and '
-               'the next hole eliminates instead.';
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.45)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(isDecider ? Icons.sports_score : Icons.filter_alt_outlined,
-              size: 18, color: color),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(headline,
-                style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold, color: color)),
-          ),
-        ]),
-        const SizedBox(height: 4),
-        Text(detail,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-      ]),
-    );
-  }
-}
+// `_SurvivorBanner` was here — a tinted block across the top reading
+// `Survivor 2 — elimination` with the phase's rule under it.
+// **Removed 22 Sep 2026.**
+//
+// The standing row states the same thing in the bar and states it better:
+// the banner's headline named the phase, where the row names what the phase
+// COSTS (`Low golfer out`) — which is the half a golfer standing on the tee
+// is actually asking about. The rule in full, and the tie cases, stay one
+// tap away behind the hole header's `?`.
 
 // ===========================================================================
 // Per-hole outcome line
