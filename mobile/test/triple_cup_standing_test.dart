@@ -10,7 +10,9 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
+import 'package:flutter/material.dart';
 import 'package:golf_mobile/utils/triple_cup_standing.dart';
+import 'package:golf_mobile/widgets/triple_cup_pairings.dart';
 
 const _me = 11;
 const _b = 12;
@@ -260,6 +262,99 @@ void main() {
 
     test('no summary, no row', () {
       expect(tripleCupStanding(null, _me, hole: 1), isNull);
+    });
+  });
+
+  // ── The strip that DRAWS it ─────────────────────────────────────────────
+  //
+  // The match score was taken out of the standing row so the cup could have
+  // the bar to itself, and it was meant to land on the pairings line in the
+  // same commit. It did not: the row's half landed and the strip's half was
+  // lost, so the match score vanished from the screen entirely and was
+  // reported from the course — `Fourball  Aldo & AB v AB & BL`, and nothing
+  // after it.
+  //
+  // Every test above passed throughout, because they pin the HELPER. Nothing
+  // pinned the widget, and nothing could: the strip was a private method on a
+  // 10k-line State. Extracting it is what makes these possible, and these are
+  // what make "the row and the strip agree" a claim about the screen rather
+  // than about a function neither of them was calling.
+  group('**the pairings strip draws the match score**', () {
+    Future<void> pump(WidgetTester t, TripleCupSummary s, {int hole = 1}) =>
+        t.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: TripleCupPairings(summary: s, hole: hole),
+          ),
+        ));
+
+    testWidgets('a live match shows its state beside the names', (t) async {
+      await pump(
+          t,
+          _summary(matches: [
+            _match(label: 'Fourball', holesUp: 1,
+                holes: [_hole(1, winner: 'Team 1')]),
+          ]));
+      expect(find.text('Fourball'), findsOneWidget);
+      expect(find.text('1 UP thru 1'), findsOneWidget);
+    });
+
+    testWidgets('it says exactly what the standing row would', (t) async {
+      final m = _match(label: 'Fourball', holesUp: 2, holes: [
+        _hole(1, winner: 'Team 1'),
+        _hole(2, winner: 'Team 1'),
+        _hole(3, winner: 'Halved'),
+      ]);
+      await pump(t, _summary(matches: [m]));
+      expect(find.text(tripleCupMatchState(m).value), findsOneWidget);
+    });
+
+    testWidgets('BOTH singles report at once — what the row could not',
+        (t) async {
+      // The row has one figure slot, so a singles segment could only ever
+      // show the reader's match. This is the whole reason the score moved
+      // down here.
+      await pump(
+          t,
+          _summary(matches: [
+            _match(
+                number: 1, segment: 'singles', label: 'Singles 1',
+                start: 13, end: 18, holesUp: 1,
+                holes: [_hole(13, winner: 'Team 1')]),
+            _match(
+                number: 2, segment: 'singles', label: 'Singles 2',
+                start: 13, end: 18, playerIds: const [21, 22],
+                holesUp: -1, holes: [_hole(13, winner: 'Team 2')]),
+          ]),
+          hole: 13);
+      expect(find.text('Singles 1'), findsOneWidget);
+      expect(find.text('Singles 2'), findsOneWidget);
+      expect(find.text('1 UP thru 1'), findsNWidgets(2));
+    });
+
+    testWidgets('the state wears the LEADER colour, never the reader',
+        (t) async {
+      // Team 2 is up, so the figure is team 2's colour even on team 1's
+      // phone — the division §3 of the rulings settled after Nassau printed
+      // `1 DOWN` in the colour of the side that was 1 UP.
+      final s = _summary(matches: [
+        _match(holesUp: -1, holes: [_hole(1, winner: 'Team 2')]),
+      ]);
+      await pump(t, s);
+      final txt = t.widget<Text>(find.text('1 UP thru 1'));
+      expect(txt.style?.color, s.team2Color);
+    });
+
+    testWidgets('before the first score it says Tee off', (t) async {
+      await pump(t, _summary(matches: [_match(label: 'Fourball')]));
+      expect(find.text('Tee off'), findsOneWidget);
+    });
+
+    testWidgets('a match on another segment is not drawn', (t) async {
+      await pump(
+          t,
+          _summary(matches: [_match(start: 7, end: 12)]),
+          hole: 1);
+      expect(find.byType(Text), findsNothing);
     });
   });
 }
