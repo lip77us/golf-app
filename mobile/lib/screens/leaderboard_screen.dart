@@ -6,6 +6,7 @@ import '../api/models.dart';
 import '../config.dart';
 import '../game_catalog.dart';
 import '../game_colors.dart';
+import '../utils/match_notation.dart';
 import '../utils/nassau_team_style.dart';
 import '../widgets/banker_board.dart';
 import '../widgets/golf_app_bar.dart';
@@ -9840,19 +9841,41 @@ class _TripleCupGroupCard extends StatelessWidget {
                     ?.cast<String>().join(' & ') ?? '';
             final result  = m['result']?.toString();
             final winLabel = m['winner_label']?.toString() ?? '—';
-            // Right-justified winner indicator: name the winning side by its
-            // short names (clearer for a watcher than "Team 1/Team 2"); keep
-            // the live status / "Halved" when not decided team1/team2.
+            // The right-justified indicator. A decided match names the winning
+            // side by its short names, which is clearer for a watcher than
+            // "Team 1 / Team 2".
+            //
+            // **A live one shows its SCORE here, not a dash.** This slot
+            // carried the winner once there was one and `—` until then, and
+            // for the second singles it is the ONLY place the running margin
+            // appears on the whole board — the block below it is a scorecard,
+            // which shows what everybody shot and not who is up. Reported
+            // 22 Sep 2026.
+            //
+            // Neutral and coloured by the leader, the same division the
+            // standing row and the six-match strip use: `1 UP` in the leading
+            // side's colour, never `1 DOWN`, because four golfers read this
+            // and none of them is "the reader".
+            final up = (m['holes_up_final'] as num?)?.toInt() ?? 0;
+            final liveScore = up == 0 ? 'All Square' : marginLabel(up.abs());
+            final liveColor = up == 0
+                ? theme.colorScheme.onSurfaceVariant
+                : (up > 0 ? t1Color : t2Color);
+
             final winnerDisplay = result == 'team1'
                 ? t1Names
                 : result == 'team2'
                     ? t2Names
-                    : winLabel;
+                    // `Halved` is a RESULT and keeps the server's word for it;
+                    // anything else means the match is still running.
+                    : (winLabel == 'Halved' ? winLabel : liveScore);
             final color = result == 'team1'
                 ? t1Color
                 : result == 'team2'
                     ? t2Color
-                    : theme.colorScheme.onSurfaceVariant;
+                    : (winLabel == 'Halved'
+                        ? theme.colorScheme.onSurfaceVariant
+                        : liveColor);
 
             // Compact SO line per team — same shape as the
             // score-entry match card: "Team −N" for foursomes,
