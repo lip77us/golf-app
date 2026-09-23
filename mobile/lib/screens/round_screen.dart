@@ -330,24 +330,39 @@ class _RoundScreenState extends State<RoundScreen> {
                     // Cup rounds are fully configured via CupRoundSetupScreen —
                     // skip all setup routing and go directly to score entry.
                     String route;
+                    // Set by the ONE branch whose screen takes a map instead
+                    // of a bare foursome id.
+                    Map<String, Object?>? teamPlayArgs;
                     if (round.isTeamPlayRound) {
-                      // Team Play owns its own card: one huge number for a
+                      // Foursome Play owns its own card: one huge number for a
                       // format that ends in one ball, a row a man with the
                       // counting scores tinted for one that does not. The
                       // drive control sits on whichever formats choose a tee
                       // shot.
-                      Navigator.of(context).pushNamed('/team-play-score',
-                          arguments: {
-                            'foursomeId'  : fs.id,
-                            'teamName'    : fs.name.isEmpty
-                                ? 'Group ${fs.groupNumber}' : fs.name,
-                            'colour'      : '',
-                            'roundId'     : round.id,
-                            'tournamentId': round.tournamentId,
-                          });
-                      return;
-                    }
-                    if (round.isCupRound &&
+                      //
+                      // **It sets the route like every other branch instead of
+                      // pushing and returning.** It used to return early, which
+                      // skipped the shared tail below — and that tail is where
+                      // the round is reloaded on the way back. So the hub kept
+                      // whatever it had loaded before scoring started:
+                      // `hasAnyScore` stayed false and the button read
+                      // `Start Match` on the 2nd hole and every hole after it.
+                      // Reported from a two-man scramble, 23 Sep 2026.
+                      //
+                      // The server was right throughout — `has_any_score`
+                      // already counts `TeamHoleScore`, because a one-ball
+                      // format writes no per-golfer row at all. The hub was
+                      // simply never asking it again.
+                      route = '/team-play-score';
+                      teamPlayArgs = {
+                        'foursomeId'  : fs.id,
+                        'teamName'    : fs.name.isEmpty
+                            ? 'Group ${fs.groupNumber}' : fs.name,
+                        'colour'      : '',
+                        'roundId'     : round.id,
+                        'tournamentId': round.tournamentId,
+                      };
+                    } else if (round.isCupRound &&
                         fs.configuredGames.contains('quota_nassau')) {
                       // Quota Nassau cup foursomes use the dedicated gross-only
                       // entry screen — not the universal score entry.
@@ -527,7 +542,9 @@ class _RoundScreenState extends State<RoundScreen> {
                     // Build richer arguments for match-play-setup so it can
                     // offer "copy to all" and "copy to peers" actions.
                     final Object routeArgs;
-                    if (route == '/match-play-setup') {
+                    if (teamPlayArgs != null) {
+                      routeArgs = teamPlayArgs;
+                    } else if (route == '/match-play-setup') {
                       final allIds = round.foursomes
                           .map((f) => f.id)
                           .toList();
