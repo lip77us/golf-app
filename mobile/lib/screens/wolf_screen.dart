@@ -28,11 +28,13 @@ import '../sync/sync_service.dart';
 import '../utils/match_handicap.dart';
 import '../utils/play_order.dart';
 import '../utils/round_complete.dart';
+import '../utils/wolf_standing.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/inline_score_picker.dart';
 import '../widgets/round_chat_button.dart';
+import '../widgets/standing_ribbon.dart';
 import '../widgets/spots_capture.dart';
 import '../widgets/pinned_hole_grid.dart';
 import '../widgets/combo_tee_chip.dart';
@@ -527,6 +529,29 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
 
   // ── Build ─────────────────────────────────────────────────────────────────
 
+  /// **Grey, because Wolf has no side to name.** The partnership is re-drawn
+  /// every hole — the wolf picks a man off the tee and they are partners for
+  /// one hole and opponents on the next — so no side lasts long enough to wear
+  /// a colour. Stroke Play reached the same answer from the other direction.
+  ///
+  /// And no `hole` argument, unlike every other game on this row: Wolf
+  /// accumulates rather than resetting, so backing up to the 4th does not
+  /// change where a golfer stands.
+  StandingRibbon? _standingRibbon(RoundProvider rp) {
+    final round = rp.round;
+    if (round == null || !round.isCasual) return null;
+    final me = context.read<AuthProvider>().player?.id;
+    final standing = wolfStanding(rp.wolfSummary, me);
+    if (standing == null) return null;
+    return StandingRibbon(
+      kind: StandingKind.result,
+      standing: standing.standing,
+      figure: standing.figure,
+      onOpenLeaderboard: () => Navigator.of(context)
+          .pushNamed('/leaderboard', arguments: round.id),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final rp   = context.watch<RoundProvider>();
@@ -558,9 +583,17 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
         (rp.round?.foursomes.length ?? 1) == 1;
     final showExit = isCasualSingle && _hasAnyScore;
 
+    final ribbon = _standingRibbon(rp);
+
     return Scaffold(
       appBar: GolfAppBar(
         title: 'Wolf',
+        // D2: the standing becomes the bar's second line, and the pill in it
+        // replaces the leaderboard ICON below.
+        bottom: ribbon,
+        titleStyle: ribbon == null
+            ? null
+            : const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.close),
@@ -593,15 +626,17 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
             ),
           if (rp.round != null)
             RoundChatButton(roundId: rp.round!.id),
-          // Standard order: Leaderboard then Scorecard (scorecard rightmost).
-          IconButton(
-            tooltip: 'Leaderboard',
-            icon: const Icon(Icons.leaderboard_outlined),
-            onPressed: rp.round == null
-                ? null
-                : () => Navigator.of(context).pushNamed(
-                    '/leaderboard', arguments: rp.round!.id),
-          ),
+          // The named pill in the ribbon is this, done properly — so the icon
+          // stands down wherever the ribbon draws.
+          if (ribbon == null)
+            IconButton(
+              tooltip: 'Leaderboard',
+              icon: const Icon(Icons.leaderboard_outlined),
+              onPressed: rp.round == null
+                  ? null
+                  : () => Navigator.of(context).pushNamed(
+                      '/leaderboard', arguments: rp.round!.id),
+            ),
           // Overflow: low-frequency actions — set rotation, end the round
           // early (soft gate), and the icon-legend help.
           PopupMenuButton<String>(
@@ -620,9 +655,26 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
                 case 'help':
                   showScoreEntryHelp(context);
                   break;
+                case 'leaderboard':
+                  if (rp.round != null) {
+                    Navigator.of(context).pushNamed(
+                        '/leaderboard', arguments: rp.round!.id);
+                  }
+                  break;
               }
             },
             itemBuilder: (_) => [
+              // First, because the ribbon's pill is the primary way in and
+              // this is where somebody looks when it is not drawn.
+              const PopupMenuItem(
+                value: 'leaderboard',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.leaderboard_outlined),
+                  title: Text('Leaderboard'),
+                ),
+              ),
               PopupMenuItem(
                 value: 'rotation',
                 enabled: rp.wolfSummary != null,
