@@ -222,12 +222,13 @@ design: **the money figure needs a "nothing yet" state, and it is silence.**
 2. **The 44px target** — needs a drawing that works inside a 27px bar, or a
    decision to rebuild the app bar as one widget.
 3. **The team form of the popping band**, for alternate shot.
-4. **The standing line for the other ten score-entry screens.** D2 says the
-   strip appears in every round carrying that round's standing. Sixes answered
-   what "the standing" means for Sixes; Wolf, Rabbit, Banker, Nassau, Points,
-   Survivor, Skins, Quota Nassau, Triple Nassau and Match Play each need the
-   same question answered. **This is the biggest remaining ask in the packet**
-   and it is one line of copy per game, not a layout.
+4. ~~**The standing line for the other ten score-entry screens.**~~
+   **ANSWERED — see `REPLY-2.md`.** Built on sixteen games. It was not one line
+   of copy per game: each game holds a different opinion about what a standing
+   IS, and three of those contradicted rules this packet had already written
+   down. The glyph rule above survived and is now exercised (exactly one game
+   takes the money bag); the team-colour rule did not generalise and produced a
+   reported defect.
 5. **`thru` vs `through`** — the app says `thru` everywhere (`All Square thru
    3` on the Sixes card and leaderboard). Kept for consistency.
 
