@@ -1,5 +1,14 @@
 /// screens/skins_screen.dart
 ///
+/// **NOT REACHED — a Skins round plays through `/score-entry`.** Nothing in
+/// the app pushes `/skins`: the setup screen sends the group to `/score-entry`
+/// whether the game is already configured or being started. Score entry
+/// carries its own version of everything below, and that is the one to change.
+///
+/// The same is true of `points_531_screen.dart`, and it cost a build there
+/// before anybody noticed. Kept rather than deleted because deleting a screen
+/// is its own decision, but **do not read this file as the live one.**
+///
 /// Score-entry and live-standings screen for the Skins casual game.
 /// Layout mirrors points_531_screen.dart exactly:
 ///   • AppBar: "Skins" title + Scorecard / Leaderboard shortcuts + sync badge.

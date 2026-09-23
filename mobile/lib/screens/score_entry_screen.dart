@@ -30,6 +30,7 @@ import '../utils/nassau_standing.dart';
 import '../utils/sixes_standing.dart';
 import '../utils/stroke_play_standing.dart';
 import '../utils/points_531_standing.dart';
+import '../utils/skins_standing.dart';
 import '../utils/vegas_standing.dart';
 import '../widgets/banker_entry_strip.dart';
 import '../widgets/standing_ribbon.dart';
@@ -1701,9 +1702,30 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         return _vegasRibbon(rp, me, leaderboard);
       case GameIds.points531:
         return _points531Ribbon(rp, me, leaderboard);
+      case GameIds.skins:
+        return _skinsRibbon(rp, me, leaderboard);
       default:
         return null;
     }
+  }
+
+  /// **A skin count is not a place.** Every other ranked game on this row
+  /// leads with one, because a place is the answer — but Skins does not rank:
+  /// the pot is divided by skins won, so two men on three each take the same
+  /// share and neither is ahead. The count leads instead, which is also the
+  /// number a golfer actually tracks.
+  ///
+  /// Grey: there is nothing here that means a side.
+  StandingRibbon? _skinsRibbon(
+      RoundProvider rp, int? me, VoidCallback onOpen) {
+    final standing = skinsStanding(rp.skinsSummary, me);
+    if (standing == null) return null;
+    return StandingRibbon(
+      kind: StandingKind.result,
+      standing: standing.standing,
+      figure: standing.figure,
+      onOpenLeaderboard: onOpen,
+    );
   }
 
   /// **The shared points race** — Wolf is the other caller. Grey, because
@@ -4824,11 +4846,26 @@ class _GameStatusSection extends StatelessWidget {
           const SizedBox(height: 12),
         ],
 
-        // Skins standings — only when Skins is the primary (as a side game it
-        // shows on the leaderboard, not during entry).
+        // **The scorecard, where the standings card used to be.** The
+        // standings — who has how many skins and what they are worth — are
+        // the leaderboard's, which already lists them per player; the reader's
+        // own now rides in the standing row at the top of this screen.
+        //
+        // What score entry has no other way to show is the card: which holes
+        // were won, by whom and on what score, with the stroke dots that say
+        // where the next skin is cheapest. Same widget and same payload the
+        // leaderboard draws, green skin-winner cell and all.
+        //
+        // The hole in play keeps its own carry-pot line above the score card,
+        // so the one number that changes what this hole is worth stays beside
+        // the hole rather than in a table.
         if (primaryGame == 'skins') ...[
-          if (skins != null)
-            _SkinsStandingsCard(skins: skins!, currentHole: currentHole)
+          if (skins != null && skins!.scorecardHoles.isNotEmpty)
+            HoleGridScorecard(
+              holes:        skins!.scorecardHoles,
+              participants: skins!.scorecardPlayers,
+              holesInPlay:  skins!.scorecardHolesInPlay,
+            )
           else if (loadingSkins)
             const Center(
               child: Padding(
@@ -6595,241 +6632,19 @@ class _StrokePlayProgressGridState extends State<_StrokePlayProgressGrid> {
 }
 
 // ---------------------------------------------------------------------------
-// Skins standings card
+// `_SkinsStandingsCard` was here — a `Skins standings` header with the pool,
+// an 18-hole strip of winners and pots, and a row per golfer with his skins
+// and payout. **Removed 22 Sep 2026.**
+//
+// The per-golfer rows are the leaderboard's, which already lists them, and
+// the reader's own now rides in the standing row at the top of the screen.
+// What replaced it here is the scorecard, which is the thing score entry had
+// no other way to show: which holes were won, by whom, on what score, with
+// the stroke dots that say where the next skin is cheapest.
+//
+// The hole strip's one actionable number — what THIS hole is worth after a
+// carry — was already drawn beside the hole itself and stays there.
 // ---------------------------------------------------------------------------
-
-class _SkinsStandingsCard extends StatefulWidget {
-  final SkinsSummary skins;
-  final int          currentHole;
-
-  const _SkinsStandingsCard({
-    required this.skins,
-    required this.currentHole,
-  });
-
-  @override
-  State<_SkinsStandingsCard> createState() => _SkinsStandingsCardState();
-}
-
-class _SkinsStandingsCardState extends State<_SkinsStandingsCard> {
-  final ScrollController _ctrl = ScrollController();
-  static const double _stride = 36.0; // 32px cell + 4px gap
-
-  @override
-  void initState() {
-    super.initState();
-    _schedule();
-  }
-
-  @override
-  void didUpdateWidget(covariant _SkinsStandingsCard old) {
-    super.didUpdateWidget(old);
-    if (old.currentHole != widget.currentHole) _schedule();
-  }
-
-  void _schedule() => WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_ctrl.hasClients) return;
-        final target = ((widget.currentHole - 4) * _stride)
-            .clamp(0.0, _ctrl.position.maxScrollExtent);
-        _ctrl.animateTo(target,
-            duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
-      });
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final skins       = widget.skins;        // aliases keep the body unchanged
-    final currentHole = widget.currentHole;
-    final theme = Theme.of(context);
-
-    // Sort by total_skins descending.
-    final sorted = List.of(skins.players)
-      ..sort((a, b) => b.totalSkins.compareTo(a.totalSkins));
-
-    // Build a lookup from hole → SkinsHole for the strip.
-    final holeMap = { for (final h in skins.holes) h.hole: h };
-
-    // Count carry pot entering each hole so the strip can show accumulated value.
-    // We pre-compute the pot for every hole for efficiency.
-    final potByHole = <int, int>{};
-    int runningPot = 1;
-    for (int h = 1; h <= 18; h++) {
-      potByHole[h] = runningPot;
-      final hd = holeMap[h];
-      if (hd == null) break; // not yet scored
-      if (hd.winnerId != null || hd.isDead) {
-        runningPot = 1;
-      } else if (hd.isCarry) {
-        runningPot++;
-      }
-    }
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header row
-            Row(children: [
-              Text('Skins standings',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary)),
-              const Spacer(),
-              Text('Pool: \$${skins.pool.toStringAsFixed(2)}',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-            ]),
-
-            const SizedBox(height: 8),
-
-            // ── 18-hole strip ────────────────────────────────────────────────
-            SizedBox(
-              height: 44,
-              child: ListView.separated(
-                controller: _ctrl,
-                scrollDirection: Axis.horizontal,
-                itemCount: 18,
-                separatorBuilder: (_, __) => const SizedBox(width: 4),
-                itemBuilder: (_, idx) {
-                  final h   = idx + 1;
-                  final hd  = holeMap[h];
-                  final pot = potByHole[h] ?? 1;
-                  final isCurrent = h == currentHole;
-
-                  // Decide cell appearance.
-                  Color  bgColor;
-                  Color  fgColor;
-                  String topLabel;   // hole number
-                  String botLabel;   // winner initials / pot / dot
-
-                  if (hd == null) {
-                    // Unplayed.
-                    bgColor  = theme.colorScheme.surfaceContainerHighest;
-                    fgColor  = theme.colorScheme.onSurfaceVariant;
-                    topLabel = '$h';
-                    botLabel = pot > 1 ? '$pot' : '·';
-                    // If carry is accumulating into this unplayed hole, amber.
-                    if (pot > 1) {
-                      bgColor = Colors.amber.shade100;
-                      fgColor = Colors.amber.shade900;
-                    }
-                  } else if (hd.winnerId != null) {
-                    // Winner decided.
-                    bgColor  = Colors.green.shade100;
-                    fgColor  = Colors.green.shade900;
-                    topLabel = '$h';
-                    botLabel = hd.winnerShort ?? '?';
-                    // If it was a carry win, show the pot value above initials.
-                    if (hd.skinsValue > 1) botLabel = '${hd.winnerShort}×${hd.skinsValue}';
-                  } else if (hd.isDead) {
-                    // Killed (tied, no carryover).
-                    bgColor  = Colors.grey.shade200;
-                    fgColor  = Colors.grey.shade600;
-                    topLabel = '$h';
-                    botLabel = '✕';
-                  } else {
-                    // Tied with carryover — skin carrying forward.
-                    bgColor  = Colors.amber.shade100;
-                    fgColor  = Colors.amber.shade900;
-                    topLabel = '$h';
-                    botLabel = '→';
-                  }
-
-                  return Container(
-                    width: 32,
-                    decoration: BoxDecoration(
-                      color: bgColor,
-                      borderRadius: BorderRadius.circular(6),
-                      border: isCurrent
-                          ? Border.all(
-                              color: theme.colorScheme.primary,
-                              width: 2,
-                            )
-                          : null,
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(topLabel,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: fgColor,
-                              fontSize: 9,
-                            )),
-                        const SizedBox(height: 1),
-                        Text(
-                          botLabel,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: fgColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: botLabel.length > 3 ? 8 : 10,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            // ── Player standings rows ────────────────────────────────────────
-            for (final p in sorted)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(children: [
-                  Text(p.name,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(fontWeight: FontWeight.w600)),
-                  const Spacer(),
-                  if (p.totalSkins > 0) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade100,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '${p.totalSkins} skin${p.totalSkins > 1 ? 's' : ''}',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: Colors.green.shade800,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '\$${p.payout.toStringAsFixed(2)}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.green.shade800,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ] else
-                    Text('—',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                ]),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // ===========================================================================
 // Nassau-specific status widgets (reused from nassau_screen.dart)

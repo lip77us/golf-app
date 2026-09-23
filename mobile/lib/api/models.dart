@@ -2818,6 +2818,18 @@ class SkinsSummary {
   final int    totalSkins; // grand total skins won (denominator)
   // Payout mode (2-axis; maps to the shared wager engine).
   final String  payoutStyle;   // 'pool' | 'per_point'
+
+  /// The same `holes` and `players` the leaderboard hands `HoleGridScorecard`,
+  /// kept as RAW MAPS beside the typed lists.
+  ///
+  /// The payload is already the card's shape — hole, par, stroke index,
+  /// `winner_id` and per-player gross with strokes — so nothing new is fetched
+  /// and nothing is converted. Converting the typed objects back would be a
+  /// second reading of the server's shape, which is the one thing that makes
+  /// two cards drift.
+  final List<Map<String, dynamic>> scorecardHoles;
+  final List<Map<String, dynamic>> scorecardPlayers;
+  final List<int> scorecardHolesInPlay;
   final String  perPointMode;  // 'average' | 'all' | 'first'
   final double  perPointRate;  // $/skin (per_point)
   final double? lossCap;       // per-player loss cap (per_point); null = uncapped
@@ -2838,6 +2850,9 @@ class SkinsSummary {
     this.perPointMode = 'first',
     this.perPointRate = 0.0,
     this.lossCap,
+    this.scorecardHoles = const [],
+    this.scorecardPlayers = const [],
+    this.scorecardHolesInPlay = const [],
   });
 
   bool get isNet        => handicapMode == 'net';
@@ -2868,6 +2883,15 @@ class SkinsSummary {
       perPointMode: j['per_point_mode']?.toString() ?? 'first',
       perPointRate: (j['per_point_rate'] as num?)?.toDouble() ?? 0.0,
       lossCap:      (j['loss_cap'] as num?)?.toDouble(),
+      scorecardHoles: (j['holes'] as List? ?? const [])
+          .map((h) => Map<String, dynamic>.from(h as Map))
+          .toList(),
+      scorecardPlayers: (j['players'] as List? ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList(),
+      scorecardHolesInPlay: (j['holes_in_play'] as List? ?? const [])
+          .map((e) => (e as num).toInt())
+          .toList(),
     );
   }
 }
