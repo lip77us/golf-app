@@ -387,6 +387,95 @@ def golfers_by_hole(foursome, config, slot=1) -> list:
     return list(out.values())
 
 
+def rank_rows(rows) -> list:
+    """Rank teams on net to par, in place — and hand back the ranked ones.
+
+    **One definition, because two surfaces read it.** The board draws these
+    ranks and the score-entry standing row reports the reader's own; a second
+    implementation would eventually put a team 2nd on the row and 3rd on the
+    board it links to, which is the one thing the row must never do.
+
+    A team with nothing entered is left unranked rather than tying for first
+    at zero — it is not on the board yet, and counting it would move everybody
+    else down a place for nothing.
+
+    Ranked on net TO PAR, never on the raw net total: the board prints to par,
+    so ranking on anything else makes it contradict its own column, and while
+    teams are still out the totals are not comparable at all — nine holes of
+    net 30 is not better than eighteen of net 70. Once everybody is in, par is
+    the same for all of them and the two orders agree, which is what
+    settlement needs.
+    """
+    scored = [r for r in rows if r.get('net_to_par') is not None]
+    scored.sort(key=lambda r: (r['net_to_par'], r.get('gross_to_par') or 0))
+
+    rank = 0
+    previous = None
+    for i, row in enumerate(scored, start=1):
+        if row['net_to_par'] != previous:
+            rank = i
+            previous = row['net_to_par']
+        row['rank'] = rank
+    counts = {}
+    for row in scored:
+        counts[row['rank']] = counts.get(row['rank'], 0) + 1
+    for row in scored:
+        row['tied'] = counts[row['rank']] > 1
+
+    for row in rows:
+        row.setdefault('rank', None)
+        row.setdefault('tied', False)
+    return scored
+
+
+def field_standing(tournament, config=None) -> dict:
+    """Every team's place in the field, keyed ``(foursome_id, slot)``.
+
+    What the standing row on score entry needs, and **nothing else** — the
+    board's own ``leaderboard()`` builds a scorecard, a per-golfer breakdown
+    and a to-par row for every team, which is the right cost for a board
+    opened now and then and the wrong one for a card refetched on every hole.
+    This runs ``team_round`` per team and stops.
+
+    It ranks through :func:`rank_rows`, so the row and the board it links to
+    cannot disagree about where a team stands.
+
+    ``field`` counts the teams with a SCORE rather than the teams entered: you
+    cannot be 2nd of six when four of them have not teed off, and it is the
+    board's own ranked set.
+    """
+    config = config or getattr(tournament, 'team_play_config', None)
+    if config is None:
+        return {}
+    round_obj = tournament.rounds.order_by('round_number').first()
+    if round_obj is None:
+        return {}
+
+    rows = []
+    for foursome in round_obj.foursomes.order_by('group_number'):
+        for slot in team_slots(foursome, config):
+            rnd = team_round(foursome, config, slot)
+            rows.append({
+                'key'         : (foursome.id, slot),
+                'net_to_par'  : rnd['net_to_par'],
+                'gross_to_par': rnd['gross_to_par'],
+                'thru'        : rnd['thru'],
+            })
+
+    scored = rank_rows(rows)
+    field = len(scored)
+    return {
+        r['key']: {
+            'rank'      : r['rank'],
+            'tied'      : r['tied'],
+            'field'     : field,
+            'net_to_par': r['net_to_par'],
+            'thru'      : r['thru'],
+        }
+        for r in rows
+    }
+
+
 def leaderboard(tournament) -> dict:
     """
     Six rows, one column, sorted on net ascending.
@@ -458,25 +547,7 @@ def leaderboard(tournament) -> dict:
     # holes of net 30 is not better than eighteen of net 70. Once everybody is
     # in, par is the same for all of them and the two orders agree, which is
     # what settlement needs.
-    scored = [r for r in rows if r['net_to_par'] is not None]
-    scored.sort(key=lambda r: (r['net_to_par'], r['gross_to_par'] or 0))
-
-    rank = 0
-    previous = None
-    for i, row in enumerate(scored, start=1):
-        if row['net_to_par'] != previous:
-            rank = i
-            previous = row['net_to_par']
-        row['rank'] = rank
-    counts = {}
-    for row in scored:
-        counts[row['rank']] = counts.get(row['rank'], 0) + 1
-    for row in scored:
-        row['tied'] = counts[row['rank']] > 1
-
-    for row in rows:
-        row.setdefault('rank', None)
-        row.setdefault('tied', False)
+    scored = rank_rows(rows)
 
     rows.sort(key=lambda r: (r['rank'] is None, r['rank'] or 0,
                              r['group_number'], r['slot']))

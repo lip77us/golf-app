@@ -6143,6 +6143,42 @@ class TeamPlayRound {
 /// one tee time with one scorer, so one person enters everything on it — and in
 /// a pairs event that is two teams' worth. Each block is self-contained so the
 /// screen stacks them without knowing which is which.
+/// Where a team stands in the FIELD — the one fact a card cannot work out for
+/// itself, since it holds one playing group and a place is about all of them.
+///
+/// Ranked server-side through the same call the board uses, so the standing
+/// row and the board its pill opens cannot disagree about a team's place.
+class TeamPlayStanding {
+  /// Null until the team has a score — it is not on the board yet, rather
+  /// than tied for first at level par.
+  final int? rank;
+  final bool tied;
+
+  /// How many teams have a SCORE, not how many are entered: you cannot be 2nd
+  /// of six when four of them have not teed off.
+  final int field;
+
+  /// Net against the par of the holes PLAYED, so a team thru 4 and a team
+  /// thru 18 are on the same scale. Computed server-side — a shamble's par is
+  /// multiplied by the ball count, which a client recomputing from `pars`
+  /// alone gets wrong by a whole par a hole.
+  final int? netToPar;
+  final int thru;
+
+  const TeamPlayStanding({
+    this.rank, this.tied = false, this.field = 0, this.netToPar, this.thru = 0,
+  });
+
+  factory TeamPlayStanding.fromJson(Map<String, dynamic> j) =>
+      TeamPlayStanding(
+        rank    : j['rank'] as int?,
+        tied    : j['tied'] == true,
+        field   : (j['field'] ?? 0) as int,
+        netToPar: j['net_to_par'] as int?,
+        thru    : (j['thru'] ?? 0) as int,
+      );
+}
+
 class TeamPlayCardTeam {
   final int    slot;
   final String name;
@@ -6165,6 +6201,12 @@ class TeamPlayCardTeam {
   final List<TeamPlayDriveOption> driveOptions;
   final int?   teamScore;                 // one-ball formats
   final TeamPlayShambleHole? shamble;     // own-ball formats
+  /// Who plays for this team. A pairs group holds two blocks, and a one-ball
+  /// format sends no per-golfer rows — so without this there is nothing on
+  /// the block to match the reader against.
+  final List<int> playerIds;
+  /// Where this team stands in the field. Null on an older server.
+  final TeamPlayStanding? standing;
 
   const TeamPlayCardTeam({
     required this.slot, required this.name, required this.colour,
@@ -6175,6 +6217,7 @@ class TeamPlayCardTeam {
     this.golfersByHole = const [], this.driveControl = 'record',
     this.teeNote = '', this.requiresDrivePick = false,
     this.driveOptions = const [], this.teamScore, this.shamble,
+    this.playerIds = const [], this.standing,
   });
 
   factory TeamPlayCardTeam.fromJson(Map<String, dynamic> j) => TeamPlayCardTeam(
@@ -6217,6 +6260,12 @@ class TeamPlayCardTeam {
             ? null
             : TeamPlayShambleHole.fromJson(
                 Map<String, dynamic>.from(j['shamble'] as Map)),
+        playerIds   : ((j['player_ids'] as List?) ?? const [])
+            .map((e) => e as int).toList(),
+        standing    : j['standing'] == null
+            ? null
+            : TeamPlayStanding.fromJson(
+                Map<String, dynamic>.from(j['standing'] as Map)),
       );
 
   /// The control is drawn at all only when there is something to tap. A rota

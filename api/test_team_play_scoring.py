@@ -531,3 +531,110 @@ class PartRoundNetTests(TeamPlayScoringTests):
         self._play_everyone()
         for row in self._board()['teams']:
             self.assertEqual(row['net'], row['gross'] - row['team_handicap'])
+
+
+class CardStandingTests(TeamPlayScoringTests):
+    """The place the score-entry standing row reports.
+
+    A card holds ONE playing group, and a place is a fact about the whole
+    field — so it comes down with the card rather than being worked out on the
+    phone. The thing that matters is that it says the same as the board its
+    own pill opens.
+    """
+
+    def _card(self, name, hole=1):
+        fs = self.teams[name]
+        return self.client.get(
+            reverse('api-team-play-card', args=[fs.id]),
+            {'hole': hole}).json()
+
+    def test_the_card_carries_the_place(self):
+        self._play_everyone()
+        card = self._card('Pine')
+        st = card['teams'][0]['standing']
+        self.assertIsInstance(st['rank'], int)
+        self.assertEqual(st['field'], len(FIELD))
+        self.assertEqual(st['thru'], 18)
+        self.assertIsNotNone(st['net_to_par'])
+
+    def test_the_card_and_the_board_never_disagree(self):
+        """**The one thing this row must never do.**
+
+        Two implementations of a rank would eventually put a team 2nd on the
+        row and 3rd on the board it links to. They share ``rank_rows``, and
+        this is what says so on the wire.
+        """
+        self._play_everyone()
+        board = {t['name']: t for t in self._board()['teams']}
+        for name in FIELD:
+            st = self._card(name)['teams'][0]['standing']
+            row = board[name]
+            self.assertEqual(st['rank'], row['rank'], name)
+            self.assertEqual(st['tied'], row['tied'], name)
+            self.assertEqual(st['net_to_par'], row['net_to_par'], name)
+
+    def test_a_tie_is_marked_on_the_card_too(self):
+        # The drawn board ties Pine and Clay on net 58, both 14 under. The
+        # board marks them and so must the row — a net field ties most weeks,
+        # and a place that cannot show a tie is wrong most weeks with it.
+        self._play_everyone()
+        pine = self._card('Pine')['teams'][0]['standing']
+        clay = self._card('Clay')['teams'][0]['standing']
+        self.assertTrue(pine['tied'])
+        self.assertTrue(clay['tied'])
+        self.assertEqual(pine['rank'], clay['rank'])
+        # ...and a tie SKIPS the places it occupies: Slate and Dune share 2nd,
+        # so the pair behind them is 4th, not 3rd.
+        self.assertEqual(pine['rank'], 4)
+
+    def test_a_team_with_no_score_is_not_ranked(self):
+        """Not level par — not on the board.
+
+        Counting it would move every scoring team down a place for nothing.
+        """
+        self._post_round('Pine', 64)
+        st = self._card('Clay')['teams'][0]['standing']
+        self.assertIsNone(st['rank'])
+        self.assertEqual(st['thru'], 0)
+        # ...and the field counts who has a SCORE, not who is entered: you
+        # cannot be 2nd of six when five have not teed off.
+        self.assertEqual(st['field'], 1)
+
+    def test_the_field_grows_as_teams_start(self):
+        self._post_round('Pine', 64, holes=3)
+        self.assertEqual(self._card('Pine')['teams'][0]['standing']['field'], 1)
+        self._post_round('Clay', 66, holes=3)
+        self.assertEqual(self._card('Pine')['teams'][0]['standing']['field'], 2)
+
+    def test_a_live_place_is_ranked_on_net_to_par(self):
+        """A team thru 3 and a team thru 18 are on the same scale.
+
+        Ranking on the raw net total would put nine holes of net 30 ahead of
+        eighteen of net 70, which is the whole reason the board prints to par.
+        """
+        self._post_round('Pine', 9, holes=3)   # three birdies and away
+        self._post_round('Clay', 70)           # a whole round
+        pine = self._card('Pine')['teams'][0]['standing']
+        clay = self._card('Clay')['teams'][0]['standing']
+        self.assertEqual(pine['thru'], 3)
+        self.assertEqual(clay['thru'], 18)
+        # Both are RANKED, against each other, on different hole counts —
+        # which only means anything because the figure is net against the par
+        # of the holes PLAYED. The order follows that figure and nothing
+        # else, so it is read off the figure rather than hardcoded.
+        self.assertIsNotNone(pine['rank'])
+        self.assertIsNotNone(clay['rank'])
+        ahead, behind = sorted((pine, clay), key=lambda r: r['net_to_par'])
+        self.assertEqual(ahead['rank'], 1)
+        self.assertEqual(behind['rank'], 2)
+
+
+    def test_the_card_names_who_plays_for_each_team(self):
+        """A one-ball format sends no per-golfer rows, so without this there
+        is nothing on the block to match the reader against."""
+        card = self._card('Pine')
+        ids = card['teams'][0]['player_ids']
+        self.assertEqual(len(ids), len(FIELD['Pine']))
+        members = set(self.teams['Pine'].memberships.values_list(
+            'player_id', flat=True))
+        self.assertTrue(set(ids) <= members)

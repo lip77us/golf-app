@@ -10889,10 +10889,11 @@ class TeamPlayCardView(APIView):
     """
     def get(self, request, pk):
         from services.team_play_state import (
-            drive_control_kind, drive_state, resolved_counts, tee_note,
+            _real_memberships, drive_control_kind, drive_state,
+            resolved_counts, tee_note,
         )
         from services.team_play_scoring import (
-            golfers_by_hole, net_to_par_by_hole, shamble_hole,
+            field_standing, golfers_by_hole, net_to_par_by_hole, shamble_hole,
             team_hole_scores, team_round,
         )
         foursome = foursome_for_reader(request.user, pk)
@@ -10929,6 +10930,13 @@ class TeamPlayCardView(APIView):
         from scoring.handicap import _strokes_on_hole
 
         slots = team_slots(foursome, config)
+
+        # Where each team stands in the FIELD — the one fact the card cannot
+        # work out for itself, because it holds one playing group and a place
+        # is a fact about all of them. Computed once for the whole card rather
+        # than per team, and through the same ranking the board uses so the
+        # standing row and the board it links to cannot disagree.
+        standings = field_standing(foursome.round.tournament, config)
 
         def _team_block(slot):
             """One team's half of the card.
@@ -10983,6 +10991,13 @@ class TeamPlayCardView(APIView):
                 'requires_drive_pick': config.requires_drive_pick,
                 'drive_options': _team_drive_options(
                     foursome, config, hole, slot),
+                # Who is ON this team. A pairs group holds two, and the card
+                # has to be able to say which one the reader plays for — a
+                # one-ball format sends no per-golfer rows, so without this
+                # there is nothing on the block to match him against.
+                'player_ids': [m.player_id
+                               for m in _real_memberships(foursome, slot)],
+                'standing': standings.get((foursome.id, slot)),
             }
             if config.plays_one_ball:
                 block['team_score'] = team_hole_scores(foursome, slot).get(hole)

@@ -49,9 +49,11 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
+import '../widgets/standing_ribbon.dart';
 import '../widgets/inline_score_picker.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/team_play/team_play_bits.dart';
+import '../utils/team_play_standing.dart';
 import '../widgets/team_scorecard.dart';
 
 /// The golfer the picker is aimed at, across a WHOLE playing group.
@@ -275,12 +277,56 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
     return null;
   }
 
+  /// **D2 — the standing folded into the bar's second line.**
+  ///
+  /// Stroke Play's shape one level up: the team's place in the field, then
+  /// what it shot. The place leads because the place is the money.
+  ///
+  /// The place comes DOWN with the card, ranked by the same call the board
+  /// uses — a card holds one playing group, and a place is a fact about the
+  /// whole field. A pairs card draws two teams; the row reports the reader's.
+  StandingRibbon? _standingRibbon(TeamPlayCard? card) {
+    if (card == null || widget.tournamentId == null) return null;
+    final me = context.read<AuthProvider>().player?.id;
+    final team = readersTeam(_teams(card), me);
+    if (team?.standing == null) return null;
+    final standing = teamPlayStanding(team);
+    final place = standing?.place ?? '';
+    final score = standing?.score ?? '';
+    return StandingRibbon(
+      kind: StandingKind.result,
+      // The place leads when there is one. With a score but nobody to rank
+      // against — the first group out, or a one-team field — the SCORE takes
+      // the loud slot rather than sitting in the qualifier beside an empty
+      // one. And before the team has a number at all, `Tee off`: the row
+      // draws on an unplayed hole because the way to the board has to be
+      // there from the first tee, which is the problem D2 exists to solve.
+      standing: place.isNotEmpty
+          ? place
+          : (score.isNotEmpty ? score : 'Tee off'),
+      figure: place.isNotEmpty ? score : '',
+      onOpenLeaderboard: () => Navigator.of(context).pushNamed(
+          '/team-play-leaderboard',
+          arguments: {
+            'tournamentId'  : widget.tournamentId,
+            'tournamentName': widget.tournamentName,
+          }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final card = _card;
+    final ribbon = _standingRibbon(card);
     return Scaffold(
       appBar: GolfAppBar(
         title: widget.teamName,
+        // D2: the standing becomes the bar's second line, and the pill in it
+        // replaces the leaderboard ICON below.
+        bottom: ribbon,
+        titleStyle: ribbon == null
+            ? null
+            : const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         automaticallyImplyLeading: false,
         // An X back to the hub, matching every other score-entry screen —
         // a back chevron reads as "undo a step", and this is a place you leave.
@@ -291,18 +337,22 @@ class _TeamPlayScoreEntryScreenState extends State<TeamPlayScoreEntryScreen> {
         ),
         actions: [
           if (widget.roundId != null) RoundChatButton(roundId: widget.roundId!),
-          IconButton(
-            tooltip: 'Leaderboard',
-            icon: const Icon(Icons.leaderboard_outlined),
-            onPressed: widget.tournamentId == null
-                ? null
-                : () => Navigator.of(context).pushNamed(
-                    '/team-play-leaderboard',
-                    arguments: {
-                      'tournamentId'  : widget.tournamentId,
-                      'tournamentName': widget.tournamentName,
-                    }),
-          ),
+          // The leaderboard ICON only while the row is not drawn — a named
+          // pill and a glyph for the same destination is two ways in, and the
+          // glyph is the weak one D2 exists to replace.
+          if (ribbon == null)
+            IconButton(
+              tooltip: 'Leaderboard',
+              icon: const Icon(Icons.leaderboard_outlined),
+              onPressed: widget.tournamentId == null
+                  ? null
+                  : () => Navigator.of(context).pushNamed(
+                      '/team-play-leaderboard',
+                      arguments: {
+                        'tournamentId'  : widget.tournamentId,
+                        'tournamentName': widget.tournamentName,
+                      }),
+            ),
         ],
       ),
       body: _error != null
