@@ -29,6 +29,7 @@ import '../utils/match_notation.dart';
 import '../utils/nassau_standing.dart';
 import '../utils/sixes_standing.dart';
 import '../utils/stroke_play_standing.dart';
+import '../utils/vegas_standing.dart';
 import '../widgets/banker_entry_strip.dart';
 import '../widgets/standing_ribbon.dart';
 import '../game_colors.dart';
@@ -1717,9 +1718,38 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         return _nassauRibbon(rp, me, leaderboard);
       case GameIds.strokePlay:
         return _strokePlayRibbon(rp, me, leaderboard);
+      case GameIds.vegas:
+        return _vegasRibbon(rp, me, leaderboard);
       default:
         return null;
     }
+  }
+
+  /// **Vegas is the only game on this row whose margin can be SIGNED.** The
+  /// two sides are fixed at setup and never change, so there is no perspective
+  /// problem to solve and a figure that agrees with the money beside it beats
+  /// a neutral one that does not. The lock-screen card made the same call.
+  ///
+  /// The COLOUR is the leading side's, not the reader's — the player rows
+  /// below are tinted team 1 blue and team 2 orange, fixed, and a blue up here
+  /// meaning something else would be the Sixes defect by another door. So the
+  /// sign is the reader's and the colour is the leader's, and neither can
+  /// contradict the screen under it.
+  StandingRibbon? _vegasRibbon(
+      RoundProvider rp, int? me, VoidCallback onOpen) {
+    final standing = vegasStanding(rp.vegasSummary, me);
+    if (standing == null) return null;
+    return StandingRibbon(
+      kind: StandingKind.result,
+      standing: standing.standing,
+      standingColor: switch (standing.leader) {
+        1 => GameColors.team1,
+        2 => GameColors.team2,
+        _ => null,
+      },
+      figure: standing.figure,
+      onOpenLeaderboard: onOpen,
+    );
   }
 
   /// **Stroke Play has no sides**, so the row stays grey throughout and both
@@ -9840,46 +9870,22 @@ class _VegasStatusCard extends StatelessWidget {
   final int currentHole;
   const _VegasStatusCard({required this.summary, required this.currentHole});
 
-  String _money(double v) {
-    if (v == 0) return '—';
-    final s = v > 0 ? '+' : '−';
-    return '$s\$${v.abs().toStringAsFixed(2)}';
-  }
-
-  Widget _teamRow(BuildContext ctx, VegasTeamSummary t, Color color) {
-    final theme = Theme.of(ctx);
-    final names = t.players.map((p) => p.shortName).join(' & ');
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(children: [
-        Container(width: 4, height: 20,
-            decoration: BoxDecoration(
-                color: color, borderRadius: BorderRadius.circular(2))),
-        const SizedBox(width: 8),
-        Expanded(child: Text(names,
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(color: color, fontWeight: FontWeight.w600),
-            overflow: TextOverflow.ellipsis)),
-        Text('${t.points} pts',
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(fontWeight: FontWeight.bold)),
-        const SizedBox(width: 10),
-        SizedBox(width: 64, child: Text(_money(t.money),
-            textAlign: TextAlign.right,
-            style: theme.textTheme.bodySmall?.copyWith(
-                color: t.money > 0 ? GameColors.win
-                    : t.money < 0 ? GameColors.loss
-                    : theme.colorScheme.onSurfaceVariant))),
-      ]),
-    );
-  }
+  // `_teamRow` was here — a coloured bar, both partners' names, the side's
+  // total points and its money, once per side. **Removed 22 Sep 2026.**
+  //
+  // The names were redundant with the player rows below, which are already
+  // tinted with those exact two colours — the same call made on Nassau, where
+  // a `Paul Lipkin vs. Jim …` line sat above rows that said it in colour. And
+  // an absolute point total is not a standing: `Team 1: 84 · Team 2: 96` says
+  // nothing a golfer can act on, because the only figure that settles is the
+  // gap. The standing row carries the gap, signed, with the money beside it.
+  //
+  // What is left is what only this card can say: the mode in force and the
+  // per-hole arithmetic.
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    VegasTeamSummary? team(int n) =>
-        summary.teams.where((t) => t.teamNumber == n).firstOrNull;
-    final t1 = team(1), t2 = team(2);
     final decided = summary.holes.where((h) => h.winner != null).toList();
 
     Color winColor(String? w) => w == 'team1' ? GameColors.team1
@@ -9908,9 +9914,6 @@ class _VegasStatusCard extends StatelessWidget {
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
             ],
           ]),
-          const SizedBox(height: 6),
-          if (t1 != null) _teamRow(context, t1, GameColors.team1),
-          if (t2 != null) _teamRow(context, t2, GameColors.team2),
           if (decided.isNotEmpty) ...[
             const Divider(height: 18),
             Wrap(spacing: 6, runSpacing: 6, children: [
