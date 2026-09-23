@@ -160,27 +160,23 @@ class SurvivorRail extends StatelessWidget {
     switch (cell) {
       case 'won':
         return BoxDecoration(
-          color: const Color(0xFFDFF0E2),
-          border: Border.all(color: const Color(0xFF7CC48A)),
+          color: SurvivorMarks.wonFill,
+          border: Border.all(color: SurvivorMarks.wonLine),
           borderRadius: BorderRadius.circular(3));
       case 'knock':
         return BoxDecoration(
-          color: const Color(0xFFFADBDB),
-          border: Border.all(color: const Color(0xFFE39494)),
+          color: SurvivorMarks.knockFill,
+          border: Border.all(color: SurvivorMarks.knockLine),
           borderRadius: BorderRadius.circular(3));
       case 'zomb':
         return BoxDecoration(
-          color: Color.alphaBlend(
-              Halved.zombie.withValues(alpha: 0.20), Colors.white),
-          border: Border.all(color: Halved.zombie),
+          color: SurvivorMarks.zombFill,
+          border: Border.all(color: SurvivorMarks.zombLine),
           borderRadius: BorderRadius.circular(3));
       case 'zback':
         return BoxDecoration(
-          color: Color.alphaBlend(
-              Halved.zombie.withValues(alpha: 0.09), Colors.white),
-          border: Border.all(
-              color: Color.alphaBlend(
-                  Halved.zombie.withValues(alpha: 0.45), Colors.white)),
+          color: SurvivorMarks.backFill,
+          border: Border.all(color: SurvivorMarks.backLine),
           borderRadius: BorderRadius.circular(3));
       case 'np':
         // Handled by _HatchCell — a flat tint sits a shade off `alive` and at
@@ -190,7 +186,7 @@ class SurvivorRail extends StatelessWidget {
         return BoxDecoration(borderRadius: BorderRadius.circular(3));
       default:
         return BoxDecoration(
-          color: const Color(0xFFE4EDE6),
+          color: SurvivorMarks.aliveFill,
           borderRadius: BorderRadius.circular(3));
     }
   }
@@ -293,7 +289,7 @@ class SurvivorRail extends StatelessWidget {
         ],
 
         const SizedBox(height: 6),
-        _Legend(zombieOn: zombieOn),
+        SurvivorLegend(zombieOn: zombieOn),
       ]);
     });
   }
@@ -364,8 +360,53 @@ class _WinnerBar extends StatelessWidget {
   }
 }
 
-class _Legend extends StatelessWidget {
-  const _Legend({required this.zombieOn});
+/// The marks a Survivor cell can wear, and the ONE place their colours live.
+///
+/// The rail draws them as lanes and the by-hole grid draws them behind a gross
+/// score, so the two had drifted: the grid drew a knocked-out hole RED whatever
+/// the round's rules were, while the rail — correctly — drew it plum whenever
+/// the Zombie Option was on, because a man in Zombieville is not out. One
+/// screen, the same hole, two colours, and the disagreement only appeared in
+/// the rounds where the distinction carries money.
+///
+/// **The dark plum is going out and the light plum is coming back**, which is
+/// the pairing that makes the two readable as one gesture. The grid had them
+/// the same weight, so a resurrection and the elimination that preceded it
+/// were the same colour.
+class SurvivorMarks {
+  /// Took the Survivor. The one green, and never used for merely surviving.
+  static const wonFill  = Color(0xFFDFF0E2);
+  static const wonLine  = Color(0xFF7CC48A);
+  static const wonText  = Color(0xFF1B5E20);
+
+  /// Knocked out, in a round with **no** Zombie Option: he is simply gone.
+  static const knockFill = Color(0xFFFADBDB);
+  static const knockLine = Color(0xFFE39494);
+
+  /// Still in it, still playing.
+  static const aliveFill = Color(0xFFE4EDE6);
+
+  /// Sent to Zombieville. **Plum, not red** — he is out of the running and
+  /// still hitting shots, which is neither of the states red and green mean.
+  static Color get zombFill => Color.alphaBlend(
+      Halved.zombie.withValues(alpha: 0.20), Colors.white);
+  static Color get zombLine => Halved.zombie;
+
+  /// Came back in. The same plum, lighter — one family, so the pair reads as
+  /// out and back rather than as two unrelated marks.
+  static Color get backFill => Color.alphaBlend(
+      Halved.zombie.withValues(alpha: 0.09), Colors.white);
+  static Color get backLine => Color.alphaBlend(
+      Halved.zombie.withValues(alpha: 0.45), Colors.white);
+
+  /// What a knocked-out hole wears, which depends on whether the round HAS a
+  /// Zombieville to send him to. Both surfaces ask this one question.
+  static Color outFill(bool zombieOn) => zombieOn ? zombFill : knockFill;
+  static Color outLine(bool zombieOn) => zombieOn ? zombLine : knockLine;
+}
+
+class SurvivorLegend extends StatelessWidget {
+  const SurvivorLegend({super.key, required this.zombieOn});
   final bool zombieOn;
 
   @override
@@ -374,16 +415,14 @@ class _Legend extends StatelessWidget {
     final style = theme.textTheme.labelSmall?.copyWith(
         fontSize: 9.5, color: theme.colorScheme.onSurfaceVariant);
     return Wrap(spacing: 10, runSpacing: 2, children: [
-      _swatch(const Color(0xFFDFF0E2), const Color(0xFF7CC48A), 'took it', style),
+      _swatch(SurvivorMarks.wonFill, SurvivorMarks.wonLine, 'took it', style),
       if (!zombieOn)
-        _swatch(const Color(0xFFFADBDB), const Color(0xFFE39494), 'out', style),
+        _swatch(SurvivorMarks.knockFill, SurvivorMarks.knockLine, 'out', style),
       if (zombieOn) ...[
-        _swatch(Color.alphaBlend(Halved.zombie.withValues(alpha: 0.20),
-                Colors.white), Halved.zombie, 'in Zombieville', style),
-        _swatch(Color.alphaBlend(Halved.zombie.withValues(alpha: 0.09),
-                Colors.white),
-            Color.alphaBlend(Halved.zombie.withValues(alpha: 0.45),
-                Colors.white), 'back in', style),
+        _swatch(SurvivorMarks.zombFill, SurvivorMarks.zombLine,
+            'in Zombieville', style),
+        _swatch(SurvivorMarks.backFill, SurvivorMarks.backLine,
+            'back in', style),
       ],
     ]);
   }

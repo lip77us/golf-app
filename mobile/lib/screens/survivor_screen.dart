@@ -1305,22 +1305,37 @@ class _SurvivorGrid extends StatelessWidget {
       final out   = entry != null && !entry.isAlive;
       final won   = entry?.isWinner ?? false;
       final knocked = entry?.isEliminated ?? false;
-      // The hole he came back in on. Plum, and it can coincide with another
-      // player's red on the SAME hole — the resurrection is what sent that
-      // decider out.
+      // The hole he came back in on. It can coincide with another player's
+      // out-mark on the SAME hole — the resurrection is what sent that decider
+      // to Zombieville.
       final revived = entry?.isResurrected ?? false;
+      final zombieOn = summary.zombieOption;
 
+      // **The marks come from `SurvivorMarks`, which the rail below draws
+      // from too.** This grid used to carry its own — a red knock-out whatever
+      // the round's rules were, and a resurrection at the same plum weight as
+      // the elimination. So on a Zombie round the two cards disagreed about
+      // the colour of the same hole, and inside this one card going out and
+      // coming back looked identical.
       Color? bg;
+      Color? line;
       Color? fg;
       if (won) {
-        bg = Colors.green.shade50;
-        fg = Colors.green.shade800;
+        bg   = SurvivorMarks.wonFill;
+        line = SurvivorMarks.wonLine;
+        fg   = SurvivorMarks.wonText;
       } else if (revived) {
-        bg = Halved.zombie.withOpacity(0.20);
-        fg = Halved.zombie;
+        // The LIGHT plum. Dark is going out, light is coming back.
+        bg   = SurvivorMarks.backFill;
+        line = SurvivorMarks.backLine;
+        fg   = Halved.zombie;
       } else if (knocked) {
-        bg = theme.colorScheme.errorContainer.withOpacity(0.45);
-        fg = theme.colorScheme.error;
+        // Plum in a Zombie round, red without one: a man in Zombieville is
+        // out of the running and still hitting shots, which is neither of the
+        // things red means.
+        bg   = SurvivorMarks.outFill(zombieOn);
+        line = SurvivorMarks.outLine(zombieOn);
+        fg   = zombieOn ? Halved.zombie : theme.colorScheme.error;
       } else if (out) {
         fg = theme.colorScheme.outline;
       }
@@ -1332,10 +1347,7 @@ class _SurvivorGrid extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: bg,
-            border: Border.all(
-              color: won
-                  ? Colors.green.shade400
-                  : revived ? Halved.zombie : Colors.transparent),
+            border: Border.all(color: line ?? Colors.transparent),
             borderRadius: BorderRadius.circular(3),
           ),
           child: scoreCellWithDots(
@@ -1366,10 +1378,15 @@ class _SurvivorGrid extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.primary)),
             const SizedBox(width: 8),
+            // **The rail's own legend, not a sentence of this card's.** The
+            // written one said `red = knocked out`, which is false in a Zombie
+            // round — and it could not name the light plum at all, so the mark
+            // a golfer most needs explained was the one with no key.
             Expanded(
-              child: Text('green = won it · red = knocked out',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant)),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: SurvivorLegend(zombieOn: summary.zombieOption),
+              ),
             ),
           ]),
           const SizedBox(height: 8),
