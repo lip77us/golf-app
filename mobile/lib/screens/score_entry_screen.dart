@@ -4996,26 +4996,35 @@ int _tcTeamOf(TripleCupMatch m, int playerId) => m.players
     .map((p) => p.teamNumber)
     .firstOrNull ?? 0;
 
-/// The bracket phase whose matches are live — see
-/// `utils/match_play_standing.bracketLiveMatches`. The card, the scorecard
-/// under it and the standing row all ask this one function, so they are never
-/// about different nines.
-const _bracketLiveMatches = bracketLiveMatches;
+/// Every match in the bracket, both rounds.
+///
+/// The CARD above is phase-scoped, because a match nine holes away is one
+/// nobody can affect. The SCORECARD is not: the round is eighteen holes and
+/// all four golfers played them.
+List<Map<String, dynamic>> _bracketAllMatches(Map<String, dynamic> data) =>
+    (data['matches'] as List? ?? const []).cast<Map<String, dynamic>>();
 
-/// The four golfers' scores over the nine they share, merged from the two
-/// matches' own cards.
+/// The four golfers' scores over the WHOLE round, merged from every match's
+/// own card.
 ///
-/// **Both matches of a phase play the same holes** — the semis on the front,
-/// the final and the 3rd-place match on the back — so they belong in one card
-/// with one set of hole columns rather than two cards stacked. A hole's `par`,
-/// `stroke_index` and per-player `strokes` come from whichever match supplied
-/// it; they agree, because they come off the same tee.
+/// **All eighteen holes, not the phase's nine.** The matches are phase-scoped
+/// — the semis on the front, the final and the 3rd-place match on the back —
+/// but the SCORECARD is the round's: all four golfers play all eighteen, the
+/// two semi losers in the 3rd-place match. Scoping it to the live phase
+/// started the card over at the 10th and threw the front nine away, which is
+/// the half a golfer wants to scroll back to. Reported 22 Sep 2026.
 ///
-/// `winner_id` is dropped: it is the winner of ONE of the two matches, and a
-/// green cell on a four-row card would claim he beat the other three.
+/// Both matches of a phase share their holes, so a hole's four cells arrive
+/// from two matches and merge into one row; `par`, `stroke_index` and the
+/// per-player `strokes` come from whichever supplied it, and they agree
+/// because they come off the same tee.
+///
+/// `winner_id` is dropped: it is the winner of ONE of the two matches on that
+/// hole, and a green cell on a four-row card would claim he beat the other
+/// three.
 List<Map<String, dynamic>> _bracketCardHoles(Map<String, dynamic> data) {
   final byHole = <int, Map<String, dynamic>>{};
-  for (final m in _bracketLiveMatches(data)) {
+  for (final m in _bracketAllMatches(data)) {
     final card = m['scorecard'] as Map<String, dynamic>?;
     for (final h in (card?['holes'] as List? ?? const [])) {
       final row = Map<String, dynamic>.from(h as Map);
@@ -5032,6 +5041,12 @@ List<Map<String, dynamic>> _bracketCardHoles(Map<String, dynamic> data) {
         final cell = Map<String, dynamic>.from(c as Map);
         // A TBD side has no golfer to put on a row, so it contributes no cell.
         if (cell['player_id'] == null) continue;
+        // In the three-player layout the top seed plays BOTH semis, so his
+        // cell for a front-nine hole arrives twice. One cell per golfer per
+        // hole.
+        final already = (into['scores'] as List).any(
+            (e) => (e as Map)['player_id'] == cell['player_id']);
+        if (already) continue;
         (into['scores'] as List).add(cell);
       }
     }
@@ -5041,11 +5056,12 @@ List<Map<String, dynamic>> _bracketCardHoles(Map<String, dynamic> data) {
   return out;
 }
 
-/// The golfers in the live phase, in bracket order.
+/// Everybody in the bracket, in bracket order — the card's rows for the whole
+/// round, not just this phase's two matches.
 List<Map<String, dynamic>> _bracketCardPlayers(Map<String, dynamic> data) {
   final seen = <int>{};
   final out = <Map<String, dynamic>>[];
-  for (final m in _bracketLiveMatches(data)) {
+  for (final m in _bracketAllMatches(data)) {
     final card = m['scorecard'] as Map<String, dynamic>?;
     for (final p in (card?['players'] as List? ?? const [])) {
       final row = Map<String, dynamic>.from(p as Map);
@@ -5057,10 +5073,10 @@ List<Map<String, dynamic>> _bracketCardPlayers(Map<String, dynamic> data) {
   return out;
 }
 
-/// The holes the live phase plays, in play order.
+/// Every hole the bracket plays, in play order — both nines.
 List<int> _bracketHolesInPlay(Map<String, dynamic> data) {
   final out = <int>[];
-  for (final m in _bracketLiveMatches(data)) {
+  for (final m in _bracketAllMatches(data)) {
     final card = m['scorecard'] as Map<String, dynamic>?;
     for (final h in (card?['holes_in_play'] as List? ?? const [])) {
       final n = (h as num).toInt();
