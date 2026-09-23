@@ -1725,6 +1725,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// So the cup stays GREY and the reader's own match, in the figure, wears
   /// its leader's colour. Both signed from his side would make one of them
   /// lie.
+  ///
+  /// **`of 4` gave its width to the format** on 22 Sep 2026. A golfer walking
+  /// onto the 7th needs telling that the fourball is over and this is
+  /// alternate shot far more than he needs reminding the cup is out of four.
   StandingRibbon? _tripleCupRibbon(
       RoundProvider rp, int? me, VoidCallback onOpen) {
     final standing =
@@ -1734,6 +1738,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     return StandingRibbon(
       kind: StandingKind.result,
       standing: standing.standing,
+      // **The format, in the quiet slot.** How many points are available never
+      // changes all afternoon; which FORMAT the group is playing changes twice
+      // and changes what they are about to do on the tee — so `of 4` gave its
+      // width to `Fourball`.
+      figureLabel: standing.figureLabel,
       figure: standing.figure,
       figureColor: switch (standing.matchLeader) {
         1 => tc.team1Color,

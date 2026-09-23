@@ -25,6 +25,7 @@ TripleCupHole _hole(int n, {String? winner}) => TripleCupHole(
 TripleCupMatch _match({
   int number = 1,
   String segment = 'fourball',
+  String? label,
   int start = 1,
   int end = 6,
   String status = 'in_progress',
@@ -34,7 +35,7 @@ TripleCupMatch _match({
   List<TripleCupHole> holes = const [],
 }) =>
     TripleCupMatch(
-      matchNumber: number, segment: segment, label: 'M$number',
+      matchNumber: number, segment: segment, label: label ?? 'M$number',
       startHole: start, endHole: end, displayEndHole: end,
       status: status, result: null, finishedOnHole: null,
       holesToPlay: holesToPlay, holesUpFinal: holesUp, winnerLabel: '—',
@@ -68,19 +69,45 @@ TripleCupSummary _summary({
 
 void main() {
   group('**the cup is the headline**', () {
-    test('including 0–0 before a point is won', () {
+    test('including 0–0 before a point is won, and WITHOUT `of 4`', () {
+      // How many points are available never changes all afternoon; the format
+      // changes twice and changes what the group is about to do.
       // A headline that means one thing before the first point and another
       // after is a slot nobody can learn.
       final s = _summary(matches: [_match()]);
-      expect(tripleCupStanding(s, _me, hole: 1)!.standing, '0–0 of 4');
+      expect(tripleCupStanding(s, _me, hole: 1)!.standing, '0–0');
     });
 
     test('halves are real, and whole points are not decimals', () {
       final s = _summary(t1: 2.5, t2: 1.5, matches: [_match()]);
-      expect(tripleCupStanding(s, _me, hole: 1)!.standing, '2½–1½ of 4');
+      expect(tripleCupStanding(s, _me, hole: 1)!.standing, '2½–1½');
       expect(cupPoints(3), '3');
       expect(cupPoints(0.5), '½');
       expect(cupPoints(0), '0');
+    });
+  });
+
+  group('**the format is named in front of the margin**', () {
+    test('a fourball says so', () {
+      final s = _summary(matches: [
+        _match(holesUp: 1, holes: [_hole(1, winner: 'T1')]),
+      ]);
+      final st = tripleCupStanding(s, _me, hole: 1)!;
+      expect(st.figureLabel, 'M1');
+      expect(st.figure, '1 UP thru 1');
+    });
+
+    test('**the label distinguishes Singles 1 from Singles 2**', () {
+      // Two singles run at once; the segment alone would name them the same.
+      final s = _summary(matches: [
+        _match(number: 2, segment: 'singles', start: 13, end: 18),
+      ]);
+      expect(tripleCupStanding(s, _me, hole: 13)!.figureLabel, 'M2');
+    });
+
+    test('and the segment is the fallback when a match has no label', () {
+      expect(segmentLabel(_match(segment: 'foursomes', label: '')),
+             'Foursomes');
     });
   });
 
@@ -130,7 +157,7 @@ void main() {
       // It is the point of the round, so the row is not empty for him.
       final s = _summary(t1: 1, matches: [_match()]);
       final st = tripleCupStanding(s, 999, hole: 1)!;
-      expect(st.standing, '1–0 of 4');
+      expect(st.standing, '1–0');
       expect(st.figure, '');
     });
 
@@ -139,7 +166,7 @@ void main() {
         _match(start: 7, end: 12, playerIds: const [13, 14]),
       ]);
       final st = tripleCupStanding(s, _me, hole: 8)!;
-      expect(st.standing, '1–0 of 4');
+      expect(st.standing, '1–0');
       expect(st.figure, '');
     });
 
