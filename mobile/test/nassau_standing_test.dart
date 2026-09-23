@@ -5,12 +5,19 @@
 /// **Nassau is the case where one figure is dishonest.** Two matches are
 /// always live — the nine being played and the eighteen — and the lock-screen
 /// card already ruled that neither can be nominated as the headline. So the
-/// subject here is that both slots are filled, and that each is written from
-/// the reader's side.
+/// first subject here is that both slots are filled.
+///
+/// The second is that **the margin is NEUTRAL and the colour names the leading
+/// side.** It used to be written from the reader's while being coloured from
+/// the leader's, and the two contradicted each other on every hole he was
+/// behind: `1 DOWN` in orange, on a screen where orange was one UP. Reported
+/// from a singles match, 22 Sep 2026.
 ///
 /// The teams are FIXED, which is the whole difference from Sixes: a pairing is
-/// chosen once and never re-drawn, so the colour can carry identity and the
-/// row never spends width on names.
+/// chosen once and never re-drawn, so the colour can carry identity, the row
+/// never spends width on names, and one string can serve all four phones.
+/// Sixes cannot do that — its pairings re-draw every six holes — so it colours
+/// the READER's side instead and says `1 DOWN` honestly.
 library;
 
 import 'package:flutter_test/flutter_test.dart';
@@ -74,14 +81,33 @@ void main() {
       expect(st.second!.value, '1 UP');
     });
 
-    test('each is written from the reader\'s side', () {
+    test('**the same string reaches both sides; only the tint differs**', () {
+      // The row is read by four golfers at once and sits above player rows
+      // tinted with the two sides' fixed colours. A margin written from the
+      // reader's side while coloured from the leader's said `1 DOWN` in the
+      // colour of the side that was one UP.
       final s = _summary(
         front9:  _bet(margin: 2, holesPlayed: 5),
         overall: _bet(margin: 1, holesPlayed: 5),
       );
+      final mine = nassauStanding(s, _me, hole: 5)!;
       final them = nassauStanding(s, _themA, hole: 5)!;
-      expect(them.main.value, '2 DOWN thru 5');
-      expect(them.second!.value, '1 DOWN');
+      expect(them.main.value, '2 UP thru 5');
+      expect(them.second!.value, '1 UP');
+      expect(them.main.value, mine.main.value);
+      // Team 1 is up in both bets, whoever is holding the phone.
+      expect(mine.main.team, 1);
+      expect(them.main.team, 1);
+    });
+
+    test('and the colour follows the LEADER when that is the other side', () {
+      final s = _summary(
+        front9:  _bet(margin: -2, holesPlayed: 5),
+        overall: _bet(margin: -1, holesPlayed: 5),
+      );
+      final mine = nassauStanding(s, _me, hole: 5)!;
+      expect(mine.main.value, '2 UP thru 5');
+      expect(mine.main.team, 2);
     });
 
     test('the back nine takes over after the turn', () {
@@ -92,7 +118,7 @@ void main() {
       );
       final st = nassauStanding(s, _me, hole: 12)!;
       expect(st.main.label, 'B9');
-      expect(st.main.value, '1 DOWN thru 3');
+      expect(st.main.value, '1 UP thru 3');
       // **Both counts on the back nine.** Three holes into this bet, twelve
       // into the eighteen — two different questions, both worth answering.
       expect(st.second!.value, '1 UP thru 12');
@@ -117,7 +143,7 @@ void main() {
         overall: _bet(margin: 1, holesPlayed: 12),
       );
       expect(nassauStanding(s, _me, hole: 4)!.main.value, 'won 3&2');
-      expect(nassauStanding(s, _me, hole: 12)!.main.value, '1 DOWN thru 3');
+      expect(nassauStanding(s, _me, hole: 12)!.main.value, '1 UP thru 3');
     });
   });
 
@@ -127,8 +153,11 @@ void main() {
         front9: _bet(margin: 3, holesPlayed: 7, result: 'team1',
                      decidedMargin: 3, decidedRemaining: 2),
       );
+      // **`won`, never `lost`** — same rule as the live margin. `lost 3&2` in
+      // the winner's colour is the contradiction one move further on.
       expect(nassauStanding(s, _me, hole: 8)!.main.value, 'won 3&2');
-      expect(nassauStanding(s, _themA, hole: 8)!.main.value, 'lost 3&2');
+      expect(nassauStanding(s, _themA, hole: 8)!.main.value, 'won 3&2');
+      expect(nassauStanding(s, _themA, hole: 8)!.main.team, 1);
     });
 
     test('played to the last hole it is 1 UP, not 1&0', () {

@@ -11,11 +11,21 @@
 ///   * **the standing** is the nine being played — `F9 2 UP thru 5`
 ///   * **the figure** is the overall — `Overall 1 UP`
 ///
-/// Both from the reader's side, because his teams are FIXED here. That is the
-/// whole difference from Sixes, and it is why this file is shorter: a Nassau
-/// pairing is chosen once and never re-drawn, so blue means the same two
-/// golfers on the first tee and the eighteenth green. The colour can carry
-/// identity, and the row never needs to spend width on names.
+/// **The margin is NEUTRAL and wears the leading side's colour.** A Nassau
+/// pairing is chosen once and never re-drawn, so blue means the same golfers
+/// on the first tee and the eighteenth green — the colour can carry identity,
+/// and the row never needs to spend width on names.
+///
+/// It used to write the margin from the READER's side while colouring the
+/// LEADER's, and the two contradicted each other on every hole the reader was
+/// behind: `1 DOWN` in orange, on a screen where orange was one UP. Reported
+/// from a singles match, 22 Sep 2026.
+///
+/// Sixes solves the same problem the other way — it colours the READER's side,
+/// so `1 DOWN` in his own blue is honest — and it has to, because its pairings
+/// re-draw every six holes and a leader-coloured row would change meaning
+/// mid-round. Nassau's do not, so it takes the answer that agrees with the
+/// leaderboard: **one string for all four phones, and the tint says whose.**
 ///
 /// ## Why no money
 ///
@@ -44,12 +54,14 @@ class NassauPart {
   /// division the group is not playing would be worse than nothing.
   final String label;
 
-  /// `2 UP thru 5`, `All Square`, `won 3&2`.
+  /// `2 UP thru 5`, `All Square`, `won 3&2` — **never `DOWN` or `lost`.**
+  /// The same string reaches all four phones and [team] says whose it is.
   final String value;
 
-  /// 1 or 2 — whose side is up. Null while level, where no side is up for a
-  /// colour to be about. Unlike Sixes it is never withheld for any other
-  /// reason, because Nassau's teams do not re-draw.
+  /// 1 or 2 — whose side is up, and therefore the colour the value wears. Null
+  /// while level, where no side is up for a colour to be about. Unlike Sixes
+  /// it is never withheld for any other reason, because Nassau's teams do not
+  /// re-draw.
   final int? team;
 
   const NassauPart(this.label, this.value, this.team);
@@ -85,12 +97,13 @@ int? readerSide(NassauSummary s, int playerId) {
 /// `B9 1 DOWN thru 3 · Overall 1 UP thru 12` — and each number answers its own
 /// question: how far into this nine's bet, and how far into the eighteen. Both
 /// are wanted there.
-NassauPart? _bet(NassauBetResult bet, {required int side,
-                                       required String label,
+NassauPart? _bet(NassauBetResult bet, {required String label,
                                        bool showThru = true}) {
   if (bet.holesPlayed == 0) return null;
-  final margin = bet.margin * (side == 1 ? 1 : -1);
-  final team = _side(bet, side);
+  // **The RAW margin, not the reader's.** It asks which SIDE is up, which is a
+  // fact about the match rather than about whoever is reading it — and the
+  // colour is about to say the same thing, so the two cannot disagree.
+  final team = _side(bet);
 
   // A DECIDED bet reports its result, not a running margin — `2 UP` on a nine
   // that is over reads as a nine still to play. `decidedRemaining` is the
@@ -99,16 +112,18 @@ NassauPart? _bet(NassauBetResult bet, {required int side,
   // the 1st tee and wrong off every shotgun.
   if (bet.result != null) {
     if (bet.result == 'halved') return NassauPart(label, kAllSquare, null);
-    final won = (bet.result == 'team1') == (side == 1);
     final m = (bet.decidedMargin ?? bet.margin).abs();
-    return NassauPart(label,
-        '${won ? "won" : "lost"} '
-        '${closeOut(won ? m : -m, bet.decidedRemaining ?? 0)}', team);
+    return NassauPart(
+        label, 'won ${closeOut(m, bet.decidedRemaining ?? 0)}', team);
   }
 
   final thru = showThru ? ' thru ${bet.holesPlayed}' : '';
-  return NassauPart(label,
-      margin == 0 ? '$kAllSquare$thru' : '${marginLabel(margin)}$thru', team);
+  return NassauPart(
+      label,
+      bet.margin == 0
+          ? '$kAllSquare$thru'
+          : '${marginLabel(bet.margin.abs())}$thru',
+      team);
 }
 
 /// The two strings, or null when the round has not said anything yet.
@@ -129,11 +144,11 @@ NassauStanding? nassauStanding(NassauSummary? summary, int? playerId,
   // switched off) rides `overall` — neither has a second row to fill, and a
   // label would be naming a division the group is not playing.
   if (summary.singleMatch) {
-    final only = _bet(summary.front9, side: side, label: '');
+    final only = _bet(summary.front9, label: '');
     return only == null ? null : NassauStanding(only, null);
   }
   if (!summary.playFront && !summary.playBack) {
-    final only = _bet(summary.overall, side: side, label: '');
+    final only = _bet(summary.overall, label: '');
     return only == null ? null : NassauStanding(only, null);
   }
 
@@ -144,13 +159,13 @@ NassauStanding? nassauStanding(NassauSummary? summary, int? playerId,
   final nine = onBack ? summary.back9 : summary.front9;
   final inPlay = onBack ? summary.playBack : summary.playFront;
 
-  final ninePart = inPlay ? _bet(nine, side: side, label: onBack ? 'B9' : 'F9')
+  final ninePart = inPlay ? _bet(nine, label: onBack ? 'B9' : 'F9')
                           : null;
   // Derived rather than keyed off which nine it is: the two counts are equal
   // exactly when they would repeat, whatever put them there — a front nine, a
   // nine still on its first hole, a bet switched off mid-round.
   final overallPart = summary.playOverall
-      ? _bet(summary.overall, side: side, label: 'Overall',
+      ? _bet(summary.overall, label: 'Overall',
              showThru: summary.overall.holesPlayed != nine.holesPlayed)
       : null;
 
@@ -160,7 +175,7 @@ NassauStanding? nassauStanding(NassauSummary? summary, int? playerId,
   // count, because there is no second one for it to repeat.
   if (ninePart == null) {
     final lead = summary.playOverall
-        ? _bet(summary.overall, side: side, label: 'Overall')
+        ? _bet(summary.overall, label: 'Overall')
         : null;
     return lead == null ? null : NassauStanding(lead, null);
   }
@@ -172,8 +187,8 @@ NassauStanding? nassauStanding(NassauSummary? summary, int? playerId,
 /// **All Square is grey**, the same call Sixes made — neither side is up, so
 /// there is no side for the colour to be about and picking one reads as a
 /// lead.
-int? _side(NassauBetResult bet, int side) {
-  final margin = bet.margin * (side == 1 ? 1 : -1);
-  if (bet.result == 'halved' || margin == 0) return null;
-  return margin > 0 ? side : (side == 1 ? 2 : 1);
+int? _side(NassauBetResult bet) {
+  if (bet.result == 'halved' || bet.margin == 0) return null;
+  // `margin` is written from team 1's side by the server.
+  return bet.margin > 0 ? 1 : 2;
 }
