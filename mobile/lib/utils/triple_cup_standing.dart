@@ -78,8 +78,23 @@ class TripleCupStanding {
   /// wears. Null while that match is level.
   final int? matchLeader;
 
+  /// The two halves of the cup score on their own — `0` and `1` — so the row
+  /// can give each one its own side's colour.
+  ///
+  /// **One colour cannot say a cup score.** `0–1` is team 1's nothing against
+  /// team 2's point; painting the whole figure red claims it for team 1, and
+  /// grey says neither of them played it. Every other standing in the app is
+  /// one side's or nobody's, which is why this is the only game that needs
+  /// the split.
+  ///
+  /// [standing] still carries the joined string, which is what the tests and
+  /// any caller without two colours to hand read.
+  final String cupT1;
+  final String cupT2;
+
   const TripleCupStanding(this.standing, this.toWin, this.figureLabel,
-                          this.figure, this.matchLeader);
+                          this.figure, this.matchLeader,
+                          {this.cupT1 = '', this.cupT2 = ''});
 }
 
 /// `2½`, `3`, `0` — halves are real in a cup and whole numbers are not
@@ -103,7 +118,9 @@ TripleCupStanding? tripleCupStanding(TripleCupSummary? summary, int? playerId,
   // The tournament's cup when the round carries one, else this foursome's.
   final t1 = summary.cupTeam1Points ?? summary.team1Points;
   final t2 = summary.cupTeam2Points ?? summary.team2Points;
-  final cupScore = '${cupPoints(t1)}–${cupPoints(t2)}';
+  final t1Text = cupPoints(t1);
+  final t2Text = cupPoints(t2);
+  final cupScore = '$t1Text–$t2Text';
   // **The one number that answers *is it gone*.** A cup is clinched rather
   // than played out, so the points a side still needs is what a captain reads
   // — and it is the only figure here that a foursome's own four points cannot
@@ -115,7 +132,10 @@ TripleCupStanding? tripleCupStanding(TripleCupSummary? summary, int? playerId,
   // counted FROM the score beside it and reads backwards in front of one.
   final cup = toWin.isEmpty ? cupScore : '$cupScore · $toWin';
 
-  if (playerId == null) return TripleCupStanding(cup, toWin, '', '', null);
+  if (playerId == null) {
+    return TripleCupStanding(cup, toWin, '', '', null,
+        cupT1: t1Text, cupT2: t2Text);
+  }
 
   // The match on this hole — **the reader's if he is in one, otherwise the
   // group's.**
@@ -133,7 +153,10 @@ TripleCupStanding? tripleCupStanding(TripleCupSummary? summary, int? playerId,
               m.players.any((p) => p.playerId == playerId && !p.isPhantom))
           .firstOrNull ??
       onHole.firstOrNull;
-  if (mine == null) return TripleCupStanding(cup, toWin, '', '', null);
+  if (mine == null) {
+    return TripleCupStanding(cup, toWin, '', '', null,
+        cupT1: t1Text, cupT2: t2Text);
+  }
 
   // The leaderboard's own rule for naming a match: its label when it has one,
   // which is what distinguishes `Singles 1` from `Singles 2`, and the segment
@@ -141,7 +164,8 @@ TripleCupStanding? tripleCupStanding(TripleCupSummary? summary, int? playerId,
   final format = segmentLabel(mine);
 
   final st = tripleCupMatchState(mine);
-  return TripleCupStanding(cup, toWin, format, st.value, st.leader);
+  return TripleCupStanding(cup, toWin, format, st.value, st.leader,
+      cupT1: t1Text, cupT2: t2Text);
 }
 
 /// Where ONE match stands — `2 UP thru 5`, `All Square thru 5`, `win 3&2`.

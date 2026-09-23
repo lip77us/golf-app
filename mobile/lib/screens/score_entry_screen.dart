@@ -1809,7 +1809,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       RoundProvider rp, int? me, VoidCallback onOpen) {
     final standing =
         tripleCupStanding(rp.tripleCupSummary, me, hole: _selectedHole);
-    if (standing == null) return null;
+    final tc = rp.tripleCupSummary;
+    if (standing == null || tc == null) return null;
     return StandingRibbon(
       kind: StandingKind.result,
       // **The cup has the bar to itself.** The match used to ride in the
@@ -1818,6 +1819,18 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       // names each match, so its state belongs on that line — and there it
       // can show BOTH singles at once, which one figure slot never could.
       standing: standing.standing,
+      // **Each half of the cup wears its own side.** A cup score is the one
+      // standing in the app that belongs to two teams at once: `0–1` is team
+      // 1's nothing against team 2's point, so a single colour claims it for
+      // one of them and grey says neither played it. The dash and `4½ to win`
+      // stay grey — the dash belongs to nobody and the target is a fact about
+      // the cup rather than about a side.
+      standingSpans: [
+        StandingSpan(standing.cupT1, tc.team1Color),
+        const StandingSpan('–'),
+        StandingSpan(standing.cupT2, tc.team2Color),
+        if (standing.toWin.isNotEmpty) StandingSpan(' · ${standing.toWin}'),
+      ],
       figure: '',
       onOpenLeaderboard: onOpen,
     );

@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
 import 'package:flutter/material.dart';
 import 'package:golf_mobile/utils/triple_cup_standing.dart';
+import 'package:golf_mobile/widgets/standing_ribbon.dart';
 import 'package:golf_mobile/widgets/triple_cup_pairings.dart';
 
 const _me = 11;
@@ -357,4 +358,76 @@ void main() {
       expect(find.byType(Text), findsNothing);
     });
   });
+
+  // ── The cup score wears both sides ──────────────────────────────────────
+  //
+  // Every other standing in the app belongs to ONE side or to nobody: a match
+  // margin is whoever is up, a place is nobody's. A cup score is the only one
+  // that names two teams in a single figure, so a single colour claims it for
+  // one of them and grey says neither played it.
+  group('**both halves of the cup, each in its own side**', () {
+    test('the halves are exposed separately from the joined string', () {
+      final s = _summary(cupT1: 6.5, cupT2: 4.5, toWin: 12.5,
+                         matches: [_match()]);
+      final st = tripleCupStanding(s, _me, hole: 1)!;
+      expect(st.cupT1, '6½');
+      expect(st.cupT2, '4½');
+      // The joined string is unchanged — it is what the ellipsis measures and
+      // what a caller without two colours to hand still reads.
+      expect(st.standing, '6½–4½ · 12½ to win');
+    });
+
+    test('a foursome cup with no tournament above it splits the same way', () {
+      final st = tripleCupStanding(
+          _summary(t1: 2, t2: 1, matches: [_match()]), _me, hole: 1)!;
+      expect(st.cupT1, '2');
+      expect(st.cupT2, '1');
+      expect(st.toWin, isEmpty);
+    });
+
+    testWidgets('the ribbon paints each half in its team colour', (t) async {
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(
+          appBar: AppBar(
+            bottom: StandingRibbon(
+              kind: StandingKind.result,
+              standing: '0–1',
+              standingSpans: const [
+                StandingSpan('0', Colors.red),
+                StandingSpan('–'),
+                StandingSpan('1', Colors.blue),
+              ],
+              figure: '',
+              onOpenLeaderboard: () {},
+            ),
+          ),
+        ),
+      ));
+      final span = t.widget<Text>(find.byWidgetPredicate((w) =>
+          w is Text && w.textSpan != null)).textSpan! as TextSpan;
+      final kids = span.children!.cast<TextSpan>();
+      expect(kids.map((k) => k.text).join(), '0–1');
+      expect(kids[0].style?.color, Colors.red);
+      // The dash belongs to nobody, so it keeps the standing's own colour.
+      expect(kids[1].style, isNull);
+      expect(kids[2].style?.color, Colors.blue);
+    });
+
+    testWidgets('without spans the row draws the plain string', (t) async {
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(
+          appBar: AppBar(
+            bottom: StandingRibbon(
+              kind: StandingKind.result,
+              standing: '1 UP thru 2',
+              figure: '',
+              onOpenLeaderboard: () {},
+            ),
+          ),
+        ),
+      ));
+      expect(find.text('1 UP thru 2'), findsOneWidget);
+    });
+  });
 }
+

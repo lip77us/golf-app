@@ -59,6 +59,18 @@ enum StandingKind {
   result,
 }
 
+/// One piece of a standing that carries its own colour — a side's half of a
+/// cup score, or the grey dash between them.
+class StandingSpan {
+  final String text;
+
+  /// Null keeps the standing's own colour, which is what the separator and
+  /// any trailing qualifier want.
+  final Color? color;
+
+  const StandingSpan(this.text, [this.color]);
+}
+
 class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
   final StandingKind kind;
 
@@ -72,6 +84,20 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
   /// Where you stand — `1 UP thru 2`, `2nd of 38`, `Red 2–1`. Full weight: it
   /// is the reason the row exists.
   final String standing;
+
+  /// The standing split into coloured pieces, when ONE colour cannot say it.
+  ///
+  /// A cup score names two sides in one figure — `0–1` is team 1's nothing
+  /// against team 2's point — so [standingColor] has no answer: either colour
+  /// claims the whole score for one team, and grey says neither played it.
+  /// The pieces wear their own sides and the separator stays grey.
+  ///
+  /// Null for every other game, and null is the ordinary case: a match margin
+  /// belongs to whoever is up, and a place belongs to nobody. It replaces
+  /// [standing] when set, so [standing] stays the string the row would have
+  /// drawn — which is what the ellipsis, the tests and every other caller
+  /// still read.
+  final List<StandingSpan>? standingSpans;
 
   /// The standing's own colour, where the game has a side to name AND that
   /// side still means on this row what it means everywhere else on the screen.
@@ -107,6 +133,7 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
     this.standingLabel = '',
     this.figureLabel = '',
     this.standingColor,
+    this.standingSpans,
     this.figureColor,
   });
 
@@ -148,8 +175,17 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
             const SizedBox(width: 5),
           ],
           Flexible(
-            child: Text(
-              standing,
+            child: Text.rich(
+              standingSpans == null
+                  ? TextSpan(text: standing)
+                  : TextSpan(children: [
+                      for (final sp in standingSpans!)
+                        TextSpan(
+                            text: sp.text,
+                            style: sp.color == null
+                                ? null
+                                : TextStyle(color: sp.color)),
+                    ]),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               // **Grey unless the caller can vouch for the colour.** Bold is
