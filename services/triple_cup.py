@@ -1904,6 +1904,46 @@ def triple_cup_summary(foursome) -> dict | None:
             'by_player' : money_out,
         },
         'phantom' : phantom_info,
+        # ── The CUP this foursome is playing into ─────────────────────────
+        #
+        # Null on a casual Triple Cup, which is a cup of its own and has
+        # nothing above it. On a cup round it is the whole tournament: the two
+        # teams' points across every foursome and every round, and what it
+        # takes to win.
+        #
+        # **That is a different headline from `overall` above.** `overall` is
+        # THIS foursome's four points; a golfer on a cup round is playing for
+        # the twenty-four, and the foursome's own score is a step toward it
+        # rather than the thing being contested.
+        'cup' : _cup_context(foursome.round),
+    }
+
+
+def _cup_context(round_obj) -> dict | None:
+    """The tournament cup a cup round plays into — or None for a casual one.
+
+    Tournament-level rather than round-level: a cup can run over several
+    rounds, and a golfer on day two is playing for the total. `to_win` comes
+    from the same builder the cup board uses, so the row and the board cannot
+    disagree about what it takes.
+    """
+    if not _is_cup_round(round_obj):
+        return None
+    try:
+        from services.cup_standings import cup_standings_summary
+        tournament = round_obj.ryder_cup_config.tournament
+        cup = cup_standings_summary(tournament)
+    except Exception:
+        return None
+    if not cup:
+        return None
+    return {
+        'team1_points'    : cup.get('team1_points'),
+        'team2_points'    : cup.get('team2_points'),
+        'points_available': cup.get('points_available'),
+        'to_win'          : cup.get('to_win'),
+        'team1_name'      : cup.get('team1_name'),
+        'team2_name'      : cup.get('team2_name'),
     }
 
 

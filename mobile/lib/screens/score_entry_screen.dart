@@ -1758,7 +1758,21 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
 
   StandingRibbon? _standingRibbon(RoundProvider rp, List<String> games) {
     final round = rp.round;
-    if (round == null || !round.isCasual) return null;
+    if (round == null) return null;
+    // **Casual only, EXCEPT Triple Cup.** Every row below was written against
+    // a casual round and says what a casual round means: a place `of 4` is a
+    // place in the foursome, and on a tournament field it would be a place
+    // among four golfers wearing the words of a place in the field. Turning
+    // them all on at once would ship nine untested rows.
+    //
+    // Triple Cup is the exception because a cup round is the case it was
+    // written for: the row reports the TOURNAMENT's cup and the reader's own
+    // match, both of which mean the same thing in either context. Reported
+    // 23 Sep 2026 — on a cup round the row did not draw at all, so there was
+    // no leaderboard link, the icon stayed, and neither score showed.
+    final isTripleCup =
+        resolvePrimary(round.primaryGame, games) == GameIds.tripleCup;
+    if (!round.isCasual && !isTripleCup) return null;
     final me = context.read<AuthProvider>().player?.id;
     final leaderboard = () => Navigator.of(context)
         .pushNamed('/leaderboard', arguments: round.id);

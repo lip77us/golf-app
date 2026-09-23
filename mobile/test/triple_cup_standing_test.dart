@@ -56,6 +56,9 @@ TripleCupSummary _summary({
   double t2 = 0,
   int available = 4,
   List<TripleCupMatch> matches = const [],
+  double? cupT1,
+  double? cupT2,
+  double? toWin,
 }) =>
     TripleCupSummary(
       status: 'in_progress', groupSize: 4,
@@ -65,6 +68,7 @@ TripleCupSummary _summary({
       team1Wins: 0, team2Wins: 0, halves: 0,
       team1Points: t1, team2Points: t2, pointsAvailable: available,
       betUnit: 0, money: const [],
+      cupTeam1Points: cupT1, cupTeam2Points: cupT2, cupToWin: toWin,
     );
 
 void main() {
@@ -108,6 +112,47 @@ void main() {
     test('and the segment is the fallback when a match has no label', () {
       expect(segmentLabel(_match(segment: 'foursomes', label: '')),
              'Foursomes');
+    });
+  });
+
+  group('**on a CUP round the headline is the tournament\'s cup**', () {
+    test('the tournament total replaces the foursome\'s four points', () {
+      // A casual Triple Cup is a cup of its own; on a Ryder-Cup round the
+      // foursome is one of several and the golfer is playing for the
+      // twenty-four.
+      final s = _summary(
+        t1: 2, t2: 1,               // this foursome
+        cupT1: 6.5, cupT2: 4.5,     // the tournament
+        toWin: 12.5,
+        matches: [_match()]);
+      expect(tripleCupStanding(s, _me, hole: 1)!.standing,
+             '6½–4½ · 12½ to win');
+    });
+
+    test('**`to win` comes AFTER the score it counts from**', () {
+      // It reads backwards in front of one, which is why it is not in the
+      // row's quiet slot — that slot sits ahead of the standing.
+      final s = _summary(cupT1: 6.5, cupT2: 4.5, toWin: 12.5,
+                         matches: [_match()]);
+      final st = tripleCupStanding(s, _me, hole: 1)!;
+      expect(st.standing.indexOf('6½–4½'),
+             lessThan(st.standing.indexOf('12½ to win')));
+    });
+
+    test('a casual Triple Cup has no cup above it, and says nothing', () {
+      final s = _summary(t1: 2, t2: 1, matches: [_match()]);
+      final st = tripleCupStanding(s, _me, hole: 1)!;
+      expect(st.standing, '2–1');
+      expect(st.toWin, '');
+    });
+
+    test('and the match still rides in the figure', () {
+      final s = _summary(
+        cupT1: 6.5, cupT2: 4.5, toWin: 12.5,
+        matches: [_match(holesUp: 1, holes: [_hole(1, winner: 'T1')])]);
+      final st = tripleCupStanding(s, _me, hole: 1)!;
+      expect(st.figure, '1 UP thru 1');
+      expect(st.figureLabel, 'M1');
     });
   });
 

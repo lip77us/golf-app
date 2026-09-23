@@ -6,6 +6,19 @@
 ///   * **the figure** is the reader's own match, NAMED — `Fourball 1 UP thru
 ///     4`, `Singles 2 win 3&2`
 ///
+/// ## On a CUP round the headline is the tournament's cup, not the foursome's
+///
+/// A casual Triple Cup is a cup of its own: four points between four men, and
+/// `overall` is the whole contest. On a Ryder-Cup round it is one foursome of
+/// several, and the golfer is playing for the tournament's twenty-four — his
+/// own four are a step toward it rather than the thing being contested.
+///
+/// So the standing becomes `6½–4½` and the figure gains `12½ to win`, which is
+/// the one number that answers *is it gone*. The lock-screen card made the
+/// same swap off the same question: **does this round carry a cup config.**
+/// Not a setting and not a flag — a Triple Cup inside a Ryder Cup is a
+/// different product from four men playing for twenty-five dollars.
+///
 /// ## The cup is the headline, including `0–0`
 ///
 /// This is the lock-screen card's ruling and it holds here for the same
@@ -45,8 +58,13 @@ import '../api/models.dart';
 import 'match_notation.dart';
 
 class TripleCupStanding {
-  /// `2½–1½`.
+  /// `2½–1½`, or `6½–4½` on a cup round.
   final String standing;
+
+  /// Retained for callers that want it alone; the row reads it inside
+  /// [standing], because `12½ to win` has to come AFTER the score it is
+  /// counting from and the row's quiet slot sits in front.
+  final String toWin;
 
   /// `Fourball`, `Foursomes`, `Singles 2` — the format the reader's match is
   /// playing, grey in front of the margin. Empty when he has no match here.
@@ -60,8 +78,8 @@ class TripleCupStanding {
   /// wears. Null while that match is level.
   final int? matchLeader;
 
-  const TripleCupStanding(
-      this.standing, this.figureLabel, this.figure, this.matchLeader);
+  const TripleCupStanding(this.standing, this.toWin, this.figureLabel,
+                          this.figure, this.matchLeader);
 }
 
 /// `2½`, `3`, `0` — halves are real in a cup and whole numbers are not
@@ -80,10 +98,22 @@ TripleCupStanding? tripleCupStanding(TripleCupSummary? summary, int? playerId,
                                      {required int hole}) {
   if (summary == null || summary.matches.isEmpty) return null;
 
-  final cup = '${cupPoints(summary.team1Points)}–'
-              '${cupPoints(summary.team2Points)}';
+  // The tournament's cup when the round carries one, else this foursome's.
+  final t1 = summary.cupTeam1Points ?? summary.team1Points;
+  final t2 = summary.cupTeam2Points ?? summary.team2Points;
+  final cupScore = '${cupPoints(t1)}–${cupPoints(t2)}';
+  // **The one number that answers *is it gone*.** A cup is clinched rather
+  // than played out, so the points a side still needs is what a captain reads
+  // — and it is the only figure here that a foursome's own four points cannot
+  // provide. Empty on a casual Triple Cup, which has no cup above it.
+  final toWin = summary.cupToWin == null
+      ? ''
+      : '${cupPoints(summary.cupToWin!)} to win';
+  // The score, then what it takes — in that order, because `12½ to win` is
+  // counted FROM the score beside it and reads backwards in front of one.
+  final cup = toWin.isEmpty ? cupScore : '$cupScore · $toWin';
 
-  if (playerId == null) return TripleCupStanding(cup, '', '', null);
+  if (playerId == null) return TripleCupStanding(cup, toWin, '', '', null);
 
   // The reader's match on this hole. A watcher, or a golfer whose match does
   // not cover the hole on screen, gets the cup and nothing beside it — which
@@ -94,7 +124,7 @@ TripleCupStanding? tripleCupStanding(TripleCupSummary? summary, int? playerId,
           hole <= m.endHole &&
           m.players.any((p) => p.playerId == playerId && !p.isPhantom))
       .firstOrNull;
-  if (mine == null) return TripleCupStanding(cup, '', '', null);
+  if (mine == null) return TripleCupStanding(cup, toWin, '', '', null);
 
   // The leaderboard's own rule for naming a match: its label when it has one,
   // which is what distinguishes `Singles 1` from `Singles 2`, and the segment
@@ -109,23 +139,21 @@ TripleCupStanding? tripleCupStanding(TripleCupSummary? summary, int? playerId,
   if (mine.status == 'complete') {
     // `holesToPlay` walks the match's own segment in the group's play order —
     // the only shotgun-safe source for the `M` in `3&2`.
-    return TripleCupStanding(
-        cup, format, 'win ${closeOut(margin, mine.holesToPlay ?? 0)}', leader);
+    return TripleCupStanding(cup, toWin, format, 'win ${closeOut(margin, mine.holesToPlay ?? 0)}', leader);
   }
   if (mine.status == 'halved') {
-    return TripleCupStanding(cup, format, kAllSquare, null);
+    return TripleCupStanding(cup, toWin, format, kAllSquare, null);
   }
 
   // Holes played in THIS match, not on the course: a Triple Cup segment is six
   // holes of its own, so the hole number in the header does not say how far
   // into the match the group is.
   final thru = mine.holes.where((h) => h.winner != null).length;
-  if (thru == 0) return TripleCupStanding(cup, format, kTeeOff, null);
+  if (thru == 0) return TripleCupStanding(cup, toWin, format, kTeeOff, null);
   if (margin == 0) {
-    return TripleCupStanding(cup, format, '$kAllSquare thru $thru', null);
+    return TripleCupStanding(cup, toWin, format, '$kAllSquare thru $thru', null);
   }
-  return TripleCupStanding(
-      cup, format, '${marginLabel(margin)} thru $thru', leader);
+  return TripleCupStanding(cup, toWin, format, '${marginLabel(margin)} thru $thru', leader);
 }
 
 /// `Fourball`, `Foursomes`, `Singles 2` — the match's own label when it has

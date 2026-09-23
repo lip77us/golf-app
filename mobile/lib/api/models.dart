@@ -2198,6 +2198,17 @@ class TripleCupSummary {
   final double team1Points;
   final double team2Points;
   final int pointsAvailable;
+
+  /// The CUP this foursome is playing into — null on a casual Triple Cup,
+  /// which is a cup of its own and has nothing above it.
+  ///
+  /// **A different headline from [team1Points].** Those are THIS foursome's
+  /// four points; a golfer on a cup round is playing for the tournament's
+  /// twenty-four, and his foursome's score is a step toward it rather than the
+  /// thing being contested.
+  final double? cupTeam1Points;
+  final double? cupTeam2Points;
+  final double? cupToWin;
   final double betUnit;
   final List<TripleCupPlayerMoney> money;
   /// Cross-foursome phantom info for 2v1 fourball — null when not 2v1.
@@ -2227,6 +2238,9 @@ class TripleCupSummary {
     required this.team1Points,
     required this.team2Points,
     required this.pointsAvailable,
+    this.cupTeam1Points,
+    this.cupTeam2Points,
+    this.cupToWin,
     required this.betUnit,
     required this.money,
     this.phantom,
@@ -2278,6 +2292,9 @@ class TripleCupSummary {
       // Today the backend always sums to a whole number, but a `as
       // int` cast on a double would crash the whole summary parse.
       pointsAvailable: ((overall['points_available'] as num?) ?? 0).toInt(),
+      cupTeam1Points: ((j['cup'] as Map?)?['team1_points'] as num?)?.toDouble(),
+      cupTeam2Points: ((j['cup'] as Map?)?['team2_points'] as num?)?.toDouble(),
+      cupToWin:       ((j['cup'] as Map?)?['to_win']       as num?)?.toDouble(),
       betUnit:        (money['bet_unit']           as num? ?? 0).toDouble(),
       money: (money['by_player'] as List? ?? [])
           .map((m) => TripleCupPlayerMoney.fromJson(m as Map<String, dynamic>))
