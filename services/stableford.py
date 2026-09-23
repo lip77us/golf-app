@@ -324,28 +324,92 @@ def _stableford_scorecard(round_obj, standings) -> dict:
         if par_by_hole:
             break
 
-    players = [
-        {'player_id': s['player_id'],
-         'name': s['player_name'],
-         'short_name': (s['player_name'] or '—').split(' ')[0]}
-        for s in standings
-    ]
-    holes_set = set()
+    # **The roster, not just the standings.** Standings are built from scored
+    # holes, so before the first tee shot they are empty — and a card with no
+    # rows cannot show anybody where his strokes fall, which is the whole point
+    # of allocating them prospectively. Ranked order is kept where it exists;
+    # anyone not yet on it is appended in roster order.
+    players, seen = [], set()
     for s in standings:
-        holes_set.update(int(h) for h in (s.get('gross') or {}).keys())
-    holes_in_play = sorted(holes_set) or list(range(1, 19))
+        players.append({'player_id': s['player_id'],
+                        'name': s['player_name'],
+                        'short_name': (s['player_name'] or '—').split(' ')[0]})
+        seen.add(s['player_id'])
+    for fs in (Foursome.objects.filter(round=round_obj)
+               .prefetch_related('memberships__player')):
+        for m in fs.memberships.all():
+            if m.player_id in seen or getattr(m.player, 'is_phantom', False):
+                continue
+            seen.add(m.player_id)
+            players.append({'player_id': m.player_id,
+                            'name': m.player.name,
+                            'short_name': m.player.short_name
+                                          or (m.player.name or '—').split(' ')[0]})
+
+    # ── The holes, and the strokes, PROSPECTIVELY ─────────────────────────
+    #
+    # Both used to come from what had been SCORED: `holes_in_play` was the set
+    # of holes with a gross on them, and `strokes` was gross minus net, which
+    # exists only on a played hole. So the card grew a column at a time and a
+    # golfer could not see where his shots fell until he had taken them — on
+    # the one game where knowing which holes give a stroke is how you decide
+    # whether to go for a green.
+    #
+    # Now: every hole the round plays, and the allocation from the game's own
+    # allocator. `make_strokes_fn` is the one the scoring above uses, so the
+    # dots and the points cannot disagree; it is also partial-round aware, so
+    # a nine-hole round is scaled and re-ranked rather than given an 18-hole
+    # handicap over nine holes.
+    from collections import OrderedDict
+    from scoring.handicap import make_strokes_fn, round_half_up
+    from services.hole_plan import play_order
+
+    config   = getattr(round_obj, 'stableford_config', None)
+    mode     = config.handicap_mode if config else 'net'
+    net_pct  = (config.net_percent if config else 100) or 100
+
+    order, strokes_by = [], {}
+    for fs in (Foursome.objects.filter(round=round_obj)
+               .prefetch_related('memberships__tee', 'memberships__player')):
+        for hn in (play_order(round_obj, fs) or list(range(1, 19))):
+            if hn not in order:
+                order.append(hn)
+        if mode == 'gross':
+            continue
+        fn = make_strokes_fn(fs)
+        for m in fs.memberships.all():
+            if m.tee_id is None or getattr(m.player, 'is_phantom', False):
+                continue
+            eff = round_half_up((m.playing_handicap or 0) * net_pct / 100)
+            if eff <= 0:
+                continue
+            per = strokes_by.setdefault(m.player_id, {})
+            for hn in (play_order(round_obj, fs) or list(range(1, 19))):
+                n = fn(eff, m.tee, hn)
+                if n:
+                    per[hn] = n
+    holes_in_play = order or list(range(1, 19))
+
+    by_pid = {s['player_id']: s for s in standings}
     holes_out = []
     for hn in holes_in_play:
         holes_out.append({
             'hole'        : hn,
             'par'         : par_by_hole.get(hn),
             'stroke_index': si_by_hole.get(hn),
+            # Stableford has no hole WINNER: every golfer scores his own
+            # points against par, so there is nobody to green.
             'winner_id'   : None,
             'scores'      : [
-                {'player_id': s['player_id'],
-                 'gross'    : (s.get('gross') or {}).get(hn),
-                 'strokes'  : (s.get('strokes') or {}).get(hn, 0)}
-                for s in standings
+                {'player_id': pl['player_id'],
+                 'gross'    : (by_pid.get(pl['player_id'], {})
+                               .get('gross') or {}).get(hn),
+                 'strokes'  : strokes_by.get(pl['player_id'], {}).get(hn, 0),
+                 # The hole's points, so one card can carry the gross block
+                 # and the points block over the same hole columns.
+                 'points'   : (by_pid.get(pl['player_id'], {})
+                               .get('holes') or {}).get(hn)}
+                for pl in players
             ],
         })
     return {'players': players, 'holes': holes_out,

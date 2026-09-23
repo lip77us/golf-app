@@ -1216,12 +1216,14 @@ class _StablefordView extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 8),
-        // ONE card: rank · per-hole Stableford points · Tot · $ payout.
-        // (Replaces the separate per-player standing cards — no more overlap.)
-        if (results.isNotEmpty)
-          _StablefordPointsGrid(results: results),
-        // Real gross scorecard (gross + stroke dots) so a modified points table
-        // isn't ambiguous — a "3" could be a net birdie vs a gross par.
+        // **One card, not two grids.** `_StablefordPointsGrid` drew the
+        // per-hole points over its own hole columns and the scorecard drew the
+        // gross over another set right under it — the same eighteen holes,
+        // twice, and a reader comparing a point to the score that earned it
+        // had to match column positions across two scrollers.
+        //
+        // `showPoints` puts both blocks over ONE set of columns and one
+        // scroll, which is what Points 5-3-1 needed for the same reason.
         Builder(builder: (_) {
           final sc = data['scorecard'] as Map<String, dynamic>?;
           final scHoles = ((sc?['holes'] as List?) ?? const [])
@@ -1248,6 +1250,12 @@ class _StablefordView extends StatelessWidget {
                   holes: scHoles,
                   participants: scPlayers,
                   holesInPlay: scHIP,
+                  // The gross block, then the points block, over one set of
+                  // hole columns — which is the pairing that makes a MODIFIED
+                  // table readable. A bare `3` could be a net birdie or a
+                  // gross par; beside the score that earned it, it is neither
+                  // ambiguous nor a second grid.
+                  showPoints: true,
                   legend: null,
                 ),
               ),
@@ -1259,154 +1267,14 @@ class _StablefordView extends StatelessWidget {
   }
 }
 
-/// Per-hole Stableford points grid for the leaderboard — Hole / per-player
-/// points / running Total. Mirrors the score-entry "Stableford points" section
-/// (without the Par row / current-hole highlight, which need the live
-/// scorecard). Driven purely by the summary's `results` (each carries a
-/// `holes:{hole:pts}` map + `total_points`).
-class _StablefordPointsGrid extends StatelessWidget {
-  final List results;
-  const _StablefordPointsGrid({required this.results});
-
-  static const double _labelColW = 92.0;   // rank + short name
-  static const double _cellW     = 28.0;
-  static const double _rowH      = 26.0;
-  static const double _totW      = 34.0;
-  static const double _payoutW   = 50.0;
-
-  String _short(String full) {
-    final first = full.trim().isEmpty ? '—' : full.trim().split(' ').first;
-    return first.length > 8 ? first.substring(0, 8) : first;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme     = Theme.of(context);
-    // Render only the holes actually played (union of the per-player point maps),
-    // sorted — so a back-9 / partial round shows 10-18, not a blank 1-9.
-    final holeSet = <int>{};
-    for (final e in results) {
-      final holes = ((e as Map)['holes'] as Map?) ?? const {};
-      for (final k in holes.keys) {
-        final h = int.tryParse(k.toString());
-        if (h != null) holeSet.add(h);
-      }
-    }
-    final holeRange = holeSet.isEmpty
-        ? List.generate(18, (i) => i + 1)
-        : (holeSet.toList()..sort());
-
-    Widget cell(Widget child, double w) =>
-        SizedBox(width: w, height: _rowH, child: Center(child: child));
-    Widget labelCell(String s, {bool bold = false, bool italic = false}) =>
-        SizedBox(
-          width: _labelColW, height: _rowH,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(s,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-                    fontStyle: italic ? FontStyle.italic : FontStyle.normal)),
-          ),
-        );
-
-    // A $ column rides next to Tot when money is in play — so this one card
-    // carries standings + per-hole points + payout (no separate money cards).
-    final hasMoney = results.any((r) =>
-        ((r as Map)['payout'] as num?) != null && (r['payout'] as num) != 0);
-    String money(num? v) {
-      if (v == null || v == 0) return '';
-      final a = v.abs();
-      final s = a == a.roundToDouble()
-          ? a.toStringAsFixed(0)
-          : a.toStringAsFixed(2);
-      return v > 0 ? '+\$$s' : '−\$$s';
-    }
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Stableford points',
-              style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
-          const SizedBox(height: 4),
-          PinnedHoleGrid(
-            labelWidth  : _labelColW,
-            cellWidth   : _cellW,
-            holeCount   : holeRange.length,
-            // A review board, not a live one: it opens on the LAST hole with
-            // points on it, which is the same reading — the round so far, its
-            // far end against the right edge.
-            currentIndex: holeRange.length - 1,
-            // Tot and the money column ride past the holes, so the rule has to
-            // reach them.
-            contentWidth: _cellW * holeRange.length + _totW +
-                (hasMoney ? _payoutW : 0),
-            bands: [
-              // Hole numbers + Total
-              HoleGridBand(
-                labelCell('Player', bold: true),
-                [
-                for (final h in holeRange)
-                  cell(Text('$h',
-                      style: const TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.bold)), _cellW),
-                cell(const Text('Tot',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                    _totW),
-                if (hasMoney)
-                  cell(const Text('\$',
-                      style: TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.bold)),
-                      _payoutW),
-              ]),
-              const HoleGridBand.rule(),
-              // Per-player points rows
-              for (final e in results)
-                () {
-                  final r     = e as Map<String, dynamic>;
-                  final holes = (r['holes'] as Map?)?.cast<String, dynamic>()
-                      ?? const {};
-                  final total  = r['total_points'] ?? 0;
-                  final rank   = r['rank'];
-                  final payout = r['payout'] as num?;
-                  final name   = _short(r['player_name']?.toString() ?? '—');
-                  return HoleGridBand(
-                    labelCell(rank == null ? name : '$rank. $name'),
-                    [
-                    for (final h in holeRange)
-                      cell(Text(holes['$h'] == null ? '' : '${holes['$h']}',
-                          style: theme.textTheme.bodySmall), _cellW),
-                    cell(Text('$total',
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
-                        _totW),
-                    if (hasMoney)
-                      cell(
-                        Text(money(payout),
-                            style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: (payout ?? 0) >= 0
-                                    ? Colors.green.shade700
-                                    : theme.colorScheme.error)),
-                        _payoutW),
-                  ]);
-                }(),
-            ],
-          ),
-        ]),
-      ),
-    );
-  }
-}
+// `_StablefordPointsGrid` was here — the per-hole points over their own
+// hole columns, above a scorecard drawing the gross over another set.
+// **Removed 22 Sep 2026.**
+//
+// The same eighteen holes twice, in two scrollers, so a reader comparing a
+// point to the score that earned it had to match column positions across
+// them. `HoleGridScorecard(showPoints: true)` puts both blocks over one
+// set of columns and one scroll.
 
 // ---- Red Ball / Pink Ball ----
 

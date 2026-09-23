@@ -179,6 +179,89 @@ class StablefordTests(TestCase):
         self.assertEqual(rows['B']['payout'], 30.0)
 
     # ---- stroke visibility on the points grid (Index row + per-cell dots) ----
+    # ---- the scorecard block ----
+    def test_scorecard_strokes_are_prospective_across_the_whole_round(self):
+        """**Every hole, with its strokes, before any of them is played.**
+
+        The block used to derive its holes from what had a GROSS on it and its
+        strokes from gross minus net — both of which exist only once a hole is
+        scored. So the card grew a column at a time and a golfer could not see
+        where his shots fell until he had taken them, on the one game where
+        knowing which holes give a stroke is how you decide whether to go for a
+        green.
+        """
+        m = FoursomeMembership.objects.get(foursome=self.fs, player=self.pa)
+        m.playing_handicap = 10
+        m.save(update_fields=['playing_handicap'])
+        HoleScore.objects.filter(foursome=self.fs).delete()
+        self._setup(handicap_mode='net', net_percent=50)
+
+        card = self._result()['scorecard']
+        self.assertEqual([h['hole'] for h in card['holes']], list(range(1, 19)))
+        self.assertEqual(card['holes_in_play'], list(range(1, 19)))
+
+        def strokes_on(hole):
+            row = next(h for h in card['holes'] if h['hole'] == hole)
+            cell = next(c for c in row['scores']
+                        if c['player_id'] == self.pa.id)
+            return cell['strokes']
+
+        # 10 off at 50% is 5 strokes — SI 1..5, and the SI is the hole number.
+        self.assertEqual(strokes_on(1), 1)
+        self.assertEqual(strokes_on(5), 1)
+        self.assertEqual(strokes_on(6), 0)
+        # ...with no gross anywhere, because nothing has been played.
+        self.assertTrue(all(c['gross'] is None
+                            for h in card['holes'] for c in h['scores']))
+
+    def test_scorecard_shows_a_double_stroke_as_two(self):
+        """**Two strokes on a hole is a 2, and it is there before the round.**
+
+        A golfer off more than the course's eighteen strokes on every hole and
+        twice on the hardest, and that second stroke is the thing a playing
+        partner most wants to know in advance. The count is not capped on the
+        way out; the shared card draws a dot per stroke.
+        """
+        m = FoursomeMembership.objects.get(foursome=self.fs, player=self.pa)
+        m.playing_handicap = 22
+        m.save(update_fields=['playing_handicap'])
+        HoleScore.objects.filter(foursome=self.fs).delete()
+        self._setup(handicap_mode='net', net_percent=100)
+
+        card = self._result()['scorecard']
+
+        def strokes_on(hole):
+            row = next(h for h in card['holes'] if h['hole'] == hole)
+            return next(c for c in row['scores']
+                        if c['player_id'] == self.pa.id)['strokes']
+
+        # 22 = one stroke everywhere, plus a second on SI 1..4.
+        self.assertEqual(strokes_on(1), 2)
+        self.assertEqual(strokes_on(4), 2)
+        self.assertEqual(strokes_on(5), 1)
+        self.assertEqual(strokes_on(18), 1)
+
+    def test_scorecard_carries_each_hole_s_points(self):
+        # One card draws the gross block and the points block over the same
+        # hole columns, which is what makes a MODIFIED table readable: a bare
+        # `3` could be a net birdie or a gross par.
+        self._setup(handicap_mode='gross')
+        card = self._result()['scorecard']
+        row = next(h for h in card['holes'] if h['hole'] == 1)
+        pts = {c['player_id']: c['points'] for c in row['scores']}
+        # A birdies every hole (3 on a par 4) → 3 on the standard table;
+        # B pars → 2, C bogeys → 1.
+        self.assertEqual(pts[self.pa.id], 3)
+        self.assertEqual(pts[self.pb.id], 2)
+        self.assertEqual(pts[self.pc.id], 1)
+
+    def test_scorecard_greens_nobody(self):
+        # Stableford has no hole WINNER — every golfer scores his own points
+        # against par, so there is nobody for the shared card to tint.
+        self._setup(handicap_mode='gross')
+        card = self._result()['scorecard']
+        self.assertTrue(all(h['winner_id'] is None for h in card['holes']))
+
     def test_summary_exposes_stroke_index_and_net_strokes(self):
         # Give A a handicap; net at 50% → effective 5 → strokes on SI 1..5
         # (HOLES stroke_index == hole number).
