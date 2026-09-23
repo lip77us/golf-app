@@ -27,7 +27,9 @@ import '../widgets/hole_grid_scorecard.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart' show scoreCellWithDots;
+import '../utils/sequoya_standing.dart';
 import '../widgets/round_chat_button.dart';
+import '../widgets/standing_ribbon.dart';
 import '../widgets/spots_capture.dart';
 import '../utils/match_handicap.dart';
 import '../utils/play_order.dart';
@@ -37,19 +39,9 @@ import '../widgets/combo_tee_chip.dart';
 const Color _kBlue   = Color(0xFF1976D2);   // side 1 of match 1 — "Team A"
 const Color _kOrange = Color(0xFFEF6C00);   // side 2
 
-/// Dollars, with pennies only when there are any. A column of "$30.00" is two
-/// characters of noise on every row, and the stakes here are whole far more
-/// often than not — a half only turns up when a bet is split. Same test the
-/// receipt and the rounds list use.
-String _dollars(double v) => v.abs() == v.abs().roundToDouble()
-    ? v.abs().toStringAsFixed(0)
-    : v.abs().toStringAsFixed(2);
-
-String _fmtMoney(double v) {
-  if (v == 0) return '—';
-  final sign = v > 0 ? '+' : '−';
-  return '$sign\$${_dollars(v)}';
-}
+// `_fmtMoney` and `_dollars` went with `_MoneyCard`, which was their only
+// reader. The standing row formats its own figure, in the same
+// whole-dollars-unless-there-are-pennies shape.
 
 /// How a bet reads on the banner. Never a multiplier, and never "DORMIE"
 /// unless the lead EQUALS the holes left — 1 up with 2 to play is not it.
@@ -411,6 +403,43 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
 
   // --- build -------------------------------------------------------------
 
+  /// **It reuses `betState`, it does not restate it.** The six-match strip
+  /// below already writes a Sequoya bet NEUTRALLY — `2 up`, never `2 down` —
+  /// with the colour naming the leading side, which is the division Nassau had
+  /// to be corrected into and which this screen had right already.
+  ///
+  /// The colour is safe here and is not safe in Sixes, although both re-draw
+  /// their pairings: **this row always reports the match the screen is
+  /// showing**, and the player rows under it are tinted side 1 blue and side 2
+  /// orange for that same match. Sixes' problem is the hole AFTER a segment
+  /// concludes, where the rows have re-drawn and the standing has not; a
+  /// Sequoya match runs to its last hole even when it was decided early, so
+  /// the two change together.
+  StandingRibbon? _standingRibbon(RoundProvider rp) {
+    final round = rp.round;
+    if (round == null || !round.isCasual) return null;
+    final me = context.read<AuthProvider>().player?.id;
+    final standing = sequoyaStanding(
+      rp.sequoyaThreesSummary, me,
+      hole: _selectedHole,
+      betState: betState,
+    );
+    if (standing == null) return null;
+    return StandingRibbon(
+      kind: StandingKind.result,
+      standingLabel: standing.label,
+      standing: standing.standing,
+      standingColor: switch (standing.leader) {
+        1 => _kBlue,
+        2 => _kOrange,
+        _ => null,
+      },
+      figure: standing.figure,
+      onOpenLeaderboard: () => Navigator.of(context)
+          .pushNamed('/leaderboard', arguments: round.id),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final rp   = context.watch<RoundProvider>();
@@ -439,9 +468,17 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
         (rp.round?.foursomes.length ?? 1) == 1;
     final showExit = isCasualSingle && _hasAnyScore;
 
+    final ribbon = _standingRibbon(rp);
+
     return Scaffold(
       appBar: GolfAppBar(
         title: 'Sequoya 3s',
+        // D2: the standing becomes the bar's second line, and the pill in it
+        // replaces the leaderboard ICON below.
+        bottom: ribbon,
+        titleStyle: ribbon == null
+            ? null
+            : const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.close),
@@ -472,13 +509,16 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
               ),
             ),
           if (rp.round != null) RoundChatButton(roundId: rp.round!.id),
-          IconButton(
-            tooltip: 'Leaderboard',
-            icon: const Icon(Icons.leaderboard_outlined),
-            onPressed: rp.round == null ? null
-                : () => Navigator.of(context)
-                    .pushNamed('/leaderboard', arguments: rp.round!.id),
-          ),
+          // The named pill in the ribbon is this, done properly — so the icon
+          // stands down wherever the ribbon draws.
+          if (ribbon == null)
+            IconButton(
+              tooltip: 'Leaderboard',
+              icon: const Icon(Icons.leaderboard_outlined),
+              onPressed: rp.round == null ? null
+                  : () => Navigator.of(context)
+                      .pushNamed('/leaderboard', arguments: rp.round!.id),
+            ),
           PopupMenuButton<String>(
             tooltip: 'More',
             icon: const Icon(Icons.more_vert),
@@ -566,10 +606,17 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
         child: Column(
             crossAxisAlignment: CrossAxisAlignment.start, children: [
-          if (match != null) ...[
-            _BetBanner(match: match),
-            const SizedBox(height: 10),
-          ],
+          // `_BetBanner` was here — `Match 3 · holes 7–9`, a bet count, and a
+          // row per bet. **Removed 22 Sep 2026.** The standing row in the app
+          // bar names the match and states it, in the screen's own `betState`
+          // words and the screen's own side colour.
+          //
+          // **What went with it: the per-PRESS stake and state.** A match's
+          // own bet is what the row reports; presses are extra and there can
+          // be several. With the six-match strip gone too, the only press
+          // affordance left on this screen is the control that CALLS one —
+          // what is riding on the presses already called reads on the
+          // leaderboard's Matches pane.
           if (match != null && (summary?.manualPresses ?? false) && !isComplete)
             _PressOffer(
               match: match,
@@ -634,18 +681,12 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
             ),
             const SizedBox(height: 12),
           ],
-          if (summary != null) ...[
-            _MatchStrip(
-              summary: summary,
-              currentHole: _selectedHole,
-              onTapMatch: (m) => setState(() {
-                _selectedHole = m.startHole;
-                _editingPlayerId = null;
-              }),
-            ),
-            const SizedBox(height: 12),
-            _MoneyCard(summary: summary),
-          ],
+          // `_MatchStrip` (`THE SIX MATCHES`) and `_MoneyCard` were here.
+          // **Removed 22 Sep 2026** — both are the leaderboard's, which
+          // carries them as its two panes, Matches and Standings.
+          //
+          // The strip's tap-a-match-to-jump went with it; the hole nav at the
+          // bottom is the way between matches now.
           const SizedBox(height: 16),
         ]),
       ),
@@ -751,77 +792,10 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
 // Bet banner — one row per bet, never a multiplier
 // ===========================================================================
 
-class _BetBanner extends StatelessWidget {
-  final SequoyaMatch match;
-  const _BetBanner({required this.match});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final n = match.bets.length;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primary.withOpacity(0.08),
-        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.4)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(
-            child: Text('Match ${match.index} · '
-                'holes ${match.startHole}–${match.endHole}',
-                style: TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary)),
-          ),
-          // The COUNT, not a total. A match carrying three bets can be a
-          // win, a loss and a half — $0 — so an at-risk figure beside them
-          // says something the rows below contradict. Each row carries its
-          // own stake.
-          Text('$n bet${n == 1 ? '' : 's'}',
-              style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant)),
-        ]),
-        const SizedBox(height: 6),
-        for (final b in match.bets)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2.5),
-            child: Row(children: [
-              Expanded(
-                // The match bet covers the whole match, which the header just
-                // said — so only a PRESS names its holes, because a press's
-                // are the thing that differs.
-                child: Text(b.isPress ? '${b.label} · ${b.holeRange}' : b.label,
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: b.isPress
-                            ? FontWeight.normal : FontWeight.w600,
-                        fontStyle: b.isPress
-                            ? FontStyle.italic : FontStyle.normal)),
-              ),
-              Text('\$${b.amount.toStringAsFixed(0)}',
-                  style: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.bold)),
-              const SizedBox(width: 10),
-              SizedBox(
-                width: 92,
-                child: Text(betState(b),
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.bold,
-                      color: b.margin == 0
-                          ? theme.colorScheme.onSurfaceVariant
-                          : (b.margin > 0 ? _kBlue : _kOrange),
-                    )),
-              ),
-            ]),
-          ),
-      ]),
-    );
-  }
-}
+// `_BetBanner` was here — the match header and one row per bet. It came
+// off with its call site on 22 Sep 2026; the standing row in the app bar
+// names the match and states it. See the note at the call site for what
+// went with it.
 
 // ===========================================================================
 // The press offer — named by the hole it would cover
@@ -1337,157 +1311,17 @@ class _ScoreRow extends StatelessWidget {
 // The six matches at a glance — where the rotation becomes visible
 // ===========================================================================
 
-class _MatchStrip extends StatelessWidget {
-  final SequoyaThreesSummary summary;
-  final int currentHole;
-  final void Function(SequoyaMatch) onTapMatch;
-
-  const _MatchStrip({
-    required this.summary, required this.currentHole, required this.onTapMatch,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-          child: Text('THE SIX MATCHES',
-              style: TextStyle(
-                  fontSize: 10.5, fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5, color: theme.colorScheme.primary)),
-        ),
-        for (final m in summary.matches)
-          InkWell(
-            onTap: () => onTapMatch(m),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              color: m.covers(currentHole)
-                  ? theme.colorScheme.primary.withOpacity(0.06)
-                  : null,
-              child: Row(children: [
-                SizedBox(
-                  width: 52,
-                  child: Text('${m.startHole}–${m.endHole}',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurfaceVariant)),
-                ),
-                Expanded(
-                  child: Text(
-                    '${m.side1.map((s) => s.shortName).join(' & ')}'
-                    '  v  '
-                    '${m.side2.map((s) => s.shortName).join(' & ')}',
-                    style: const TextStyle(fontSize: 12.5),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  m.bets.isEmpty ? '—' : betState(m.bets.first),
-                  style: TextStyle(
-                    fontSize: 11, fontWeight: FontWeight.bold,
-                    color: m.bets.isEmpty || m.bets.first.margin == 0
-                        ? theme.colorScheme.onSurfaceVariant
-                        : (m.bets.first.margin > 0 ? _kBlue : _kOrange),
-                  ),
-                ),
-                if (m.bets.length > 1) ...[
-                  const SizedBox(width: 6),
-                  Text('+${m.bets.length - 1}',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                          fontStyle: FontStyle.italic,
-                          color: theme.colorScheme.onSurfaceVariant)),
-                ],
-              ]),
-            ),
-          ),
-      ]),
-    );
-  }
-}
+// `_MatchStrip` was here — `THE SIX MATCHES`, one row each with its hole
+// range, its sides and its state. It is the leaderboard's Matches pane.
+//
+// The standing row reuses this widget's `betState`, which is why that
+// function is still here and is still the one definition of how a Sequoya
+// bet is written.
 
 // ===========================================================================
 // Money — the four nets, in money order
 // ===========================================================================
 
-class _MoneyCard extends StatelessWidget {
-  final SequoyaThreesSummary summary;
-  const _MoneyCard({required this.summary});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('MONEY',
-              style: TextStyle(
-                  fontSize: 10.5, fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5, color: theme.colorScheme.primary)),
-          Text('won–lost–halved over every bet, presses included',
-              style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant)),
-          const SizedBox(height: 6),
-          for (final p in summary.players)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(children: [
-                Expanded(
-                  child: Text(p.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
-                ),
-                Text(p.betRecordLabel,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-                const SizedBox(width: 14),
-                SizedBox(
-                  width: 74,
-                  child: Text(_fmtMoney(p.money),
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: p.money > 0
-                            ? Colors.green.shade700
-                            : p.money < 0
-                                ? Colors.red.shade700
-                                : theme.colorScheme.onSurfaceVariant,
-                      )),
-                ),
-              ]),
-            ),
-          if (summary.transfers.isNotEmpty) ...[
-            const Divider(height: 20),
-            for (final t in summary.transfers)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 1.5),
-                child: Text(
-                  '${t.fromName} pays ${t.toName} '
-                  '\$${_dollars(t.amount)}',
-                  style: theme.textTheme.bodySmall,
-                ),
-              ),
-          ],
-          const SizedBox(height: 8),
-          Text(
-            'Ceiling: \$${summary.exposureCeiling.toStringAsFixed(0)} per golfer — '
-            'all six matches lost with every bet live.',
-            style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant),
-          ),
-        ]),
-      ),
-    );
-  }
-}
+// `_MoneyCard` was here — the per-player running money. It is the
+// leaderboard's Standings pane, and the reader's own figure now rides in
+// the standing row at the top of this screen.
