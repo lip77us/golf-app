@@ -2428,6 +2428,18 @@ class VegasSummary {
   final List<VegasHole> holes;
   final double betUnit;
 
+  /// The per-hole gross card, exactly as `HoleGridScorecard` wants it — raw
+  /// maps, because that widget reads the server's own shape and converting on
+  /// the way in would only be a second place for the two to disagree.
+  ///
+  /// **Vegas is a digit game with no scorecard of its own**, so this block
+  /// exists precisely to give a net or strokes-off player somewhere to see
+  /// where their strokes fall. Each hole carries `winner_team`, which is what
+  /// tints the winning side's two cells.
+  final List<Map<String, dynamic>> scorecardHoles;
+  final List<Map<String, dynamic>> scorecardPlayers;
+  final List<int> scorecardHolesInPlay;
+
   const VegasSummary({
     required this.status,
     required this.handicapMode,
@@ -2438,6 +2450,9 @@ class VegasSummary {
     required this.teams,
     required this.holes,
     required this.betUnit,
+    this.scorecardHoles = const [],
+    this.scorecardPlayers = const [],
+    this.scorecardHolesInPlay = const [],
   });
 
   factory VegasSummary.fromJson(Map<String, dynamic> j) => VegasSummary(
@@ -2454,6 +2469,18 @@ class VegasSummary {
             .map((h) => VegasHole.fromJson(h as Map<String, dynamic>))
             .toList(),
         betUnit: ((j['money'] as Map?)?['bet_unit'] as num?)?.toDouble() ?? 0.0,
+        scorecardHoles: (((j['scorecard'] as Map?)?['holes']) as List? ??
+                const [])
+            .map((h) => Map<String, dynamic>.from(h as Map))
+            .toList(),
+        scorecardPlayers: (((j['scorecard'] as Map?)?['players']) as List? ??
+                const [])
+            .map((p) => Map<String, dynamic>.from(p as Map))
+            .toList(),
+        scorecardHolesInPlay:
+            (((j['scorecard'] as Map?)?['holes_in_play']) as List? ?? const [])
+                .map((e) => (e as num).toInt())
+                .toList(),
       );
 
   bool get isStarted => teams.length == 2 &&

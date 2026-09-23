@@ -62,32 +62,10 @@ import '../widgets/pinned_hole_grid.dart';
 import '../widgets/combo_tee_chip.dart';
 import '../utils/nine_totals.dart';
 
-// ---------------------------------------------------------------------------
-// Handicap helpers (shared with nassau_screen.dart)
-// ---------------------------------------------------------------------------
-
-int _effectiveHandicap({
-  required String mode,
-  required int    netPercent,
-  required int    playingHandicap,
-  int?            lowestPlayingHandicap,
-}) {
-  switch (mode) {
-    case 'gross':
-      return 0;
-    case 'strokes_off':
-      if (lowestPlayingHandicap == null) return playingHandicap;
-      final off = playingHandicap - lowestPlayingHandicap;
-      if (off <= 0) return 0;
-      // Apply the same net_percent scaling the backend uses:
-      // so = round(diff * net_percent / 100)
-      return roundHalfUp(off * netPercent / 100.0);
-    case 'net':
-    default:
-      if (netPercent == 100) return playingHandicap;
-      return roundHalfUp(playingHandicap * netPercent / 100.0);
-  }
-}
+// `_effectiveHandicap` was here — the round-total allocation, which had
+// exactly one reader in the end: the `gets N` chip. It went with it on
+// 22 Sep 2026. Per-hole strokes come from `_strokesForHole`, which is what
+// the dots have always used.
 
 /// Per-player, per-hole strokes for a Sixes Strokes-Off match.
 ///
@@ -2994,29 +2972,8 @@ class _HoleScoreCard extends StatelessWidget {
     return result;
   }
 
-  /// The overall match-play handicap differential for [m] in cup singles:
-  /// 0 if [m] is the lower handicap, (m.hcp - opponent.hcp) if higher.
-  /// Used for the label next to the player name ("-0", "-3", etc.).
-  int _cupSinglesHandicapFor(Membership m) {
-    // Prefer exact per-match differential from loaded bracket data.
-    final matches = (matchPlayData?['matches'] as List?) ?? [];
-    for (final raw in matches) {
-      final match = Map<String, dynamic>.from(raw as Map);
-      final p1Id  = match['player1_id'] as int?;
-      final p2Id  = match['player2_id'] as int?;
-      int? opponentId;
-      if (p1Id == m.player.id)      opponentId = p2Id;
-      else if (p2Id == m.player.id) opponentId = p1Id;
-      else continue;
-      final opp = players.where((x) => x.player.id == opponentId).firstOrNull;
-      if (opp == null) return 0;
-      return (m.playingHandicap - opp.playingHandicap).clamp(0, 99);
-    }
-    // Fallback before matchPlayData loads: strokes off foursome low.
-    if (players.isEmpty) return 0;
-    final low = players.map((x) => x.playingHandicap).reduce((a, b) => a < b ? a : b);
-    return (m.playingHandicap - low).clamp(0, 99);
-  }
+  // `_cupSinglesHandicapFor` was here — it fed the `gets N` chip and nothing else.
+  // Removed with it on 22 Sep 2026.
 
   /// Cup singles match-play handicap: lower of the two paired players gets 0
   /// strokes; higher gets (own_hcp - opponent_hcp) strokes allocated by SI.
@@ -3039,16 +2996,8 @@ class _HoleScoreCard extends StatelessWidget {
     return 0;
   }
 
-  /// What this golfer gets off the BEST golfer in the group, or null when
-  /// this is not a Banker round. Zero for the low man himself.
-  int? _bankerGets(Membership m) {
-    final s = bankerSummary;
-    if (s == null) return null;
-    for (final p in s.players) {
-      if (p.playerId == m.player.id) return p.playingHandicap;
-    }
-    return null;
-  }
+  // `_bankerGets` was here — it fed the `gets N` chip and nothing else.
+  // Removed with it on 22 Sep 2026.
 
   /// Banker's per-row stroke for a hole, or null when this is not a Banker
   /// round (or the hole has no banker yet).
@@ -3180,26 +3129,11 @@ class _HoleScoreCard extends StatelessWidget {
     return 0;
   }
 
-  int _effectiveHcap(Membership m) => _effectiveHandicap(
-        mode:                  handicapMode,
-        netPercent:            netPercent,
-        playingHandicap:       m.playingHandicap,
-        lowestPlayingHandicap: _lowPlayingHandicap,
-      );
+  // `_effectiveHcap` went with `_effectiveHcapForRound` — the round-total
+  // handicap had exactly one reader, and it was the chip.
 
-  /// Strokes a player actually GETS over the holes in play — the full-18
-  /// effective handicap scaled to a partial / 9-hole round, so the "gets N"
-  /// label matches the halved per-hole dots (a back-9 shows "gets 5", not 10).
-  int _effectiveHcapForRound(Membership m) {
-    final full = _effectiveHcap(m);
-    if (full <= 0) return 0;
-    final universe = scorecard.holes.isEmpty
-        ? 18
-        : scorecard.holes.map((x) => x.holeNumber).reduce((a, b) => a > b ? a : b);
-    final n = holesInPlay.isEmpty ? universe : holesInPlay.length;
-    if (n >= universe) return full;
-    return (full * n / universe).round();
-  }
+  // `_effectiveHcapForRound` was here — it fed the `gets N` chip and nothing else.
+  // Removed with it on 22 Sep 2026.
 
   // ── Match Play (single_elim) per-opponent SO helpers ────────────────────
   // For regular match-play brackets in Strokes-Off-Low mode we show each
@@ -3301,36 +3235,8 @@ class _HoleScoreCard extends StatelessWidget {
     return null;
   }
 
-  /// Every TC match a player has on *hole* (one per match they're in).
-  /// The 2v1 singles solo appears in TWO matches simultaneously — one
-  /// vs each opponent on the team-of-2 — and his per-pair SO + per-
-  /// hole strokes can differ between them.  The player-row hcap
-  /// badge calls this so a solo who's -5 vs Glenn but -0 vs BobS
-  /// shows BOTH badges side-by-side, not just whichever match the
-  /// summary listed first.
-  ///
-  /// Returns an empty list when *playerId* isn't on any TC match at
-  /// *hole*; falls back to the single-entry path naturally.
-  List<({int? strokesOff, int strokesOnHole})>
-      _tripleCupEntriesForHole(int playerId, int hole) {
-    final tc = tripleCupSummary;
-    if (tc == null) return const [];
-    final out = <({int? strokesOff, int strokesOnHole})>[];
-    for (final m in tc.matches) {
-      if (hole < m.startHole || hole > m.endHole) continue;
-      final entry = m.players.firstWhere(
-        (p) => p.playerId == playerId,
-        orElse: () => const TripleCupMatchPlayer(
-            playerId: -1, name: '', shortName: '', teamNumber: 0),
-      );
-      if (entry.playerId == -1) continue;
-      out.add((
-        strokesOff:    entry.soForHole(hole),   // per-hole SO for fourball donor
-        strokesOnHole: entry.strokesByHole[hole] ?? 0,
-      ));
-    }
-    return out;
-  }
+  // `_tripleCupEntriesForHole` was here — it fed the `gets N` chip and nothing else.
+  // Removed with it on 22 Sep 2026.
 
   /// True when this player is on a Triple Cup foursomes (alt-shot)
   /// team for the current hole but it's the PARTNER's turn to play.
@@ -3570,62 +3476,6 @@ class _HoleScoreCard extends StatelessWidget {
             final isHot      = idx == hotSpotIdx;
             final matchStrok = _strokesForHole(m, holeData);
 
-            String? hcapLabel;
-            if (isCupSingles) {
-              // Singles: show the match-play differential (strokes the higher
-              // player receives).  Hidden for the lower player (0 = gets none);
-              // the stroke-this-hole indicator lives in the dot strip above.
-              final so = _cupSinglesHandicapFor(m);
-              if (so > 0) hcapLabel = 'gets $so';
-            } else if (handicapMode == 'net' || handicapMode == 'strokes_off') {
-              // Triple Cup: each match the player is on at this hole
-              // gets its own "-N •" badge.  The 2v1 singles solo
-              // appears in TWO matches at once (one per opponent on
-              // the team-of-2) with different per-pair SO + per-hole
-              // strokes; the first badge drives the score-box net
-              // calc via matchStrok.  Other players only have one
-              // entry — formats the same as the legacy single-badge
-              // display.  Falls through to the generic mobile calc
-              // when no TC summary is attached.
-              final tcEntries = handicapMode == 'strokes_off'
-                  ? _tripleCupEntriesForHole(m.player.id, holeNumber)
-                  : const <({int? strokesOff, int strokesOnHole})>[];
-              if (tcEntries.isNotEmpty) {
-                // Dedupe identical entries.  In 2-player TC a single
-                // hole shows up in two simultaneous matches (e.g. hole
-                // 4 is in both F9 and Overall) — same pairing, same
-                // per-pair SO — so rendering it twice ("gets 6 / gets
-                // 6") is noise.  Only the genuine ghost-singles case in
-                // 3-player TC (solo vs two opponents with different SOs)
-                // produces distinct values worth showing side-by-side.
-                // Zero-stroke entries are dropped (nothing given).
-                final unique = <int>{};
-                final labels = <String>[];
-                for (final e in tcEntries) {
-                  final so = e.strokesOff ?? 0;
-                  if (so > 0 && unique.add(so)) labels.add('gets $so');
-                }
-                if (labels.isNotEmpty) hcapLabel = labels.join(' / ');
-              } else {
-                // Match Play single-elim brackets in SO mode: bubble shows
-                // strokes vs the per-match opponent (semi opponent on
-                // holes 1–9, final/3rd opponent on holes 10–18).  When
-                // no opponent is known (back-9 still tentative) falls
-                // back to _effectiveHcap which uses the foursome low.
-                final mpSo = (handicapMode == 'strokes_off' &&
-                              matchPlayData?['bracket_type'] == 'single_elim')
-                    ? _matchPlaySo(m.player.id, holeNumber)
-                    : null;
-                // Banker: what he gets off the BEST golfer, not his full
-                // net. Every stroke in this game is a gap between two
-                // handicaps, and a gap reads at a glance when one end is
-                // zero — the low man gets nothing and shows no chip at all.
-                final displayHcap =
-                    _bankerGets(m) ?? mpSo ?? _effectiveHcapForRound(m);
-                if (displayHcap > 0) hcapLabel = 'gets $displayHcap';
-              }
-            }
-
             final junkCount = allowJunk ? junkForPlayer(m.player.id) : 0;
 
             // Points 5-3-1: per-hole award and cumulative total.
@@ -3650,7 +3500,6 @@ class _HoleScoreCard extends StatelessWidget {
                 gross:               gross,
                 isHot:               isHot,
                 par:                 par,
-                matchHcapLabel:      hcapLabel,
                 comboTee:            m.comboTeeOnHole(holeNumber),
                 strokesOnThisHole:   matchStrok,
                 teamLabel:           _teamLabelFor(m.player.id),
@@ -3869,15 +3718,6 @@ class _ScoreEntryLegendSheet extends StatelessWidget {
             Text('Score row guide', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
             const Divider(height: 1),
-
-            if (showHcapChip)
-              row(
-                pill('gets 16'),
-                'Match handicap',
-                isCupSingles
-                  ? 'Strokes-off-low differential for this match (lower handicap plays scratch).'
-                  : 'Handicap strokes this player receives in the current game (after Net % / Strokes-Off adjustments).',
-              ),
 
             if (showHcapChip)
               row(
@@ -4426,7 +4266,6 @@ class _PlayerRow extends StatelessWidget {
   final int?          gross;
   final bool          isHot;
   final int           par;
-  final String?       matchHcapLabel;
   /// Which tee this golfer plays on THIS hole — combo sets only, and only on
   /// his own row. Null for an ordinary tee and for a combo the course data
   /// cannot resolve, which draw the same thing: nothing.
@@ -4469,7 +4308,6 @@ class _PlayerRow extends StatelessWidget {
     required this.gross,
     required this.isHot,
     required this.par,
-    this.matchHcapLabel,
     this.comboTee,
     this.onTap,
     this.strokesOnThisHole = 0,
@@ -4583,24 +4421,18 @@ class _PlayerRow extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (matchHcapLabel != null) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.secondaryContainer.withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: theme.colorScheme.outlineVariant),
-                    ),
-                    child: Text(
-                      matchHcapLabel!,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.onSecondaryContainer,
-                      ),
-                    ),
-                  ),
-                ],
+                // The `gets N` chip was here. **Removed 22 Sep 2026.**
+                //
+                // It carried the ROUND's allocation while the dots above the
+                // score box carry THIS hole's, and the two are read together:
+                // a golfer who sees `gets 16` and one dot has been handed the
+                // arithmetic for subtracting a stroke he has already been
+                // given. The dots are the fact he can act on.
+                //
+                // Lost with it, deliberately: the 2v1 Triple Cup solo's second
+                // badge (`gets 6 / gets 4`, one per simultaneous match). That
+                // is a round total for an edge case, and the dots still show
+                // the hole.
                 // Which tee he plays on this hole, on a COMBO set only.
                 //
                 // **A neutral outline, not a filled status chip.** Tee names
@@ -5032,13 +4864,38 @@ class _GameStatusSection extends StatelessWidget {
           const SizedBox(height: 12),
         ],
 
-        // Las Vegas — team totals + per-hole numbers grid.
+        // Las Vegas — the mode in force, the per-hole numbers, and the card.
         if (games.contains('vegas')) ...[
-          if (vegasSummary != null)
+          if (vegasSummary != null) ...[
+            // **The scorecard, moved here from the leaderboard — and ABOVE the
+            // hole chips.** Vegas is a digit game with no card of its own,
+            // which is exactly why the server already emits this block: a net
+            // or strokes-off player has nowhere else to see where his strokes
+            // fall, and the chips below are built out of scores he cannot
+            // otherwise check.
+            //
+            // The order is the reading order. `45-57 +12` is a CONCLUSION, and
+            // the scores it was drawn from have to be above it — a reader
+            // going the other way has to scroll back up to check the number he
+            // has just been given.
+            //
+            // Same widget, same payload, same `winner_team` tint as the
+            // leaderboard draws. One implementation is what keeps the two
+            // cards identical.
+            if (vegasSummary!.scorecardHoles.isNotEmpty) ...[
+              HoleGridScorecard(
+                holes:        vegasSummary!.scorecardHoles,
+                participants: vegasSummary!.scorecardPlayers,
+                legend:       null,
+                holesInPlay:  vegasSummary!.scorecardHolesInPlay,
+              ),
+              const SizedBox(height: 8),
+            ],
             _VegasStatusCard(
               summary:     vegasSummary!,
               currentHole: currentHole,
-            )
+            ),
+          ]
           else if (loadingVegas)
             const Center(
               child: Padding(
