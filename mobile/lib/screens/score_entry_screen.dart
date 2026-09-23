@@ -2406,13 +2406,17 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           // belongs to another group — otherwise the bar shows another
           // foursome's players, which is what produced the "3-some bottom
           // shows the 4-some's players" bug.
+          // **The bracket's footer bar came off 22 Sep 2026.** It restated
+          // the match scores the bracket card already carries, one screen up
+          // — and the card states them with the pairings attached, which the
+          // bar could not. Cup singles keeps its bar: that is a different
+          // game with a different card and no such repetition.
           if (mpForThisFoursome &&
+              mpData!['bracket_type'] == 'cup_singles' &&
               (games.contains('match_play') ||
                games.contains('singles_18') ||
                games.contains('singles_nassau')))
-            mpData!['bracket_type'] == 'cup_singles'
-                ? _CupSinglesStatusBar(data: mpData)
-                : _MatchPlayStatusBar(data: mpData),
+            _CupSinglesStatusBar(data: mpData),
           // (Irish Rumble balls-counted banner + borrowed-4th row moved to the
           // TOP of the entry body — see _buildBody — to match the Pink Ball
           // screen; they no longer live in this footer.)
@@ -4963,6 +4967,89 @@ int _tcTeamOf(TripleCupMatch m, int playerId) => m.players
     .map((p) => p.teamNumber)
     .firstOrNull ?? 0;
 
+/// The bracket phase whose matches are live — round 2 once every round-1 match
+/// is done, round 1 until then.
+///
+/// The same rule the bracket card shows its matches by, so the card and the
+/// scorecard under it are never about different nines.
+List<Map<String, dynamic>> _bracketLiveMatches(Map<String, dynamic> data) {
+  final all = (data['matches'] as List? ?? const [])
+      .cast<Map<String, dynamic>>();
+  final r1 = all.where((m) => m['round'] == 1).toList();
+  final r2 = all.where((m) => m['round'] == 2).toList();
+  final done = r1.isEmpty ||
+      r1.every((m) => m['status'] == 'complete' || m['status'] == 'halved');
+  return (r2.isNotEmpty && done) ? r2 : r1;
+}
+
+/// The four golfers' scores over the nine they share, merged from the two
+/// matches' own cards.
+///
+/// **Both matches of a phase play the same holes** — the semis on the front,
+/// the final and the 3rd-place match on the back — so they belong in one card
+/// with one set of hole columns rather than two cards stacked. A hole's `par`,
+/// `stroke_index` and per-player `strokes` come from whichever match supplied
+/// it; they agree, because they come off the same tee.
+///
+/// `winner_id` is dropped: it is the winner of ONE of the two matches, and a
+/// green cell on a four-row card would claim he beat the other three.
+List<Map<String, dynamic>> _bracketCardHoles(Map<String, dynamic> data) {
+  final byHole = <int, Map<String, dynamic>>{};
+  for (final m in _bracketLiveMatches(data)) {
+    final card = m['scorecard'] as Map<String, dynamic>?;
+    for (final h in (card?['holes'] as List? ?? const [])) {
+      final row = Map<String, dynamic>.from(h as Map);
+      final hole = (row['hole'] as num?)?.toInt();
+      if (hole == null) continue;
+      final into = byHole.putIfAbsent(hole, () => {
+            'hole'        : hole,
+            'par'         : row['par'],
+            'stroke_index': row['stroke_index'],
+            'winner_id'   : null,
+            'scores'      : <Map<String, dynamic>>[],
+          });
+      for (final c in (row['scores'] as List? ?? const [])) {
+        final cell = Map<String, dynamic>.from(c as Map);
+        // A TBD side has no golfer to put on a row, so it contributes no cell.
+        if (cell['player_id'] == null) continue;
+        (into['scores'] as List).add(cell);
+      }
+    }
+  }
+  final out = byHole.values.toList()
+    ..sort((a, b) => (a['hole'] as int).compareTo(b['hole'] as int));
+  return out;
+}
+
+/// The golfers in the live phase, in bracket order.
+List<Map<String, dynamic>> _bracketCardPlayers(Map<String, dynamic> data) {
+  final seen = <int>{};
+  final out = <Map<String, dynamic>>[];
+  for (final m in _bracketLiveMatches(data)) {
+    final card = m['scorecard'] as Map<String, dynamic>?;
+    for (final p in (card?['players'] as List? ?? const [])) {
+      final row = Map<String, dynamic>.from(p as Map);
+      final id = row['player_id'];
+      if (id is! int || !seen.add(id)) continue;
+      out.add(row);
+    }
+  }
+  return out;
+}
+
+/// The holes the live phase plays, in play order.
+List<int> _bracketHolesInPlay(Map<String, dynamic> data) {
+  final out = <int>[];
+  for (final m in _bracketLiveMatches(data)) {
+    final card = m['scorecard'] as Map<String, dynamic>?;
+    for (final h in (card?['holes_in_play'] as List? ?? const [])) {
+      final n = (h as num).toInt();
+      if (!out.contains(n)) out.add(n);
+    }
+  }
+  return out;
+}
+
 class _GameStatusSection extends StatelessWidget {
   final List<String>          games;
   final NassauSummary?        nassau;
@@ -5327,10 +5414,34 @@ class _GameStatusSection extends StatelessWidget {
                     currentHole: currentHole,
                     onTapHole:   onTapHole,
                   )
-                : _MatchPlayStatusCard(
-                    data:       matchPlayData!,
-                    foursomeId: foursomeId,
-                    roundId:    roundId,
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _MatchPlayStatusCard(
+                        data:       matchPlayData!,
+                        foursomeId: foursomeId,
+                        roundId:    roundId,
+                      ),
+                      // **The card, under the bracket.** The bracket says who
+                      // is playing whom and where each match stands; this says
+                      // what they actually shot, with the stroke dots. Room
+                      // for it came from the footer bar and the half of the
+                      // bracket card that was showing matches nine holes away.
+                      //
+                      // Both semis play the same nine, as do the final and the
+                      // 3rd-place match, so the four golfers share one set of
+                      // hole columns — which is why the two matches' cards
+                      // merge into one rather than stacking.
+                      if (_bracketCardHoles(matchPlayData!).isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        HoleGridScorecard(
+                          holes:        _bracketCardHoles(matchPlayData!),
+                          participants: _bracketCardPlayers(matchPlayData!),
+                          legend:       null,
+                          holesInPlay:  _bracketHolesInPlay(matchPlayData!),
+                        ),
+                      ],
+                    ],
                   )
           else if (loadingMatchPlay)
             const Center(
@@ -7042,167 +7153,13 @@ class _MatchStatusBar extends StatelessWidget {
 //     round, player1, player2, label, status, result,
 //     winner_name, finished_hole, tie_break, holes, players_tbd
 
-class _MatchPlayStatusBar extends StatelessWidget {
-  final Map<String, dynamic> data;
-  const _MatchPlayStatusBar({required this.data});
-
-  // Short label: "Semi 1" → "S1", "Final" → "F", "3rd Place" → "3rd"
-  String _shortLabel(String label) {
-    if (label.startsWith('Semi')) {
-      final num = label.replaceAll(RegExp(r'[^0-9]'), '');
-      return 'S$num';
-    }
-    if (label.toLowerCase().contains('final')) return 'F';
-    if (label.toLowerCase().contains('3rd'))   return '3rd';
-    return label.length <= 4 ? label : label.substring(0, 4);
-  }
-
-  /// Running score line for one match — mirrors _matchSummary in the body card,
-  /// but truncated to fit inside a narrow chip.  Uses short names so each chip
-  /// stays compact even when player names are long.
-  String _chipBody(Map<String, dynamic> match) {
-    // The server owns this sentence now — "Gunst 4&2", "All square thru 11",
-    // "1 UP thru 11" — because the rules behind it (a halved semi playing on,
-    // a back-9 match scored against an opponent the bracket cannot name yet)
-    // live in the engine. The client only shortens it to chip width.
-    final line = (match['line'] as String?)?.trim();
-    if (line != null && line.isNotEmpty) return _compact(line);
-
-    // Fallback for a payload from before the engine sent `line`.
-    final status      = match['status']      as String;
-    final result      = match['result']      as String?;
-    final holes       = match['holes']       as List? ?? [];
-    final p1          = (match['player1_short'] ?? match['player1']) as String? ?? '?';
-    final p2          = (match['player2_short'] ?? match['player2']) as String? ?? '?';
-    final winnerShort = (match['winner_short'] ?? match['winner_name']) as String?;
-    final finishedOn  = match['finished_hole'] as int?;
-    final round       = match['round']       as int;
-
-    if (status == 'complete') {
-      if (result == 'halved') return 'AS';
-      if (winnerShort == null) return 'done';
-      if (finishedOn != null) {
-        final scheduledEnd = round == 1 ? 9 : 18;
-        final remaining    = scheduledEnd - finishedOn;
-        if (remaining > 0) {
-          final h    = holes.cast<Map<String, dynamic>>().firstWhere(
-            (h) => h['hole'] == finishedOn, orElse: () => <String, dynamic>{});
-          final margin = ((h['margin'] as int?) ?? 0).abs();
-          return '$winnerShort ${margin}&$remaining';
-        }
-      }
-      return winnerShort;
-    }
-
-    if (holes.isEmpty) return status == 'pending' ? '—' : '…';
-
-    final last   = holes.last as Map<String, dynamic>;
-    final margin = last['margin'] as int? ?? 0;
-    if (margin == 0) return 'AS';
-    final leader = margin > 0 ? p1 : p2;
-    return '$leader ${margin.abs()}Up';
-  }
-
-  /// Chip-width form of the engine's match line. A chip has room for a few
-  /// characters, so "All square" becomes "AS" and a halved match keeps only
-  /// the name that took the trophy.
-  static String _compact(String line) {
-    if (line.startsWith('Halved — ')) {
-      final who = line.substring(9).split(' ').first;
-      return 'AS ($who)';
-    }
-    if (line == 'Halved') return 'AS';
-    if (line == 'Not started') return '—';
-    return line
-        .replaceFirst('All square', 'AS')
-        .replaceFirst(' thru ', ' T');
-  }
-
-  // Light tints of the player1 (blue) / player2 (orange) name colours, so a
-  // "Paul 1Up" chip reads in the same colour as Paul's name in the
-  // score-entry row above (GameColors.team1 / team2).
-
-  Color _chipBg(Map<String, dynamic> match, ThemeData theme) {
-    final status   = match['status'] as String;
-    final result   = match['result'] as String?;
-    final holes    = match['holes']  as List? ?? [];
-    final round    = match['round']  as int;
-
-    if (status == 'complete') {
-      if (result == 'halved') return Colors.grey.shade200;
-      // Winner-tinted to match the player's name colour in the score-entry row.
-      if (result == 'player1') return GameColors.team1Bg;
-      if (result == 'player2') return GameColors.team2Bg;
-      return Colors.grey.shade200;
-    }
-    if (holes.isEmpty) return theme.colorScheme.surfaceContainer;
-
-    final last   = holes.last as Map<String, dynamic>;
-    final holeNum = last['hole']   as int? ?? 0;
-    final margin  = last['margin'] as int? ?? 0;
-
-    if (round == 1 && holeNum > 9) return Colors.amber.shade100; // playing on
-    if (margin == 0)  return theme.colorScheme.surfaceContainer;
-    return margin > 0 ? GameColors.team1Bg : GameColors.team2Bg;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme   = Theme.of(context);
-    final matches = (data['matches'] as List? ?? [])
-        .map((m) => Map<String, dynamic>.from(m as Map))
-        .toList();
-
-    if (matches.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      color: theme.colorScheme.surfaceContainerHighest,
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
-      child: Row(
-        children: [
-          // "MP" prefix label, like "Top" / "Bot" in the Nassau bar
-          Text('MP',
-              style: theme.textTheme.labelSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onSurfaceVariant)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: matches.map((m) {
-                final rawLabel  = m['label'] as String? ?? 'M${m['round']}';
-                final chipLabel = _shortLabel(rawLabel);
-                final body      = _chipBody(m);
-                final bg        = _chipBg(m, theme);
-
-                return Flexible(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: bg,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      Text(chipLabel,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant)),
-                      const SizedBox(height: 2),
-                      Text(body,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                              fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center),
-                    ]),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// `_MatchPlayStatusBar` was here — a footer strip repeating the bracket's
+// match scores. **Removed 22 Sep 2026.** The bracket card one screen up
+// carries them WITH the pairings attached, which the bar could not, and
+// the room it gave back is where the scorecard went.
+//
+// `_CupSinglesStatusBar` stays: a different game, a different card, and no
+// such repetition.
 
 // ---------------------------------------------------------------------------
 // Sixes match grid (ported from sixes_screen.dart _MatchGrid / _SegmentCard)
@@ -7648,6 +7605,13 @@ class _MatchPlayStatusCard extends StatelessWidget {
     final winner = data['winner'] as String?;
     final r1     = _matchesForRound(1);
     final r2     = _matchesForRound(2);
+    // The back nine's matches take over once every semi has finished — not
+    // when the first one does, because the other is still the live match for
+    // two of the four golfers.
+    final showR2 = r2.isNotEmpty &&
+        (r1.isEmpty ||
+         r1.every((m) => (m['status'] as String?) == 'complete' ||
+                         (m['status'] as String?) == 'halved'));
 
     // Pending → bracket setup; in-progress or complete → leaderboard so
     // the user lands on the rich bracket view (MatchPlayDetailView).
@@ -7680,42 +7644,32 @@ class _MatchPlayStatusCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header row
+              // **One phase at a time.** The semis and the final are nine
+              // holes apart, so a card carrying both spends half its height on
+              // matches nobody can affect — either four names with no scores
+              // yet, or two results already settled. The semis show until they
+              // are all done and the back nine's matches replace them.
+              //
+              // **The game is not restated here.** The app bar says it, and a
+              // `Mini Singles Bracket` title on a card sitting under the score
+              // entry for that bracket was a line spent on something the
+              // reader cannot be in any doubt about. The status chip and the
+              // chevron stay: one is news, the other is the way through to the
+              // full bracket.
               Row(children: [
-                Icon(Icons.sports_tennis,
-                    size: 16, color: theme.colorScheme.primary),
-                const SizedBox(width: 6),
-                Text('Mini Singles Bracket',
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.bold)),
+                Text(showR2 ? 'Final & 3rd (B9)' : 'Semis (F9)',
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
                 const Spacer(),
-                // Overall status chip
                 _StatusChip(status: status, winner: winner, theme: theme),
                 const SizedBox(width: 4),
                 Icon(Icons.chevron_right,
                     size: 18,
                     color: theme.colorScheme.onSurfaceVariant),
               ]),
-
-              if (r1.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Text('Semis (F9)',
-                    style: theme.textTheme.labelSmall
-                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 4),
-                for (final m in r1)
-                  _MatchRow(match: m, summary: _matchSummary(m), theme: theme),
-              ],
-
-              if (r2.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text('Final & 3rd (B9)',
-                    style: theme.textTheme.labelSmall
-                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 4),
-                for (final m in r2)
-                  _MatchRow(match: m, summary: _matchSummary(m), theme: theme),
-              ],
+              const SizedBox(height: 4),
+              for (final m in (showR2 ? r2 : r1))
+                _MatchRow(match: m, summary: _matchSummary(m), theme: theme),
             ],
           ),
         ),
