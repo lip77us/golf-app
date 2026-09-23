@@ -9888,32 +9888,19 @@ class _TripleCupGroupCard extends StatelessWidget {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Team 2 (Orange) side on the left — names on top,
-                          // SO under.
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(t2Names,
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      color: t2Color,
-                                      fontWeight: FontWeight.w600)),
-                              if (t2So != null)
-                                Text(t2So,
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        color: t2Color)),
-                            ],
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: Text('vs',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color: theme.colorScheme.onSurfaceVariant)),
-                          ),
-                          // Team 1 (Blue) side on the right — names on top,
-                          // SO under.
+                          // **Team 1 on the left, every time.** These lines
+                          // used to put team 2 first while the card's header
+                          // and its cup score both lead with team 1, so the
+                          // left-hand column changed teams halfway down the
+                          // card: the rosters read blue-then-orange and every
+                          // match under them read orange-then-blue. Reported
+                          // 22 Sep 2026.
+                          //
+                          // Fixed here rather than in the header because the
+                          // header is the side the SCORE agrees with — `0 – 0`
+                          // is team 1 first, as it is on the lock card and in
+                          // every cup notation — so flipping the names up
+                          // there would only have moved the disagreement.
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -9927,6 +9914,28 @@ class _TripleCupGroupCard extends StatelessWidget {
                                     style: TextStyle(
                                         fontSize: 11,
                                         color: t1Color)),
+                            ],
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: Text('vs',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.onSurfaceVariant)),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(t2Names,
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: t2Color,
+                                      fontWeight: FontWeight.w600)),
+                              if (t2So != null)
+                                Text(t2So,
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: t2Color)),
                             ],
                           ),
                         ],
