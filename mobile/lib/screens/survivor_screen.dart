@@ -1260,6 +1260,11 @@ class _SurvivorGrid extends StatelessWidget {
     const double labelColW = 56.0;
     const double cellW = 34.0;
     const double rowH  = 32.0;
+    // The header band's own height. Named, because **every cell in a band —
+    // including its pinned LABEL — has to be exactly this tall** or the two
+    // halves of the grid run at different pitches and the names stop lining up
+    // with the rows they name.
+    const double headerH = 26.0;
     final holeRange = summary.holes.isNotEmpty
         ? summary.holes.map((h) => h.hole).toList()
         : List.generate(18, (i) => i + 1);
@@ -1394,8 +1399,8 @@ class _SurvivorGrid extends StatelessWidget {
             final split = NineSplit.of(holeRange);
             const summaryW = 34.0;
 
-            Widget sumCell(String t) => SizedBox(
-                  width: summaryW, height: rowH,
+            Widget sumCell(String t, {double height = rowH}) => SizedBox(
+                  width: summaryW, height: height,
                   child: Center(
                     child: Text(t,
                         style: theme.textTheme.labelSmall
@@ -1432,25 +1437,30 @@ class _SurvivorGrid extends StatelessWidget {
                   split.rightEdgeOf(currentHole, cellW, summaryW),
               contentWidth: split.contentWidth(cellW, summaryW),
               bands: [
+                // **`height:` sizes BOTH halves.** This grid handed in a bare
+                // `Text` per name and an empty `SizedBox` for the header, so
+                // the pinned column ran at the text's line height while the
+                // scrolling half ran at 32 — and the names ended up stacked
+                // above the grid instead of beside their own rows. Declaring
+                // the height on the band is what makes that unsayable.
                 HoleGridBand(
-                  const SizedBox(width: labelColW),
+                  null,
                   [
                     for (final h in split.front) headerCell(h),
-                    if (split.showOut) sumCell('OUT'),
+                    if (split.showOut) sumCell('OUT', height: headerH),
                     for (final h in split.back) headerCell(h),
-                    if (split.showIn) sumCell('IN'),
-                    if (split.showTot) sumCell('TOT'),
+                    if (split.showIn) sumCell('IN', height: headerH),
+                    if (split.showTot) sumCell('TOT', height: headerH),
                   ],
+                  height: headerH,
                 ),
                 for (final m in players)
                   HoleGridBand(
-                    SizedBox(
-                      width: labelColW,
-                      child: Text(m.player.displayShort,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall
-                              ?.copyWith(fontWeight: FontWeight.w600)),
-                    ),
+                    height: rowH,
+                    Text(m.player.displayShort,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall
+                            ?.copyWith(fontWeight: FontWeight.w600)),
                     [
                       for (final h in split.front) cell(m, h),
                       if (split.showOut) grossTotal(m, split.front),

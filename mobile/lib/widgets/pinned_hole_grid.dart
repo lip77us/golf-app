@@ -23,6 +23,12 @@
 /// order. A grid whose columns disagree by one row is worse than one that
 /// scrolls, so bands and rules are added to both sides together and there is
 /// no way to add to one alone.
+///
+/// Length and order had no way to go wrong. **Height did**: the label came
+/// straight from the caller, so a band whose label was shorter than its cells
+/// put the pinned column out of step, and it compounded down the grid until
+/// the names no longer named the rows they sat beside. `HoleGridBand.height`
+/// closes that — pass it and both halves are sized together.
 library;
 
 import 'package:flutter/material.dart';
@@ -42,7 +48,22 @@ class HoleGridBand {
   /// the only thing that matters — they fall out of step otherwise.
   final double gapHeight;
 
-  const HoleGridBand(this.label, this.cells, {this.colour})
+  /// **The row's height, applied to BOTH halves.** Pass it and the label can
+  /// no longer be a different height from the cells beside it.
+  ///
+  /// It is optional because every grid predates it and sizes its own label;
+  /// it exists because one of them did not. Survivor's by-hole grid handed in
+  /// a bare `Text` for each name and an empty `SizedBox` for the header, so
+  /// the pinned column ran at the text's line height while the scrolling half
+  /// ran at 32 — and the three names ended up stacked ABOVE the grid rather
+  /// than beside their own rows. Reported from the course, 22 Sep 2026.
+  ///
+  /// The library's note already claimed the two halves were "same length, same
+  /// heights, same order". Length and order had no way to go wrong; height
+  /// did, and nothing checked it. **Prefer this over sizing a label by hand.**
+  final double? height;
+
+  const HoleGridBand(this.label, this.cells, {this.colour, this.height})
       : isRule = false,
         gapHeight = 0;
   const HoleGridBand.rule()
@@ -50,11 +71,13 @@ class HoleGridBand {
         cells = null,
         colour = null,
         gapHeight = 0,
+        height = null,
         isRule = true;
   const HoleGridBand.gap(this.gapHeight)
       : label = null,
         cells = null,
         colour = null,
+        height = null,
         isRule = false;
 }
 
@@ -160,9 +183,20 @@ class _PinnedHoleGridState extends State<PinnedHoleGrid> {
             color: theme.colorScheme.outlineVariant,
             margin: const EdgeInsets.symmetric(vertical: 2)));
       } else {
-        labelCol.add(Container(color: b.colour, child: b.label));
-        cellCol.add(
-            Container(color: b.colour, child: Row(children: b.cells ?? [])));
+        // A declared height goes on BOTH halves, which is the only way to be
+        // sure they agree. The label is also aligned left-centre for it, so a
+        // caller passing a bare `Text` gets the same treatment every
+        // hand-sized label already gives itself.
+        labelCol.add(Container(
+            color: b.colour,
+            height: b.height,
+            alignment: b.height == null ? null : Alignment.centerLeft,
+            width: b.height == null ? null : widget.labelWidth,
+            child: b.label));
+        cellCol.add(Container(
+            color: b.colour,
+            height: b.height,
+            child: Row(children: b.cells ?? [])));
       }
     }
 
