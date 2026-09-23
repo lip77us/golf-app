@@ -33,6 +33,7 @@ import '../utils/points_531_standing.dart';
 import '../utils/fourball_standing.dart';
 import '../utils/match_play_standing.dart';
 import '../utils/skins_standing.dart';
+import '../utils/stableford_standing.dart';
 import '../utils/triple_cup_standing.dart';
 import '../utils/vegas_standing.dart';
 import '../widgets/banker_entry_strip.dart';
@@ -1783,9 +1784,39 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         return _tripleCupRibbon(rp, me, leaderboard);
       case GameIds.matchPlay:
         return _matchPlayRibbon(rp, me, leaderboard);
+      case GameIds.stableford:
+        return _stablefordRibbon(rp, me, leaderboard);
       default:
         return null;
     }
+  }
+
+  /// **The shared points race**, with Wolf and Points 5-3-1 as the other
+  /// callers — `2nd of 12 · 27 pts`.
+  ///
+  /// **The place is honest here where Stroke Play's is not.** That row
+  /// withholds its place on a multi-group round, because score entry holds one
+  /// foursome's card and a rank off it would be a place among four wearing the
+  /// words of a place in the field. Stableford's summary is ROUND-level and
+  /// arrives already ranked, so `2nd of 12` means second of twelve however
+  /// many groups are out.
+  ///
+  /// The money waits for the round to finish: `payout` is a prize projection
+  /// off standings that can turn on the last hole, and settled-or-silent is
+  /// the rule this strip has held since Sixes.
+  StandingRibbon? _stablefordRibbon(
+      RoundProvider rp, int? me, VoidCallback onOpen) {
+    final standing = stablefordStanding(
+      rp.stablefordResult, me,
+      roundComplete: rp.round?.status == 'complete',
+    );
+    if (standing == null) return null;
+    return StandingRibbon(
+      kind: StandingKind.result,
+      standing: standing.standing,
+      figure: standing.figure,
+      onOpenLeaderboard: onOpen,
+    );
   }
 
   /// **It renders the ENGINE's line and writes nothing of its own.**
