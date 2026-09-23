@@ -4543,18 +4543,21 @@ class _Points531GroupCard extends StatelessWidget {
               ),
             ),
 
-          // **The card, at the bottom.** Points 5-3-1 had none — the only
-          // per-hole view was its own awards grid, so a net or strokes-off
-          // golfer could not see where his strokes fell or what anybody
-          // actually shot. Same widget, same payload and same `showPoints`
-          // block the play screen renders: gross over awards, one set of hole
-          // columns, with the Index row and shading every other card has.
+          // **The card, at the bottom — gross only.** Points 5-3-1 had no
+          // scorecard at all: the only per-hole view was its own awards grid,
+          // so a net or strokes-off golfer could not see where his strokes
+          // fell or what anybody actually shot.
+          //
+          // **No `showPoints` here**, unlike score entry. The awards grid
+          // above is already this card's points table, and the block would be
+          // the same numbers in the same order a few rows down. Score entry
+          // has no awards grid of its own, which is why the block is the only
+          // place the points appear there.
           if (scHoles.isNotEmpty) ...[
             const Divider(height: 20),
             HoleGridScorecard(
               holes:        scHoles,
               participants: scPlayers,
-              showPoints:   true,
               legend:       null,
               holesInPlay:  scHolesInPlay,
             ),
