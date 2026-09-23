@@ -2926,33 +2926,20 @@ class _SkinsGroupCard extends StatelessWidget {
           Text('Status: ${status.replaceAll('_', ' ')}',
               style: const TextStyle(fontSize: 11, color: Colors.grey)),
           const Divider(height: 16),
-          ...players.map((p) {
-            final skinsWon = p['skins_won'] ?? 0;
-            final junk     = p['junk_skins'] ?? 0;
-            // Signed net (up/down) — the true settlement figure in both modes.
-            final net      = (p['net'] as num?)?.toDouble() ?? 0.0;
-            final netStr   = net > 0
-                ? '+\$${net.formatBet()}'
-                : net < 0 ? '−\$${(-net).formatBet()}' : '\$0';
-            final netColor = net > 0
-                ? Colors.green.shade700
-                : net < 0 ? Colors.red.shade700 : Colors.grey;
-            final skinsLabel = junk > 0
-                ? '$skinsWon skin${skinsWon == 1 ? '' : 's'} and $junk junk'
-                : '$skinsWon skin${skinsWon == 1 ? '' : 's'}';
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(children: [
-                Expanded(child: Text(p['name']?.toString() ?? '—')),
-                Text(skinsLabel,
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(width: 12),
-                Text(netStr,
-                    style: TextStyle(
-                        fontWeight: FontWeight.w600, color: netColor)),
-              ]),
-            );
-          }),
+          // **The play screen's standings block, moved here.** It answers
+          // where the money went AND what the next hole is worth, in one
+          // strip; the per-player list it replaces could only total it up.
+          //
+          // `currentHole` is the last hole DECIDED rather than one in play — a
+          // board is read after the fact, so the strip opens on the newest
+          // result, which is the same rule every grid on this screen follows.
+          _SkinsStandingsBlock(
+            skins: SkinsSummary.fromJson(summary),
+            currentHole: holes
+                .where((h) => h['winner_id'] != null)
+                .map((h) => (h['hole'] as num?)?.toInt() ?? 0)
+                .fold<int>(0, (a, b) => a > b ? a : b),
+          ),
           // Per-hole scorecard — gross scores with the skin-winner cell
           // highlighted, mirroring the Multi-Group Skins view.  Adds a
           // visual answer to "who actually won each hole?" right next
@@ -11434,6 +11421,245 @@ class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
               )),
         ),
       ]),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Skins standings — recovered from score entry, 22 Sep 2026.
+//
+// It was built for the play screen and is better than what this card had: the
+// 18-hole strip answers *where the money went and what the next hole is worth*
+// in one line, where a per-player list can only total it up. Carried holes
+// show their POT, which is the number that decides whether the hole in front
+// of the group is worth two skins or five.
+//
+// Moved rather than copied. Score entry now draws the scorecard in its place,
+// and two standings tables that agree today are two that disagree later.
+//
+// It reads a typed `SkinsSummary`, so this card parses one from the group
+// payload rather than the card being rewritten around raw maps — the model
+// already exists and is the same shape.
+// ---------------------------------------------------------------------------
+
+class _SkinsStandingsBlock extends StatefulWidget {
+  final SkinsSummary skins;
+  final int          currentHole;
+
+  const _SkinsStandingsBlock({
+    required this.skins,
+    required this.currentHole,
+  });
+
+  @override
+  State<_SkinsStandingsBlock> createState() => _SkinsStandingsBlockState();
+}
+
+class _SkinsStandingsBlockState extends State<_SkinsStandingsBlock> {
+  final ScrollController _ctrl = ScrollController();
+  static const double _stride = 36.0; // 32px cell + 4px gap
+
+  @override
+  void initState() {
+    super.initState();
+    _schedule();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SkinsStandingsBlock old) {
+    super.didUpdateWidget(old);
+    if (old.currentHole != widget.currentHole) _schedule();
+  }
+
+  void _schedule() => WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_ctrl.hasClients) return;
+        final target = ((widget.currentHole - 4) * _stride)
+            .clamp(0.0, _ctrl.position.maxScrollExtent);
+        _ctrl.animateTo(target,
+            duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+      });
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final skins       = widget.skins;        // aliases keep the body unchanged
+    final currentHole = widget.currentHole;
+    final theme = Theme.of(context);
+
+    // Sort by total_skins descending.
+    final sorted = List.of(skins.players)
+      ..sort((a, b) => b.totalSkins.compareTo(a.totalSkins));
+
+    // Build a lookup from hole → SkinsHole for the strip.
+    final holeMap = { for (final h in skins.holes) h.hole: h };
+
+    // Count carry pot entering each hole so the strip can show accumulated value.
+    // We pre-compute the pot for every hole for efficiency.
+    final potByHole = <int, int>{};
+    int runningPot = 1;
+    for (int h = 1; h <= 18; h++) {
+      potByHole[h] = runningPot;
+      final hd = holeMap[h];
+      if (hd == null) break; // not yet scored
+      if (hd.winnerId != null || hd.isDead) {
+        runningPot = 1;
+      } else if (hd.isCarry) {
+        runningPot++;
+      }
+    }
+
+    // **Not a Card of its own any more.** On score entry this stood alone in a
+    // scroll view and needed its own frame; here it is a section INSIDE the
+    // group card, and a bordered box inside a bordered box reads as two
+    // objects where there is one.
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // The `Skins standings · Pool: $N` header row this carried on
+            // score entry is gone: the group card it now sits inside already
+            // names the group, the payout mode and the pool, one line above.
+            // Two pool figures a centimetre apart is the thing that got the
+            // points table cut down to one.
+
+            // ── 18-hole strip ────────────────────────────────────────────────
+            SizedBox(
+              height: 44,
+              child: ListView.separated(
+                controller: _ctrl,
+                scrollDirection: Axis.horizontal,
+                itemCount: 18,
+                separatorBuilder: (_, __) => const SizedBox(width: 4),
+                itemBuilder: (_, idx) {
+                  final h   = idx + 1;
+                  final hd  = holeMap[h];
+                  final pot = potByHole[h] ?? 1;
+                  final isCurrent = h == currentHole;
+
+                  // Decide cell appearance.
+                  Color  bgColor;
+                  Color  fgColor;
+                  String topLabel;   // hole number
+                  String botLabel;   // winner initials / pot / dot
+
+                  if (hd == null) {
+                    // Unplayed.
+                    bgColor  = theme.colorScheme.surfaceContainerHighest;
+                    fgColor  = theme.colorScheme.onSurfaceVariant;
+                    topLabel = '$h';
+                    botLabel = pot > 1 ? '$pot' : '·';
+                    // If carry is accumulating into this unplayed hole, amber.
+                    if (pot > 1) {
+                      bgColor = Colors.amber.shade100;
+                      fgColor = Colors.amber.shade900;
+                    }
+                  } else if (hd.winnerId != null) {
+                    // Winner decided.
+                    bgColor  = Colors.green.shade100;
+                    fgColor  = Colors.green.shade900;
+                    topLabel = '$h';
+                    botLabel = hd.winnerShort ?? '?';
+                    // If it was a carry win, show the pot value above initials.
+                    if (hd.skinsValue > 1) botLabel = '${hd.winnerShort}×${hd.skinsValue}';
+                  } else if (hd.isDead) {
+                    // Killed (tied, no carryover).
+                    bgColor  = Colors.grey.shade200;
+                    fgColor  = Colors.grey.shade600;
+                    topLabel = '$h';
+                    botLabel = '✕';
+                  } else {
+                    // Tied with carryover — skin carrying forward.
+                    bgColor  = Colors.amber.shade100;
+                    fgColor  = Colors.amber.shade900;
+                    topLabel = '$h';
+                    botLabel = '→';
+                  }
+
+                  return Container(
+                    width: 32,
+                    decoration: BoxDecoration(
+                      color: bgColor,
+                      borderRadius: BorderRadius.circular(6),
+                      border: isCurrent
+                          ? Border.all(
+                              color: theme.colorScheme.primary,
+                              width: 2,
+                            )
+                          : null,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(topLabel,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: fgColor,
+                              fontSize: 9,
+                            )),
+                        const SizedBox(height: 1),
+                        Text(
+                          botLabel,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: fgColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: botLabel.length > 3 ? 8 : 10,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            // ── Player standings rows ────────────────────────────────────────
+            for (final p in sorted)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(children: [
+                  Text(p.name,
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(fontWeight: FontWeight.w600)),
+                  const Spacer(),
+                  if (p.totalSkins > 0) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade100,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '${p.totalSkins} skin${p.totalSkins > 1 ? 's' : ''}',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: Colors.green.shade800,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '\$${p.payout.toStringAsFixed(2)}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.green.shade800,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ] else
+                    Text('—',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                ]),
+              ),
+          ],
+      ),
     );
   }
 }
