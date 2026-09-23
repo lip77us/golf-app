@@ -1445,7 +1445,7 @@ def _build_score_indexes(game, foursome, matches, members_by_pid):
     return gross_index, net_index, pair_indexes
 
 
-def triple_cup_summary(foursome) -> dict | None:
+def triple_cup_summary(foursome, *, with_cup: bool = False) -> dict | None:
     """
     Return the JSON-friendly summary the mobile client consumes.  None
     when no Triple Cup game has been set up for this foursome.
@@ -1915,32 +1915,64 @@ def triple_cup_summary(foursome) -> dict | None:
         # THIS foursome's four points; a golfer on a cup round is playing for
         # the twenty-four, and the foursome's own score is a step toward it
         # rather than the thing being contested.
-        'cup' : _cup_context(foursome.round),
+        #
+        # **Opt-in, and that is load-bearing.** `cup_standings_summary` walks
+        # every foursome in the tournament and calls THIS function for each
+        # Triple Cup one — so a cup block computed unconditionally makes the
+        # two functions call each other forever. Only the views that serve a
+        # client ask for it; every internal caller, the cup builder included,
+        # gets `None` and cannot recurse.
+        'cup' : _cup_context(foursome.round) if with_cup else None,
     }
 
 
 def _cup_context(round_obj) -> dict | None:
     """The tournament cup a cup round plays into — or None for a casual one.
 
-    Tournament-level rather than round-level: a cup can run over several
-    rounds, and a golfer on day two is playing for the total. `to_win` comes
-    from the same builder the cup board uses, so the row and the board cannot
-    disagree about what it takes.
+    **Resolved exactly the way the lock-screen card resolves it**, because the
+    two must never disagree about whether a round carries a cup or what it
+    takes to win:
+
+    * the tournament is ``round.tournament`` — NOT
+      ``ryder_cup_config.tournament``, which is a ``TeamTournament`` and a
+      different object. Passing it raised inside the standings query, which my
+      first version caught and turned into "casual round"; the row then showed
+      the foursome's own 0–0 as if it were the cup. Found 23 Sep 2026.
+    * the gate is ``cup_round_live_summary`` rather than a config check: a
+      tournament round is not automatically a cup round.
+
+    Tournament-level rather than round-level, because a cup can run several
+    rounds and a golfer on day two is playing for the total.
+
+    **Nothing is caught here.** A cup round that cannot produce a cup score is
+    a fault worth seeing; swallowing it is what let a wrong number ship looking
+    like a right one.
     """
+    # **The cheap check first.** `cup_round_live_summary` walks the round's
+    # foursomes and `cup_standings_summary` aggregates every round in the
+    # tournament; this function runs on EVERY summary build, which is every
+    # score post. Gating on the config's existence — one FK — keeps a casual
+    # Triple Cup and a non-cup tournament round at zero cost, which is what
+    # they were before this block existed.
     if not _is_cup_round(round_obj):
         return None
-    try:
-        from services.cup_standings import cup_standings_summary
-        tournament = round_obj.ryder_cup_config.tournament
-        cup = cup_standings_summary(tournament)
-    except Exception:
+    from services.cup_standings import (cup_round_live_summary,
+                                        cup_standings_summary)
+    tournament = getattr(round_obj, 'tournament', None)
+    if tournament is None:
         return None
+    if cup_round_live_summary(round_obj) is None:
+        return None
+    cup = cup_standings_summary(tournament)
     if not cup:
         return None
     return {
         'team1_points'    : cup.get('team1_points'),
         'team2_points'    : cup.get('team2_points'),
-        'points_available': cup.get('points_available'),
+        # `total_possible`, not `points_available` — the cup builder's own key.
+        # The wrong one read null, which would have hidden `to win` even once
+        # the tournament resolved.
+        'points_available': cup.get('total_possible'),
         'to_win'          : cup.get('to_win'),
         'team1_name'      : cup.get('team1_name'),
         'team2_name'      : cup.get('team2_name'),

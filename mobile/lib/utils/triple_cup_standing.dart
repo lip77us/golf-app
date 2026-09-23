@@ -92,8 +92,10 @@ String cupPoints(double v) {
 
 /// The row's strings, or null before the cup is drawn.
 ///
-/// [hole] picks the reader's match — four run at once over different hole
-/// ranges, so the one on screen is the one to report.
+/// [hole] picks the match — four run at once over different hole ranges, so
+/// the one covering the hole on screen is the one to report. The reader's own
+/// when he is in it; otherwise the group's, because a TD looking at a foursome
+/// he is not playing in is looking at a screen entirely about that group.
 TripleCupStanding? tripleCupStanding(TripleCupSummary? summary, int? playerId,
                                      {required int hole}) {
   if (summary == null || summary.matches.isEmpty) return null;
@@ -115,15 +117,22 @@ TripleCupStanding? tripleCupStanding(TripleCupSummary? summary, int? playerId,
 
   if (playerId == null) return TripleCupStanding(cup, toWin, '', '', null);
 
-  // The reader's match on this hole. A watcher, or a golfer whose match does
-  // not cover the hole on screen, gets the cup and nothing beside it — which
-  // is honest rather than empty: the cup is the point of the round.
-  final mine = summary.matches
-      .where((m) =>
-          hole >= m.startHole &&
-          hole <= m.endHole &&
-          m.players.any((p) => p.playerId == playerId && !p.isPhantom))
-      .firstOrNull;
+  // The match on this hole — **the reader's if he is in one, otherwise the
+  // group's.**
+  //
+  // A TD or a captain opens a foursome he is not playing in, and the screen he
+  // gets is entirely about that group: its hole, its four rows, its card. A
+  // row that went blank there reported nothing about the thing on screen —
+  // which is what happened, and what `Fourball 1 UP` beside a cup score is
+  // for. Reported 23 Sep 2026.
+  final onHole = summary.matches
+      .where((m) => hole >= m.startHole && hole <= m.endHole)
+      .toList();
+  final mine = onHole
+          .where((m) =>
+              m.players.any((p) => p.playerId == playerId && !p.isPhantom))
+          .firstOrNull ??
+      onHole.firstOrNull;
   if (mine == null) return TripleCupStanding(cup, toWin, '', '', null);
 
   // The leaderboard's own rule for naming a match: its label when it has one,

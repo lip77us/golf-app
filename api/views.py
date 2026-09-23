@@ -7046,7 +7046,10 @@ class TripleCupSetupView(APIView):
             return Response({'detail': str(exc)},
                             status=status.HTTP_400_BAD_REQUEST)
         calculate_triple_cup(foursome)
-        return Response(triple_cup_summary(foursome),
+        # `with_cup` on the CLIENT-facing responses only — see
+        # `triple_cup_summary`, whose cup block would otherwise recurse
+        # through `cup_standings_summary` and back.
+        return Response(triple_cup_summary(foursome, with_cup=True),
                         status=status.HTTP_201_CREATED)
 
 
@@ -7055,7 +7058,7 @@ class TripleCupResultView(APIView):
     def get(self, request, pk):
         foursome = foursome_for_scorer(request.user, pk)
         from services.triple_cup import triple_cup_summary
-        summary = triple_cup_summary(foursome)
+        summary = triple_cup_summary(foursome, with_cup=True)
         if summary is None:
             return Response(
                 {'detail': 'No Triple Cup game set up for this foursome.'},
@@ -7131,7 +7134,7 @@ class TripleCupFoursomesTeeOffView(APIView):
         # already exist.
         from services.triple_cup import calculate_triple_cup, triple_cup_summary
         calculate_triple_cup(foursome)
-        return Response(triple_cup_summary(foursome))
+        return Response(triple_cup_summary(foursome, with_cup=True))
 
 
 # ---------------------------------------------------------------------------

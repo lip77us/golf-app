@@ -197,20 +197,36 @@ void main() {
     });
   });
 
-  group('when the reader has no match here', () {
-    test('**a watcher still gets the cup**', () {
-      // It is the point of the round, so the row is not empty for him.
-      final s = _summary(t1: 1, matches: [_match()]);
+  group('**when the reader is not in the match on screen**', () {
+    test('**a TD gets the GROUP\'s match, not a blank**', () {
+      // He opened a foursome he is not playing in, and the screen he got is
+      // entirely about that group: its hole, its four rows, its card. A row
+      // that went blank there reported nothing about the thing on screen.
+      final s = _summary(t1: 1, matches: [
+        _match(holesUp: 1, playerIds: const [21, 22],
+               holes: [_hole(1, winner: 'T1')]),
+      ]);
       final st = tripleCupStanding(s, 999, hole: 1)!;
       expect(st.standing, '1–0');
-      expect(st.figure, '');
+      expect(st.figure, '1 UP thru 1');
+      expect(st.figureLabel, 'M1');
     });
 
-    test('and so does a golfer whose match is not on this hole', () {
+    test('**his own match still wins when he is in one**', () {
+      final s = _summary(matches: [
+        _match(number: 1, holesUp: 2, playerIds: const [21, 22],
+               holes: [_hole(1, winner: 'T1')]),
+        _match(number: 2, label: 'M2', holesUp: 1,
+               playerIds: const [_me, 23], holes: [_hole(1, winner: 'T1')]),
+      ]);
+      expect(tripleCupStanding(s, _me, hole: 1)!.figureLabel, 'M2');
+    });
+
+    test('a hole no match covers gives the cup alone', () {
       final s = _summary(t1: 1, matches: [
         _match(start: 7, end: 12, playerIds: const [13, 14]),
       ]);
-      final st = tripleCupStanding(s, _me, hole: 8)!;
+      final st = tripleCupStanding(s, _me, hole: 2)!;
       expect(st.standing, '1–0');
       expect(st.figure, '');
     });
