@@ -140,29 +140,34 @@ TripleCupStanding? tripleCupStanding(TripleCupSummary? summary, int? playerId,
   // otherwise.
   final format = segmentLabel(mine);
 
-  final margin = mine.holesUpFinal.abs();
-  final leader = mine.holesUpFinal == 0
-      ? null
-      : (mine.holesUpFinal > 0 ? 1 : 2);
+  final st = tripleCupMatchState(mine);
+  return TripleCupStanding(cup, toWin, format, st.value, st.leader);
+}
 
-  if (mine.status == 'complete') {
-    // `holesToPlay` walks the match's own segment in the group's play order —
-    // the only shotgun-safe source for the `M` in `3&2`.
-    return TripleCupStanding(cup, toWin, format, 'win ${closeOut(margin, mine.holesToPlay ?? 0)}', leader);
-  }
-  if (mine.status == 'halved') {
-    return TripleCupStanding(cup, toWin, format, kAllSquare, null);
-  }
+/// Where ONE match stands — `2 UP thru 5`, `All Square thru 5`, `win 3&2`.
+///
+/// Neutral, with [leader] naming the side that is up, which is the division
+/// every match row in the app now uses. **Shared by the standing row and the
+/// pairings strip**, so the two cannot write the same match differently.
+({String value, int? leader}) tripleCupMatchState(TripleCupMatch m) {
+  final margin = m.holesUpFinal.abs();
+  final leader = m.holesUpFinal == 0 ? null : (m.holesUpFinal > 0 ? 1 : 2);
 
-  // Holes played in THIS match, not on the course: a Triple Cup segment is six
-  // holes of its own, so the hole number in the header does not say how far
-  // into the match the group is.
-  final thru = mine.holes.where((h) => h.winner != null).length;
-  if (thru == 0) return TripleCupStanding(cup, toWin, format, kTeeOff, null);
-  if (margin == 0) {
-    return TripleCupStanding(cup, toWin, format, '$kAllSquare thru $thru', null);
+  if (m.status == 'complete') {
+    // `holesToPlay` walks the match's own segment in the group's play
+    // order — the only shotgun-safe source for the `M` in `3&2`.
+    return (value: 'win ${closeOut(margin, m.holesToPlay ?? 0)}',
+            leader: leader);
   }
-  return TripleCupStanding(cup, toWin, format, '${marginLabel(margin)} thru $thru', leader);
+  if (m.status == 'halved') return (value: kAllSquare, leader: null);
+
+  // Holes played in THIS match, not on the course: a Triple Cup segment is
+  // six holes of its own, so the hole number in the header does not say how
+  // far into the match the group is.
+  final thru = m.holes.where((h) => h.winner != null).length;
+  if (thru == 0) return (value: kTeeOff, leader: null);
+  if (margin == 0) return (value: '$kAllSquare thru $thru', leader: null);
+  return (value: '${marginLabel(margin)} thru $thru', leader: leader);
 }
 
 /// `Fourball`, `Foursomes`, `Singles 2` — the match's own label when it has

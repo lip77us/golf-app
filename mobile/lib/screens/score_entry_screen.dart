@@ -1878,21 +1878,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final standing =
         tripleCupStanding(rp.tripleCupSummary, me, hole: _selectedHole);
     if (standing == null) return null;
-    final tc = rp.tripleCupSummary!;
     return StandingRibbon(
       kind: StandingKind.result,
+      // **The cup has the bar to itself.** The match used to ride in the
+      // figure, which left `0–1 · 4½ to win` sharing 27px with it and
+      // truncating to `4½ to w…`. The pairings strip under the bar already
+      // names each match, so its state belongs on that line — and there it
+      // can show BOTH singles at once, which one figure slot never could.
       standing: standing.standing,
-      // **The format, in the quiet slot.** How many points are available never
-      // changes all afternoon; which FORMAT the group is playing changes twice
-      // and changes what they are about to do on the tee — so `of 4` gave its
-      // width to `Fourball`.
-      figureLabel: standing.figureLabel,
-      figure: standing.figure,
-      figureColor: switch (standing.matchLeader) {
-        1 => tc.team1Color,
-        2 => tc.team2Color,
-        _ => null,
-      },
+      figure: '',
       onOpenLeaderboard: onOpen,
     );
   }

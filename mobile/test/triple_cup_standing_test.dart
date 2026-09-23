@@ -72,6 +72,29 @@ TripleCupSummary _summary({
     );
 
 void main() {
+  group('**one definition of where a match stands**', () {
+    test('the strip and the row cannot write it differently', () {
+      // Both call `tripleCupMatchState`; the row used to compute its own.
+      final m = _match(holesUp: 2, holes: [_hole(1, winner: 'T1')]);
+      final st = tripleCupMatchState(m);
+      final s = _summary(matches: [m]);
+      expect(st.value, tripleCupStanding(s, _me, hole: 1)!.figure);
+      expect(st.leader, tripleCupStanding(s, _me, hole: 1)!.matchLeader);
+    });
+
+    test('a close-out reads win N&M, from the server\'s holes left', () {
+      final st = tripleCupMatchState(
+          _match(status: 'complete', holesUp: 3, holesToPlay: 2));
+      expect(st.value, 'win 3&2');
+    });
+
+    test('level and halved both take no colour', () {
+      expect(tripleCupMatchState(_match(holes: [_hole(1, winner: 'Halved')]))
+          .leader, isNull);
+      expect(tripleCupMatchState(_match(status: 'halved')).value, 'All Square');
+    });
+  });
+
   group('**the cup is the headline**', () {
     test('including 0–0 before a point is won, and WITHOUT `of 4`', () {
       // How many points are available never changes all afternoon; the format
