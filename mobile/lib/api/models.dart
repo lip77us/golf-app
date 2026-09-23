@@ -1362,11 +1362,47 @@ class PlayerTotals {
       );
 }
 
+/// Where one golfer stands in a tournament FIELD.
+///
+/// Sent only on an individual-play stroke tournament, and only with the
+/// scorecard — a place changes on every save, which is exactly when the card
+/// is refetched. A casual round's field IS the foursome, so the row works
+/// that out from the card it already holds and this is absent.
+class FieldPlace {
+  /// Null until the golfer has teed off. He is not on the board yet, rather
+  /// than sharing the last place handed out.
+  final int? rank;
+  final bool tied;
+
+  /// Every golfer ENTERED. Eight golfers are eight golfers from the first
+  /// tee, and that is how many rows the board draws all day.
+  final int field;
+  final int? netToPar;
+  final int thru;
+
+  const FieldPlace({
+    this.rank, this.tied = false, this.field = 0, this.netToPar,
+    this.thru = 0,
+  });
+
+  factory FieldPlace.fromJson(Map<String, dynamic> j) => FieldPlace(
+        rank    : j['rank'] as int?,
+        tied    : j['tied'] == true,
+        field   : (j['field'] ?? 0) as int,
+        netToPar: j['net_to_par'] as int?,
+        thru    : (j['thru'] ?? 0) as int,
+      );
+}
+
 class Scorecard {
   final int foursomeId;
   final int groupNumber;
   final List<ScorecardHole> holes;
   final List<PlayerTotals> totals;
+
+  /// Every golfer's place in the field, by player id. Empty on a casual
+  /// round and on any tournament shape that is not individual stroke play.
+  final Map<int, FieldPlace> fieldStanding;
 
   /// Public page for this group's scorecard — what Share sends. Built by the
   /// server (it owns share-URL shape); empty when the round has no watch
@@ -1379,6 +1415,7 @@ class Scorecard {
     required this.holes,
     required this.totals,
     this.shareUrl = '',
+    this.fieldStanding = const {},
   });
 
   factory Scorecard.fromJson(Map<String, dynamic> j) => Scorecard(
@@ -1391,6 +1428,12 @@ class Scorecard {
         totals: (j['totals'] as List? ?? [])
             .map((t) => PlayerTotals.fromJson(t as Map<String, dynamic>))
             .toList(),
+        fieldStanding: {
+          for (final e in Map<String, dynamic>.from(
+                  (j['field_standing'] ?? const {}) as Map).entries)
+            int.parse(e.key):
+                FieldPlace.fromJson(Map<String, dynamic>.from(e.value as Map)),
+        },
       );
 
   ScorecardHole? holeData(int holeNumber) =>

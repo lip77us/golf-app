@@ -477,7 +477,7 @@ def _build_scorecard(foursome: Foursome) -> dict:
             'total_stableford': sf,
         })
 
-    return {
+    out = {
         'foursome_id' : foursome.id,
         'group_number': foursome.group_number,
         'holes'       : holes_out,
@@ -487,6 +487,28 @@ def _build_scorecard(foursome: Foursome) -> dict:
         # the watcher invite's watch_url) and the client has no base for it.
         'share_url'   : _scorecard_share_url(foursome),
     }
+
+    # Where each golfer stands in the FIELD — the standing row's place, on an
+    # individual-play STROKE tournament.
+    #
+    # **It rides the scorecard because the scorecard is what gets refetched.**
+    # The round payload is loaded once on the way in, so a place hung off that
+    # would be stale by the 3rd hole; this call already runs after every save,
+    # which is exactly when a place changes.
+    #
+    # Gated rather than universal: a casual round's field IS the foursome, so
+    # the row works it out on the card it already holds, and a tournament is
+    # the only shape where the whole field has to be ranked to answer.
+    # Stableford scoring has its own round-level summary and its own row.
+    tournament = foursome.round.tournament
+    if (tournament is not None
+            and tournament.is_individual_play
+            and getattr(tournament, 'scoring_method', 'stroke') == 'stroke'):
+        from services.low_net_round import field_standing
+        out['field_standing'] = {
+            str(pid): v for pid, v in field_standing(foursome.round).items()
+        }
+    return out
 
 
 def _scorecard_share_url(foursome) -> str:

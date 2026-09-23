@@ -418,6 +418,53 @@ def low_net_round_standings(round_obj) -> list:
     return _rank_standings(player_totals, payouts_cfg, excluded_ids)
 
 
+def field_standing(round_obj) -> dict:
+    """Each golfer's place in the ROUND's field, keyed by player id.
+
+    What the score-entry standing row reports, and the one fact that card
+    cannot work out for itself: it holds one foursome, and a place is about
+    everybody. A rank taken off four golfers would be a place among four
+    wearing the words of a place in the field.
+
+    **Ranked by :func:`low_net_round_standings`, which is the board the row's
+    own pill opens.** A second implementation would eventually put a golfer
+    2nd on the row and 3rd on the board he taps through to.
+
+    Two departures from the board's rows, both in the direction of claiming
+    less:
+
+    * a golfer who has not teed off is **unranked** rather than sharing the
+      last rank handed out — he is not on the board yet, and the row says
+      `Tee off` for him anyway. Unstarted golfers sort last, so this can never
+      change the rank of a golfer who HAS a score, and the two surfaces agree
+      wherever the row actually speaks.
+    * ``tied`` counts only golfers who have started, for the same reason.
+
+    ``field`` is every golfer ENTERED, not the ones who have started: eight
+    golfers are eight golfers from the first tee, and that is how many rows
+    the board draws all day.
+    """
+    rows = low_net_round_standings(round_obj)
+
+    started = [r for r in rows if r.get('holes_played')]
+    at_rank: dict = {}
+    for r in started:
+        at_rank[r['rank']] = at_rank.get(r['rank'], 0) + 1
+
+    field = len(rows)
+    out = {}
+    for r in rows:
+        playing = bool(r.get('holes_played'))
+        out[r['player_id']] = {
+            'rank'      : r['rank'] if playing else None,
+            'tied'      : playing and at_rank.get(r['rank'], 0) > 1,
+            'field'     : field,
+            'net_to_par': r['net_to_par'],
+            'thru'      : r.get('holes_played') or 0,
+        }
+    return out
+
+
 def low_net_round_summary(round_obj) -> dict:
     """
     Return serialisable summary dict:

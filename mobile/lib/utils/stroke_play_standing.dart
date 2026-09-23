@@ -21,6 +21,15 @@
 /// a row whose hue means *which side you are on* everywhere else would make
 /// one colour mean two things across the app.
 ///
+/// ## In a TOURNAMENT the place comes down from the server
+///
+/// The reasoning below is about a casual round, where the field is the
+/// foursome and the card holds it. An individual-play stroke tournament is
+/// the other case: the card is one group of a real field, so the place is
+/// ranked server-side — by `low_net_round_standings`, which IS the board the
+/// row's pill opens, so the two cannot put a golfer in two different places.
+/// See [tournamentStrokeStanding].
+///
 /// ## Why the place can be withheld
 ///
 /// Score entry holds ONE foursome's scorecard. On a single-group round that is
@@ -179,4 +188,28 @@ StrokePlayStanding? strokePlayStanding({
   final level = started.where((e) => e.n.toPar == mine.toPar).length;
   return StrokePlayStanding(
       '${placeLabel(better + 1, level > 1)} of ${started.length}', score);
+}
+
+/// The row on an individual-play STROKE tournament — `T-2 of 8`, `−1 thru 4`.
+///
+/// The same shape as the casual row and for the same reason: **the place
+/// leads because the place is the money.** What differs is where it comes
+/// from. A casual round's field is the foursome, so the card holds it; a
+/// tournament card is one group of a real field, and a rank taken off four
+/// golfers would be a place among four wearing the words of a place in the
+/// field. So the server ranks it, through the board's own call.
+///
+/// Null before the reader has a score — the row draws `Tee off` for that,
+/// which is the caller's string and not one to invent here.
+StrokePlayStanding? tournamentStrokeStanding(
+    Map<int, FieldPlace> fieldStanding, int? playerId) {
+  if (playerId == null) return null;
+  final me = fieldStanding[playerId];
+  if (me == null || me.netToPar == null || me.thru == 0) return null;
+  final score = '${toParLabel(me.netToPar!)} thru ${me.thru}';
+  // `1st of 1` is true and says nothing. It cannot happen in a real field,
+  // but a one-golfer test event should read as a score rather than a win.
+  if (me.rank == null || me.field < 2) return StrokePlayStanding('', score);
+  return StrokePlayStanding(
+      '${placeLabel(me.rank!, me.tied)} of ${me.field}', score);
 }

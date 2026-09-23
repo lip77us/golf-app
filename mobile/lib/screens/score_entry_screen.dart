@@ -1704,10 +1704,34 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // no leaderboard link, the icon stayed, and neither score showed.
     final isTripleCup =
         resolvePrimary(round.primaryGame, games) == GameIds.tripleCup;
-    if (!round.isCasual && !isTripleCup) return null;
     final me = context.read<AuthProvider>().player?.id;
     final leaderboard = () => Navigator.of(context)
         .pushNamed('/leaderboard', arguments: round.id);
+
+    // **An individual-play STROKE tournament, announced by the server.**
+    //
+    // A tournament round carries no `active_games` of its own — the game
+    // lives on the tournament — so there is nothing here to switch on, and a
+    // client re-deriving the tournament's shape would be a second copy of a
+    // rule it does not own. The presence of `field_standing` on the scorecard
+    // IS the answer: the server sends it for exactly this case, ranked by the
+    // board this row's pill opens.
+    final fieldStanding = rp.scorecard?.fieldStanding ?? const {};
+    if (fieldStanding.isNotEmpty) {
+      final standing = tournamentStrokeStanding(fieldStanding, me);
+      return StandingRibbon(
+        kind: StandingKind.result,
+        // Before his first score there is still a way to the board, which is
+        // the whole reason the row draws on an unplayed hole.
+        standing: standing == null
+            ? 'Tee off'
+            : (standing.place.isNotEmpty ? standing.place : standing.score),
+        figure: (standing?.place.isNotEmpty ?? false) ? standing!.score : '',
+        onOpenLeaderboard: leaderboard,
+      );
+    }
+
+    if (!round.isCasual && !isTripleCup) return null;
 
     switch (resolvePrimary(round.primaryGame, games)) {
       case GameIds.sixes:
