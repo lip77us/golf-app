@@ -32,6 +32,7 @@
 library;
 
 import '../api/models.dart';
+import 'standing_money.dart';
 import 'match_notation.dart';
 
 class RabbitStanding {
@@ -53,17 +54,8 @@ class RabbitStanding {
 /// **Settled, never a forecast.** A leg in progress contributes nothing, which
 /// is what lets the row say `so far` and mean it — the same rule Sixes needed
 /// after `1 UP · Even so far` read as a contradiction.
-String rabbitMoney(RabbitSummary s, int playerId) {
-  final me = s.players.where((p) => p.playerId == playerId).firstOrNull;
-  final v = me?.money ?? 0;
-  if (v.abs() < 0.005) return '';
-  final n = v.abs();
-  final amount =
-      n == n.roundToDouble() ? n.toStringAsFixed(0) : n.toStringAsFixed(2);
-  // U+2212, not a hyphen — beside a `+` at this size the hyphen is visibly
-  // the wrong length.
-  return '${v > 0 ? "+" : "−"}\$$amount so far';
-}
+String rabbitMoney(RabbitSummary s, int playerId) => standingMoney(
+    s.players.where((p) => p.playerId == playerId).firstOrNull?.money ?? 0);
 
 /// Who held the rabbit at [hole], walking BACK through the leg in play order.
 ///

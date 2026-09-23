@@ -45,6 +45,7 @@
 library;
 
 import '../api/models.dart';
+import 'standing_money.dart';
 import 'match_notation.dart';
 
 class SurvivorStanding {
@@ -71,17 +72,8 @@ enum SurvivorTint { alive, zombie, none }
 ///
 /// **Settled, never a forecast.** A Survivor in progress contributes nothing,
 /// which is what lets the row say `so far` and mean it.
-String survivorMoney(SurvivorSummary s, int playerId) {
-  final me = s.players.where((p) => p.playerId == playerId).firstOrNull;
-  final v = me?.money ?? 0;
-  if (v.abs() < 0.005) return '';
-  final n = v.abs();
-  final amount =
-      n == n.roundToDouble() ? n.toStringAsFixed(0) : n.toStringAsFixed(2);
-  // U+2212, not a hyphen — beside a `+` at this size the hyphen is visibly
-  // the wrong length.
-  return '${v > 0 ? "+" : "−"}\$$amount so far';
-}
+String survivorMoney(SurvivorSummary s, int playerId) => standingMoney(
+    s.players.where((p) => p.playerId == playerId).firstOrNull?.money ?? 0);
 
 /// Who is alive at [hole], which Survivor it belongs to, and who is out of it.
 ///

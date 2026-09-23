@@ -33,11 +33,13 @@ import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart';
+import '../providers/auth_provider.dart';
+import '../utils/points_531_standing.dart';
+import '../widgets/hole_grid_scorecard.dart';
 import '../widgets/round_chat_button.dart';
+import '../widgets/standing_ribbon.dart';
 import '../widgets/spots_capture.dart';
-import '../widgets/pinned_hole_grid.dart';
 import '../widgets/combo_tee_chip.dart';
-import '../utils/nine_totals.dart';
 
 // ---------------------------------------------------------------------------
 // The screen
@@ -401,9 +403,17 @@ class _Points531ScreenState extends State<Points531Screen>
         (rp.round?.foursomes.length ?? 1) == 1;
     final showExit = isCasualSingle && _hasAnyScore;
 
+    final ribbon = _standingRibbon(rp);
+
     return Scaffold(
       appBar: GolfAppBar(
         title: 'Points 5-3-1',
+        // D2: the standing becomes the bar's second line, and the pill in it
+        // replaces the leaderboard ICON below.
+        bottom: ribbon,
+        titleStyle: ribbon == null
+            ? null
+            : const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.close),
@@ -436,21 +446,46 @@ class _Points531ScreenState extends State<Points531Screen>
             ),
           if (rp.round != null)
             RoundChatButton(roundId: rp.round!.id),
-          // Leaderboard shortcut — round-level summary across every game.
-          IconButton(
-            tooltip: 'Leaderboard',
-            icon: const Icon(Icons.leaderboard_outlined),
-            onPressed: rp.round == null
-                ? null
-                : () => Navigator.of(context).pushNamed(
-                      '/leaderboard',
-                      arguments: rp.round!.id,
-                    ),
-          ),
+          // The named pill in the ribbon is this, done properly — so the icon
+          // stands down wherever the ribbon draws.
+          if (ribbon == null)
+            IconButton(
+              tooltip: 'Leaderboard',
+              icon: const Icon(Icons.leaderboard_outlined),
+              onPressed: rp.round == null
+                  ? null
+                  : () => Navigator.of(context).pushNamed(
+                        '/leaderboard',
+                        arguments: rp.round!.id,
+                      ),
+            ),
         ],
       ),
       body: _buildBody(context, rp, sync, isComplete),
       bottomNavigationBar: sc == null ? null : _buildBottomNav(context, rp, sc),
+    );
+  }
+
+  /// **The shared points race** — Wolf is the other caller. Grey, because
+  /// three men playing for themselves have no side to colour; and no hole
+  /// argument, because a hole adds points and never re-opens one.
+  ///
+  /// The nine points on a hole are DIVIDED, which is why the lock card keeps
+  /// three ranked rows: a single margin cannot describe a three-way split. The
+  /// row has one slot, so it reports the reader's own place and total and
+  /// leaves the division to the card below.
+  StandingRibbon? _standingRibbon(RoundProvider rp) {
+    final round = rp.round;
+    if (round == null || !round.isCasual) return null;
+    final me = context.read<AuthProvider>().player?.id;
+    final standing = points531Standing(rp.points531Summary, me);
+    if (standing == null) return null;
+    return StandingRibbon(
+      kind: StandingKind.result,
+      standing: standing.standing,
+      figure: standing.figure,
+      onOpenLeaderboard: () => Navigator.of(context)
+          .pushNamed('/leaderboard', arguments: round.id),
     );
   }
 
@@ -588,15 +623,28 @@ class _Points531ScreenState extends State<Points531Screen>
               ),
               const SizedBox(height: 12),
 
-              // ── 18-hole summary grid ──
-              if (rp.points531Summary != null) ...[
-                _P531SummaryGrid(
-                  summary:     rp.points531Summary!,
-                  players:     players,
-                  scorecard:   sc,
-                  currentHole: _selectedHole,
-                  onTapHole:   (h) =>
-                      setState(() { _selectedHole = h; _editHotPid = null; }),
+              // ── The card, and the points under it ──
+              //
+              // **The app's standard scorecard, not this game's own grid.**
+              // `_P531SummaryGrid` stacked a score row and a points row per
+              // golfer, alternating down the card, which asked the reader to
+              // hold which of two adjacent numbers meant what — and the two do
+              // not compare: a gross is strokes and a points total is a share
+              // of nine per hole.
+              //
+              // `showPoints` draws them as two blocks instead, gross first and
+              // the awards beneath, sharing the hole columns and the scroll.
+              // So the points table needs no hole row and no par row of its
+              // own: the card above it already has them, with the same shading
+              // and the same Index row every other game shows.
+              if (rp.points531Summary != null &&
+                  rp.points531Summary!.scorecardHoles.isNotEmpty) ...[
+                HoleGridScorecard(
+                  holes:        rp.points531Summary!.scorecardHoles,
+                  participants: rp.points531Summary!.scorecardPlayers,
+                  showPoints:   true,
+                  legend:       null,
+                  holesInPlay:  rp.points531Summary!.scorecardHolesInPlay,
                 ),
                 const SizedBox(height: 12),
               ] else if (rp.loadingPoints531) ...[
@@ -1134,425 +1182,14 @@ class _P531PlayerRow extends StatelessWidget {
 }
 
 // ===========================================================================
-// 18-hole summary grid — compact matrix of scores + per-hole 5-3-1 awards
+// `_P531SummaryGrid` and `_PlayerGridRows` were here — a bespoke card that
+// stacked a score row and a points row per golfer, alternating down the
+// grid. **Removed 22 Sep 2026.**
+//
+// It asked the reader to hold which of two adjacent numbers meant what, and
+// the two do not compare: a gross is strokes and a points total is a share
+// of nine per hole. `HoleGridScorecard(showPoints: true)` draws them as two
+// BLOCKS instead — every golfer's gross, then every golfer's award — over
+// one set of hole columns, in the shading and with the Index row every
+// other game's card uses.
 // ===========================================================================
-
-class _P531SummaryGrid extends StatefulWidget {
-  final Points531Summary summary;
-  final List<Membership> players;
-  final Scorecard        scorecard;
-  final int              currentHole;
-  final void Function(int hole)? onTapHole;
-
-  const _P531SummaryGrid({
-    required this.summary,
-    required this.players,
-    required this.scorecard,
-    required this.currentHole,
-    this.onTapHole,
-  });
-
-  @override
-  State<_P531SummaryGrid> createState() => _P531SummaryGridState();
-}
-
-class _P531SummaryGridState extends State<_P531SummaryGrid> {
-  static const double _labelColW = 56.0;
-  static const double _cellW     = 34.0;
-
-  // The controller, the pin and the scroll target live in PinnedHoleGrid.
-  // This one also scrolled by HOLE NUMBER rather than by position in play
-  // order, so a back-nine round aimed at a column that does not exist.
-
-  /// Per-hole points awarded for this player (from server summary).
-  /// Returns a map: hole → points.
-  Map<int, double> _pointsByHole(int playerId) {
-    final out = <int, double>{};
-    for (final h in widget.summary.holes) {
-      for (final e in h.entries) {
-        if (e.playerId == playerId) {
-          out[h.hole] = e.points;
-          break;
-        }
-      }
-    }
-    return out;
-  }
-
-  /// Mode-aware stroke count for the summary grid dots.
-  /// Mirrors `_P531HoleScoreCard._strokesForHole`:
-  ///   • Gross → 0 (no dots)
-  ///   • Net @ 100% → the server's entry.handicapStrokes (uses this
-  ///     player's own tee SI already)
-  ///   • Net @ non-100% → compute with effective = phcp × pct on the
-  ///     player's own SI
-  ///   • Strokes-Off → compute with effective = phcp − lowPhcp on the
-  ///     player's own SI
-  int _strokesOnHoleFor(Membership m, int holeNumber) {
-    final summary   = widget.summary;
-    final scorecard = widget.scorecard;
-    final players   = widget.players;
-    if (summary.handicapMode == 'gross') return 0;
-    final hole = scorecard.holeData(holeNumber);
-    if (hole == null) return 0;
-    final entry = hole.scoreFor(m.player.id);
-    final mySi  = entry?.strokeIndex ?? hole.strokeIndex;
-
-    if (summary.handicapMode == 'net') {
-      if (summary.netPercent == 100 && entry != null) {
-        return entry.handicapStrokes;
-      }
-      final effective = roundHalfUp(m.playingHandicap * summary.netPercent / 100.0);
-      return strokesOnHole(effective, mySi);
-    }
-
-    if (summary.handicapMode == 'strokes_off') {
-      if (players.isEmpty) return 0;
-      final low = players.map((p) => p.playingHandicap).reduce((a, b) => a < b ? a : b);
-      // Scale the strokes-off differential by Net %, matching the backend
-      // (nassau.py / sixes.py / rabbit.py) and the "SO {n}%" chip.
-      final so  = roundHalfUp((m.playingHandicap - low) * summary.netPercent / 100.0);
-      if (so <= 0) return 0;
-      return strokesOnHole(so, mySi);
-    }
-
-    return 0;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme       = Theme.of(context);
-    final summary     = widget.summary;
-    final players     = widget.players;
-    final scorecard   = widget.scorecard;
-    final currentHole = widget.currentHole;
-    final onTapHole   = widget.onTapHole;
-
-    const double labelColW = 56.0;
-    const double cellW     = 34.0;
-    const double rowH      = 28.0;
-
-    final holeRange = List.generate(18, (i) => i + 1);
-
-    // Helper: tappable hole column cell (common to every row).
-    Widget holeCell(int h, {required Widget child, Color? bg, bool bold = false}) {
-      final isCurrent = h == currentHole;
-      return GestureDetector(
-        onTap: onTapHole == null ? null : () => onTapHole!(h),
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: cellW,
-          height: rowH,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: bg ?? (isCurrent
-                ? theme.colorScheme.primaryContainer.withOpacity(0.35)
-                : null),
-            border: isCurrent
-                ? Border.all(
-                    color: theme.colorScheme.primary.withOpacity(0.6),
-                    width: 1.2)
-                : null,
-          ),
-          child: child,
-        ),
-      );
-    }
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Round progress',
-                style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary)),
-            const SizedBox(height: 4),
-            Builder(builder: (ctx) {
-              Widget lbl(String text, TextStyle? style) => SizedBox(
-                    width: labelColW, height: rowH,
-                    child: Align(alignment: Alignment.centerLeft,
-                        child: Text(text, style: style)),
-                  );
-              final split = NineSplit.of(holeRange);
-              const summaryW = 34.0;
-              Widget sumCell(String t) => SizedBox(
-                    width: summaryW, height: rowH,
-                    child: Center(
-                      child: Text(t,
-                          style: theme.textTheme.bodySmall
-                              ?.copyWith(fontWeight: FontWeight.bold)),
-                    ),
-                  );
-              int parSum(List<int> hs) {
-                var t = 0;
-                for (final h in hs) {
-                  t += scorecard.holeData(h)?.par ?? 0;
-                }
-                return t;
-              }
-              return PinnedHoleGrid(
-                labelWidth  : labelColW,
-                cellWidth   : cellW,
-                holeCount   : holeRange.length,
-                currentIndex: split.rightEdgeOf(
-                        currentHole, cellW, summaryW) == null ? -1 : 0,
-                currentRightEdge:
-                    split.rightEdgeOf(currentHole, cellW, summaryW),
-                contentWidth: split.contentWidth(cellW, summaryW),
-                bands: [
-                  // Header: hole numbers
-                  HoleGridBand(
-                    lbl('Hole', const TextStyle(
-                        fontSize: 11, fontWeight: FontWeight.bold)),
-                    [
-                      for (final h in split.front) holeCell(h,
-                          child: Text('$h',
-                              style: const TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.bold))),
-                      if (split.showOut) sumCell('OUT'),
-                      for (final h in split.back) holeCell(h,
-                          child: Text('$h',
-                              style: const TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.bold))),
-                      if (split.showIn) sumCell('IN'),
-                      if (split.showTot) sumCell('TOT'),
-                  ]),
-                  // Par row
-                  HoleGridBand(
-                    lbl('Par', theme.textTheme.bodySmall?.copyWith(
-                        fontStyle: FontStyle.italic)),
-                    [
-                      for (final h in split.front) holeCell(h,
-                          child: Text(
-                            '${scorecard.holeData(h)?.par ?? "-"}',
-                            style: theme.textTheme.bodySmall)),
-                      if (split.showOut) sumCell('${parSum(split.front)}'),
-                      for (final h in split.back) holeCell(h,
-                          child: Text(
-                            '${scorecard.holeData(h)?.par ?? "-"}',
-                            style: theme.textTheme.bodySmall)),
-                      if (split.showIn) sumCell('${parSum(split.back)}'),
-                      if (split.showTot) sumCell('${parSum(split.all)}'),
-                  ]),
-                  // Separates the fixed course-info rows (hole numbers + par)
-                  // from the player score / points rows below.
-                  const HoleGridBand.rule(),
-                  // One row per player: score cell + stroke dot overlay + points-won below
-                  for (final m in players) ..._PlayerGridRows(
-                    member:      m,
-                    scorecard:   scorecard,
-                    holeRange:   holeRange,
-                    currentHole: currentHole,
-                    onTapHole:   onTapHole,
-                    labelColW:   labelColW,
-                    cellW:       cellW,
-                    rowH:        rowH,
-                    strokesOnHole: (h) => _strokesOnHoleFor(m, h),
-                    pointsByHole:  _pointsByHole(m.player.id),
-                    split:         split,
-                    summaryW:      summaryW,
-                  ).toBands(ctx),
-                ],
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Renders two stacked rows for one player: the gross scores (with a
-/// stroke dot when applicable) and the per-hole Points 5-3-1 award.
-class _PlayerGridRows extends StatelessWidget {
-  final Membership   member;
-  final Scorecard    scorecard;
-  final List<int>    holeRange;
-  final int          currentHole;
-  final void Function(int hole)? onTapHole;
-  final double       labelColW;
-  final double       cellW;
-  final double       rowH;
-  final int Function(int hole)    strokesOnHole;
-  final Map<int, double>           pointsByHole;
-  /// The nine split, when the card carries OUT / IN / TOT.
-  final NineSplit?                 split;
-  final double                     summaryW;
-
-  const _PlayerGridRows({
-    required this.member,
-    required this.scorecard,
-    required this.holeRange,
-    required this.currentHole,
-    required this.onTapHole,
-    required this.labelColW,
-    required this.cellW,
-    required this.rowH,
-    required this.strokesOnHole,
-    required this.pointsByHole,
-    this.split,
-    this.summaryW = 34.0,
-  });
-
-  static String _fmtPoints(double v) =>
-      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
-
-  Widget _cell(int h, BuildContext ctx, {required Widget child}) {
-    final theme     = Theme.of(ctx);
-    final isCurrent = h == currentHole;
-    return GestureDetector(
-      onTap: onTapHole == null ? null : () => onTapHole!(h),
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: cellW, height: rowH,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isCurrent
-              ? theme.colorScheme.primaryContainer.withOpacity(0.35)
-              : null,
-          border: isCurrent
-              ? Border.all(
-                  color: theme.colorScheme.primary.withOpacity(0.6),
-                  width: 1.2)
-              : null,
-        ),
-        child: child,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final b in toBands(context))
-          Row(children: [b.label!, ...b.cells!]),
-      ],
-    );
-  }
-
-  /// TWO bands — the score row and the points row beneath it — each split into
-  /// its pinned half and its scrolling half.
-  List<HoleGridBand> toBands(BuildContext context) {
-    final theme = Theme.of(context);
-
-    Widget sumCell(String t, {double? h}) => SizedBox(
-          width: summaryW, height: h ?? rowH,
-          child: Center(
-            child: Text(t,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(fontWeight: FontWeight.bold)),
-          ),
-        );
-
-    Widget grossTotal(List<int> holes) {
-      var total = 0;
-      for (final hole in holes) {
-        final g =
-            scorecard.holeData(hole)?.scoreFor(member.player.id)?.grossScore;
-        if (g == null) return sumCell('—');
-        total += g;
-      }
-      return sumCell('$total');
-    }
-
-    /// front · OUT · back · IN · TOT, or the flat row when this card carries
-    /// no summary columns. Points get blank slots — a points total is a
-    /// different quantity from a nine's gross.
-    List<Widget> withTotals(Widget Function(int) cell,
-        {Widget Function(List<int>)? sum, double? h}) {
-      final sp = split;
-      if (sp == null) return [for (final hole in holeRange) cell(hole)];
-      final f = sum ?? (List<int> _) => sumCell('', h: h);
-      return [
-        for (final hole in sp.front) cell(hole),
-        if (sp.showOut) f(sp.front),
-        for (final hole in sp.back) cell(hole),
-        if (sp.showIn) f(sp.back),
-        if (sp.showTot) f(sp.all),
-      ];
-    }
-
-    return [
-        // Score row (with stroke dot in top-right corner when applicable)
-        HoleGridBand(
-          SizedBox(
-            width: labelColW, height: rowH,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(member.player.displayShort,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(fontWeight: FontWeight.w600)),
-            ),
-          ),
-          withTotals(sum: grossTotal, (h) =>
-            _cell(h, context, child: scoreCellWithDots(
-            SizedBox(
-              width:  cellW,
-              height: rowH,
-              child: Center(
-                child: Builder(builder: (_) {
-                  final saved = scorecard.holeData(h)?.scoreFor(member.player.id);
-                  final gross = saved?.grossScore;
-                  return Text(
-                    gross == null ? '–' : '$gross',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: gross == null
-                            ? theme.colorScheme.onSurfaceVariant
-                            : null),
-                  );
-                }),
-              ),
-            ),
-            strokesOnHole(h),
-            theme.colorScheme.primary,
-          ))),
-        ),
-        // Points awarded row (same player, labelled "pts")
-        HoleGridBand(
-          SizedBox(
-            width: labelColW, height: rowH - 4,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(' pts',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      fontStyle: FontStyle.italic)),
-            ),
-          ),
-          withTotals(h: rowH - 4, (h) => Container(
-            width: cellW, height: rowH - 4,
-            alignment: Alignment.center,
-            child: Builder(builder: (_) {
-              final pts = pointsByHole[h];
-              if (pts == null) {
-                return Text('·', style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant));
-              }
-              final isWinner = pts >= 5;
-              return Text(
-                _fmtPoints(pts),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  fontWeight: isWinner ? FontWeight.bold : FontWeight.w600,
-                  color: isWinner
-                      ? Colors.green.shade700
-                      : theme.colorScheme.onSurface,
-                ),
-              );
-            }),
-          )),
-        ),
-    ];
-  }
-}

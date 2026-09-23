@@ -35,6 +35,7 @@
 library;
 
 import '../api/models.dart';
+import 'standing_money.dart';
 import 'match_notation.dart';
 
 class VegasStanding {
@@ -57,15 +58,7 @@ class VegasStanding {
 /// so the running figure is money already owed rather than a projection — the
 /// same shape as Wolf and Points 5-3-1, and the reason this row can say
 /// `so far` and mean it.
-String vegasMoney(double v) {
-  if (v.abs() < 0.005) return '';
-  final n = v.abs();
-  final amount =
-      n == n.roundToDouble() ? n.toStringAsFixed(0) : n.toStringAsFixed(2);
-  // U+2212, not a hyphen — beside a `+` at this size the hyphen is visibly
-  // the wrong length.
-  return '${v > 0 ? "+" : "−"}\$$amount so far';
-}
+String vegasMoney(double v) => standingMoney(v);
 
 /// The row's strings, or null when the reader is not on a side.
 ///

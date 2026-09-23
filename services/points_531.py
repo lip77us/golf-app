@@ -548,6 +548,61 @@ def points_531_summary(foursome) -> dict:
         if _h in _played:
             current_hole = _h
 
+    # ── Scorecard grid ────────────────────────────────────────────────────
+    # The standard card — hole, par, stroke index, gross with stroke dots, and
+    # a per-hole POINTS block under it — so both the play screen and the
+    # leaderboard render the one every other game shows rather than this game's
+    # own grid of alternating score/points rows.
+    #
+    # Strokes are PROSPECTIVE, from the shared `full_round_strokes`: Points
+    # allocates over the whole round (there is no segment to spread over), so
+    # the dots show which holes give a stroke before they are played. The
+    # summary's own per-hole `strokes` are gross minus net and therefore exist
+    # only on holes already scored, which would blank the plan on exactly the
+    # hole a golfer is standing on.
+    si_by_hole: dict = {}
+    if sample_tee is not None:
+        for _h in in_play:
+            si_by_hole[_h] = sample_tee.hole(_h).get('stroke_index')
+
+    from services.live_activity_registry import full_round_strokes
+    strokes_by = full_round_strokes(
+        foursome,
+        handicap_mode=game.handicap_mode,
+        net_percent=game.net_percent,
+        holes=in_play,
+    )
+    points_by_hole: dict = {}
+    for _h in holes_out:
+        for _e in _h.get('entries', []):
+            points_by_hole.setdefault(_h['hole'], {})[_e['player_id']] = \
+                _e.get('points')
+
+    scorecard_players = [
+        {'player_id': pid, 'name': by_pid[pid].name,
+         'short_name': by_pid[pid].short_name}
+        for pid in real_ids
+    ]
+    scorecard_holes = [
+        {
+            'hole'         : hn,
+            'par'          : par_by_hole.get(hn),
+            'stroke_index' : si_by_hole.get(hn),
+            # Points has no single hole WINNER to green: five, three and one
+            # are handed out every hole and the top award is already bold in
+            # the points block.
+            'winner_id'    : None,
+            'scores'       : [
+                {'player_id': pid,
+                 'gross'    : gross_index.get(pid, {}).get(hn),
+                 'strokes'  : strokes_by.get(pid, {}).get(hn, 0),
+                 'points'   : points_by_hole.get(hn, {}).get(pid)}
+                for pid in real_ids
+            ],
+        }
+        for hn in in_play
+    ]
+
     return {
         'status'  : game.status,
         'handicap': {
@@ -556,6 +611,11 @@ def points_531_summary(foursome) -> dict:
         },
         'players' : players_out,
         'holes'   : holes_out,
+        'scorecard': {
+            'players'      : scorecard_players,
+            'holes'        : scorecard_holes,
+            'holes_in_play': in_play,
+        },
         'holes_in_play' : in_play,
         'current_hole'  : current_hole,
         'money'   : {

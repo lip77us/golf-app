@@ -2512,6 +2512,17 @@ class Points531Summary {
   final String  payoutStyle;   // 'pool' | 'per_point'
   final String  perPointMode;  // 'average' | 'all' | 'first'
 
+  /// The standard card, exactly as `HoleGridScorecard` wants it — raw maps,
+  /// because that widget reads the server's own shape and converting on the
+  /// way in would only be a second place for the two to disagree.
+  ///
+  /// Each score carries `points` as well as `gross` and `strokes`, which is
+  /// what lets one widget draw the gross block and the per-hole points block
+  /// beneath it, sharing the hole columns and the scroll.
+  final List<Map<String, dynamic>> scorecardHoles;
+  final List<Map<String, dynamic>> scorecardPlayers;
+  final List<int> scorecardHolesInPlay;
+
   const Points531Summary({
     required this.status,
     required this.handicapMode,
@@ -2523,6 +2534,9 @@ class Points531Summary {
     this.lossCap,
     this.payoutStyle  = 'per_point',
     this.perPointMode = 'average',
+    this.scorecardHoles = const [],
+    this.scorecardPlayers = const [],
+    this.scorecardHolesInPlay = const [],
   });
 
   bool get isNet        => handicapMode == 'net';
@@ -2548,6 +2562,18 @@ class Points531Summary {
       lossCap:    (money['loss_cap']     as num?)?.toDouble(),
       payoutStyle:  money['payout_style']   as String? ?? 'per_point',
       perPointMode: money['per_point_mode'] as String? ?? 'average',
+      scorecardHoles: (((j['scorecard'] as Map?)?['holes']) as List? ??
+              const [])
+          .map((h) => Map<String, dynamic>.from(h as Map))
+          .toList(),
+      scorecardPlayers: (((j['scorecard'] as Map?)?['players']) as List? ??
+              const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList(),
+      scorecardHolesInPlay:
+          (((j['scorecard'] as Map?)?['holes_in_play']) as List? ?? const [])
+              .map((e) => (e as num).toInt())
+              .toList(),
     );
   }
 }

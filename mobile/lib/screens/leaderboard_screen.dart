@@ -4395,6 +4395,18 @@ class _Points531GroupCard extends StatelessWidget {
     final status   = summary['status']?.toString() ?? 'pending';
     final players  = (summary['players'] as List? ?? const []);
     final holes    = (summary['holes']   as List? ?? const []);
+    // The standard card's payload, which the server sends beside the game's
+    // own awards grid.
+    final scorecard = summary['scorecard'] as Map<String, dynamic>? ?? const {};
+    final scHoles = (scorecard['holes'] as List? ?? const [])
+        .map((h) => Map<String, dynamic>.from(h as Map))
+        .toList();
+    final scPlayers = (scorecard['players'] as List? ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final scHolesInPlay = (scorecard['holes_in_play'] as List? ?? const [])
+        .map((e) => (e as num).toInt())
+        .toList();
     final money    = summary['money']    as Map<String, dynamic>? ?? const {};
     final betUnit  = (money['bet_unit']  as num?)?.toDouble() ?? 0.0;
     final parPH    = (money['par_per_hole'] as num?)?.toInt() ?? 3;
@@ -4503,8 +4515,10 @@ class _Points531GroupCard extends StatelessWidget {
               );
             }),
 
-          // Per-hole grid — compact, expandable.  Collapsed by default so
-          // the card matches the size of the Sixes card at a glance.
+          // Per-hole awards grid — compact, expandable. Collapsed by default
+          // so the card matches the size of the Sixes card at a glance. It
+          // stays beside the scorecard below: this one is the game (who took
+          // five and who took one), that one is the round.
           if (holes.isNotEmpty) ...[
             const Divider(height: 20),
             _Points531HoleGrid(
@@ -4528,6 +4542,23 @@ class _Points531GroupCard extends StatelessWidget {
                     color: theme.colorScheme.onSurfaceVariant),
               ),
             ),
+
+          // **The card, at the bottom.** Points 5-3-1 had none — the only
+          // per-hole view was its own awards grid, so a net or strokes-off
+          // golfer could not see where his strokes fell or what anybody
+          // actually shot. Same widget, same payload and same `showPoints`
+          // block the play screen renders: gross over awards, one set of hole
+          // columns, with the Index row and shading every other card has.
+          if (scHoles.isNotEmpty) ...[
+            const Divider(height: 20),
+            HoleGridScorecard(
+              holes:        scHoles,
+              participants: scPlayers,
+              showPoints:   true,
+              legend:       null,
+              holesInPlay:  scHolesInPlay,
+            ),
+          ],
         ]),
       ),
     );
