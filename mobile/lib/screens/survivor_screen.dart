@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
+import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
@@ -27,6 +28,7 @@ import '../widgets/golf_app_bar.dart';
 import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/inline_score_picker.dart';
+import '../widgets/standing_ribbon.dart';
 import '../widgets/survivor_rail.dart';
 import '../widgets/net_score_button.dart' show scoreCellWithDots;
 import '../widgets/round_chat_button.dart';
@@ -34,6 +36,7 @@ import '../widgets/spots_capture.dart';
 import '../utils/match_handicap.dart';
 import '../utils/play_order.dart';
 import '../utils/round_complete.dart';
+import '../utils/survivor_standing.dart';
 import '../widgets/pinned_hole_grid.dart';
 import '../widgets/combo_tee_chip.dart';
 import '../utils/nine_totals.dart';
@@ -322,6 +325,35 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
     ));
   }
 
+  /// **Survivor is measured in whether you are still in it**, which is why
+  /// this row carries a word where every other game carries a number. It is
+  /// the lock-screen card's reading, and the colours are the player rows' own:
+  /// mint alive, plum the Zombie, grey out of play.
+  StandingRibbon? _standingRibbon(RoundProvider rp) {
+    final round = rp.round;
+    if (round == null || !round.isCasual) return null;
+    final me = context.read<AuthProvider>().player?.id;
+    final ids = _realMembers(round).map((m) => m.player.id).toList();
+    final standing = survivorStanding(rp.survivorSummary, me,
+        hole: _selectedHole,
+        playerIds: ids,
+        isLastHole: _selectedHole == _playOrder(rp).lastOrNull);
+    if (standing == null) return null;
+    return StandingRibbon(
+      kind: StandingKind.result,
+      standingLabel: standing.label,
+      standing: standing.standing,
+      standingColor: switch (standing.tint) {
+        SurvivorTint.alive  => Halved.mint,
+        SurvivorTint.zombie => Halved.zombie,
+        SurvivorTint.none   => null,
+      },
+      figure: standing.figure,
+      onOpenLeaderboard: () => Navigator.of(context)
+          .pushNamed('/leaderboard', arguments: round.id),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final rp   = context.watch<RoundProvider>();
@@ -351,9 +383,17 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
         (rp.round?.foursomes.length ?? 1) == 1;
     final showExit = isCasualSingle && _hasAnyScore;
 
+    final ribbon = _standingRibbon(rp);
+
     return Scaffold(
       appBar: GolfAppBar(
         title: 'Survivor',
+        // D2: the standing becomes the bar's second line, and the pill in it
+        // replaces the leaderboard ICON below.
+        bottom: ribbon,
+        titleStyle: ribbon == null
+            ? null
+            : const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.close),
@@ -384,13 +424,16 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
             ),
           if (rp.round != null)
             RoundChatButton(roundId: rp.round!.id),
-          IconButton(
-            tooltip: 'Leaderboard',
-            icon: const Icon(Icons.leaderboard_outlined),
-            onPressed: rp.round == null ? null
-                : () => Navigator.of(context).pushNamed(
-                    '/leaderboard', arguments: rp.round!.id),
-          ),
+          // The named pill in the ribbon is this, done properly — so the icon
+          // stands down wherever the ribbon draws.
+          if (ribbon == null)
+            IconButton(
+              tooltip: 'Leaderboard',
+              icon: const Icon(Icons.leaderboard_outlined),
+              onPressed: rp.round == null ? null
+                  : () => Navigator.of(context).pushNamed(
+                      '/leaderboard', arguments: rp.round!.id),
+            ),
           // Overflow: end the round early (soft gate) + the icon-legend help.
           PopupMenuButton<String>(
             tooltip: 'More',
@@ -403,9 +446,26 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
                 case 'help':
                   showScoreEntryHelp(context);
                   break;
+                case 'leaderboard':
+                  if (rp.round != null) {
+                    Navigator.of(context).pushNamed(
+                        '/leaderboard', arguments: rp.round!.id);
+                  }
+                  break;
               }
             },
             itemBuilder: (_) => [
+              // First, because the ribbon's pill is the primary way in and
+              // this is where somebody looks when it is not drawn.
+              const PopupMenuItem(
+                value: 'leaderboard',
+                child: ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.leaderboard_outlined),
+                  title: Text('Leaderboard'),
+                ),
+              ),
               if (!isComplete)
                 const PopupMenuItem(
                   value: 'end',
@@ -466,35 +526,19 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
     // is a property of that hole (a Survivor resets the roster), so read it
     // straight off the summary rather than tracking it here; an unscored hole
     // inherits the state of the last scored one before it in PLAY ORDER.
-    int     svIndex   = holeInfo?.survivor ?? summary?.currentSurvivor ?? 1;
+    //
+    // The read itself moved to `utils/survivor_standing.survivorStateAt` so
+    // the standing row reports the same state these rows are tinted with. Two
+    // copies would disagree about who is plum, on the one screen showing both.
+    int     svIndex   = summary?.currentSurvivor ?? 1;
     Set<int> aliveIds = players.map((m) => m.player.id).toSet();
     int?    outId;
     if (summary != null) {
-      final scored = holeInfo != null && holeInfo.isScored;
-      if (scored) {
-        aliveIds = holeInfo.entries
-            .where((e) => e.isAlive).map((e) => e.playerId).toSet();
-        outId = holeInfo.entries
-            .where((e) => !e.isAlive)
-            .map((e) => e.playerId).firstOrNull;
-      } else {
-        // Unscored: this is the hole the group is standing on, and the ENGINE
-        // already knows the state they are playing it under — who is alive,
-        // who is the Zombie, and which Survivor it is.
-        //
-        // This used to be re-derived by walking back to the last scored hole,
-        // which a RESURRECTION breaks: after the Zombie goes low outright and
-        // sends a decider to Zombieville, the Zombie is the DECIDER he
-        // displaced, not the man who came back. Reported from the course — a
-        // golfer won a hole as the Zombie and was still drawn as the Zombie on
-        // the next one, while the golfer he displaced read as alive.
-        svIndex  = summary.currentSurvivor;
-        aliveIds = summary.currentAliveIds.toSet();
-        outId    = summary.currentZombieId ??
-            players.map((m) => m.player.id)
-                .where((pid) => !aliveIds.contains(pid))
-                .firstOrNull;
-      }
+      final at = survivorStateAt(summary, _selectedHole,
+          players.map((m) => m.player.id).toList());
+      svIndex  = at.survivor;
+      aliveIds = at.aliveIds;
+      outId    = at.outId;
     }
     final isDecider = aliveIds.length == 2;
 
@@ -560,9 +604,22 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
               _OutcomeLine(hole: holeInfo),
             ],
             const SizedBox(height: 12),
+            if (summary != null)
+              _SurvivorGrid(
+                summary: summary, players: players, scorecard: sc,
+                currentHole: _selectedHole,
+                onTapHole: (h) => setState(() {
+                  _selectedHole = h; _editingPlayerId = null;
+                })),
+            const SizedBox(height: 12),
             // The R5 rail. The packet's primary artefact, and it belongs on
             // BOTH surfaces — same widget as the leaderboard's, so the two can
             // never drift into two different pictures of one Survivor.
+            //
+            // **Below the by-hole card, not above it.** The grid is about the
+            // hole the group is standing on — tapping a column moves the
+            // screen there — so it belongs nearer the score box. The rail is
+            // the round's shape, which is what you read once the hole is in.
             if (summary != null && summary.survivors.isNotEmpty) ...[
               Card(
                 elevation: 0,
@@ -579,17 +636,7 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-              _SurvivorStrip(summary: summary),
-              const SizedBox(height: 12),
             ],
-            if (summary != null)
-              _SurvivorGrid(
-                summary: summary, players: players, scorecard: sc,
-                currentHole: _selectedHole,
-                onTapHole: (h) => setState(() {
-                  _selectedHole = h; _editingPlayerId = null;
-                })),
             const SizedBox(height: 16),
           ]),
         ),
@@ -1275,89 +1322,13 @@ class _OutcomeLine extends StatelessWidget {
   }
 }
 
-// ===========================================================================
-// Survivors strip
-// ===========================================================================
-
-class _SurvivorStrip extends StatelessWidget {
-  final SurvivorSummary summary;
-  const _SurvivorStrip({required this.summary});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Survivors',
-              style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
-          const SizedBox(height: 6),
-          Column(children: [
-            for (final s in summary.survivors)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(children: [
-                  SizedBox(width: 92,
-                    child: Text(s.rangeLabel,
-                        style: theme.textTheme.bodySmall)),
-                  Expanded(child: _result(theme, s)),
-                  if (s.isLive)
-                    Text('in play',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant))
-                  else if (s.payout > 0)
-                    Text('\$${s.payout.toStringAsFixed(2)}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.green.shade700,
-                            fontWeight: FontWeight.w600)),
-                ]),
-              ),
-          ]),
-        ]),
-      ),
-    );
-  }
-
-  Widget _result(ThemeData theme, SurvivorLeg s) {
-    if (s.isLive) {
-      return Text(
-        s.eliminatedShort == null
-            ? 'Everyone still in'
-            : '${s.eliminatedShort} out — decider',
-        style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant),
-      );
-    }
-    if (s.isNoBlood) {
-      return Text('No blood',
-          style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: theme.colorScheme.onSurfaceVariant));
-    }
-    if (s.isSplit) {
-      return Text('Split · ${s.eliminatedShort ?? '?'} pays',
-          style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600, color: theme.colorScheme.primary));
-    }
-    // Just the winner. Naming ONE elimination reads as the whole story of the
-    // Survivor, and it is not: with the Zombie Option a golfer can be knocked
-    // out, come back, and be knocked out again inside a single Survivor, so
-    // "· X out" picks one moment out of several and implies it was the only
-    // one. The card below has every hole of it.
-    return Text(
-      '${s.winnerShort} wins',
-      style: theme.textTheme.bodyMedium?.copyWith(
-          fontWeight: FontWeight.w600, color: theme.colorScheme.primary),
-    );
-  }
-}
+// `_SurvivorStrip` was here — a card headed **Survivors**, one row per leg
+// with its range, its winner and its payout. **Removed 22 Sep 2026.**
+//
+// The rail below already answers both of that card's questions and answers
+// them better: a winner bar's LENGTH says how long a Survivor ran, which a
+// range label only states, and its label says who took it. What was left
+// was the money, which is a leaderboard column.
 
 // ===========================================================================
 // Survivor by-hole grid
