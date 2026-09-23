@@ -15,7 +15,8 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
-import 'package:golf_mobile/screens/wolf_screen.dart' show wolfStrokesForHole;
+import 'package:golf_mobile/screens/wolf_screen.dart'
+    show wolfStrokesForHole, wolfWonTheHole;
 
 const _me = 11;
 
@@ -121,6 +122,38 @@ void main() {
           wolfStrokesForHole(_m(_me, hcp: 18), null,
               mode: 'net', netPercent: 100, lowPlaying: null),
           0);
+    });
+  });
+
+  group('**the scorecard marks a SIDE, not a score**', () {
+    // The house rule is that a hole is marked when ONE ball wins it — Skins
+    // fills the winning cell green, Rabbit greens the outright winner. A Wolf
+    // hole is won by the Wolf's side or by the opponents, so pointing at one
+    // cell would name a man who may have been carried. The server says as much
+    // by sending `winner_id: None` for this game.
+    test('the Wolf and his partner are both marked when their side wins', () {
+      expect(wolfWonTheHole('wolf', 'wolf'), isTrue);
+      expect(wolfWonTheHole('wolf', 'partner'), isTrue);
+      expect(wolfWonTheHole('wolf', 'opponent'), isFalse);
+    });
+
+    test('and the opponents are, when theirs does', () {
+      expect(wolfWonTheHole('opponents', 'opponent'), isTrue);
+      expect(wolfWonTheHole('opponents', 'wolf'), isFalse);
+      expect(wolfWonTheHole('opponents', 'partner'), isFalse);
+    });
+
+    test('**a tie marks nobody**', () {
+      // Both sides drew it. Tinting both would say two sides won; tinting
+      // neither is the truth.
+      for (final r in const ['wolf', 'partner', 'opponent']) {
+        expect(wolfWonTheHole('tie', r), isFalse, reason: r);
+      }
+    });
+
+    test('an undecided hole marks nobody either', () {
+      expect(wolfWonTheHole(null, 'wolf'), isFalse);
+      expect(wolfWonTheHole('wolf', null), isFalse);
     });
   });
 }

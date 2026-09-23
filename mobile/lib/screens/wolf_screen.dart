@@ -44,6 +44,21 @@ import '../widgets/combo_tee_chip.dart';
 /// Team accent color for a player's role on a hole. Per the color standard the
 /// Wolf side (Wolf + partner) is team 1 (blue); the opponents are team 2
 /// (orange). Null = no team yet.
+/// Was a golfer in [role] on the side that WON a hole whose outcome is [side]?
+///
+/// **Wolf marks a side, not a score** — which is why the server sends
+/// `winner_id: None` for this game and the shared leaderboard card draws no
+/// green. Pointing at one cell would name a man who may have been carried.
+///
+/// A TIE marks nobody: both sides drew it, so tinting both would say two sides
+/// won and tinting neither is the truth. So does an undecided hole.
+bool wolfWonTheHole(String? side, String? role) {
+  if (side != 'wolf' && side != 'opponents') return false;
+  if (role == null) return false;
+  final onWolfSide = role == 'wolf' || role == 'partner';
+  return (side == 'wolf') == onWolfSide;
+}
+
 Color? _wolfTeamColor(String? role) {
   switch (role) {
     case 'wolf':
@@ -54,6 +69,24 @@ Color? _wolfTeamColor(String? role) {
   }
   return null;
 }
+
+/// A legend swatch for the by-hole card — the same fill and edge a winning
+/// cell wears, so the key is the mark rather than a description of it.
+Widget _winSwatch(ThemeData theme, Color c, String label) =>
+    Row(mainAxisSize: MainAxisSize.min, children: [
+      Container(
+        width: 10, height: 10,
+        decoration: BoxDecoration(
+          color: c.withValues(alpha: 0.16),
+          border: Border.all(color: c.withValues(alpha: 0.55)),
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+      const SizedBox(width: 4),
+      Text(label,
+          style: theme.textTheme.labelSmall?.copyWith(
+              fontSize: 9.5, color: theme.colorScheme.onSurfaceVariant)),
+    ]);
 
 String _fmtPoints(double v) =>
     v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
@@ -1752,6 +1785,20 @@ class _WolfGrid extends StatelessWidget {
     const summaryW = 34.0;
 
     final wolfByHole = {for (final h in summary.holes) h.hole: h.wolfId};
+
+    // Who WON each hole, and which side each golfer was on for it.
+    //
+    // **Wolf marks a SIDE, not a score**, which is why the server sends
+    // `winner_id: None` for this game and the shared leaderboard card draws no
+    // green. A hole here is won by the Wolf's side or by the opponents, and
+    // pointing at one cell would name a man who may have been carried.
+    final wonByHole  = {for (final h in summary.holes) h.hole: h.winningSide};
+    final roleByHole = <int, Map<int, String>>{};
+    for (final h in summary.holes) {
+      for (final e in h.entries) {
+        roleByHole.putIfAbsent(h.hole, () => {})[e.playerId] = e.role;
+      }
+    }
     final totals = {for (final p in summary.players) p.playerId: p};
     final lowPlaying = summary.handicapMode == 'strokes_off' && players.isNotEmpty
         ? players.map((m) => m.playingHandicap).reduce((a, b) => a < b ? a : b)
@@ -1806,6 +1853,22 @@ class _WolfGrid extends StatelessWidget {
         (totals[wolfByHole[h]]?.shortName ?? '').characters.take(3).toString(),
         style: const TextStyle(fontSize: 9));
 
+    /// The team colour a golfer's cell wears on hole [h], or null.
+    ///
+    /// **Warm for the Wolf's side, cool for the opponents** — the same two
+    /// colours the player rows above are tinted with, six lines up the screen.
+    /// Green was the other candidate and is wrong here: on every other card in
+    /// the app it means *this ball won the hole*, and a Wolf hole is won by a
+    /// side. One colour cannot mean both on two cards a golfer reads in the
+    /// same round.
+    ///
+    /// A TIE marks nobody. Both sides drew it, so tinting both would say two
+    /// sides won and tinting neither is the truth.
+    Color? winColour(Membership m, int h) =>
+        wolfWonTheHole(wonByHole[h], roleByHole[h]?[m.player.id])
+            ? _wolfTeamColor(roleByHole[h]?[m.player.id])
+            : null;
+
     /// A gross score with its stroke dots — **the grid's vertical run**, which
     /// costs 7px of the cell's width where three horizontal dots would cost 14
     /// and reach the digit.
@@ -1815,19 +1878,31 @@ class _WolfGrid extends StatelessWidget {
       final strokes = wolfStrokesForHole(m, hole,
           mode: summary.handicapMode, netPercent: summary.netPercent,
           lowPlaying: lowPlaying);
+      final win = winColour(m, h);
       return cell(
         h,
         Stack(
           clipBehavior: Clip.none,
           alignment: Alignment.center,
           children: [
+            Container(
+              width: cellW - 2, height: rowH - 4,
+              decoration: win == null
+                  ? null
+                  : BoxDecoration(
+                      color: win.withValues(alpha: 0.16),
+                      border: Border.all(color: win.withValues(alpha: 0.55)),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+            ),
             SizedBox(
               width: cellW, height: rowH,
               child: Center(
                 child: Text(
                   gross?.toString() ?? '',
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(fontWeight: FontWeight.w600),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight:
+                          win == null ? FontWeight.w600 : FontWeight.bold),
                 ),
               ),
             ),
@@ -1852,10 +1927,22 @@ class _WolfGrid extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Scorecard',
-                style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary)),
+            Row(children: [
+              Text('Scorecard',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary)),
+              const SizedBox(width: 8),
+              // A card that carries a mark has to name it. Both swatches, not
+              // one: with only the Wolf's colour keyed, the other tint reads as
+              // a second unexplained state rather than as the other side.
+              Expanded(
+                child: Wrap(spacing: 10, runSpacing: 2, children: [
+                  _winSwatch(theme, GameColors.team1, 'Wolf side won'),
+                  _winSwatch(theme, GameColors.team2, 'opponents won'),
+                ]),
+              ),
+            ]),
             const SizedBox(height: 4),
             PinnedHoleGrid(
               labelWidth  : labelColW,
