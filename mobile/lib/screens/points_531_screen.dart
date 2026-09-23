@@ -666,12 +666,9 @@ class _P531HoleScoreCard extends StatelessWidget {
         .reduce((a, b) => a < b ? a : b);
   }
 
-  int _matchHcapFor(Membership m) => effectiveMatchHandicap(
-        mode:                  _mode,
-        netPercent:            _netPercent,
-        playingHandicap:       m.playingHandicap,
-        lowestPlayingHandicap: _lowPlayingHandicap,
-      );
+  // `_matchHcapFor` was here — the ROUND's allocation, whose only reader was
+  // the `gets N` chip. Removed with it on 22 Sep 2026. Per-hole strokes come
+  // from `_strokesForHole`, which is what the dots have always used.
 
   /// Per-player strokes on a hole for THIS match's handicap mode.
   /// Drives stroke-dot display and the inline picker's net-par coloring.
@@ -864,16 +861,6 @@ class _P531HoleScoreCard extends StatelessWidget {
 
             final matchStrokes = _strokesForHole(m, holeData);
 
-            // Handicap chip reads "gets N" (strokes this player receives).
-            // The stroke-this-hole indicator now lives in the dot strip above
-            // the score box, so no bullets here. Hidden for a 0-stroke player
-            // and in gross mode (no strokes of any kind are given).
-            String? hcapLabel;
-            if (_mode == 'net' || _mode == 'strokes_off') {
-              final h = _matchHcapFor(m);
-              if (h > 0) hcapLabel = 'gets $h';
-            }
-
             final pointsForThisHole = awards[m.player.id];
             final cumulativePoints  = _pointsFor(m.player.id);
 
@@ -882,7 +869,6 @@ class _P531HoleScoreCard extends StatelessWidget {
                 member:         m,
                 gross:          gross,
                 isHot:          isHot,
-                matchHcapLabel: hcapLabel,
                 comboTee:            m.comboTeeOnHole(holeNumber),
                 // Pass strokes so the score-box corner can render a dot
                 // for players receiving a stroke on the active hole.  In
@@ -952,7 +938,6 @@ class _P531PlayerRow extends StatelessWidget {
   final Membership   member;
   final int?         gross;
   final bool         isHot;
-  final String?      matchHcapLabel;
   /// This golfer's tee for the hole being entered — combo sets only.
   final String?       comboTee;
   final VoidCallback? onTap;
@@ -983,7 +968,6 @@ class _P531PlayerRow extends StatelessWidget {
     required this.member,
     required this.gross,
     required this.isHot,
-    this.matchHcapLabel,
     this.comboTee,
     this.onTap,
     this.strokesOnThisHole = 0,
@@ -1040,25 +1024,10 @@ class _P531PlayerRow extends StatelessWidget {
                 ),
               ),
             ),
-            if (matchHcapLabel != null) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 6, vertical: 1),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.secondaryContainer.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: theme.colorScheme.outlineVariant),
-                ),
-                child: Text(
-                  matchHcapLabel!,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSecondaryContainer,
-                  ),
-                ),
-              ),
-            ],
+            // The `gets N` chip was here. **Removed 22 Sep 2026.** It carried
+            // the ROUND's allocation while the dots on the score box carry
+            // THIS hole's, and a golfer reading both has been handed the
+            // arithmetic for subtracting a stroke he has already been given.
             ComboTeeChip(tee: comboTee),
           ]),
               if (spotsActive)

@@ -592,12 +592,9 @@ class _SkinsHoleScoreCard extends StatelessWidget {
         .reduce((a, b) => a < b ? a : b);
   }
 
-  int _matchHcapFor(Membership m) => effectiveMatchHandicap(
-        mode:                  _mode,
-        netPercent:            _netPercent,
-        playingHandicap:       m.playingHandicap,
-        lowestPlayingHandicap: _lowPlayingHandicap,
-      );
+  // `_matchHcapFor` was here — the ROUND's allocation, whose only reader was
+  // the `gets N` chip. Removed with it on 22 Sep 2026. Per-hole strokes come
+  // from `_strokesForHole`, which is what the dots have always used.
 
   /// Per-player strokes on a hole — mirrors _P531HoleScoreCard._strokesForHole.
   int _strokesForHole(Membership m, ScorecardHole? h) {
@@ -749,15 +746,6 @@ class _SkinsHoleScoreCard extends StatelessWidget {
             final hasScore     = gross != null;
             final matchStrokes = _strokesForHole(m, holeData);
 
-            // Handicap chip reads "gets N" (strokes this player receives).
-            // The stroke-this-hole indicator now lives in the dot strip above
-            // the score box, so no bullets here. Hidden for a 0-stroke player.
-            String? hcapLabel;
-            if (_mode == 'net' || _mode == 'strokes_off') {
-              final eff = _matchHcapFor(m);
-              if (eff > 0) hcapLabel = 'gets $eff';
-            }
-
             // Running skins total from server summary.
             final totalSkins = summary?.players
                     .where((p) => p.playerId == pid)
@@ -781,7 +769,6 @@ class _SkinsHoleScoreCard extends StatelessWidget {
                 member:            m,
                 gross:             gross,
                 isHot:             isHot,
-                matchHcapLabel:    hcapLabel,
                 comboTee:            m.comboTeeOnHole(holeNumber),
                 strokesOnThisHole: matchStrokes,
                 totalSkins:        totalSkins,
@@ -914,7 +901,6 @@ class _SkinsPlayerRow extends StatelessWidget {
   final Membership   member;
   final int?         gross;
   final bool         isHot;
-  final String?      matchHcapLabel;
   /// This golfer's tee for the hole being entered — combo sets only.
   final String?       comboTee;
   final VoidCallback? onTap;
@@ -937,7 +923,6 @@ class _SkinsPlayerRow extends StatelessWidget {
     required this.member,
     required this.gross,
     required this.isHot,
-    this.matchHcapLabel,
     this.comboTee,
     this.onTap,
     this.strokesOnThisHole = 0,
@@ -986,24 +971,10 @@ class _SkinsPlayerRow extends StatelessWidget {
                 ),
               ),
             ),
-            if (matchHcapLabel != null) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.secondaryContainer.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: theme.colorScheme.outlineVariant),
-                ),
-                child: Text(
-                  matchHcapLabel!,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSecondaryContainer,
-                  ),
-                ),
-              ),
-            ],
+            // The `gets N` chip was here. **Removed 22 Sep 2026.** It carried
+            // the ROUND's allocation while the dots on the score box carry
+            // THIS hole's, and a golfer reading both has been handed the
+            // arithmetic for subtracting a stroke he has already been given.
             ComboTeeChip(tee: comboTee),
           ]),
         ),

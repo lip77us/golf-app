@@ -30,6 +30,7 @@ import '../widgets/round_chat_button.dart';
 import '../utils/play_order.dart';
 import '../utils/round_complete.dart';
 import '../widgets/combo_tee_chip.dart';
+import '../widgets/stroke_dots.dart';
 
 const List<Color> _kNc = [Color(0xFF1976D2), Color(0xFFEF6C00), Color(0xFF7B3FA0)];
 const Color _muted = Color(0xFF5C6B62);
@@ -604,15 +605,6 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
       final colour = _colourFor(rp, pid);
       final active = isHot || isEditing;
 
-      // Round-total allowance vs each opponent (like Sixes' "gets N"), labelled
-      // by opponent so it's obvious against whom — one pill per match the player
-      // gets strokes in (the higher player of a pair; none for the low player).
-      int getsVs(Membership opp) => mode == 'gross' ? 0
-          : ((m.playingHandicap - opp.playingHandicap) * netPct / 100)
-              .round().clamp(0, 99);
-      final getsLeft  = getsVs(leftOpp);
-      final getsRight = getsVs(rightOpp);
-
       final rowContent = Row(children: [
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -624,16 +616,15 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
             ),
             ComboTeeChip(tee: m.comboTeeOnHole(holeData?.holeNumber ?? 0)),
           ]),
-          if (getsLeft > 0 || getsRight > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 3),
-              child: Wrap(spacing: 6, runSpacing: 3, children: [
-                if (getsLeft > 0)
-                  _getsPill(getsLeft, _colourFor(rp, leftOpp.player.id)),
-                if (getsRight > 0)
-                  _getsPill(getsRight, _colourFor(rp, rightOpp.player.id)),
-              ]),
-            ),
+          // The two `gets N` pills were here — a round-total allowance per
+          // opponent, coloured to say which. **Removed 22 Sep 2026.**
+          //
+          // The dot columns either side of the score box already carry the
+          // same two facts in the same two colours, and carry the one that
+          // matters: the strokes on THIS hole. A golfer reading `gets 6` and
+          // one dot has been handed the arithmetic for subtracting a stroke he
+          // has already been given — and here he was being handed it twice, in
+          // two colours, on every row.
         ])),
         // Left dots (vs lowest-index) · box · right dots (other match).
         _dotsCol(leftStrokes, _colourFor(rp, leftOpp.player.id)),
@@ -704,28 +695,24 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
     ]);
   }
 
-  // "gets N" — coloured by the opponent; that colour (+ the fact you only get
-  // strokes as the higher player) identifies which match, so no "v JS" needed.
-  Widget _getsPill(int n, Color c) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-        decoration: BoxDecoration(
-          color: c.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: c.withValues(alpha: 0.4)),
-        ),
-        child: Text('gets $n', style: TextStyle(
-            fontSize: 10, fontWeight: FontWeight.w700, color: c)),
-      );
-
+  /// Strokes on THIS hole against one opponent, coloured to say which.
+  ///
+  /// **The shared dot geometry, and no cap.** This drew its own 5px dot and
+  /// clamped at three — the same cap removed from the other nine surfaces in
+  /// the stroke-dot sweep, so a golfer getting three shots in a match saw two.
+  /// It cannot use `StrokeDotColumn` itself, which returns a `Positioned` for
+  /// a Stack: these columns stand beside the box rather than over it, one per
+  /// match, which is the whole reason this screen has two of them.
   Widget _dotsCol(int n, Color c) {
     if (n <= 0) return const SizedBox(width: 10);
     return SizedBox(
       width: 10,
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        for (var i = 0; i < n.clamp(0, 3); i++)
+        for (var i = 0; i < n; i++)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 1),
-            child: Container(width: 5, height: 5,
+            child: Container(
+                width: kStrokeDot, height: kStrokeDot,
                 decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
           ),
       ]),

@@ -885,11 +885,6 @@ class _HoleScoreCard extends StatelessWidget {
               gross:    gross,
               isHot:    isHot,
               strokes:  strokes,
-              showHcap: _mode != 'gross',
-              hcap:     effectiveMatchHandicap(
-                mode: _mode, netPercent: _netPercent,
-                playingHandicap: m.playingHandicap,
-                lowestPlayingHandicap: _lowPlaying),
               isHolder: _isHolder(m.player.id),
               isEditing: isEditing,
               onTap: editable ? () => onEditTap(m) : null,
@@ -943,8 +938,6 @@ class _PlayerRow extends StatelessWidget {
   final int?       gross;
   final bool       isHot;
   final int        strokes;
-  final bool       showHcap;
-  final int        hcap;
   final bool       isHolder;
   final bool       isEditing;  // its inline picker is currently open
   final VoidCallback? onTap;
@@ -959,8 +952,6 @@ class _PlayerRow extends StatelessWidget {
     required this.gross,
     required this.isHot,
     required this.strokes,
-    required this.showHcap,
-    required this.hcap,
     required this.isHolder,
     this.isEditing = false,
     this.onTap,
@@ -1015,23 +1006,10 @@ class _PlayerRow extends StatelessWidget {
                   style: theme.textTheme.bodyMedium
                       ?.copyWith(fontWeight: FontWeight.w600)),
             ),
-            if (showHcap && hcap > 0) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.secondaryContainer.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: theme.colorScheme.outlineVariant),
-                ),
-                child: Text(
-                  'gets $hcap',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.onSecondaryContainer),
-                ),
-              ),
-            ],
+            // The `gets N` chip was here. **Removed 22 Sep 2026.** It carried
+            // the ROUND's allocation while the dots on the score box carry
+            // THIS hole's, and a golfer reading both has been handed the
+            // arithmetic for subtracting a stroke he has already been given.
             ComboTeeChip(tee: comboTee),
               ]),
               if (spotsActive)

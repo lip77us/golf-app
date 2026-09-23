@@ -823,12 +823,9 @@ class _NassauHoleScoreCard extends StatelessWidget {
     return players.map((m) => m.playingHandicap).reduce((a, b) => a < b ? a : b);
   }
 
-  int _matchHcapFor(Membership m) => effectiveMatchHandicap(
-        mode:                  _mode,
-        netPercent:            _netPercent,
-        playingHandicap:       m.playingHandicap,
-        lowestPlayingHandicap: _lowPlayingHandicap,
-      );
+  // `_matchHcapFor` was here — the ROUND's allocation, whose only reader was
+  // the `gets N` pill. Removed with it on 22 Sep 2026. Per-hole strokes come
+  // from `_strokesForHole`, which is what the dots have always used.
 
   int _strokesForHole(Membership m, ScorecardHole? h) {
     if (h == null || _mode == 'gross') return 0;
@@ -967,15 +964,6 @@ class _NassauHoleScoreCard extends StatelessWidget {
             final hasScore   = gross != null;
             final matchStrok = _strokesForHole(m, holeData);
 
-            // Handicap pill reads "gets N" (strokes this player receives).
-            // The stroke-this-hole indicator now lives in the dot strip above
-            // the score box, so no bullets here. Hidden for a 0-stroke player.
-            String? hcapLabel;
-            if (_mode == 'net' || _mode == 'strokes_off') {
-              final h = _matchHcapFor(m);
-              if (h > 0) hcapLabel = 'gets $h';
-            }
-
             final team = _teamOf(m.player.id);
             final boxColor = team != null
                 ? nassauTeamColor(team)
@@ -984,7 +972,6 @@ class _NassauHoleScoreCard extends StatelessWidget {
                 member:              m,
                 gross:               gross,
                 isHot:               isHot,
-                matchHcapLabel:      hcapLabel,
                 comboTee:            m.comboTeeOnHole(holeNumber),
                 strokesOnThisHole:   matchStrok,
                 team:                team,
@@ -1218,7 +1205,6 @@ class _NassauPlayerRow extends StatelessWidget {
   final Membership    member;
   final int?          gross;
   final bool          isHot;
-  final String?       matchHcapLabel;
   /// This golfer's tee for the hole being entered — combo sets only.
   final String?       comboTee;
   final VoidCallback? onTap;
@@ -1233,7 +1219,6 @@ class _NassauPlayerRow extends StatelessWidget {
     required this.member,
     required this.gross,
     required this.isHot,
-    this.matchHcapLabel,
     this.comboTee,
     this.onTap,
     this.strokesOnThisHole = 0,
@@ -1295,27 +1280,10 @@ class _NassauPlayerRow extends StatelessWidget {
                 ),
               ),
             ),
-            if (matchHcapLabel != null) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.secondaryContainer
-                      .withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                      color: theme.colorScheme.outlineVariant),
-                ),
-                child: Text(
-                  matchHcapLabel!,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSecondaryContainer,
-                  ),
-                ),
-              ),
-            ],
+            // The `gets N` pill was here. **Removed 22 Sep 2026.** It carried
+            // the ROUND's allocation while the dots on the score box carry
+            // THIS hole's, and a golfer reading both has been handed the
+            // arithmetic for subtracting a stroke he has already been given.
             ComboTeeChip(tee: comboTee),
           ]),
               if (spotsActive)
