@@ -30,6 +30,7 @@ import '../utils/nassau_standing.dart';
 import '../utils/sixes_standing.dart';
 import '../utils/stroke_play_standing.dart';
 import '../utils/points_531_standing.dart';
+import '../utils/fourball_standing.dart';
 import '../utils/skins_standing.dart';
 import '../utils/vegas_standing.dart';
 import '../widgets/banker_entry_strip.dart';
@@ -1704,9 +1705,39 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         return _points531Ribbon(rp, me, leaderboard);
       case GameIds.skins:
         return _skinsRibbon(rp, me, leaderboard);
+      case GameIds.fourball:
+        return _fourballRibbon(rp, me, leaderboard);
       default:
         return null;
     }
+  }
+
+  /// **No names, because the rows below are already the two sides.** The
+  /// status card this replaces led with the leading pair's short names, which
+  /// was right on a card that also had to say who the sides WERE and is not
+  /// right on a row sitting above four rows tinted team 1 blue and team 2
+  /// orange. Nassau's banner got the same ruling.
+  ///
+  /// Fourball can take it for the reason Vegas can: the two sides are fixed at
+  /// setup and never change, so the colour means one thing for eighteen holes.
+  /// The margin stays NEUTRAL and wears the leader's colour — unlike Vegas,
+  /// where the figure had to agree with a money column beside it. Here the
+  /// number IS the match, and `2 UP` is what a golfer says out loud.
+  StandingRibbon? _fourballRibbon(
+      RoundProvider rp, int? me, VoidCallback onOpen) {
+    final standing = fourballStanding(rp.fourballSummary, me);
+    if (standing == null) return null;
+    return StandingRibbon(
+      kind: StandingKind.result,
+      standing: standing.standing,
+      standingColor: switch (standing.leader) {
+        'team1' => GameColors.team1,
+        'team2' => GameColors.team2,
+        _       => null,
+      },
+      figure: standing.figure,
+      onOpenLeaderboard: onOpen,
+    );
   }
 
   /// **A skin count is not a place.** Every other ranked game on this row
@@ -5001,21 +5032,26 @@ class _GameStatusSection extends StatelessWidget {
           const SizedBox(height: 12),
         ],
 
-        // Fourball — match status card + per-hole progress grid.
+        // Fourball — the per-hole progress grid.
+        //
+        // **The status card came off 22 Sep 2026.** It said the match state
+        // (`Paul & Mike 2 UP thru 5`) and named the two sides; the standing
+        // row in the app bar says the first, and the four player rows above
+        // are already tinted with the two sides' fixed colours. Nassau's team
+        // banner came off for the identical reason.
         if (games.contains('fourball') && fourballSummary != null) ...[
-          _FourballStatusCard(
-            summary:     fourballSummary!,
-            currentHole: currentHole,
-          ),
-          const SizedBox(height: 8),
-          _FourballProgressGrid(
-            summary:     fourballSummary!,
-            players:     players,
-            scorecard:   scorecard,
-            currentHole: currentHole,
-            onTapHole:   onTapHole,
-            holesInPlay: holesInPlay,
-          ),
+          // **The app's standard scorecard**, replacing this game's own
+          // progress grid. Its `winner_team` tint colours the WINNING side's
+          // two scores on every hole, which is why there is no `Won by` row
+          // any more: the boxes say it where the scores are, and a row of
+          // team initials underneath was the same fact one line down.
+          if (fourballSummary!.scorecardHoles.isNotEmpty)
+            HoleGridScorecard(
+              holes:        fourballSummary!.scorecardHoles,
+              participants: fourballSummary!.scorecardPlayers,
+              legend:       null,
+              holesInPlay:  fourballSummary!.scorecardHolesInPlay,
+            ),
           const SizedBox(height: 12),
         ],
 
@@ -6033,350 +6069,16 @@ class _GridPlayerRow extends StatelessWidget {
 // best ball — is highlighted in that player's cell.
 // ---------------------------------------------------------------------------
 
-class _FourballProgressGrid extends StatefulWidget {
-  final FourballSummary  summary;
-  final List<Membership> players;
-  final Scorecard        scorecard;
-  final int              currentHole;
-  final void Function(int hole)? onTapHole;
-  final List<int>        holesInPlay;   // play order; empty = full 1-18
-
-  const _FourballProgressGrid({
-    required this.summary,
-    required this.players,
-    required this.scorecard,
-    required this.currentHole,
-    this.onTapHole,
-    this.holesInPlay = const [],
-  });
-
-  @override
-  State<_FourballProgressGrid> createState() => _FourballProgressGridState();
-}
-
-class _FourballProgressGridState extends State<_FourballProgressGrid> {
-  static const double _labelColW = 56.0;
-  static const double _cellW     = 34.0;
-  static const double _rowH      = 28.0;
-
-  // The scroll controller, the pin and the scroll maths all live in
-  // PinnedHoleGrid now. This grid had its labels INSIDE the scroll view, so
-  // by the 14th the four rows were anonymous — exactly when a fourball needs
-  // to know whose ball is whose — and it parked the current hole in the middle
-  // rather than at the right edge a scorecard is read from.
-
-  // Strokes this player gets on hole [h] under the match's handicap mode —
-  // mirrors services/fourball.py so the dots + nets match the calculator.
-  int _strokesOnHoleFor(Membership m, int h) {
-    final s = widget.summary;
-    if (s.isGross) return 0;
-    final hole  = widget.scorecard.holeData(h);
-    if (hole == null) return 0;
-    final entry = hole.scoreFor(m.player.id);
-
-    final universe = widget.scorecard.holes.isEmpty
-        ? 18
-        : widget.scorecard.holes
-            .map((x) => x.holeNumber)
-            .reduce((a, b) => a > b ? a : b);
-    int siFor(int hh) =>
-        widget.scorecard.holeData(hh)?.scoreFor(m.player.id)?.strokeIndex ??
-        widget.scorecard.holeData(hh)?.strokeIndex ??
-        18;
-
-    if (s.isNet) {
-      if (s.netPercent == 100 && entry != null) return entry.handicapStrokes;
-      final effective = roundHalfUp(m.playingHandicap * s.netPercent / 100.0);
-      return partialStrokesOnHole(
-          effective, h, widget.holesInPlay, universe, siFor);
-    }
-    // strokes-off — anchored on the foursome low.
-    if (widget.players.isEmpty) return 0;
-    final low = widget.players
-        .map((p) => p.playingHandicap)
-        .reduce((a, b) => a < b ? a : b);
-    final rawSo = m.playingHandicap - low;
-    if (rawSo <= 0) return 0;
-    final so = roundHalfUp(rawSo * s.netPercent / 100.0);
-    if (so <= 0) return 0;
-    return partialStrokesOnHole(so, h, widget.holesInPlay, universe, siFor);
-  }
-
-  FourballHole? _holeResult(int h) =>
-      widget.summary.holes.where((x) => x.hole == h).firstOrNull;
-
-  /// True when [m]'s score on hole [h] is the winning team's best ball —
-  /// i.e. it's the score that actually won the hole.
-  bool _isWinningCell(Membership m, int h) {
-    final hr = _holeResult(h);
-    if (hr == null || hr.winner == 'Halved') return false;
-    final team = widget.summary.teamOf(m.player.id);
-    if (team == null) return false;
-    final winTeam = hr.winner == 'T1' ? 1 : 2;
-    if (team != winTeam) return false;
-    final winVal = winTeam == 1 ? hr.t1Net : hr.t2Net;
-    final gross = widget.scorecard.holeData(h)?.scoreFor(m.player.id)?.grossScore;
-    if (winVal == null || gross == null) return false;
-    return gross - _strokesOnHoleFor(m, h) == winVal;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme     = Theme.of(context);
-    final summary   = widget.summary;
-    final scorecard = widget.scorecard;
-    final current   = widget.currentHole;
-    final onTapHole = widget.onTapHole;
-    // Only the holes in play (play order) — no blank 1-9 on a back-9 round.
-    final holeRange = widget.holesInPlay.isNotEmpty
-        ? widget.holesInPlay
-        : List.generate(18, (i) => i + 1);
-
-    Color teamColor(int? t) => t == 1
-        ? GameColors.team1
-        : t == 2 ? GameColors.team2 : theme.colorScheme.onSurface;
-
-    // Players ordered team 1 first, then team 2, so partners sit together.
-    final ordered = [...widget.players]..sort((a, b) =>
-        (summary.teamOf(a.player.id) ?? 9)
-            .compareTo(summary.teamOf(b.player.id) ?? 9));
-
-    Widget holeCell(int h, {required Widget child, Color? bg, bool? winBorder}) {
-      final isCurrent = h == current;
-      return GestureDetector(
-        onTap: onTapHole == null ? null : () => onTapHole!(h),
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: _cellW, height: _rowH,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: bg ?? (isCurrent
-                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.35)
-                : null),
-            border: isCurrent
-                ? Border.all(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.6),
-                    width: 1.2)
-                : null,
-          ),
-          child: child,
-        ),
-      );
-    }
-
-    // ── OUT / IN / TOT ──────────────────────────────────────────────────────
-    // The same three columns the Stroke Play card carries, built the same way,
-    // so the two read as one object. A nine that is not in play has no column:
-    // a back-nine round shows IN alone rather than an OUT that could only ever
-    // be blank.
-    final front    = holeRange.where((h) => h <= 9).toList();
-    final back     = holeRange.where((h) => h > 9).toList();
-    final showOut  = front.isNotEmpty;
-    final showIn   = back.isNotEmpty;
-    final showTot  = front.isNotEmpty && back.isNotEmpty;
-    const summaryW = 34.0;
-
-    int parSum(List<int> holes) {
-      var t = 0;
-      for (final h in holes) {
-        t += scorecard.holeData(h)?.par ?? 0;
-      }
-      return t;
-    }
-
-    Widget summaryCell(String text) => SizedBox(
-          width: summaryW, height: _rowH,
-          child: Center(
-            child: Text(text,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(fontWeight: FontWeight.bold)),
-          ),
-        );
-
-    /// A golfer's gross over a set of holes — **null until every hole in the
-    /// set is scored**, so a subtotal appears once its nine is complete and
-    /// never as a misleading partial. The same rule `_GridPlayerRow` uses.
-    int? grossSum(Membership m, List<int> holes) {
-      var total = 0;
-      for (final h in holes) {
-        final g = scorecard.holeData(h)?.scoreFor(m.player.id)?.grossScore;
-        if (g == null) return null;
-        total += g;
-      }
-      return total;
-    }
-
-    Widget totalCell(Membership m, List<int> holes) {
-      final t = grossSum(m, holes);
-      return summaryCell(t == null ? '—' : '$t');
-    }
-
-    /// One golfer's gross on one hole — the winning best ball highlighted in
-    /// that player's own cell, his stroke dots down the right edge.
-    Widget scoreCell(Membership m, int h) {
-      final tCol    = teamColor(summary.teamOf(m.player.id));
-      final hd      = scorecard.holeData(h);
-      final gross   = hd?.scoreFor(m.player.id)?.grossScore;
-      final win     = _isWinningCell(m, h);
-      final strokes = _strokesOnHoleFor(m, h);
-      return holeCell(h,
-          bg: win ? tCol.withValues(alpha: 0.18) : null,
-          child: Stack(children: [
-            Center(child: Text(
-                gross == null ? '–' : '$gross',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    fontWeight: win ? FontWeight.w800 : FontWeight.w600,
-                    color: gross == null
-                        ? theme.colorScheme.onSurfaceVariant
-                        : win ? tCol : null))),
-            StrokeDotColumn(strokes: strokes,
-                            color: theme.colorScheme.primary),
-          ]));
-    }
-
-    /// Which side took the hole — T1 / T2 / halved / not yet played.
-    Widget wonByCell(int h) {
-      final hr = _holeResult(h);
-      Color? bg; Color? fg; String lbl;
-      if (hr == null) {
-        lbl = '·';
-      } else if (hr.winner == 'T1') {
-        bg = GameColors.team1Bg; fg = GameColors.team1;
-        lbl = teamInitialsFromNames(summary.team1.players);
-      } else if (hr.winner == 'T2') {
-        bg = GameColors.team2Bg; fg = GameColors.team2;
-        lbl = teamInitialsFromNames(summary.team2.players);
-      } else {
-        bg = Colors.grey.shade100; fg = Colors.grey.shade600;
-        lbl = '=';
-      }
-      return holeCell(h, bg: bg,
-          child: Text(lbl,
-              style: theme.textTheme.labelSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: fg ?? theme.colorScheme.onSurfaceVariant)));
-    }
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Fourball progress',
-              style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
-          const SizedBox(height: 4),
-          Builder(builder: (_) {
-            Widget label(String text, TextStyle? style) => SizedBox(
-                  width: _labelColW, height: _rowH,
-                  child: Align(alignment: Alignment.centerLeft,
-                      child: Text(text, style: style)),
-                );
-
-            final nSummary =
-                (showOut ? 1 : 0) + (showIn ? 1 : 0) + (showTot ? 1 : 0);
-            // Where the current hole's right edge sits, counting the summary
-            // columns before it — a back-nine hole is one column further right
-            // than its position in the play order suggests.
-            double? edge;
-            final fi = front.indexOf(current);
-            final bi = back.indexOf(current);
-            if (fi >= 0) {
-              edge = (fi + 1) * _cellW;
-            } else if (bi >= 0) {
-              edge = front.length * _cellW +
-                  (showOut ? summaryW : 0) + (bi + 1) * _cellW;
-            }
-
-            return PinnedHoleGrid(
-              labelWidth : _labelColW,
-              cellWidth  : _cellW,
-              holeCount  : holeRange.length,
-              currentIndex: edge == null ? -1 : 0,
-              currentRightEdge: edge,
-              contentWidth: _cellW * holeRange.length + summaryW * nSummary,
-              bands: [
-                // Hole numbers
-                HoleGridBand(
-                  label('Hole', const TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.bold)),
-                  [
-                    for (final h in front)
-                      holeCell(h, child: Text('$h',
-                          style: const TextStyle(
-                              fontSize: 11, fontWeight: FontWeight.bold))),
-                    if (showOut) summaryCell('OUT'),
-                    for (final h in back)
-                      holeCell(h, child: Text('$h',
-                          style: const TextStyle(
-                              fontSize: 11, fontWeight: FontWeight.bold))),
-                    if (showIn) summaryCell('IN'),
-                    if (showTot) summaryCell('TOT'),
-                  ],
-                ),
-                // Par
-                HoleGridBand(
-                  label('Par', theme.textTheme.bodySmall
-                      ?.copyWith(fontStyle: FontStyle.italic)),
-                  [
-                    for (final h in front)
-                      holeCell(h, child: Text(
-                          '${scorecard.holeData(h)?.par ?? "-"}',
-                          style: theme.textTheme.bodySmall)),
-                    if (showOut) summaryCell('${parSum(front)}'),
-                    for (final h in back)
-                      holeCell(h, child: Text(
-                          '${scorecard.holeData(h)?.par ?? "-"}',
-                          style: theme.textTheme.bodySmall)),
-                    if (showIn) summaryCell('${parSum(back)}'),
-                    if (showTot) summaryCell('${parSum([...front, ...back])}'),
-                  ],
-                ),
-                const HoleGridBand.rule(),
-                // Player score rows — names tinted by team; the winning best
-                // ball each hole is highlighted in that player's cell.
-                for (final m in ordered)
-                  HoleGridBand(
-                    label(m.player.displayShort,
-                        theme.textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: teamColor(summary.teamOf(m.player.id)))),
-                    [
-                      for (final h in front) scoreCell(m, h),
-                      if (showOut) totalCell(m, front),
-                      for (final h in back) scoreCell(m, h),
-                      if (showIn) totalCell(m, back),
-                      if (showTot) totalCell(m, [...front, ...back]),
-                    ],
-                  ),
-                const HoleGridBand.rule(),
-                // Won by — T1 / T2 / = per hole.
-                HoleGridBand(
-                  label('Won by', theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      fontStyle: FontStyle.italic)),
-                  [
-                    for (final h in front) wonByCell(h),
-                    // A nine has no winner, so the summary slots stay empty
-                    // rather than carrying an invented one.
-                    if (showOut) summaryCell(''),
-                    for (final h in back) wonByCell(h),
-                    if (showIn) summaryCell(''),
-                    if (showTot) summaryCell(''),
-                  ],
-                ),
-              ],
-            );
-          }),
-        ]),
-      ),
-    );
-  }
-}
+// ---------------------------------------------------------------------------
+// `_FourballProgressGrid` and its state were here — hole, par, the four
+// players grouped and tinted by team, and a `Won by` row underneath.
+// **Removed 22 Sep 2026**, replaced by the app's standard scorecard.
+//
+// The shared card tints the WINNING side's two scores on every hole from
+// the server's `winner_team`, which is the `Won by` row's fact stated where
+// the scores are rather than one line below them. What else it brings is
+// what every other game's card has: the Index row, the same shading, and
+// the stroke dots.
 
 // ---------------------------------------------------------------------------
 // Stroke Play (low_net_round) per-hole grid — modelled on _NassauProgressGrid
@@ -9275,120 +8977,12 @@ class _VegasStatusCard extends StatelessWidget {
   }
 }
 
-/// Live Fourball match status during score entry: both teams on one line
-/// (long names, "vs." between, colored), then the running result led by the
-/// leading team's short names ("Paul & Mike 2 UP thru 5" / "All Square" /
-/// "Paul & Mike win 3&2").
-class _FourballStatusCard extends StatelessWidget {
-  final FourballSummary summary;
-  final int currentHole;
-  const _FourballStatusCard(
-      {required this.summary, required this.currentHole});
-
-  String _hcapLabel() {
-    if (summary.isGross) return 'Gross';
-    final pct = summary.netPercent == 100 ? '' : ' ${summary.netPercent}%';
-    return summary.isStrokesOff ? 'Strokes-off$pct' : 'Net$pct';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    Color sideColor(String? side) => side == 'team1'
-        ? GameColors.team1
-        : side == 'team2'
-            ? GameColors.team2
-            : theme.colorScheme.onSurfaceVariant;
-
-    String longNames(FourballTeamInfo t) =>
-        t.players.isNotEmpty ? t.players.join(' & ') : 'Team';
-    String shortNames(FourballTeamInfo t) =>
-        (t.shortNames.isNotEmpty ? t.shortNames : t.players).join(' & ');
-
-    // "thru N" is holes COMPLETED (a count), not a hole number — reads right on
-    // a mid-course / shotgun start (played 7–12 = thru 6, not 12).
-    final thru = summary.holesPlayed;
-    final margin    = summary.holesUp.abs();
-    final leadTeam  = summary.holesUp > 0 ? summary.team1 : summary.team2;
-    // Live status line, led by the leading/winning team's short names:
-    //   "Paul & Mike 2 UP thru 5" / "All Square thru 5" / "Paul & Mike win 3&2".
-    final String statusLine;
-    if (summary.status == 'complete') {
-      // Holes remaining at close-out comes from the SERVER (`holes_to_play`),
-      // which walks the group's play order. Doing `18 - finishedOnHole` here
-      // read right on a round from the 1st and wrong on every shotgun: off a
-      // shotgun on 13, a match closing on hole 7 (the 13th played, 5 left)
-      // printed "3&11".
-      final toPlay = summary.holesToPlay ?? 0;
-      statusLine = toPlay > 0
-          ? '${shortNames(leadTeam)} win $margin&$toPlay'
-          : '${shortNames(leadTeam)} win $margin UP';
-    } else if (summary.status == 'halved') {
-      statusLine = 'All Square';
-    } else if (thru == 0) {
-      statusLine = 'Not started';
-    } else if (summary.holesUp == 0) {
-      statusLine = 'All Square thru $thru';
-    } else {
-      statusLine = '${shortNames(leadTeam)} $margin UP thru $thru';
-    }
-    final leaderColor = sideColor(summary.leader);
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Text('Fourball', style: theme.textTheme.titleSmall
-                ?.copyWith(fontWeight: FontWeight.bold)),
-            const Spacer(),
-            Text(_hcapLabel(),
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          ]),
-          const SizedBox(height: 6),
-          // Both teams on one line, long names, "vs." in between.
-          Text.rich(
-            TextSpan(children: [
-              TextSpan(
-                  text: longNames(summary.team1),
-                  style: TextStyle(
-                      color: GameColors.team1, fontWeight: FontWeight.w700)),
-              TextSpan(
-                  text: '  vs.  ',
-                  style: TextStyle(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w500)),
-              TextSpan(
-                  text: longNames(summary.team2),
-                  style: TextStyle(
-                      color: GameColors.team2, fontWeight: FontWeight.w700)),
-            ]),
-            style: theme.textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 6),
-          Row(children: [
-            Icon(
-                summary.status == 'complete'
-                    ? Icons.flag_rounded
-                    : summary.status == 'halved'
-                        ? Icons.handshake_rounded
-                        : Icons.timelapse_rounded,
-                size: 16, color: leaderColor),
-            const SizedBox(width: 6),
-            Text(statusLine,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600, color: leaderColor)),
-          ]),
-        ]),
-      ),
-    );
-  }
-}
-
+// `_FourballStatusCard` was here — both teams on one line with `vs.`
+// between them, and the running result led by the leading pair's short
+// names. **Removed 22 Sep 2026.**
+//
+// The result is the standing row in the app bar now, and the two sides are
+// the four player rows above, already tinted with their fixed colours.
+// Nassau's team banner came off for the identical reason, and Fourball can
+// afford it for the reason Vegas can: the sides are set at setup and never
+// change, so the colour means one thing for eighteen holes.

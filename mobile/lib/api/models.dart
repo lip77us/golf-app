@@ -1733,6 +1733,16 @@ class FourballSummary {
   final double  betAmount;
   final List<FourballMoneyEntry> money;
 
+  /// The standard card's payload, as `HoleGridScorecard` wants it — raw maps,
+  /// straight from the server's own shape.
+  ///
+  /// Each hole carries `winner_team`, and each player his `team`, which is
+  /// what tints the WINNING side's two scores on every hole. That tint is why
+  /// this card needs no `Won by` row: the boxes say it where the scores are.
+  final List<Map<String, dynamic>> scorecardHoles;
+  final List<Map<String, dynamic>> scorecardPlayers;
+  final List<int> scorecardHolesInPlay;
+
   const FourballSummary({
     required this.status,
     this.result,
@@ -1750,6 +1760,9 @@ class FourballSummary {
     required this.holes,
     required this.betAmount,
     required this.money,
+    this.scorecardHoles = const [],
+    this.scorecardPlayers = const [],
+    this.scorecardHolesInPlay = const [],
   });
 
   bool get isNet        => handicapMode == 'net';
@@ -1795,6 +1808,15 @@ class FourballSummary {
       betAmount: (moneyJ['bet_amount'] as num?)?.toDouble() ?? 0.0,
       money: (moneyJ['by_player'] as List? ?? [])
           .map((m) => FourballMoneyEntry.fromJson(m as Map<String, dynamic>))
+          .toList(),
+      scorecardHoles: (j['scorecard'] as List? ?? const [])
+          .map((h) => Map<String, dynamic>.from(h as Map))
+          .toList(),
+      scorecardPlayers: (j['players'] as List? ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList(),
+      scorecardHolesInPlay: (j['holes_in_play'] as List? ?? const [])
+          .map((e) => (e as num).toInt())
           .toList(),
     );
   }
