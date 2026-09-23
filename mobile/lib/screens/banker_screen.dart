@@ -31,7 +31,9 @@ import '../theme/halved_brand.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/hole_grid_scorecard.dart';
+import '../utils/banker_standing.dart';
 import '../widgets/round_chat_button.dart';
+import '../widgets/standing_ribbon.dart';
 
 /// Three action colours, one concept each, reused for nothing else:
 /// gold = the role, blue = a player's double, amber = the banker's counter.
@@ -133,10 +135,41 @@ class _BankerScreenState extends State<BankerScreen> {
 
   // -- build ----------------------------------------------------------------
 
+  /// **The first row on this strip whose standing IS money**, and the first to
+  /// take the 💰 glyph. Every game before it had a match, a place, a points
+  /// total or a word to report, with the money riding in the quiet slot as a
+  /// qualifier. Banker has nothing else: a hole is three one-on-one bets and
+  /// the only thing it produces is dollars.
+  ///
+  /// Which leaves the figure for the hole — and **whether you are the banker
+  /// is the position-defining fact of a Banker hole**, since one man plays
+  /// three matches at once and carries the sum of them. The screen says whose
+  /// hole it is; it does not say it from the READER's side.
+  ///
+  /// Grey, deliberately. The standings card tints its totals green and red,
+  /// but on every other game on this strip a coloured standing means a SIDE,
+  /// and a row that used colour for profit on one game and for a team on the
+  /// next teaches a reader to distrust it on both.
+  StandingRibbon? _standingRibbon(RoundProvider rp) {
+    final round = rp.round;
+    if (round == null) return null;
+    final me = context.read<AuthProvider>().player?.id;
+    final standing = bankerStanding(rp.bankerSummary, me);
+    if (standing == null) return null;
+    return StandingRibbon(
+      kind: StandingKind.money,
+      standing: standing.standing,
+      figure: standing.figure,
+      onOpenLeaderboard: () => Navigator.of(context)
+          .pushNamed('/leaderboard', arguments: round.id),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final rp = context.watch<RoundProvider>();
     final s  = rp.bankerSummary;
+    final ribbon = _standingRibbon(rp);
 
     return Scaffold(
       backgroundColor: Halved.surface,
@@ -147,6 +180,12 @@ class _BankerScreenState extends State<BankerScreen> {
       // their head.
       appBar: GolfAppBar(
         title: 'Banker',
+        // D2: the standing becomes the bar's second line, and the pill in it
+        // replaces the leaderboard ICON below.
+        bottom: ribbon,
+        titleStyle: ribbon == null
+            ? null
+            : const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.close),
@@ -155,14 +194,18 @@ class _BankerScreenState extends State<BankerScreen> {
         ),
         actions: [
           if (rp.round != null) RoundChatButton(roundId: rp.round!.id),
-          IconButton(
-            tooltip: 'Leaderboard',
-            icon: const Icon(Icons.leaderboard_outlined),
-            onPressed: rp.round == null
-                ? null
-                : () => Navigator.of(context)
-                    .pushNamed('/leaderboard', arguments: rp.round!.id),
-          ),
+          // The named pill in the ribbon is this, done properly — so the icon
+          // stands down wherever the ribbon draws. Banker keeps Settle up,
+          // which is its own destination and not a leaderboard.
+          if (ribbon == null)
+            IconButton(
+              tooltip: 'Leaderboard',
+              icon: const Icon(Icons.leaderboard_outlined),
+              onPressed: rp.round == null
+                  ? null
+                  : () => Navigator.of(context)
+                      .pushNamed('/leaderboard', arguments: rp.round!.id),
+            ),
           IconButton(
             tooltip: 'Settle up',
             icon: const Icon(Icons.receipt_long_outlined),
