@@ -36,6 +36,8 @@ import '../widgets/inline_score_picker.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/standing_ribbon.dart';
 import '../widgets/spots_capture.dart';
+import '../widgets/stroke_dots.dart';
+import '../utils/nine_totals.dart';
 import '../widgets/pinned_hole_grid.dart';
 import '../widgets/combo_tee_chip.dart';
 
@@ -1206,23 +1208,28 @@ class _WolfDecisionSheet extends StatelessWidget {
                           ? FontWeight.bold : FontWeight.w500,
                       color: isWolf ? theme.colorScheme.primary : null)),
             ),
-            // Handicap strokes this player gets on THIS hole — so the Wolf can
-            // see who's getting a shot before choosing a partner.
+            // Strokes on THIS hole — the fact the partner choice turns on.
+            //
+            // **The same dot as the score box**, drawn from `kStrokeDot` and
+            // `kStrokeDotGap` rather than this sheet's own 5px one, so a
+            // stroke looks the same in the picker as on the row it is picking
+            // from. `StrokeDotRow` itself returns a `Positioned` for a Stack;
+            // here the run sits inline beside a name, so it borrows the
+            // geometry and not the widget.
+            //
+            // **No cap.** This clamped at three, the same cap removed from the
+            // other nine surfaces — it drew two dots for a man getting three.
+            // And no `gets N` beside it: the dots say it, and a number there
+            // invites subtracting the stroke a second time.
             if (slot.strokes > 0) ...[
               const SizedBox(width: 6),
-              ...List.generate(
-                slot.strokes.clamp(0, 3),
-                (_) => Container(
-                  width: 5, height: 5,
-                  margin: const EdgeInsets.only(left: 2),
+              for (var i = 0; i < slot.strokes; i++)
+                Container(
+                  width: kStrokeDot, height: kStrokeDot,
+                  margin: const EdgeInsets.only(left: kStrokeDotGap),
                   decoration: BoxDecoration(
                       color: theme.colorScheme.primary, shape: BoxShape.circle),
                 ),
-              ),
-              const SizedBox(width: 4),
-              Text('gets ${slot.strokes}',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.primary, fontWeight: FontWeight.w600)),
             ],
             if (isWolf) ...[
               const SizedBox(width: 6),
@@ -1321,6 +1328,34 @@ class _WolfOutcomeLine extends StatelessWidget {
 int  _wolfZeroSpots(int _) => 0;
 void _wolfNoopPid(int _) {}
 
+/// Handicap strokes for [m] on one hole — **the screen's one stroke source**.
+///
+/// The score box's dots, the inline picker's and the by-hole grid's all come
+/// from here. Two copies of this on one screen is how a row shows one dot and
+/// the grid shows two for the same golfer on the same hole, which reads as a
+/// bug in the scoring rather than in the drawing.
+///
+/// (The partner picker takes `WolfTeeSlot.strokes` off the SERVER instead,
+/// which is the authoritative figure. They agree; the sheet is the one place
+/// the server sends a per-hole allocation for this game.)
+int wolfStrokesForHole(Membership m, ScorecardHole? h,
+    {required String mode, required int netPercent, required int? lowPlaying}) {
+  if (h == null || mode == 'gross') return 0;
+  final entry = h.scoreFor(m.player.id);
+  final mySi  = entry?.strokeIndex ?? h.strokeIndex;
+  if (mode == 'net') {
+    if (netPercent == 100 && entry != null) return entry.handicapStrokes;
+    final eff = roundHalfUp(m.playingHandicap * netPercent / 100.0);
+    return strokesOnHole(eff, mySi);
+  }
+  if (lowPlaying == null) return 0;
+  // Scale the strokes-off differential by Net %, matching the backend
+  // (nassau.py / sixes.py / rabbit.py) and the "SO {n}%" chip.
+  final so = roundHalfUp((m.playingHandicap - lowPlaying) * netPercent / 100.0);
+  if (so <= 0) return 0;
+  return strokesOnHole(so, mySi);
+}
+
 class _HoleScoreCard extends StatelessWidget {
   final ScorecardHole?   holeData;
   final int              holeNumber;
@@ -1371,23 +1406,9 @@ class _HoleScoreCard extends StatelessWidget {
     return players.map((m) => m.playingHandicap).reduce((a, b) => a < b ? a : b);
   }
 
-  int _strokesForHole(Membership m, ScorecardHole? h) {
-    if (h == null || _mode == 'gross') return 0;
-    final entry = h.scoreFor(m.player.id);
-    final mySi  = entry?.strokeIndex ?? h.strokeIndex;
-    if (_mode == 'net') {
-      if (_netPercent == 100 && entry != null) return entry.handicapStrokes;
-      final eff = roundHalfUp(m.playingHandicap * _netPercent / 100.0);
-      return strokesOnHole(eff, mySi);
-    }
-    final low = _lowPlaying;
-    if (low == null) return 0;
-    // Scale the strokes-off differential by Net %, matching the backend
-    // (nassau.py / sixes.py / rabbit.py) and the "SO {n}%" chip.
-    final so = roundHalfUp((m.playingHandicap - low) * _netPercent / 100.0);
-    if (so <= 0) return 0;
-    return strokesOnHole(so, mySi);
-  }
+  int _strokesForHole(Membership m, ScorecardHole? h) =>
+      wolfStrokesForHole(m, h,
+          mode: _mode, netPercent: _netPercent, lowPlaying: _lowPlaying);
 
   Widget _legendDot(ThemeData theme, Color color, String label) {
     return Row(mainAxisSize: MainAxisSize.min, children: [
@@ -1488,11 +1509,6 @@ class _HoleScoreCard extends StatelessWidget {
                 gross:     gross,
                 isHot:     isHot,
                 strokes:   strokes,
-                showHcap:  _mode != 'gross',
-                hcap:      effectiveMatchHandicap(
-                  mode: _mode, netPercent: _netPercent,
-                  playingHandicap: m.playingHandicap,
-                  lowestPlayingHandicap: _lowPlaying),
                 role:      role,
                 dimmed:    !decided,
                 isEditing: isEditing,
@@ -1555,8 +1571,6 @@ class _PlayerRow extends StatelessWidget {
   final int?       gross;
   final bool       isHot;
   final int        strokes;
-  final bool       showHcap;
-  final int        hcap;
   final String?    role;   // wolf | partner | opponent
   final bool       dimmed; // greyed while awaiting the Wolf's decision
   final bool       isEditing;  // its inline picker is currently open
@@ -1572,8 +1586,6 @@ class _PlayerRow extends StatelessWidget {
     required this.gross,
     required this.isHot,
     required this.strokes,
-    required this.showHcap,
-    required this.hcap,
     required this.role,
     this.dimmed = false,
     this.isEditing = false,
@@ -1646,23 +1658,10 @@ class _PlayerRow extends StatelessWidget {
               ),
             ],
             ComboTeeChip(tee: comboTee),
-            if (showHcap && hcap > 0) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.secondaryContainer.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: theme.colorScheme.outlineVariant),
-                ),
-                child: Text(
-                  'gets $hcap',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.onSecondaryContainer),
-                ),
-              ),
-            ],
+            // `gets N` was here — the ROUND's total allocation, in a chip, and
+            // only ever drawn on a strokes-off round. It is replaced by the
+            // dots on the score box, which say the thing the Wolf actually
+            // needs off the tee: who is getting a shot on THIS hole.
               ]),
               if (spotsActive)
                 Padding(
@@ -1680,19 +1679,35 @@ class _PlayerRow extends StatelessWidget {
         // consistent with the other score screens, where tapping the score is
         // the edit gesture).
         const SizedBox(width: 8),
-        Container(
-          width: 40, height: 36,
-          decoration: BoxDecoration(
-            color: boxBg, border: boxBorder,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Center(
-            child: gross != null
-                ? Text('$gross',
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.bold))
-                : const SizedBox.shrink(),
-          ),
+        // **The stroke dots, which Wolf was the last score screen without.**
+        // They matter more here than anywhere else: the Wolf picks his partner
+        // off the tee, and a man getting a shot on this hole is a different
+        // proposition from the same man on the next one. The row showed
+        // nothing at all on a NET round, which is most of them.
+        //
+        // Same 40x36 box and same horizontal run as every other score box —
+        // three dots cost 15px of 40 here and clear the digit, which is why
+        // this axis is the box's and the column is the grid's.
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 40, height: 36,
+              decoration: BoxDecoration(
+                color: boxBg, border: boxBorder,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Center(
+                child: gross != null
+                    ? Text('$gross',
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.bold))
+                    : const SizedBox.shrink(),
+              ),
+            ),
+            StrokeDotRow(
+                strokes: strokes, color: theme.colorScheme.primary),
+          ],
         ),
       ]),
     ));
@@ -1733,16 +1748,36 @@ class _WolfGrid extends StatelessWidget {
         ? summary.holes.map((h) => h.hole).toList()
         : List.generate(18, (i) => i + 1);
 
-    // hole → playerId → points
-    final pointsByHole = <int, Map<int, double>>{};
-    final wolfByHole   = <int, int>{};
-    for (final h in summary.holes) {
-      wolfByHole[h.hole] = h.wolfId;
-      for (final e in h.entries) {
-        pointsByHole.putIfAbsent(h.hole, () => {})[e.playerId] = e.points;
-      }
-    }
+    final split    = NineSplit.of(holeRange);
+    const summaryW = 34.0;
+
+    final wolfByHole = {for (final h in summary.holes) h.hole: h.wolfId};
     final totals = {for (final p in summary.players) p.playerId: p};
+    final lowPlaying = summary.handicapMode == 'strokes_off' && players.isNotEmpty
+        ? players.map((m) => m.playingHandicap).reduce((a, b) => a < b ? a : b)
+        : null;
+
+    Widget sumCell(String t, {double height = rowH}) => SizedBox(
+          width: summaryW, height: height,
+          child: Center(
+            child: Text(t,
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+          ),
+        );
+
+    /// A golfer's gross over a nine — **an em dash until it is complete**, the
+    /// rule every other card on this row uses: a subtotal appears once its
+    /// nine is whole and never as a misleading partial.
+    Widget grossTotal(Membership m, List<int> holes) {
+      var total = 0;
+      for (final h in holes) {
+        final g = scorecard.holeData(h)?.scoreFor(m.player.id)?.grossScore;
+        if (g == null) return sumCell('—');
+        total += g;
+      }
+      return sumCell('$total');
+    }
 
     Widget cell(int h, Widget child) {
       final isCur = h == currentHole;
@@ -1764,6 +1799,48 @@ class _WolfGrid extends StatelessWidget {
       );
     }
 
+    /// Who held the Wolf. Kept above the scores because reading a hole means
+    /// knowing whose tee shot the bet was built on — it is the one thing the
+    /// gross card cannot say for itself.
+    Widget wolfCell(int h) => Text(
+        (totals[wolfByHole[h]]?.shortName ?? '').characters.take(3).toString(),
+        style: const TextStyle(fontSize: 9));
+
+    /// A gross score with its stroke dots — **the grid's vertical run**, which
+    /// costs 7px of the cell's width where three horizontal dots would cost 14
+    /// and reach the digit.
+    Widget grossCell(Membership m, int h) {
+      final hole  = scorecard.holeData(h);
+      final gross = hole?.scoreFor(m.player.id)?.grossScore;
+      final strokes = wolfStrokesForHole(m, hole,
+          mode: summary.handicapMode, netPercent: summary.netPercent,
+          lowPlaying: lowPlaying);
+      return cell(
+        h,
+        Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            SizedBox(
+              width: cellW, height: rowH,
+              child: Center(
+                child: Text(
+                  gross?.toString() ?? '',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+            // Dots on an UNPLAYED hole too: the allocation is known up front,
+            // and it is the hole in front of you that the Wolf is choosing a
+            // partner for.
+            StrokeDotColumn(
+                strokes: strokes, color: theme.colorScheme.primary),
+          ],
+        ),
+      );
+    }
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -1775,7 +1852,7 @@ class _WolfGrid extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Wolf points',
+            Text('Scorecard',
                 style: theme.textTheme.labelLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.primary)),
@@ -1784,8 +1861,11 @@ class _WolfGrid extends StatelessWidget {
               labelWidth  : labelColW,
               cellWidth   : cellW,
               holeCount   : holeRange.length,
-              // Never scrolled to a hole before.
-              currentIndex: holeRange.indexOf(currentHole),
+              currentIndex: split.rightEdgeOf(
+                      currentHole, cellW, summaryW) == null ? -1 : 0,
+              currentRightEdge:
+                  split.rightEdgeOf(currentHole, cellW, summaryW),
+              contentWidth: split.contentWidth(cellW, summaryW),
               bands: [
                   // Hole-number header.
                   HoleGridBand(
@@ -1795,10 +1875,17 @@ class _WolfGrid extends StatelessWidget {
                             style: TextStyle(fontSize: 11,
                                 fontWeight: FontWeight.bold)))),
                     [
-                    for (final h in holeRange)
+                    for (final h in split.front)
                       cell(h, Text('$h',
                           style: const TextStyle(fontSize: 11,
                               fontWeight: FontWeight.bold))),
+                    if (split.showOut) sumCell('OUT'),
+                    for (final h in split.back)
+                      cell(h, Text('$h',
+                          style: const TextStyle(fontSize: 11,
+                              fontWeight: FontWeight.bold))),
+                    if (split.showIn) sumCell('IN'),
+                    if (split.showTot) sumCell('TOT'),
                   ]),
                   // Wolf row — who held the Wolf each hole.
                   HoleGridBand(
@@ -1808,11 +1895,13 @@ class _WolfGrid extends StatelessWidget {
                             style: theme.textTheme.bodySmall?.copyWith(
                                 fontStyle: FontStyle.italic)))),
                     [
-                    for (final h in holeRange)
-                      cell(h, Text(
-                          (totals[wolfByHole[h]]?.shortName ?? '')
-                              .characters.take(3).toString(),
-                          style: const TextStyle(fontSize: 9))),
+                    for (final h in split.front) cell(h, wolfCell(h)),
+                    // **Blank, not a total.** A nine has no Wolf, and the only
+                    // thing that could go here would be inventing one.
+                    if (split.showOut) sumCell(''),
+                    for (final h in split.back) cell(h, wolfCell(h)),
+                    if (split.showIn) sumCell(''),
+                    if (split.showTot) sumCell(''),
                   ]),
                   const HoleGridBand.rule(),
                   // One row per player — per-hole points + running total.
@@ -1827,43 +1916,18 @@ class _WolfGrid extends StatelessWidget {
                                     ?.copyWith(fontWeight: FontWeight.w600))),
                           ]))),
                       [
-                      for (final h in holeRange)
-                        cell(h, Builder(builder: (_) {
-                          final pts = pointsByHole[h]?[m.player.id];
-                          if (pts == null) {
-                            return Text('·', style: theme.textTheme.labelSmall
-                                ?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant));
-                          }
-                          final pos = pts > 0;
-                          return Text(
-                            '${pos ? '+' : ''}${_fmtPoints(pts)}',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: pts == 0
-                                    ? theme.colorScheme.onSurfaceVariant
-                                    : pos
-                                        ? Colors.green.shade700
-                                        : theme.colorScheme.error),
-                          );
-                        })),
+                      for (final h in split.front) grossCell(m, h),
+                      if (split.showOut) grossTotal(m, split.front),
+                      for (final h in split.back) grossCell(m, h),
+                      if (split.showIn) grossTotal(m, split.back),
+                      if (split.showTot) grossTotal(m, split.all),
                     ]),
               ],
             ),
-            const SizedBox(height: 8),
-            // Standings line.
-            Wrap(spacing: 12, runSpacing: 4, children: [
-              for (final p in summary.players)
-                Text('${p.shortName}: ${p.points >= 0 ? '+' : ''}'
-                    '${_fmtPoints(p.points)}',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: p.points > 0
-                            ? Colors.green.shade700
-                            : p.points < 0
-                                ? theme.colorScheme.error
-                                : null)),
-            ]),
+            // The per-player points totals were here. They are on the
+            // leaderboard's Wolf card — with the money beside them, which is
+            // what a points total is FOR — and the reader's own now rides in
+            // the standing row at the top of this screen.
           ],
         ),
       ),
