@@ -83,10 +83,15 @@ TeamPlayStandingText? teamPlayStanding(TeamPlayCardTeam? team) =>
 ///
 ///     B&P 1st · D&D 2nd of 4          thru 1
 ///
-/// **The score leaves the row when there are two of them.** Two places, two
-/// to-par figures and a field do not fit 27px, and the place is the money —
-/// so the shared `thru` carries the progress and the board carries the rest.
-/// A one-team card keeps its score, because there is room.
+/// **The whole bar goes to the places when there are two of them.** Two
+/// places, two to-par figures and a field do not fit 27px, and the place is
+/// the money — so the score goes and the board carries it.
+///
+/// `thru` goes with it, and for a better reason than width: each team's own
+/// block on the card already reads `thru 1 · Net −1` in its header, a few
+/// pixels below. A third copy bought nothing and cost the row the margin that
+/// made it read as cramped. A one-team card keeps `−4 thru 12`, because there
+/// is room for it and no second block competing.
 TeamPlayStandingText? teamPlayCardStanding(List<TeamPlayCardTeam> teams) {
   final rows = [
     for (final t in teams)
@@ -126,9 +131,7 @@ TeamPlayStandingText? teamPlayCardStanding(List<TeamPlayCardTeam> teams) {
       ? parts.join(' · ')
       : '${parts.join(' · ')} of $field';
 
-  // Both teams are on the same hole, so `thru` is one fact. If a hole is only
-  // half entered they differ for a moment, and the places already carry it.
-  final thrus = rows.map((r) => r.st.thru).toSet();
-  final score = thrus.length == 1 ? 'thru ${thrus.first}' : '';
-  return TeamPlayStandingText(place, score);
+  // No figure: the places take the whole bar, and each team's own block says
+  // `thru 1 · Net −1` in its header a few pixels below.
+  return TeamPlayStandingText(place, '');
 }

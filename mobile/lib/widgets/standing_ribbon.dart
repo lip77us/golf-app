@@ -170,11 +170,24 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
           // while a third of the row was blank. The money is a short fixed
           // string and belongs beside the pill; only this one ellipsises, and
           // only once there is genuinely nothing left.
+          //
+          // **`Expanded`, not `Flexible` before a `Spacer`.** That pairing was
+          // the same defect wearing the fix's clothes: a `Spacer` is an
+          // `Expanded` with flex 1, so the free space was divided EQUALLY
+          // between it and the standing, and the standing could never use more
+          // than half the bar however empty the other half was. It went
+          // unnoticed for as long as every row was short enough to fit in
+          // half; a two-team scramble row — `B&P 1st · D&D 2nd of 4` — clipped
+          // to `D&D 2nd o…` with a visible gap beside it. Reported 23 Sep 2026.
+          //
+          // Expanded gives the slot everything that is left; the Text paints
+          // from the start, so unused width still sits between the standing
+          // and the qualifier, which is what the paragraph above asks for.
           if (standingLabel.isNotEmpty) ...[
             Text(standingLabel, style: _labelStyle),
             const SizedBox(width: 5),
           ],
-          Flexible(
+          Expanded(
             child: Text.rich(
               standingSpans == null
                   ? TextSpan(text: standing)
@@ -198,7 +211,6 @@ class StandingRibbon extends StatelessWidget implements PreferredSizeWidget {
                   color: standingColor ?? Halved.muted),
             ),
           ),
-          const Spacer(),
           if (figureLabel.isNotEmpty) ...[
             Text(figureLabel, style: _labelStyle),
             const SizedBox(width: 5),

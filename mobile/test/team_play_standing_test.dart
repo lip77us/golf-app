@@ -112,8 +112,10 @@ void main() {
         pair('D & D', 2, 1, ntp: 0),
       ])!;
       expect(st.place, 'B&P 1st · D&D 2nd of 4');
-      // Both are on the same hole, so `thru` is one fact and is said once.
-      expect(st.score, 'thru 1');
+      // No figure. Each team's own block says `thru 1 · Net −1` in its header
+      // a few pixels below, and a third copy cost the row the margin that
+      // made it read as cramped.
+      expect(st.score, isEmpty);
     });
 
     test('the field is every team ENTERED, not the ones that have started',
@@ -135,8 +137,6 @@ void main() {
         pair('D & D', null, 0),
       ])!;
       expect(st.place, 'B&P 1st · D&D — of 4');
-      // Their hole counts differ for the moment between the two entries, so
-      // there is no one `thru` to state.
       expect(st.score, isEmpty);
     });
 
