@@ -26,7 +26,9 @@ import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/inline_score_picker.dart';
+import '../utils/triple_nassau_standing.dart';
 import '../widgets/round_chat_button.dart';
+import '../widgets/standing_ribbon.dart';
 import '../utils/play_order.dart';
 import '../utils/round_complete.dart';
 import '../widgets/combo_tee_chip.dart';
@@ -317,6 +319,37 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
 
   // ── Build ──────────────────────────────────────────────────────────────────
 
+  /// **Two matches at once, so both slots are spoken for.** The reader plays
+  /// each of the other two, and the confusion this game produces is knowing
+  /// you are two up and not remembering two up on WHOM — so each slot names
+  /// its opponent.
+  ///
+  /// `2 UP`, never `2 DN`: a direction word is relative to a reader, and here
+  /// the colour says who is ahead inside the same glyph that carries the
+  /// number. It is the LEADER's own colour, because on this screen each of the
+  /// three golfers has one — the lock-screen card made the same call for the
+  /// same reason.
+  StandingRibbon? _standingRibbon(RoundProvider rp) {
+    final round = rp.round;
+    if (round == null || !round.isCasual) return null;
+    final me = context.read<AuthProvider>().player?.id;
+    final st = tripleNassauStanding(rp.tripleNassauSummary, me,
+        hole: _selectedHole);
+    if (st == null) return null;
+    Color? tint(int? pid) => pid == null ? null : _colourFor(rp, pid);
+    return StandingRibbon(
+      kind: StandingKind.result,
+      standingLabel: st.first.label,
+      standing: st.first.value,
+      standingColor: tint(st.first.leaderId),
+      figureLabel: st.second?.label ?? '',
+      figure: st.second?.value ?? '',
+      figureColor: tint(st.second?.leaderId),
+      onOpenLeaderboard: () => Navigator.of(context)
+          .pushNamed('/leaderboard', arguments: round.id),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final rp   = context.watch<RoundProvider>();
@@ -346,9 +379,17 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
     final modeStr = rp.tripleNassauSummary == null
         ? '' : ' — ${_modeLabel(rp.tripleNassauSummary!)}';
 
+    final ribbon = _standingRibbon(rp);
+
     return Scaffold(
       appBar: GolfAppBar(
         title: 'Triple Nassau$modeStr',
+        // D2: the standing becomes the bar's second line, and the pill in it
+        // replaces the leaderboard ICON below.
+        bottom: ribbon,
+        titleStyle: ribbon == null
+            ? null
+            : const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.close),
@@ -378,13 +419,16 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
               ),
             ),
           if (rp.round != null) RoundChatButton(roundId: rp.round!.id),
-          IconButton(
-            tooltip: 'Leaderboard',
-            icon: const Icon(Icons.leaderboard_outlined),
-            onPressed: rp.round == null ? null
-                : () => Navigator.of(context).pushNamed(
-                    '/leaderboard', arguments: rp.round!.id),
-          ),
+          // The named pill in the ribbon is this, done properly — so the icon
+          // stands down wherever the ribbon draws.
+          if (ribbon == null)
+            IconButton(
+              tooltip: 'Leaderboard',
+              icon: const Icon(Icons.leaderboard_outlined),
+              onPressed: rp.round == null ? null
+                  : () => Navigator.of(context).pushNamed(
+                      '/leaderboard', arguments: rp.round!.id),
+            ),
         ],
       ),
       body: _buildBody(context, rp, isComplete),
@@ -600,8 +644,18 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
           (x) => x.player.id != leftOpp.player.id,
           orElse: () => leftOpp);
 
+      // The allowance against each opponent — the gap between two playing
+      // handicaps, which is what a stroke in this game IS. One pill per match
+      // the golfer receives in; the lower man of a pair gets none and shows
+      // none.
+      int getsVs(Membership opp) => mode == 'gross' ? 0
+          : ((m.playingHandicap - opp.playingHandicap) * netPct / 100)
+              .round().clamp(0, 99);
+
       final leftStrokes  = _pairStrokes(m, leftOpp, si, mode, netPct);
       final rightStrokes = _pairStrokes(m, rightOpp, si, mode, netPct);
+      final getsLeft  = getsVs(leftOpp);
+      final getsRight = getsVs(rightOpp);
       final colour = _colourFor(rp, pid);
       final active = isHot || isEditing;
 
@@ -616,15 +670,27 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
             ),
             ComboTeeChip(tee: m.comboTeeOnHole(holeData?.holeNumber ?? 0)),
           ]),
-          // The two `gets N` pills were here — a round-total allowance per
-          // opponent, coloured to say which. **Removed 22 Sep 2026.**
+          // **Back, 22 Sep 2026.** I took these out with the app-wide `gets N`
+          // sweep and was wrong to: that chip stated a ROUND-WIDE allocation
+          // beside dots stating the hole's, and the pair invited subtracting a
+          // stroke twice.
           //
-          // The dot columns either side of the score box already carry the
-          // same two facts in the same two colours, and carry the one that
-          // matters: the strokes on THIS hole. A golfer reading `gets 6` and
-          // one dot has been handed the arithmetic for subtracting a stroke he
-          // has already been given — and here he was being handed it twice, in
-          // two colours, on every row.
+          // **Triple Nassau has no round-wide allocation.** Every stroke in
+          // this game is the GAP between two playing handicaps, and a golfer
+          // gets a different one against each of his two opponents — which is
+          // the same reason Banker's chip survived the sweep. Without these
+          // the match allowances appeared nowhere on this screen; the dots say
+          // which HOLES, and nothing said how many.
+          if (getsLeft > 0 || getsRight > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Wrap(spacing: 6, runSpacing: 3, children: [
+                if (getsLeft > 0)
+                  _getsPill(getsLeft, _colourFor(rp, leftOpp.player.id)),
+                if (getsRight > 0)
+                  _getsPill(getsRight, _colourFor(rp, rightOpp.player.id)),
+              ]),
+            ),
         ])),
         // Left dots (vs lowest-index) · box · right dots (other match).
         _dotsCol(leftStrokes, _colourFor(rp, leftOpp.player.id)),
@@ -703,6 +769,27 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
   /// It cannot use `StrokeDotColumn` itself, which returns a `Positioned` for
   /// a Stack: these columns stand beside the box rather than over it, one per
   /// match, which is the whole reason this screen has two of them.
+  /// `gets N` — the allowance against ONE opponent, in that opponent's colour.
+  ///
+  /// **Not the `gets N` the sweep removed.** That one stated a round-wide
+  /// allocation beside dots stating the hole's. Triple Nassau has no
+  /// round-wide allocation: every stroke is the gap between two playing
+  /// handicaps and a golfer has a different one against each opponent, so this
+  /// is one end of exactly one match — Banker's case, and Banker's chip
+  /// survived the sweep for the same reason.
+  ///
+  /// The colour identifies the match, so no `v JS` is needed beside it.
+  Widget _getsPill(int n, Color c) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+        decoration: BoxDecoration(
+          color: c.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: c.withValues(alpha: 0.4)),
+        ),
+        child: Text('gets $n', style: TextStyle(
+            fontSize: 10, fontWeight: FontWeight.w700, color: c)),
+      );
+
   Widget _dotsCol(int n, Color c) {
     if (n <= 0) return const SizedBox(width: 10);
     return SizedBox(
