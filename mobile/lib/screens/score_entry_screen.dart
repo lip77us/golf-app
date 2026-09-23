@@ -31,6 +31,7 @@ import '../utils/sixes_standing.dart';
 import '../utils/stroke_play_standing.dart';
 import '../utils/points_531_standing.dart';
 import '../utils/fourball_standing.dart';
+import '../utils/match_play_standing.dart';
 import '../utils/skins_standing.dart';
 import '../utils/triple_cup_standing.dart';
 import '../utils/vegas_standing.dart';
@@ -1780,9 +1781,37 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         return _fourballRibbon(rp, me, leaderboard);
       case GameIds.tripleCup:
         return _tripleCupRibbon(rp, me, leaderboard);
+      case GameIds.matchPlay:
+        return _matchPlayRibbon(rp, me, leaderboard);
       default:
         return null;
     }
+  }
+
+  /// **It renders the ENGINE's line and writes nothing of its own.**
+  /// `_match_line` already produces the one-line state the board and the
+  /// bracket card both show, and produces it NEUTRALLY — naming the golfer who
+  /// is up rather than saying UP or DOWN at anybody. It also handles three
+  /// things a client-side margin could not: a halved semi that played on, a
+  /// back-nine match against an unresolved semi, and the close-out's `&M`
+  /// counted along the match's own nine.
+  ///
+  /// The phase takes the quiet slot, because `Semi 1` and `Final` is which of
+  /// the bracket's matches this is rather than news about it.
+  StandingRibbon? _matchPlayRibbon(
+      RoundProvider rp, int? me, VoidCallback onOpen) {
+    final standing = matchPlayStanding(rp.matchPlayData, me);
+    if (standing == null) return null;
+    return StandingRibbon(
+      kind: StandingKind.result,
+      standingLabel: standing.label,
+      standing: standing.standing,
+      // Grey. A bracket match is two golfers with no side to be on, so there
+      // is nothing here a colour could name — and the line already says who
+      // is up.
+      figure: '',
+      onOpenLeaderboard: onOpen,
+    );
   }
 
   /// **The cup is the headline, including `0–0`.** Triple Cup exists to
@@ -4967,20 +4996,11 @@ int _tcTeamOf(TripleCupMatch m, int playerId) => m.players
     .map((p) => p.teamNumber)
     .firstOrNull ?? 0;
 
-/// The bracket phase whose matches are live — round 2 once every round-1 match
-/// is done, round 1 until then.
-///
-/// The same rule the bracket card shows its matches by, so the card and the
-/// scorecard under it are never about different nines.
-List<Map<String, dynamic>> _bracketLiveMatches(Map<String, dynamic> data) {
-  final all = (data['matches'] as List? ?? const [])
-      .cast<Map<String, dynamic>>();
-  final r1 = all.where((m) => m['round'] == 1).toList();
-  final r2 = all.where((m) => m['round'] == 2).toList();
-  final done = r1.isEmpty ||
-      r1.every((m) => m['status'] == 'complete' || m['status'] == 'halved');
-  return (r2.isNotEmpty && done) ? r2 : r1;
-}
+/// The bracket phase whose matches are live — see
+/// `utils/match_play_standing.bracketLiveMatches`. The card, the scorecard
+/// under it and the standing row all ask this one function, so they are never
+/// about different nines.
+const _bracketLiveMatches = bracketLiveMatches;
 
 /// The four golfers' scores over the nine they share, merged from the two
 /// matches' own cards.
@@ -7527,13 +7547,10 @@ class _MatchPlayStatusCard extends StatelessWidget {
     this.roundId,
   });
 
-  List<Map<String, dynamic>> _matchesForRound(int round) =>
-      (data['matches'] as List? ?? [])
-          .map((m) => Map<String, dynamic>.from(m as Map))
-          .where((m) => (m['round'] as int) == round)
-          .toList();
+  // `_matchesForRound` went with the round-by-round layout — the card
+  // shows one phase now, and `bracketLiveMatches` picks it.
 
-  /// Human-readable one-liner for a single match (mirrors match_play_screen.dart).
+/// Human-readable one-liner for a single match (mirrors match_play_screen.dart).
   /// Uses short names so the status column fits inside the compact bottom
   /// cards on the score-entry screen ("Paul L wins 3&2" vs "Paul Lipkin
   /// wins 3&2" — the latter truncates).
@@ -7603,15 +7620,14 @@ class _MatchPlayStatusCard extends StatelessWidget {
     final theme  = Theme.of(context);
     final status = data['status'] as String? ?? 'pending';
     final winner = data['winner'] as String?;
-    final r1     = _matchesForRound(1);
-    final r2     = _matchesForRound(2);
-    // The back nine's matches take over once every semi has finished — not
-    // when the first one does, because the other is still the live match for
-    // two of the four golfers.
-    final showR2 = r2.isNotEmpty &&
-        (r1.isEmpty ||
-         r1.every((m) => (m['status'] as String?) == 'complete' ||
-                         (m['status'] as String?) == 'halved'));
+    // The phase being played. The back nine's matches take over once every
+    // semi has finished — not when the FIRST one does, because the other is
+    // still the live match for two of the four golfers.
+    //
+    // One definition, shared with the scorecard under this card and with the
+    // standing row above it, so the three are never about different nines.
+    final live   = bracketLiveMatches(data);
+    final showR2 = live.isNotEmpty && live.first['round'] == 2;
 
     // Pending → bracket setup; in-progress or complete → leaderboard so
     // the user lands on the rich bracket view (MatchPlayDetailView).
@@ -7668,7 +7684,7 @@ class _MatchPlayStatusCard extends StatelessWidget {
                     color: theme.colorScheme.onSurfaceVariant),
               ]),
               const SizedBox(height: 4),
-              for (final m in (showR2 ? r2 : r1))
+              for (final m in live)
                 _MatchRow(match: m, summary: _matchSummary(m), theme: theme),
             ],
           ),
