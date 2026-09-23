@@ -1,5 +1,16 @@
 /// screens/points_531_screen.dart
 ///
+/// **NOT REACHED — a Points 5-3-1 round plays through `/score-entry`.**
+/// Nothing in the app pushes `/points-531`: the setup screen sends the group
+/// to `/score-entry` whether the game is already configured or being started,
+/// and the round hub falls through to the same place once it is. Score entry
+/// carries its own copy of everything below, and that copy is the one to
+/// change. Found 22 Sep 2026 after the standing row was built here first and
+/// never drew.
+///
+/// Kept rather than deleted because deleting a screen is its own decision, but
+/// **do not read this file as the live one.**
+///
 /// Score-entry and live-standings screen for the Points 5-3-1 casual
 /// game.  Modeled on sixes_screen.dart but simplified: no teams, no
 /// segments, and no pink-ball.  Exactly three real players rank on
