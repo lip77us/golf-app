@@ -32,6 +32,7 @@ import '../utils/stroke_play_standing.dart';
 import '../utils/points_531_standing.dart';
 import '../utils/fourball_standing.dart';
 import '../utils/skins_standing.dart';
+import '../utils/triple_cup_standing.dart';
 import '../utils/vegas_standing.dart';
 import '../widgets/banker_entry_strip.dart';
 import '../widgets/standing_ribbon.dart';
@@ -1707,9 +1708,40 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         return _skinsRibbon(rp, me, leaderboard);
       case GameIds.fourball:
         return _fourballRibbon(rp, me, leaderboard);
+      case GameIds.tripleCup:
+        return _tripleCupRibbon(rp, me, leaderboard);
       default:
         return null;
     }
+  }
+
+  /// **The cup is the headline, including `0–0`.** Triple Cup exists to
+  /// produce a cup score, and the match in front of you is a way of earning a
+  /// point in it — a different question, and it gets the smaller slot. The
+  /// lock card ruled the same way, after an earlier pass swapped the two to
+  /// avoid showing `0–0`: a headline that means one thing before the first
+  /// point and another after is a slot nobody can learn.
+  ///
+  /// So the cup stays GREY and the reader's own match, in the figure, wears
+  /// its leader's colour. Both signed from his side would make one of them
+  /// lie.
+  StandingRibbon? _tripleCupRibbon(
+      RoundProvider rp, int? me, VoidCallback onOpen) {
+    final standing =
+        tripleCupStanding(rp.tripleCupSummary, me, hole: _selectedHole);
+    if (standing == null) return null;
+    final tc = rp.tripleCupSummary!;
+    return StandingRibbon(
+      kind: StandingKind.result,
+      standing: standing.standing,
+      figure: standing.figure,
+      figureColor: switch (standing.matchLeader) {
+        1 => tc.team1Color,
+        2 => tc.team2Color,
+        _ => null,
+      },
+      onOpenLeaderboard: onOpen,
+    );
   }
 
   /// **No names, because the rows below are already the two sides.** The
@@ -4768,6 +4800,71 @@ class _JunkDots extends StatelessWidget {
 // Game status section — summary cards for each active game
 // ===========================================================================
 
+/// The standard card's rows for a Triple Cup round, built from the summary's
+/// own per-match hole data rather than from a server `scorecard` block.
+///
+/// Triple Cup sends none, and it does not need to: every hole belongs to
+/// exactly one of the six matches, and that match already carries the hole's
+/// par, its stroke index and each player's gross and PROSPECTIVE strokes —
+/// the same numbers the score rows above read, so the two cannot disagree.
+List<Map<String, dynamic>> _tripleCupCardHoles(TripleCupSummary tc) {
+  final out = <Map<String, dynamic>>[];
+  for (final m in tc.matches) {
+    for (final h in m.holes) {
+      out.add({
+        'hole'        : h.hole,
+        'par'         : h.par,
+        'stroke_index': h.strokeIndex,
+        // No green winner cell. A Triple Cup hole is won by a SIDE, which is
+        // the rule Wolf's card follows and the reason the server sends
+        // `winner_id: null` for every team game.
+        'winner_id'   : null,
+        'scores'      : [
+          for (final sc in h.scores)
+            {
+              'player_id': sc.playerId,
+              // **Foursomes: the driver only.** One ball between two men, so
+              // the partner's cell stays blank — which is also what says
+              // whose turn the next shot is.
+              'gross'    : m.segment == 'foursomes' &&
+                           m.activePlayerId(
+                               _tcTeamOf(m, sc.playerId), h.hole) !=
+                               sc.playerId
+                  ? null
+                  : sc.gross,
+              'strokes'  : sc.strokes,
+            },
+        ],
+      });
+    }
+  }
+  out.sort((a, b) => (a['hole'] as int).compareTo(b['hole'] as int));
+  return out;
+}
+
+/// The roster, in the order the card draws its rows.
+List<Map<String, dynamic>> _tripleCupCardPlayers(TripleCupSummary tc) {
+  final seen = <int>{};
+  final out = <Map<String, dynamic>>[];
+  for (final m in tc.matches) {
+    for (final p in m.players) {
+      if (p.isPhantom || !seen.add(p.playerId)) continue;
+      out.add({
+        'player_id' : p.playerId,
+        'name'      : p.name,
+        'short_name': p.shortName,
+        'team'      : p.teamNumber,
+      });
+    }
+  }
+  return out;
+}
+
+int _tcTeamOf(TripleCupMatch m, int playerId) => m.players
+    .where((p) => p.playerId == playerId)
+    .map((p) => p.teamNumber)
+    .firstOrNull ?? 0;
+
 class _GameStatusSection extends StatelessWidget {
   final List<String>          games;
   final NassauSummary?        nassau;
@@ -4940,12 +5037,26 @@ class _GameStatusSection extends StatelessWidget {
           const SizedBox(height: 12),
         ],
 
-        // Triple Cup (One Round Ryder Cup) match grid
+        // Triple Cup — the app's standard scorecard.
+        //
+        // **`_TripleCupMatchGrid` came off 22 Sep 2026**: it carried the cup
+        // score and every match's, both of which the standing row now states
+        // for the hole in play, with the rest on the leaderboard's Cup Detail.
+        //
+        // **On a FOURSOMES hole only the driver's cell carries a score.**
+        // Alternate shot is one ball between two men, so a gross in both
+        // partners' cells would be the same stroke written twice — and the
+        // blank is the useful half of it, because it says whose turn the next
+        // one is. `activePlayerId` is the engine's own alternation, off the
+        // team's first-tee player, so the card and the dimmed score row above
+        // it cannot disagree about whose shot it is.
         if (games.contains('triple_cup')) ...[
           if (tripleCupSummary != null)
-            _TripleCupMatchGrid(
-              summary:     tripleCupSummary!,
-              currentHole: currentHole,
+            HoleGridScorecard(
+              holes:        _tripleCupCardHoles(tripleCupSummary!),
+              participants: _tripleCupCardPlayers(tripleCupSummary!),
+              legend:       null,
+              holesInPlay:  holesInPlay,
             )
           else if (loadingTripleCup)
             const Center(
@@ -7083,248 +7194,15 @@ String _sixesInitials(String name) {
 // Triple Cup (One Round Ryder Cup) match grid — mirrors _SixesMatchGrid
 // ---------------------------------------------------------------------------
 
-class _TripleCupMatchGrid extends StatelessWidget {
-  final TripleCupSummary summary;
-  final int              currentHole;
+// `_TripleCupMatchGrid` was here — `Cup 0 – 0 of 4` over a row per match
+// with its own score. **Removed 22 Sep 2026.**
+//
+// The standing row states the cup and the reader's own match; the other
+// five read on the leaderboard's Cup Detail, which carries each with its
+// sides, its strokes-off lines and its own six-hole card.
 
-  const _TripleCupMatchGrid({
-    required this.summary,
-    required this.currentHole,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final matches = summary.matches;
-    if (matches.isEmpty) return const SizedBox.shrink();
-    final t1Color = summary.team1Color;
-    final t2Color = summary.team2Color;
-
-    // Progressive reveal — same pattern as Sixes: the next match shows
-    // only once the previous one is done.  Singles 1 and Singles 2
-    // share holes 13–18 so they reveal together.
-    //
-    // 2-player TC is a Nassau (F9 + B9 + Overall) where Overall spans
-    // 1-18 and is genuinely "live" from hole 1.  Skip the reveal
-    // gating in that case — show all three cards from the start so
-    // the user can track Overall progress alongside F9 / B9.
-    final List<TripleCupMatch> visible;
-    if (summary.groupSize == 2) {
-      visible = List<TripleCupMatch>.from(matches);
-    } else {
-      visible = <TripleCupMatch>[];
-      for (var i = 0; i < matches.length; i++) {
-        final m = matches[i];
-        visible.add(m);
-        final done = m.status == 'complete' || m.status == 'halved';
-        // If this match isn't done AND the next match doesn't share
-        // the same hole range, stop revealing — wait for the current
-        // one to finish.
-        if (!done) {
-          final shareNext = i + 1 < matches.length &&
-              matches[i + 1].startHole == m.startHole &&
-              matches[i + 1].endHole   == m.endHole;
-          if (!shareNext) break;
-        }
-      }
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-          child: Row(children: [
-            Text('Cup ',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary)),
-            Text(_fmt(summary.team1Points),
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: t1Color)),
-            Text(' – ',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            Text(_fmt(summary.team2Points),
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: t2Color)),
-            Text(' of ${summary.pointsAvailable}',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          ]),
-        ),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: visible.map((m) {
-              final isCurrent = currentHole >= m.startHole &&
-                  currentHole <= m.endHole;
-              return _TripleCupMatchCard(
-                match:     m,
-                isCurrent: isCurrent,
-                t1Color:   t1Color,
-                t2Color:   t2Color,
-              );
-            }).toList(),
-          ),
-        ),
-      ],
-    );
-  }
-
-  static String _fmt(double p) =>
-      p == p.truncateToDouble() ? p.toStringAsFixed(0) : p.toStringAsFixed(1);
-}
-
-class _TripleCupMatchCard extends StatelessWidget {
-  final TripleCupMatch match;
-  final bool   isCurrent;
-  final Color  t1Color;
-  final Color  t2Color;
-
-  const _TripleCupMatchCard({
-    required this.match,
-    required this.isCurrent,
-    required this.t1Color,
-    required this.t2Color,
-  });
-
-  Color _statusColor(BuildContext ctx) {
-    switch (match.result) {
-      case 'team1':  return t1Color;
-      case 'team2':  return t2Color;
-      case 'halved': return Colors.grey.shade700;
-    }
-    // In progress: tint by current leader so "1 UP thru 3" reads in
-    // the leading team's color.  AS thru N stays neutral.  Use the last
-    // *played* hole — the backend emits unplayed segment holes up front whose
-    // margin is 0, so holes.last read all-square and left every live match grey.
-    if (match.status == 'in_progress') {
-      final played = match.holes.where((h) => h.winner != null).toList();
-      final margin = played.isEmpty ? 0 : played.last.margin;
-      if (margin > 0) return t1Color;
-      if (margin < 0) return t2Color;
-      return Theme.of(ctx).colorScheme.onSurfaceVariant;
-    }
-    return Theme.of(ctx).colorScheme.onSurfaceVariant;
-  }
-
-  String _statusLabel() {
-    final raw = match.statusDisplay;
-    return raw == '—' ? 'Pending' : raw;
-  }
-
-  String _segmentTag() {
-    switch (match.segment) {
-      case 'fourball':  return 'Four Ball';
-      case 'foursomes': return 'Alt-Shot';
-      default:
-        // Singles: differentiate at-a-glance using the backend's match
-        // label.  4-player TC has "Singles 1"/"Singles 2"; 2-player TC
-        // Nassau has "Front 9"/"Back 9"/"Overall".  Empty/legacy labels
-        // fall back to plain "Singles" so older rounds still read OK.
-        final lbl = match.label.trim();
-        return lbl.isEmpty ? 'Singles' : lbl;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme      = Theme.of(context);
-    final lastPlayed = match.holes.isNotEmpty ? match.holes.last.hole : null;
-    final decided    = match.status == 'complete' || match.status == 'halved';
-    final displayEnd = (decided && lastPlayed != null && lastPlayed < match.endHole)
-        ? lastPlayed
-        : match.endHole;
-
-    return Card(
-      margin: const EdgeInsets.only(right: 8),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(
-          color: isCurrent
-              ? theme.colorScheme.primary
-              : theme.colorScheme.outlineVariant,
-          width: isCurrent ? 2 : 1,
-        ),
-      ),
-      child: Container(
-        width: 120,
-        padding: const EdgeInsets.all(10),
-        // Compact 3-row layout: segment / match score (focal) / hole range.
-        // Team identity comes through via the status color — red/blue (or
-        // cup-team colors) tints the score line.  Player-level detail
-        // (team rosters, SO) lives on the player rows above and on the
-        // leaderboard.
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _segmentTag(),
-              style: theme.textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.tertiary),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              _statusLabel(),
-              textAlign: TextAlign.center,
-              style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: _statusColor(context)),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Holes ${match.startHole}–$displayEnd',
-              style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant),
-            ),
-            // Singles segment has two simultaneous 1v1 matches — show
-            // the pairing so the user can tell which match this card
-            // belongs to.  Fourball / Foursomes share the same 2v2
-            // partnership across the foursome, so the pairing is
-            // already obvious from the colored player rows above.
-            if (match.segment == 'singles') ...[
-              const SizedBox(height: 4),
-              RichText(
-                textAlign: TextAlign.center,
-                text: TextSpan(
-                  style: theme.textTheme.bodySmall,
-                  children: [
-                    TextSpan(
-                      text: match.team1.hasPlayers
-                          ? match.team1.shorts.join('/')
-                          : '??',
-                      style: TextStyle(
-                          color: t1Color, fontWeight: FontWeight.w600),
-                    ),
-                    TextSpan(
-                      text: '  v.  ',
-                      style: TextStyle(
-                          color: theme.colorScheme.onSurfaceVariant),
-                    ),
-                    TextSpan(
-                      text: match.team2.hasPlayers
-                          ? match.team2.shorts.join('/')
-                          : '??',
-                      style: TextStyle(
-                          color: t2Color, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
+// `_TripleCupMatchCard` went with the grid — it drew one match's row and
+// had no other reader.
 
 // ---------------------------------------------------------------------------
 // Match Play status card (compact bracket snapshot for score entry screen)
