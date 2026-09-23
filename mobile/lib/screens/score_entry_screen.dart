@@ -1684,6 +1684,76 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// Sixes is a good first one because it is the awkward case: the pairings
   /// rotate every six holes, so "your side" is not a fixed thing and a
   /// standing read off team 1 would be wrong two segments in three.
+  /// The match-ups live on this hole — one line each, names and colours only.
+  ///
+  /// **Singles is the case that needs it.** Two run at once over the same six
+  /// holes, so four tinted rows leave a golfer knowing he is blue without
+  /// knowing which orange he is playing. Fourball and foursomes have one match
+  /// on the hole and it still earns its line: the side a man is partnered with
+  /// is the thing alternate shot is about.
+  ///
+  /// No margin and no cup here — the standing row has both, and putting them
+  /// back would rebuild the grid this replaced.
+  Widget _tcPairings(BuildContext ctx, TripleCupSummary tc) {
+    final theme = Theme.of(ctx);
+    final live = tc.matches
+        .where((m) => _selectedHole >= m.startHole && _selectedHole <= m.endHole)
+        .toList();
+    if (live.isEmpty) return const SizedBox.shrink();
+
+    String side(TripleCupMatch m, int team) => m.players
+        .where((p) => p.teamNumber == team && !p.isPhantom)
+        .map((p) => p.shortName)
+        .join(' & ');
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final m in live)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1),
+              child: Row(children: [
+                // The format, in the same grey the standing row gives it —
+                // and the match's own label, so `Singles 1` and `Singles 2`
+                // are told apart here as they are there.
+                SizedBox(
+                  width: 68,
+                  child: Text(segmentLabel(m),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurfaceVariant)),
+                ),
+                Flexible(
+                  child: Text(side(m, 1),
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: tc.team1Color)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  child: Text('v',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                ),
+                Flexible(
+                  child: Text(side(m, 2),
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: tc.team2Color)),
+                ),
+              ]),
+            ),
+        ],
+      ),
+    );
+  }
+
   StandingRibbon? _standingRibbon(RoundProvider rp, List<String> games) {
     final round = rp.round;
     if (round == null || !round.isCasual) return null;
@@ -2568,6 +2638,19 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               // Irish Rumble balls-counted banner — at the top, matching the
               // Pink Ball screen (was previously a footer strip).
               if (games.contains('irish_rumble')) _irBallsBanner(ctx, rp),
+              // **Who is playing whom on this hole.**
+              //
+              // Four rows tinted blue and orange say which SIDE a golfer is
+              // on; on a singles hole they do not say which blue plays which
+              // orange, and there are two matches running. Reported 22 Sep
+              // 2026, after the match grid that used to carry the pairings was
+              // taken out for carrying the scores with them.
+              //
+              // So this is the pairings alone: names and colours, no margins
+              // and no cup. It sits ABOVE the score card because it is
+              // something a golfer needs before he enters a number, not after.
+              if (games.contains('triple_cup') && rp.tripleCupSummary != null)
+                _tcPairings(ctx, rp.tripleCupSummary!),
               // Active hole score card
               _HoleScoreCard(
                 bankerSummary: resolvePrimary(
