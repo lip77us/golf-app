@@ -526,12 +526,18 @@ class _BankerScreenState extends State<BankerScreen> {
                           fontSize: 10, fontWeight: FontWeight.w700,
                           letterSpacing: 0.4, color: _gold)),
                 ),
-                // His handicap, on his row only. Every opponent's strokes are
-                // the gap between this number and his own, so with it here the
-                // three differentials can be checked without leaving the
-                // screen — and the opponents' rows stay uncluttered, since
-                // each already carries the one stroke that applies to him.
-                _getsChip(h.bankerHandicap),
+                // The banker's own `gets N` was here. **Removed 22 Sep 2026.**
+                //
+                // It was the input to an arithmetic the screen already
+                // finishes: each bet line below states that match's stroke
+                // outright, beside the opponent's own handicap. So this
+                // number only bought the ability to recompute an answer that
+                // is already on the row — and it sat on the one row where a
+                // handicap does not define a single match, because the banker
+                // holds a different relationship in each of the three.
+                //
+                // The opponents' chips stay: there the number IS one end of
+                // the one match that applies to that row.
               ]),
               const SizedBox(height: 5),
               if (h.bankerGross != null)
@@ -689,11 +695,18 @@ class _BankerScreenState extends State<BankerScreen> {
     );
   }
 
-  /// "gets 17" — the playing handicap, on every one of the four rows.
+  /// "gets 17" — the playing handicap, on an OPPONENT's row.
   ///
-  /// The strokes in each match are the gap between two of these, so the whole
-  /// hole's handicap arithmetic can be checked on one screen without trusting
-  /// the app to have done it right.
+  /// It survives here, where every other screen's `gets N` came off, because
+  /// it is not the same chip: elsewhere it stated a round-wide allocation
+  /// beside dots that stated the hole's, and the pair invited subtracting a
+  /// stroke twice. Banker has no round-wide allocation to state — every
+  /// stroke in the game is the GAP between two of these numbers — and this
+  /// row is one end of exactly one match.
+  ///
+  /// It came off the BANKER's row on 22 Sep 2026, which was the one row where
+  /// that is not true: he holds a different relationship in each of the three
+  /// bets, and each of those rows already states its own stroke.
   Widget _getsChip(int? hcp) {
     if (hcp == null) return const SizedBox.shrink();
     return Container(

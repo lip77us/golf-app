@@ -2595,6 +2595,24 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               if (resolvePrimary(rp.round?.primaryGame, games) ==
                       GameIds.banker &&
                   rp.bankerSummary != null) ...[
+                // **The card, ABOVE the bets.** Banker splits a hole across
+                // two screens, and this is the one where the numbers are
+                // called; the bets below are what those numbers are worth, so
+                // the scores they were drawn from belong first. A reader going
+                // the other way has to scroll back up to check a stake he has
+                // just been handed.
+                //
+                // Same shared grid, same gold banker cells and stroke plan the
+                // Banker screen draws — one implementation is what keeps the
+                // two halves of the hole agreeing.
+                if (rp.bankerSummary!.grid.isNotEmpty) ...[
+                  HoleGridScorecard(
+                    holes:        rp.bankerSummary!.grid,
+                    participants: rp.bankerSummary!.gridPlayers,
+                    legend:       null,
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 BankerEntryStrip(
                   summary: rp.bankerSummary!,
                   hole: _selectedHole,
