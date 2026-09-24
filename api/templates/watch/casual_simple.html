@@ -43,7 +43,7 @@
         {% for r in g.rows %}
           <div class="p531-row">
             <span class="name">{{ r.name }}{% if r.phcp is not None %} <span class="phcp-inline">({{ r.phcp }})</span>{% endif %}</span>
-            <span class="pts">{{ r.figure|default:0 }} {% if r.figure == 1 %}{{ spec.unit_one }}{% else %}{{ spec.unit }}{% endif %}</span>
+            <span class="pts">{{ r.figure_text }}</span>
             <span class="delta {% if r.money > 0 %}up{% elif r.money < 0 %}down{% endif %}">
               {% if r.money > 0 %}+${{ r.money|floatformat:"-2" }}{% elif r.money < 0 %}−${{ r.money|floatformat:"-2"|cut:"-" }}{% else %}—{% endif %}
             </span>

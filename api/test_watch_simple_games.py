@@ -174,3 +174,65 @@ class WatchPageTests(TestCase):
         make_foursome(rnd, [('Gus', 4), ('Hal', 9)], tee=tee)
         body = self.client.get(f'/watch/{rnd.watch_token}/').content.decode()
         self.assertNotIn('view=rabbit', body)
+
+
+class EveryLiveGameHasATabTests(TestCase):
+    """**The gap this work closed, stated as a rule.**
+
+    Ten live games rendered nothing on a watch page. The page is what the
+    share card and the invite card both point at, so a game without one is a
+    link that opens on somebody else's round.
+
+    Asserted against the dispatch table rather than by opening ten rounds:
+    what went wrong was that nobody had written the renderer at all, and a
+    missing key is exactly what that looks like.
+    """
+
+    def test_every_casual_game_the_app_can_start_has_a_view(self):
+        from api.watch_views import _VIEW_DISPATCH
+        # The slug each game uses in `Round.active_games`, mapped to the
+        # `?view=` key that draws it. A game added to the app without a watch
+        # page fails here.
+        expected = {
+            'skins': 'skins', 'multi_skins': 'multi_skins',
+            'stableford': 'stableford', 'points_531': 'points_531',
+            'nassau': 'nassau', 'triple_cup': 'triple_cup', 'wolf': 'wolf',
+            'vegas': 'vegas', 'match_play': 'match_play', 'sixes': 'sixes',
+            'pink_ball': 'red_ball', 'irish_rumble': 'irish_rumble',
+            'low_net_round': 'low_net',
+            # Added by this work.
+            'survivor': 'survivor', 'rabbit': 'rabbit', 'honors': 'honors',
+            'spots': 'spots', 'banker': 'banker',
+            'fourball': 'fourball', 'triple_nassau': 'triple_nassau',
+            'better_ball': 'better_ball', 'sequoya_threes': 'sequoya',
+            'quota_nassau': 'quota_nassau',
+        }
+        for game, view in expected.items():
+            with self.subTest(game=game):
+                self.assertIn(view, _VIEW_DISPATCH,
+                              f'{game} has no watch page')
+
+    def test_foursome_play_has_one_too(self):
+        """It is a tournament shape rather than a round game, so it is keyed
+        off the config and not off `active_games`."""
+        from api.watch_views import _VIEW_DISPATCH
+        self.assertIn('team_play', _VIEW_DISPATCH)
+
+
+class MoneyFormattingTests(TestCase):
+    def test_a_negative_puts_the_sign_in_front_of_the_dollar(self):
+        """`f'${v:g}'` prints `$-40`, which reads as a typo."""
+        from api.watch_views import _signed_money
+        self.assertEqual(_signed_money(-40), '−$40')
+        self.assertEqual(_signed_money(40), '$40')
+        self.assertEqual(_signed_money(0), '$0')
+
+    def test_the_figure_takes_a_singular_and_tolerates_no_unit(self):
+        from api.watch_views import _figure_text
+        spec = {'unit': 'rabbits', 'unit_one': 'rabbit'}
+        self.assertEqual(_figure_text(3, spec), '3 rabbits')
+        self.assertEqual(_figure_text(1, spec), '1 rabbit')
+        self.assertEqual(_figure_text(0, spec), '0 rabbits')
+        # A record label has no unit at all.
+        self.assertEqual(_figure_text('3-2-1', {'unit': ''}), '3-2-1')
+        self.assertEqual(_figure_text(None, spec), '')

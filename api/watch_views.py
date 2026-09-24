@@ -995,6 +995,44 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
             'url': f'{base}?view=sixes',
             'active': current == 'sixes',
         })
+    if _has_casual_fourball(round_obj):
+        tabs.append({
+            'key': 'fourball', 'label': 'Fourball',
+            'url': f'{base}?view=fourball', 'active': current == 'fourball',
+        })
+    if _has_casual_triple_nassau(round_obj):
+        tabs.append({
+            'key': 'triple_nassau', 'label': 'Triple Nassau',
+            'url': f'{base}?view=triple_nassau',
+            'active': current == 'triple_nassau',
+        })
+    if _has_casual_better_ball(round_obj):
+        tabs.append({
+            'key': 'better_ball', 'label': 'Better Ball',
+            'url': f'{base}?view=better_ball',
+            'active': current == 'better_ball',
+        })
+    if _has_casual_quota_nassau(round_obj):
+        tabs.append({
+            'key': 'quota_nassau', 'label': 'Quota Nassau',
+            'url': f'{base}?view=quota_nassau',
+            'active': current == 'quota_nassau',
+        })
+    if _has_casual_sequoya(round_obj):
+        tabs.append({
+            'key': 'sequoya', 'label': 'Sequoya 3s',
+            'url': f'{base}?view=sequoya', 'active': current == 'sequoya',
+        })
+    if _has_casual_banker(round_obj):
+        tabs.append({
+            'key': 'banker', 'label': 'Banker',
+            'url': f'{base}?view=banker', 'active': current == 'banker',
+        })
+    if _has_team_play(round_obj):
+        tabs.append({
+            'key': 'team_play', 'label': 'Foursome Play',
+            'url': f'{base}?view=team_play', 'active': current == 'team_play',
+        })
     # The per-player money games, in the table's own order so the tab strip
     # does not reorder itself between rounds.
     for _k, _spec in _SIMPLE_GAME_SPECS.items():
@@ -1668,7 +1706,14 @@ def _nassau_watch_card(s: dict) -> dict:
         card['leader'] = _leader_from_margin(margin, result)
         leader_name = t1 if margin > 0 else (t2 if margin < 0 else '')
         if result is not None:
-            left = 18 - thru
+            # **The `M` in `3&2` ships from the SERVER.** It is holes left in
+            # the match's own window along the group's play order, and this
+            # was `18 - thru` — which off a shotgun printed `3&11` for a match
+            # that finished on the last hole the group played. The engine
+            # already carries it.
+            left = ov.get('decided_remaining')
+            if left is None:
+                left = 0
             if margin == 0:
                 card['status'] = 'Halved'
             elif left > 0:
@@ -1934,10 +1979,15 @@ def _simple_group_card(fs, spec) -> dict:
     rows = []
     for p in (summary.get('players') or []):
         rows.append({
-            'name'  : p.get('name') or p.get('short_name') or '',
-            'phcp'  : p.get('phcp_in_play'),
-            'figure': p.get(spec['figure']),
-            'money' : _as_float(p.get(spec['money'])),
+            'name'       : p.get('name') or p.get('short_name') or '',
+            'phcp'       : p.get('phcp_in_play'),
+            # **Formatted here, not in the template.** The singular is a rule
+            # (`1 rabbit`, not `1 rabbits`) and the games that joined later
+            # carry a record like `3-2-1` with no unit at all. Django can
+            # express neither without a tag per case, and a rule written in
+            # markup cannot be tested.
+            'figure_text': _figure_text(p.get(spec['figure']), spec),
+            'money'      : _as_float(p.get(spec['money'])),
         })
     return {
         'group_number': fs.group_number,
@@ -1945,6 +1995,32 @@ def _simple_group_card(fs, spec) -> dict:
         'summary'     : summary,
         'rows'        : rows,
     }
+
+
+def _signed_money(v: float) -> str:
+    """`$40`, `−$40`, `$0` — the sign in FRONT of the dollar, and U+2212.
+
+    `f'${v:g}'` on a negative prints `$-40`, which reads as a typo.
+    """
+    if v < 0:
+        return f'−${abs(v):g}'
+    return f'${v:g}'
+
+
+def _figure_text(value, spec) -> str:
+    """`3 rabbits`, `1 rabbit`, `3-2-1`, or nothing at all.
+
+    A spec with no `unit` prints the value alone — that is the shape a record
+    label takes, and Banker's, where the money IS the figure and a second
+    column would say it twice.
+    """
+    if value is None or value == '':
+        return ''
+    unit = spec.get('unit') or ''
+    if not unit:
+        return str(value)
+    one = spec.get('unit_one') or unit
+    return f'{value} {one if value == 1 else unit}'
 
 
 def _as_float(v):
@@ -1987,6 +2063,356 @@ def _has_simple_game(round_obj, key: str) -> bool:
     return _SIMPLE_GAME_SPECS[key]['game'] in (round_obj.active_games or [])
 
 
+# ---------------------------------------------------------------------------
+# Match-shaped games — Triple Nassau, Fourball
+# ---------------------------------------------------------------------------
+#
+# Both reduce to the card `casual_nassau.html` already draws: two sides, where
+# the match stands, and the money. Triple Nassau's summary literally carries
+# three Nassau blocks, so it hands them straight to `_nassau_watch_card`;
+# Fourball is one match with teams and a result label, so it is mapped once
+# here rather than given a template of its own.
+
+def _render_casual_triple_nassau(request, round_obj, token: str, tabs: list):
+    """Three cards, one per pairing — everybody plays everybody.
+
+    **The pairing IS the card header**, so there is no group pill to add: the
+    template already leads with `Paul vs Jim`, which is exactly what a watcher
+    needs to tell three simultaneous matches apart. This is the confusion the
+    game's own lock-screen card was built to remove, one surface over.
+    """
+    from services.triple_nassau import triple_nassau_summary
+    foursomes = list(
+        round_obj.foursomes
+        .prefetch_related('memberships__player')
+        .order_by('group_number')
+    )
+    groups = []
+    for fs in foursomes:
+        summary = triple_nassau_summary(fs)
+        if not summary:
+            continue
+        for m in (summary.get('matches') or []):
+            inner = m.get('match')
+            if not inner:
+                continue
+            groups.append({
+                'group_number': fs.group_number,
+                'card':         _nassau_watch_card(inner),
+            })
+    return render(request, 'watch/casual_nassau.html', {
+        'thru':         _round_thru(round_obj),
+        'round':        round_obj,
+        'course_name':  normalize_course_name(round_obj.course.name),
+        'tournament':   round_obj.tournament,
+        'is_match':     False,
+        'game_label':   'Triple Nassau',
+        'groups':       groups,
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
+
+def _fourball_watch_card(s: dict) -> dict:
+    """A Fourball match in the shared card's own vocabulary.
+
+    Fourball is one 18-hole match between two fixed pairs, so it is the
+    `is_match` shape — one status line, no nines. The engine already writes
+    the close-out (`result_label`) and the holes left in play order
+    (`holes_to_play`), so neither is re-derived here.
+    """
+    def names(team):
+        t = s.get(team) or {}
+        return ' & '.join(t.get('players') or []) or team
+    t1, t2 = names('team1'), names('team2')
+    ov     = s.get('overall') or {}
+    up     = ov.get('holes_up') or 0
+    leader = ov.get('leader')
+    thru   = len([h for h in (s.get('holes') or []) if h.get('winner')])
+    bet    = float((s.get('money') or {}).get('bet_amount') or 0)
+
+    leader_name = t1 if leader == 'team1' else (t2 if leader == 'team2' else '')
+    if s.get('status') in ('complete', 'halved'):
+        label = s.get('result_label') or ''
+        status = ('Halved' if s.get('result') == 'halved'
+                  else f'{leader_name} wins {label}'.strip())
+    elif up == 0:
+        status = 'All Square'
+    else:
+        status = f'{leader_name} {abs(up)} UP'
+
+    card = {'t1': t1, 't2': t2, 'thru': thru, 'is_match': True,
+            'status': status, 'segments': [],
+            'leader': 't1' if leader == 'team1' else (
+                't2' if leader == 'team2' else ''),
+            'money': ''}
+    if bet and leader_name:
+        card['money'] = f'{leader_name}  +${bet:g}'
+    elif s.get('result') == 'halved':
+        card['money'] = 'Halved — no money'
+    return card
+
+
+def _render_casual_fourball(request, round_obj, token: str, tabs: list):
+    from services.fourball import fourball_summary
+    foursomes = list(
+        round_obj.foursomes
+        .prefetch_related('memberships__player')
+        .order_by('group_number')
+    )
+    groups = []
+    for fs in foursomes:
+        s = fourball_summary(fs)
+        if not s:
+            continue
+        groups.append({
+            'group_number': fs.group_number,
+            'card':         _fourball_watch_card(s),
+        })
+    return render(request, 'watch/casual_nassau.html', {
+        'thru':         _round_thru(round_obj),
+        'round':        round_obj,
+        'course_name':  normalize_course_name(round_obj.course.name),
+        'tournament':   round_obj.tournament,
+        'is_match':     True,
+        'game_label':   'Fourball',
+        'groups':       groups,
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
+
+def _render_casual_better_ball(request, round_obj, token: str, tabs: list):
+    """Better Ball is Irish Rumble's engine with the ball count held still,
+    and its summary carries the same four keys that page reads — `overall`,
+    `pool`, `entry_fee`, `net_percent`. So it is the same template, with the
+    TD's own name for the game in the title."""
+    from services.better_ball import better_ball_summary
+    summary = better_ball_summary(round_obj)
+    return render(request, 'watch/casual_irish_rumble.html', {
+        'thru':         _round_thru(round_obj),
+        'round':        round_obj,
+        'course_name':  normalize_course_name(round_obj.course.name),
+        'tournament':   round_obj.tournament,
+        'summary':      summary,
+        'game_label':   (summary or {}).get('name') or 'Better Ball',
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
+
+def _has_casual_triple_nassau(round_obj) -> bool:
+    return 'triple_nassau' in (round_obj.active_games or [])
+
+
+def _has_casual_fourball(round_obj) -> bool:
+    return 'fourball' in (round_obj.active_games or [])
+
+
+def _has_casual_better_ball(round_obj) -> bool:
+    return 'better_ball' in (round_obj.active_games or [])
+
+
+# ---------------------------------------------------------------------------
+# The four that needed a renderer of their own
+# ---------------------------------------------------------------------------
+#
+# All four draw through `casual_simple.html` — a row per competitor, a figure
+# and the money — but none could join `_SIMPLE_GAME_SPECS`, and for reasons
+# worth stating rather than working around:
+#
+#   * **Sequoya 3s** and **Quota Nassau** are set up with a PAIRING, so their
+#     `setup_*` takes an argument the table's convention cannot supply.
+#   * **Banker** has no per-player count at all — the money IS the figure.
+#   * **Foursome Play** scores a TEAM, and its standings are the tournament's
+#     rather than the round's.
+
+def _render_casual_sequoya(request, round_obj, token: str, tabs: list):
+    """Six three-hole matches, partners rotating — so the row is a RECORD.
+
+    `record_label` counts every bet including presses, which is the tally
+    that reconciles with the money: a golfer 2-1 up and $0 richer reads as an
+    arithmetic error, and it is the presses that explain it.
+    """
+    spec = {'label': 'Sequoya 3s', 'unit': '', 'unit_one': '',
+            'blurb': 'Six three-hole matches, partners rotating every third.'}
+    foursomes = list(
+        round_obj.foursomes.prefetch_related('memberships__player')
+        .order_by('group_number'))
+    from services.sequoya_threes import sequoya_threes_summary
+    groups = []
+    for fs in foursomes:
+        summary = sequoya_threes_summary(fs)
+        if not summary:
+            continue
+        groups.append({
+            'group_number': fs.group_number,
+            'summary'     : summary,
+            'rows'        : [{
+                'name'       : p.get('name'),
+                'phcp'       : None,
+                'figure_text': p.get('record_label') or '',
+                'money'      : _as_float(p.get('money')),
+            } for p in (summary.get('players') or [])],
+        })
+    return _simple_render(request, round_obj, token, tabs, spec, groups)
+
+
+def _render_casual_banker(request, round_obj, token: str, tabs: list):
+    """**The money IS the figure**, so the middle column carries what a
+    watcher cannot work out from it: how the golfer got there. Banking and
+    betting are the two halves of Banker and they move independently — a man
+    can be up as banker and down against the other three on the same day."""
+    spec = {'label': 'Banker', 'unit': '', 'unit_one': '',
+            'blurb': 'One golfer banks the hole; the other three take him on.'}
+    from services.banker import banker_summary
+    groups = []
+    for fs in round_obj.foursomes.prefetch_related(
+            'memberships__player').order_by('group_number'):
+        summary = banker_summary(fs)
+        if not summary:
+            continue
+        rows = []
+        for p in (summary.get('players') or []):
+            bank = _as_float(p.get('banking'))
+            bet  = _as_float(p.get('betting'))
+            rows.append({
+                'name'       : p.get('name') or p.get('short_name'),
+                'phcp'       : p.get('playing_handicap'),
+                'figure_text': (f'bank {_signed_money(bank)} · '
+                                f'bets {_signed_money(bet)}'),
+                'money'      : _as_float(p.get('total')),
+            })
+        groups.append({'group_number': fs.group_number,
+                       'summary': summary, 'rows': rows})
+    return _simple_render(request, round_obj, token, tabs, spec, groups)
+
+
+def _render_casual_quota_nassau(request, round_obj, token: str, tabs: list):
+    """Quota Nassau is a Nassau whose margin is in QUOTA POINTS, so it draws
+    the match card and says so — `+3 pts` rather than `3 UP`, because a hole
+    is not the unit here and a margin printed in holes would be wrong."""
+    from services.quota_nassau import quota_nassau_summary
+    groups = []
+    for fs in round_obj.foursomes.prefetch_related(
+            'memberships__player').order_by('group_number'):
+        summary = quota_nassau_summary(fs)
+        if not summary:
+            continue
+        for m in (summary.get('matches') or []):
+            groups.append({
+                'group_number': fs.group_number,
+                'card'        : _quota_watch_card(m),
+            })
+    return render(request, 'watch/casual_nassau.html', {
+        'thru':         _round_thru(round_obj),
+        'round':        round_obj,
+        'course_name':  normalize_course_name(round_obj.course.name),
+        'tournament':   round_obj.tournament,
+        'is_match':     False,
+        'game_label':   'Quota Nassau',
+        'groups':       groups,
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
+
+def _quota_watch_card(m: dict) -> dict:
+    p1 = m.get('player1') or {}
+    p2 = m.get('player2') or {}
+    n1 = p1.get('name') or p1.get('short_name') or 'Player 1'
+    n2 = p2.get('name') or p2.get('short_name') or 'Player 2'
+
+    def seg(label, d):
+        d = d or {}
+        margin = d.get('margin') or 0
+        result = d.get('result')
+        if result is None and not margin:
+            return {'label': label, 'text': 'All square', 'leader': ''}
+        leader = n1 if margin > 0 else n2
+        who = 't1' if margin > 0 else ('t2' if margin < 0 else '')
+        # A quota margin is POINTS. `{:g}` because a Stableford margin can be
+        # a half when a hole is shared.
+        text = (f'{leader} +{abs(margin):g} pts' if margin
+                else 'All square')
+        if result is not None and margin:
+            text = f'{leader} wins by {abs(margin):g}'
+        return {'label': label, 'text': text, 'leader': who}
+
+    holes = [h for h in (m.get('holes') or []) if h.get('p1_stableford')
+             is not None]
+    return {
+        't1': n1, 't2': n2, 'thru': len(holes), 'is_match': False,
+        'status': '', 'leader': '', 'money': '',
+        'segments': [seg('Front 9', m.get('front9')),
+                     seg('Back 9', m.get('back9')),
+                     seg('Overall', m.get('overall'))],
+    }
+
+
+def _render_team_play(request, round_obj, token: str, tabs: list):
+    """Foursome Play — the whole FIELD on one board, not a card per group.
+
+    The other pages here are per-foursome because the games are; this event
+    is teams against each other, so the page is its leaderboard and the row
+    is a team. Ranked by the same call the app's board uses.
+    """
+    spec = {'label': 'Foursome Play', 'unit': '', 'unit_one': '',
+            'blurb': 'Teams against each other on one leaderboard.'}
+    tournament = round_obj.tournament
+    from services.team_play_scoring import leaderboard as _tp_leaderboard
+    board = _tp_leaderboard(tournament) if tournament else None
+    rows = []
+    for t in ((board or {}).get('teams') or []):
+        ntp = t.get('net_to_par')
+        place = t.get('rank')
+        # U+2212, the minus the money column and every board already use —
+        # visibly the right length beside a `+`, unlike a hyphen.
+        tp = ''
+        if ntp is not None:
+            tp = 'E' if ntp == 0 else (f'+{ntp}' if ntp > 0
+                                       else f'−{abs(ntp)}')
+        thru = t.get('thru') or 0
+        rows.append({
+            'name'       : (f"{place}. " if place else '') + (t.get('name') or ''),
+            'phcp'       : t.get('team_handicap'),
+            'figure_text': f'{tp} thru {thru}' if ntp is not None else 'Not started',
+            'money'      : 0.0,
+        })
+    groups = [{'group_number': None, 'summary': {}, 'rows': rows}] if rows else []
+    return _simple_render(request, round_obj, token, tabs, spec, groups)
+
+
+def _simple_render(request, round_obj, token, tabs, spec, groups):
+    return render(request, 'watch/casual_simple.html', {
+        'thru':         _round_thru(round_obj),
+        'round':        round_obj,
+        'course_name':  normalize_course_name(round_obj.course.name),
+        'tournament':   round_obj.tournament,
+        'spec':         spec,
+        'groups':       groups,
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
+
+def _has_casual_sequoya(round_obj) -> bool:
+    return 'sequoya_threes' in (round_obj.active_games or [])
+
+
+def _has_casual_banker(round_obj) -> bool:
+    return 'banker' in (round_obj.active_games or [])
+
+
+def _has_casual_quota_nassau(round_obj) -> bool:
+    return 'quota_nassau' in (round_obj.active_games or [])
+
+
+def _has_team_play(round_obj) -> bool:
+    t = round_obj.tournament
+    return bool(t and getattr(t, 'team_play_config', None))
+
+
 _VIEW_DISPATCH = {
     'matches':      _render_matches,
     'low_net':      _render_low_net,
@@ -2006,7 +2432,14 @@ _VIEW_DISPATCH = {
     'red_ball':     _render_casual_red_ball,
     'irish_rumble': _render_casual_irish_rumble,
     'four_ball':    _render_cup_four_ball,
-    # The five per-player money games share one renderer; the key names which.
+    'triple_nassau': _render_casual_triple_nassau,
+    'fourball':       _render_casual_fourball,
+    'better_ball':    _render_casual_better_ball,
+    'sequoya':        _render_casual_sequoya,
+    'banker':         _render_casual_banker,
+    'quota_nassau':   _render_casual_quota_nassau,
+    'team_play':      _render_team_play,
+    # The per-player money games share one renderer; the key names which.
     **{k: (lambda req, r, t, tabs, _k=k: _render_simple_game(req, r, t, tabs, _k))
        for k in _SIMPLE_GAME_SPECS},
 }

@@ -1,12 +1,12 @@
 {% extends "watch/base.html" %}
 
 {% block title %}
-{{ tournament.name|default:"Irish Rumble" }} · Round {{ round.round_number }}
+{% if tournament %}{{ tournament.name }}{% else %}{{ game_label|default:"Irish Rumble" }}{% endif %} · Round {{ round.round_number }}
 {% endblock %}
 
 {% block body %}
   <h1>
-    {% if tournament %}{{ tournament.name }}{% else %}Irish Rumble{% endif %}
+    {% if tournament %}{{ tournament.name }}{% else %}{{ game_label|default:"Irish Rumble" }}{% endif %}
   </h1>
   <p class="sub">
     {% if tournament %}Round {{ round.round_number }} · {% endif %}{{ round.date|date:"D, M j, Y" }} · {{ course_name }}{% if round.status == 'complete' %} · Final{% elif thru %} · Thru hole {{ thru }}{% endif %}
@@ -15,7 +15,7 @@
   {% if summary and summary.overall %}
     <div class="card">
       <div class="match-meta">
-        <span class="game-pill">Irish Rumble</span>
+        <span class="game-pill">{{ game_label|default:"Irish Rumble" }}</span>
         <span class="meta-text">
           {% if summary.handicap_mode %}{{ summary.handicap_mode|upper }}{% if summary.handicap_mode == 'net' and summary.net_percent != 100 %} ({{ summary.net_percent }}%){% endif %}{% endif %}
           {% if summary.entry_fee %} · ${{ summary.entry_fee|floatformat:"-2" }} entry{% endif %}
@@ -54,6 +54,6 @@
       </table>
     </div>
   {% else %}
-    <div class="card empty">Irish Rumble isn't configured for this round yet.</div>
+    <div class="card empty">{{ game_label|default:"Irish Rumble" }} isn't configured for this round yet.</div>
   {% endif %}
 {% endblock %}
