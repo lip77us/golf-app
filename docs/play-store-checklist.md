@@ -5,6 +5,10 @@ template: it built with a debug key, called itself `golf_mobile`, and wore the
 stock Flutter logo. This is the counterpart of `go-live-checklist.md`, which
 covers the App Store.
 
+**Updated 2026-09-24 — the app is APPROVED and live on the closed track.**
+Read §0 first; it records why testers could not download for weeks, and the
+answer is not what it looked like.
+
 The order below is deliberate. The account clock (§1) is the only item with a
 mandatory two-week wait in it, so it starts first and everything else happens
 while it runs.
@@ -13,35 +17,116 @@ while it runs.
 
 ## 0. Where things stand
 
-**2026-08-30 — the app exists in Play Console and the first bundle is uploaded.**
+**2026-09-24 — APPROVED. Halved Golf `2.9.1+39` is live on Closed testing -
+Alpha.** Submitted 19 Sep, approved the same day. The listing, all 11
+app-content items, contact details and category are done. One tester opted in;
+**eleven more needed** before the production clock starts.
+
+### The thing that cost weeks: internal testing is NEVER reviewed
+
+Testers reported the app "fails to download". The opt-in page read
+`You're a tester for golf.halved.app (unreviewed)` and the download died there.
+A couple of people got through, most did not — which made it look like an
+account or opt-in problem, and it is not.
+
+**Root cause: an internal testing track has no review step at all.** The app
+sat `Active · Not reviewed` on internal indefinitely, and Play would not serve
+an unreviewed listing to ordinary tester accounts.
+
+Completing the store listing does NOT fix this from the internal track. Only a
+**closed** (or open/production) track carries a `Send the release to Google for
+review` step, and that is the only route to clearing `(unreviewed)`. The closed
+track's own task list is where the missing step is visible:
+
+```
+SET UP YOUR TRACK          CREATE AND ROLL OUT A RELEASE
+  Select countries           Create a new release
+  Select testers             Preview and confirm the release
+                             Send the release to Google for review   <-- here
+```
+
+Hours were also lost to a wrong diagnosis (incomplete App content items). They
+were genuinely incomplete and worth finishing, but they were never why
+downloads failed.
+
+**How to tell it worked:** the dashboard header drops the
+`Draft app · Temporary app name 'golf.halved.app (unreviewed)'` line and reads
+plain `golf.halved.app`; both tracks lose their `Not reviewed` tag; Publishing
+overview empties.
+
+### The internal track is PAUSED (2026-09-24) — deliberately
+
+It was still Active and still serving **25 (2.7.0)** from 30 Aug, a month
+stale. It did not actually bite (Play served the higher version code, 39, and
+will not downgrade an installed app), but it was pointed at old code with the
+whole tester list holding its opt-in link. Paused because:
+
+- **Internal opt-ins do not count** toward the 12 testers or the 14-day clock.
+  Only closed does. A tester left on internal is one not being counted.
+- It removes any ambiguity about which build a tester gets.
+- Its opt-in link stops competing with the closed one.
+
+`Resume track` on the Internal testing page puts it back. Takes up to an hour
+to propagate.
+
+### The links testers need
+
+```
+1. Opt in:   https://play.google.com/apps/testing/golf.halved.app
+2. Install:  https://play.google.com/store/apps/details?id=golf.halved.app
+```
+
+Step 1 FIRST. The install link shows nothing useful to someone who has not
+opted in — which is exactly the dead end the old testers hit.
+
+**Do NOT tell testers to search the Play Store.** A closed-testing app is not
+reliably searchable even for opted-in testers, and the ones who cannot find it
+will report the app as missing.
+
+The old internal join URL (`.../apps/internaltest/4701572945338269346`) is
+**superseded** and its track is paused.
+
+### Historical (2026-08-30 — first bundle uploaded)
 
 - Package name `golf.halved.app` is claimed and permanently bound to the listing.
   (Play briefly reported it as "already in use" during creation; that was the
   console being eventually consistent with itself, not a real collision. It
   cleared after ~30 seconds. Don't panic-rename on that error.)
-- **Internal testing join URL:**
-  https://play.google.com/apps/internaltest/4701572945338269346
-  Testers must open it while signed into the Google account that is on the
-  tester list — a device signed in as a different account silently does nothing.
-- Identity (license) verification was still pending at upload time; it gates
-  rollout, not upload.
-- **2.7.0+25 is the live internal build**, installed on the moto g play from
+- A tester must open a join link while signed into the Google account that is on
+  the tester list — a device signed in as a different account silently does
+  nothing.
+- **2.7.0+25 was the live internal build**, installed on the moto g play from
   the Play Store (`installerPackageName=com.android.vending`), which proves the
-  whole chain: upload keystore → Play App Signing → real device.
+  whole chain: upload keystore -> Play App Signing -> real device.
   (The first upload was accidentally a stale 2.6.1+25 bundle sitting on disk —
   `flutter build apk` does not refresh the `.aab`. **Rebuild the bundle
   immediately before every upload.**)
-- Android App Links verified working → §6.
+- Android App Links verified working -> §6.
 
-Still to do, in order of what blocks the calendar:
+### Still to do, in order of what blocks the calendar
 
-- [ ] **Closed testing track + 12 testers.** Internal testing does NOT advance
-      the 14-day clock — only closed does. Same bundle, same release notes.
-      This is the ONLY remaining item that moves the launch date.
-- [ ] Store listing, data safety, content rating → §5.
-- [ ] The two push defects + two QA findings → `android-qa-findings.md`.
+- [ ] **Recruit 11 more testers — 1 of 12 opted in.** The 14-day clock starts
+      when the TWELFTH opts in and RESETS if the count drops below 12. Add them
+      to the `Halved Internal` email list; it is already attached to the closed
+      track. Being on the list is NOT the same as having opted in.
+- [ ] Run the closed test 14 days, then **Apply for production access** — a
+      separate human-reviewed questionnaire about how the test went. Expect it
+      to feel like the first submission, not like a routine update.
+- [ ] The two push defects + two QA findings -> `android-qa-findings.md`.
 - [ ] Confirm a REAL watch token opens the leaderboard (only a bogus token has
       been tested; it correctly fell through to the normal boot).
+- [ ] **Sixes routing defect** found while capturing screenshots: `Continue
+      Match` opens the Segment 2 partner draw when it should go straight to
+      score entry. Same shape as the fixed `rp.sixesIsStarted()` bug — routing
+      off client state instead of asking the server.
+
+### Update cadence, once in production
+
+The first review is the slow one. Routine updates are typically hours to a day
+or two. What pushes an update back into slow review: changing target audience
+or age rating, adding sensitive permissions, redoing the content rating or Data
+safety declarations, or switching app category. New games, fixes, screenshots
+and description edits touch none of those.
 
 ---
 
@@ -181,30 +266,90 @@ and tells people what to settle between themselves — so it is not a gambling
 app, but listing copy that reads like a betting product invites the reviewer to
 treat it as one.
 
-- [ ] **Graphics** — `docs/store/play/icon-512.png` and
-      `feature-graphic-1024x500.png` are generated and in the repo. The feature
-      graphic is Play-only; Apple has no equivalent.
-- [ ] **Screenshots** — 2–8 phone shots, captured from an Android device or
-      emulator against seeded demo data (`adb exec-out screencap -p > shot.png`).
-      Do not reuse the iOS ones; they show iOS chrome.
-- [ ] **Short description** (80 chars) and full description (4000).
-- [ ] **Privacy policy URL**: `https://halved.golf/privacy`.
-- [ ] **Data safety form** — mirrors `app-privacy-labels.md`: name, email, phone
-      number, user content, user ID, plus the FCM token as a device identifier.
-      Encrypted in transit; user can request deletion; no sharing with third
-      parties; no tracking; no advertising.
-- [ ] **Content rating** — the IARC questionnaire. Answer the gambling
+**All of §5 was completed and approved on 2026-09-19.** Kept as the record of
+what was declared, and of the things the original notes got wrong.
+
+- [x] **Graphics** — `docs/store/play/icon-512.png` and
+      `feature-graphic-1024x500.png`. Play-only; Apple has no equivalent.
+      Neither may carry an alpha channel.
+- [x] **Screenshots** — `docs/store/play/screenshots/` (4 at 1080x1920).
+      Captured from an **emulator**, not the moto g play: that device is
+      720x1600, and Play refuses a screenshot whose long side exceeds twice its
+      short side (2.222) and wants 1080px minimum. The `Pixel8_API35` AVD is
+      1080x2400 and fails the same ratio test — set `hw.lcd.height=1920` in
+      `~/.android/avd/Pixel8_API35.avd/config.ini` (and delete `skin.name` /
+      `skin.path`, or the skin forces the old size back) for a true 9:16.
+      Clean status bar via SysUI demo mode:
+      `adb shell settings put global sysui_demo_allowed 1` then broadcast
+      `com.android.systemui.demo` with `command enter` / `battery` / `clock` /
+      `network` / `notifications`. Still do not reuse the iOS shots.
+      **2 screenshots is the hard minimum; 4 at 1080px is the threshold for
+      promotional eligibility** — an earlier note here said 4 was required.
+- [x] **Short description** (80) and full description (4000) —
+      `play-store-listing.md`. Play has NO keywords field, so the game names
+      from Apple's keyword list have to appear in the prose. **Do not carry
+      across the App Store copy's lock-screen/Live Activities line — iOS only.**
+- [x] **Privacy policy URL**: `https://halved.golf/privacy`.
+- [x] **Data safety form** — declared: Name, Email address, Phone number,
+      Other info (the `Player.sex` men's/women's tee toggle), Other in-app
+      messages (round chat), Other actions (scores, rounds, handicap index),
+      and Device or other IDs (the FCM token). Collected yes, **shared no**
+      throughout — Twilio and Firebase are service providers, and watch links
+      and texted invites are user-initiated; both are exempt from "sharing".
+      Purpose App functionality everywhere, plus Account management on Name and
+      Phone number. Nothing is ephemeral.
+      **User IDs is NOT declared** — phone-OTP is the sole sign-in path and no
+      username is ever transmitted.
+- [x] **Content rating** — the IARC questionnaire. Answer the gambling
       questions honestly: no real-money wagering, no simulated gambling
       mechanics, no purchase of chips or credits.
-- [ ] **Target audience** — adults. Not "Designed for Families".
-- [ ] **Data deletion** — declare the in-app path (Settings → Delete Account)
-      and give `https://halved.golf/support` as the web URL, which already
-      documents it.
-- [ ] **App access** — the app is login-gated, so reviewers need the demo
-      phone + OTP bypass. Same procedure and copy as
-      `app-store-review-notes.md`; make sure `seed_demo` has been run against
-      prod and `REVIEW_BYPASS_PHONE`/`REVIEW_BYPASS_CODE` are set on Railway.
-- [ ] **Ads**: none. **Financial features**: none — do not declare any.
+- [x] **Target audience** — 16 and older. Not "Designed for Families".
+- [x] **Data deletion** — the App content -> Data deletion URL is
+      **`https://halved.golf/delete-account.html`** (source
+      `website/delete-account.html`, linked from privacy.html and support.html,
+      listed in sitemap.xml). The old note here said to use `/support`; that
+      page mentions deletion but does not meet the requirement, which wants a
+      page dedicated to it covering what is deleted, what is retained, and how
+      to request it without the app installed.
+      **The same URL serves both the account-deletion and the partial-data
+      questions.** Separately, Data safety's "delete some data without deleting
+      the account" question is **Yes** (rounds, tournaments, golfers and
+      courses are each individually deletable) and takes no URL.
+- [x] **App access** — login-gated, so reviewers need the demo phone + OTP
+      bypass. `seed_demo` has been run against prod and
+      `REVIEW_BYPASS_PHONE`/`REVIEW_BYPASS_CODE` are set on Railway.
+- [x] **Ads**: none. **Financial features**: none — none declared.
+- [x] **Advertising ID**: **No** — verified against the merged manifest rather
+      than assumed (`build/app/intermediates/merged_manifest/.../AndroidManifest.xml`
+      has no `AD_ID`; permissions are INTERNET, ACCESS_NETWORK_STATE,
+      POST_NOTIFICATIONS, WAKE_LOCK and the FCM receive permission). Firebase
+      Messaging did not drag the ads identifier in, which it sometimes does.
+      **Its radios are ordered `No` then `Yes`** — the reverse of every other
+      yes/no in the console, and easy to mis-click.
+- [x] **App category**: Sports. Contact email **`support@halved.golf`**, not a
+      personal address — that field is PUBLIC on the listing. Website
+      `https://halved.golf`, phone blank. No tag fits a golf scorekeeper; tags
+      are optional and do not block review.
+
+### The asset library, which is where an hour went
+
+Uploading the graphics repeatedly appeared to work and left the fields red.
+Two undocumented rules:
+
+- **Clicking an asset's filename does nothing — only the thumbnail selects it.**
+- **Selecting is not applying.** With something selected the panel's bottom bar
+  changes from `Upload | Add from Drive` to `Manage tags | Add`, and that
+  **Add** is the confirm. Without it the tile looks chosen and the field stays
+  red.
+
+"Asset deduplicated" on a drag-and-drop means the file is already in the
+library and is fine — not an error. The panel also filters by what fits the
+ACTIVE field, so the 1024x500 feature graphic is invisible while the 1:1 icon
+slot is open and looks like it was never uploaded. Check which field is
+highlighted before pressing Add; it is easy to drop an asset into the wrong one.
+
+**Use the classic `main-store-listing` form, not the two-step Assets/Review
+wizard** — the wizard's asset picker is where all of the above bites hardest.
 
 ---
 
