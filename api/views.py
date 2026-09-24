@@ -501,13 +501,21 @@ def _build_scorecard(foursome: Foursome) -> dict:
     # the only shape where the whole field has to be ranked to answer.
     # Stableford scoring has its own round-level summary and its own row.
     tournament = foursome.round.tournament
-    if (tournament is not None
-            and tournament.is_individual_play
-            and getattr(tournament, 'scoring_method', 'stroke') == 'stroke'):
-        from services.low_net_round import field_standing
-        out['field_standing'] = {
-            str(pid): v for pid, v in field_standing(foursome.round).items()
-        }
+    if tournament is not None and tournament.is_individual_play:
+        method = getattr(tournament, 'scoring_method', 'stroke') or 'stroke'
+        if method == 'stableford':
+            # This ROUND's points, which is what the board the pill opens
+            # now shows. The championship total is a different number on a
+            # different screen; quoting it here would be two answers to one
+            # question on a multi-round event.
+            from services.stableford import (
+                field_standing as _stableford_field_standing,
+            )
+            rows = _stableford_field_standing(foursome.round)
+        else:
+            from services.low_net_round import field_standing as _ln_standing
+            rows = _ln_standing(foursome.round)
+        out['field_standing'] = {str(pid): v for pid, v in rows.items()}
     return out
 
 
@@ -568,7 +576,17 @@ def _build_leaderboard(round_obj: Round) -> dict:
                 **_summary_for_game(_lr.game),
             }
 
-    if 'stableford' in active_games:
+    # A round inside an individual-play STABLEFORD tournament carries no
+    # `active_games` of its own — the game is the TOURNAMENT's — so this board
+    # drew a stroke-play tab and no points at all, on the one competition
+    # being played. Reported 23 Sep 2026: *I don't see the stableford points
+    # anywhere.* `stableford_summary` resolves the governing config, so the
+    # tab is scored on the TD's table rather than a hardcoded scale.
+    _t = round_obj.tournament
+    _tournament_stableford = (
+        _t is not None and _t.is_individual_play
+        and (getattr(_t, 'scoring_method', 'stroke') or 'stroke') == 'stableford')
+    if 'stableford' in active_games or _tournament_stableford:
         from services.stableford import stableford_summary
         games['stableford'] = {
             'label': 'Stableford',

@@ -456,6 +456,11 @@ def field_standing(round_obj) -> dict:
     for r in rows:
         playing = bool(r.get('holes_played'))
         out[r['player_id']] = {
+            # Which figure this row carries. One payload key must never mean
+            # two shapes — the Stableford tournament sends `points` here and
+            # no `net_to_par`, and a client casting blind would read one as
+            # the other.
+            'metric'    : 'stroke',
             'rank'      : r['rank'] if playing else None,
             'tied'      : playing and at_rank.get(r['rank'], 0) > 1,
             'field'     : field,

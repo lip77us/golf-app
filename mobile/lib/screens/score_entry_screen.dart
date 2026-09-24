@@ -1729,7 +1729,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           if (!m.player.isPhantom)
             (id: m.player.id, shortName: m.player.shortName),
       ];
-      final standing = tournamentStrokeStanding(fieldStanding, me, card: card);
+      final standing = tournamentFieldStanding(fieldStanding, me, card: card);
       return StandingRibbon(
         kind: StandingKind.result,
         // Before his first score there is still a way to the board, which is

@@ -20,8 +20,11 @@ from scoring.tests._helpers import (
 )
 
 
-class FieldStandingTests(TestCase):
+class _FieldBase(TestCase):
     """Two groups of two, so the field is bigger than any one card."""
+
+    method = 'stroke'
+    games  = ['low_net']
 
     def setUp(self):
         course = make_course()
@@ -29,7 +32,7 @@ class FieldStandingTests(TestCase):
         self.tourn = Tournament.objects.create(
             account=course.account, name='Tilden Stroke',
             start_date=date(2026, 9, 23), total_rounds=1,
-            active_games=['low_net'], scoring_method='stroke',
+            active_games=list(self.games), scoring_method=self.method,
             handicap_mode='net', net_percent=100)
         self.round = make_round(course=course, handicap_mode='net',
                                 net_percent=100, active_games=[])
@@ -47,6 +50,10 @@ class FieldStandingTests(TestCase):
 
     def _play(self, fs, hole, scores):
         submit_hole(fs, hole, [(self._pid(fs, n), s) for n, s in scores])
+
+
+class FieldStandingTests(_FieldBase):
+    """Stroke scoring — a place and a score against par."""
 
     # ── the shape ────────────────────────────────────────────────────────────
 
@@ -138,10 +145,70 @@ class FieldStandingTests(TestCase):
         self.tourn.save(update_fields=['active_games'])
         self.assertNotIn('field_standing', _build_scorecard(self.fs1))
 
-    def test_a_stableford_tournament_carries_none(self):
-        """Stableford has its own round-level summary and its own row; a
-        stroke place beside a points total would be two answers to one
-        question."""
-        self.tourn.scoring_method = 'stableford'
-        self.tourn.save(update_fields=['scoring_method'])
-        self.assertNotIn('field_standing', _build_scorecard(self.fs1))
+class StablefordFieldStandingTests(_FieldBase):
+    """The same row on an individual-play STABLEFORD tournament.
+
+    It quotes the CHAMPIONSHIP rather than this round, because that is the
+    board its pill opens: a Stableford tournament round has no round-level
+    points board — the game is the tournament's — and the round leaderboard
+    would show a stroke-play tab that is not the competition being played.
+    """
+
+    method = 'stableford'
+    games  = ['stableford_championship']
+
+    def test_the_metric_is_points_not_strokes(self):
+        """One payload key must never mean two shapes.
+
+        A client casting blind would read a points total as a score against
+        par, which on a Stableford round is roughly its opposite.
+        """
+        self._play(self.fs1, 1, [('Ann', self.par[1] - 1), ('Bea', self.par[1])])
+        st = _build_scorecard(self.fs1)['field_standing']
+        ann = st[str(self._pid(self.fs1, 'Ann'))]
+        self.assertEqual(ann['metric'], 'points')
+        self.assertIn('points', ann)
+        self.assertNotIn('net_to_par', ann)
+
+    def test_more_points_is_a_better_place(self):
+        """Stableford ranks the other way up — and the row must follow the
+        game rather than the shape of the stroke one it was copied from."""
+        self._play(self.fs1, 1, [('Ann', self.par[1] - 1), ('Bea', self.par[1])])
+        self._play(self.fs2, 1, [('Cal', self.par[1] + 2), ('Dee', self.par[1] + 2)])
+        st = _build_scorecard(self.fs1)['field_standing']
+        ann = st[str(self._pid(self.fs1, 'Ann'))]
+        bea = st[str(self._pid(self.fs1, 'Bea'))]
+        self.assertGreater(ann['points'], bea['points'])
+        self.assertLess(ann['rank'], bea['rank'])
+
+    def test_thru_is_TODAY_not_the_event(self):
+        """The total is cumulative; how far in you are is a fact about today."""
+        self._play(self.fs1, 1, [('Ann', self.par[1]), ('Bea', self.par[1])])
+        self._play(self.fs1, 2, [('Ann', self.par[2]), ('Bea', self.par[2])])
+        ann = _build_scorecard(self.fs1)['field_standing'][
+            str(self._pid(self.fs1, 'Ann'))]
+        self.assertEqual(ann['thru'], 2)
+
+    def test_the_row_draws_from_the_FIRST_TEE(self):
+        """**The championship standings hold only golfers who have scored.**
+
+        Before the first putt they are empty, so the block would be empty, so
+        there would be no row — and no named way to the leaderboard on the one
+        screen a first-time player is looking at. That is the problem D2
+        exists to solve, so the whole roster is seeded and the row says
+        `Tee off`.
+        """
+        st = _build_scorecard(self.fs1)['field_standing']
+        self.assertEqual(len(st), 4)
+        ann = st[str(self._pid(self.fs1, 'Ann'))]
+        self.assertIsNone(ann['rank'])
+        self.assertIsNone(ann['points'])
+        self.assertEqual(ann['thru'], 0)
+        self.assertEqual(ann['field'], 4)
+
+    def test_a_golfer_who_has_not_teed_off_is_unranked(self):
+        self._play(self.fs1, 1, [('Ann', self.par[1]), ('Bea', self.par[1])])
+        st = _build_scorecard(self.fs1)['field_standing']
+        cal = st[str(self._pid(self.fs2, 'Cal'))]
+        self.assertIsNone(cal['rank'])
+        self.assertEqual(cal['field'], 4)

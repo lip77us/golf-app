@@ -88,6 +88,35 @@ def _strokes_on_hole(hcp: int, stroke_index: int) -> int:
     return hcp // 18 + base
 
 
+def governing_config(round_obj):
+    """Whose Stableford settings this round is scored on.
+
+    Its own `StablefordGame` on a casual round — the ordinary case, and the
+    one every line below was written for.
+
+    **A round inside an individual-play STABLEFORD tournament has no
+    round-level game at all**: the game belongs to the tournament, the round
+    carries no `active_games` of its own, and without this the round was
+    scored on a hardcoded 5/4/3/2/1/0 fallback rather than the table the TD
+    set — so a club running a Modified scale saw the wrong points on the one
+    screen it was entering them from. The championship config governs
+    instead, which is also what makes every round of the event score on one
+    table.
+
+    The two configs are not the same model. The championship has no payout
+    style, per-point rate or participant subset — those are casual-round
+    ideas — so every caller reads them with `getattr` and a default.
+    """
+    cfg = getattr(round_obj, 'stableford_config', None)
+    if cfg is not None:
+        return cfg
+    t = getattr(round_obj, 'tournament', None)
+    if (t is not None and t.is_individual_play
+            and (t.scoring_method or 'stroke') == 'stableford'):
+        return getattr(t, 'stableford_championship_config', None)
+    return None
+
+
 def _build_stableford_totals(round_obj, *, mode=None, net_pct=None,
                              points_fn=None, participant_ids=None) -> dict:
     """{player_id: {name, points, holes_played, foursome_id, holes:{hole:pts}}}.
@@ -104,7 +133,7 @@ def _build_stableford_totals(round_obj, *, mode=None, net_pct=None,
     """
     from tournament.models import Foursome
 
-    config = getattr(round_obj, 'stableford_config', None)
+    config = governing_config(round_obj)
     if mode is None:
         mode = config.handicap_mode if config else round_obj.handicap_mode
     if net_pct is None:
@@ -196,13 +225,14 @@ def stableford_standings(round_obj) -> list:
     """
     from collections import defaultdict
 
-    config = getattr(round_obj, 'stableford_config', None)
-    style = config.payout_style if config else 'pool'
+    config = governing_config(round_obj)
+    style = getattr(config, 'payout_style', 'pool') if config else 'pool'
     payouts_cfg  = ({p['place']: float(p['amount']) for p in (config.payouts or [])}
                     if config else {})
     excluded_ids = set(config.excluded_player_ids or []) if config else set()
     # Subset side game: restrict scoring/pool/payouts to the chosen players.
-    participant_ids = (config.participant_player_ids or None) if config else None
+    participant_ids = (getattr(config, 'participant_player_ids', None) or None
+                       if config else None)
 
     totals = _build_stableford_totals(round_obj, participant_ids=participant_ids)
 
@@ -364,7 +394,7 @@ def _stableford_scorecard(round_obj, standings) -> dict:
     from scoring.handicap import make_strokes_fn, round_half_up
     from services.hole_plan import play_order
 
-    config   = getattr(round_obj, 'stableford_config', None)
+    config   = governing_config(round_obj)
     mode     = config.handicap_mode if config else 'net'
     net_pct  = (config.net_percent if config else 100) or 100
 
@@ -416,10 +446,75 @@ def _stableford_scorecard(round_obj, standings) -> dict:
             'holes_in_play': holes_in_play}
 
 
+def field_standing(round_obj) -> dict:
+    """Each golfer's place in the ROUND's field, keyed by player id.
+
+    The Stableford twin of `low_net_round.field_standing`, and deliberately
+    the same shape: what the score-entry standing row reports, and the one
+    fact that card cannot work out for itself, since it holds one foursome
+    and a place is about everybody.
+
+    **This round, not the championship** — because this is the board the
+    row's pill opens. A Stableford tournament round now draws a points tab
+    (the game is the tournament's, so the round has no `active_games` of its
+    own and the board used to show a stroke-play tab and nothing else). The
+    championship total is a different number on a different screen, and a row
+    quoting it beside a board showing today's would be two answers to one
+    question on a multi-round event.
+
+    Same two departures the stroke twin makes, both claiming less: a golfer
+    who has not teed off is unranked rather than sharing the last rank
+    issued, and `tied` counts only golfers who have started. `field` is every
+    golfer ENTERED.
+    """
+    rows = stableford_standings(round_obj)
+
+    # **Seed the whole roster.** Stableford standings are built from posted
+    # scores, so before the first putt they are EMPTY — and an empty block
+    # means no row, which means no named way to the leaderboard on the one
+    # screen a first-time player is looking at. That is the problem the row
+    # exists to solve, so it draws `Tee off` from the first tee instead.
+    # (The stroke twin gets this for free: `low_net_round_standings` already
+    # seeds the roster so its prospective scorecard can show.)
+    roster = {
+        m.player_id
+        for fs in round_obj.foursomes.all()
+        for m in fs.memberships.select_related('player')
+        if not m.player.is_phantom
+    }
+
+    started = [r for r in rows if r.get('holes_played')]
+    at_rank: dict = {}
+    for r in started:
+        at_rank[r['rank']] = at_rank.get(r['rank'], 0) + 1
+
+    field = len(roster | {r['player_id'] for r in rows})
+    out = {
+        pid: {'metric': 'points', 'rank': None, 'tied': False,
+              'field': field, 'points': None, 'thru': 0}
+        for pid in roster
+    }
+    for r in rows:
+        playing = bool(r.get('holes_played'))
+        out[r['player_id']] = {
+            # One payload key must never mean two shapes. The stroke twin
+            # sends `net_to_par` and no `points`; a client casting blind
+            # would read a points total as a score against par, which on a
+            # Stableford round is roughly its opposite.
+            'metric': 'points',
+            'rank'  : r['rank'] if playing else None,
+            'tied'  : playing and at_rank.get(r['rank'], 0) > 1,
+            'field' : field,
+            'points': r['total_points'] if playing else None,
+            'thru'  : r.get('holes_played') or 0,
+        }
+    return out
+
+
 def stableford_summary(round_obj) -> dict:
     """Full Stableford block for the leaderboard / watch page: ranked standings
     + the points table + pool/entry-fee + handicap settings."""
-    config = getattr(round_obj, 'stableford_config', None)
+    config = governing_config(round_obj)
     standings = stableford_standings(round_obj)
     entry_fee = float(config.entry_fee) if config else 0.0
     table = None
@@ -429,16 +524,23 @@ def stableford_summary(round_obj) -> dict:
             'birdie':    config.pts_birdie,    'par':   config.pts_par,
             'bogey':     config.pts_bogey,     'double': config.pts_double,
         }
-    style = config.payout_style if config else 'pool'
+    style = getattr(config, 'payout_style', 'pool') if config else 'pool'
     return {
         'status'        : round_obj.status,
         'handicap_mode' : config.handicap_mode if config else 'net',
         'net_percent'   : config.net_percent if config else 100,
         'payout_style'  : style,
-        'per_point_rate': float(config.per_point_rate) if config else 0.0,
-        'per_point_mode': config.per_point_mode if config else 'average',
+        # `getattr` with a default, not attribute access: a Stableford
+        # tournament's governing config is the CHAMPIONSHIP's, which has no
+        # payout style, per-point rate or loss cap — those are casual-round
+        # ideas. Reading them straight off it raises.
+        'per_point_rate': float(getattr(config, 'per_point_rate', 0) or 0)
+                          if config else 0.0,
+        'per_point_mode': getattr(config, 'per_point_mode', 'average')
+                          if config else 'average',
         'loss_cap'      : (float(config.loss_cap)
-                           if config and config.loss_cap is not None else None),
+                           if config and getattr(config, 'loss_cap', None)
+                           is not None else None),
         'entry_fee'     : entry_fee,
         'pool'          : (round(entry_fee * len(standings), 2)
                            if style == 'pool' else 0.0),

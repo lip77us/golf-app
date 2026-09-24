@@ -28,7 +28,7 @@
 /// the other case: the card is one group of a real field, so the place is
 /// ranked server-side — by `low_net_round_standings`, which IS the board the
 /// row's pill opens, so the two cannot put a golfer in two different places.
-/// See [tournamentStrokeStanding].
+/// See [tournamentFieldStanding].
 ///
 /// ## Why the place can be withheld
 ///
@@ -190,7 +190,12 @@ StrokePlayStanding? strokePlayStanding({
       '${placeLabel(better + 1, level > 1)} of ${started.length}', score);
 }
 
-/// The row on an individual-play STROKE tournament — `T-2 of 8`, `−1 thru 4`.
+/// The row on an individual-play tournament — `T-2 of 8`, `−1 thru 4` on a
+/// stroke event and `T-2 of 8`, `27 pts thru 4` on a Stableford one.
+///
+/// **Both quote the ROUND, not the championship**, because the round board is
+/// what the pill opens. A cumulative total beside a board showing today's
+/// would be two answers to one question on a multi-round event.
 ///
 /// The same shape as the casual row and for the same reason: **the place
 /// leads because the place is the money.** What differs is where it comes
@@ -215,12 +220,17 @@ StrokePlayStanding? strokePlayStanding({
 ///
 /// The two cases are kept apart on purpose: a reader who IS in the field and
 /// has not teed off still gets `Tee off`, because that is true of him.
-StrokePlayStanding? tournamentStrokeStanding(
+StrokePlayStanding? tournamentFieldStanding(
     Map<int, FieldPlace> fieldStanding, int? playerId,
     {List<({int id, String shortName})> card = const []}) {
   StrokePlayStanding? format(FieldPlace p, String who) {
-    if (p.netToPar == null || p.thru == 0) return null;
-    final score = '${toParLabel(p.netToPar!)} thru ${p.thru}';
+    if (!p.hasFigure || p.thru == 0) return null;
+    // **Stableford counts the other way up**, and says so in its own unit.
+    // `+27` beside a stroke row's `+3` would be the same glyph meaning a
+    // good round and a bad one.
+    final score = p.metric == 'points'
+        ? '${p.points} pts thru ${p.thru}'
+        : '${toParLabel(p.netToPar!)} thru ${p.thru}';
     // `1st of 1` is true and says nothing. It cannot happen in a real field,
     // but a one-golfer test event should read as a score rather than a win.
     if (p.rank == null || p.field < 2) {

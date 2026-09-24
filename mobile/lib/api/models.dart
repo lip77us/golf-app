@@ -1377,21 +1377,44 @@ class FieldPlace {
   /// Every golfer ENTERED. Eight golfers are eight golfers from the first
   /// tee, and that is how many rows the board draws all day.
   final int field;
+
+  /// Which figure this row carries — `stroke` or `points`.
+  ///
+  /// **One payload key must never mean two shapes.** A Stableford tournament
+  /// sends [points] and no [netToPar], and a client reading one as the other
+  /// would print a points total as a score against par, which on a Stableford
+  /// round is roughly its opposite.
+  final String metric;
+
+  /// Net against par, on a stroke tournament. Null on a Stableford one.
   final int? netToPar;
+
+  /// The championship points total, on a Stableford tournament. Null on a
+  /// stroke one.
+  final int? points;
+
+  /// Holes played TODAY. On Stableford the total is cumulative across the
+  /// event, but how far in you are is a fact about this round.
   final int thru;
 
   const FieldPlace({
-    this.rank, this.tied = false, this.field = 0, this.netToPar,
-    this.thru = 0,
+    this.rank, this.tied = false, this.field = 0, this.metric = 'stroke',
+    this.netToPar, this.points, this.thru = 0,
   });
 
   factory FieldPlace.fromJson(Map<String, dynamic> j) => FieldPlace(
         rank    : j['rank'] as int?,
         tied    : j['tied'] == true,
         field   : (j['field'] ?? 0) as int,
+        metric  : (j['metric'] ?? 'stroke') as String,
         netToPar: j['net_to_par'] as int?,
+        points  : j['points'] as int?,
         thru    : (j['thru'] ?? 0) as int,
       );
+
+  /// True once this golfer has something to report.
+  bool get hasFigure =>
+      metric == 'points' ? points != null : netToPar != null;
 }
 
 class Scorecard {
