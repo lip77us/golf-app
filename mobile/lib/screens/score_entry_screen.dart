@@ -1718,7 +1718,18 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // board this row's pill opens.
     final fieldStanding = rp.scorecard?.fieldStanding ?? const {};
     if (fieldStanding.isNotEmpty) {
-      final standing = tournamentStrokeStanding(fieldStanding, me);
+      // The card's own golfers, in the order the rows are drawn — what the
+      // row falls back to naming when the reader is not in the field, which
+      // in a tournament is the ordinary case rather than the exception.
+      final card = [
+        for (final m in round.foursomes
+            .firstWhere((f) => f.id == widget.foursomeId,
+                orElse: () => round.foursomes.first)
+            .memberships)
+          if (!m.player.isPhantom)
+            (id: m.player.id, shortName: m.player.shortName),
+      ];
+      final standing = tournamentStrokeStanding(fieldStanding, me, card: card);
       return StandingRibbon(
         kind: StandingKind.result,
         // Before his first score there is still a way to the board, which is

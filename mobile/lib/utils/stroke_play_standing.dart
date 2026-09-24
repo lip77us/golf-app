@@ -201,15 +201,52 @@ StrokePlayStanding? strokePlayStanding({
 ///
 /// Null before the reader has a score — the row draws `Tee off` for that,
 /// which is the caller's string and not one to invent here.
+///
+/// **When the reader is not in the field at all, it reports the CARD.**
+/// [card] is the foursome's own golfers, best first after ranking, and the
+/// row names the leader among them: `AW 1st of 8`.
+///
+/// A TD or a scorer opens a group he is not playing in — and in a tournament
+/// that is the ordinary case, not the exception: every golfer in the field
+/// can be a login-less roster entry, so the one person holding the phone is
+/// frequently in none of them. The screen he gets is entirely about that
+/// group, and a row reporting nothing would report nothing about the thing
+/// in front of him. It said `Tee off` while the group was thru 1.
+///
+/// The two cases are kept apart on purpose: a reader who IS in the field and
+/// has not teed off still gets `Tee off`, because that is true of him.
 StrokePlayStanding? tournamentStrokeStanding(
-    Map<int, FieldPlace> fieldStanding, int? playerId) {
-  if (playerId == null) return null;
-  final me = fieldStanding[playerId];
-  if (me == null || me.netToPar == null || me.thru == 0) return null;
-  final score = '${toParLabel(me.netToPar!)} thru ${me.thru}';
-  // `1st of 1` is true and says nothing. It cannot happen in a real field,
-  // but a one-golfer test event should read as a score rather than a win.
-  if (me.rank == null || me.field < 2) return StrokePlayStanding('', score);
-  return StrokePlayStanding(
-      '${placeLabel(me.rank!, me.tied)} of ${me.field}', score);
+    Map<int, FieldPlace> fieldStanding, int? playerId,
+    {List<({int id, String shortName})> card = const []}) {
+  StrokePlayStanding? format(FieldPlace p, String who) {
+    if (p.netToPar == null || p.thru == 0) return null;
+    final score = '${toParLabel(p.netToPar!)} thru ${p.thru}';
+    // `1st of 1` is true and says nothing. It cannot happen in a real field,
+    // but a one-golfer test event should read as a score rather than a win.
+    if (p.rank == null || p.field < 2) {
+      return StrokePlayStanding(who.isEmpty ? '' : who, score);
+    }
+    final place = '${placeLabel(p.rank!, p.tied)} of ${p.field}';
+    return StrokePlayStanding(who.isEmpty ? place : '$who $place', score);
+  }
+
+  final me = playerId == null ? null : fieldStanding[playerId];
+  // He is in the field. Whatever it says about him is the row — including
+  // nothing, before he has teed off.
+  if (me != null) return format(me, '');
+
+  // He is not. Report the best-placed golfer on this card, named — a tie
+  // takes the first in card order, which is the order the rows are drawn in.
+  ({int id, String shortName})? best;
+  FieldPlace? bestPlace;
+  for (final g in card) {
+    final p = fieldStanding[g.id];
+    if (p == null || p.rank == null || p.thru == 0) continue;
+    if (bestPlace == null || p.rank! < bestPlace.rank!) {
+      best = g;
+      bestPlace = p;
+    }
+  }
+  if (best == null) return null;
+  return format(bestPlace!, best.shortName);
 }

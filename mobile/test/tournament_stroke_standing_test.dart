@@ -111,4 +111,70 @@ void main() {
       expect(sc.fieldStanding, isEmpty);
     });
   });
+
+  // ── The reader is usually NOT in the field ──────────────────────────────
+  //
+  // Reported from a live tournament: the row said `Tee off` while the group
+  // was thru 1. Every golfer in that field was a login-less roster entry, so
+  // the one person holding the phone was in none of them — which in a
+  // tournament is the ordinary case, not an edge. The screen he is looking at
+  // is entirely about that group, and a row reporting nothing reported
+  // nothing about the thing in front of him.
+  group('**a TD not playing gets the card, not a blank row**', () {
+    const card = [
+      (id: 21, shortName: 'AW'),
+      (id: 22, shortName: 'AM'),
+      (id: 23, shortName: 'AB'),
+    ];
+    const standings = {
+      21: FieldPlace(rank: 1, field: 8, netToPar: -1, thru: 1),
+      22: FieldPlace(rank: 2, tied: true, field: 8, netToPar: 0, thru: 1),
+      23: FieldPlace(rank: 7, tied: true, field: 8, netToPar: 1, thru: 1),
+    };
+
+    test('it names the best-placed golfer on the card', () {
+      final st = tournamentStrokeStanding(standings, 999, card: card)!;
+      expect(st.place, 'AW 1st of 8');
+      expect(st.score, '−1 thru 1');
+    });
+
+    test('a tie takes the first in CARD order, which is how rows are drawn',
+        () {
+      const tiedCard = [(id: 22, shortName: 'AM'), (id: 24, shortName: 'BL')];
+      const tied = {
+        22: FieldPlace(rank: 2, tied: true, field: 8, netToPar: 0, thru: 1),
+        24: FieldPlace(rank: 2, tied: true, field: 8, netToPar: 0, thru: 1),
+      };
+      expect(tournamentStrokeStanding(tied, 999, card: tiedCard)!.place,
+          'AM T-2 of 8');
+    });
+
+    test('a reader who IS in the field still gets his own, unnamed', () {
+      // The two cases are kept apart: the name marks a row that is about
+      // somebody else.
+      final st = tournamentStrokeStanding(standings, 23, card: card)!;
+      expect(st.place, 'T-7 of 8');
+    });
+
+    test('a reader in the field who has not teed off still gets Tee off', () {
+      // True of him, and not the same question as not being in the field.
+      expect(
+          tournamentStrokeStanding(
+              const {21: FieldPlace(field: 8, thru: 0)}, 21,
+              card: const [(id: 21, shortName: 'AW')]),
+          isNull);
+    });
+
+    test('nobody on the card has started — no row', () {
+      expect(
+          tournamentStrokeStanding(
+              const {21: FieldPlace(field: 8, thru: 0)}, 999,
+              card: const [(id: 21, shortName: 'AW')]),
+          isNull);
+    });
+
+    test('no card passed — the casual callers are unaffected', () {
+      expect(tournamentStrokeStanding(standings, 999), isNull);
+    });
+  });
 }
