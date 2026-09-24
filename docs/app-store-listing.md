@@ -1,4 +1,4 @@
-# App Store listing copy — Halved (v2.8.3)
+# App Store listing copy — Halved (v2.9.1)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
@@ -21,7 +21,14 @@ https://halved.golf/support
 ## Primary category
 Sports  (Secondary: optional, e.g. Utilities)
 
-## Keywords (100 max) — refreshed for 2.8.3 (98 chars)
+## Keywords (100 max) — refreshed for 2.9.1 (99 chars)
+banker,vegas,wolf,sixes,stableford,handicap,foursome,scorecard,tournament,survivor,scramble,shamble
+(Added `scramble` and `shamble`: Pairs Play and Foursome Play both run them
+now, and a golfer looking for a scramble app searches the format by name.
+Dropped `spots` — a small add-on nobody searches for — and `matchplay`, which
+the description already carries and which competes with far bigger apps.)
+
+## Keywords — previous (2.8.3, 98 chars)
 banker,vegas,wolf,sixes,stableford,spots,handicap,foursome,matchplay,scorecard,tournament,survivor
 (Added `banker` and dropped `settle` to fit it. A game NAME is worth more than
 a verb: somebody searching `banker` is looking for exactly this app, and
@@ -33,7 +40,10 @@ lead on.)
 (Skins/Nassau are already in the subtitle, so they're omitted here — Apple
 indexes the subtitle words anyway; keywords spend the budget on new terms.)
 
-## Promotional text (170 max, editable without review) — 166 chars
+## Promotional text (170 max, editable without review) — 2.9.1, 164 chars
+New: every game shows where you stand right under its title — your match, your place, your points — one tap from the full leaderboard. Plus Better Ball and flights.
+
+## Promotional text — previous (v2.8.3, 166 chars)
 New: Banker — one golfer takes on the other three at once, and the stakes can
 double twice on a single hole. Plus Sequoya 3s, six short matches, partners
 rotating.
@@ -107,6 +117,45 @@ seconds, with no spreadsheets and no napkin math.
 
 Halved is built for friendly play among friends. It tracks informal stakes for
 scoring purposes only and does not process payments.
+
+## What's New (v2.9.1)
+Where you stand, without leaving the hole.
+
+THE STANDING BAR — every game now carries a second line under its title: where
+you stand this second, and a Leaderboard button that says so in a word instead
+of an icon. Each game answers the question it actually makes you ask on the
+tee — your match in Sixes and Fourball, your place in Stroke Play and
+Stableford, your points in Wolf and 5-3-1, who is holding it in Rabbit,
+whether you are still in it in Survivor. Tournaments answer it against the
+whole field.
+
+BETTER BALL — the best of your team's balls counts on every hole, with the
+count fixed for the round and named in the title. Irish Rumble's engine, held
+still.
+
+FLIGHTS — cut one field into two by index, each flight ranked and paid on its
+own board. The cut is previewed before it is taken, and frozen once it is.
+
+MORE LOCK SCREEN CARDS — Stableford, Stroke Play, Points 5-3-1, Wolf, Las
+Vegas, Triple Nassau and Triple Cup join the ones already there, and every card
+now tells you when you are getting a stroke on the hole you are walking to.
+Each signs off with the result at the end of the round.
+
+SCORECARDS
+• Names stay put when you scroll — the label column no longer slides away
+• Every card opens on the hole you are playing, not on the 1st
+• OUT, IN and TOT on every scorecard in the app
+• All your strokes show as dots, not just the first two
+• A chip names which tee each hole plays from on a combo set
+
+ALSO IN THIS RELEASE
+• Correct a wrong tee or a wrong playing handicap through the first three
+  holes, with one step back — the round rescores itself
+• Shotgun starts corrected throughout: how far you are through, close-outs and
+  cup points all count the holes actually played
+• Stableford tournaments show their points on the round board
+• Favorites and search in the golfer picker, so the same four are one tap away
+• A finished round always opens its scorecard, never a setup screen
 
 ## What's New (v2.8.3)
 Two new games.
