@@ -386,11 +386,13 @@ GAME_SUGGESTION_NOTIFY_EMAIL = os.environ.get('GAME_SUGGESTION_NOTIFY_EMAIL', ''
 # ---------------------------------------------------------------------------
 # Client version compatibility
 # ---------------------------------------------------------------------------
-# Bump SERVER_VERSION with each deploy (informational — shown in About).
-# Bump CLIENT_MIN_VERSION only when a server change is incompatible with
-# older clients — this will force users to update the app before they can
-# continue.  Leave CLIENT_MIN_VERSION at the last compatible release to
-# allow older clients to keep working.
+# SERVER_VERSION is INFORMATIONAL and nothing depends on it. Its only reader
+# is the About dialog (`app_drawer.dart`), which prints it as a string — it is
+# never parsed and never compared. This used to say "bump it with each
+# deploy"; nobody did, for eight releases, and nothing broke, because there
+# was nothing to break. The instruction is gone rather than the value: a
+# number saying 2.1.0 is only misleading to whoever reads About, while a rule
+# nobody follows sends the next person looking for a process that is not there.
 SERVER_VERSION    = os.environ.get('SERVER_VERSION', '2.1.0')
 # Both env-overridable so a version change is a Railway env-var flip (no code
 # deploy).  Forced to 2.1.0: from 2.1.0 on the client's update gate is a HARD
@@ -399,6 +401,13 @@ SERVER_VERSION    = os.environ.get('SERVER_VERSION', '2.1.0')
 # its own gate), and 2.0.0's gate is only a soft nag that points to the update.
 # NOTE: if Railway has a CLIENT_MIN_VERSION env var set (e.g. an old 1.1.0), the
 # env wins — set it to 2.1.0 (or clear it) so this default takes effect.
+#
+# **CLIENT_MIN_VERSION is the one with consequences**, and it is a different
+# kind of setting entirely: `main.dart` hard-blocks below it with no dismiss
+# and no way into the app. Raise it only when an old client would be WRONG,
+# not merely missing something — see the rule in `docs/api-compatibility.md`.
+# Nearly every server change here is additive and degrades on its own, which
+# is why this floor has not moved since 2.1.0.
 CLIENT_MIN_VERSION = os.environ.get('CLIENT_MIN_VERSION', '2.1.0')
 
 # ---------------------------------------------------------------------------
