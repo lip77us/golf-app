@@ -2938,10 +2938,24 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                     ? (rp.round?.irBallsConfig ?? const [])
                     : const [],
                 irHandicapMode:          rp.round?.handicapMode ?? 'net',
+                // The TOURNAMENT's handicap wins on a tournament round: the
+                // round-level Stroke Play config is a casual thing and is
+                // absent there, and the round's own fields are defaults the
+                // tournament never wrote to.
                 strokePlayHandicapMode:
-                    rp.lowNetConfig?['handicap_mode'] as String? ?? 'net',
+                    (rp.scorecard?.scoringMode.isNotEmpty ?? false)
+                        ? rp.scorecard!.scoringMode
+                        : rp.lowNetConfig?['handicap_mode'] as String? ?? 'net',
                 strokePlayNetPercent:
-                    rp.lowNetConfig?['net_percent']   as int?    ?? 100,
+                    (rp.scorecard?.scoringMode.isNotEmpty ?? false)
+                        ? rp.scorecard!.scoringNetPercent
+                        : rp.lowNetConfig?['net_percent'] as int? ?? 100,
+                // **A tournament round has no game-specific grid**, because
+                // the game lives on the tournament and the round carries no
+                // `active_games` of its own — so the screen ended below the
+                // hole card with room to spare. The standard card goes there.
+                tournamentCard:
+                    (rp.scorecard?.fieldStanding.isNotEmpty ?? false),
                 stablefordResult:
                     games.contains('stableford') ? rp.stablefordResult : null,
                 holesInPlay:             _playOrderFor(rp),
@@ -5141,6 +5155,11 @@ class _GameStatusSection extends StatelessWidget {
   final String                      irHandicapMode;
   // Stroke Play (low_net_round) — handicap settings from the game config
   // (not the round-level handicap_mode, which casual stroke play overrides).
+  /// Draw the app's standard scorecard for a round whose game is the
+  /// TOURNAMENT's — there is no per-round primary to hang one off, so none of
+  /// the branches below fire and the screen would otherwise end at the hole
+  /// card.
+  final bool                        tournamentCard;
   final String                      strokePlayHandicapMode;
   final int                         strokePlayNetPercent;
   // Stableford — authoritative per-hole + total points (config-aware).
@@ -5181,6 +5200,7 @@ class _GameStatusSection extends StatelessWidget {
     required this.onTapHole,
     this.irBallsConfig   = const [],
     this.irHandicapMode  = 'net',
+    this.tournamentCard = false,
     this.strokePlayHandicapMode = 'net',
     this.strokePlayNetPercent   = 100,
     this.stablefordResult,
@@ -5415,6 +5435,24 @@ class _GameStatusSection extends StatelessWidget {
               legend:       null,
               holesInPlay:  fourballSummary!.scorecardHolesInPlay,
             ),
+          const SizedBox(height: 12),
+        ],
+
+        // A tournament round — stroke or Stableford. The same standard card
+        // the Stroke Play primary draws, because what a golfer wants under
+        // the hole he is entering is his group's card, and that does not
+        // change with what the field is being scored on. Stableford's POINTS
+        // are the leaderboard's tab; this is the gross round.
+        if (tournamentCard) ...[
+          _StrokePlayProgressGrid(
+            players:      players,
+            scorecard:    scorecard,
+            currentHole:  currentHole,
+            onTapHole:    onTapHole,
+            handicapMode: strokePlayHandicapMode,
+            netPercent:   strokePlayNetPercent,
+            holesInPlay:  holesInPlay,
+          ),
           const SizedBox(height: 12),
         ],
 

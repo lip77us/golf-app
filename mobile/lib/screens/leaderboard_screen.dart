@@ -733,15 +733,19 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
       // Reflect the tournament's actual championship rather than a hardcoded
       // "Low Net" — a Stableford Championship round should read "Stableford".
       final ta = lb?.tournamentActiveGames ?? const <String>[];
-      if (ta.contains('stableford_championship')) return 'Stableford';
       if (ta.contains('match_play') && !ta.contains('low_net')) return 'Mini Singles Bracket';
-      // Title the Stroke Play championship with the tournament's name so it's
-      // distinct from a per-round "Stroke Play" side game. Guard against the
-      // cup case where the tournament name already appears as the cup tab.
+      // Title the championship with the TOURNAMENT's name so it is distinct
+      // from the per-round tab of the same game sitting beside it. Guard
+      // against the cup case where the tournament name is already the cup tab.
+      //
+      // **Stableford needed this as much as Stroke Play did, and did not have
+      // it.** A Stableford tournament round now draws a per-round points tab
+      // as well, so the board showed two tabs both reading `Stableford` with
+      // no way to tell the event from the day. Reported 23 Sep 2026.
       final tn = lb?.tournamentName;
       final cn = lb?.cupName;
       if (tn != null && tn.isNotEmpty && tn != cn) return tn;
-      return 'Stroke Play';
+      return ta.contains('stableford_championship') ? 'Stableford' : 'Stroke Play';
     }
     // Tabs are named for what they pay, and the ball game's name is the
     // TD's own — "Beer Ball" if that is what he typed. The app never asks

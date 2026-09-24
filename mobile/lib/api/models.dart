@@ -1424,8 +1424,17 @@ class Scorecard {
   final List<PlayerTotals> totals;
 
   /// Every golfer's place in the field, by player id. Empty on a casual
-  /// round and on any tournament shape that is not individual stroke play.
+  /// round and on any tournament shape that is not individual play.
   final Map<int, FieldPlace> fieldStanding;
+
+  /// Which handicap this round is scored on, when a TOURNAMENT decides it.
+  ///
+  /// `Round.handicapMode` / `netPercent` are the round's own defaults and are
+  /// not written from the tournament, so they read net/100 on an event the TD
+  /// set to gross or to 90%. Empty on a casual round, where the round's own
+  /// values are the answer.
+  final String scoringMode;
+  final int    scoringNetPercent;
 
   /// Public page for this group's scorecard — what Share sends. Built by the
   /// server (it owns share-URL shape); empty when the round has no watch
@@ -1439,6 +1448,8 @@ class Scorecard {
     required this.totals,
     this.shareUrl = '',
     this.fieldStanding = const {},
+    this.scoringMode = '',
+    this.scoringNetPercent = 100,
   });
 
   factory Scorecard.fromJson(Map<String, dynamic> j) => Scorecard(
@@ -1457,6 +1468,9 @@ class Scorecard {
             int.parse(e.key):
                 FieldPlace.fromJson(Map<String, dynamic>.from(e.value as Map)),
         },
+        scoringMode: ((j['scoring'] as Map?)?['handicap_mode'] ?? '') as String,
+        scoringNetPercent:
+            ((j['scoring'] as Map?)?['net_percent'] ?? 100) as int,
       );
 
   ScorecardHole? holeData(int holeNumber) =>

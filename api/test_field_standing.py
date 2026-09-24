@@ -212,3 +212,60 @@ class StablefordFieldStandingTests(_FieldBase):
         cal = st[str(self._pid(self.fs2, 'Cal'))]
         self.assertIsNone(cal['rank'])
         self.assertEqual(cal['field'], 4)
+
+class GoverningHandicapTests(_FieldBase):
+    """Which handicap a tournament round's card is drawn off.
+
+    `Round.handicap_mode` / `net_percent` are the ROUND's own defaults and are
+    never written from the tournament, so they read net/100 on an event the TD
+    set to gross or to 90% — and the card's stroke dots would be drawn off a
+    handicap nobody is playing.
+    """
+
+    def test_the_tournaments_handicap_is_sent_not_the_rounds(self):
+        self.tourn.handicap_mode = 'gross'
+        self.tourn.net_percent = 90
+        self.tourn.save(update_fields=['handicap_mode', 'net_percent'])
+        # The round still says its own thing...
+        self.assertEqual(self.round.handicap_mode, 'net')
+        self.assertEqual(self.round.net_percent, 100)
+        # ...and the card is told the tournament's.
+        scoring = _build_scorecard(self.fs1)['scoring']
+        self.assertEqual(scoring['handicap_mode'], 'gross')
+        self.assertEqual(scoring['net_percent'], 90)
+        self.assertEqual(scoring['method'], 'stroke')
+
+    def test_a_casual_round_is_told_nothing(self):
+        """Its own values ARE the answer, so there is nothing to override."""
+        course = make_course()
+        tee = make_tee(course=course, holes=DEFAULT_HOLES)
+        rnd = make_round(course=course, active_games=['low_net_round'])
+        fs = make_foursome(rnd, [('Eve', 0)], tee=tee)
+        self.assertNotIn('scoring', _build_scorecard(fs))
+
+
+class StablefordGoverningHandicapTests(_FieldBase):
+    method = 'stableford'
+    games  = ['stableford_championship']
+
+    def test_the_championship_config_governs_when_there_is_one(self):
+        """The same resolver the points come from.
+
+        A board scored on one handicap and a card drawn off another is the
+        kind of disagreement nobody can debug from the tee.
+        """
+        from games.models import StablefordChampionshipConfig
+        StablefordChampionshipConfig.objects.create(
+            tournament=self.tourn, handicap_mode='gross', net_percent=80)
+        scoring = _build_scorecard(self.fs1)['scoring']
+        self.assertEqual(scoring['handicap_mode'], 'gross')
+        self.assertEqual(scoring['net_percent'], 80)
+
+    def test_it_falls_back_to_the_tournament_with_no_config(self):
+        # The wizard only writes a championship config when the TD sets money,
+        # so a no-stakes event legitimately has none.
+        self.tourn.handicap_mode = 'gross'
+        self.tourn.save(update_fields=['handicap_mode'])
+        self.assertEqual(
+            _build_scorecard(self.fs1)['scoring']['handicap_mode'], 'gross')
+

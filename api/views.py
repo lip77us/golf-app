@@ -516,6 +516,27 @@ def _build_scorecard(foursome: Foursome) -> dict:
             from services.low_net_round import field_standing as _ln_standing
             rows = _ln_standing(foursome.round)
         out['field_standing'] = {str(pid): v for pid, v in rows.items()}
+        # **Which handicap this round is actually scored on.**
+        #
+        # `Round.handicap_mode` / `net_percent` are the ROUND's own defaults
+        # and are not written from the tournament at creation — they read
+        # net/100 on an event the TD set to gross or to 90%. The card's
+        # stroke dots would then be drawn off a handicap nobody is playing.
+        # Individual-play scoring is set once on the tournament and read back
+        # everywhere, so it is read back here too; on Stableford the
+        # championship config governs, which is the same resolver its points
+        # come from.
+        _h_mode, _h_pct = tournament.handicap_mode, tournament.net_percent
+        if method == 'stableford':
+            from services.stableford import governing_config
+            _cfg = governing_config(foursome.round)
+            if _cfg is not None:
+                _h_mode, _h_pct = _cfg.handicap_mode, _cfg.net_percent
+        out['scoring'] = {
+            'method'       : method,
+            'handicap_mode': _h_mode,
+            'net_percent'  : _h_pct,
+        }
     return out
 
 
