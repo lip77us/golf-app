@@ -106,13 +106,40 @@ all shipped without touching the floor:
    nothing and looks broken — which is why an App Store build should not go
    for review before its server half is live.
 
-## The gap worth knowing about
+## What enforces this — `mobile/test/api_compatibility_test.dart`
 
-**Nothing enforces rule 2.** The `fromJson` defaults are a convention held up
-by care, not a check — there is no test asserting that every model tolerates an
-empty payload. Two consumers of one key with different shapes is likewise
-caught by reading, not by tooling.
+Two things, and the shape of them is worth reading before adding a third.
 
-A test that constructs every `fromJson` from `{}` would turn the convention
-into a rule. It has not been written; if the floor ever does need raising, the
-reason will probably be something that test would have caught.
+**1. An unknown key changes nothing — all 159 models, no exemptions.** The
+server adds a field; a phone built before it existed must behave exactly as it
+did. Every model is built twice, with and without a junk key, and the
+OUTCOMES are compared — so the models that legitimately reject a payload take
+part too: they must fail the same way, not a new way. The registry is checked
+against the source, so a model added without an entry fails rather than being
+quietly skipped.
+
+**2. Every field designed to be absent degrades to its documented default** —
+written one at a time, each with the reason. A default is only correct against
+a specific shipped behaviour, so a loop over them would assert the shape and
+lose the argument. `FieldPlace.metric` is the one to look at first: it is the
+discriminator that keeps one key from meaning two things, and getting it wrong
+prints a points total as a score against par.
+
+### The test this doc originally asked for was the wrong one
+
+It said to construct every model from `{}`. Measuring that is what showed why
+it is wrong: **80 of the 159 refuse an empty map**, every one of them on an
+identity field. `PlayerTotals.playerId` is `j['player_id'] as int` with no
+default while every optional field beside it carries `?? 0` — which is the
+model written *correctly*. A player row with no `player_id` is not a payload
+any server sends, and a test demanding tolerance there needs eighty
+exemptions, which is a list nobody maintains.
+
+The bar that matters is not "survives nothing". It is "survives a server that
+knows more than it does".
+
+### Still not enforced
+
+One key meaning two shapes on two paths — the `allowance` defect — is caught
+by reading, not by tooling. Nothing compares a payload's shape between the
+code paths that emit it.
