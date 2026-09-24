@@ -995,6 +995,15 @@ def _build_tabs(round_obj, token: str, current: str) -> list:
             'url': f'{base}?view=sixes',
             'active': current == 'sixes',
         })
+    # The per-player money games, in the table's own order so the tab strip
+    # does not reorder itself between rounds.
+    for _k, _spec in _SIMPLE_GAME_SPECS.items():
+        if _has_simple_game(round_obj, _k):
+            tabs.append({
+                'key': _k, 'label': _spec['label'],
+                'url': f'{base}?view={_k}',
+                'active': current == _k,
+            })
     if _has_casual_pink_ball(round_obj):
         tabs.append({
             'key': 'red_ball', 'label': _red_ball_label(round_obj),
@@ -1840,6 +1849,144 @@ def _render_cup_four_ball(request, round_obj, token: str, tabs: list):
     })
 
 
+# ---------------------------------------------------------------------------
+# Per-player money games — one renderer, one template
+# ---------------------------------------------------------------------------
+#
+# **Ten live games rendered nothing on a watch page**, which is the link the
+# share card and the invite card both advertise. Five of them are the same
+# shape: a foursome, a per-player figure the game is counting, a money column,
+# and a hole-by-hole trail. Writing five more bespoke templates would have made
+# the next one a sixth decision; this is one spec table and one template, and a
+# new game joins by adding a row.
+#
+# What differs per game is only which key holds the figure and what to call it.
+# The keys are read off the real summaries rather than the constructors — see
+# the table below, which is checked by a test that calls every summary and
+# asserts the field it names actually exists.
+
+_SIMPLE_GAME_SPECS = {
+    'survivor': {
+        'label'   : 'Survivor',
+        'module'  : 'services.survivor',
+        'fn'      : 'survivor_summary',
+        'game'    : 'survivor',
+        'figure'  : 'survivors_won',
+        'unit'    : 'won',
+        'unit_one': 'won',
+        'money'   : 'money',
+        # What the row is measured in, said once under the group pill.
+        'blurb'   : 'Worst score is knocked out; the last two duel for it.',
+    },
+    'rabbit': {
+        'label'   : 'Rabbit',
+        'module'  : 'services.rabbit',
+        'fn'      : 'rabbit_summary',
+        'game'    : 'rabbit',
+        'figure'  : 'segments_won',
+        'unit'    : 'rabbits',
+        'unit_one': 'rabbit',
+        'money'   : 'money',
+        'blurb'   : 'Win a hole outright to take it; lose it by being beaten.',
+    },
+    'honors': {
+        'label'   : 'Honors',
+        'module'  : 'services.honors',
+        'fn'      : 'honors_summary',
+        'game'    : 'honors',
+        'figure'  : 'points',
+        'unit'    : 'pts',
+        'unit_one': 'pt',
+        'money'   : 'money',
+        'blurb'   : 'Hold the honor and score a point every hole you keep it.',
+    },
+    'spots': {
+        'label'   : 'Spots',
+        'module'  : 'services.spots',
+        'fn'      : 'spots_summary',
+        'game'    : 'spots',
+        'figure'  : 'spots',
+        'unit'    : 'spots',
+        'unit_one': 'spot',
+        # Spots is the one that pays through `payout`, not `money` — it was
+        # built as an add-on with its own settlement rather than as a game
+        # with a running net.
+        'money'   : 'payout',
+        'blurb'   : 'Per-hole achievements the group tallies by hand.',
+    },
+}
+
+# **Banker is deliberately NOT here.** It looked like a fifth member of the
+# family and is not: its summary has no per-player COUNT at all — `banking`
+# and `betting` are two halves of a money total — and no `handicap` block
+# either, so a row built from this spec drew `0 banked` against every golfer
+# on a round that had been played out. It also carries a grid, an exposure
+# ladder and a biggest-swings list that this card has nowhere to put. It gets
+# its own renderer rather than a misleading share of one.
+
+
+def _simple_group_card(fs, spec) -> dict:
+    """One foursome's card for a per-player money game."""
+    import importlib
+    summary = getattr(importlib.import_module(spec['module']), spec['fn'])(fs)
+    if not summary:
+        return None
+    rows = []
+    for p in (summary.get('players') or []):
+        rows.append({
+            'name'  : p.get('name') or p.get('short_name') or '',
+            'phcp'  : p.get('phcp_in_play'),
+            'figure': p.get(spec['figure']),
+            'money' : _as_float(p.get(spec['money'])),
+        })
+    return {
+        'group_number': fs.group_number,
+        'foursome_id' : fs.id,
+        'summary'     : summary,
+        'rows'        : rows,
+    }
+
+
+def _as_float(v):
+    """Decimal, int, None — the money column takes them all.
+
+    Banker settles in `Decimal` and the rest in `float`; a template comparing
+    a Decimal against 0 works, but mixing the two in one column makes the
+    formatting rules diverge for no reason.
+    """
+    if v is None:
+        return 0.0
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _render_simple_game(request, round_obj, token: str, tabs: list, key: str):
+    spec = _SIMPLE_GAME_SPECS[key]
+    foursomes = list(
+        round_obj.foursomes
+        .prefetch_related('memberships__player')
+        .order_by('group_number')
+    )
+    groups = [c for c in (_simple_group_card(fs, spec) for fs in foursomes)
+              if c is not None]
+    return render(request, 'watch/casual_simple.html', {
+        'thru':         _round_thru(round_obj),
+        'round':        round_obj,
+        'course_name':  normalize_course_name(round_obj.course.name),
+        'tournament':   round_obj.tournament,
+        'spec':         spec,
+        'groups':       groups,
+        'refresh_secs': 30,
+        'tabs':         tabs,
+    })
+
+
+def _has_simple_game(round_obj, key: str) -> bool:
+    return _SIMPLE_GAME_SPECS[key]['game'] in (round_obj.active_games or [])
+
+
 _VIEW_DISPATCH = {
     'matches':      _render_matches,
     'low_net':      _render_low_net,
@@ -1859,6 +2006,9 @@ _VIEW_DISPATCH = {
     'red_ball':     _render_casual_red_ball,
     'irish_rumble': _render_casual_irish_rumble,
     'four_ball':    _render_cup_four_ball,
+    # The five per-player money games share one renderer; the key names which.
+    **{k: (lambda req, r, t, tabs, _k=k: _render_simple_game(req, r, t, tabs, _k))
+       for k in _SIMPLE_GAME_SPECS},
 }
 
 

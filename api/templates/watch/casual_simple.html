@@ -1,0 +1,71 @@
+{% extends "watch/base.html" %}
+
+{% comment %}
+  One template for every per-player money game — Survivor, Rabbit, Honors,
+  Spots and Banker. What changes between them is the label, the figure each
+  row counts and what that figure is called; all three come off `spec`, so a
+  new game of this shape joins by adding a row to `_SIMPLE_GAME_SPECS` and
+  writing no markup at all.
+
+  The layout is the one the Points 5-3-1 page already established: a group
+  pill with the game's settings beside it, then a row per golfer with the
+  figure and the money. A watcher is reading this on a phone, standing
+  somewhere else — the two numbers that answer "how are they doing" come
+  first and nothing scrolls sideways to reach them.
+{% endcomment %}
+
+{% block title %}
+{{ tournament.name|default:spec.label }} · {{ spec.label }}
+{% endblock %}
+
+{% block body %}
+  <h1>
+    {% if tournament %}{{ tournament.name }}{% else %}{{ spec.label }}{% endif %}
+  </h1>
+  <p class="sub">
+    {% if tournament %}Round {{ round.round_number }} · {% endif %}{{ round.date|date:"D, M j, Y" }} · {{ course_name }}{% if round.status == 'complete' %} · Final{% elif thru %} · Thru hole {{ thru }}{% endif %}
+  </p>
+
+  {% for g in groups %}
+    {% with summary=g.summary %}
+      <div class="card">
+        <div class="match-meta">
+          <span class="game-pill">Group {{ g.group_number }}</span>
+          <span class="meta-text">
+            {{ spec.label }}
+            {% if summary.handicap.mode %}
+              · {{ summary.handicap.mode|upper }}{% if summary.handicap.mode == 'net' and summary.handicap.net_percent != 100 %} ({{ summary.handicap.net_percent }}%){% endif %}
+            {% endif %}
+            {% if summary.money.bet_unit %} · ${{ summary.money.bet_unit|floatformat:"-2" }}{% endif %}
+          </span>
+        </div>
+
+        {% for r in g.rows %}
+          <div class="p531-row">
+            <span class="name">{{ r.name }}{% if r.phcp is not None %} <span class="phcp-inline">({{ r.phcp }})</span>{% endif %}</span>
+            <span class="pts">{{ r.figure|default:0 }} {% if r.figure == 1 %}{{ spec.unit_one }}{% else %}{{ spec.unit }}{% endif %}</span>
+            <span class="delta {% if r.money > 0 %}up{% elif r.money < 0 %}down{% endif %}">
+              {% if r.money > 0 %}+${{ r.money|floatformat:"-2" }}{% elif r.money < 0 %}−${{ r.money|floatformat:"-2"|cut:"-" }}{% else %}—{% endif %}
+            </span>
+          </div>
+        {% empty %}
+          {% comment %}
+            Nobody has a row yet. Say which game is waiting rather than
+            drawing an empty card — a watcher who opened this link wants to
+            know the round exists and has not started, not to wonder whether
+            the page is broken.
+          {% endcomment %}
+          <div class="empty" style="padding: 20px 4px;">
+            No scores yet. {{ spec.blurb }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endwith %}
+  {% empty %}
+    <div class="card">
+      <div class="empty" style="padding: 20px 4px;">
+        This round has no {{ spec.label }} group yet.
+      </div>
+    </div>
+  {% endfor %}
+{% endblock %}
