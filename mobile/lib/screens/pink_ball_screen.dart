@@ -13,6 +13,7 @@
 /// and syncs automatically (same path as all other entry screens).
 
 import '../widgets/standing_ribbon.dart';
+import '../widgets/stroke_play_progress_grid.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -660,10 +661,7 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                 par:              par,
                 yards:            hole?.yards,
                 si:               hole?.strokeIndex,
-                carrierName:      carrierName,
-                gameName:        _gameName,
                 irishRumbleBalls: _irishBallsToCount,
-                ballAlreadyLost:  _ballLostOnHole != null && _holeNumber > _ballLostOnHole!,
               ),
               const SizedBox(height: 12),
 
@@ -824,6 +822,42 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                 ),
               ),
 
+              // ── The group's card ────────────────────────────────────────
+              // **The same card a tournament round draws under the hole in
+              // score entry** (`widgets/stroke_play_progress_grid.dart`), which
+              // is where it came from. Pink Ball is a stroke-play tournament
+              // with a carried ball on top, and it was the one screen in the
+              // app with no card at all — a golfer entering the 14th could not
+              // see what his group had shot on the first thirteen.
+              //
+              // Above the match cards, because those are conclusions drawn
+              // from these scores: a reader handed a match state first has to
+              // scroll back up to check the numbers behind it.
+              //
+              // The handicap is the TOURNAMENT's — `scoringMode` is written for
+              // exactly this, the round's own fields being defaults no
+              // tournament ever touches.
+              //
+              // No `holesInPlay`: this screen indexes everything by hole NUMBER
+              // (`_carrierId` is `_order[_holeIndex % 3]`), so it has no play
+              // order to hand over — the pre-existing gap the shotgun sweep
+              // flagged at `18 - lastHole` below. The card falls back to 1..18,
+              // which is what the rest of the screen already assumes.
+              StrokePlayProgressGrid(
+                players:      realMembers,
+                scorecard:    sc,
+                currentHole:  _holeNumber,
+                onTapHole: (h) => setState(() {
+                  _holeIndex = h - 1;
+                  _ballLost  = _ballLostOnHole == h;
+                  _pendingScores.clear();
+                  _editHotPid = null;
+                }),
+                handicapMode: sc.scoringMode.isNotEmpty ? sc.scoringMode : 'net',
+                netPercent:   sc.scoringNetPercent,
+              ),
+
+
               // ── Match Play status (when match play is also active) ───────
               if (_matchPlayActive) ...[
                 const SizedBox(height: 12),
@@ -900,23 +934,19 @@ class _CarrierBanner extends StatelessWidget {
   final int     par;
   final int?    yards;
   final int?    si;
-  final String  carrierName;
-  final String  gameName;
   /// Number of scores that count for Irish Rumble on this hole, or null if
   /// Irish Rumble is not an active game.
   final int?    irishRumbleBalls;
-  /// True when the ball was lost on a previous hole — hides carrier info.
-  final bool    ballAlreadyLost;
 
+  // `carrierName`, `gameName` and `ballAlreadyLost` are gone with the line
+  // they fed. The standing row says who has it and whether it is still alive;
+  // leaving the parameters behind would be three inputs nothing reads.
   const _CarrierBanner({
     required this.holeNumber,
     required this.par,
     this.yards,
     this.si,
-    required this.carrierName,
-    required this.gameName,
     this.irishRumbleBalls,
-    this.ballAlreadyLost = false,
   });
 
   @override
@@ -944,29 +974,14 @@ class _CarrierBanner extends StatelessWidget {
             ],
           ]),
           const SizedBox(height: 10),
-          if (!ballAlreadyLost) ...[
-            Row(children: [
-              Icon(Icons.sports_golf,
-                  size: 18,
-                  color: theme.colorScheme.primary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: RichText(
-                  text: TextSpan(
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onPrimaryContainer),
-                    children: [
-                      TextSpan(
-                        text: carrierName,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      TextSpan(text: ' carries the $gameName'),
-                    ],
-                  ),
-                ),
-              ),
-            ]),
-          ],
+          // **`<Name> carries the <Game>` came off.** The standing row in the
+          // app bar says it now — `Allan Peterson has it` — and the two sit
+          // in one glance, which is the case §7 says a second copy is not
+          // allowed in.
+          //
+          // The per-row carrier badge and accent border STAY: they mark WHICH
+          // ROW is his, which is the actionable half and the one a name in a
+          // bar cannot do.
           if (irishRumbleBalls != null) ...[
             const SizedBox(height: 6),
             Row(children: [
