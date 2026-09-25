@@ -121,32 +121,80 @@ class RankInFlightsTests(SimpleTestCase):
         ranked, _ = self._run(agg, {1: 2, 2: 1, 3: 2, 4: 1})
         self.assertEqual([f for _p, _d, _r, f in ranked], [1, 1, 2, 2])
 
-    def test_each_flight_pays_the_same_table(self):
+    def test_equal_flights_pay_equal_shares_of_the_table(self):
+        """**Not the whole table each.** That was the money bug: two flights
+        funded by one pool each paid it in full, so the event went out at
+        twice what came in. Reported from a real event, 25 Sep 2026.
+
+        Three and three out of six is half the table each."""
         agg = {p: {'ntp': p, 'holes': 18} for p in range(1, 7)}
         _ranked, pay = self._run(agg, {1: 1, 2: 1, 3: 1, 4: 2, 5: 2, 6: 2})
-        self.assertEqual(pay[1], 100.0)
-        self.assertEqual(pay[4], 100.0)          # flight 2's winner, same money
-        self.assertEqual(pay[3], 40.0)
-        self.assertEqual(pay[6], 40.0)
+        self.assertEqual(pay[1], 50.0)
+        self.assertEqual(pay[4], 50.0)          # flight 2's winner, same size
+        self.assertEqual(pay[3], 20.0)
+        self.assertEqual(pay[6], 20.0)
 
-    def test_the_event_pays_the_table_once_per_flight_and_no_more(self):
+    def test_an_uneven_cut_pays_each_flight_what_its_own_golfers_put_in(self):
+        """*"15 in to 2 flights … the first flight divides $80 and the second
+        $70."* Five and three out of eight is 5/8 and 3/8 of the table."""
         agg = {p: {'ntp': p, 'holes': 18} for p in range(1, 9)}
         _ranked, pay = self._run(
-            agg, {1: 1, 2: 1, 3: 1, 4: 1, 5: 2, 6: 2, 7: 2, 8: 2})
+            agg, {1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 2, 7: 2, 8: 2})
+        table = sum(self.TABLE.values())
+        big = sum(v for p, v in pay.items() if p <= 5 and v)
+        small = sum(v for p, v in pay.items() if p > 5 and v)
+        self.assertAlmostEqual(big, table * 5 / 8, places=2)
+        self.assertAlmostEqual(small, table * 3 / 8, places=2)
+
+    def test_the_event_pays_the_table_ONCE_however_it_is_cut(self):
+        """So long as every flight is big enough to fill the paid places —
+        see the test below, which is where that stops being true."""
+        agg = {p: {'ntp': p, 'holes': 18} for p in range(1, 10)}
+        for cut in ({p: 1 if p <= 4 else 2 for p in range(1, 10)},
+                    {p: 1 if p <= 5 else 2 for p in range(1, 10)},
+                    {p: (p - 1) // 3 + 1 for p in range(1, 10)}):
+            with self.subTest(cut=sorted(set(cut.values()))):
+                _ranked, pay = self._run(agg, cut)
+                total = sum(v for v in pay.values() if v)
+                self.assertAlmostEqual(total, sum(self.TABLE.values()),
+                                       places=2)
+
+    def test_a_flight_smaller_than_the_paid_places_strands_money(self):
+        """A property of the arithmetic, and deliberately left alone.
+
+        The table pays three places; a flight of two has nobody in 3rd, so
+        that share of its purse goes unclaimed and the event pays out less
+        than it collected.
+
+        **Ruled not worth guarding, 25 Sep 2026 — "seems like an absurd
+        case", and it is.** It needs a flight SMALLER than the paid-places
+        count: three places means a flight of two, so four golfers cut in two
+        or six cut in three. Nobody flights a six-man field. And a TD who does
+        pay four places to a flight of three sees a paid place with nobody
+        standing in it, on his own board, immediately.
+
+        Pinned so the next person who notices the arithmetic does not "fix" it
+        by redistributing money the table never assigned — which would pay a
+        golfer a place he did not finish in.
+        """
+        agg = {p: {'ntp': p, 'holes': 18} for p in range(1, 9)}
+        _ranked, pay = self._run(agg, {p: (p - 1) // 2 + 1 for p in range(1, 9)})
         total = sum(v for v in pay.values() if v)
-        self.assertAlmostEqual(total, sum(self.TABLE.values()) * 2)
+        self.assertLess(total, sum(self.TABLE.values()))
 
     def test_a_tie_inside_a_flight_splits_that_flights_places_only(self):
-        # 1 and 2 tie for first in flight 1: they share 1st+2nd = $80 each, and
-        # flight 2 is untouched.
+        # 1 and 2 tie for first in flight 1 (three of five golfers, so 3/5 of
+        # the table): they share its 1st+2nd, and flight 2 is untouched.
         agg = {1: {'ntp': -4, 'holes': 18}, 2: {'ntp': -4, 'holes': 18},
                3: {'ntp': 2, 'holes': 18},
                4: {'ntp': -1, 'holes': 18}, 5: {'ntp': 5, 'holes': 18}}
         _ranked, pay = self._run(agg, {1: 1, 2: 1, 3: 1, 4: 2, 5: 2})
-        self.assertEqual(pay[1], 80.0)
-        self.assertEqual(pay[2], 80.0)
-        self.assertEqual(pay[3], 40.0)
-        self.assertEqual(pay[4], 100.0)
+        self.assertEqual(pay[1], pay[2])
+        self.assertAlmostEqual(
+            pay[1] + pay[2] + pay[3],
+            sum(self.TABLE.values()) * 3 / 5, places=2)
+        # Flight 2 has two of the five, and pays its own 1st out of that.
+        self.assertGreater(pay[4], 0)
 
     def test_a_tie_does_not_let_a_flight_overpay_its_table(self):
         # Three tied for 1st share places 1+2+3.
