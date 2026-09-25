@@ -26,6 +26,7 @@ import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/borrowed_fourth.dart';
 import '../widgets/golf_app_bar.dart';
+import '../utils/play_order.dart';
 import '../widgets/hole_header.dart';
 import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart';
@@ -42,7 +43,16 @@ class PinkBallScreen extends StatefulWidget {
 }
 
 class _PinkBallScreenState extends State<PinkBallScreen> {
-  int  _holeIndex = 0;          // 0-based; displayed as hole _holeIndex+1
+  /// **The group's POSITION in its round, 0-based — not the hole number.**
+  ///
+  /// The ball's rotation follows position (ruled 25 Sep 2026): the first golfer
+  /// in [_order] carries it off the group's FIRST TEE, whichever hole that is.
+  /// This used to be `holeNumber - 1`, which is the same integer only when the
+  /// round starts on the 1st — off a shotgun it handed the ball to the wrong
+  /// golfer, and since the carrier's net IS the ball's score the group was
+  /// ranked on scores nobody shot. `services/red_ball.py` carried the identical
+  /// mistake and was corrected in the same commit.
+  int  _pos = 0;
   bool _ballLost  = false;
   bool _saving    = false;
 
@@ -50,8 +60,20 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
   // the tab, the carrier badge, the lost-ball switch and the chat line —
   // so nothing here appends the word 'Ball' to a colour any more.
   String _gameName = 'Pink Ball';
-  List<int> _order  = [];       // 18 player PKs (carrier per hole)
+  List<int> _order  = [];       // player PKs, BY POSITION in the round
   bool _configLoaded = false;
+
+  /// This group's holes in play order — `[13, 14, …, 18, 1, …, 12]` off a
+  /// shotgun start. Empty until the scorecard loads; [_holesInPlay] covers that.
+  List<int> _holes = [];
+
+  /// The play order, or a plain 1..18 before the round is known. Every index in
+  /// this screen is into THIS list.
+  List<int> get _holesInPlay =>
+      _holes.isEmpty ? [for (var i = 1; i <= 18; i++) i] : _holes;
+
+  /// The last position in the round — where Finish replaces Next.
+  int get _lastPos => _holesInPlay.length - 1;
 
   // Ball-lost tracking: null = ball still in play.
   int? _ballLostOnHole;
@@ -123,14 +145,34 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
     if (rp.scorecard == null) {
       await rp.loadScorecard(widget.foursomeId);
     }
-    // Jump to first unplayed hole
+    // The play order first — everything below indexes into it.
     final sc = rp.scorecard;
+    final holes = roundPlayOrder(
+      rp.round,
+      sc,
+      foursome: rp.round?.foursomes
+          .where((f) => f.id == widget.foursomeId)
+          .firstOrNull,
+    );
+    // Jump to the first unplayed hole IN PLAY ORDER. `indexWhere` over
+    // `sc.holes` returned an index into a list sorted by hole number, so a
+    // shotgun group resumed at the lowest unscored NUMBER — often a hole it had
+    // not reached yet, with the whole screen then a hole out of step.
     if (sc != null) {
-      final firstEmpty = sc.holes.indexWhere(
-          (h) => h.scores.any((s) => s.grossScore == null));
-      if (firstEmpty >= 0) {
-        setState(() => _holeIndex = firstEmpty);
+      var firstEmpty = -1;
+      for (var i = 0; i < holes.length; i++) {
+        final hd = sc.holeData(holes[i]);
+        if (hd == null || hd.scores.any((x) => x.grossScore == null)) {
+          firstEmpty = i;
+          break;
+        }
       }
+      setState(() {
+        _holes = holes;
+        if (firstEmpty >= 0) _pos = firstEmpty;
+      });
+    } else {
+      setState(() => _holes = holes);
     }
     // Load match play data if that game is also active — but NOT for
     // 3-player foursomes that play Three-Person Match (5-3-1) instead of
@@ -355,7 +397,10 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
-  int get _holeNumber => _holeIndex + 1;
+  /// The hole the group is standing on — read OUT of the play order rather than
+  /// derived from the position, which is the whole point of the fix.
+  int get _holeNumber =>
+      _holesInPlay[_pos.clamp(0, _holesInPlay.length - 1)];
 
   /// **Whose ball is it, and is it still alive.**
   ///
@@ -452,15 +497,18 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
   }
 
   /// Player PK who carries the ball on the current hole.
+  /// Who is carrying. `_pos` is the POSITION, so this is the ruling stated in
+  /// one line: the Nth hole of the group's round belongs to the Nth name in the
+  /// rotation. Mirrors `services/red_ball.carrier_at`.
   int? get _carrierId {
     if (_order.isEmpty) return null;
-    return _order[_holeIndex % _order.length];
+    return _order[_pos % _order.length];
   }
 
-  ScorecardHole? _currentHole(Scorecard sc) {
-    if (_holeIndex >= sc.holes.length) return null;
-    return sc.holes[_holeIndex];
-  }
+  /// Looked up BY HOLE NUMBER, not by index into `sc.holes` — that list is
+  /// ordered by hole number, so indexing it with a position read the wrong row
+  /// on a shotgun (and the right one only by coincidence).
+  ScorecardHole? _currentHole(Scorecard sc) => sc.holeData(_holeNumber);
 
   /// Gross score to SHOW for a player on the current hole:
   /// 1. Session-pending edit (_pendingScores)
@@ -541,19 +589,41 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
         });
       }
     }
-    if (ok && advance && _holeIndex < 17) {
+    if (ok && advance && _pos < _lastPos) {
       setState(() {
-        _holeIndex++;
-        _ballLost = _ballLostOnHole == (_holeIndex + 1); // restore for new hole
+        _pos++;
+        _ballLost = _ballLostOnHole == _holeNumber;  // restore for the new hole
         _pendingScores.clear();
         _editHotPid = null;
       });
-    } else if (ok && advance && _holeIndex == 17) {
-      // Finished hole 18
+    } else if (ok && advance && _pos == _lastPos) {
+      // The group's LAST hole, which off a shotgun is not the 18th.
+      final n = _holesInPlay.length;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('All 18 holes saved!')),
+        SnackBar(content: Text('All $n holes saved!')),
       );
     }
+  }
+
+  /// Adopt this group's play order when it changes (or first becomes knowable).
+  ///
+  /// A post-frame `setState` because it is called FROM build. The equality check
+  /// is what keeps that safe: an unchanged order schedules nothing.
+  void _syncPlayOrder(Round? round, Scorecard? sc, Foursome? foursome) {
+    final holes = roundPlayOrder(round, sc, foursome: foursome);
+    if (holes.length == _holes.length &&
+        (holes.isEmpty || holes.first == _holes.first)) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _holes = holes;
+        // Keep the position inside the new round rather than off the end of it.
+        if (_pos > holes.length - 1) _pos = holes.length - 1;
+        if (_pos < 0) _pos = 0;
+      });
+    });
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -574,6 +644,13 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
     final foursome = round?.foursomes.firstWhere(
         (f) => f.id == widget.foursomeId,
         orElse: () => round!.foursomes.first);
+
+    // **The play order, re-derived once the round is actually in hand.**
+    // `_initScreen` computes it too, but it can run before `rp.round` has
+    // landed, and `roundPlayOrder(null, …)` quietly answers 1..18 — which for a
+    // shotgun group is a plausible wrong answer rather than an error. Fires only
+    // on a real change, so it is not a rebuild loop.
+    _syncPlayOrder(round, sc, foursome);
     final realMembers = foursome?.memberships
             .where((m) => !m.player.isPhantom)
             .toList() ??
@@ -711,21 +788,14 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                     // first golfer's index is not the group's, and a stroke
                     // falls where the index says.
                     //
-                    // **No `holesInPlay`, so no `3 of 9` marker — deliberately.**
-                    // This screen walks 1..18 by hole NUMBER (`_holeIndex`), so
-                    // on a shotgun round starting on the 7th it opens on hole 1
-                    // while the group is standing on their first tee. A position
-                    // marker fed from a play order the screen does not follow
-                    // would read `1 of 18` there, which is worse than saying
-                    // nothing. The fix is play-order navigation — and that moves
-                    // `_carrierId` (`_order[_holeIndex % 3]`), i.e. who carries
-                    // the ball, so it is a money change and its own piece of
-                    // work. Same gap the shotgun sweep flagged at
-                    // `18 - lastHole` further down.
+                    // The `3 of 9` marker works here now: the screen navigates
+                    // by POSITION, so the order it hands over is the one it
+                    // actually follows. It was withheld until that was true.
                     HoleHeader(
-                      holeData:   hole,
-                      holeNumber: _holeNumber,
-                      players:    realMembers,
+                      holeData:    hole,
+                      holeNumber:  _holeNumber,
+                      players:     realMembers,
+                      holesInPlay: _holes,
                     ),
                     // Where score entry puts its hole-outcome banners: under
                     // the header, above the rows.
@@ -881,17 +951,17 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
               // exactly this, the round's own fields being defaults no
               // tournament ever touches.
               //
-              // No `holesInPlay`: this screen indexes everything by hole NUMBER
-              // (`_carrierId` is `_order[_holeIndex % 3]`), so it has no play
-              // order to hand over — the pre-existing gap the shotgun sweep
-              // flagged at `18 - lastHole` below. The card falls back to 1..18,
-              // which is what the rest of the screen already assumes.
+              // The card draws only the holes the group plays, in order, now
+              // that the screen knows them.
               StrokePlayProgressGrid(
                 players:      realMembers,
                 scorecard:    sc,
                 currentHole:  _holeNumber,
+                holesInPlay:  _holes,
                 onTapHole: (h) => setState(() {
-                  _holeIndex = h - 1;
+                  // By POSITION. `h - 1` was an index into 1..18.
+                  final i = _holesInPlay.indexOf(h);
+                  if (i >= 0) _pos = i;
                   _ballLost  = _ballLostOnHole == h;
                   _pendingScores.clear();
                   _editHotPid = null;
@@ -929,17 +999,20 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
           child: Row(children: [
             OutlinedButton.icon(
-              onPressed: _holeIndex == 0
+              onPressed: _pos == 0
                   ? null
                   : () => setState(() {
-                        final newIdx = _holeIndex - 1;
-                        _holeIndex = newIdx;
-                        _ballLost  = _ballLostOnHole == (newIdx + 1);
+                        _pos--;
+                        _ballLost  = _ballLostOnHole == _holeNumber;
                         _pendingScores.clear();
                         _editHotPid = null;
                       }),
               icon: const Icon(Icons.chevron_left),
-              label: Text(_holeIndex == 0 ? 'Previous' : 'Hole $_holeIndex'),
+              // The previous hole in the group's ORDER — `Hole 18` when a
+              // shotgun group off the 13th steps back from the 1st.
+              label: Text(_pos == 0
+                  ? 'Previous'
+                  : 'Hole ${_holesInPlay[_pos - 1]}'),
             ),
             const Spacer(),
             FilledButton.icon(
@@ -951,14 +1024,14 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                       width: 16, height: 16,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
-                  : Icon(_holeIndex == 17
+                  : Icon(_pos == _lastPos
                       ? Icons.check
                       : Icons.chevron_right),
               label: Text(_saving
                   ? 'Saving…'
-                  : _holeIndex == 17
+                  : _pos == _lastPos
                       ? 'Finish'
-                      : 'Hole ${_holeNumber + 1}'),
+                      : 'Hole ${_holesInPlay[_pos + 1]}'),
               iconAlignment: IconAlignment.end,
             ),
           ]),
@@ -1621,8 +1694,14 @@ class _ThreePersonMatchPhase2Card extends StatelessWidget {
     if (p2Status == 'pending') return 'Waiting for hole 10 scores';
     if (p2Status == 'complete') {
       if (winnerName == null) return 'All Square after 18';
-      if (lastHole != null && lastHole < 18) {
-        return '$winnerName wins ${margin.abs()}&${18 - lastHole}';
+      // **`holes_to_play` comes from the server** — the `&M` rule: only the
+      // server knows the match's window, so only it can count what is left of
+      // one. `18 - lastHole` was the client doing that sum, which the shotgun
+      // sweep rules out. No fallback: a payload without the field is an older
+      // server, and a wrong margin is worse than a plain `2UP`.
+      final toPlay = (p2['holes_to_play'] as num?)?.toInt();
+      if (toPlay != null && toPlay > 0) {
+        return '$winnerName wins ${margin.abs()}&$toPlay';
       }
       return '$winnerName wins ${margin.abs()}UP';
     }

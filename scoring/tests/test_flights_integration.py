@@ -137,12 +137,16 @@ class FlightsIntegrationTests(TestCase):
         self.assertEqual(rows[0]['rank'], 1)
         self.assertEqual(rows[4]['rank'], 1)
 
-        # THE POINT: each flight pays the whole table, so the event pays it
-        # twice — $150 per flight, $300 in all.
+        # **THE POINT, corrected.** Each flight pays what its OWN golfers put
+        # in, so the event pays the table ONCE however it is cut. This used to
+        # assert $300 out of a $150 table — the money bug, pinned as though it
+        # were the rule. Reported from a real event, 25 Sep 2026.
         paid = [r['payout'] for r in rows if r['payout']]
-        self.assertAlmostEqual(sum(paid), 300.0)
-        self.assertAlmostEqual(rows[0]['payout'], 100.0)
-        self.assertAlmostEqual(rows[4]['payout'], 100.0)
+        self.assertAlmostEqual(sum(paid), 150.0)
+        # Four and four, so each flight holds half the table and pays half of
+        # each place.
+        self.assertAlmostEqual(rows[0]['payout'], 50.0)
+        self.assertAlmostEqual(rows[4]['payout'], 50.0)
 
     def test_unflighted_pays_the_table_once(self):
         self._field([2.0, 6.0, 11.0, 19.0, 25.0, 30.0, 33.0, 40.0])
@@ -215,9 +219,12 @@ class ExcludedFromTheLowNetPoolTests(FlightsIntegrationTests):
         for r in rows:
             if r['payout']:
                 by_flight.setdefault(r['flight'], []).append(r['payout'])
-        # Both flights still pay their whole table.
-        self.assertAlmostEqual(sum(by_flight[1]), 150.0)
-        self.assertAlmostEqual(sum(by_flight[2]), 150.0)
+        # Each flight pays its own share — four golfers of eight is half the
+        # table each — and an excluded golfer does not reduce it: the prize
+        # ranking is recomputed over the eligible, so the man behind him moves
+        # up a paid place rather than that place going unclaimed.
+        self.assertAlmostEqual(sum(by_flight[1]), 75.0)
+        self.assertAlmostEqual(sum(by_flight[2]), 75.0)
 
     def test_nobody_excluded_is_unchanged(self):
         self._field([2.0, 6.0, 11.0, 19.0])

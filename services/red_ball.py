@@ -7,10 +7,33 @@ Rules
 ~~~~~
 * Each foursome carries one physical red ball for the round.
 * The ball rotates through the players on a fixed schedule stored in
-  Foursome.pink_ball_order (a list of player PKs, one per hole).
+  Foursome.pink_ball_order (a list of player PKs).
 * If the designated player loses the physical ball on their hole
   (OB, water, unplayable and not recovered), that foursome is eliminated.
 * The last foursome with the ball survives and wins.
+
+The rotation follows POSITION IN THE ROUND, not hole number
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Ruled 25 Sep 2026. The first golfer in ``pink_ball_order`` carries the ball on
+the group's FIRST TEE, whichever hole that is — so a shotgun group off the 13th
+has him on the 13th, not on the 1st.
+
+This module read ``order[(hole_number - 1) % len(order)]`` throughout, which is
+the same thing only when the round starts on the 1st. Off a shotgun start it
+handed the ball to the wrong golfer on every hole, and since the carrier's net
+IS the ball's score, the group was ranked on scores nobody shot.
+
+Everything downstream follows from the same correction, because every one of
+these questions is about position and none of them is about a hole number:
+
+* which holes the ball has covered (walk the play order, not ``range(1, 19)``);
+* where the round ENDS (the last hole in play order, not hole 18);
+* **latest death wins** — later in the group's own round, so a ball lost on the
+  3rd played 16th beats one lost on the 15th played 3rd;
+* the ball stops counting at the position it died, not at every hole numbered
+  below it;
+* ``thru`` is a COUNT of holes played (RULINGS §9), which on a shotgun is not
+  the number of the hole just finished.
 
 Ranking — by SURVIVAL, not by score
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -48,7 +71,33 @@ from django.db import transaction
 
 from games.models import PinkBallConfig, PinkBallHoleResult, PinkBallResult
 from scoring.models import HoleScore
+from services.hole_plan import play_order
 from tournament.models import Foursome
+
+
+# ---------------------------------------------------------------------------
+# Position, not hole number
+# ---------------------------------------------------------------------------
+
+def carrier_at(order: list, position: int):
+    """The player PK carrying the ball at 0-based ``position`` in the round.
+
+    The ONE place the rotation rule lives. ``order`` is usually as long as the
+    round, but the modulo is kept so a short order (or a re-drawn one) still
+    rotates rather than raising.
+    """
+    return order[position % len(order)] if order else None
+
+
+def carrier_on_hole(order: list, holes: list, hole_number: int):
+    """The carrier on ``hole_number``, resolved through the group's play order.
+
+    Returns None when the hole is not one the group plays — better than the old
+    arithmetic, which silently answered for a hole outside the round.
+    """
+    if hole_number not in holes:
+        return None
+    return carrier_at(order, holes.index(hole_number))
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +110,8 @@ def record_hole(round_obj, foursome, hole_number: int,
     Create or update the PinkBallHoleResult for one foursome on one hole.
 
     Automatically identifies the designated player from
-    Foursome.pink_ball_order (0-indexed list → hole 1 = index 0).
+    Foursome.pink_ball_order by the hole's POSITION in this group's play order
+    — index 0 is the group's first tee, which on a shotgun is not hole 1.
 
     Parameters
     ----------
@@ -77,7 +127,11 @@ def record_hole(round_obj, foursome, hole_number: int,
     if not order:
         raise ValueError(f"Foursome {foursome} has no pink_ball_order set.")
 
-    player_pk = order[(hole_number - 1) % len(order)]
+    holes = play_order(round_obj, foursome)
+    player_pk = carrier_on_hole(order, holes, hole_number)
+    if player_pk is None:
+        raise ValueError(
+            f"Hole {hole_number} is not in {foursome}'s play order {holes}.")
 
     result, _ = PinkBallHoleResult.objects.update_or_create(
         round       = round_obj,
@@ -138,9 +192,16 @@ def calculate_red_ball(round_obj) -> list:
     # avoid any cross-foursome key-collision issues.
     statuses = []
     for foursome in foursomes:
-        order     = foursome.pink_ball_order or []  # list of player PKs, 0-indexed
+        order     = foursome.pink_ball_order or []  # player PKs, by POSITION
+        holes     = play_order(round_obj, foursome)
         lost_hole = ball_lost_hole.get(foursome.pk)  # None = alive / survived
-        max_hole  = lost_hole if lost_hole is not None else 18
+        # **How far the ball got, counted in POSITIONS.** The ball stops at the
+        # hole it died on, and "the holes before it" means earlier in this
+        # group's round — not every hole with a smaller number. Off the 13th a
+        # ball lost on the 2nd has covered seven holes, and `range(1, 3)` would
+        # have counted two.
+        lost_pos  = holes.index(lost_hole) if lost_hole in holes else None
+        last_pos  = lost_pos if lost_pos is not None else len(holes) - 1
 
         # Build (player_id, hole_number) → net_score map for this foursome.
         # net_score may be NULL when Django's update_or_create() persists only
@@ -158,10 +219,11 @@ def calculate_red_ball(round_obj) -> list:
         net_total    = 0
         par_total    = 0
         holes_played = 0
-        for h in range(1, max_hole + 1):
+        for pos in range(last_pos + 1):
             if not order:
                 break
-            carrier_pk = order[(h - 1) % len(order)]
+            h = holes[pos]
+            carrier_pk = carrier_at(order, pos)
             ns = scores.get((carrier_pk, h))
             if ns is not None:
                 net_total    += ns
@@ -174,6 +236,10 @@ def calculate_red_ball(round_obj) -> list:
         statuses.append({
             'foursome'         : foursome,
             'eliminated_on'    : lost_hole,
+            # The POSITION it died at, which is what "latest death" compares.
+            # Kept beside the hole number rather than replacing it: the hole
+            # number is what a golfer is told, the position is what ranks him.
+            'eliminated_at_pos': lost_pos,
             'total_net'        : net_total,
             'net_to_par'       : net_total - par_total,
             'holes_played'     : holes_played,
@@ -185,7 +251,10 @@ def calculate_red_ball(round_obj) -> list:
     def sort_key(s):
         if s['eliminated_on'] is None:
             return (0, s['net_to_par'], -s['holes_played'])
-        return (1, -s['eliminated_on'], s['net_to_par'])
+        # By POSITION, not by hole number: off a shotgun the 3rd can be the
+        # 16th hole played, and a ball carried that far beat one lost on the
+        # 15th three holes in.
+        return (1, -(s['eliminated_at_pos'] or 0), s['net_to_par'])
 
     statuses.sort(key=sort_key)
 
@@ -196,7 +265,7 @@ def calculate_red_ball(round_obj) -> list:
     def tie_key(s):
         if s['eliminated_on'] is None:
             return (0, s['net_to_par'])
-        return (1, -s['eliminated_on'], s['net_to_par'])
+        return (1, -(s['eliminated_at_pos'] or 0), s['net_to_par'])
 
     shared_rank = []
     rank = 1
@@ -208,11 +277,16 @@ def calculate_red_ball(round_obj) -> list:
     # Mark the winner's last hole result
     PinkBallHoleResult.objects.filter(round=round_obj, is_winner=True).update(is_winner=False)
     if statuses and statuses[0]['eliminated_on'] is None:
-        # Winner survived — mark their hole 18 result
+        # Winner survived — mark their LAST hole, which is the last one in their
+        # own play order. Hardcoding 18 marked nothing on a back-nine round and
+        # the wrong hole on a shotgun.
         winner_fs = statuses[0]['foursome']
-        (PinkBallHoleResult.objects
-         .filter(round=round_obj, foursome=winner_fs, hole_number=18)
-         .update(is_winner=True))
+        winner_holes = play_order(round_obj, winner_fs)
+        if winner_holes:
+            (PinkBallHoleResult.objects
+             .filter(round=round_obj, foursome=winner_fs,
+                     hole_number=winner_holes[-1])
+             .update(is_winner=True))
 
     # Persist PinkBallResult rows
     PinkBallResult.objects.filter(round=round_obj).delete()
@@ -334,11 +408,11 @@ def red_ball_summary(round_obj) -> dict:
         # loss so the spectator page can read "Lost by RyanL" instead of
         # a generic hole number.
         order_list_for_lost = r.foursome.pink_ball_order or []
+        fs_holes            = play_order(round_obj, r.foursome)
         lost_by_short_name  = None
         if r.eliminated_on_hole is not None and order_list_for_lost:
-            carrier_pk = order_list_for_lost[
-                (r.eliminated_on_hole - 1) % len(order_list_for_lost)
-            ]
+            carrier_pk = carrier_on_hole(
+                order_list_for_lost, fs_holes, r.eliminated_on_hole)
             for m in members:
                 if m.player_id == carrier_pk:
                     lost_by_short_name = (
@@ -357,10 +431,16 @@ def red_ball_summary(round_obj) -> dict:
         # foursome have a gross score recorded.  PinkBallHoleResult rows are
         # only written when the ball is lost, so we derive progress from the
         # regular HoleScore table instead.
-        player_ids = [m.player_id for m in members]
+        # **Walked BACKWARDS ALONG THE PLAY ORDER**, not down from 18. The last
+        # hole a group finished is the last one in its own sequence; off the
+        # 13th the highest NUMBER it has scored is 18 after six holes, which
+        # reads as a round almost done.
+        player_ids   = [m.player_id for m in members]
         current_hole = None
+        current_pos  = None          # 0-based; None = nothing complete yet
         if player_ids:
-            for h in range(18, 0, -1):
+            for pos in range(len(fs_holes) - 1, -1, -1):
+                h = fs_holes[pos]
                 scored_count = HoleScore.objects.filter(
                     foursome=r.foursome,
                     hole_number=h,
@@ -369,6 +449,7 @@ def red_ball_summary(round_obj) -> dict:
                 ).count()
                 if scored_count >= len(player_ids):
                     current_hole = h
+                    current_pos  = pos
                     break
 
         # net_to_par: carrier's cumulative (net_score − par) across played holes.
@@ -379,12 +460,17 @@ def red_ball_summary(round_obj) -> dict:
         carrier_net   = None   # fresh total for display
         order_list    = r.foursome.pink_ball_order or []
         if hole_pars and order_list:
-            holes_max = (r.eliminated_on_hole if r.eliminated_on_hole is not None
-                         else (current_hole or 0))
+            # In POSITIONS, like the calculator: how far the ball got in this
+            # group's own round.
+            if r.eliminated_on_hole is not None and r.eliminated_on_hole in fs_holes:
+                last_pos = fs_holes.index(r.eliminated_on_hole)
+            else:
+                last_pos = current_pos if current_pos is not None else -1
             net_sum = 0
             par_sum = 0
-            for h in range(1, holes_max + 1):
-                carrier_pk = order_list[(h - 1) % len(order_list)]
+            for pos in range(last_pos + 1):
+                h = fs_holes[pos]
+                carrier_pk = carrier_at(order_list, pos)
                 ns = hs_lookup_summary.get((r.foursome_id, carrier_pk, h))
                 if ns is not None:
                     net_sum += ns
@@ -398,9 +484,13 @@ def red_ball_summary(round_obj) -> dict:
         alive        = r.eliminated_on_hole is None
         carrier      = None
         carrier_hole = None
-        if alive and order_list:
-            carrier_hole = min((current_hole or 0) + 1, 18)
-            carrier_pk   = order_list[(carrier_hole - 1) % len(order_list)]
+        if alive and order_list and fs_holes:
+            # The NEXT hole in the group's own order — and it stays on the last
+            # one when the round is done rather than inventing a 19th.
+            next_pos     = min((current_pos + 1) if current_pos is not None else 0,
+                               len(fs_holes) - 1)
+            carrier_hole = fs_holes[next_pos]
+            carrier_pk   = carrier_at(order_list, next_pos)
             carrier = next((m.player.name for m in members
                             if m.player_id == carrier_pk), None)
 
@@ -409,11 +499,17 @@ def red_ball_summary(round_obj) -> dict:
         # column.  After the ball is lost, freeze at the elimination
         # hole so the row reads e.g. "Thru 8 · Lost by RyanL" instead
         # of advancing along with later side-game scoring.
-        display_thru = (
-            r.eliminated_on_hole
-            if r.eliminated_on_hole is not None
-            else current_hole
-        )
+        #
+        # **A COUNT of holes played, not a hole number** (RULINGS §9). The two
+        # are the same integer on a round starting on the 1st, which is why this
+        # read as a hole number for so long; off the 13th a group six holes in
+        # has scored up to hole 18 and the column said `Thru 18`.
+        if r.eliminated_on_hole is not None and r.eliminated_on_hole in fs_holes:
+            display_thru = fs_holes.index(r.eliminated_on_hole) + 1
+        elif r.eliminated_on_hole is not None:
+            display_thru = None       # a hole this group does not play
+        else:
+            display_thru = (current_pos + 1) if current_pos is not None else None
         summary_rows.append({
             'rank'              : r.rank,
             'group_number'      : r.foursome.group_number,

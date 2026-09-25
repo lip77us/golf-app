@@ -338,19 +338,13 @@ void main() {
     //    position marker (`3 of 9`) the others lack.
 
     test('every screen that names a hole passes its play order', () {
-      // The marker is the point of the sweep and it needs the order. Pink Ball
-      // is the one exception and its file says why: it navigates by hole NUMBER,
-      // so a marker fed from an order it does not follow would read `1 of 18`
-      // with the group on their first tee of a shotgun.
+      // No exceptions left. Pink Ball was one for a day: it navigated by hole
+      // NUMBER, so an order it did not follow would have marked `1 of 18` with
+      // the group on their first tee. It navigates by POSITION now — the ball's
+      // rotation was ruled to follow position on 25 Sep 2026 — so it hands over
+      // the order it actually walks.
       for (final path in screens) {
-        final src = File(path).readAsStringSync();
-        if (path.endsWith('pink_ball_screen.dart')) {
-          expect(src.contains('No `holesInPlay`, so no `3 of 9` marker'), isTrue,
-              reason: 'Pink Ball omits the marker on purpose — keep the reason '
-                  'in the file, or give it play-order navigation.');
-          continue;
-        }
-        expect(src.contains('holesInPlay'), isTrue,
+        expect(File(path).readAsStringSync().contains('holesInPlay'), isTrue,
             reason: '$path draws HoleHeader but hands it no play order, so a '
                 'shotgun group gets no position marker.');
       }

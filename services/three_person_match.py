@@ -895,6 +895,21 @@ def three_person_match_summary(foursome: Foursome) -> dict | None:
         current_margin = p2_holes_out[-1]['margin'] if p2_holes_out else 0
         last_hole      = p2_holes_out[-1]['hole']   if p2_holes_out else None
 
+        # **The `M` in "3&2" ships from the server.** The client was computing
+        # `18 - last_hole`, which the shotgun sweep rules out: only the server
+        # knows the match's window, so only it can count what is left of one.
+        #
+        # NOTE the window itself is holes 10-18 by NUMBER (`phase2_start_hole`
+        # is hardcoded to 10), so off a shotgun start this counts against a nine
+        # the group may not be playing second. That is the SAME open rules
+        # question the sweep flagged for `tournament_match_play` — is "the back
+        # nine" holes 10-18, or the second nine played? — and it is a ruling, not
+        # a patch. This field is faithful to the definition in force; correct the
+        # definition and this follows it.
+        p2_window        = list(range(game.phase2_start_hole, 19))
+        holes_to_play    = (len(p2_window) - p2_window.index(last_hole) - 1
+                            if last_hole in p2_window else None)
+
         winner_name = None
         if game.match_winner_id:
             w = pid_to_player.get(game.match_winner_id)
@@ -915,6 +930,8 @@ def three_person_match_summary(foursome: Foursome) -> dict | None:
             'runner_up_name': game.phase1_runner_up.short_name,
             'margin'        : current_margin,
             'last_hole'     : last_hole,
+            # Holes left in the match's own window after `last_hole` — the `M`.
+            'holes_to_play' : holes_to_play,
             'winner_name'   : winner_name,
             'holes'         : p2_holes_out,
         }
