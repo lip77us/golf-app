@@ -8,7 +8,6 @@
 ///   • 18-hole summary grid with per-hole winner indicator
 ///   • Bottom hole-navigation bar (← Hole N-1 | Hole N+1 →)
 /// Nassau-specific additions layered around the entry pattern:
-///   • Team banner (Blue vs Orange colour dots + names)
 ///   • Presses strip (active/completed presses)
 ///   • F9 / B9 / Overall match status chips + Call Press button
 
@@ -38,7 +37,6 @@ import '../utils/match_notation.dart';
 import '../utils/nassau_standing.dart';
 import '../widgets/standing_ribbon.dart';
 import '../game_colors.dart';
-import '../providers/auth_provider.dart';
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -432,7 +430,9 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
     if (summary == null) return null;
     final round = rp.round;
     if (round == null) return null;
-    final me = context.read<AuthProvider>().player?.id;
+    // No reader: the row is about the MATCH, and nothing in it is relative to
+    // whoever is holding the phone — which is what lets a TD entering for a
+    // group he is not in see the match rather than `Tee off`.
     final standing = nassauStanding(summary, hole: _selectedHole);
     Color? tint(int? team) => team == null
         ? null
@@ -699,9 +699,14 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
     });
 
     return Column(children: [
-      // Team banner (Blue vs Orange colour dots + names)
-      if (nas != null) _TeamBanner(summary: nas),
-
+      // **The team banner came off**, the same call casual Nassau made: it
+      // named the two sides in their colours directly above four player rows
+      // that are already tinted those colours and already carry the names. It
+      // was the colours again, in words — and it was spending a row of a
+      // phone that the progress scorecard below can use. Reported 25 Sep 2026.
+      //
+      // The standing row in the app bar says where the match stands, which is
+      // the part a banner never told anybody.
       // Presses strip — show only presses for the current nine.
       // Front-nine presses are cleared once we reach hole 10.
       if (nas != null &&
@@ -2003,51 +2008,6 @@ class _NassauGridPlayerRow extends StatelessWidget {
 // Team banner
 // ---------------------------------------------------------------------------
 
-class _TeamBanner extends StatelessWidget {
-  final NassauSummary summary;
-  const _TeamBanner({required this.summary});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    // Team 1 (Blue) on the left, Team 2 (Orange) on the right.
-    final leftLabel  = summary.team1.map((p) => p.name).join(' & ');
-    final rightLabel = summary.team2.map((p) => p.name).join(' & ');
-    final leftColor  = nassauTeamColor(1);
-    final rightColor = nassauTeamColor(2);
-
-    return Container(
-      color: theme.colorScheme.surfaceContainerHighest,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(children: [
-        nassauTeamDot(1),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(leftLabel,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: leftColor,
-              ),
-              overflow: TextOverflow.ellipsis),
-        ),
-        Text(' vs ',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        Expanded(
-          child: Text(rightLabel,
-              textAlign: TextAlign.right,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: rightColor,
-              ),
-              overflow: TextOverflow.ellipsis),
-        ),
-        const SizedBox(width: 6),
-        nassauTeamDot(2),
-      ]),
-    );
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Presses strip
