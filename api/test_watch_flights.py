@@ -40,9 +40,17 @@ class WatchFlightHeaderTests(TestCase):
         LowNetChampionshipConfig.objects.create(
             tournament=self.tourn,
             payouts=[{'place': 1, 'amount': 40}])
-        par = {h['number']: h['par'] for h in DEFAULT_HOLES}
+        self.par = {h['number']: h['par'] for h in DEFAULT_HOLES}
+
+    def _cut(self, n):
+        """Cut, THEN play — the only order the server allows, because a cut
+        is frozen once the field has posted a score."""
+        set_flights(self.tourn, n)
+        self._play()
+
+    def _play(self):
         submit_hole(self.fs, 1, [
-            (m.player_id, par[1]) for m in self.fs.memberships.all()])
+            (m.player_id, self.par[1]) for m in self.fs.memberships.all()])
 
     def _page(self):
         # `stroke_play`, not `low_net`. Both draw `low_net.html`, but only the
@@ -58,12 +66,13 @@ class WatchFlightHeaderTests(TestCase):
 
     def test_an_unflighted_board_draws_no_header(self):
         """One board is the degenerate case and must stay exactly as it was."""
+        self._play()
         body = self._page()
         self.assertNotIn(self.HEAD, body)
         self.assertIn('Ann', body)
 
     def test_a_flighted_board_names_each_flight(self):
-        set_flights(self.tourn, 2)
+        self._cut(2)
         body = self._page()
         self.assertIn(self.HEAD, body)
         # Two headers, because the ranks restart twice.
@@ -75,7 +84,7 @@ class WatchFlightHeaderTests(TestCase):
     def test_the_header_carries_the_size_and_the_purse(self):
         """The purse is the full TABLE, identical for every flight — summing
         what a flight has actually paid reads as `$0` before anybody scores."""
-        set_flights(self.tourn, 2)
+        self._cut(2)
         body = self._page()
         self.assertIn('2 golfers', body)
         # `floatformat:"-2"` strips the decimals on a whole number.
@@ -83,13 +92,13 @@ class WatchFlightHeaderTests(TestCase):
 
     def test_a_header_appears_once_per_flight_not_once_per_golfer(self):
         """`ifchanged` on the row's flight, so it marks the boundary."""
-        set_flights(self.tourn, 2)
+        self._cut(2)
         body = self._page()
         self.assertEqual(body.count('<span class="flight-label">A</span>'), 1)
         self.assertEqual(body.count('<span class="flight-label">B</span>'), 1)
 
     def test_clearing_the_cut_takes_the_headers_away(self):
-        set_flights(self.tourn, 2)
+        self._cut(2)
         self.assertIn(self.HEAD, self._page())
         # Back to one board the way the app does it — the DELETE endpoint,
         # which drops the frozen rows and zeroes the count. `set_flights(0)`

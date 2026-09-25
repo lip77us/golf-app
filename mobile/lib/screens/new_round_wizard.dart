@@ -3347,16 +3347,23 @@ class _StepScoring extends StatelessWidget {
     final muted = theme.colorScheme.onSurfaceVariant;
     return SectionCard(
       title: 'Flights',
+      // **`AFTER PAIRINGS`, not `LATER`.** The chip used to read LATER,
+      // meaning later in the setup, and it was read as later in the ROADMAP —
+      // reported by the TD running 2.9.1, who concluded flights were not
+      // built. They are: the count, the preview and the cut all live on the
+      // championship screen. The badge contradicted the sentence under it,
+      // and the badge is what gets read.
       trailing: Chip(
-        label: const Text('LATER', style: TextStyle(fontSize: 9.5)),
+        label: const Text('AFTER PAIRINGS', style: TextStyle(fontSize: 9.5)),
         visualDensity: VisualDensity.compact,
         padding: EdgeInsets.zero,
       ),
       child: Text(
-        'One board for everyone, for now. Splitting the field gives each '
-        'flight its own board and its own payout — set it on the championship '
-        'screen once pairings are final, because equal-sized flights are '
-        'sized off the whole field and every late entry resizes them.',
+        'One board for everyone until you cut it. Splitting the field gives '
+        'each flight its own board and its own payout — set it on the '
+        'championship screen (Leaderboard \u2192 Configure) once pairings are '
+        'final, because equal-sized flights are sized off the whole field and '
+        'every late entry resizes them. The cut freezes at the first score.',
         style: theme.textTheme.bodySmall?.copyWith(color: muted, height: 1.45),
       ),
     );

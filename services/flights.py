@@ -174,6 +174,52 @@ def tournament_field(tournament, unindexed=None):
     return [(pid, None if pid in unindexed else idx) for pid, idx in rows]
 
 
+class FlightsLocked(Exception):
+    """The cut cannot move because the field has started playing under it."""
+
+
+def cut_is_locked(tournament) -> bool:
+    """True once any REAL golfer has posted a gross score in this tournament.
+
+    **Frozen means frozen.** Until this commit "frozen" in this module meant
+    *stored rather than recomputed* — the assignment was written down, and
+    nothing stopped a TD replacing it on the 14th. Re-cutting mid-round
+    silently re-ranks both boards and moves prize money under golfers who are
+    still on the course, which is the one thing a cut must not do.
+
+    Phantoms are excluded, the same rule `has_any_score` uses: a padded
+    three-ball must not lock a cut nobody has played a hole under.
+    """
+    from scoring.models import HoleScore
+    return HoleScore.objects.filter(
+        foursome__round__tournament=tournament,
+        gross_score__isnull=False,
+        player__is_phantom=False,
+    ).exists()
+
+
+def _same_cut(tournament, n_flights: int, unindexed) -> bool:
+    """True when this request would write exactly what is already stored.
+
+    **An idempotent re-post is not a change and is not refused.** A setup
+    screen that saves on close, or a double tap, must not be told the round
+    has started — the same rule Sequoya's pairing lock uses, where `[B, A]`
+    is not a redraw of `[A, B]`.
+    """
+    if (tournament.flight_count or 0) != n_flights:
+        return False
+    stored = dict(tournament.flights.values_list('player_id', 'flight'))
+    if not stored:
+        return False
+    stored_unindexed = set(
+        tournament.flights.filter(index_at_assignment__isnull=True)
+        .values_list('player_id', flat=True))
+    if stored_unindexed != set(unindexed or []):
+        return False
+    field = tournament_field(tournament, unindexed=set(unindexed or []))
+    return assign_flights(field, n_flights) == stored
+
+
 def set_flights(tournament, n_flights: int = None, unindexed=None):
     """Cut the field and FREEZE it. Returns ``{player_id: flight_no}``.
 
@@ -196,6 +242,15 @@ def set_flights(tournament, n_flights: int = None, unindexed=None):
         n_flights = tournament.flight_count
     if n_flights < 1:
         raise ValueError('Set a flight count of 1 or more before cutting.')
+
+    # **Refused in the SERVICE, not the view**, so every caller is covered —
+    # the lesson `setup_sixes` learned when its guard lived one layer up.
+    if cut_is_locked(tournament) and not _same_cut(
+            tournament, n_flights, unindexed):
+        raise FlightsLocked(
+            'The field has started playing under this cut, so it cannot '
+            'change. Re-cutting now would re-rank both boards and move prize '
+            'money under golfers who are still on the course.')
 
     field = tournament_field(tournament, unindexed=unindexed)
     known_ids = {pid for pid, _idx in field}

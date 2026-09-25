@@ -52,6 +52,10 @@ class _FlightsCardState extends State<FlightsCard> {
   int _n = 2;
   /// Golfers the TD has named as holding a guessed index.
   final Set<int> _unindexed = {};
+
+  /// Whether the cut is frozen because the field has started scoring. The
+  /// SERVER decides this; see the note on the banner below.
+  bool get _locked => _data?['locked'] == true;
   bool _namingOpen = false;
 
   @override
@@ -288,23 +292,54 @@ class _FlightsCardState extends State<FlightsCard> {
         ],
 
         const SizedBox(height: 12),
-        Row(children: [
-          FilledButton(
-            onPressed: _busy ? null : _cut,
-            child: Text(isCut
-                ? (_n == 1 ? 'Back to one board' : 'Re-cut')
-                : (_n == 1 ? 'One board' : 'Set flights')),
-          ),
-          if (isCut) ...[
-            const SizedBox(width: 8),
-            TextButton(
-              onPressed: _busy ? null : _clear,
-              child: const Text('Clear'),
+        // **Locked once the field has posted a score.** The server refuses it
+        // either way; this is so a TD reads the reason instead of pressing a
+        // button and being told no. Told by the server rather than counted
+        // here — a client deriving it would be a second copy of the rule, and
+        // would not know that a phantom's score does not lock a cut.
+        if (_locked) ...[
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(10),
             ),
-          ],
-        ]),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(Icons.lock_outline, size: 16, color: muted),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isCut
+                      ? 'The field has started playing under this cut, so it '
+                        'cannot change. Re-cutting now would re-rank both '
+                        'boards and move prize money under golfers who are '
+                        'still on the course.'
+                      : 'The field has started playing, so it can no longer '
+                        'be cut. Flights have to be set before the first '
+                        'score.',
+                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                ),
+              ),
+            ]),
+          ),
+        ] else
+          Row(children: [
+            FilledButton(
+              onPressed: _busy ? null : _cut,
+              child: Text(isCut
+                  ? (_n == 1 ? 'Back to one board' : 'Re-cut')
+                  : (_n == 1 ? 'One board' : 'Set flights')),
+            ),
+            if (isCut) ...[
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: _busy ? null : _clear,
+                child: const Text('Clear'),
+              ),
+            ],
+          ]),
 
-        if (isCut) ...[
+        if (isCut && !_locked) ...[
           const SizedBox(height: 6),
           Text(
             'Set once pairings are final. Re-cutting is a fresh cut, not a '

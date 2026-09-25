@@ -123,6 +123,9 @@ class TournamentFlightsEndpointTests(APITestCase):
         LowNetChampionshipConfig.objects.create(
             tournament=self.tournament, entry_fee=0,
             payouts=[{'place': 1, 'amount': 100.0}])
+        # Cut before a ball is struck — the order the freeze enforces.
+        self.client.post(self.url, {'n_flights': 2}, format='json')
+        self.tournament.refresh_from_db()      # the POST cut it, not this object
         par = {h['number']: h['par'] for h in DEFAULT_HOLES}
         for fs in self.round.foursomes.all():
             ids = [m.player_id for m in fs.memberships.all()
@@ -130,8 +133,6 @@ class TournamentFlightsEndpointTests(APITestCase):
             for h in range(1, 19):
                 submit_hole(fs, h, [(pid, par[h]) for pid in ids])
 
-        self.client.post(self.url, {'n_flights': 2}, format='json')
-        self.tournament.refresh_from_db()      # the POST cut it, not this object
         summary = low_net_championship_summary(self.tournament)
 
         self.assertEqual(summary['flight_count'], 2)
@@ -165,13 +166,17 @@ class TournamentFlightsEndpointTests(APITestCase):
 
         LowNetChampionshipConfig.objects.create(
             tournament=self.tournament, entry_fee=0, payouts=[])
+        # **Cut FIRST, then play.** That is the order a TD works in and, since
+        # the freeze landed, the only order the server allows: a cut is
+        # refused once the field has posted a score, because re-ranking both
+        # boards mid-round moves prize money under golfers still out there.
+        self.client.post(self.url, {'n_flights': 2}, format='json')
         par = {h['number']: h['par'] for h in DEFAULT_HOLES}
         for fs in self.round.foursomes.all():
             ids = [m.player_id for m in fs.memberships.all()
                    if not m.player.is_phantom]
             for h in range(1, 19):
                 submit_hole(fs, h, [(pid, par[h]) for pid in ids])
-        self.client.post(self.url, {'n_flights': 2}, format='json')
         self.tournament.refresh_from_db()
         summary = low_net_championship_summary(self.tournament)
         self.assertTrue(summary['results'], 'no rows to check')

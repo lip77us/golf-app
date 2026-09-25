@@ -2526,8 +2526,13 @@ class TournamentFlightsView(APIView):
         from core.models import Player
         roster = {p.id: p.name for p in Player.objects.filter(
             id__in=[pid for pid, _ in field])}
+        from services.flights import cut_is_locked
         return Response({
             'flight_count': tournament.flight_count or 0,
+            # **Told, not derived.** A client counting scores itself would be
+            # a second copy of the rule, and it would not know that phantoms
+            # do not lock a cut.
+            'locked'      : cut_is_locked(tournament),
             'field_size'  : len(field),
             'unindexed'   : sum(1 for _pid, idx in field if idx is None),
             'field'       : [
@@ -2549,7 +2554,7 @@ class TournamentFlightsView(APIView):
         })
 
     def post(self, request, pk):
-        from services.flights import flight_sizes, set_flights
+        from services.flights import FlightsLocked, flight_sizes, set_flights
         tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
         try:
             n = int(request.data.get('n_flights'))
@@ -2568,6 +2573,11 @@ class TournamentFlightsView(APIView):
                             status=400)
         try:
             assignment = set_flights(tournament, n, unindexed=unindexed)
+        except FlightsLocked as e:
+            # 409, not 400: the request is well-formed and would have been
+            # accepted an hour ago. The client shows the reason rather than
+            # treating it as a validation error the TD can correct.
+            return Response({'detail': str(e), 'locked': True}, status=409)
         except ValueError as e:
             return Response({'detail': str(e)}, status=400)
         return Response({'flight_count': n,
@@ -2577,7 +2587,18 @@ class TournamentFlightsView(APIView):
 
     def delete(self, request, pk):
         from tournament.models import TournamentFlight
+        from services.flights import cut_is_locked
         tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        # Clearing is a change too — it re-ranks the whole field onto one
+        # board, which is exactly what the lock exists to prevent. Refused on
+        # the same terms as a re-cut rather than left as a back door.
+        if cut_is_locked(tournament) and (tournament.flight_count or 0) > 1:
+            return Response(
+                {'detail': 'The field has started playing under this cut, so '
+                           'it cannot be cleared. Dropping to one board now '
+                           'would re-rank everybody mid-round.',
+                 'locked': True},
+                status=409)
         TournamentFlight.objects.filter(tournament=tournament).delete()
         tournament.flight_count = 0
         tournament.save(update_fields=['flight_count'])
