@@ -55,6 +55,20 @@
         --halved:#252924;
       }
     }
+    /* A flight header on a board whose ranks restart. Quiet: it is a
+       divider that names a section, not a result — the rows under it carry
+       the news. */
+    .flight-head, tr.flight-row td {
+      display: flex; align-items: baseline; gap: 8px;
+      margin: 18px 0 6px; padding: 6px 2px 5px;
+      border-bottom: 1px solid var(--border);
+    }
+    tr.flight-row td { margin: 0; padding: 14px 6px 5px; }
+    .flight-label {
+      font-weight: 700; font-size: 13px; letter-spacing: .02em;
+      color: var(--fg);
+    }
+    .flight-meta { font-size: 12px; color: var(--muted); }
     * { box-sizing: border-box; }
     body {
       margin: 0; padding: 0;

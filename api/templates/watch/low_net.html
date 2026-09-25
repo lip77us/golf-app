@@ -18,6 +18,26 @@
 
   {% if summary and summary.results %}
     {% for r in summary.results %}
+      {% comment %}
+        **A flighted board restarts its ranks**, and without a header that
+        reads as a bug: 1, 2, 3, 1, 2, 3 down one list. The app draws
+        `FlightHeader` for this; the page never got it, and it is WORSE off
+        than before Phase 2 — the stopgap that prefixed every name with
+        `A · ` was deleted when the app learned to draw headers, and nothing
+        replaced it here.
+
+        Interleaved with `ifchanged`, not grouped. The server already returns
+        the rows flight by flight; re-grouping them here would be a second
+        ordering authority and the two would eventually disagree.
+      {% endcomment %}
+      {% ifchanged r.flight %}{% if r.flight %}
+        {% for f in summary.flights %}{% if f.flight == r.flight %}
+          <div class="flight-head">
+            <span class="flight-label">{{ f.label }}</span>
+            <span class="flight-meta">{{ f.size }} golfer{{ f.size|pluralize }}{% if f.purse %} · ${{ f.purse|floatformat:"-2" }} purse{% endif %}</span>
+          </div>
+        {% endif %}{% endfor %}
+      {% endif %}{% endifchanged %}
       <details class="ln-card{% if not r.has_scorecard %} ln-card-static{% endif %}">
         <summary class="ln-summary">
           <span class="ln-rank">{{ r.rank }}</span>

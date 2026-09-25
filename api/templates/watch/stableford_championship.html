@@ -44,6 +44,22 @@
         </thead>
         <tbody>
           {% for r in summary.results %}
+            {% comment %}
+              Same rule as the Stroke Play board: the ranks restart per
+              flight, so a row announcing the flight goes in front of each
+              one. Interleaved rather than grouped, because the server owns
+              the order.
+            {% endcomment %}
+            {% ifchanged r.flight %}{% if r.flight %}
+              {% for f in summary.flights %}{% if f.flight == r.flight %}
+                <tr class="flight-row">
+                  <td colspan="5">
+                    <span class="flight-label">{{ f.label }}</span>
+                    <span class="flight-meta">{{ f.size }} golfer{{ f.size|pluralize }}{% if f.purse %} · ${{ f.purse|floatformat:"-2" }} purse{% endif %}</span>
+                  </td>
+                </tr>
+              {% endif %}{% endfor %}
+            {% endif %}{% endifchanged %}
             <tr>
               <td>{{ r.rank|default:"—" }}</td>
               <td>{{ r.player_name }}{% if r.excluded %} <span class="each">(no prize)</span>{% endif %}</td>
