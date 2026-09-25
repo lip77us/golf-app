@@ -710,6 +710,18 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                     // slashes only what they disagree on. In a mixed group the
                     // first golfer's index is not the group's, and a stroke
                     // falls where the index says.
+                    //
+                    // **No `holesInPlay`, so no `3 of 9` marker — deliberately.**
+                    // This screen walks 1..18 by hole NUMBER (`_holeIndex`), so
+                    // on a shotgun round starting on the 7th it opens on hole 1
+                    // while the group is standing on their first tee. A position
+                    // marker fed from a play order the screen does not follow
+                    // would read `1 of 18` there, which is worse than saying
+                    // nothing. The fix is play-order navigation — and that moves
+                    // `_carrierId` (`_order[_holeIndex % 3]`), i.e. who carries
+                    // the ball, so it is a money change and its own piece of
+                    // work. Same gap the shotgun sweep flagged at
+                    // `18 - lastHole` further down.
                     HoleHeader(
                       holeData:   hole,
                       holeNumber: _holeNumber,

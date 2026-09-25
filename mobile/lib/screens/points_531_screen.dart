@@ -40,6 +40,7 @@ import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../utils/match_handicap.dart';
 import '../utils/round_complete.dart';
+import '../utils/play_order.dart';
 import '../widgets/hole_header.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_message.dart';
@@ -555,6 +556,12 @@ class _Points531ScreenState extends State<Points531Screen>
     );
   }
 
+  /// Holes this group plays, in order (back-9 / 9-hole / shotgun aware).
+  /// The shared helper — `utils/play_order.dart` — which every other play
+  /// screen already used.
+  List<int> _playOrder(RoundProvider rp) =>
+      roundPlayOrder(rp.round, rp.scorecard);
+
   Widget _buildBody(
     BuildContext ctx,
     RoundProvider rp,
@@ -606,6 +613,7 @@ class _Points531ScreenState extends State<Points531Screen>
               _P531HoleScoreCard(
                 holeData:    holeData,
                 holeNumber:  _selectedHole,
+                holesInPlay: _playOrder(rp),
                 players:     players,
                 scorecard:   sc,
                 merged:      merged,
@@ -681,6 +689,9 @@ class _Points531ScreenState extends State<Points531Screen>
 // ===========================================================================
 
 class _P531HoleScoreCard extends StatelessWidget {
+  /// The group's holes in play order — drives the header's shotgun position
+  /// marker (`3 of 9`).
+  final List<int> holesInPlay;
   final ScorecardHole?   holeData;
   final int              holeNumber;
   final List<Membership> players;
@@ -714,6 +725,7 @@ class _P531HoleScoreCard extends StatelessWidget {
     required this.spotsCountFor,
     required this.onSpotsAdd,
     required this.onSpotsRemove,
+    this.holesInPlay = const [],
   });
 
   String get _mode        => summary?.handicapMode ?? 'net';
@@ -845,6 +857,7 @@ class _P531HoleScoreCard extends StatelessWidget {
           HoleHeader(
             holeData:   holeData,
             holeNumber: holeNumber,
+            holesInPlay: holesInPlay,
             players:    players,
           ),
 

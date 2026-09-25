@@ -61,6 +61,24 @@ String holeHeaderLine(ScorecardHole hole, List<Membership> players) {
   return yardStr == null ? '$parStr  |  $siStr' : '$parStr  |  $yardStr  |  $siStr';
 }
 
+/// `3 of 9` — where this hole sits in the group's own round.
+///
+/// **Empty unless the round is a shotgun.** On a round that starts on the 1st
+/// the hole number IS the position, so the marker would restate it; the
+/// confusion it exists for is the group teeing off on the 9th and not knowing
+/// whether that is their first hole or their ninth. A back-nine round counts as
+/// a shotgun for this purpose and legitimately gets it — `Hole 14 · 5 of 9`.
+///
+/// Empty too when [hole] is not in [playOrder] at all. `indexOf` returns −1
+/// there and the obvious `indexOf + 1` renders `0 of 9`, which is worse than
+/// saying nothing.
+String holePositionLine(List<int> playOrder, int hole) {
+  if (playOrder.isEmpty || playOrder.first == 1) return '';
+  final i = playOrder.indexOf(hole);
+  if (i < 0) return '';
+  return '${i + 1} of ${playOrder.length}';
+}
+
 /// The header. Rounded at the TOP only by default, because it is the top of a
 /// card whose other rows are the golfers — a floating mint banner above the
 /// rows was the thing that made Pink Ball look like a different app.
@@ -92,6 +110,10 @@ class HoleHeader extends StatelessWidget {
   /// nothing and the space is simply symmetrical.
   final Widget? trailing;
 
+  /// The group's holes IN PLAY ORDER. Drives the shotgun position marker; empty
+  /// (a round nobody has told the header about) simply omits it.
+  final List<int> holesInPlay;
+
   /// A block of its own — rounded on all four corners — rather than the top of
   /// a card. See the class doc.
   final bool standalone;
@@ -103,6 +125,7 @@ class HoleHeader extends StatelessWidget {
     this.players = const [],
     this.courseName = '',
     this.trailing,
+    this.holesInPlay = const [],
     this.standalone = false,
   });
 
@@ -140,6 +163,19 @@ class HoleHeader extends StatelessWidget {
               holeHeaderLine(holeData!, players),
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall,
+            ),
+          // **Its own line, not a fourth field on the one above.** That line
+          // states the hole's GEOMETRY and already slashes when the tees
+          // disagree — `Par 4/5  |  400/340 yds.  |  SI: 7/3` is at the width
+          // limit before anything is added. This answers a different question
+          // (how far through the round the group is), and it costs a third line
+          // only on the shotgun rounds that need one.
+          if (holePositionLine(holesInPlay, holeNumber).isNotEmpty)
+            Text(
+              holePositionLine(holesInPlay, holeNumber),
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
         ]),
       ),

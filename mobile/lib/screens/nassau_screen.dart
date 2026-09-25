@@ -22,6 +22,7 @@ import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
+import '../utils/play_order.dart';
 import '../widgets/hole_header.dart';
 import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart';
@@ -653,6 +654,12 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
     );
   }
 
+  /// Holes this group plays, in order (back-9 / 9-hole / shotgun aware).
+  /// The shared helper — `utils/play_order.dart` — which every other play
+  /// screen already used.
+  List<int> _playOrder(RoundProvider rp) =>
+      roundPlayOrder(rp.round, rp.scorecard);
+
   Widget _buildBody(
     BuildContext ctx,
     RoundProvider rp,
@@ -733,6 +740,7 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
               _NassauHoleScoreCard(
                 holeData:        holeData,
                 holeNumber:      _selectedHole,
+                holesInPlay:     _playOrder(rp),
                 players:         players,
                 scorecard:       sc,
                 merged:          merged,
@@ -837,6 +845,9 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
 // ===========================================================================
 
 class _NassauHoleScoreCard extends StatelessWidget {
+  /// The group's holes in play order — drives the header's shotgun position
+  /// marker (`3 of 9`).
+  final List<int> holesInPlay;
   final ScorecardHole?          holeData;
   final int                     holeNumber;
   final List<Membership>        players;
@@ -872,6 +883,7 @@ class _NassauHoleScoreCard extends StatelessWidget {
     required this.spotsCountFor,
     required this.onSpotsAdd,
     required this.onSpotsRemove,
+    this.holesInPlay = const [],
   });
 
   String get _mode       => nassau?.handicapMode ?? 'net';
@@ -943,6 +955,7 @@ class _NassauHoleScoreCard extends StatelessWidget {
           HoleHeader(
             holeData:   holeData,
             holeNumber: holeNumber,
+            holesInPlay: holesInPlay,
             players:    players,
           ),
 

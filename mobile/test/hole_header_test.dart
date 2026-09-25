@@ -226,6 +226,82 @@ void main() {
     });
   });
 
+  group('the shotgun position marker', () {
+    // The confusion it exists for: a group teeing off on the 9th does not know
+    // whether that is their first hole or their ninth.
+    List<int> order(int start, {int n = 18, int universe = 18}) =>
+        [for (var i = 0; i < n; i++) ((start - 1 + i) % universe) + 1];
+
+    test('a round starting on the 1st gets nothing', () {
+      // The hole number IS the position, so the marker would only restate it.
+      for (final h in [1, 9, 18]) {
+        expect(holePositionLine(order(1), h), '');
+      }
+    });
+
+    test('an unknown play order gets nothing', () {
+      expect(holePositionLine(const [], 7), '');
+    });
+
+    test('a shotgun counts from the group\'s own first tee', () {
+      // fs=517 in the local database: a skins round starting on the 13th.
+      final o = order(13);
+      expect(holePositionLine(o, 13), '1 of 18');
+      expect(holePositionLine(o, 18), '6 of 18');
+      expect(holePositionLine(o, 1), '7 of 18');   // wraps
+      expect(holePositionLine(o, 12), '18 of 18');
+    });
+
+    test('a back nine counts within its own nine', () {
+      final o = order(10, n: 9);
+      expect(holePositionLine(o, 10), '1 of 9');
+      expect(holePositionLine(o, 14), '5 of 9');
+      expect(holePositionLine(o, 18), '9 of 9');
+    });
+
+    test('a hole outside the order gets nothing, not `0 of 9`', () {
+      // `indexOf` returns −1 and the obvious `indexOf + 1` renders `0 of 9`,
+      // which was reachable in the team-play copy this rule replaced.
+      expect(holePositionLine(order(10, n: 9), 3), '');
+    });
+
+    testWidgets('the header draws it under the facts, on its own line',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: HoleHeader(
+            holeData: _hole(),
+            holeNumber: 14,
+            players: [_m(1, tee: _tee(9, 'White'))],
+            holesInPlay: order(13),
+          ),
+        ),
+      ));
+      // Off the 13th, hole 14 is the group's second.
+      expect(find.text('2 of 18'), findsOneWidget);
+      // Under the geometry line, not folded into it — that line already slashes
+      // when the tees disagree and is at the width limit before anything else.
+      final facts = tester.getCenter(find.text('Par 4  |  400 yds.  |  SI: 7'));
+      expect(tester.getCenter(find.text('2 of 18')).dy,
+          greaterThan(facts.dy));
+    });
+
+    testWidgets('a round off the 1st draws no third line at all',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: HoleHeader(
+            holeData: _hole(),
+            holeNumber: 7,
+            players: [_m(1, tee: _tee(9, 'White'))],
+            holesInPlay: [for (var i = 1; i <= 18; i++) i],
+          ),
+        ),
+      ));
+      expect(find.textContaining(' of 18'), findsNothing);
+    });
+  });
+
   group('one header, every score-entry screen', () {
     // Source-level: the point is the sweep, not the rendering. Every screen
     // that enters a score draws the same header, and the ones with their own
@@ -260,6 +336,48 @@ void main() {
     //  * `team_play_score_entry_screen` is a TEAM game — one ball, so there is
     //    no per-golfer par to collapse — and its line carries a shotgun
     //    position marker (`3 of 9`) the others lack.
+
+    test('every screen that names a hole passes its play order', () {
+      // The marker is the point of the sweep and it needs the order. Pink Ball
+      // is the one exception and its file says why: it navigates by hole NUMBER,
+      // so a marker fed from an order it does not follow would read `1 of 18`
+      // with the group on their first tee of a shotgun.
+      for (final path in screens) {
+        final src = File(path).readAsStringSync();
+        if (path.endsWith('pink_ball_screen.dart')) {
+          expect(src.contains('No `holesInPlay`, so no `3 of 9` marker'), isTrue,
+              reason: 'Pink Ball omits the marker on purpose — keep the reason '
+                  'in the file, or give it play-order navigation.');
+          continue;
+        }
+        expect(src.contains('holesInPlay'), isTrue,
+            reason: '$path draws HoleHeader but hands it no play order, so a '
+                'shotgun group gets no position marker.');
+      }
+    });
+
+    test('the marker rule is stated once', () {
+      // Team play wrote its own and it drifted: it could render `0 of 9`.
+      final hits = Directory('lib')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))
+          .where((f) =>
+              f.readAsStringSync().contains('String holePositionLine('))
+          .map((f) => f.path)
+          .toList();
+      expect(hits, ['lib/widgets/hole_header.dart']);
+    });
+
+    test('team play states the position the same way', () {
+      // It is not a HoleHeader (a team game has one ball, so no per-golfer par
+      // to collapse) but the marker has to read identically on both.
+      final src = File('lib/screens/team_play_score_entry_screen.dart')
+          .readAsStringSync();
+      expect(src.contains('holePositionLine('), isTrue);
+      expect(src.contains('positionOf(hole)'), isFalse,
+          reason: 'the old copy, which could render `0 of 9`');
+    });
 
     test('no screen keeps a private hole header any more', () {
       final rogue = Directory('lib/screens')

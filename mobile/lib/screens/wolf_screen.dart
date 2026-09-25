@@ -795,10 +795,11 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
             children: [
               // ── Hole header ──
               HoleHeader(
-                holeData:   holeData,
-                holeNumber: _selectedHole,
-                players:    players,
-                standalone: true,
+                holeData:    holeData,
+                holeNumber:  _selectedHole,
+                players:     players,
+                holesInPlay: _playOrder(rp),
+                standalone:  true,
                 trailing: holeLegendButton(
                     context, () => _showWolfLegend(context)),
               ),

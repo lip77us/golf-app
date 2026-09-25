@@ -549,10 +549,11 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             HoleHeader(
-              holeData:   holeData,
-              holeNumber: _selectedHole,
-              players:    players,
-              standalone: true,
+              holeData:    holeData,
+              holeNumber:  _selectedHole,
+              players:     players,
+              holesInPlay: _playOrder(rp),
+              standalone:  true,
               trailing: holeLegendButton(
                   context, () => _showSurvivorLegend(context)),
             ),

@@ -40,6 +40,7 @@ import '../widgets/banker_entry_strip.dart';
 import '../widgets/triple_cup_pairings.dart';
 import '../widgets/standing_ribbon.dart';
 import '../widgets/stroke_play_progress_grid.dart';
+import '../utils/play_order.dart';
 import '../widgets/hole_header.dart';
 import '../game_colors.dart';
 import '../providers/auth_provider.dart';
@@ -873,20 +874,19 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// starting hole and wrapping around the course size. Reduces to 1..18 for a
   /// normal round. Mirrors services/hole_plan.play_order. (Per-group shotgun
   /// starts override on the FOURSOME; casual rounds fall back to the round.)
-  List<int> _playOrderFor(RoundProvider rp) {
-    final r  = rp.round;
-    final sc = rp.scorecard;
-    final universe = (sc == null || sc.holes.isEmpty)
-        ? 18
-        : sc.holes.map((h) => h.holeNumber).reduce((a, b) => a > b ? a : b);
-    // A shotgun group starts on its foursome's own hole (else the round's).
-    final fs = r?.foursomes
-        .where((f) => f.id == widget.foursomeId)
-        .firstOrNull;
-    final start = fs?.startingHole ?? r?.startingHole ?? 1;
-    final n = (r?.numHoles ?? universe).clamp(1, universe);
-    return [for (int i = 0; i < n; i++) ((start - 1 + i) % universe) + 1];
-  }
+  /// Holes this group plays, in order (back-9 / 9-hole / shotgun aware).
+  ///
+  /// **Delegates to `utils/play_order.dart`.** This was a hand-rolled copy of
+  /// it, identical apart from not clamping a starting hole above the course's
+  /// hole count. The `foursome:` argument is the part that earns its place: on
+  /// a tournament shotgun each group starts on its OWN hole, not the round's.
+  List<int> _playOrderFor(RoundProvider rp) => roundPlayOrder(
+        rp.round,
+        rp.scorecard,
+        foursome: rp.round?.foursomes
+            .where((f) => f.id == widget.foursomeId)
+            .firstOrNull,
+      );
 
   /// The hole after [_selectedHole] in play order, or null if it's the last one.
   int? _nextHoleInOrder(RoundProvider rp) {
@@ -3655,10 +3655,11 @@ class _HoleScoreCard extends StatelessWidget {
           // different one; the `?` legend is score entry's own and rides in
           // as `trailing`, which is the only part of it that is.
           HoleHeader(
-            holeData:   holeData,
-            holeNumber: holeNumber,
-            players:    players,
-            courseName: courseName,
+            holeData:    holeData,
+            holeNumber:  holeNumber,
+            players:     players,
+            courseName:  courseName,
+            holesInPlay: holesInPlay,
             // "?" legend — explains the row meta (handicap chip, dots, tee,
             // totals, game-specific badges). Adaptive to the active game(s)
             // so we don't show irrelevant rows.

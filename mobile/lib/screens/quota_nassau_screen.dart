@@ -12,6 +12,7 @@
 
 import '../providers/auth_provider.dart';
 import '../game_colors.dart';
+import '../utils/play_order.dart';
 import '../widgets/hole_header.dart';
 import '../widgets/standing_ribbon.dart';
 import '../utils/match_notation.dart';
@@ -568,6 +569,12 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen>
     );
   }
 
+  /// Holes this group plays, in order (back-9 / 9-hole / shotgun aware).
+  /// The shared helper — `utils/play_order.dart` — which every other play
+  /// screen already used.
+  List<int> _playOrder(RoundProvider rp) =>
+      roundPlayOrder(rp.round, rp.scorecard);
+
   Widget _buildBody(
     BuildContext ctx,
     RoundProvider rp,
@@ -606,6 +613,7 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen>
               _QNHoleScoreCard(
                 holeData:        holeData,
                 holeNumber:      _selectedHole,
+                holesInPlay:     _playOrder(rp),
                 players:         players,
                 scores:          scores,
                 hotSpotIdx:      hotSpot,
@@ -807,6 +815,9 @@ class _QNPhantomInfoStrip extends StatelessWidget {
 // ===========================================================================
 
 class _QNHoleScoreCard extends StatelessWidget {
+  /// The group's holes in play order — drives the header's shotgun position
+  /// marker (`3 of 9`).
+  final List<int> holesInPlay;
   final ScorecardHole?                 holeData;
   final int                            holeNumber;
   final List<Membership>               players;
@@ -838,6 +849,7 @@ class _QNHoleScoreCard extends StatelessWidget {
     required this.spotsCountFor,
     required this.onSpotsAdd,
     required this.onSpotsRemove,
+    this.holesInPlay = const [],
   });
 
   Color get _t1Color => _qnTeamColor(summary?.team1Colour);
@@ -873,6 +885,7 @@ class _QNHoleScoreCard extends StatelessWidget {
           HoleHeader(
             holeData:   holeData,
             holeNumber: holeNumber,
+            holesInPlay: holesInPlay,
             players:    players,
           ),
 

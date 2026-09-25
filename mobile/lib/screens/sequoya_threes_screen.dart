@@ -632,10 +632,11 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
               onUndo: () => _removePress(match),
             ),
           HoleHeader(
-            holeData:   holeData,
-            holeNumber: _selectedHole,
-            players:    players,
-            standalone: true,
+            holeData:    holeData,
+            holeNumber:  _selectedHole,
+            players:     players,
+            holesInPlay: _playOrder(rp),
+            standalone:  true,
           ),
           const SizedBox(height: 12),
           if (match == null)

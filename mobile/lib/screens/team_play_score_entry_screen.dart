@@ -47,6 +47,7 @@ import 'package:provider/provider.dart';
 
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/hole_header.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/standing_ribbon.dart';
@@ -648,15 +649,23 @@ class _HoleHeader extends StatelessWidget {
       if (card.par != null) 'Par ${card.par}',
       if (card.yards != null) '${card.yards} yds',
       if (card.strokeIndex != null) 'SI ${card.strokeIndex}',
-      // On a shotgun start the hole number is not the position in the round,
-      // so say both rather than leaving a group on 9 wondering whether it is
-      // on its first hole or its ninth.
-      if (card.playOrder.isNotEmpty && card.playOrder.first != 1)
-        '${card.positionOf(hole)} of ${card.playOrder.length}',
       // Stated on EVERY hole, per the packet — it is the one piece of the
       // shamble's rule that is operative rather than reference, so it stays up
       // here even though the rule itself moved to the bottom.
     ];
+    // **The shotgun position marker, which started here and is now everywhere.**
+    // On a shotgun the hole number is not the position in the round, so say
+    // both rather than leaving a group on the 9th wondering whether it is on
+    // their first hole or their ninth.
+    //
+    // It reads `holePositionLine` (`widgets/hole_header.dart`) rather than
+    // keeping its own copy, and it moved OFF the `bits` line onto its own:
+    // every other screen states the hole's geometry there and that line already
+    // slashes when the tees disagree. This answers a different question.
+    //
+    // (The shared rule also declines a hole that is not in the order at all.
+    // `positionOf` returns 0 for one, and `0 of 9` was reachable here.)
+    final position = holePositionLine(card.playOrder, hole);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -672,6 +681,11 @@ class _HoleHeader extends StatelessWidget {
         if (bits.isNotEmpty)
           Text(bits.join('  ·  '),
               textAlign: TextAlign.center, style: theme.textTheme.bodySmall),
+        if (position.isNotEmpty)
+          Text(position,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
       ]),
     );
   }
