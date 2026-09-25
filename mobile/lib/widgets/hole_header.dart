@@ -61,10 +61,15 @@ String holeHeaderLine(ScorecardHole hole, List<Membership> players) {
   return yardStr == null ? '$parStr  |  $siStr' : '$parStr  |  $yardStr  |  $siStr';
 }
 
-/// The header. Rounded at the TOP only, because it is the top of a card whose
-/// other rows are the golfers — it is not a card of its own, and a floating
-/// mint banner above the rows was the thing that made Pink Ball look like a
-/// different app.
+/// The header. Rounded at the TOP only by default, because it is the top of a
+/// card whose other rows are the golfers — a floating mint banner above the
+/// rows was the thing that made Pink Ball look like a different app.
+///
+/// [standalone] rounds all four corners, for the screens that draw the header
+/// as a block of its own above a separate score card (Rabbit, Survivor, Wolf,
+/// Sequoya 3s, Triple Nassau). That is a real difference in what the header IS
+/// on those screens, not a style choice, so it is a parameter rather than
+/// something each of them re-implements.
 class HoleHeader extends StatelessWidget {
   /// The hole's row from the group's card. Null (a hole with no data yet) drops
   /// the meta line rather than inventing a par.
@@ -87,6 +92,10 @@ class HoleHeader extends StatelessWidget {
   /// nothing and the space is simply symmetrical.
   final Widget? trailing;
 
+  /// A block of its own — rounded on all four corners — rather than the top of
+  /// a card. See the class doc.
+  final bool standalone;
+
   const HoleHeader({
     super.key,
     required this.holeData,
@@ -94,6 +103,7 @@ class HoleHeader extends StatelessWidget {
     this.players = const [],
     this.courseName = '',
     this.trailing,
+    this.standalone = false,
   });
 
   @override
@@ -109,7 +119,9 @@ class HoleHeader extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 10),
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerHighest,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+          borderRadius: standalone
+              ? BorderRadius.circular(8)
+              : const BorderRadius.vertical(top: Radius.circular(8)),
         ),
         child: Column(children: [
           if (courseName.isNotEmpty) ...[

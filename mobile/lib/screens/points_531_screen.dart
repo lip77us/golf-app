@@ -40,6 +40,7 @@ import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../utils/match_handicap.dart';
 import '../utils/round_complete.dart';
+import '../widgets/hole_header.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/inline_score_picker.dart';
@@ -814,51 +815,10 @@ class _P531HoleScoreCard extends StatelessWidget {
   /// (e.g. Tilden Park), so this needs to slash par, not just yards.
   ///
   /// Yardage is omitted entirely when no tee provides it.
-  static String _buildHoleHeaderText(
-    ScorecardHole hole,
-    List<Membership> players,
-  ) {
-    // Walk players in order, collecting at most one (par, yards, SI)
-    // triple per distinct tee id.  `m.tee?.id` is the canonical key;
-    // for the exceedingly rare case where a real player has no tee we
-    // key on a negative player id so they're not silently collapsed
-    // into another teeless entry.
-    final seenKeys      = <int>{};
-    final parVals       = <int>[];
-    final yardVals      = <int?>[];
-    final siVals        = <int>[];
-    for (final m in players) {
-      final key = m.tee?.id ?? -m.player.id;
-      if (!seenKeys.add(key)) continue;
-      final e = hole.scoreFor(m.player.id);
-      parVals.add(e?.par ?? hole.par);
-      yardVals.add(e?.yards ?? hole.yards);
-      siVals.add(e?.strokeIndex ?? hole.strokeIndex);
-    }
-
-    // Deduplicate values (preserving first-seen order) then join with '/'.
-    // [4,4,4] → "4"   [4,4,5] → "4/5"   [380,320] → "380/320"
-    // Set dedup handles nullable ints correctly (null == null in Dart).
-    String _collapse<T>(List<T> values, String Function(T) fmt) {
-      if (values.isEmpty) return '';
-      final seen   = <T>{};
-      final unique = values.where((v) => seen.add(v)).toList();
-      if (unique.length == 1) return fmt(unique.first);
-      return unique.map(fmt).join('/');
-    }
-
-    final parStr   = 'Par ${_collapse<int>(parVals, (v) => '$v')}';
-    final siStr    = 'SI: ${_collapse<int>(siVals, (v) => '$v')}';
-
-    final anyYards = yardVals.any((y) => y != null);
-    final yardStr  = anyYards
-        ? '${_collapse<int?>(yardVals, (v) => v == null ? '—' : '$v')} yds.'
-        : null;
-
-    return yardStr == null
-        ? '$parStr  |  $siStr'
-        : '$parStr  |  $yardStr  |  $siStr';
-  }
+  // `_buildHoleHeaderText` was here — one of FIVE copies of the same collapse.
+  // **Gone to `widgets/hole_header.dart` as `holeHeaderLine` 25 Sep 2026.** The
+  // reasoning that lived in this one's comments moved to the header's call site
+  // above and to the shared function's own doc.
 
   @override
   Widget build(BuildContext context) {
@@ -876,38 +836,16 @@ class _P531HoleScoreCard extends StatelessWidget {
         children: [
           // ── Hole header ──
           //
-          // Par / yds / SI are now sourced from EACH PLAYER's own tee
-          // entry so mixed men's/women's foursomes get accurate numbers.
-          // When every player's tee agrees on a field, we show a single
-          // value.  When any differ, we show them slash-joined in the
-          // SAME ORDER AS THE PLAYER LIST — e.g. "4 / 5" for par on a
-          // hole that's par 4 for the first two golfers and par 5 for
-          // the third.  No labels are needed: yardage differences make
-          // it self-evident which tee is which, and per the user's
-          // design spec the SI slash order mirrors the player order.
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(8)),
-            ),
-            child: Column(children: [
-              Text('Hole $holeNumber',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 2),
-              Builder(builder: (_) {
-                if (holeData == null) return const SizedBox.shrink();
-                final header = _buildHoleHeaderText(holeData!, players);
-                return Text(
-                  header,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall,
-                );
-              }),
-            ]),
+          // The shared header — `widgets/hole_header.dart`. Par / yds / SI come
+          // from EACH GOLFER's own tee entry, so a mixed men's / women's
+          // foursome gets accurate numbers: one value where every tee agrees,
+          // slash-joined in PLAYER ORDER where they differ (`Par 4/5` on a hole
+          // that is a four off two tees and a five off the third). No labels
+          // are needed — the yardages make it self-evident which tee is which.
+          HoleHeader(
+            holeData:   holeData,
+            holeNumber: holeNumber,
+            players:    players,
           ),
 
           // ── Player rows + inline picker ──

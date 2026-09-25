@@ -29,6 +29,7 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../sync/sync_service.dart';
+import '../widgets/hole_header.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart';
@@ -639,40 +640,8 @@ class _SkinsHoleScoreCard extends StatelessWidget {
       .firstOrNull;
 
   /// Build "Par X | Y yds. | SI: Z" — copied verbatim from _P531HoleScoreCard.
-  static String _buildHoleHeaderText(
-    ScorecardHole hole,
-    List<Membership> players,
-  ) {
-    final seenKeys = <int>{};
-    final parVals  = <int>[];
-    final yardVals = <int?>[];
-    final siVals   = <int>[];
-    for (final m in players) {
-      final key = m.tee?.id ?? -m.player.id;
-      if (!seenKeys.add(key)) continue;
-      final e = hole.scoreFor(m.player.id);
-      parVals.add(e?.par ?? hole.par);
-      yardVals.add(e?.yards ?? hole.yards);
-      siVals.add(e?.strokeIndex ?? hole.strokeIndex);
-    }
-
-    String collapse<T>(List<T> values, String Function(T) fmt) {
-      if (values.isEmpty) return '';
-      final seen   = <T>{};
-      final unique = values.where((v) => seen.add(v)).toList();
-      if (unique.length == 1) return fmt(unique.first);
-      return unique.map(fmt).join('/');
-    }
-
-    final parStr  = 'Par ${collapse<int>(parVals, (v) => '$v')}';
-    final siStr   = 'SI: ${collapse<int>(siVals, (v) => '$v')}';
-    final anyYards = yardVals.any((y) => y != null);
-    final yardStr  = anyYards
-        ? '${collapse<int?>(yardVals, (v) => v == null ? '—' : '$v')} yds.'
-        : null;
-
-    return yardStr == null ? '$parStr  |  $siStr' : '$parStr  |  $yardStr  |  $siStr';
-  }
+  // `_buildHoleHeaderText` was here — one of FIVE copies of the same collapse.
+  // **Gone to `widgets/hole_header.dart` as `holeHeaderLine` 25 Sep 2026.**
 
   @override
   Widget build(BuildContext context) {
@@ -689,61 +658,31 @@ class _SkinsHoleScoreCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Hole header (gray bar) ──
-          // Stack so the "?" legend button can sit top-right without
-          // disturbing the centred Hole-N + meta column.
-          Stack(children: [
-            Container(
-              // width: infinity so the grey header fills the full card —
-              // Stack doesn't propagate the parent Column's stretch.
-              // Horizontal padding gives the centred Hole-N + meta line
-              // breathing room so the "?" doesn't overlap the text.
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 10),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(8)),
-              ),
-              child: Column(children: [
-                Text('Hole $holeNumber',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleLarge
-                        ?.copyWith(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 2),
-                Builder(builder: (_) {
-                  if (holeData == null) return const SizedBox.shrink();
-                  return Text(
-                    _buildHoleHeaderText(holeData!, players),
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall,
-                  );
-                }),
-              ]),
-            ),
+          // The shared header — `widgets/hole_header.dart`. The `?` legend is
+          // this screen's own and rides in as `trailing`.
+          HoleHeader(
+            holeData:   holeData,
+            holeNumber: holeNumber,
+            players:    players,
             // Legend button — explains the player-row meta (handicap chip,
             // stroke dots, totals, junk, hole-winner marker).
-            Positioned(
-              top: 2,
-              right: 2,
-              child: IconButton(
-                tooltip: 'What do these mean?',
-                icon: Icon(
-                  Icons.help_outline,
-                  size: 22,
-                  color: theme.colorScheme.primary,
-                ),
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                onPressed: () => showModalBottomSheet<void>(
-                  context: context,
-                  showDragHandle: true,
-                  builder: (_) => const _SkinsLegendSheet(),
-                ),
+            trailing: IconButton(
+              tooltip: 'What do these mean?',
+              icon: Icon(
+                Icons.help_outline,
+                size: 22,
+                color: theme.colorScheme.primary,
+              ),
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              onPressed: () => showModalBottomSheet<void>(
+                context: context,
+                showDragHandle: true,
+                builder: (_) => const _SkinsLegendSheet(),
               ),
             ),
-          ]),
+          ),
 
           // ── Player rows + inline picker ──
           ...players.asMap().entries.expand((entry) {

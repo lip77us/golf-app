@@ -22,6 +22,7 @@ import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/golf_app_bar.dart';
+import '../widgets/hole_header.dart';
 import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
@@ -918,39 +919,8 @@ class _NassauHoleScoreCard extends StatelessWidget {
     return null;
   }
 
-  static String _buildHoleHeaderText(
-      ScorecardHole hole, List<Membership> players) {
-    final seenKeys = <int>{};
-    final parVals  = <int>[];
-    final yardVals = <int?>[];
-    final siVals   = <int>[];
-    for (final m in players) {
-      final key = m.tee?.id ?? -m.player.id;
-      if (!seenKeys.add(key)) continue;
-      final e = hole.scoreFor(m.player.id);
-      parVals.add(e?.par   ?? hole.par);
-      yardVals.add(e?.yards ?? hole.yards);
-      siVals.add(e?.strokeIndex ?? hole.strokeIndex);
-    }
-
-    String collapse<T>(List<T> values, String Function(T) fmt) {
-      if (values.isEmpty) return '';
-      final seen   = <T>{};
-      final unique = values.where((v) => seen.add(v)).toList();
-      return unique.length == 1 ? fmt(unique.first) : unique.map(fmt).join('/');
-    }
-
-    final parStr   = 'Par ${collapse<int>(parVals, (v) => '$v')}';
-    final siStr    = 'SI: ${collapse<int>(siVals,  (v) => '$v')}';
-    final anyYards = yardVals.any((y) => y != null);
-    final yardStr  = anyYards
-        ? '${collapse<int?>(yardVals, (v) => v == null ? '—' : '$v')} yds.'
-        : null;
-
-    return yardStr == null
-        ? '$parStr  |  $siStr'
-        : '$parStr  |  $yardStr  |  $siStr';
-  }
+  // `_buildHoleHeaderText` was here — one of FIVE copies of the same collapse.
+  // **Gone to `widgets/hole_header.dart` as `holeHeaderLine` 25 Sep 2026.**
 
   @override
   Widget build(BuildContext context) {
@@ -969,27 +939,11 @@ class _NassauHoleScoreCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Hole header
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(8)),
-            ),
-            child: Column(children: [
-              Text('Hole $holeNumber',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 2),
-              if (holeData != null)
-                Text(
-                  _buildHoleHeaderText(holeData!, players),
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall,
-                ),
-            ]),
+          // The shared header — `widgets/hole_header.dart`.
+          HoleHeader(
+            holeData:   holeData,
+            holeNumber: holeNumber,
+            players:    players,
           ),
 
           // Hole outcome banner (shown once hole is scored)
