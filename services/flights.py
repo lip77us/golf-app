@@ -78,6 +78,63 @@ def flight_sizes(assignment: dict, n_flights: int) -> list:
 # Ranking
 # ---------------------------------------------------------------------------
 
+def apportion(total_cents: int, weights) -> list:
+    """Divide `total_cents` by `weights` so the parts sum EXACTLY to it.
+
+    Largest-remainder: every part gets its floor, and the leftover cents go
+    to the parts with the biggest fractions, ties by position. Rounding each
+    part on its own is what invents money — three flights of three out of
+    nine each rounding $66.666 to $66.67 pays $200.01 of a $200 table, which
+    is the odd cent a TD should never have to see.
+    """
+    total_w = sum(weights)
+    if total_w <= 0:
+        return [0] * len(weights)
+    exact = [total_cents * w / total_w for w in weights]
+    parts = [int(x) for x in exact]
+    left = total_cents - sum(parts)
+    order = sorted(range(len(weights)), key=lambda i: (-(exact[i] - parts[i]), i))
+    for i in order[:left]:
+        parts[i] += 1
+    return parts
+
+
+def scale_table(payouts_cfg, purse_cents: int) -> dict:
+    """The event's payout table rewritten to pay exactly `purse_cents`.
+
+    **A flight's purse is its own golfers' entries.** Fifteen golfers cut 8/7
+    at $10 a head means $80 and $70 — each flight divides what its own players
+    put in. Since everybody pays the same entry, that share is `size / field`,
+    so the fee itself never has to be passed in; the caller works the purses
+    out with :func:`apportion` and hands one in here.
+
+    Before this, every flight paid the table in FULL: eight golfers at $20 put
+    $160 in, a $100/$60 table over two flights took $320 out, and the event was
+    short by exactly one pool. Reported from a real event, 25 Sep 2026.
+
+    **Proportional, not an equal division of the pool.** An equal split pays a
+    7-man flight and an 8-man flight the same money, so neither plays for what
+    it paid in — and it strands a cent that is an artifact rather than a fact
+    about the field. Here the flights differ because their fields differ.
+
+    The places sum exactly to the purse: each is rounded to the cent and the
+    remainder lands on FIRST place.
+    """
+    table = {int(k): float(v or 0) for k, v in (payouts_cfg or {}).items()}
+    total = sum(table.values())
+    if total <= 0 or not table:
+        return {k: 0.0 for k in table}
+
+    places = sorted(table)
+    out, spent = {}, 0
+    for place in places[1:]:
+        c = round(table[place] / total * purse_cents)
+        out[place] = c / 100
+        spent += c
+    out[places[0]] = (purse_cents - spent) / 100
+    return out
+
+
 def rank_in_flights(aggregated, *, sort_key, rank_key, flight_of, payouts_cfg,
                     eligible=None):
     """``([(player_id, data, rank, flight), ...], {player_id: payout})``.
@@ -105,8 +162,11 @@ def rank_in_flights(aggregated, *, sort_key, rank_key, flight_of, payouts_cfg,
     eligible golfers alone — so the man behind him moves up a paid place rather
     than that place going unclaimed.
 
-    Every flight pays the SAME table (see the plan): equal pools and stated
-    amounts mean flight B's table is flight A's table.
+    **Each flight pays a share of the table proportional to its SIZE**, which
+    is the same thing as saying it pays out what its own golfers paid in — see
+    :func:`scale_table`. A single flight holds the whole field, so the table is
+    untouched and the unflighted event is the degenerate case rather than a
+    second path.
     """
     from services.payout import split_tied_places
 
@@ -125,17 +185,28 @@ def rank_in_flights(aggregated, *, sort_key, rank_key, flight_of, payouts_cfg,
     for pid, data in aggregated.items():
         by_flight.setdefault(flight_of(pid), []).append((pid, data))
 
+    # **Every flight's purse is its own golfers' entries**, apportioned so the
+    # purses sum to the table exactly — rounding each on its own invents a
+    # cent across the flights, which is the odd cent a TD should never see.
+    order = sorted(by_flight)
+    table_cents = round(
+        sum(float(v or 0) for v in (payouts_cfg or {}).values()) * 100)
+    purses = dict(zip(order, apportion(
+        table_cents, [len(by_flight[f]) for f in order])))
+
     ranked, payouts = [], {}
-    for flight in sorted(by_flight):
+    for flight in order:
         rows = sorted(by_flight[flight], key=sort_key)
 
         for pid, data, rank in _ranked(rows):
             ranked.append((pid, data, rank, flight))
 
+        flight_cfg = scale_table(payouts_cfg, purses[flight])
+
         # Prize ranking is its own pass over the eligible golfers in THIS
         # flight, renumbered from 1 — see the docstring.
         prize = _ranked([r for r in rows if r[0] in eligible])
-        paid = split_tied_places(payouts_cfg, [r for _pid, _d, r in prize])
+        paid = split_tied_places(flight_cfg, [r for _pid, _d, r in prize])
         for pid, _data, r in prize:
             payouts[pid] = paid.get(r) or None
 
@@ -325,12 +396,17 @@ def cut_index_map(tournament) -> dict:
 def flight_blocks(tournament, standings, payouts_cfg) -> list:
     """One entry per flight, in board order — what a client draws headers from.
 
-    **Every flight pays the same table**, which is the settled decision that
-    makes this cheap: the purse is the sum of the configured amounts, identical
-    for every flight, and the event's budget is that times the flight count.
-    A client that summed each flight's actual payouts would instead report what
-    a flight PAID, which drops to zero before anybody has scored and reads as a
-    flight with no prize.
+    **The purse is what this flight's own golfers paid in** — the table scaled
+    by its share of the field, which is `size / field` because every golfer
+    pays the same entry. Fifteen golfers cut 8/7 shows $80 and $70.
+
+    It used to be the whole table on every flight: two flights funded by one
+    $160 pool each said `$160 purse`, which is where the money bug sat in
+    plain sight and read as a generous event rather than an impossible one.
+
+    Still the COMMITTED figure rather than what a flight has paid so far — a
+    client summing actual payouts would report `$0` before anybody has scored
+    and read as a flight with no prize.
 
     Sized from the standings rather than from the frozen rows so the header
     counts what the board actually shows — a late entry with no frozen row is
@@ -339,14 +415,18 @@ def flight_blocks(tournament, standings, payouts_cfg) -> list:
     n = tournament.flight_count or 0
     if n < 2:
         return []
-    purse = sum(float(p.get('amount') or 0) for p in (payouts_cfg or []))
+    table = sum(float(p.get('amount') or 0) for p in (payouts_cfg or []))
     sizes = {}
     for row in standings:
         f = row.get('flight')
         if f:
             sizes[f] = sizes.get(f, 0) + 1
+    order = sorted(sizes)
+    # The SAME apportionment the money uses, so the header cannot advertise a
+    # purse the board does not pay.
+    purses = apportion(round(table * 100), [sizes[f] for f in order])
     return [{'flight': f,
              'label' : flight_label(f),
              'size'  : sizes.get(f, 0),
-             'purse' : purse}
-            for f in sorted(sizes)]
+             'purse' : purses[i] / 100}
+            for i, f in enumerate(order)]

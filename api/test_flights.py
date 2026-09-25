@@ -146,10 +146,17 @@ class TournamentFlightsEndpointTests(APITestCase):
         # What replaced it: one header block per flight, in board order.
         self.assertEqual([b['label'] for b in summary['flights']], ['A', 'B'])
         self.assertEqual([b['size'] for b in summary['flights']], [4, 4])
-        # **Every flight pays the same table**, so each purse is the full
-        # table and the event's budget is that times the flight count.
+        # **Each purse is this flight's SHARE of the table.** It used to be
+        # the whole of it — two flights each showing `$100` against one $100
+        # table, which is where the money bug was visible all along and read
+        # as a generous event rather than an impossible one. Reported from a
+        # real event, 25 Sep 2026.
         self.assertEqual([b['purse'] for b in summary['flights']],
-                         [100.0, 100.0])
+                         [50.0, 50.0])
+        # ...and the money going out is the money that was configured, not a
+        # multiple of it.
+        paid = sum(float(r['payout'] or 0) for r in summary['results'])
+        self.assertAlmostEqual(paid, 100.0, places=2)
 
         # Settlement reads the standings, which never carried the prefix.
         standings = low_net_championship_standings(self.tournament)

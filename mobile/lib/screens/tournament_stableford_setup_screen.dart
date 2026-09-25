@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/handicap_mode_selector.dart';
+import '../utils/flight_share.dart';
 import '../widgets/flights_card.dart';
 import '../widgets/payout_config_field.dart';
 
@@ -39,6 +40,11 @@ class TournamentStablefordSetupScreen extends StatefulWidget {
 
 class _TournamentStablefordSetupScreenState
     extends State<TournamentStablefordSetupScreen> {
+  /// The golfer count per flight, reported by `FlightsCard`. Drives the
+  /// per-place readback under the payout table — a flight's purse is its
+  /// own golfers' entries, so an 8/7 cut pays two different numbers.
+  List<int> _flightSizes = const [];
+
   String _mode = 'net';
   int _netPercent = 100;
   final _entryCtrl = TextEditingController();
@@ -240,6 +246,17 @@ class _TournamentStablefordSetupScreenState
         Text('Pool: \$${_pool.toStringAsFixed(0)}  ($_numPlayers players)',
             style: theme.textTheme.bodySmall),
         const SizedBox(height: 8),
+
+        // **ABOVE the payouts**, because the cut changes what the table
+        // means: each flight pays it divided by the flight count. A TD
+        // typing $200 into first place needs to know whether that is $200 or
+        // $100 before he types it.
+        FlightsCard(
+          tournamentId: widget.tournamentId,
+          onChanged: (sizes) => setState(() => _flightSizes = sizes),
+        ),
+        const SizedBox(height: 16),
+
         PayoutConfigField(
           pool: _pool.round(),
           numPayouts: _numPayouts,
@@ -247,13 +264,9 @@ class _TournamentStablefordSetupScreenState
           onNumPayoutsChanged: (n) => setState(() => _numPayouts = n),
           onPayoutChanged: () => setState(() {}),
           onSuggest: _suggest,
+          placeSubtitle: (i) => flightShareLabel(
+              double.tryParse(_payoutCtrls[i].text.trim()) ?? 0, _flightSizes),
         ),
-        const SizedBox(height: 24),
-
-        // Below the payouts on purpose: a flight's purse IS the table above,
-        // paid once per flight, so the number has to be set before the
-        // question of how many boards it pays means anything.
-        FlightsCard(tournamentId: widget.tournamentId),
       ],
     );
   }

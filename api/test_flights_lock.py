@@ -145,3 +145,121 @@ class FlightsLockEndpointTests(FlightsLockTests):
         event must not start failing."""
         self._score()
         self.assertEqual(self.api.delete(self.url).status_code, 200)
+
+
+class FlightPurseBalanceTests(TestCase):
+    """**Money out equals money configured, at any flight count.**
+
+    Before this, every flight paid the table in FULL: eight golfers at $20 put
+    $160 in, a $100/$60 table over two flights took $320 out, and the event was
+    short by exactly one pool. Reported from a real event, 25 Sep 2026 — *"it
+    pays each flight the entire pool."*
+    """
+
+    TABLE = [{'place': 1, 'amount': 120.0},
+             {'place': 2, 'amount': 72.0},
+             {'place': 3, 'amount': 48.0}]
+    TOTAL = 240.0
+
+    def _event(self, n_flights):
+        """A whole event cut into `n_flights` and played out.
+
+        **A fresh one per count.** The cut freezes at the first score, so a
+        single fixture cannot be re-cut between subtests — which is the lock
+        doing its job, and is why this reads as a builder rather than a loop
+        over one tournament.
+        """
+        from games.models import LowNetChampionshipConfig
+        course = make_course()
+        tee = make_tee(course=course, holes=DEFAULT_HOLES)
+        tourn = Tournament.objects.create(
+            account=course.account, name=f'Champs {n_flights}',
+            start_date=date(2026, 9, 25), total_rounds=1,
+            active_games=['low_net'], scoring_method='stroke')
+        rnd = make_round(course=course, active_games=[])
+        rnd.tournament = tourn
+        rnd.save(update_fields=['tournament'])
+        groups = [
+            make_foursome(rnd,
+                          [(f'P{g}{i}', 2 + g * 8 + i * 2) for i in range(4)],
+                          tee=tee, group_number=g + 1)
+            for g in range(3)                      # twelve golfers
+        ]
+        LowNetChampionshipConfig.objects.create(
+            tournament=tourn, entry_fee=20, payouts=list(self.TABLE))
+        if n_flights > 1:
+            set_flights(tourn, n_flights)
+        par = {h['number']: h['par'] for h in DEFAULT_HOLES}
+        for fs in groups:
+            ids = [m.player_id for m in fs.memberships.all()]
+            for h in range(1, 19):
+                submit_hole(fs, h, [(pid, par[h]) for pid in ids])
+        from services.low_net_championship import low_net_championship_summary
+        s = low_net_championship_summary(tourn)
+        paid = round(sum(float(r['payout'] or 0) for r in s['results']), 2)
+        return paid, s
+
+    def test_the_table_is_paid_once_however_the_field_is_cut(self):
+        for n in (1, 2, 3, 4):
+            with self.subTest(flights=n):
+                paid, _ = self._event(n)
+                self.assertAlmostEqual(
+                    paid, self.TOTAL, places=2,
+                    msg=f'{n} flights paid ${paid} of a ${self.TOTAL} table')
+
+    def test_an_unflighted_event_is_untouched(self):
+        """The degenerate case is the same code on the same numbers."""
+        paid, s = self._event(1)
+        self.assertAlmostEqual(paid, self.TOTAL, places=2)
+        self.assertEqual(s['flights'], [])
+
+    def test_the_reported_case_15_golfers_cut_8_and_7(self):
+        """*"If I have 15 in to 2 flights, then the first flight has 8 players
+        and the second flight 7 players and at $10 entry, the first flight
+        divides $80 and the second flight $70."*
+
+        A flight's purse is what its OWN golfers paid in. Since everybody pays
+        the same entry, that share is exactly `size / field`, so the fee never
+        has to be passed in.
+        """
+        from services.flights import apportion, scale_table
+        table = {1: 75.0, 2: 45.0, 3: 30.0}          # $150 over three places
+        purses = apportion(15000, [8, 7])            # cents, 8 and 7 golfers
+        self.assertEqual(purses, [8000, 7000])       # $80 and $70
+        a = scale_table(table, purses[0])
+        b = scale_table(table, purses[1])
+        self.assertAlmostEqual(sum(a.values()), 80.0, places=2)
+        self.assertAlmostEqual(sum(b.values()), 70.0, places=2)
+        self.assertAlmostEqual(sum(a.values()) + sum(b.values()), 150.0,
+                               places=2)
+        # ...and no cent is stranded on a place.
+        self.assertEqual(a, {1: 40.0, 2: 24.0, 3: 16.0})
+        self.assertEqual(b, {1: 35.0, 2: 21.0, 3: 14.0})
+
+    def test_a_scaled_place_that_does_not_divide_lands_on_first(self):
+        """The column has to add up to the purse.
+
+        Rounding each place independently loses or invents money; the
+        remainder goes to FIRST place, which is the convention `split_to_cents`
+        already uses across a tie, applied down a table instead.
+        """
+        from services.flights import apportion, scale_table
+        # $100 three ways: 33.34 / 33.33 / 33.33, summing to exactly $100.
+        purses = apportion(10000, [5, 5, 5])
+        self.assertEqual(sum(purses), 10000)
+        for pc in purses:
+            t = scale_table({1: 50.0, 2: 30.0, 3: 20.0}, pc)
+            self.assertEqual(round(sum(t.values()) * 100), pc)
+
+    def test_an_unflighted_table_is_returned_untouched(self):
+        """One flight holds the whole field, so there is nothing to scale."""
+        from services.flights import scale_table
+        table = {1: 75.0, 2: 45.0}
+        self.assertEqual(scale_table(table, 12000), table)
+
+    def test_the_header_purse_is_the_flights_share(self):
+        _paid, s = self._event(3)
+        self.assertEqual(len(s['flights']), 3)
+        for block in s['flights']:
+            self.assertAlmostEqual(block['purse'],
+                                   round(self.TOTAL / 3, 2), places=2)

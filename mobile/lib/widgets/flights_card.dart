@@ -28,9 +28,15 @@ import 'section_card.dart';
 
 class FlightsCard extends StatefulWidget {
   final int tournamentId;
-  /// Called after a cut or a clear, so the screen can reload anything that
-  /// reads `flight_count`.
-  final VoidCallback? onChanged;
+
+  /// The golfer count per flight, in board order — `[]` for one board.
+  ///
+  /// Reported on load and after every cut or clear, because the payout
+  /// editor above cannot say what a flight winner receives without it: a
+  /// flight's purse is its OWN golfers' entries, so an 8/7 cut pays two
+  /// different numbers. The card is the only thing that knows the split, and
+  /// it knows it from the preview before anything is committed.
+  final ValueChanged<List<int>>? onChanged;
 
   const FlightsCard({
     super.key,
@@ -53,6 +59,14 @@ class _FlightsCardState extends State<FlightsCard> {
   /// Golfers the TD has named as holding a guessed index.
   final Set<int> _unindexed = {};
 
+  /// The split the payout editor needs. Empty below two flights, where
+  /// there is nothing to divide and a helper line would be noise.
+  static List<int> _sizesOf(Map<String, dynamic> d) {
+    final n = (d['preview_flights'] as int?) ?? 0;
+    if (n < 2) return const [];
+    return ((d['preview_sizes'] as List?) ?? const []).cast<int>();
+  }
+
   /// Whether the cut is frozen because the field has started scoring. The
   /// SERVER decides this; see the note on the banner below.
   bool get _locked => _data?['locked'] == true;
@@ -70,6 +84,7 @@ class _FlightsCardState extends State<FlightsCard> {
       final d = await api.getFlights(widget.tournamentId,
           nFlights: _n, unindexed: _unindexed.toList());
       if (!mounted) return;
+      widget.onChanged?.call(_sizesOf(d));
       setState(() {
         _data = d;
         _error = null;
@@ -97,7 +112,7 @@ class _FlightsCardState extends State<FlightsCard> {
     try {
       await api.setFlights(widget.tournamentId,
           nFlights: _n, unindexed: _unindexed.toList());
-      widget.onChanged?.call();
+      await _load();
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -121,7 +136,7 @@ class _FlightsCardState extends State<FlightsCard> {
     setState(() => _busy = true);
     try {
       await api.clearFlights(widget.tournamentId);
-      widget.onChanged?.call();
+      await _load();
       await _load();
     } catch (e) {
       if (mounted) {

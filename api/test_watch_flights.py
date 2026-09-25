@@ -87,8 +87,11 @@ class WatchFlightHeaderTests(TestCase):
         self._cut(2)
         body = self._page()
         self.assertIn('2 golfers', body)
-        # `floatformat:"-2"` strips the decimals on a whole number.
-        self.assertIn('$40 purse', body)
+        # HALF the $40 table, because two flights divide one pool. The header
+        # used to print the whole table against every flight — the money bug,
+        # in plain sight. `floatformat:"-2"` strips the decimals on a whole
+        # number.
+        self.assertIn('$20 purse', body)
 
     def test_a_header_appears_once_per_flight_not_once_per_golfer(self):
         """`ifchanged` on the row's flight, so it marks the boundary."""

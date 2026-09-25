@@ -16,6 +16,7 @@ import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
 import '../widgets/handicap_mode_selector.dart';
+import '../utils/flight_share.dart';
 import '../widgets/flights_card.dart';
 import '../widgets/payout_config_field.dart';
 import '../widgets/section_card.dart';
@@ -32,6 +33,11 @@ class TournamentLowNetSetupScreen extends StatefulWidget {
 class _TournamentLowNetSetupScreenState
     extends State<TournamentLowNetSetupScreen> {
   String _mode       = 'net';
+  /// The golfer count per flight, reported by `FlightsCard`. Drives the
+  /// per-place readback under the payout table — a flight's purse is its
+  /// own golfers' entries, so an 8/7 cut pays two different numbers.
+  List<int> _flightSizes = const [];
+
   int    _netPercent = 100;
   final  _entryCtrl       = TextEditingController();
   // Local-only: used to estimate the prize pool (not saved to server)
@@ -300,6 +306,22 @@ class _TournamentLowNetSetupScreenState
 
           const SizedBox(height: 16),
 
+          // ── Flights ───────────────────────────────────────────────────────
+          // **ABOVE the payouts**, because the cut changes what the table
+          // means. Each flight pays the table divided by the flight count, so
+          // a TD typing $200 into first place needs to know whether that is
+          // $200 or $100 before he types it. It used to sit below, on the
+          // reasoning that a purse is the table above — which was true only
+          // while every flight paid the whole table, and that was the money
+          // bug. Reported 25 Sep 2026: *"I need to set the number of flights
+          // before I set the prize pool."*
+          FlightsCard(
+            tournamentId: widget.tournamentId,
+            onChanged: (sizes) => setState(() => _flightSizes = sizes),
+          ),
+
+          const SizedBox(height: 16),
+
           // ── Payout structure ──────────────────────────────────────────────
           SectionCard(
             title: 'Payouts',
@@ -320,6 +342,11 @@ class _TournamentLowNetSetupScreenState
                       setState(() => _payoutPlaces = n),
                   onPayoutChanged    : () => setState(() {}),
                   onSuggest          : _suggest,
+                  // What one flight pays for this place. Silent on a single
+                  // board, where there is nothing to divide.
+                  placeSubtitle: (i) => flightShareLabel(
+                      double.tryParse(_payoutCtrls[i].text.trim()) ?? 0,
+                      _flightSizes),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -334,11 +361,6 @@ class _TournamentLowNetSetupScreenState
 
           const SizedBox(height: 16),
 
-          // ── Flights ───────────────────────────────────────────────────────
-          // Below the payouts on purpose: a flight's purse IS the table above,
-          // paid once per flight, so the number has to be set before the
-          // question of how many boards it pays means anything.
-          FlightsCard(tournamentId: widget.tournamentId),
 
           // ── Error banner ──────────────────────────────────────────────────
           if (_error != null && _saving == false) ...[
