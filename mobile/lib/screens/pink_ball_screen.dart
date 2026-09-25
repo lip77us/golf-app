@@ -26,6 +26,7 @@ import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/borrowed_fourth.dart';
 import '../widgets/golf_app_bar.dart';
+import '../widgets/hole_header.dart';
 import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
@@ -386,7 +387,18 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
               ? null
               : _memberFor(rp, cid);
       final name = mem ?? '';
-      standing = name.isEmpty ? '$_gameName in play' : '$name has it';
+      // **`has the Devil Ball`, not `has it`.** `it` has no antecedent on a
+      // line that is read on its own, screenshotted, or glanced at from a cart
+      // — and the other two forms of this very standing already name the game
+      // (`Devil Ball in play`, `Devil Ball lost on 7`), so `has it` was the
+      // one form of three that made the reader supply the noun.
+      //
+      // The name is whatever the TD typed, which is the rule for every other
+      // surface the ball appears on: the leaderboard tab, the carrier badge,
+      // the lost-ball control, the chat line and the settlement row. A group
+      // playing Beer Ball is told about Beer Ball.
+      standing =
+          name.isEmpty ? '$_gameName in play' : '$name has the $_gameName';
     }
     return StandingRibbon(
       kind: StandingKind.result,
@@ -585,13 +597,10 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
     final hole = _currentHole(sc);
     final par  = hole?.par ?? 4;
 
-    // carrier name
-    final cid          = _carrierId;
-    final carrierMem   = cid == null
-        ? null
-        : realMembers.firstWhere((m) => m.player.id == cid,
-            orElse: () => realMembers.first);
-    final carrierName  = carrierMem?.player.name ?? '—';
+    // Who is carrying — the rows badge and tint HIS row. The name itself is
+    // the standing row's (`_standingRibbon`), which reads the same
+    // `_carrierId`; `carrierMem` / `carrierName` went with the banner line.
+    final cid = _carrierId;
 
     final complete = hole != null && _holeIsComplete(hole, realMembers);
     final groupNum = foursome?.groupNumber ?? 0;
@@ -655,17 +664,17 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             children: [
-              // ── Carrier banner ────────────────────────────────────────
-              _CarrierBanner(
-                holeNumber:       _holeNumber,
-                par:              par,
-                yards:            hole?.yards,
-                si:               hole?.strokeIndex,
-                irishRumbleBalls: _irishBallsToCount,
-              ),
-              const SizedBox(height: 12),
-
               // ── Lost ball toggle ──────────────────────────────────────
+              // **Above the hole card, and deliberately left there** when the
+              // header moved inside it. With auto-advance on, the hole SAVES
+              // the instant the last score lands, so a control below the rows
+              // is one a scorer entering three scores in a row never sees — and
+              // this is the switch that ends the group's game. It has to be in
+              // view while he enters, not after.
+              //
+              // (Recoverable either way: stepping back to the hole restores the
+              // toggle from `_ballLostOnHole` and re-saves. But a control that
+              // needs an undo to reach is the wrong way round.)
               _BallLostCard(
                 gameName:    _gameName,
                 lost:         _ballLost,
@@ -688,6 +697,28 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // **The app's standard hole header**, inside the card with
+                    // the golfers under it — `widgets/hole_header.dart`, which
+                    // is where score entry draws it for every other game.
+                    //
+                    // `_CarrierBanner` was here: a mint card floating above the
+                    // rows, the hole on the left and par / yards / index as
+                    // pill chips on the right. Nothing was wrong with it except
+                    // that it was not the header the same golfer reads in every
+                    // other round — and the chips took the first golfer's tee,
+                    // where the shared line collapses ACROSS the tees and
+                    // slashes only what they disagree on. In a mixed group the
+                    // first golfer's index is not the group's, and a stroke
+                    // falls where the index says.
+                    HoleHeader(
+                      holeData:   hole,
+                      holeNumber: _holeNumber,
+                      players:    realMembers,
+                    ),
+                    // Where score entry puts its hole-outcome banners: under
+                    // the header, above the rows.
+                    if (_irishBallsToCount != null)
+                      _IrishRumbleBallsLine(balls: _irishBallsToCount!),
                     ...() {
                   // Compute hot spot once — first player without a score.
                   int hotSpotIdx = -1;
@@ -926,103 +957,43 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
 }
 
 // ---------------------------------------------------------------------------
-// Carrier banner
+// Irish Rumble ball count
 // ---------------------------------------------------------------------------
 
-class _CarrierBanner extends StatelessWidget {
-  final int     holeNumber;
-  final int     par;
-  final int?    yards;
-  final int?    si;
-  /// Number of scores that count for Irish Rumble on this hole, or null if
-  /// Irish Rumble is not an active game.
-  final int?    irishRumbleBalls;
-
-  // `carrierName`, `gameName` and `ballAlreadyLost` are gone with the line
-  // they fed. The standing row says who has it and whether it is still alive;
-  // leaving the parameters behind would be three inputs nothing reads.
-  const _CarrierBanner({
-    required this.holeNumber,
-    required this.par,
-    this.yards,
-    this.si,
-    this.irishRumbleBalls,
-  });
+/// `2 balls count for Irish Rumble` — how many of the group's scores the round's
+/// OTHER game takes from this hole.
+///
+/// **All that is left of `_CarrierBanner`.** That card drew the hole header, the
+/// par / yards / index chips and `<Name> carries the <Game>`; the header is now
+/// the app's shared one and the carrier is named in the standing row. This line
+/// is not either of those — it is a fact about a second game sharing the card,
+/// which is why it survived both removals.
+class _IrishRumbleBallsLine extends StatelessWidget {
+  final int balls;
+  const _IrishRumbleBallsLine({required this.balls});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      color: theme.colorScheme.primaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Text('Hole $holeNumber',
-                style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.onPrimaryContainer)),
-            const Spacer(),
-            _InfoChip('Par $par'),
-            if (yards != null) ...[
-              const SizedBox(width: 6),
-              _InfoChip('${yards}y'),
-            ],
-            if (si != null) ...[
-              const SizedBox(width: 6),
-              _InfoChip('SI $si'),
-            ],
-          ]),
-          const SizedBox(height: 10),
-          // **`<Name> carries the <Game>` came off.** The standing row in the
-          // app bar says it now — `Allan Peterson has it` — and the two sit
-          // in one glance, which is the case §7 says a second copy is not
-          // allowed in.
-          //
-          // The per-row carrier badge and accent border STAY: they mark WHICH
-          // ROW is his, which is the actionable half and the one a name in a
-          // bar cannot do.
-          if (irishRumbleBalls != null) ...[
-            const SizedBox(height: 6),
-            Row(children: [
-              Icon(Icons.filter_none,
-                  size: 16,
-                  color: theme.colorScheme.primary),
-              const SizedBox(width: 8),
-              Text(
-                '$irishRumbleBalls ${irishRumbleBalls == 1 ? 'ball counts' : 'balls count'} '
-                'for Irish Rumble',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onPrimaryContainer),
-              ),
-            ]),
-          ],
-        ]),
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+      child: Row(children: [
+        Icon(Icons.filter_none, size: 16, color: theme.colorScheme.primary),
+        const SizedBox(width: 8),
+        Text(
+          '$balls ${balls == 1 ? 'ball counts' : 'balls count'} '
+          'for Irish Rumble',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+      ]),
     );
   }
 }
 
-class _InfoChip extends StatelessWidget {
-  final String label;
-  const _InfoChip(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primary.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(label,
-          style: theme.textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onPrimaryContainer)),
-    );
-  }
-}
+// `_InfoChip` was here — the banner's `Par 4` / `412y` / `SI 7` pills. Gone
+// with it: the shared header states all three in one line, collapsed across the
+// tees actually in play.
 
 // ---------------------------------------------------------------------------
 // Player score row

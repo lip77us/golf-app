@@ -40,6 +40,7 @@ import '../widgets/banker_entry_strip.dart';
 import '../widgets/triple_cup_pairings.dart';
 import '../widgets/standing_ribbon.dart';
 import '../widgets/stroke_play_progress_grid.dart';
+import '../widgets/hole_header.dart';
 import '../game_colors.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
@@ -3618,36 +3619,9 @@ class _HoleScoreCard extends StatelessWidget {
         ?.points ?? 0.0;
   }
 
-  static String _buildHoleHeader(ScorecardHole hole, List<Membership> players) {
-    final seenKeys = <int>{};
-    final parVals  = <int>[];
-    final yardVals = <int?>[];
-    final siVals   = <int>[];
-    for (final m in players) {
-      final key = m.tee?.id ?? -m.player.id;
-      if (!seenKeys.add(key)) continue;
-      final e = hole.scoreFor(m.player.id);
-      parVals.add(e?.par   ?? hole.par);
-      yardVals.add(e?.yards ?? hole.yards);
-      siVals.add(e?.strokeIndex ?? hole.strokeIndex);
-    }
-
-    String collapse<T>(List<T> values, String Function(T) fmt) {
-      if (values.isEmpty) return '';
-      final seen   = <T>{};
-      final unique = values.where((v) => seen.add(v)).toList();
-      return unique.length == 1 ? fmt(unique.first) : unique.map(fmt).join('/');
-    }
-
-    final parStr  = 'Par ${collapse<int>(parVals, (v) => '$v')}';
-    final siStr   = 'SI: ${collapse<int>(siVals,  (v) => '$v')}';
-    final anyYards = yardVals.any((y) => y != null);
-    final yardStr = anyYards
-        ? '${collapse<int?>(yardVals, (v) => v == null ? '—' : '$v')} yds.'
-        : null;
-
-    return yardStr == null ? '$parStr  |  $siStr' : '$parStr  |  $yardStr  |  $siStr';
-  }
+  // `_buildHoleHeader` was here — the par / yardage / index line, collapsed
+  // across the tees in play. **Moved to `widgets/hole_header.dart` as
+  // `holeHeaderLine` 25 Sep 2026**, with the header that draws it.
 
   @override
   Widget build(BuildContext context) {
@@ -3676,80 +3650,49 @@ class _HoleScoreCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Hole header — Stack so the "?" legend button can sit top-right
-          // without disturbing the centred Hole-N + Par/SI line.
-          Stack(children: [
-            Container(
-              // width: infinity so the grey header fills the full card —
-              // Stack doesn't propagate the parent Column's stretch.
-              // Horizontal padding gives the centred Hole-N + meta line
-              // breathing room so the "?" doesn't overlap the text.
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 10),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+          // The shared header — `widgets/hole_header.dart`. It was written
+          // inline here and every game with its own play screen drew a
+          // different one; the `?` legend is score entry's own and rides in
+          // as `trailing`, which is the only part of it that is.
+          HoleHeader(
+            holeData:   holeData,
+            holeNumber: holeNumber,
+            players:    players,
+            courseName: courseName,
+            // "?" legend — explains the row meta (handicap chip, dots, tee,
+            // totals, game-specific badges). Adaptive to the active game(s)
+            // so we don't show irrelevant rows.
+            trailing: IconButton(
+              tooltip: 'What do these mean?',
+              icon: Icon(
+                Icons.help_outline,
+                size: 22,
+                color: theme.colorScheme.primary,
               ),
-              child: Column(children: [
-                // Course name above the hole number, in the same small font as
-                // the Par/yds/SI line below it.
-                if (courseName.isNotEmpty) ...[
-                  Text(courseName,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodySmall),
-                  const SizedBox(height: 2),
-                ],
-                Text('Hole $holeNumber',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleLarge
-                        ?.copyWith(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 2),
-                if (holeData != null)
-                  Text(
-                    _buildHoleHeader(holeData!, players),
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall,
-                  ),
-              ]),
-            ),
-            // "?" legend — explains the row meta (handicap chip, dots,
-            // tee, totals, game-specific badges).  Adaptive to the active
-            // game(s) so we don't show irrelevant rows.
-            Positioned(
-              top: 2,
-              right: 2,
-              child: IconButton(
-                tooltip: 'What do these mean?',
-                icon: Icon(
-                  Icons.help_outline,
-                  size: 22,
-                  color: theme.colorScheme.primary,
-                ),
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                onPressed: () => showModalBottomSheet<void>(
-                  context: context,
-                  showDragHandle: true,
-                  builder: (_) => _ScoreEntryLegendSheet(
-                    hasSkins:        skins != null,
-                    hasNassau:       nassau != null,
-                    hasSixes:        sixesSummary != null,
-                    hasTripleCup:    tripleCupSummary != null,
-                    hasPoints531:    points531Summary != null,
-                    hasVegas:        vegasSummary != null,
-                    // The 4-player bracket also feeds matchPlayData for cup
-                    // singles; isCupSingles tells those apart.
-                    hasMatchPlay:    matchPlayData != null && !isCupSingles,
-                    hasThreePersonMatch: hasThreePersonMatch,
-                    isEighteenHoleMatch: nassau?.isEighteenHoleMatch ?? false,
-                    isCupSingles:    isCupSingles,
-                    handicapMode:    handicapMode,
-                  ),
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              onPressed: () => showModalBottomSheet<void>(
+                context: context,
+                showDragHandle: true,
+                builder: (_) => _ScoreEntryLegendSheet(
+                  hasSkins:        skins != null,
+                  hasNassau:       nassau != null,
+                  hasSixes:        sixesSummary != null,
+                  hasTripleCup:    tripleCupSummary != null,
+                  hasPoints531:    points531Summary != null,
+                  hasVegas:        vegasSummary != null,
+                  // The 4-player bracket also feeds matchPlayData for cup
+                  // singles; isCupSingles tells those apart.
+                  hasMatchPlay:    matchPlayData != null && !isCupSingles,
+                  hasThreePersonMatch: hasThreePersonMatch,
+                  isEighteenHoleMatch: nassau?.isEighteenHoleMatch ?? false,
+                  isCupSingles:    isCupSingles,
+                  handicapMode:    handicapMode,
                 ),
               ),
             ),
-          ]),
+          ),
 
           // Nassau hole outcome banner
           if (nassauHole != null && nassauHole.winner != null)
