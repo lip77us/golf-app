@@ -116,4 +116,32 @@ void main() {
       expect(read(f), contains('bottom: ribbon'), reason: f);
     }
   });
+
+  // ── The jump has to know whose card it is reading ───────────────────────
+  //
+  // `RoundProvider.scorecard` is ONE slot, so on entry it still holds
+  // whichever group was open last. A screen that jumps to the first unplayed
+  // hole without checking will land on the first hole THAT group had not
+  // played — `quota_nassau_screen` opened on the 4th of a round with no
+  // scores in it at all. Reported 25 Sep 2026; every other play screen had
+  // carried the guard since the jump was written.
+  group('**the initial jump reads its own foursome**', () {
+    test('every screen that jumps also checks the card belongs to it', () {
+      final unguarded = <String>[];
+      for (final f in _playScreens) {
+        final src = read(f);
+        if (!src.contains('_initialJumpDone') &&
+            !src.contains('_jumpToFirstUnplayed')) {
+          continue;
+        }
+        if (!src.contains('activeFoursomeId == widget.foursomeId')) {
+          unguarded.add(f);
+        }
+      }
+      expect(unguarded, isEmpty,
+          reason: 'these jump using whatever scorecard is loaded, which on '
+              'entry is the previous group\'s — guard with '
+              '`rp.activeFoursomeId == widget.foursomeId`');
+    });
+  });
 }

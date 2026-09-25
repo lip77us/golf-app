@@ -153,16 +153,6 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen>
     return map;
   }
 
-  /// 'T1' for player1 in any match, 'T2' for player2.
-  String? _teamLabel(int playerId, QuotaNassauSummary? summary) {
-    if (summary == null) return null;
-    for (final m in summary.matches) {
-      if (m.player1.playerId == playerId) return 'T1';
-      if (m.player2.playerId == playerId) return 'T2';
-    }
-    return null;
-  }
-
   void _jumpToFirstUnplayed(RoundProvider rp, List<Membership> players) {
     final sc = rp.scorecard;
     if (sc == null) return;
@@ -173,9 +163,12 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen>
     for (int h = 1; h <= 18; h++) {
       final hd = sc.holeData(h);
       if (hd == null) continue;
-      final allScored = hd.scores
-          .where((s) => realIds.contains(s.playerId))
-          .every((s) => s.grossScore != null);
+      // **`every` on an empty list is TRUE**, so a hole carrying no rows for
+      // the real golfers would read as fully scored and be skipped. It is the
+      // opposite: nothing entered is nothing played.
+      final mine = hd.scores.where((s) => realIds.contains(s.playerId));
+      final allScored =
+          mine.isNotEmpty && mine.every((s) => s.grossScore != null);
       if (!allScored && !rp.localPendingByHole.containsKey(h)) {
         setState(() => _selectedHole = h);
         return;
@@ -426,7 +419,15 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen>
 
     final players = _orderedPlayers(foursome, summary);
 
-    if (!_initialJumpDone && sc != null) {
+    // **The card has to BELONG to this foursome.** `rp.scorecard` is one
+    // slot on the provider, so on entry it still holds whichever group was
+    // open last — and the jump read that one, landing on the first hole THAT
+    // group had not played. Reported from a fresh Quota Nassau round with no
+    // scores in it at all, which opened on the 4th. Every other play screen
+    // has carried this guard since the jump was written; this one did not.
+    if (!_initialJumpDone &&
+        sc != null &&
+        rp.activeFoursomeId == widget.foursomeId) {
       _initialJumpDone = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -583,8 +584,15 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen>
     final quotaMap = _quotaMap(summary);
 
     return Column(children: [
-      _QNTeamBanner(summary: summary),
-
+      // **The pairings banner came off**, the same call casual Nassau made in
+      // `33c3465` and the cup Nassau screen made beside it: it named the two
+      // sides in their colours directly above player rows already tinted
+      // those colours and already carrying the names. It was the colours
+      // again, in words — and on a phone it was spending a row the progress
+      // card below can use.
+      //
+      // The standing row in the app bar says where the match STANDS, which is
+      // the part a banner never told anybody.
       Expanded(
         child: RefreshIndicator(
           onRefresh: _refresh,
@@ -792,56 +800,6 @@ class _QNPhantomInfoStrip extends StatelessWidget {
 // Team banner
 // ===========================================================================
 
-class _QNTeamBanner extends StatelessWidget {
-  final QuotaNassauSummary? summary;
-  const _QNTeamBanner({required this.summary});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final t1Label = summary == null || summary!.matches.isEmpty
-        ? 'Team 1'
-        : summary!.matches.map((m) => m.player1.shortName).join(' & ');
-    final t2Label = summary == null || summary!.matches.isEmpty
-        ? 'Team 2'
-        : summary!.matches.map((m) => m.player2.shortName).join(' & ');
-
-    final t1Color  = _qnTeamColor(summary?.team1Colour);
-    final t2Color  = _qnTeamColor(summary?.team2Colour);
-    final t1IsRed  = t1Color.red >= t1Color.blue;
-    final leftColor  = t1IsRed ? t1Color : t2Color;
-    final rightColor = t1IsRed ? t2Color : t1Color;
-    final leftLabel  = t1IsRed ? t1Label : t2Label;
-    final rightLabel = t1IsRed ? t2Label : t1Label;
-
-    return Container(
-      color: theme.colorScheme.surfaceContainerHighest,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(children: [
-        Expanded(
-          child: Text(leftLabel,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: leftColor,
-              ),
-              overflow: TextOverflow.ellipsis),
-        ),
-        Text(' vs ',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        Expanded(
-          child: Text(rightLabel,
-              textAlign: TextAlign.right,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: rightColor,
-              ),
-              overflow: TextOverflow.ellipsis),
-        ),
-      ]),
-    );
-  }
-}
 
 // ===========================================================================
 // Active hole card
