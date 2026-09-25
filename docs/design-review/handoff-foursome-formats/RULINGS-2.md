@@ -229,6 +229,65 @@ all on would ship nine untested rows.
 **This is the first thing to revisit on the tournament side**, and it is a
 per-game question, not a switch.
 
+**Since answered for five of them** — individual Stroke Play, individual
+Stableford, Foursome Play, cup Four Ball and cup Four Ball Quota, plus the
+Mini Singles bracket. Answering them turned up §12, which every one of them
+got wrong on the first attempt.
+
+---
+
+## §12 — On a tournament round the reader is usually NOT playing
+
+**Ruling: a row reporting a MATCH, a GROUP or a FIELD must not require the
+reader to be in it. He is used only to pick WHICH one to report; when he is in
+none, report the thing on screen.**
+
+This was found four separate times, from the course, in two days — the
+tournament Stroke Play row, cup Nassau, Quota Nassau and the Mini Singles
+bracket. Each time the symptom was the same: `Tee off` printed above a match
+that had been played, while the card two inches below it showed the score.
+
+**The cause is one assumption, inherited from casual golf.** Every row in this
+set was written where whoever holds the phone is one of the four. On a
+tournament round he usually is not: **every golfer in the field can be a
+login-less roster entry**, so the TD entering the scores is in none of the
+matches, and so is a captain, a scorer, or anyone reading a shared link. It is
+the ordinary case there, not an edge.
+
+Three things make the fallback safe rather than a guess:
+
+- **Nothing downstream is relative to him.** §3 already put every margin in
+  the neutral form with the colour naming the LEADER, so the row states a fact
+  about the match rather than a perspective on it. The reader was only ever an
+  index.
+- **The screen is entirely about that group** — its hole, its four rows, its
+  card. A row that goes quiet there reports nothing about the thing in front
+  of him, which is strictly worse than reporting somebody else's match.
+- **`Tee off` is a positive claim**, not silence. Refusing did not produce a
+  blank; it produced a false statement about a round in progress.
+
+**What to report when he is in none:**
+
+| The row answers | Report |
+|---|---|
+| a match — Nassau, Quota, Triple Cup, the bracket | the match the hole on screen belongs to; the group's first if several |
+| a place in the field — Stroke Play, Stableford | the best-placed golfer ON THE CARD, named, so the row is about the group |
+| a team — Foursome Play | every team on the card, since one person enters for both |
+
+**The exception, and it is narrow.** A genuinely PERSONAL figure — what I owe
+in Banker, my points in Wolf — has no group answer to fall back to, so those
+keep the gate. The test is not whether the util takes a `playerId`; it is
+whether the ANSWER changes depending on who is asking. If it does not, the
+gate is refusing to state a fact it already holds.
+
+**Audited across every cup surface**, 25 Sep 2026, and the assumption was
+confined to these utils. Navigation, permissions and content were already
+right: `canEdit = canManage || isMyGroup || youScore` lets a TD score any
+group, `_landscapeFoursomeId` already fell back to the first foursome, and the
+leaderboard's uses only sort and flag rather than filter. Where a reader-only
+feature is genuinely meaningless without one — the **My Foursome** tab — its
+absence is correct and is not this bug.
+
 ---
 
 ## Open, for design
@@ -248,4 +307,8 @@ per-game question, not a switch.
 5. **Stroke Play's leaderboard tab** shows strokes-off in a form the TD called
    *"not ideal, but we can work with it."* The fix is the one Stableford just
    had: a prospective `scorecard` block and the standard card.
-6. **Tournament games**, per §11.
+6. **Tournament games**, per §11 — five are answered, the rest are not.
+7. **§12 is new and was written from four field reports rather than from the
+   packet.** It is the one ruling here that contradicts how the whole set was
+   originally built, so it is the one most worth disagreeing with if design
+   sees it differently.
