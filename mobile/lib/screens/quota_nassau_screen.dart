@@ -10,6 +10,11 @@
 ///   • 18-hole summary grid: 2 header rows, T1 rows, T1 pts row, T2 rows, T2 pts row
 ///   • Footer: combined Stableford pts vs quota for each team
 
+import '../providers/auth_provider.dart';
+import '../game_colors.dart';
+import '../widgets/standing_ribbon.dart';
+import '../utils/match_notation.dart';
+import '../utils/quota_nassau_standing.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -361,6 +366,44 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen>
 
   // ── Build ─────────────────────────────────────────────────────────────────
 
+  /// **The margin is POINTS, not holes.**
+  ///
+  /// Quota Nassau gives every golfer a quota (36 − course handicap) and the
+  /// match is the difference between how far each is beating it. `3 UP` is
+  /// the Nassau form and it is wrong here: a hole is not the unit, and a
+  /// golfer three quota points clear may be level on holes. So the row reads
+  /// `Yau +3 pts`.
+  ///
+  /// The LEADER is named rather than the margin signed from the reader — two
+  /// golfers read the same row, and `+3` from one side is `−3` from the
+  /// other. Neutral margin, leader's colour: RULINGS §3.
+  ///
+  /// A foursome runs two of these matches, so the row reports the one the
+  /// reader is in, on the nine he is standing on, with the eighteen beside
+  /// it — the division `nassau_standing.dart` settled.
+  StandingRibbon? _standingRibbon(
+      RoundProvider rp, QuotaNassauSummary? summary) {
+    final round = rp.round;
+    if (summary == null || round == null) return null;
+    final me = context.read<AuthProvider>().player?.id;
+    final standing = quotaNassauStanding(summary, me, hole: _selectedHole);
+    Color? tint(int? side) => side == null
+        ? null
+        : (side == 1 ? GameColors.team1 : GameColors.team2);
+    return StandingRibbon(
+      kind: StandingKind.result,
+      standingLabel: standing?.main.label ?? '',
+      standing: standing?.main.value ?? kTeeOff,
+      standingColor: tint(standing?.main.side),
+      figureLabel: standing?.second?.label ?? '',
+      figure: standing?.second?.value ?? '',
+      figureColor: tint(standing?.second?.side),
+      onOpenLeaderboard: () => Navigator.of(context)
+          .pushNamed('/leaderboard', arguments: round.id),
+    );
+  }
+
+
   @override
   Widget build(BuildContext context) {
     final rp      = context.watch<RoundProvider>();
@@ -402,8 +445,13 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen>
     }
     _prevHadPending = nowHasPending;
 
+    final ribbon = _standingRibbon(rp, summary);
+
     return Scaffold(
       appBar: AppBar(
+        // D2: the standing becomes the bar's second line, and the pill in it
+        // replaces the leaderboard ICON below.
+        bottom: ribbon,
         // Close (X), not a back arrow — avoids being tapped as "previous hole".
         automaticallyImplyLeading: false,
         leading: IconButton(
@@ -411,7 +459,10 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen>
           tooltip: 'Close',
           onPressed: () => Navigator.of(context).maybePop(),
         ),
-        title: const Text('Four Ball Quota'),
+        title: Text('Four Ball Quota',
+            style: ribbon == null
+                ? null
+                : const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
         centerTitle: true,
         actions: [
           if (sync.hasPending)
@@ -437,14 +488,17 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen>
             ),
           if (rp.round != null)
             RoundChatButton(roundId: rp.round!.id),
-          IconButton(
-            tooltip: 'Leaderboard',
-            icon: const Icon(Icons.leaderboard_outlined),
-            onPressed: round == null
-                ? null
-                : () => Navigator.of(context)
-                    .pushNamed('/leaderboard', arguments: round.id),
-          ),
+          // The icon only while the row is not drawn — a named pill
+          // and a glyph for one destination is two ways in.
+          if (ribbon == null)
+            IconButton(
+              tooltip: 'Leaderboard',
+              icon: const Icon(Icons.leaderboard_outlined),
+              onPressed: round == null
+                  ? null
+                  : () => Navigator.of(context)
+                      .pushNamed('/leaderboard', arguments: round.id),
+            ),
         ],
       ),
       body: sc == null

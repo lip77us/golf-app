@@ -34,6 +34,11 @@ import '../widgets/stroke_dots.dart';
 import '../widgets/pinned_hole_grid.dart';
 import '../widgets/combo_tee_chip.dart';
 import '../utils/nine_totals.dart';
+import '../utils/match_notation.dart';
+import '../utils/nassau_standing.dart';
+import '../widgets/standing_ribbon.dart';
+import '../game_colors.dart';
+import '../providers/auth_provider.dart';
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -411,6 +416,42 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
 
   // ── Build ─────────────────────────────────────────────────────────────────
 
+  /// **This screen is the CUP's Four Ball**, and the row says the same thing
+  /// it says on a casual Nassau: where the match stands, because on a cup
+  /// round the group IS one match and that match is the point it is playing
+  /// for. The cup total belongs on the tournament board, not in a bar above
+  /// four golfers who can only affect this one line of it.
+  ///
+  /// That is the difference from Triple Cup, which DOES put the cup in the
+  /// bar: there, four matches inside one group produce a cup score of their
+  /// own, so the group can see the whole contest move. Here it cannot.
+  ///
+  /// Shares `nassauStanding` with score entry, so a cup Four Ball and a casual
+  /// Nassau cannot describe the same match differently.
+  StandingRibbon? _standingRibbon(RoundProvider rp, NassauSummary? summary) {
+    if (summary == null) return null;
+    final round = rp.round;
+    if (round == null) return null;
+    final me = context.read<AuthProvider>().player?.id;
+    final standing = nassauStanding(summary, me, hole: _selectedHole);
+    Color? tint(int? team) => team == null
+        ? null
+        : (team == 1 ? GameColors.team1 : GameColors.team2);
+    return StandingRibbon(
+      kind: StandingKind.result,
+      standingLabel: standing?.main.label ?? '',
+      standing: standing?.main.value ?? kTeeOff,
+      standingColor: tint(standing?.main.team),
+      // The eighteen gets its own colour, not the nine's — a golfer can be
+      // 1 UP on the back nine and 1 DOWN overall.
+      figureLabel: standing?.second?.label ?? '',
+      figure: standing?.second?.value ?? '',
+      figureColor: tint(standing?.second?.team),
+      onOpenLeaderboard: () => Navigator.of(context)
+          .pushNamed('/leaderboard', arguments: round.id),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final rp         = context.watch<RoundProvider>();
@@ -437,8 +478,16 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
     }
     _prevHadPending = nowHasPending;
 
+    final ribbon = _standingRibbon(rp, nas);
+
     return Scaffold(
       appBar: GolfAppBar(
+        // D2: the standing becomes the bar's second line, and the pill in it
+        // replaces the leaderboard ICON below.
+        bottom: ribbon,
+        titleStyle: ribbon == null
+            ? null
+            : const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         // Close (X), not a back arrow — avoids being tapped as "previous hole".
         automaticallyImplyLeading: false,
         leading: IconButton(
@@ -473,14 +522,18 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
             ),
           if (rp.round != null)
             RoundChatButton(roundId: rp.round!.id),
-          IconButton(
-            tooltip: 'Leaderboard',
-            icon: const Icon(Icons.leaderboard_outlined),
-            onPressed: rp.round == null
-                ? null
-                : () => Navigator.of(context)
-                    .pushNamed('/leaderboard', arguments: rp.round!.id),
-          ),
+          // The icon only while the row is not drawn. A named pill and a
+          // glyph for one destination is two ways in, and the glyph is the
+          // weak one D2 exists to replace.
+          if (ribbon == null)
+            IconButton(
+              tooltip: 'Leaderboard',
+              icon: const Icon(Icons.leaderboard_outlined),
+              onPressed: rp.round == null
+                  ? null
+                  : () => Navigator.of(context)
+                      .pushNamed('/leaderboard', arguments: rp.round!.id),
+            ),
         ],
       ),
       body: _buildBody(context, rp, sync, sc, nas, isComplete),

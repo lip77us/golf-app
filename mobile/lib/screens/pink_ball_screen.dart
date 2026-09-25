@@ -12,6 +12,7 @@
 /// Scores are submitted via RoundProvider.submitHole() which persists offline
 /// and syncs automatically (same path as all other entry screens).
 
+import '../widgets/standing_ribbon.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -354,6 +355,57 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
 
   int get _holeNumber => _holeIndex + 1;
 
+  /// **Whose ball is it, and is it still alive.**
+  ///
+  /// That is the question this game makes a golfer ask on the tee, and it is
+  /// the only one that changes what he does: the carrier's score is the one
+  /// that has to count, so the row names him the way Rabbit names its holder.
+  ///
+  /// The game is called whatever the TD typed — `Beer Ball` if that is what
+  /// he set up — so the dead form reads from `_gameName` rather than saying
+  /// "pink".
+  ///
+  /// **No score and no place**, because this screen cannot honestly report
+  /// either: the ball's net-to-par and its rank against the other groups live
+  /// in `red_ball_summary`, and there is no client call that fetches it. A
+  /// figure worked out here would be a second implementation of the server's
+  /// own rule. Worth adding with the fetch; not worth guessing.
+  StandingRibbon? _standingRibbon(RoundProvider rp) {
+    final round = rp.round;
+    if (round == null) return null;
+
+    String standing;
+    if (_ballLostOnHole != null) {
+      standing = '$_gameName lost on ${_ballLostOnHole!}';
+    } else {
+      final cid = _carrierId;
+      final mem = cid == null
+          ? null
+          : rp.scorecard == null
+              ? null
+              : _memberFor(rp, cid);
+      final name = mem ?? '';
+      standing = name.isEmpty ? '$_gameName in play' : '$name has it';
+    }
+    return StandingRibbon(
+      kind: StandingKind.result,
+      standing: standing,
+      figure: '',
+      onOpenLeaderboard: () => Navigator.of(context)
+          .pushNamed('/leaderboard', arguments: round.id),
+    );
+  }
+
+  /// The carrier's name, from the round's own memberships.
+  String? _memberFor(RoundProvider rp, int playerId) {
+    for (final f in rp.round?.foursomes ?? const []) {
+      for (final m in f.memberships) {
+        if (m.player.id == playerId) return m.player.name;
+      }
+    }
+    return null;
+  }
+
   /// True once any score has been entered (pending or saved) — gates the
   /// app-bar Exit (✕) on a single-foursome casual round.
   bool get _hasAnyScore {
@@ -550,9 +602,17 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
         (rp.round?.foursomes.length ?? 1) == 1;
     final showExit = isCasualSingle && _hasAnyScore;
 
+    final ribbon = _standingRibbon(rp);
+
     return Scaffold(
       appBar: GolfAppBar(
         title: 'Group $groupNum',
+        // D2: the standing becomes the bar's second line, and the pill in it
+        // replaces the leaderboard ICON below.
+        bottom: ribbon,
+        titleStyle: ribbon == null
+            ? null
+            : const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.close),
@@ -565,7 +625,10 @@ class _PinkBallScreenState extends State<PinkBallScreen> {
         actions: [
           if (rp.round != null)
             RoundChatButton(roundId: rp.round!.id),
-          IconButton(
+          // The icon only while the row is not drawn — a named pill and a
+          // glyph for one destination is two ways in.
+          if (ribbon == null)
+            IconButton(
             icon: const Icon(Icons.leaderboard_outlined),
             tooltip: 'Leaderboard',
             onPressed: round == null
