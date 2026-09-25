@@ -433,7 +433,7 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
     final round = rp.round;
     if (round == null) return null;
     final me = context.read<AuthProvider>().player?.id;
-    final standing = nassauStanding(summary, me, hole: _selectedHole);
+    final standing = nassauStanding(summary, hole: _selectedHole);
     Color? tint(int? team) => team == null
         ? null
         : (team == 1 ? GameColors.team1 : GameColors.team2);

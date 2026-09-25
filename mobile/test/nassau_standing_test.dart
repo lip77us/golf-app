@@ -74,7 +74,7 @@ void main() {
         front9:  _bet(margin: 2, holesPlayed: 5),
         overall: _bet(margin: 1, holesPlayed: 5),
       );
-      final st = nassauStanding(s, _me, hole: 5)!;
+      final st = nassauStanding(s, hole: 5)!;
       expect(st.main.label, 'F9');
       expect(st.main.value, '2 UP thru 5');
       expect(st.second!.label, 'Overall');
@@ -90,14 +90,18 @@ void main() {
         front9:  _bet(margin: 2, holesPlayed: 5),
         overall: _bet(margin: 1, holesPlayed: 5),
       );
-      final mine = nassauStanding(s, _me, hole: 5)!;
-      final them = nassauStanding(s, _themA, hole: 5)!;
-      expect(them.main.value, '2 UP thru 5');
-      expect(them.second!.value, '1 UP');
-      expect(them.main.value, mine.main.value);
-      // Team 1 is up in both bets, whoever is holding the phone.
-      expect(mine.main.team, 1);
-      expect(them.main.team, 1);
+      // **One row, whoever is holding the phone** — and since the reader is
+      // no longer an input at all, that is now structural rather than
+      // asserted. Comparing two calls would be comparing one call to itself,
+      // which is a test that cannot fail; what is left worth pinning is that
+      // the margin is neutral and the colour names the side that is UP.
+      final st = nassauStanding(s, hole: 5)!;
+      expect(st.main.value, '2 UP thru 5');
+      expect(st.second!.value, '1 UP');
+      // Never `2 DOWN`: a direction word needs a reader to be relative to,
+      // and there is not one. RULINGS §3.
+      expect(st.main.value.contains('DOWN'), isFalse);
+      expect(st.main.team, 1);
     });
 
     test('and the colour follows the LEADER when that is the other side', () {
@@ -105,7 +109,7 @@ void main() {
         front9:  _bet(margin: -2, holesPlayed: 5),
         overall: _bet(margin: -1, holesPlayed: 5),
       );
-      final mine = nassauStanding(s, _me, hole: 5)!;
+      final mine = nassauStanding(s, hole: 5)!;
       expect(mine.main.value, '2 UP thru 5');
       expect(mine.main.team, 2);
     });
@@ -116,7 +120,7 @@ void main() {
         back9:   _bet(margin: -1, holesPlayed: 3),
         overall: _bet(margin: 1, holesPlayed: 12),
       );
-      final st = nassauStanding(s, _me, hole: 12)!;
+      final st = nassauStanding(s, hole: 12)!;
       expect(st.main.label, 'B9');
       expect(st.main.value, '1 UP thru 3');
       // **Both counts on the back nine.** Three holes into this bet, twelve
@@ -129,7 +133,7 @@ void main() {
         front9:  _bet(margin: 2, holesPlayed: 5),
         overall: _bet(margin: 1, holesPlayed: 5),
       );
-      expect(nassauStanding(s, _me, hole: 5)!.second!.value, '1 UP');
+      expect(nassauStanding(s, hole: 5)!.second!.value, '1 UP');
     });
 
     test('**backing up to the front nine reports the front nine**', () {
@@ -142,8 +146,8 @@ void main() {
         back9:   _bet(margin: -1, holesPlayed: 3),
         overall: _bet(margin: 1, holesPlayed: 12),
       );
-      expect(nassauStanding(s, _me, hole: 4)!.main.value, 'won 3&2');
-      expect(nassauStanding(s, _me, hole: 12)!.main.value, '1 UP thru 3');
+      expect(nassauStanding(s, hole: 4)!.main.value, 'won 3&2');
+      expect(nassauStanding(s, hole: 12)!.main.value, '1 UP thru 3');
     });
   });
 
@@ -155,9 +159,9 @@ void main() {
       );
       // **`won`, never `lost`** — same rule as the live margin. `lost 3&2` in
       // the winner's colour is the contradiction one move further on.
-      expect(nassauStanding(s, _me, hole: 8)!.main.value, 'won 3&2');
-      expect(nassauStanding(s, _themA, hole: 8)!.main.value, 'won 3&2');
-      expect(nassauStanding(s, _themA, hole: 8)!.main.team, 1);
+      expect(nassauStanding(s, hole: 8)!.main.value, 'won 3&2');
+      expect(nassauStanding(s, hole: 8)!.main.value, 'won 3&2');
+      expect(nassauStanding(s, hole: 8)!.main.team, 1);
     });
 
     test('played to the last hole it is 1 UP, not 1&0', () {
@@ -165,14 +169,14 @@ void main() {
         front9: _bet(margin: 1, holesPlayed: 9, result: 'team1',
                      decidedRemaining: 0),
       );
-      expect(nassauStanding(s, _me, hole: 9)!.main.value, 'won 1 UP');
+      expect(nassauStanding(s, hole: 9)!.main.value, 'won 1 UP');
     });
 
     test('a halved nine says All Square', () {
       final s = _summary(
         front9: _bet(margin: 0, holesPlayed: 9, result: 'halved'),
       );
-      expect(nassauStanding(s, _me, hole: 9)!.main.value, 'All Square');
+      expect(nassauStanding(s, hole: 9)!.main.value, 'All Square');
     });
   });
 
@@ -186,7 +190,7 @@ void main() {
         back9:   _bet(),
         overall: _bet(margin: 2, holesPlayed: 9),
       );
-      final st = nassauStanding(s, _me, hole: 10)!;
+      final st = nassauStanding(s, hole: 10)!;
       expect(st.main.label, 'Overall');
       expect(st.main.value, '2 UP thru 9',
              reason: 'as the leading slot it keeps its own count');
@@ -194,12 +198,24 @@ void main() {
     });
 
     test('before any score at all, nothing', () {
-      expect(nassauStanding(_summary(), _me, hole: 1), isNull);
+      expect(nassauStanding(_summary(), hole: 1), isNull);
     });
 
-    test('a watcher gets nothing — he is on neither side', () {
+    test('a reader on NEITHER side still gets the match', () {
+      // **The row is about the match, not about him.** This used to assert
+      // the opposite — `a watcher gets nothing` — which was written while the
+      // row was casual-only and whoever held the phone was normally playing.
+      // On a cup round he normally is not: the TD enters for a group he is
+      // not in, and the bar said `Tee off` over a match that was 1 UP through
+      // two. Reported 25 Sep 2026.
+      //
+      // Nothing was ever derived from his side: the margin is neutral and the
+      // colour names the LEADER. The gate was refusing to state a fact it had
+      // in hand.
       final s = _summary(front9: _bet(margin: 1, holesPlayed: 2));
-      expect(nassauStanding(s, 999, hole: 2), isNull);
+      final st = nassauStanding(s, hole: 2);
+      expect(st, isNotNull);
+      expect(st!.main.value, '1 UP thru 2');
     });
   });
 
@@ -208,7 +224,7 @@ void main() {
       final s = _summary(
         front9: _bet(margin: 1, holesPlayed: 4), singleMatch: true,
       );
-      final st = nassauStanding(s, _me, hole: 4)!;
+      final st = nassauStanding(s, hole: 4)!;
       expect(st.main.label, '', reason: 'no nine to name on a single bet');
       expect(st.main.value, '1 UP thru 4');
       expect(st.second, isNull, reason: 'no second bet to report');
@@ -219,7 +235,7 @@ void main() {
         overall: _bet(margin: 2, holesPlayed: 12),
         playFront: false, playBack: false,
       );
-      final st = nassauStanding(s, _me, hole: 12)!;
+      final st = nassauStanding(s, hole: 12)!;
       expect(st.main.label, '');
       expect(st.main.value, '2 UP thru 12');
       expect(st.second, isNull);
@@ -234,7 +250,7 @@ void main() {
         front9:  _bet(margin: 2, holesPlayed: 5),
         overall: _bet(margin: 1, holesPlayed: 5),
       );
-      final st = nassauStanding(s, _me, hole: 5)!;
+      final st = nassauStanding(s, hole: 5)!;
       expect(st.main.label, 'F9');
       expect(st.main.value, startsWith('2 UP'),
              reason: 'the margin is the news, and carries the tint');
@@ -248,7 +264,7 @@ void main() {
         back9:   _bet(margin: 1, holesPlayed: 3),
         overall: _bet(margin: -2, holesPlayed: 12),
       );
-      final st = nassauStanding(s, _me, hole: 12)!;
+      final st = nassauStanding(s, hole: 12)!;
       expect(st.main.team, 1, reason: 'his side leads the back nine');
       expect(st.second!.team, 2, reason: 'and trails the eighteen');
     });
@@ -257,8 +273,8 @@ void main() {
   group('the colour', () {
     test('it is his side while he is up, and theirs while he is down', () {
       final up = _summary(front9: _bet(margin: 1, holesPlayed: 2));
-      expect(nassauStanding(up, _me, hole: 2)!.main.team, 1);
-      expect(nassauStanding(up, _themA, hole: 2)!.main.team, 1,
+      expect(nassauStanding(up, hole: 2)!.main.team, 1);
+      expect(nassauStanding(up, hole: 2)!.main.team, 1,
              reason: 'team 1 is up whoever is reading it');
     });
 
@@ -266,7 +282,7 @@ void main() {
       // Neither side is up, so there is no side for the colour to be about;
       // picking one would read as a lead.
       final level = _summary(front9: _bet(margin: 0, holesPlayed: 2));
-      expect(nassauStanding(level, _me, hole: 2)!.main.team, isNull);
+      expect(nassauStanding(level, hole: 2)!.main.team, isNull);
     });
 
     test('it never has to be withheld — the teams do not re-draw', () {
@@ -278,7 +294,7 @@ void main() {
         overall: _bet(margin: 3, holesPlayed: 12),
       );
       for (final hole in [4, 9, 10, 12]) {
-        expect(nassauStanding(s, _me, hole: hole)!.main.team, isNotNull,
+        expect(nassauStanding(s, hole: hole)!.main.team, isNotNull,
                reason: 'hole $hole');
       }
     });

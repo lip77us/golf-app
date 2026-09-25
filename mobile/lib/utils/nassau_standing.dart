@@ -78,13 +78,6 @@ class NassauStanding {
   const NassauStanding(this.main, this.second);
 }
 
-/// Which side the reader is on, or null when he is not in this match.
-int? readerSide(NassauSummary s, int playerId) {
-  if (s.team1.any((p) => p.playerId == playerId)) return 1;
-  if (s.team2.any((p) => p.playerId == playerId)) return 2;
-  return null;
-}
-
 /// One bet, written from the reader's side.
 ///
 /// `null` when the bet is not in play, or when nothing has been scored in it —
@@ -133,11 +126,24 @@ NassauPart? _bet(NassauBetResult bet, {required String label,
 /// rule Sixes needed, for the same reason: the header, the player rows and the
 /// scores on screen are all that nine, and a standing describing the other one
 /// is the only thing disagreeing with the rest of the screen.
-NassauStanding? nassauStanding(NassauSummary? summary, int? playerId,
-                               {required int hole}) {
-  if (summary == null || playerId == null) return null;
-  final side = readerSide(summary, playerId);
-  if (side == null) return null;
+/// **The row is about the MATCH, not about the reader.**
+///
+/// It used to refuse unless the reader was on one of the two sides, and that
+/// refusal was pinned by a test reading *"a watcher gets nothing — he is on
+/// neither side."* The rule was written while this row was casual-only, where
+/// whoever holds the phone is normally playing.
+///
+/// On a cup round he normally is NOT: the TD enters scores for a group he is
+/// not in, and every golfer in the field can be a login-less roster entry. The
+/// screen he is looking at is entirely about that match, and the row said
+/// `Tee off` over a match that was 1 UP through two holes — reported from a
+/// cup Four Ball, 25 Sep 2026. RULINGS §10.4, one game over.
+///
+/// Nothing below ever used the reader's side: the margin is neutral and the
+/// colour names the LEADER, which is RULINGS §3 and what `_bet` says in its
+/// own comment. So the gate was refusing to state a fact it had in hand.
+NassauStanding? nassauStanding(NassauSummary? summary, {required int hole}) {
+  if (summary == null) return null;
 
   // **A single-bet Nassau has no nine to name.** Nassau Nine rides `front9` as
   // one match over the holes played, and an 18-hole match play (front and back

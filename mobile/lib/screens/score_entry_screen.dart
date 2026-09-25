@@ -2015,7 +2015,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       RoundProvider rp, int? me, VoidCallback onOpen) {
     final summary = rp.nassauSummary;
     if (summary == null) return null;
-    final standing = nassauStanding(summary, me, hole: _selectedHole);
+    final standing = nassauStanding(summary, hole: _selectedHole);
     Color? tint(int? team) => team == null
         ? null
         : (team == 1 ? GameColors.team1 : GameColors.team2);
