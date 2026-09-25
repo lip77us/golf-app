@@ -90,4 +90,30 @@ void main() {
       expect(apportion(50, const [0, 0]), [0, 0]);
     });
   });
+
+  group('**sizing, which the wizard needs before anything is saved**', () {
+    test('equal, with the remainder in the LOWER flights', () {
+      // The server's own example: 23 golfers in two is 12 and 11 — the better
+      // players' flight absorbs the odd man, not the other way round.
+      expect(flightSizes(23, 2), [12, 11]);
+      expect(flightSizes(13, 2), [7, 6]);
+      expect(flightSizes(12, 2), [6, 6]);
+      expect(flightSizes(10, 3), [4, 3, 3]);
+    });
+
+    test('one board has no sizes to report', () {
+      expect(flightSizes(20, 1), isEmpty);
+      expect(flightSizes(20, 0), isEmpty);
+      expect(flightSizes(0, 2), isEmpty);
+    });
+
+    test('the sizes account for every golfer', () {
+      for (final n in [7, 13, 24, 41]) {
+        for (final f in [2, 3, 4]) {
+          expect(flightSizes(n, f).reduce((a, b) => a + b), n,
+              reason: '$n golfers in $f flights');
+        }
+      }
+    });
+  });
 }

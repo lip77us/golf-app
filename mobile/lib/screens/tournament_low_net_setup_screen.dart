@@ -308,13 +308,17 @@ class _TournamentLowNetSetupScreenState
 
           // ── Flights ───────────────────────────────────────────────────────
           // **ABOVE the payouts**, because the cut changes what the table
-          // means. Each flight pays the table divided by the flight count, so
-          // a TD typing $200 into first place needs to know whether that is
-          // $200 or $100 before he types it. It used to sit below, on the
-          // reasoning that a purse is the table above — which was true only
-          // while every flight paid the whole table, and that was the money
-          // bug. Reported 25 Sep 2026: *"I need to set the number of flights
-          // before I set the prize pool."*
+          // means — each flight pays what its own golfers put in, so `$39`
+          // into first is $39 on one board and about $21 on the bigger of
+          // two. It used to sit below, on the reasoning that a purse is the
+          // table above, which held only while every flight paid the whole
+          // table — and that was the money bug.
+          //
+          // **This is no longer where flights are SET.** The wizard asks for
+          // the count on its own payouts step and cuts on create, so a TD
+          // never has to finish setup and come back. What is left here is the
+          // work that needs a settled field: re-cutting after a late entry,
+          // and naming the golfers whose index is a guess.
           FlightsCard(
             tournamentId: widget.tournamentId,
             onChanged: (sizes) => setState(() => _flightSizes = sizes),

@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../api/models.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
+import '../utils/flight_share.dart';
 import '../utils/cup_colors.dart';
 import '../providers/round_provider.dart';
 import '../utils/grouping.dart';
@@ -403,6 +404,15 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   _EventType _eventType  = _EventType.solo;
   String     _cupFormat  = 'mixed';    // mixed | triple  (triple = exclusive)
   String     _soloFormat = 'stroke';   // stroke | stableford
+
+  /// How many boards the field is cut into. 1 is one board, which is the
+  /// ordinary event and the default.
+  ///
+  /// **Captured here and CUT on create**, rather than left for a second visit
+  /// to the hub — reported 25 Sep 2026: *"I can see a TD not remember to do
+  /// that, or not understanding why they need to complete the configuration
+  /// and then go back in to edit it."*
+  int        _flightCount = 1;
 
   // ---- Tournament side game (cup, non-exclusive formats only) ----
   // A field-wide game every group plays, scored across the field.  None is the
@@ -1460,6 +1470,22 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     );
     if (!mounted) return;
 
+    // **Cut the flights.** AFTER setup, because the cut needs the field: it
+    // reads every golfer's index off the memberships the call above just
+    // wrote. This is what stops the TD having to finish setup and then go
+    // back into it — the count he chose on the payouts step is taken here.
+    //
+    // Best-effort. A failed cut leaves a one-board event, which is a working
+    // tournament he can cut from the leaderboard; failing the whole creation
+    // over it would throw away everything he just entered.
+    if (tournamentId != null && _flightCount > 1) {
+      try {
+        await client.setFlights(tournamentId, nFlights: _flightCount);
+      } catch (_) {
+        // Deliberately swallowed — see above.
+      }
+    }
+
     // Team Play — the config, then the names. It posts AFTER setup because
     // sync_teams needs the foursomes to exist: it provisions the phantom for
     // any team that came out at three and works every team's allowance.
@@ -1972,6 +1998,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           payouts     : _lowNetPayouts,
           carvePct    : _miniCarvePct,
           miniSinglesOn: _activeGames.contains(GameIds.matchPlay),
+          flightCount : _flightCount,
+          onFlightsChanged: (n) => setState(() => _flightCount = n),
           onChanged   : (fee, nPays, pays) => setState(() {
             _lowNetEntryFee   = fee;
             _lowNetNumPayouts = nPays;
@@ -3172,8 +3200,6 @@ class _StepScoring extends StatelessWidget {
           const SizedBox(height: 16),
           _roundsThatCount(context),
         ],
-        const SizedBox(height: 16),
-        _flightsDeferred(context),
       ],
     );
   }
@@ -3330,44 +3356,6 @@ class _StepScoring extends StatelessWidget {
     );
   }
 
-  // ── Flights — drawn, not hidden ───────────────────────────────────────
-  /// Nothing is disabled without saying why. Flights are a real intention and
-  /// a real absence, so the row states both rather than vanishing.
-  /// **Not the control, a pointer to it.** The plan had the real controls
-  /// here, but this wizard runs before the tournament exists and before
-  /// pairings are set — so it has neither an id to cut nor a field to cut.
-  /// Equal-sized flights are sized off the whole field, so the freeze has to
-  /// happen once the field is final, which is the championship screen.
-  ///
-  /// The card stays because stating the absence beats hiding it: a TD who
-  /// wants flights should find out here that they exist, not discover them by
-  /// accident three screens away.
-  Widget _flightsDeferred(BuildContext context) {
-    final theme = Theme.of(context);
-    final muted = theme.colorScheme.onSurfaceVariant;
-    return SectionCard(
-      title: 'Flights',
-      // **`AFTER PAIRINGS`, not `LATER`.** The chip used to read LATER,
-      // meaning later in the setup, and it was read as later in the ROADMAP —
-      // reported by the TD running 2.9.1, who concluded flights were not
-      // built. They are: the count, the preview and the cut all live on the
-      // championship screen. The badge contradicted the sentence under it,
-      // and the badge is what gets read.
-      trailing: Chip(
-        label: const Text('AFTER PAIRINGS', style: TextStyle(fontSize: 9.5)),
-        visualDensity: VisualDensity.compact,
-        padding: EdgeInsets.zero,
-      ),
-      child: Text(
-        'One board for everyone until you cut it. Splitting the field gives '
-        'each flight its own board and its own payout — set it on the '
-        'championship screen (Leaderboard \u2192 Configure) once pairings are '
-        'final, because equal-sized flights are sized off the whole field and '
-        'every late entry resizes them. The cut freezes at the first score.',
-        style: theme.textTheme.bodySmall?.copyWith(color: muted, height: 1.45),
-      ),
-    );
-  }
 }
 
 // ===========================================================================
@@ -3392,7 +3380,10 @@ class _StepPayouts extends StatefulWidget {
   /// off — nothing here may assume it exists.
   final int       carvePct;
   final bool      miniSinglesOn;
+  /// How many boards the field is cut into. 1 is one board.
+  final int       flightCount;
   final void Function(int fee, int numPayouts, List<int> payouts) onChanged;
+  final ValueChanged<int> onFlightsChanged;
 
   const _StepPayouts({
     required this.isStableford,
@@ -3402,7 +3393,9 @@ class _StepPayouts extends StatefulWidget {
     required this.payouts,
     required this.carvePct,
     required this.miniSinglesOn,
+    required this.flightCount,
     required this.onChanged,
+    required this.onFlightsChanged,
   });
 
   @override
@@ -3507,6 +3500,8 @@ class _StepPayoutsState extends State<_StepPayouts> {
           ]),
         ),
         const SizedBox(height: 16),
+        _flightsCard(context),
+        const SizedBox(height: 16),
         SectionCard(
           title: 'Paid places',
           child: PayoutConfigField(
@@ -3519,6 +3514,14 @@ class _StepPayoutsState extends State<_StepPayouts> {
             },
             onPayoutChanged: () => setState(_notify),
             onSuggest      : _suggest,
+            // What ONE flight pays for this place. Exact, not an estimate:
+            // the field was chosen two steps ago, and an equal cut's sizes
+            // depend on the count alone.
+            placeSubtitle: (i) => flightShareLabel(
+                [for (var k = 0; k < _numPayouts; k++)
+                  (double.tryParse(_payoutCtrls[k].text.trim()) ?? 0)],
+                i,
+                flightSizes(widget.numPlayers, widget.flightCount)),
           ),
         ),
         if (!widget.miniSinglesOn) ...[
@@ -3532,6 +3535,58 @@ class _StepPayoutsState extends State<_StepPayouts> {
           ),
         ],
       ],
+    );
+  }
+
+  /// **Flights, here rather than on the hub.**
+  ///
+  /// A TD reported the real cost of the old home: *"I can see a TD not
+  /// remember to do that, or not understanding why they need to complete the
+  /// configuration and then go back in to edit it."* Setup should be finished
+  /// when setup finishes.
+  ///
+  /// It sits ABOVE the paid places because the count changes what the table
+  /// MEANS — each flight pays its own golfers' entries, so `$39` into first
+  /// is $39 on one board and about $21 on the bigger of two. Asking after
+  /// would be asking him to type a number he cannot yet interpret.
+  ///
+  /// **The count only.** Naming the golfers whose index is a guess is a walk
+  /// down the roster, and it wants a settled field — it stays on the hub,
+  /// which is also where a late entry gets re-cut.
+  Widget _flightsCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final sizes = flightSizes(widget.numPlayers, widget.flightCount);
+    return SectionCard(
+      title: 'Flights',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Wrap(spacing: 8, children: [
+          for (final n in [1, 2, 3, 4])
+            ChoiceChip(
+              selected: widget.flightCount == n,
+              label: Text(n == 1 ? 'One board' : '$n flights'),
+              onSelected: (_) => widget.onFlightsChanged(n),
+            ),
+        ]),
+        const SizedBox(height: 10),
+        Text(
+          sizes.isEmpty
+              ? 'Everyone on one board, ranked and paid together.'
+              : 'Cut on handicap index: ${sizes.join(' and ')} golfers. Each '
+                'flight is ranked on its own board and pays what its own '
+                'golfers put in.',
+          style: theme.textTheme.bodySmall?.copyWith(color: muted, height: 1.45),
+        ),
+        if (sizes.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Taken when you create the event. A late entry resizes the '
+            'flights, so re-cut from the leaderboard if the field changes '
+            'before the first tee.',
+            style: theme.textTheme.bodySmall?.copyWith(color: muted, height: 1.45),
+          ),
+        ],
+      ]),
     );
   }
 

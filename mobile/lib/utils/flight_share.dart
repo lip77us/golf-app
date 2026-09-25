@@ -45,6 +45,26 @@ List<int> apportion(int total, List<num> weights) {
   return parts;
 }
 
+/// The golfer count per flight, in board order.
+///
+/// Mirrors `services/flights.assign_flights`: **equal-sized, remainder to the
+/// LOWER flights** — 23 golfers in two is 12 and 11, the better players'
+/// flight absorbing the odd man rather than the other way round.
+///
+/// Depends on the COUNT alone, which is what lets the wizard show an exact
+/// split on the payouts step: the field is already chosen two steps earlier,
+/// and the indexes only decide who goes where, not how many go.
+///
+/// The server's rule has one wrinkle this does not: a golfer whose index is a
+/// guess drops out of the sizing and is appended to the bottom flight. That is
+/// named on the hub, never in the wizard, so there is nothing here to model.
+List<int> flightSizes(int golfers, int flights) {
+  if (flights < 2 || golfers <= 0) return const [];
+  final base = golfers ~/ flights;
+  final rem  = golfers % flights;
+  return [for (var i = 0; i < flights; i++) base + (i < rem ? 1 : 0)];
+}
+
 /// 1 when every amount is a whole dollar, else 100 (cents).
 int tableUnit(List<double> amounts) =>
     amounts.every((a) => a == a.roundToDouble()) ? 1 : 100;

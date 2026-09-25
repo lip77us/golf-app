@@ -357,8 +357,9 @@ class _FlightsCardState extends State<FlightsCard> {
         if (isCut && !_locked) ...[
           const SizedBox(height: 6),
           Text(
-            'Set once pairings are final. Re-cutting is a fresh cut, not a '
-            'patch — the sizing depends on the whole field.',
+            'Re-cut if the field has changed since you created the event. '
+            'It is a fresh cut, not a patch — the sizing depends on the whole '
+            'field, so one late entry resizes every flight.',
             style: theme.textTheme.bodySmall?.copyWith(color: muted),
           ),
         ],
