@@ -1050,7 +1050,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             _StepKind.stablefordPoints =>
               (label: 'Points table', sub: 'The Stableford scale', perRound: false),
             _StepKind.payouts =>
-              (label: 'Payouts', sub: 'The 36-hole money', perRound: false),
+              (label: 'Payouts', sub: 'The championship money', perRound: false),
             _StepKind.cupDesign =>
               (label: 'Cup design', sub: 'Teams and colours', perRound: false),
             _StepKind.cupGamePlan =>
@@ -3319,8 +3319,8 @@ class _StepScoring extends StatelessWidget {
         ]),
         const SizedBox(height: 10),
         Text(
-          "A golfer's worst round is dropped, so somebody who sits one out on "
-          'a 36-hole day stays in the championship. The dropped round is '
+          "A golfer's worst round is dropped, so somebody who sits a round "
+          'out stays in the championship. The dropped round is '
           'struck through on the board, not hidden, and it moves as scores '
           'land. A round still in progress never displaces a finished one.',
           style: theme.textTheme.bodySmall?.copyWith(
@@ -3471,7 +3471,14 @@ class _StepPayoutsState extends State<_StepPayouts> {
     return _pinnedStep(
       context,
       title: 'Payouts',
-      subtitle: 'The 36-hole money. Side games are priced on the next step.',
+      // **Named, not measured.** This read `The 36-hole money`, which is
+      // a two-round event's length stated as though it were the name of
+      // the pot — wrong on the one-round event a TD reported it from,
+      // and wrong again on three rounds. The contrast being drawn is
+      // championship vs side games, so say that: it is true at any round
+      // count and survives a nine-hole round, which a computed hole
+      // total would not.
+      subtitle: 'The championship money. Side games are priced on the next step.',
       children: [
         SectionCard(
           title: label,
@@ -3764,8 +3771,9 @@ class _StepSideGames extends StatelessWidget {
         else
           Text(
             'The day bet appears on events with more than one round — it pays '
-            'a great single round from somebody already out of the 36-hole '
-            'money, so a one-round event has nothing for it to sit beside.',
+            'a great single round from somebody already out of the '
+            'championship money, so a one-round event has nothing for it to '
+            'sit beside.',
             style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant, height: 1.45),
           ),

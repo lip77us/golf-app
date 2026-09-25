@@ -349,7 +349,7 @@ class _DayBetView extends StatelessWidget {
 
         InlineMessage(
           kind: InlineMessageKind.info,
-          text: 'Italic rows are currently in the 36-hole money. They are not '
+          text: 'Italic rows are currently in the championship money. They are not '
               'eligible for this bet and are not charged for it — their entry '
               'is returned when the championship closes. Positions and the '
               'pool firm up then.',
