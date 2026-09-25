@@ -110,6 +110,40 @@ void main() {
       expect(line, 'Par 4/5  |  400/340 yds.  |  SI: 7/3');
     });
 
+    test('the golfers\' own tees win over the card\'s shared values', () {
+      // **This is the bug the sweep fixed.** `ScorecardHole.par` and
+      // `.strokeIndex` are the SHARED first-player values; Rabbit, Survivor,
+      // Wolf, Sequoya 3s and Triple Nassau all read them, so a mixed group was
+      // shown one golfer's par and one golfer's index — and the index is what
+      // decides where a stroke falls.
+      //
+      // The card here says par 4 / SI 7 while NEITHER golfer plays it that way.
+      final line = holeHeaderLine(
+          _hole(par: 4, yards: 400, si: 7, perPlayer: {
+            1: (par: 5, yards: 520, si: 1),
+            2: (par: 5, yards: 455, si: 2),
+          }),
+          [_m(1, tee: _tee(9, 'Blue')), _m(2, tee: _tee(10, 'White'))]);
+      expect(line, 'Par 5  |  520/455 yds.  |  SI: 1/2');
+      // Said explicitly, because the equality above is what would have read
+      // `Par 4 | 400 yds. | SI: 7` on five screens: the card's own numbers
+      // appear NOWHERE. (`isNot(contains('4'))` would be the obvious probe and
+      // is wrong — `455` contains a 4.)
+      expect(line, isNot(contains('Par 4')));
+      expect(line, isNot(contains('SI: 7')));
+      expect(line, isNot(contains('400')));
+    });
+
+    test('a golfer with no entry on the hole falls back to the card', () {
+      // The fallback is per FIELD, not all-or-nothing: a golfer the card has no
+      // row for still counts, off the hole's shared figures.
+      final line = holeHeaderLine(
+          _hole(par: 4, yards: 400, si: 7,
+              perPlayer: {1: (par: 5, yards: 520, si: 1)}),
+          [_m(1, tee: _tee(9, 'Blue')), _m(2, tee: _tee(10, 'White'))]);
+      expect(line, 'Par 5/4  |  520/400 yds.  |  SI: 1/7');
+    });
+
     test('no yardage on the card drops the middle field, not the line',
         () {
       final line = holeHeaderLine(
@@ -196,10 +230,49 @@ void main() {
     // Source-level: the point is the sweep, not the rendering. Every screen
     // that enters a score draws the same header, and the ones with their own
     // play screen are exactly the ones a sweep misses.
+    // Every screen that names the hole a golfer is entering. The four that
+    // already collapsed correctly (Nassau, Points 5-3-1, Quota Nassau, Skins)
+    // each carried their own copy of the function; the five that did not
+    // (Rabbit, Survivor, Wolf, Sequoya 3s, Triple Nassau) were reading the
+    // card's shared first-player par and index.
     const screens = [
       'lib/screens/score_entry_screen.dart',
       'lib/screens/pink_ball_screen.dart',
+      'lib/screens/nassau_screen.dart',
+      'lib/screens/points_531_screen.dart',
+      'lib/screens/quota_nassau_screen.dart',
+      'lib/screens/skins_screen.dart',
+      'lib/screens/rabbit_screen.dart',
+      'lib/screens/survivor_screen.dart',
+      'lib/screens/wolf_screen.dart',
+      'lib/screens/sequoya_threes_screen.dart',
+      'lib/screens/triple_nassau_screen.dart',
     ];
+
+    // **Two screens are deliberately NOT on that list**, and neither is an
+    // oversight:
+    //
+    //  * `banker_screen` states hole, par and index on ONE line with a
+    //    `triples, not doubles` note under it, and reads them from the SERVER's
+    //    `BankerHoleState` rather than from the group's card. Its single par is
+    //    the same latent problem, but fixing it means changing a payload, not
+    //    swapping a widget.
+    //  * `team_play_score_entry_screen` is a TEAM game — one ball, so there is
+    //    no per-golfer par to collapse — and its line carries a shotgun
+    //    position marker (`3 of 9`) the others lack.
+
+    test('no screen keeps a private hole header any more', () {
+      final rogue = Directory('lib/screens')
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))
+          .where((f) =>
+              f.readAsStringSync().contains('class _HoleHeader extends'))
+          .map((f) => f.path)
+          .toList();
+      // Team play's is its own thing — see the note above.
+      expect(rogue, ['lib/screens/team_play_score_entry_screen.dart']);
+    });
 
     for (final path in screens) {
       test('$path draws HoleHeader', () {

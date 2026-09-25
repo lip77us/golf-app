@@ -22,6 +22,7 @@ import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../widgets/error_view.dart' show friendlyError;
+import '../widgets/hole_header.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/hole_grid_scorecard.dart';
 import '../widgets/inline_message.dart';
@@ -630,7 +631,12 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
               onCall: (side) => _callPress(match, side),
               onUndo: () => _removePress(match),
             ),
-          _HoleHeader(holeNumber: _selectedHole, holeData: holeData),
+          HoleHeader(
+            holeData:   holeData,
+            holeNumber: _selectedHole,
+            players:    players,
+            standalone: true,
+          ),
           const SizedBox(height: 12),
           if (match == null)
             const InlineMessage(
@@ -1008,36 +1014,16 @@ class _PressOffer extends StatelessWidget {
 // ===========================================================================
 // Hole header
 // ===========================================================================
+//
+// `_HoleHeader` was here. **Replaced by the shared `HoleHeader`
+// (`widgets/hole_header.dart`) 25 Sep 2026** — and this was not a cosmetic
+// swap: its subtitle read `hole.par` and `hole.strokeIndex`, which are the
+// SHARED first-player values on `ScorecardHole`. On a mixed men's / women's
+// card that is one golfer's par and one golfer's index stated for everybody,
+// and the index is what decides where a stroke falls. The shared header
+// collapses both across the tees actually in play and slashes what they
+// disagree on.
 
-class _HoleHeader extends StatelessWidget {
-  final int holeNumber;
-  final ScorecardHole? holeData;
-  const _HoleHeader({required this.holeNumber, required this.holeData});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final d = holeData;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(children: [
-        Text('Hole $holeNumber',
-            style: theme.textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.bold)),
-        if (d != null)
-          Text('Par ${d.par}'
-               '${d.yards != null ? '  ·  ${d.yards} yds' : ''}'
-               '  ·  SI ${d.strokeIndex}',
-              style: theme.textTheme.bodySmall),
-      ]),
-    );
-  }
-}
 
 // ===========================================================================
 // One side of the match — its two golfers and their score boxes

@@ -23,6 +23,7 @@ import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
+import '../widgets/hole_header.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/inline_score_picker.dart';
@@ -484,7 +485,12 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
           _rosterBanner(rp, players),
           if (s != null) _pressesStrip(rp, s, players),
           const SizedBox(height: 10),
-          _holeHeader(holeData),
+          HoleHeader(
+            holeData:   holeData,
+            holeNumber: _selectedHole,
+            players:    players,
+            standalone: true,
+          ),
           const SizedBox(height: 10),
           _scoreCard(ctx, rp, s, players, low, holeData, scores, hotSpot),
           if (s != null) ...[
@@ -601,22 +607,14 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
     );
   }
 
-  Widget _holeHeader(ScorecardHole? h) {
-    final par = h?.par ?? 4;
-    final si  = h?.strokeIndex;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      decoration: BoxDecoration(
-          color: const Color(0xFFE1EAE2), borderRadius: BorderRadius.circular(8)),
-      child: Column(children: [
-        Text('Hole $_selectedHole', style: const TextStyle(
-            fontWeight: FontWeight.w700, fontSize: 18)),
-        Text('Par $par${si != null ? '  ·  SI $si' : ''}',
-            style: const TextStyle(fontSize: 12, color: _muted)),
-      ]),
-    );
-  }
+  // `_holeHeader` was here. **Replaced by the shared `HoleHeader`
+  // (`widgets/hole_header.dart`) 25 Sep 2026.** It was the furthest adrift of
+  // the nine: a hardcoded `0xFFE1EAE2` instead of the theme's surface, hardcoded
+  // 18px / 12px type instead of `titleLarge` / `bodySmall`, **no yardage at
+  // all**, and a par and index read off `ScorecardHole`'s SHARED first-player
+  // values — one golfer's numbers stated for all three, on a game whose whole
+  // point is three separate one-on-one matches with three separate stroke
+  // allocations.
 
   Widget _scoreCard(BuildContext ctx, RoundProvider rp, TripleNassauSummary? s,
       List<Membership> players, Membership? low, ScorecardHole? holeData,

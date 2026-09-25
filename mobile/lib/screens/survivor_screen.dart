@@ -24,6 +24,7 @@ import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../sync/sync_service.dart';
 import '../theme/halved_brand.dart';
+import '../widgets/hole_header.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
@@ -547,8 +548,14 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _HoleHeader(holeNumber: _selectedHole, holeData: holeData,
-                onHelp: () => _showSurvivorLegend(context)),
+            HoleHeader(
+              holeData:   holeData,
+              holeNumber: _selectedHole,
+              players:    players,
+              standalone: true,
+              trailing: holeLegendButton(
+                  context, () => _showSurvivorLegend(context)),
+            ),
             const SizedBox(height: 12),
             _HoleScoreCard(
               holeData:   holeData,
@@ -737,64 +744,16 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
 // ===========================================================================
 // Rabbit banner — who holds it + lead, and the active segment
 // ===========================================================================
+//
+// `_HoleHeader` was here. **Replaced by the shared `HoleHeader`
+// (`widgets/hole_header.dart`) 25 Sep 2026** — and this was not a cosmetic
+// swap: its subtitle read `hole.par` and `hole.strokeIndex`, which are the
+// SHARED first-player values on `ScorecardHole`. On a mixed men's / women's
+// card that is one golfer's par and one golfer's index stated for everybody,
+// and the index is what decides where a stroke falls. The shared header
+// collapses both across the tees actually in play and slashes what they
+// disagree on.
 
-class _HoleHeader extends StatelessWidget {
-  final int holeNumber;
-  final ScorecardHole? holeData;
-  /// Opens the per-hole row legend ("?"), matching the other score screens.
-  final VoidCallback? onHelp;
-  const _HoleHeader({
-    required this.holeNumber,
-    required this.holeData,
-    this.onHelp,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final h = holeData;
-    final sub = h == null ? ''
-        : 'Par ${h.par}'
-          '${h.yards != null ? '  ·  ${h.yards} yds' : ''}'
-          '  ·  SI ${h.strokeIndex}';
-    return Stack(
-      children: [
-        Container(
-          width: double.infinity,
-          // Horizontal padding keeps the centred title clear of the "?".
-          padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 10),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(children: [
-            Text('Hole $holeNumber',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.titleLarge
-                    ?.copyWith(fontWeight: FontWeight.bold)),
-            if (sub.isNotEmpty)
-              Text(sub, textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall),
-          ]),
-        ),
-        if (onHelp != null)
-          Positioned(
-            top: 2,
-            right: 2,
-            child: IconButton(
-              tooltip: 'What do these mean?',
-              icon: Icon(Icons.help_outline,
-                  size: 22, color: theme.colorScheme.primary),
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              onPressed: onHelp,
-            ),
-          ),
-      ],
-    );
-  }
-}
 
 // ===========================================================================
 // Score-entry card

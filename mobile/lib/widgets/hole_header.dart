@@ -148,3 +148,20 @@ class HoleHeader extends StatelessWidget {
     ]);
   }
 }
+
+/// The `?` that opens a screen's row legend, for [HoleHeader.trailing].
+///
+/// The SHEET is each screen's own — Skins explains junk and the hole-winner
+/// marker, Wolf explains the wolf's pips — but the button never was. It was
+/// written out longhand on six screens, identical down to the 36×36 minimum
+/// target, which is one more copy than a 22px icon deserves.
+IconButton holeLegendButton(BuildContext context, VoidCallback onPressed) =>
+    IconButton(
+      tooltip: 'What do these mean?',
+      icon: Icon(Icons.help_outline,
+          size: 22, color: Theme.of(context).colorScheme.primary),
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+      onPressed: onPressed,
+    );
