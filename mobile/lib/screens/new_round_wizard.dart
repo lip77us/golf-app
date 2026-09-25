@@ -5301,6 +5301,19 @@ class _StepSideGame extends StatelessWidget {
 const _kMixedGames = <(String, String, String, String, int, int, bool, bool)>[
   ('nassau',           'Nassau pairs',      '2 v 2 inside a foursome — one match each',
       'foursome', 2, 3, false, true),
+  // **Dropped by the mixed-cup redesign, and it is fully built.** Quota
+  // Nassau has an engine, a play screen, a watch page, a leaderboard card and
+  // a standing row, and the backend names it in `cup_group_counts`' own
+  // docstring — but this list is what the wizard plans a day from, and
+  // `CupRoundSetupScreen` then filters its picker down to the plan. Absent
+  // here it was unreachable on any mixed cup. Reported 25 Sep 2026.
+  //
+  // Priced exactly as Nassau pairs because it IS one: 2 v 2 inside a
+  // foursome over front, back and overall. Only the unit of the margin
+  // differs — quota points rather than holes.
+  ('quota_nassau',     'Quota Nassau pairs',
+      '2 v 2 — points against each golfer\'s quota',
+      'foursome', 2, 3, false, true),
   ('two_man_chapman',  'Two-golfer Chapman',   '2 v 2 inside a foursome — one ball a pair',
       'foursome', 2, 1, false, false),
   ('foursomes',        'Foursomes',         'Alternate shot — 2 v 2, one ball a pair',
