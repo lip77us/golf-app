@@ -345,8 +345,9 @@ class _TournamentLowNetSetupScreenState
                   // What one flight pays for this place. Silent on a single
                   // board, where there is nothing to divide.
                   placeSubtitle: (i) => flightShareLabel(
-                      double.tryParse(_payoutCtrls[i].text.trim()) ?? 0,
-                      _flightSizes),
+                      [for (var k = 0; k < _payoutPlaces; k++)
+                        double.tryParse(_payoutCtrls[k].text.trim()) ?? 0],
+                      i, _flightSizes),
                 ),
                 const SizedBox(height: 8),
                 Text(

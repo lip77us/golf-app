@@ -263,3 +263,67 @@ class FlightPurseBalanceTests(TestCase):
         for block in s['flights']:
             self.assertAlmostEqual(block['purse'],
                                    round(self.TOTAL / 3, 2), places=2)
+
+class WholeDollarPayoutTests(TestCase):
+    """**A TD would rather move a payout than keep a proportion.**
+
+    Asked for directly, 25 Sep 2026, against a $39/$16/$10 table on 13 golfers
+    cut 7/6, which was paying `$8.62 / $7.38` for second: *"I would always
+    move payouts to create even dollars rather than maintain the
+    proportions."*
+
+    These are the SAME numbers `mobile/test/flight_share_test.dart` asserts.
+    The client predicts this table while the TD types, because the setup
+    screen has no round trip for something unsaved — so two implementations of
+    one rule exist, and they are pinned to one worked example on both sides.
+    """
+
+    TABLE = {1: 39.0, 2: 16.0, 3: 10.0}      # $65
+    CUT   = [7, 6]                            # 13 golfers
+
+    def test_every_place_lands_on_whole_dollars(self):
+        from services.flights import apportion, scale_table, table_unit
+        unit = table_unit(self.TABLE)
+        self.assertEqual(unit, 1)
+        purses = apportion(65, self.CUT)
+        self.assertEqual(purses, [35, 30])
+        a = scale_table(self.TABLE, purses[0], unit)
+        b = scale_table(self.TABLE, purses[1], unit)
+        self.assertEqual(a, {1: 21, 2: 9, 3: 5})
+        self.assertEqual(b, {1: 18, 2: 7, 3: 5})
+
+    def test_each_flight_adds_up_to_its_own_purse(self):
+        from services.flights import apportion, scale_table, table_unit
+        unit = table_unit(self.TABLE)
+        for purse in apportion(65, self.CUT):
+            t = scale_table(self.TABLE, purse, unit)
+            self.assertEqual(sum(t.values()), purse)
+
+    def test_the_flights_together_pay_the_table_once(self):
+        from services.flights import apportion
+        self.assertEqual(sum(apportion(65, self.CUT)), 65)
+
+    def test_the_leftover_goes_to_the_biggest_fraction(self):
+        """$35 of 39:16:10 is 21.0 / 8.615 / 5.385 — second holds the bigger
+        fraction, so second takes the dollar. Handing it to first every time
+        would pay 22/8/5 and quietly overweight the winner."""
+        from services.flights import apportion
+        self.assertEqual(apportion(35, [39.0, 16.0, 10.0]), [21, 9, 5])
+
+    def test_a_table_the_TD_built_with_cents_keeps_them(self):
+        """$33.33 is a number somebody chose. Rounding it to $33 would be
+        overruling him rather than tidying up after a division."""
+        from services.flights import table_unit
+        self.assertEqual(table_unit({1: 33.33, 2: 33.33, 3: 33.34}), 100)
+        self.assertEqual(table_unit(self.TABLE), 1)
+
+    def test_a_cents_table_still_adds_up(self):
+        from services.flights import apportion, scale_table, table_unit
+        table = {1: 33.33, 2: 33.33, 3: 33.34}
+        unit = table_unit(table)
+        purses = apportion(10000, self.CUT)
+        self.assertEqual(sum(purses), 10000)
+        for purse in purses:
+            t = scale_table(table, purse, unit)
+            self.assertEqual(round(sum(t.values()) * 100), purse)
+

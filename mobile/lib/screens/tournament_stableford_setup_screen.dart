@@ -265,7 +265,9 @@ class _TournamentStablefordSetupScreenState
           onPayoutChanged: () => setState(() {}),
           onSuggest: _suggest,
           placeSubtitle: (i) => flightShareLabel(
-              double.tryParse(_payoutCtrls[i].text.trim()) ?? 0, _flightSizes),
+              [for (var k = 0; k < _numPayouts; k++)
+                double.tryParse(_payoutCtrls[k].text.trim()) ?? 0],
+              i, _flightSizes),
         ),
       ],
     );

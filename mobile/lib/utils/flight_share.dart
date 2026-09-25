@@ -1,42 +1,76 @@
 /// utils/flight_share.dart
 /// ----------------------
-/// What one flight actually pays for a place.
+/// What one flight actually pays for a place, shown under the payout editor
+/// while the TD types.
 ///
 /// **A flight's purse is its own golfers' entries.** Fifteen golfers cut 8/7
 /// at $10 a head means $80 and $70 — so a table typed as the event's total is
-/// paid by each flight at its share of the field. A TD needs to see that while
-/// he types — *"I want to set the prize pool and see what each flight winner
-/// will get"* — because $200 into first place means $200 on one board and
-/// about $107 on the larger of two.
+/// paid by each flight at its share of the field.
 ///
-/// **Proportional, not an equal division.** An equal split pays a 7-man flight
-/// and an 8-man flight the same money, so neither plays for what it paid in,
-/// and it strands a cent that has to go somewhere. Here the flights differ
-/// because their fields differ, which is a fact rather than an artifact.
+/// **Whole dollars when the table is whole dollars.** Asked for directly:
+/// *"I would always move payouts to create even dollars rather than maintain
+/// the proportions."* A $39/$16/$10 table cut 7/6 pays 21/9/5 and 18/7/5 —
+/// not 21/8.62/5.38 — and each flight still adds up to its own purse.
+///
+/// ## This mirrors `services/flights.py` and must keep mirroring it
+///
+/// The server apportions the money; this only predicts it, because the setup
+/// screen has no round trip for a table that has not been saved. Two
+/// implementations of one rule is exactly the hazard this codebase keeps
+/// finding, so the algorithm is the same in both — largest remainder, first
+/// across the flights and then across the places — and both are tested on the
+/// same worked example.
 library;
 
-/// `Each flight pays $50` when the flights are the same size, or
-/// `Flights pay $35–$40` when they are not.
+/// Divide [total] by [weights] so the parts sum EXACTLY to it.
 ///
-/// Empty for one board or no amount: there is nothing to divide, and a line
-/// saying so would be noise on the ordinary event.
+/// Largest remainder: every part takes its floor, and the leftover units go
+/// to the biggest fractions, ties by position. Rounding each part on its own
+/// invents money — three flights of three each rounding $66.666 up pays
+/// $200.01 of a $200 table.
+List<int> apportion(int total, List<num> weights) {
+  final totalW = weights.fold<num>(0, (a, b) => a + b);
+  if (totalW <= 0) return List<int>.filled(weights.length, 0);
+  final exact = [for (final w in weights) total * w / totalW];
+  final parts = [for (final e in exact) e.floor()];
+  var left = total - parts.fold<int>(0, (a, b) => a + b);
+  final order = List<int>.generate(weights.length, (i) => i)
+    ..sort((a, b) {
+      final fa = exact[a] - parts[a], fb = exact[b] - parts[b];
+      return fa == fb ? a.compareTo(b) : fb.compareTo(fa);
+    });
+  for (var i = 0; i < left && i < order.length; i++) {
+    parts[order[i]] += 1;
+  }
+  return parts;
+}
+
+/// 1 when every amount is a whole dollar, else 100 (cents).
+int tableUnit(List<double> amounts) =>
+    amounts.every((a) => a == a.roundToDouble()) ? 1 : 100;
+
+/// `Each flight pays $5` for place [placeIndex], or `Flights pay $7–$9`.
 ///
-/// [sizes] is the golfer count per flight, in board order. Pass an empty list
-/// before a cut has been previewed and this stays quiet rather than guessing
-/// at an even split the field may not produce.
-String flightShareLabel(double amount, List<int> sizes) {
-  if (amount <= 0 || sizes.length < 2) return '';
-  final field = sizes.fold<int>(0, (a, b) => a + b);
-  if (field <= 0) return '';
+/// Empty for one board or an empty table: there is nothing to divide, and a
+/// line saying so would be noise on the ordinary event.
+String flightShareLabel(
+    List<double> amounts, int placeIndex, List<int> sizes) {
+  if (sizes.length < 2 || placeIndex >= amounts.length) return '';
+  final total = amounts.fold<double>(0, (a, b) => a + b);
+  if (total <= 0 || amounts[placeIndex] <= 0) return '';
 
-  // In cents, which is the unit the money is paid in — dividing dollars and
-  // rounding twice is what invents a penny.
-  final cents = (amount * 100).round();
-  final shares = [for (final s in sizes) (cents * s / field).round()];
-  String money(int c) => '\$${(c / 100).toStringAsFixed(2)}';
+  final unit   = tableUnit(amounts);
+  final purses = apportion((total * unit).round(), sizes);
+  final paid   = [
+    for (final p in purses) apportion(p, amounts)[placeIndex],
+  ];
 
-  final lo = shares.reduce((a, b) => a < b ? a : b);
-  final hi = shares.reduce((a, b) => a > b ? a : b);
-  if (lo == hi) return 'Each flight pays ${money(lo)}';
-  return 'Flights pay ${money(lo)}–${money(hi)}';
+  String money(int u) => unit == 1
+      ? '\$$u'
+      : '\$${(u / 100).toStringAsFixed(2)}';
+  final lo = paid.reduce((a, b) => a < b ? a : b);
+  final hi = paid.reduce((a, b) => a > b ? a : b);
+  return lo == hi
+      ? 'Each flight pays ${money(lo)}'
+      : 'Flights pay ${money(lo)}–${money(hi)}';
 }

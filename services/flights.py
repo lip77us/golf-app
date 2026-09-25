@@ -99,8 +99,24 @@ def apportion(total_cents: int, weights) -> list:
     return parts
 
 
-def scale_table(payouts_cfg, purse_cents: int) -> dict:
-    """The event's payout table rewritten to pay exactly `purse_cents`.
+def table_unit(payouts_cfg) -> int:
+    """Units per dollar to apportion a table in — 1 for whole dollars.
+
+    **A TD would rather move a payout than keep a proportion.** Asked for
+    directly, 25 Sep 2026: a $39/$16/$10 table cut 7/6 was paying
+    `$8.62 / $7.38` for second, and *"I would always move payouts to create
+    even dollars rather than maintain the proportions."* So when every amount
+    he typed is a whole dollar, every amount he hands out is one too.
+
+    A table with cents in it — $33.33 — is one he built deliberately, so it
+    keeps them and apportions in cents.
+    """
+    amounts = [float(v or 0) for v in (payouts_cfg or {}).values()]
+    return 1 if all(a == int(a) for a in amounts) else 100
+
+
+def scale_table(payouts_cfg, purse_units: int, unit: int = 100) -> dict:
+    """The event's payout table rewritten to pay exactly `purse_units`.
 
     **A flight's purse is its own golfers' entries.** Fifteen golfers cut 8/7
     at $10 a head means $80 and $70 — each flight divides what its own players
@@ -117,22 +133,18 @@ def scale_table(payouts_cfg, purse_cents: int) -> dict:
     it paid in — and it strands a cent that is an artifact rather than a fact
     about the field. Here the flights differ because their fields differ.
 
-    The places sum exactly to the purse: each is rounded to the cent and the
-    remainder lands on FIRST place.
+    The places are apportioned by largest remainder, so they sum EXACTLY to
+    the purse and the rounding lands where it costs least — a $35 flight of a
+    $39/$16/$10 table pays 21/9/5, not 21/8.62/5.38.
     """
     table = {int(k): float(v or 0) for k, v in (payouts_cfg or {}).items()}
-    total = sum(table.values())
-    if total <= 0 or not table:
+    if not table or sum(table.values()) <= 0:
         return {k: 0.0 for k in table}
 
     places = sorted(table)
-    out, spent = {}, 0
-    for place in places[1:]:
-        c = round(table[place] / total * purse_cents)
-        out[place] = c / 100
-        spent += c
-    out[places[0]] = (purse_cents - spent) / 100
-    return out
+    parts = apportion(purse_units, [table[p] for p in places])
+    return {p: parts[i] * (1 if unit == 1 else 0.01)
+            for i, p in enumerate(places)}
 
 
 def rank_in_flights(aggregated, *, sort_key, rank_key, flight_of, payouts_cfg,
@@ -189,10 +201,14 @@ def rank_in_flights(aggregated, *, sort_key, rank_key, flight_of, payouts_cfg,
     # purses sum to the table exactly — rounding each on its own invents a
     # cent across the flights, which is the odd cent a TD should never see.
     order = sorted(by_flight)
-    table_cents = round(
-        sum(float(v or 0) for v in (payouts_cfg or {}).values()) * 100)
+    # Whole dollars when the table is whole dollars — see `table_unit`. The
+    # purses AND the places within them are apportioned in the same unit, so
+    # a flight's column adds up and the flights add up to the table.
+    unit = table_unit(payouts_cfg)
+    total_units = round(
+        sum(float(v or 0) for v in (payouts_cfg or {}).values()) * unit)
     purses = dict(zip(order, apportion(
-        table_cents, [len(by_flight[f]) for f in order])))
+        total_units, [len(by_flight[f]) for f in order])))
 
     ranked, payouts = [], {}
     for flight in order:
@@ -201,7 +217,7 @@ def rank_in_flights(aggregated, *, sort_key, rank_key, flight_of, payouts_cfg,
         for pid, data, rank in _ranked(rows):
             ranked.append((pid, data, rank, flight))
 
-        flight_cfg = scale_table(payouts_cfg, purses[flight])
+        flight_cfg = scale_table(payouts_cfg, purses[flight], unit)
 
         # Prize ranking is its own pass over the eligible golfers in THIS
         # flight, renumbered from 1 — see the docstring.
@@ -422,11 +438,12 @@ def flight_blocks(tournament, standings, payouts_cfg) -> list:
         if f:
             sizes[f] = sizes.get(f, 0) + 1
     order = sorted(sizes)
-    # The SAME apportionment the money uses, so the header cannot advertise a
-    # purse the board does not pay.
-    purses = apportion(round(table * 100), [sizes[f] for f in order])
+    # The SAME apportionment the money uses, in the SAME unit, so the header
+    # cannot advertise a purse the board does not pay.
+    unit = table_unit({p['place']: p['amount'] for p in (payouts_cfg or [])})
+    purses = apportion(round(table * unit), [sizes[f] for f in order])
     return [{'flight': f,
              'label' : flight_label(f),
              'size'  : sizes.get(f, 0),
-             'purse' : purses[i] / 100}
+             'purse' : purses[i] / unit}
             for i, f in enumerate(order)]

@@ -1,51 +1,93 @@
 /// test/flight_share_test.dart
 /// --------------------------
-/// The per-place readback under the payout table.
+/// The per-place readback under the payout table — and the guarantee that it
+/// predicts what `services/flights.py` will actually pay.
 ///
-/// **A flight's purse is its own golfers' entries.** Reported from a real
-/// event: *"If I have 15 in to 2 flights, then the first flight has 8 players
-/// and the second flight 7 players and at $10 entry, the first flight divides
-/// $80 and the second flight $70."*
+/// **Whole dollars when the table is whole dollars.** Asked for directly,
+/// 25 Sep 2026, against a $39/$16/$10 table on 13 golfers cut 7/6, which was
+/// showing `$7.38–$8.62` for second: *"I would always move payouts to create
+/// even dollars rather than maintain the proportions."*
 library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/utils/flight_share.dart';
 
 void main() {
-  test('the reported case — 15 golfers cut 8 and 7', () {
-    // A $150 table: first place is half of it.
-    expect(flightShareLabel(75, const [8, 7]), 'Flights pay \$35.00–\$40.00');
+  // The screenshot: $39 / $16 / $10 over 13 golfers, cut 7 and 6.
+  const table = [39.0, 16.0, 10.0];
+  const cut   = [7, 6];
+
+  group('**the reported case, to the dollar**', () {
+    test('every place lands on whole dollars', () {
+      expect(flightShareLabel(table, 0, cut), 'Flights pay \$18–\$21');
+      expect(flightShareLabel(table, 1, cut), 'Flights pay \$7–\$9');
+      expect(flightShareLabel(table, 2, cut), 'Each flight pays \$5');
+    });
+
+    test('each flight still adds up to its own purse', () {
+      // $65 cut 7/6 is $35 and $30 — what those golfers actually put in.
+      final purses = apportion(65, cut);
+      expect(purses, [35, 30]);
+      for (final p in purses) {
+        expect(apportion(p, table).reduce((a, b) => a + b), p);
+      }
+      // ...and 21+9+5 / 18+7+5, which is the TD's own arithmetic.
+      expect(apportion(35, table), [21, 9, 5]);
+      expect(apportion(30, table), [18, 7, 5]);
+    });
+
+    test('the flights together pay the table exactly once', () {
+      final purses = apportion(65, cut);
+      expect(purses.reduce((a, b) => a + b), 65);
+    });
   });
 
-  test('equal flights say one number, not a range', () {
-    // A range where both ends are the same reads as an arithmetic accident.
-    expect(flightShareLabel(100, const [8, 8]), 'Each flight pays \$50.00');
+  group('**where cents survive**', () {
+    test('a table the TD built with cents keeps them', () {
+      // $33.33 is a number somebody chose; rounding it to $33 would be
+      // overruling him rather than tidying up after the division.
+      expect(tableUnit(const [33.33, 33.33, 33.34]), 100);
+      expect(tableUnit(table), 1);
+    });
+
+    test('a cents table still adds up', () {
+      const cents = [33.33, 33.33, 33.34];
+      final purses = apportion(10000, cut);
+      expect(purses.reduce((a, b) => a + b), 10000);
+      for (final p in purses) {
+        expect(apportion(p, cents).reduce((a, b) => a + b), p);
+      }
+    });
   });
 
-  test('three flights of different sizes span the whole spread', () {
-    expect(flightShareLabel(120, const [5, 4, 3]),
-        'Flights pay \$30.00–\$50.00');
+  group('**when it says nothing**', () {
+    test('one board has nothing to divide', () {
+      expect(flightShareLabel(table, 0, const [13]), isEmpty);
+      expect(flightShareLabel(table, 0, const []), isEmpty);
+    });
+
+    test('an empty place says nothing', () {
+      expect(flightShareLabel(const [39.0, 0.0], 1, cut), isEmpty);
+      expect(flightShareLabel(const [], 0, cut), isEmpty);
+    });
   });
 
-  test('one board says nothing', () {
-    // There is nothing to divide, and a line saying so would be noise on the
-    // ordinary event.
-    expect(flightShareLabel(100, const [12]), isEmpty);
-    expect(flightShareLabel(100, const []), isEmpty);
-  });
+  group('**apportion is largest-remainder**', () {
+    test('the leftover goes to the biggest fraction, not the first place', () {
+      // $35 of 39:16:10 is 21.0 / 8.615 / 5.385 — second has the bigger
+      // fraction, so second gets the dollar. Handing it to first every time
+      // would pay 22/8/5 and quietly overweight the winner.
+      expect(apportion(35, table), [21, 9, 5]);
+    });
 
-  test('an empty amount says nothing', () {
-    expect(flightShareLabel(0, const [8, 7]), isEmpty);
-  });
+    test('equal weights split as evenly as a whole number allows', () {
+      expect(apportion(10, const [1, 1, 1]), [4, 3, 3]);
+      expect(apportion(9, const [1, 1, 1]), [3, 3, 3]);
+    });
 
-  test('the shares add up to the amount', () {
-    // What the server guarantees, checked at the only other place the
-    // arithmetic is written down.
-    const sizes = [8, 7];
-    const amount = 75.0;
-    final field = sizes.reduce((a, b) => a + b);
-    final cents = (amount * 100).round();
-    final shares = [for (final s in sizes) (cents * s / field).round()];
-    expect(shares.reduce((a, b) => a + b), cents);
+    test('a zero total pays nobody', () {
+      expect(apportion(0, const [1, 1]), [0, 0]);
+      expect(apportion(50, const [0, 0]), [0, 0]);
+    });
   });
 }
