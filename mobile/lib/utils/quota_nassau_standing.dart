@@ -60,16 +60,31 @@ String quotaPoints(double v) {
   return '$sign${whole == 0 ? '' : whole}½';
 }
 
-/// The match this golfer is in, or null when he is in none of them.
+/// The match to report: the reader's if he is in one, otherwise the GROUP's
+/// first.
+///
+/// **A TD entering for a group he is not in is the ordinary case here, not an
+/// edge.** This is a cup screen: every golfer in the field can be a
+/// login-less roster entry, so whoever holds the phone is frequently in
+/// neither match. Returning null for him made the row say `Tee off` over a
+/// match that had been played — the third time this exact gate has been
+/// found, after the tournament stroke row and cup Nassau. RULINGS §10.4.
+///
+/// Nothing downstream is relative to him: the margin is neutral and names the
+/// LEADER, so the fallback reports a fact rather than a perspective.
 QuotaNassauMatchSummary? readerMatch(
     QuotaNassauSummary s, int? playerId) {
-  if (playerId == null) return null;
-  for (final m in s.matches) {
-    if (m.player1.playerId == playerId || m.player2.playerId == playerId) {
-      return m;
+  if (s.matches.isEmpty) return null;
+  if (playerId != null) {
+    for (final m in s.matches) {
+      if (m.player1.playerId == playerId || m.player2.playerId == playerId) {
+        return m;
+      }
     }
   }
-  return null;
+  // He is in neither. The screen he is looking at is entirely about this
+  // group, so report the match it is drawing rather than nothing.
+  return s.matches.first;
 }
 
 QuotaPart _part(String label, QuotaNassauSegment seg, QuotaNassauMatchSummary m,

@@ -120,21 +120,36 @@ void main() {
   });
 
   group('when the reader is not in the live phase', () {
-    test('a semi loser gets no row while the final runs', () {
+    test('a semi loser watches the FINAL rather than nothing', () {
+      // He is knocked out and still standing there. The bracket is what the
+      // screen is drawing, so the row reports the match that is live — it
+      // used to report nothing, which told him less than the card below him.
       final d = _data([
         _m(status: 'complete'),
         _m(label: 'Semi 2', status: 'complete', p1: 13, p2: 14),
         _m(round: 2, label: 'Final', p1: 13, p2: 14),
       ]);
-      expect(matchPlayStanding(d, _me), isNull);
+      final st = matchPlayStanding(d, _me);
+      expect(st, isNotNull);
+      expect(st!.label, 'Final');
     });
 
-    test('a watcher is not in the bracket', () {
-      expect(matchPlayStanding(_data([_m()]), 999), isNull);
+    test('a reader in NO match gets the live one', () {
+      // **Ordinary on a tournament screen**, not an edge: every golfer in the
+      // field can be a login-less roster entry, so the TD entering the scores
+      // is frequently in none of them. RULINGS §10.4 — the same gate found on
+      // the tournament stroke row, cup Nassau and Quota Nassau.
+      //
+      // Safe because the line is the ENGINE's and written NEUTRALLY, naming
+      // the golfer who is up rather than saying UP or DOWN at anybody.
+      final st = matchPlayStanding(_data([_m()]), 999);
+      expect(st, isNotNull);
+      expect(matchPlayStanding(_data([_m()]), null), isNotNull);
     });
 
-    test('no data, no row', () {
+    test('no data and no live match are still nothing', () {
       expect(matchPlayStanding(null, _me), isNull);
+      expect(matchPlayStanding(_data(const []), _me), isNull);
     });
   });
 }

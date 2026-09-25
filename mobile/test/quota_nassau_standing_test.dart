@@ -111,11 +111,25 @@ void main() {
       expect(quotaNassauStanding(s, _other, hole: 1)!.main.value, 'Mai +5 pts');
     });
 
-    test('a reader in neither match gets no row', () {
-      final s = _summary([_match(holes: [_hole(1, p1: 0)])]);
-      expect(quotaNassauStanding(s, 999, hole: 1), isNull);
-      expect(quotaNassauStanding(s, null, hole: 1), isNull);
+    test('a reader in NEITHER match still gets the group match', () {
+      // **The ordinary case on a cup screen, not an edge.** Every golfer in
+      // the field can be a login-less roster entry, so the TD entering the
+      // scores is frequently in neither match — and the row said `Tee off`
+      // over a match that had been played. Third time this gate has been
+      // found: the tournament stroke row, cup Nassau, and this.
+      final s = _summary([
+        _match(front: 3, overall: 3, holes: [_hole(1, p1: 1)]),
+      ]);
+      final st = quotaNassauStanding(s, 999, hole: 1);
+      expect(st, isNotNull);
+      expect(st!.main.value, 'Yau +3 pts');
+      // A phone with no linked golfer at all reads the same.
+      expect(quotaNassauStanding(s, null, hole: 1)!.main.value, 'Yau +3 pts');
+    });
+
+    test('no match and no summary are still nothing', () {
       expect(quotaNassauStanding(null, _me, hole: 1), isNull);
+      expect(quotaNassauStanding(_summary(const []), _me, hole: 1), isNull);
     });
   });
 }

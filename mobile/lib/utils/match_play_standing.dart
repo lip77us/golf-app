@@ -61,17 +61,29 @@ List<Map<String, dynamic>> bracketLiveMatches(Map<String, dynamic> data) {
 /// would change.
 MatchPlayStanding? matchPlayStanding(
     Map<String, dynamic>? data, int? playerId) {
-  if (data == null || playerId == null) return null;
+  if (data == null) return null;
 
   // The reader's match in the live phase. In the three-player layout the top
   // seed plays both semis at once; the first is taken, because two rows cannot
   // fit and the card below has the other.
-  final mine = bracketLiveMatches(data).where((m) {
-    final p1 = m['player1_id'] ?? m['player1_player_id'];
-    final p2 = m['player2_id'] ?? m['player2_player_id'];
-    return p1 == playerId || p2 == playerId;
-  }).firstOrNull;
-  if (mine == null) return null;
+  final live = bracketLiveMatches(data);
+  if (live.isEmpty) return null;
+  final mine = live.where((m) {
+        final p1 = m['player1_id'] ?? m['player1_player_id'];
+        final p2 = m['player2_id'] ?? m['player2_player_id'];
+        return p1 == playerId || p2 == playerId;
+      }).firstOrNull ??
+      // **He is in no match, which on a tournament screen is ordinary.**
+      // Every golfer in the field can be a login-less roster entry, so the TD
+      // entering the scores is frequently in none of them — and refusing here
+      // put `Tee off` over a bracket that was being played. RULINGS §10.4,
+      // the same gate found on the tournament stroke row, cup Nassau and
+      // Quota Nassau.
+      //
+      // Safe because the line is the ENGINE's and is written NEUTRALLY —
+      // naming the golfer who is up rather than saying UP or DOWN at anybody
+      // — so it reports a fact rather than a perspective.
+      live.first;
 
   final label = (mine['label'] as String?)?.trim() ?? '';
   final line = (mine['line'] as String?)?.trim() ?? '';
