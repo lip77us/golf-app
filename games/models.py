@@ -3729,3 +3729,81 @@ class BankerBet(models.Model):
 
     def __str__(self):
         return f'{self.player_id} ${self.amount} x{self.own_multiplier}'
+
+
+class EclecticConfig(models.Model):
+    """
+    Eclectic — the one side game that spans the whole event.
+
+    Each golfer keeps his best score on each hole NUMBER across every round,
+    and those eighteen bests are his card. Lowest total wins.
+
+    Three rulings shape the model, all settled 26 Sep 2026:
+
+    **Matched by hole number, compared TO PAR.** Hole 7 on Friday against hole
+    7 on Saturday, whatever course each was played on. A gross total means
+    nothing across two courses with different pars, so the kept value is the
+    score against THAT round's par for THAT hole — a 4 on the Ridge's par-5 5th
+    is a birdie and beats a par 4 on North Links' 5th.
+
+    **Two pools, not one game with a handicap setting.** Gross and Net are
+    separate competitions with separate entries and separate money, because a
+    golfer may be in one, the other or both. Both are on by default and the
+    last one on cannot be turned off — an eclectic with no pool is not a game.
+
+    **Net strokes are per round, before selection.** That round's handicap at
+    full allowance, allocated on that course's stroke index. There is no
+    tournament handicap and no blended stroke index: the strokes a golfer got
+    on Friday are the strokes that made Friday's score, and the selection then
+    picks among scores that are already net.
+
+    The net double-bogey cap is deliberately NOT applied. Only the best score
+    on a hole counts, so a ceiling on the worst one changes nothing.
+
+    Entry is a flat fee per pool taken at signup, like every other side game.
+    ``*_payouts`` is the usual place table::
+
+        [{'place': 1, 'amount': 160.00}, {'place': 2, 'amount': 80.00}]
+
+    See docs/design-review/handoff-eclectic/HANDOFF.md.
+    """
+    tournament        = models.OneToOneField(
+                            'tournament.Tournament',
+                            on_delete=models.CASCADE,
+                            related_name='eclectic_config',
+                        )
+
+    # ── The two pools ────────────────────────────────────────────────────
+    gross_on          = models.BooleanField(default=True)
+    net_on            = models.BooleanField(default=True)
+
+    gross_entry_fee   = models.DecimalField(
+                            max_digits=8, decimal_places=2, default=0.00,
+                            help_text='Per-golfer entry for the GROSS pool.')
+    gross_payouts     = models.JSONField(
+                            default=list,
+                            help_text="[{'place': 1, 'amount': 160.00}, …]")
+
+    net_entry_fee     = models.DecimalField(
+                            max_digits=8, decimal_places=2, default=0.00,
+                            help_text='Per-golfer entry for the NET pool.')
+    net_payouts       = models.JSONField(
+                            default=list,
+                            help_text="[{'place': 1, 'amount': 160.00}, …]")
+
+    # Ranked but not paid — a guest, or a golfer whose index nobody knows.
+    # Same field and the same meaning as every other config that has one.
+    excluded_player_ids = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        verbose_name = 'Eclectic Config'
+
+    def __str__(self):
+        pools = '/'.join(
+            p for p, on in (('gross', self.gross_on), ('net', self.net_on)) if on)
+        return f'Eclectic ({pools or "no pools"})'
+
+    @property
+    def pools(self) -> list:
+        """The pools actually being played, in display order."""
+        return [p for p, on in (('gross', self.gross_on), ('net', self.net_on)) if on]
