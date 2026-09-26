@@ -20,8 +20,21 @@ docs/design-review/handoff-eclectic/HANDOFF.md)
   blended stroke index.
 * **No net double-bogey cap.** Only the best score on a hole counts, so a
   ceiling on the worst one changes nothing.
-* **A missed round is still eligible.** Its holes contribute no candidate; a
-  hole with no candidate at all adds nothing to the total and draws as `–`.
+* **A missed round is still eligible — but the card must cover all eighteen
+  hole numbers.** Ruled 26 Sep 2026. Missing holes add nothing to the total, so
+  without this a golfer who played ONE round of three competes on ten holes
+  against a full card's fifty-four and can win the money on it. The seeded demo
+  produced exactly that: T3 on −2 from ten holes, level with a golfer who had
+  played all three rounds.
+
+  So a card with a hole nobody covered is RANKED BELOW every complete card and
+  cannot be paid. It is not hidden: the scores are real and the golfer played
+  them. A hole with no candidate still draws as `–`.
+
+  **The rule is self-normalising**, which is why it needs no "is the event
+  live" test: during round 1 every card is incomplete, so it separates nobody;
+  once a round finishes everyone who played it is complete together; and the
+  only golfer it isolates afterwards is the one with an actual gap.
 * **Ties split the money for the places they cover.** No countback.
 
 Availability
@@ -263,28 +276,43 @@ def eclectic_standings(tournament, pool: str, per_round=None,
     if not cards:
         return []
 
+    def _bucket(d) -> int:
+        """0 = a whole card, 1 = one with a gap, 2 = nothing posted yet.
+
+        The gap bucket is what stops a ten-hole card outranking a
+        fifty-four-hole one; the empty bucket is what stops a golfer who has
+        not teed off leading on a total of zero.
+        """
+        if d['holes_kept'] == 0:
+            return 2
+        return 0 if d['holes_kept'] >= len(CARD_HOLES) else 1
+
     def _sort_key(kv):
         d = kv[1]
-        if d['holes_kept'] == 0:
-            return (1, 0, 0)
+        if _bucket(d) == 2:
+            return (2, 0, 0)
         # More holes kept breaks a tie in the SORT so the board reads sensibly
         # mid-event; it does NOT break it in the RANK, because the game is the
         # total and two golfers level on it are level.
-        return (0, d['total'], -d['holes_kept'])
+        return (_bucket(d), d['total'], -d['holes_kept'])
 
     from services.flights import rank_in_flights
     ranked_f, payouts = rank_in_flights(
         cards,
         sort_key=_sort_key,
-        rank_key=lambda kv: ((1, 0) if kv[1]['holes_kept'] == 0
-                             else (0, kv[1]['total'])),
+        rank_key=lambda kv: ((2, 0) if _bucket(kv[1]) == 2
+                             else (_bucket(kv[1]), kv[1]['total'])),
         # **Eclectic is never flighted.** The flights cut is the
         # championship's; a side game riding on it would pay two boards from
         # one table. One flight holding everybody is the same code path the
         # unflighted championship uses.
         flight_of=lambda pid: 1,
         payouts_cfg=payouts_cfg,
-        eligible=set(cards) - excluded,
+        # **A card with a gap cannot be paid.** Same mechanism the TD's own
+        # exclusions use, so the prize ranking is recomputed over the eligible
+        # alone and the place moves UP to the golfer behind him.
+        eligible={pid for pid, d in cards.items()
+                  if _bucket(d) == 0} - excluded,
     )
 
     rows = []
@@ -301,6 +329,11 @@ def eclectic_standings(tournament, pool: str, per_round=None,
             'holes_kept' : data['holes_kept'],
             'payout'     : payouts.get(pid),
             'excluded'   : pid in excluded,
+            # Every hole number covered by at least one round. The board says
+            # `10 of 18` when it is not, because "not paid" with no reason is
+            # the thing the flag exists to avoid.
+            'card_complete': data['holes_kept'] >= len(CARD_HOLES),
+            'card_holes'   : len(CARD_HOLES),
         })
     return rows
 
@@ -382,6 +415,39 @@ def _course_legend(rounds: list) -> list:
     return [{'key': r['label'], 'course': r['course']} for r in rounds]
 
 
+def _single_course_holes(tournament, rounds) -> dict:
+    """``{'par': {h: p}, 'stroke_index': {h: si}}`` when the whole event is on
+    ONE course, else ``{}``.
+
+    The card draws the app's standard `Par` and `Index` bands from this. They
+    are omitted on a mixed-course event rather than guessed: two courses mean
+    two pars and two stroke indexes on the same hole number, so one row of
+    either would be wrong for half the card. The notation carries par there
+    instead, which is the handoff's own rule.
+
+    Read off the first tee in play — on one course the field's tees can still
+    differ, and a per-golfer par row is not a thing a shared card can draw. The
+    SCORES are always scored against each golfer's own tee; this is the header,
+    and it says what the course is.
+    """
+    if len({r['course'] for r in rounds}) != 1:
+        return {}
+    first = tournament.rounds.order_by('round_number').first()
+    if first is None:
+        return {}
+    fs = first.foursomes.first()
+    if fs is None:
+        return {}
+    m = next((m for m in fs.memberships.all() if m.tee_id), None)
+    if m is None:
+        return {}
+    return {
+        'par': {h['number']: h.get('par') for h in (m.tee.holes or [])},
+        'stroke_index': {h['number']: h.get('stroke_index')
+                         for h in (m.tee.holes or [])},
+    }
+
+
 def eclectic_summary(tournament) -> dict:
     """Everything the board draws, for both pools.
 
@@ -454,6 +520,8 @@ def eclectic_summary(tournament) -> dict:
         'n_rounds'  : len(rounds),
         'n_courses' : n_courses,
         'course_legend': legend,
+        # Present only on a one-course event — see `_single_course_holes`.
+        **_single_course_holes(tournament, rounds),
         # `R3 live · projected` — the chip that says the money can still move.
         'live_label': (f"{live[0]['label']} live" if len(live) == 1
                        else (f'{len(live)} rounds live' if live else '')),

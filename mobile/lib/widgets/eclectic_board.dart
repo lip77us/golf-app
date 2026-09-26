@@ -23,6 +23,7 @@ import 'package:flutter/material.dart';
 
 import '../api/models.dart';
 import '../theme/halved_brand.dart';
+import 'pinned_hole_grid.dart';
 import 'score_mark.dart';
 import 'stroke_dots.dart';
 
@@ -129,6 +130,8 @@ class _EclecticBoardState extends State<EclecticBoard> {
             card    : pool.cards[row.playerId],
             legend  : _s.courseLegend,
             isNet   : _pool == 'net',
+            par     : _s.par,
+            strokeIndex: _s.strokeIndex,
             theme   : theme,
           ),
       ],
@@ -273,12 +276,15 @@ class _StandingRow extends StatelessWidget {
   final EclecticCard? card;
   final List<Map<String, String>> legend;
   final bool isNet;
+  final Map<int, int> par;
+  final Map<int, int> strokeIndex;
   final ThemeData theme;
 
   const _StandingRow({
     required this.row, required this.isMe, required this.isOpen,
     required this.isLive, required this.subline, required this.onTap,
     required this.card, required this.legend, required this.isNet,
+    required this.par, required this.strokeIndex,
     required this.theme,
   });
 
@@ -327,6 +333,15 @@ class _StandingRow extends StatelessWidget {
                         // column would otherwise just be empty with no reason.
                         _Tag('NOT PAID'),
                       ],
+                      if (!row.cardComplete && row.holesKept > 0) ...[
+                        const SizedBox(width: 6),
+                        // **The count, not the word.** `NOT PAID` says he
+                        // cannot collect; `10 of 18` says what would fix it,
+                        // and on a card that is short only because the round
+                        // is still being played it reads as progress rather
+                        // than as a penalty.
+                        _Tag('${row.holesKept} OF ${row.cardHoles}'),
+                      ],
                     ]),
                     const SizedBox(height: 2),
                     Text(subline,
@@ -366,7 +381,8 @@ class _StandingRow extends StatelessWidget {
           ),
         ),
         if (isOpen && card != null)
-          EclecticCardView(card: card!, legend: legend, isNet: isNet),
+          EclecticCardView(card: card!, legend: legend, isNet: isNet,
+              par: par, strokeIndex: strokeIndex),
       ]),
     );
   }
@@ -405,6 +421,22 @@ class _Tag extends StatelessWidget {
 
 /// Front and back nines, a row per round, and the eclectic along the bottom.
 ///
+/// **It reads as the same object as every other scorecard in the app** — the
+/// banded header (`Hole` on `surfaceContainerHighest`, `Par` and `Index` a step
+/// lighter on `surfaceContainerLow`), the hairline under it, and a PINNED label
+/// column with only the holes scrolling. The first cut of this card had none of
+/// them, and the pinned column is not a style point: a grid that scrolls its
+/// own row labels away was the defect eighteen other grids were converted out
+/// of.
+///
+/// **Par and Index appear only when the event is on ONE course**, and that is
+/// the handoff's rule rather than an omission. Two courses mean two pars and
+/// two stroke indexes on the same hole number, so a single row of either would
+/// be wrong for half the card — which is also why the notation carries par
+/// instead: a circle is under, a square is over, doubled is two or more, read
+/// against THAT round's par. On one course both rows are unambiguous, so they
+/// are drawn exactly as the standard card draws them.
+///
 /// Public because it is the answer to "where did that −9 come from" and the
 /// packet puts it on one surface today — but it is the kind of thing a
 /// settlement receipt or a watch page asks for next, and a copy of it would
@@ -414,13 +446,23 @@ class EclecticCardView extends StatelessWidget {
   final List<Map<String, String>> legend;
   final bool isNet;
 
+  /// Par and stroke index by hole, when every round is on ONE course. Empty on
+  /// a mixed-course event, which is what takes the two rows off.
+  final Map<int, int> par;
+  final Map<int, int> strokeIndex;
+
   const EclecticCardView({
     super.key, required this.card, required this.legend, required this.isNet,
+    this.par = const {}, this.strokeIndex = const {},
   });
 
-  static const _labelW = 46.0;
-  static const _cellW  = 27.0;
-  static const _rowH   = 26.0;
+  // The standard card's geometry (`hole_grid_scorecard.dart`).
+  static const _labelW  = 62.0;
+  static const _cellW   = 32.0;
+  static const _rowH    = 26.0;
+  static const _summaryW = 34.0;
+
+  bool get _oneCourse => par.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -442,17 +484,26 @@ class EclecticCardView extends StatelessWidget {
             ),
           ),
         ]),
+        if (!_oneCourse) ...[
+          const SizedBox(height: 2),
+          // Said once, so the two missing rows read as a rule rather than as a
+          // card that failed to load them.
+          Text('Two pars on some holes — the notation carries it',
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        ],
         const SizedBox(height: 6),
-        _nine(context, const [1, 2, 3, 4, 5, 6, 7, 8, 9], 'Front', 'Out'),
+        _nine(context, const [1, 2, 3, 4, 5, 6, 7, 8, 9], 'Front', 'OUT'),
         const SizedBox(height: 10),
-        _nine(context, const [10, 11, 12, 13, 14, 15, 16, 17, 18], 'Back', 'In'),
+        _nine(context, const [10, 11, 12, 13, 14, 15, 16, 17, 18], 'Back', 'IN'),
       ]),
     );
   }
 
   Widget _nine(BuildContext context, List<int> holes, String head, String tot) {
     final theme = Theme.of(context);
-    Widget label(String t, {bool bold = false, String suffix = ''}) => SizedBox(
+
+    Widget label(String t, TextStyle? style, {String suffix = ''}) => SizedBox(
           width: _labelW, height: _rowH,
           child: Align(
             alignment: Alignment.centerLeft,
@@ -463,60 +514,114 @@ class EclecticCardView extends StatelessWidget {
                     style: TextStyle(
                         fontSize: 8.5,
                         color: theme.colorScheme.onSurfaceVariant)),
-            ]), style: theme.textTheme.labelSmall?.copyWith(
-                fontWeight: bold ? FontWeight.bold : FontWeight.w600)),
+            ]), style: style, overflow: TextOverflow.ellipsis),
           ),
         );
 
-    Widget cell(Widget child, {Color? bg}) => Container(
+    Widget cell(Widget child, {Color? bg, Border? border}) => Container(
           width: _cellW, height: _rowH,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: bg,
+            color: bg, border: border,
             borderRadius: BorderRadius.circular(3),
           ),
           child: child,
         );
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Header band — hole numbers and the nine's total column.
-        Row(children: [
-          label(head, bold: true),
+    Widget summary(String text, {Color? colour}) => SizedBox(
+          width: _summaryW, height: _rowH,
+          child: Center(
+            child: Text(text,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontWeight: FontWeight.bold, color: colour)),
+          ),
+        );
+
+    final bands = <HoleGridBand>[
+      // Hole numbers, on the darker band.
+      HoleGridBand(
+        label('Hole',
+            const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+        [
           for (final h in holes)
-            cell(Text('$h', style: theme.textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onSurfaceVariant))),
-          cell(Text(tot, style: theme.textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onSurfaceVariant))),
-        ]),
+            cell(Text('$h', style: const TextStyle(
+                fontSize: 11, fontWeight: FontWeight.bold))),
+          summary(tot),
+        ],
+        colour: theme.colorScheme.surfaceContainerHighest,
+        height: _rowH,
+      ),
+    ];
 
-        // A row per round. The cells print GROSS, which is what a golfer
-        // remembers making; the notation is read against that round's par —
-        // net par in the Net pool.
-        for (final r in card.rounds)
-          Row(children: [
-            label(r.label, suffix: r.courseInitial),
-            for (final h in holes) _roundCell(context, r, h, cell),
-            // **Round totals are GROSS in both pools.** A net nine total would
-            // be a fourth number in a card that is already carrying gross,
-            // to-par and strokes.
-            cell(Text(_nineGross(r, holes),
+    if (_oneCourse) {
+      bands.add(HoleGridBand(
+        label('Par', theme.textTheme.bodySmall
+            ?.copyWith(fontStyle: FontStyle.italic)),
+        [
+          for (final h in holes)
+            cell(Text('${par[h] ?? "–"}',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(fontStyle: FontStyle.italic))),
+          summary('${holes.fold<int>(0, (a, h) => a + (par[h] ?? 0))}'),
+        ],
+        colour: theme.colorScheme.surfaceContainerLow,
+        height: _rowH,
+      ));
+      bands.add(HoleGridBand(
+        label('Index', theme.textTheme.labelSmall
+            ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        [
+          for (final h in holes)
+            cell(Text('${strokeIndex[h] ?? "–"}',
                 style: theme.textTheme.labelSmall
-                    ?.copyWith(fontWeight: FontWeight.bold))),
-          ]),
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant))),
+          // A stroke index has no nine total — the slot stays empty, exactly
+          // as the standard card leaves it.
+          const SizedBox(width: _summaryW, height: _rowH),
+        ],
+        colour: theme.colorScheme.surfaceContainerLow,
+        height: _rowH,
+      ));
+    }
 
-        // The eclectic itself.
-        Row(children: [
-          label('Best', bold: true),
-          for (final h in holes) _bestCell(context, h, cell),
-          cell(Text(_nineBest(holes),
-              style: theme.textTheme.labelSmall?.copyWith(
-                  fontWeight: FontWeight.bold, color: _keptText))),
-        ]),
-      ]),
+    bands.add(const HoleGridBand.rule());
+
+    for (final r in card.rounds) {
+      bands.add(HoleGridBand(
+        label(r.label,
+            theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600),
+            suffix: r.courseInitial),
+        [
+          for (final h in holes) _roundCell(context, r, h, cell),
+          // **Round totals are GROSS in both pools.** A net nine total would
+          // be a fourth number in a card already carrying gross, to-par and
+          // strokes.
+          summary(_nineGross(r, holes)),
+        ],
+        height: _rowH,
+      ));
+    }
+
+    bands.add(HoleGridBand(
+      label('Best',
+          theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold)),
+      [
+        for (final h in holes) _bestCell(context, h, cell),
+        summary(_nineBest(holes), colour: _keptText),
+      ],
+      height: _rowH,
+    ));
+
+    final contentW = _cellW * holes.length + _summaryW;
+    return PinnedHoleGrid(
+      labelWidth  : _labelW,
+      cellWidth   : _cellW,
+      holeCount   : holes.length,
+      // A card read after the fact has no hole in play, so it opens on its
+      // first column rather than chasing one.
+      currentIndex: -1,
+      contentWidth: contentW,
+      bands       : bands,
     );
   }
 

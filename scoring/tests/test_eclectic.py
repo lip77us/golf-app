@@ -163,6 +163,72 @@ class SelectionTests(_Base):
         self.assertEqual(self.row('gross', self.bea)['total'], -2)
         self.assertEqual(self.row('gross', self.bea)['rank'], 1)
 
+    def test_a_card_with_a_gap_ranks_BELOW_every_whole_one(self):
+        # **The rule, and why it exists.** Missing holes add nothing to the
+        # total, so without this a golfer who played one round of three
+        # competes on ten holes against a full card's fifty-four. The seeded
+        # demo produced exactly that — T3 on −2 from ten holes, level with a
+        # golfer who had played all three rounds.
+        #
+        # Bea plays both rounds badly; Ann plays only the front nine of R2.
+        # Ann's ten-hole total is better and she still ranks second.
+        self.par_round(0, self.bea, offsets={h: 1 for h in range(1, 19)})
+        self.par_round(1, self.bea, offsets={h: 1 for h in range(1, 19)})
+        for h in range(1, 10):
+            submit_hole(self.foursomes[1], h, [(self.ann.id, PAR[h] - 1)])
+
+        rows = eclectic_standings(self.tourn, 'gross')
+        self.assertEqual(rows[0]['player_id'], self.bea.id)
+        self.assertEqual(rows[1]['player_id'], self.ann.id)
+        self.assertLess(self.row('gross', self.ann)['total'],
+                        self.row('gross', self.bea)['total'])
+
+    def test_a_card_with_a_gap_cannot_be_paid(self):
+        self.par_round(0, self.bea)
+        self.par_round(1, self.bea)
+        for h in range(1, 10):
+            submit_hole(self.foursomes[1], h, [(self.ann.id, PAR[h] - 3)])
+        ann = self.row('gross', self.ann)
+        self.assertFalse(ann['card_complete'])
+        self.assertFalse(ann['payout'])
+        # The place moves UP to the golfer behind him — the same mechanism the
+        # TD's own exclusions use.
+        self.assertEqual(self.row('gross', self.bea)['payout'], 160.0)
+
+    def test_an_incomplete_card_is_still_on_the_board(self):
+        # Not hidden: the golfer played those holes and the scores are real.
+        for h in range(1, 10):
+            submit_hole(self.foursomes[0], h, [(self.ann.id, PAR[h])])
+        rows = eclectic_standings(self.tourn, 'gross')
+        self.assertIn(self.ann.id, [r['player_id'] for r in rows])
+        row = self.row('gross', self.ann)
+        self.assertEqual(row['holes_kept'], 9)
+        self.assertEqual(row['card_holes'], 18)
+
+    def test_the_rule_is_a_no_op_while_everybody_is_incomplete(self):
+        # **Self-normalising**, which is why it needs no "is the event live"
+        # test. Mid-round-1 every card has gaps, so it separates nobody and the
+        # board still ranks on the score.
+        for h in range(1, 10):
+            submit_hole(self.foursomes[0], h, [(self.ann.id, PAR[h] - 1)])
+            submit_hole(self.foursomes[0], h, [(self.bea.id, PAR[h] + 1)])
+        rows = eclectic_standings(self.tourn, 'gross')
+        self.assertEqual(rows[0]['player_id'], self.ann.id)
+        self.assertFalse(rows[0]['card_complete'])
+        self.assertFalse(rows[1]['card_complete'])
+
+    def test_one_whole_round_IS_a_whole_card(self):
+        # The case the original rule was written for and which stays exactly as
+        # it was: a golfer who misses a round but played a full eighteen has
+        # every hole number covered, so he is complete and he can be paid.
+        self.par_round(1, self.bea, offsets={4: -1})
+        self.par_round(0, self.ann)
+        self.par_round(1, self.ann)
+        bea = self.row('gross', self.bea)
+        self.assertTrue(bea['card_complete'])
+        self.assertEqual(bea['rank'], 1)
+        self.assertEqual(bea['payout'], 160.0)
+
     def test_a_golfer_who_has_not_teed_off_is_last_not_first(self):
         # A bare ascending sort would lead him on a total of zero.
         self.par_round(0, self.ann, offsets={4: 1})

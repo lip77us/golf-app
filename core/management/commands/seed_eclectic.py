@@ -324,11 +324,20 @@ class Command(BaseCommand):
         w(f'  Rounds       : R1 Harbour Links · R2 Ridgeview · R3 Harbour '
           f'({thru} holes{"" if thru >= 18 else ", LIVE"})')
         w('')
-        w('  Login — PHONE (the app\'s default flow):')
+        w('  Login — PHONE. **There is no other way in.** Password login was')
+        w('  retired: LoginView 403s unless PASSWORD_LOGIN_ENABLED is set, and')
+        w('  the password screen is gone from the app. The username and')
+        w('  password below exist only for a shell or the Django admin.')
         w(f'    {TD_PHONE}   (TD, admin, verified)')
-        w('    In dev the OTP comes back as `debug_code` and is logged to the')
-        w('    server console.')
-        w(f'    Username fallback: {account.name} / ectd / {self.password}')
+        w(f'    {MEMBER_PHONES[0]}   (member)')
+        w('    In dev the code prints in the runserver console AND comes back')
+        w('    as `debug_code`. Watch OTP_REQUESTS_PER_HOUR (5 per number):')
+        w("      PhoneOTP.objects.filter(phone='...').delete()")
+        w('')
+        w('  Point the app at THIS server, or it will look for the tenant on')
+        w('  Railway and not find it:')
+        w('    flutter run --dart-define=USE_LOCAL=true')
+        w(f'    (shell / admin only: {account.name} / ectd / {self.password})')
         w('')
         for pool in ('gross', 'net'):
             rows = eclectic_standings(tourn, pool)[:3]
@@ -356,23 +365,22 @@ class Command(BaseCommand):
         w('    ⚙ → Configure Eclectic for the setup screen.')
         w('    Settle up → By game for `Eclectic · Gross` and `· Net`.')
         w('')
-        # **Named, not hidden.** The packet's rule is that missing holes are
-        # skipped and add nothing to the total, which is implemented exactly.
-        # The consequence only shows when a golfer's rounds do not cover all
-        # eighteen hole numbers between them — and then a SHORT card competes
-        # on equal terms with a full one. It is a real ruling to make, not a
-        # bug, so the seed puts it where it will be seen.
-        short = [r for r in eclectic_standings(tourn, 'gross')
-                 if 0 < r['holes_kept'] < 18]
+        # The minimum-holes rule, shown working. This seed is what surfaced
+        # the need for it: before the 26 Sep ruling the late arrival came out
+        # T3 on −2 from TEN holes, level with a golfer who had played
+        # fifty-four, because missing holes add nothing to the total.
+        rows = eclectic_standings(tourn, 'gross')
+        short = [r for r in rows if 0 < r['holes_kept'] < 18]
         if short:
-            w(self.style.WARNING('  Worth a look — a SHORT card ranks on equal terms:'))
+            w('  The minimum-holes rule, working:')
             for r in short:
                 w(f"    {r['player_name']} is "
-                  f"{'T' if r['tied'] else ''}{r['rank']} on {r['total']:+d} "
-                  f"from {r['holes_kept']} holes; a full card is 18.")
-            w('    That is the stated rule (missing holes add nothing), and it')
-            w('    only bites when a golfer\'s rounds do not cover all 18 hole')
-            w('    numbers between them. Decide whether it should.')
+                  f"{'T' if r['tied'] else ''}{r['rank']} of {len(rows)} on "
+                  f"{r['total']:+d} from {r['holes_kept']} of 18 holes — "
+                  f"below every whole card, and not paid.")
+            w('    His scores are real and stay on the board; the row carries')
+            w(f"    `{short[0]['holes_kept']} OF 18` so the empty money column")
+            w('    has a reason on it.')
             w('')
 
         if thru < 18:

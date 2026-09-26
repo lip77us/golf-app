@@ -307,8 +307,16 @@ class _EclecticSetupScreenState extends State<EclecticSetupScreen> {
             _factRow('From the tournament',
                 "100% of each round's course handicap", 'Inherited'),
             const Divider(height: 20),
+            // Half-true before the 26 Sep ruling, and the half that was
+            // missing is the half a TD needs: a golfer who misses a round is
+            // still in it, but only if the rounds he DID play cover all
+            // eighteen hole numbers between them.
             _factRow('Missed rounds',
                 'Still eligible, with fewer scores to pick from', 'Allowed'),
+            const Divider(height: 20),
+            _factRow('An incomplete card',
+                'Needs a score on all 18 hole numbers to be paid',
+                'Required'),
           ]),
         ),
         const SizedBox(height: 24),

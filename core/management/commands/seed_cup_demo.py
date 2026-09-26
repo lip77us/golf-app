@@ -262,7 +262,12 @@ class Command(BaseCommand):
         self.stdout.write(f"    phone {TD_PHONE}  (admin, verified)")
         self.stdout.write("    Enter the phone on the login screen; in dev the OTP code")
         self.stdout.write("    is returned as `debug_code` and logged to the server console.")
-        self.stdout.write("    Fallback — 'Sign in with a username instead':")
+        # **Stale since the phone-only cutover** (`d5c38ad`): LoginView 403s
+        # unless PASSWORD_LOGIN_ENABLED is set, and the password screen was
+        # deleted from the app. The credentials still work in a shell and in
+        # the Django admin, which is all this line now claims.
+        self.stdout.write('    (shell / Django admin only — the app has no')
+        self.stdout.write('     password screen any more):')
         self.stdout.write(f"    {account.name} / cuptd / {self.password}   (admin)")
         self.stdout.write("")
         self.stdout.write("  Test the tee-box flow:")

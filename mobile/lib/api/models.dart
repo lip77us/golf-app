@@ -7784,10 +7784,24 @@ class EclecticStanding {
   final double? payout;
   final bool    excluded;
 
+  /// Every hole number covered by at least one round.
+  ///
+  /// **A card with a gap ranks below every whole one and cannot be paid**
+  /// (ruled 26 Sep 2026): missing holes add nothing to the total, so without
+  /// it a golfer who played one round of three competes on ten holes against a
+  /// full card's fifty-four. Defaults TRUE so an older server — which sends
+  /// neither this nor [cardHoles] — behaves exactly as it did.
+  final bool    cardComplete;
+
+  /// How many holes a whole card has. 18, and sent rather than assumed so the
+  /// row's `10 of 18` is the server's own arithmetic.
+  final int     cardHoles;
+
   const EclecticStanding({
     required this.playerId, required this.playerName, required this.rank,
     required this.tied, required this.total, required this.holesKept,
     required this.payout, required this.excluded,
+    this.cardComplete = true, this.cardHoles = 18,
   });
 
   factory EclecticStanding.fromJson(Map<String, dynamic> j) => EclecticStanding(
@@ -7799,6 +7813,8 @@ class EclecticStanding {
         holesKept : (j['holes_kept'] as num?)?.toInt() ?? 0,
         payout    : (j['payout'] as num?)?.toDouble(),
         excluded  : j['excluded'] as bool? ?? false,
+        cardComplete: j['card_complete'] as bool? ?? true,
+        cardHoles   : (j['card_holes'] as num?)?.toInt() ?? 18,
       );
 
   /// `1` / `T2` — the position as the board prints it.
@@ -7903,6 +7919,12 @@ class EclecticPool {
       );
 }
 
+/// `{'1': 4, …}` → `{1: 4}`, dropping anything the server left null.
+Map<int, int> _holeMap(dynamic raw) => {
+      for (final e in (raw as Map? ?? const {}).entries)
+        if (e.value != null) int.parse(e.key.toString()): (e.value as num).toInt(),
+    };
+
 class EclecticSummary {
   /// Which pools are being played, in display order. **A pool that is off is
   /// absent from [gross]/[net] entirely**, so an empty board cannot be
@@ -7917,6 +7939,15 @@ class EclecticSummary {
   /// `R3 live` while any round is open; empty once the event closes.
   final String liveLabel;
   final bool isFinal;
+
+  /// Par and stroke index by hole — **sent only when the whole event is on ONE
+  /// course**, and empty otherwise. That is what takes the card's `Par` and
+  /// `Index` bands off on a mixed-course event: two courses mean two pars on
+  /// the same hole number, so one row of either would be wrong for half the
+  /// card, and the score notation carries par there instead.
+  final Map<int, int> par;
+  final Map<int, int> strokeIndex;
+
   final EclecticPool? gross;
   final EclecticPool? net;
 
@@ -7924,6 +7955,7 @@ class EclecticSummary {
     required this.pools, required this.rounds, required this.nRounds,
     required this.nCourses, required this.courseLegend,
     required this.liveLabel, required this.isFinal,
+    this.par = const {}, this.strokeIndex = const {},
     this.gross, this.net,
   });
 
@@ -7945,6 +7977,8 @@ class EclecticSummary {
             .toList(),
         liveLabel: j['live_label'] as String? ?? '',
         isFinal  : j['is_final'] as bool? ?? false,
+        par: _holeMap(j['par']),
+        strokeIndex: _holeMap(j['stroke_index']),
         gross: j['gross'] == null
             ? null
             : EclecticPool.fromJson(Map<String, dynamic>.from(j['gross'] as Map)),

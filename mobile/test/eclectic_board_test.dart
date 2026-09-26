@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
 import 'package:golf_mobile/widgets/eclectic_board.dart';
+import 'package:golf_mobile/widgets/pinned_hole_grid.dart';
 
 /// A two-round payload in the server's own shape.
 Map<String, dynamic> payload({
@@ -21,6 +22,7 @@ Map<String, dynamic> payload({
   List<Map<String, dynamic>>? standings,
   Map<String, dynamic>? cards,
   List<Map<String, String>>? legend,
+  bool oneCourse = false,
 }) {
   final pool = {
     'entry_fee': 10.0,
@@ -29,9 +31,11 @@ Map<String, dynamic> payload({
     'standings': standings ??
         [
           {'player_id': 1, 'player_name': 'Ann', 'rank': 1, 'tied': false,
-           'total': -4, 'holes_kept': 18, 'payout': 160.0, 'excluded': false},
+           'total': -4, 'holes_kept': 18, 'payout': 160.0, 'excluded': false,
+           'card_complete': true, 'card_holes': 18},
           {'player_id': 2, 'player_name': 'Bea', 'rank': 2, 'tied': false,
-           'total': 2, 'holes_kept': 18, 'payout': null, 'excluded': false},
+           'total': 2, 'holes_kept': 18, 'payout': null, 'excluded': false,
+           'card_complete': true, 'card_holes': 18},
         ],
     'cards': cards ?? {'1': _card(), '2': _card()},
   };
@@ -52,6 +56,11 @@ Map<String, dynamic> payload({
          {'key': 'T', 'course': 'The Ridge'}],
     'live_label': isFinal ? '' : liveLabel,
     'is_final': isFinal,
+    // Sent only on a ONE-course event, which is what puts the Par and Index
+    // bands on the card.
+    if (oneCourse) 'par': {for (var h = 1; h <= 18; h++) '$h': 4},
+    if (oneCourse)
+      'stroke_index': {for (var h = 1; h <= 18; h++) '$h': h},
     for (final p in pools) p: pool,
   };
 }
@@ -129,6 +138,98 @@ void main() {
     });
   });
 
+  group('the card reads as the app\'s standard scorecard', () {
+    // The first cut had none of this — no bands, no Index, and a label column
+    // that scrolled away with the holes, which is the defect eighteen other
+    // grids in the app were converted out of.
+    testWidgets('the row labels are PINNED, not scrolled', (tester) async {
+      await pump(tester, payload(oneCourse: true));
+      // `PinnedHoleGrid` is the house widget that holds the label column
+      // outside the scroller. Two nines, so two of them.
+      expect(find.byType(PinnedHoleGrid), findsNWidgets(2));
+    });
+
+    testWidgets('one course draws Par and Index, like every other card',
+        (tester) async {
+      await pump(tester, payload(oneCourse: true));
+      expect(find.text('Hole'), findsNWidgets(2));
+      expect(find.text('Par'), findsNWidgets(2));
+      expect(find.text('Index'), findsNWidgets(2));
+    });
+
+    testWidgets('two courses take BOTH rows off, and say why', (tester) async {
+      // Two pars on the same hole number means one row of either would be
+      // wrong for half the card.
+      await pump(tester, payload());
+      expect(find.text('Par'), findsNothing);
+      expect(find.text('Index'), findsNothing);
+      // Said once, so the absence reads as a rule rather than a failed load.
+      expect(find.textContaining('the notation carries it'), findsOneWidget);
+    });
+
+    testWidgets('an older server that sends neither behaves as before',
+        (tester) async {
+      await pump(tester, payload());
+      expect(find.text('Hole'), findsNWidgets(2));
+      expect(find.text('Index'), findsNothing);
+    });
+  });
+
+  group('a card with a gap', () {
+    // **Ruled 26 Sep 2026.** Missing holes add nothing to the total, so a
+    // golfer who played one round of three would otherwise compete on ten
+    // holes against a full card's fifty-four. The server ranks him below every
+    // whole card and pays him nothing; the row has to say WHY.
+    Map<String, dynamic> short({int holes = 10}) => payload(standings: [
+          {'player_id': 1, 'player_name': 'Ann', 'rank': 1, 'tied': false,
+           'total': -4, 'holes_kept': 18, 'payout': 160.0, 'excluded': false,
+           'card_complete': true, 'card_holes': 18},
+          {'player_id': 2, 'player_name': 'Dee', 'rank': 2, 'tied': false,
+           'total': -6, 'holes_kept': holes, 'payout': null,
+           'excluded': false, 'card_complete': false, 'card_holes': 18},
+        ], cards: {'1': _card(), '2': _card(roundsPlayed: 1)});
+
+    testWidgets('the row carries the count, so the blank money has a reason',
+        (tester) async {
+      await pump(tester, short());
+      expect(find.text('10 OF 18'), findsOneWidget);
+    });
+
+    testWidgets('it stays ON the board — the scores are real', (tester) async {
+      await pump(tester, short());
+      expect(find.text('Dee'), findsOneWidget);
+      // And his to-par is shown even though it is better than the leader's:
+      // hiding it would be pretending he did not play those holes.
+      expect(find.text('-6'), findsOneWidget);
+    });
+
+    testWidgets('a golfer with nothing posted gets no count', (tester) async {
+      // `0 OF 18` on a man who has not teed off is noise, not a reason.
+      await pump(tester, payload(standings: [
+        {'player_id': 1, 'player_name': 'Ann', 'rank': 1, 'tied': false,
+         'total': null, 'holes_kept': 0, 'payout': null, 'excluded': false,
+         'card_complete': false, 'card_holes': 18},
+      ], cards: {}));
+      expect(find.textContaining('OF 18'), findsNothing);
+    });
+
+    testWidgets('a whole card carries no count at all', (tester) async {
+      await pump(tester, payload());
+      expect(find.textContaining('OF 18'), findsNothing);
+    });
+
+    testWidgets('an older server that says nothing is treated as whole',
+        (tester) async {
+      // The promise to a build already on somebody's phone: absent means what
+      // it meant before the rule existed.
+      await pump(tester, payload(standings: [
+        {'player_id': 1, 'player_name': 'Ann', 'rank': 1, 'tied': false,
+         'total': -4, 'holes_kept': 18, 'payout': 160.0, 'excluded': false},
+      ], cards: {'1': _card()}));
+      expect(find.textContaining('OF 18'), findsNothing);
+    });
+  });
+
   group('the pool switch', () {
     testWidgets('both pools give a switch carrying each pool\'s money',
         (tester) async {
@@ -196,17 +297,22 @@ void main() {
     testWidgets('a row per round, plus the eclectic along the bottom',
         (tester) async {
       await pump(tester, payload());
-      expect(find.text('Front'), findsOneWidget);
-      expect(find.text('Back'), findsOneWidget);
+      // The header row is labelled `Hole`, as on every other card in the app —
+      // the nines are told apart by their numbers and by OUT / IN, which is
+      // how the standard scorecard does it too.
+      expect(find.text('Hole'), findsNWidgets(2));
+      // Scoped to the CARD: the row's own sub-line is `R1 79 · R2 84`, which
+      // contains the same text and would otherwise be counted as a round row.
+      // `findRichText` because the label is a `Text.rich` — the course initial
+      // is a smaller, quieter span on the same line (`R1 N`).
+      Finder inCard(String t) => find.descendant(
+          of: find.byType(EclecticCardView),
+          matching: find.textContaining(t, findRichText: true));
+      expect(inCard('R1'), findsNWidgets(2));   // one per nine
+      expect(inCard('R2'), findsNWidgets(2));
       expect(find.text('Best'), findsNWidgets(2));   // one per nine
-      expect(find.text('Out'), findsOneWidget);
-      expect(find.text('In'), findsOneWidget);
-    });
-
-    testWidgets('there is no par row — two courses mean two pars',
-        (tester) async {
-      await pump(tester, payload());
-      expect(find.text('Par'), findsNothing);
+      expect(find.text('OUT'), findsOneWidget);
+      expect(find.text('IN'), findsOneWidget);
     });
 
     testWidgets('the legend names the courses', (tester) async {
