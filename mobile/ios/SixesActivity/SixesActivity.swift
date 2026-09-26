@@ -191,6 +191,15 @@ struct SixesActivityAttributes: ActivityAttributes {
             /// `+$5 so far` — the only slot that differs between two phones in
             /// the same group.
             let money: String
+            /// A small caps tag claiming the quiet slot — `ECLECTIC` today.
+            ///
+            /// **A side game never gets a card of its own**, so when it has
+            /// news it borrows this row from the game that does. Optional and
+            /// defaulted, so an activity already on a lock screen decodes
+            /// without it and simply draws the line untagged; the line itself
+            /// is in `context` and is composed server-side, which is what
+            /// stops the tag and the text naming different pools.
+            var label: String? = nil
         }
 
         /// The one personal state, on round sign. Replaces the board entirely:

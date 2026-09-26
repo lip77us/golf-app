@@ -1849,6 +1849,16 @@ private struct FooterView: View {
         if isStale || hasThru || !footer.context.isEmpty
             || !footer.money.isEmpty {
             HStack(spacing: 8) {
+                // The borrowed-slot tag. Quieter and smaller than the line it
+                // introduces, because it names WHERE the news is from rather
+                // than being the news.
+                if !isStale, let label = footer.label, !label.isEmpty {
+                    Text(label)
+                        .font(Sixes.body(8.5, .bold))
+                        .tracking(0.5)
+                        .foregroundStyle(.white.opacity(0.55))
+                        .lineLimit(1)
+                }
                 Text(isStale ? "No scores in a while" : footer.context)
                     .font(Sixes.body(11))
                     .foregroundStyle(.white.opacity(0.66))
