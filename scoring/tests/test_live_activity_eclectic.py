@@ -124,6 +124,45 @@ class ImprovementTests(_Base):
         line = footer_line(self.news(1, 7))
         self.assertIn('T1', line)
 
+    def test_an_improvement_that_changes_NO_PLACE_still_shows(self):
+        # **Ruled 26 Sep 2026**, settling the packet's one open question.
+        #
+        # The eclectic is the one game a golfer cannot see on his own card: the
+        # score he just made either went onto it or it did not, and only the
+        # server knows which. Gating on a place change would mean a golfer who
+        # just birdied a hole he had been carrying a double on is told nothing,
+        # because nobody else moved.
+        #
+        # Here Ann is alone at the top before and after — rank 1 both times —
+        # and the line fires anyway.
+        self.play(0, self.ann, offsets={7: 2})   # a double on the 7th
+        self.play(1, self.ann, upto=6)
+        self.play(0, self.bea, offsets={h: 3 for h in range(1, 19)})
+        self.play(1, self.bea, upto=6, offsets={h: 3 for h in range(1, 7)})
+
+        before = self.news(1, 6)
+        self.assertEqual(before['place'], 1)
+
+        # Now par the 7th — better than the double, so it is kept. His place
+        # does not move: he was 1st and he is still 1st.
+        self.play(1, self.ann, upto=7)
+        self.play(1, self.bea, upto=7, offsets={7: 3})
+        after = self.news(1, 7)
+        self.assertEqual(after['place'], 1)
+        self.assertEqual(after['improved_hole'], 7)
+        self.assertIn('Improved on 7', footer_line(after))
+
+    def test_nothing_in_the_block_compares_places_before_and_after(self):
+        # A guard on the RULE rather than on one case: the module must not
+        # grow a "did the place move" test, because that is the behaviour the
+        # ruling rejected.
+        import inspect
+        from services import live_activity_eclectic as mod
+        src = inspect.getsource(mod)
+        for banned in ('previous_place', 'place_changed', 'prev_rank',
+                       'last_place'):
+            self.assertNotIn(banned, src)
+
     def test_the_higher_place_picks_the_pool(self):
         # Ann is off 18, so the net pool flatters her. With both improved, the
         # pool she places higher in is the one named.

@@ -19,6 +19,25 @@ Three rules, and each of them is about restraint
 * **It clears on the next score posted.** If that hole also improves the card,
   the line updates rather than clearing.
 
+Every improvement shows, including one that changes no place
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The packet left this open and asked for it to be flagged if it read as noisy.
+**Ruled 26 Sep 2026: show it on every hole where the score improved.** Nothing
+here compares the reader's place before and after, and nothing should be added
+that does.
+
+The reason is what the line is FOR. The eclectic is the one game a golfer
+cannot see on his own card: the score he just made either went onto it or it
+did not, and only the server knows which. A place is a different fact and it is
+already on the board. Gating the line on a place change would mean a golfer who
+just birdied a hole he had been carrying a double on — the single biggest thing
+that can happen to an eclectic card — is told nothing, because eleven other
+golfers did not move.
+
+It is bounded in practice: after round 1 (which never shows it at all) an
+improvement needs a score better than every earlier round's on that hole
+number, and those get rarer as the card fills.
+
 Which pool
 ~~~~~~~~~~
 If both improved, show the one where the reader PLACES HIGHER; on an equal
