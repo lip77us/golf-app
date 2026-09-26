@@ -18,6 +18,8 @@ import '../widgets/inline_message.dart';
 import '../widgets/stroke_play_strip.dart';
 import '../widgets/synced_scroll_group.dart';
 import '../widgets/flight_header.dart';
+import '../widgets/eclectic_board.dart';
+import 'eclectic_setup_screen.dart';
 import 'tournament_settlement_screen.dart';
 import 'tournament_low_net_setup_screen.dart';
 import 'tournament_stableford_setup_screen.dart';
@@ -111,6 +113,19 @@ class _TournamentLeaderboardScreenState
       for (final g in activeGames) {
         if (gamesMap.containsKey(g) && !tabs.contains(g)) tabs.add(g);
       }
+      // **Eclectic sits between the championship and the per-round side
+      // games**, and is moved there explicitly rather than left wherever the
+      // wizard's toggle order put it in `active_games`. It is the only side
+      // game that spans the whole event, which is also why its tab takes no
+      // round suffix.
+      if (tabs.remove('eclectic')) {
+        const champs = ['low_net', 'stableford_championship'];
+        var at = 0;
+        for (var i = 0; i < tabs.length; i++) {
+          if (champs.contains(tabs[i])) at = i + 1;
+        }
+        tabs.insert(at, 'eclectic');
+      }
       // The day bet is not a tournament-level active game — it belongs to the
       // final round — but it IS a tab, and it is the LAST one. Tabs are named
       // for what they pay, so it comes after the side games rather than
@@ -151,6 +166,7 @@ class _TournamentLeaderboardScreenState
     'low_net_round': 'Stroke Play',
     'stableford_championship': 'Stableford',
     'match_play'   : 'Mini Singles Bracket',
+    'eclectic'     : 'Eclectic',
   };
 
   /// Tabs read the name the TD set — the ball game as he typed it, and
@@ -206,6 +222,10 @@ class _TournamentLeaderboardScreenState
                   const PopupMenuItem(
                       value: 'stableford_championship',
                       child: Text('Configure Stableford')),
+                if (activeGames.contains('eclectic'))
+                  const PopupMenuItem(
+                      value: 'eclectic',
+                      child: Text('Configure Eclectic')),
               ],
             ),
         ],
@@ -244,7 +264,10 @@ class _TournamentLeaderboardScreenState
         if (data == null) return const Center(child: Text('No data yet.'));
         return RefreshIndicator(
           onRefresh: _load,
-          child: _GameView(gameKey: g, data: data),
+          child: _GameView(
+              gameKey : g,
+              data    : data,
+              readerId: context.read<AuthProvider>().player?.id),
         );
       }).toList(),
     );
@@ -261,6 +284,11 @@ class _TournamentLeaderboardScreenState
         builder: (_) => TournamentStablefordSetupScreen(
             tournamentId: widget.tournamentId),
       )).then((_) => _load());
+    } else if (game == 'eclectic') {
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => EclecticSetupScreen(
+            tournamentId: widget.tournamentId),
+      )).then((_) => _load());
     }
   }
 }
@@ -272,7 +300,9 @@ class _TournamentLeaderboardScreenState
 class _GameView extends StatelessWidget {
   final String             gameKey;
   final Map<String, dynamic> data;
-  const _GameView({required this.gameKey, required this.data});
+  /// The signed-in golfer, for boards that mark the reader's own row.
+  final int?               readerId;
+  const _GameView({required this.gameKey, required this.data, this.readerId});
 
   @override
   Widget build(BuildContext context) {
@@ -283,6 +313,8 @@ class _GameView extends StatelessWidget {
         return _StablefordChampView(data: data);
       case 'match_play':
         return _MatchPlayChampView(data: data);
+      case 'eclectic':
+        return EclecticBoard(data: data, readerId: readerId);
       case 'day_bet':
         return _DayBetView(data: data);
       default:

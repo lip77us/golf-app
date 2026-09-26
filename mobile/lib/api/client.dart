@@ -883,6 +883,47 @@ class ApiClient {
     return Map<String, dynamic>.from(data as Map);
   }
 
+  // ---- Eclectic (tournament, multi-round side game) ----
+
+  /// The TD's two pools, plus the availability gate and the round list the
+  /// setup screen draws. `available` / `unavailable_reason` come from the
+  /// server so the rule lives in ONE place — the client states the reason, it
+  /// does not derive it.
+  Future<Map<String, dynamic>> getEclecticSetup(int tournamentId) async {
+    final data = await _get('/tournaments/$tournamentId/eclectic/setup/');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  Future<Map<String, dynamic>> postEclecticSetup(
+    int tournamentId, {
+    required bool                       grossOn,
+    required bool                       netOn,
+    required double                     grossEntryFee,
+    required List<Map<String, dynamic>> grossPayouts,
+    required double                     netEntryFee,
+    required List<Map<String, dynamic>> netPayouts,
+  }) async {
+    final data = await _post('/tournaments/$tournamentId/eclectic/setup/', {
+      'gross_on'       : grossOn,
+      'net_on'         : netOn,
+      'gross_entry_fee': grossEntryFee.toStringAsFixed(2),
+      'gross_payouts'  : grossPayouts,
+      'net_entry_fee'  : netEntryFee.toStringAsFixed(2),
+      'net_payouts'    : netPayouts,
+    });
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  /// Turn the GAME off. Turning one POOL off is a POST — the server refuses
+  /// the state where neither is on.
+  Future<void> deleteEclecticSetup(int tournamentId) =>
+      _delete('/tournaments/$tournamentId/eclectic/setup/');
+
+  Future<EclecticSummary> getEclectic(int tournamentId) async {
+    final data = await _get('/tournaments/$tournamentId/eclectic/');
+    return EclecticSummary.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
   // ---- Rounds ----
 
   Future<Round> getRound(int id) async {

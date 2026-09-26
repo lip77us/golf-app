@@ -3771,6 +3771,30 @@ class _StepSideGames extends StatelessWidget {
         ),
         const SizedBox(height: 12),
 
+        // ── Eclectic ────────────────────────────────────────────────────
+        // **Hidden on a one-round event**, not disabled: with one round an
+        // eclectic IS the round, so there is nothing to explain and a struck
+        // row would invite the TD to work out why.
+        //
+        // The other half of the rule — every round 18 holes — is enforced by
+        // the server and stated on the setup screen. The individual wizard
+        // cannot currently build a round that is anything else, so a disabled
+        // row here would be a control for a state it cannot produce.
+        if (numRounds > 1) ...[
+          _GameToggleCard(
+            on      : activeGames.contains(GameIds.eclectic),
+            title   : 'Eclectic',
+            blurb   : 'Each golfer keeps his best score on each hole number '
+                      'across all $numRounds rounds. Those eighteen bests are '
+                      'his card, and the lowest wins.',
+            moneyNote: 'Gross and net are two separate pools with two entries. '
+                       'Both are set on the Eclectic screen, right after you '
+                       'create the tournament.',
+            onToggle: (v) => onToggle(GameIds.eclectic, v),
+          ),
+          const SizedBox(height: 12),
+        ],
+
         // ── Mini Singles ────────────────────────────────────────────────
         _GameToggleCard(
           on      : activeGames.contains(GameIds.matchPlay),

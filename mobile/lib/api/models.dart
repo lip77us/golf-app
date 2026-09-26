@@ -7735,3 +7735,221 @@ class BankerSettlement {
 
 double _d(dynamic v) =>
     v == null ? 0.0 : (v is num ? v.toDouble() : double.tryParse('$v') ?? 0.0);
+
+// ---------------------------------------------------------------------------
+// Eclectic — the best score on every hole number, across every round
+// ---------------------------------------------------------------------------
+
+/// One round's place in the event, as the eclectic card labels it.
+class EclecticRound {
+  final int    index;
+  final String label;        // `R1`
+  final String course;
+  /// The one-letter suffix beside the label (`R1 N`). **Empty for every round
+  /// when any two courses share an initial** — the server drops the scheme for
+  /// the whole card rather than lettering one row and blanking four, which
+  /// reads as a rendering fault. Five Bandon courses are all `B`.
+  final String courseInitial;
+  final String date;
+  final int?   par;
+  final bool   isComplete;
+
+  const EclecticRound({
+    required this.index, required this.label, required this.course,
+    required this.courseInitial, required this.date,
+    required this.par, required this.isComplete,
+  });
+
+  factory EclecticRound.fromJson(Map<String, dynamic> j) => EclecticRound(
+        index        : j['index'] as int? ?? 0,
+        label        : j['label'] as String? ?? '',
+        course       : j['course'] as String? ?? '',
+        courseInitial: j['course_initial'] as String? ?? '',
+        date         : j['date'] as String? ?? '',
+        par          : (j['par'] as num?)?.toInt(),
+        isComplete   : j['is_complete'] as bool? ?? false,
+      );
+}
+
+/// One golfer's row on the board.
+class EclecticStanding {
+  final int     playerId;
+  final String  playerName;
+  final int     rank;
+  final bool    tied;
+  /// The card against par. Null before the golfer has posted a single hole —
+  /// which is NOT zero, and is why he ranks last rather than leading.
+  final int?    total;
+  final int     holesKept;
+  final double? payout;
+  final bool    excluded;
+
+  const EclecticStanding({
+    required this.playerId, required this.playerName, required this.rank,
+    required this.tied, required this.total, required this.holesKept,
+    required this.payout, required this.excluded,
+  });
+
+  factory EclecticStanding.fromJson(Map<String, dynamic> j) => EclecticStanding(
+        playerId  : j['player_id'] as int,
+        playerName: j['player_name'] as String? ?? '',
+        rank      : (j['rank'] as num?)?.toInt() ?? 0,
+        tied      : j['tied'] as bool? ?? false,
+        total     : (j['total'] as num?)?.toInt(),
+        holesKept : (j['holes_kept'] as num?)?.toInt() ?? 0,
+        payout    : (j['payout'] as num?)?.toDouble(),
+        excluded  : j['excluded'] as bool? ?? false,
+      );
+
+  /// `1` / `T2` — the position as the board prints it.
+  String get positionLabel => tied ? 'T$rank' : '$rank';
+}
+
+/// One hole of one round, inside a golfer's card.
+class EclecticCell {
+  final int  gross;
+  final int  par;
+  /// Strokes that round gave on this hole. Always 0 in the gross pool.
+  final int  strokes;
+  final int  toPar;
+  /// This is the score the eclectic kept for that hole number.
+  final bool kept;
+
+  const EclecticCell({
+    required this.gross, required this.par, required this.strokes,
+    required this.toPar, required this.kept,
+  });
+
+  factory EclecticCell.fromJson(Map<String, dynamic> j) => EclecticCell(
+        gross  : (j['gross'] as num?)?.toInt() ?? 0,
+        par    : (j['par'] as num?)?.toInt() ?? 0,
+        strokes: (j['strokes'] as num?)?.toInt() ?? 0,
+        toPar  : (j['to_par'] as num?)?.toInt() ?? 0,
+        kept   : j['kept'] as bool? ?? false,
+      );
+}
+
+/// One round's row inside the card.
+class EclecticCardRound {
+  final String label;
+  final String courseInitial;
+  final Map<int, EclecticCell> holes;
+
+  const EclecticCardRound({
+    required this.label, required this.courseInitial, required this.holes,
+  });
+
+  factory EclecticCardRound.fromJson(Map<String, dynamic> j) =>
+      EclecticCardRound(
+        label        : j['label'] as String? ?? '',
+        courseInitial: j['course_initial'] as String? ?? '',
+        holes        : {
+          for (final e in (j['holes'] as Map? ?? const {}).entries)
+            int.parse(e.key.toString()):
+                EclecticCell.fromJson(Map<String, dynamic>.from(e.value as Map)),
+        },
+      );
+}
+
+/// The grid a row opens into — every round, and the kept score per hole.
+class EclecticCard {
+  final List<EclecticCardRound> rounds;
+  /// Kept to-par per hole number. A hole nobody has played is absent, not 0.
+  final Map<int, int> best;
+
+  const EclecticCard({required this.rounds, required this.best});
+
+  factory EclecticCard.fromJson(Map<String, dynamic> j) => EclecticCard(
+        rounds: (j['rounds'] as List? ?? const [])
+            .map((r) =>
+                EclecticCardRound.fromJson(Map<String, dynamic>.from(r as Map)))
+            .toList(),
+        best: {
+          for (final e in (j['best'] as Map? ?? const {}).entries)
+            int.parse(e.key.toString()): (e.value as num).toInt(),
+        },
+      );
+}
+
+/// One pool — gross or net. They are separate competitions with separate
+/// money, not two columns of one game.
+class EclecticPool {
+  final double entryFee;
+  final double pool;
+  final List<Map<String, dynamic>> payouts;
+  final List<EclecticStanding> standings;
+  final Map<int, EclecticCard> cards;
+
+  const EclecticPool({
+    required this.entryFee, required this.pool, required this.payouts,
+    required this.standings, required this.cards,
+  });
+
+  factory EclecticPool.fromJson(Map<String, dynamic> j) => EclecticPool(
+        entryFee : (j['entry_fee'] as num?)?.toDouble() ?? 0,
+        pool     : (j['pool'] as num?)?.toDouble() ?? 0,
+        payouts  : (j['payouts'] as List? ?? const [])
+            .map((p) => Map<String, dynamic>.from(p as Map))
+            .toList(),
+        standings: (j['standings'] as List? ?? const [])
+            .map((r) =>
+                EclecticStanding.fromJson(Map<String, dynamic>.from(r as Map)))
+            .toList(),
+        cards: {
+          for (final e in (j['cards'] as Map? ?? const {}).entries)
+            int.parse(e.key.toString()):
+                EclecticCard.fromJson(Map<String, dynamic>.from(e.value as Map)),
+        },
+      );
+}
+
+class EclecticSummary {
+  /// Which pools are being played, in display order. **A pool that is off is
+  /// absent from [gross]/[net] entirely**, so an empty board cannot be
+  /// mistaken for a real one.
+  final List<String> pools;
+  final List<EclecticRound> rounds;
+  final int nRounds;
+  final int nCourses;
+  /// `[{key, course}]` — what the card header spells out. Keyed on the initial
+  /// when the scheme holds, on the round label when it does not.
+  final List<Map<String, String>> courseLegend;
+  /// `R3 live` while any round is open; empty once the event closes.
+  final String liveLabel;
+  final bool isFinal;
+  final EclecticPool? gross;
+  final EclecticPool? net;
+
+  const EclecticSummary({
+    required this.pools, required this.rounds, required this.nRounds,
+    required this.nCourses, required this.courseLegend,
+    required this.liveLabel, required this.isFinal,
+    this.gross, this.net,
+  });
+
+  bool get isConfigured => pools.isNotEmpty;
+
+  EclecticPool? poolNamed(String name) => name == 'net' ? net : gross;
+
+  factory EclecticSummary.fromJson(Map<String, dynamic> j) => EclecticSummary(
+        pools : (j['pools'] as List? ?? const []).cast<String>(),
+        rounds: (j['rounds'] as List? ?? const [])
+            .map((r) =>
+                EclecticRound.fromJson(Map<String, dynamic>.from(r as Map)))
+            .toList(),
+        nRounds : (j['n_rounds'] as num?)?.toInt() ?? 0,
+        nCourses: (j['n_courses'] as num?)?.toInt() ?? 0,
+        courseLegend: (j['course_legend'] as List? ?? const [])
+            .map((e) => Map<String, String>.from(
+                (e as Map).map((k, v) => MapEntry('$k', '$v'))))
+            .toList(),
+        liveLabel: j['live_label'] as String? ?? '',
+        isFinal  : j['is_final'] as bool? ?? false,
+        gross: j['gross'] == null
+            ? null
+            : EclecticPool.fromJson(Map<String, dynamic>.from(j['gross'] as Map)),
+        net: j['net'] == null
+            ? null
+            : EclecticPool.fromJson(Map<String, dynamic>.from(j['net'] as Map)),
+      );
+}

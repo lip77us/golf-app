@@ -87,6 +87,10 @@ class GameIds {
   static const String singlesNassau  = 'singles_nassau';
   static const String singles18      = 'singles_18';
   static const String pinkBall    = 'pink_ball';
+  /// Eclectic — the one side game that spans the EVENT rather than a round:
+  /// each golfer's best score on each hole number across every round. Offered
+  /// only on individual events with 2+ rounds, all of them 18 holes.
+  static const String eclectic    = 'eclectic';
   static const String scramble    = 'scramble';
 
   // Tournament-level championship game IDs (sent to createTournament).
