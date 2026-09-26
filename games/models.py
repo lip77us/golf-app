@@ -3807,3 +3807,84 @@ class EclecticConfig(models.Model):
     def pools(self) -> list:
         """The pools actually being played, in display order."""
         return [p for p, on in (('gross', self.gross_on), ('net', self.net_on)) if on]
+
+
+class FortyBallsConfig(models.Model):
+    """
+    40 Balls — the Irish Rumble family's one game where the GROUP decides.
+
+    A foursome gets **40 balls** for the round and a threesome **30**; on each
+    hole it spends 0 to k of them, and the best n nets count against n × par.
+    Two 3s on a par 4 with two balls spent is −2. Nothing is chosen at setup:
+    the count is picked hole by hole, AFTER the scores are in, which is the
+    whole game — the group sees its nets and then decides what they are worth.
+
+    So this model holds no ball plan. What the TD sets is how a score is
+    measured (`handicap_mode`, `net_percent`, `net_max_double_bogey`) and what
+    the round is worth (`entry_fee`, `payouts`); the counts live per hole on
+    `FortyBallsHoleCount`.
+
+    **The budget is derived, never stored.** 10 × the group's real-player count,
+    read off the roster at scoring time, so a group that loses a player does not
+    keep spending a departed man's ten balls. There is no borrowed 4th: a
+    phantom cannot choose, and a ball it never hit is not one the group may
+    count.
+
+    Re-run each round with its own entry and pool, like Irish Rumble — hence
+    round-scoped rather than tournament-scoped, and a multi-round tab reading
+    `40 Balls · R2`.
+
+    See docs/design-review/handoff-forty-balls/HANDOFF.md.
+    """
+    round             = models.OneToOneField(
+                            Round, on_delete=models.CASCADE,
+                            related_name='forty_balls_config')
+    handicap_mode     = models.CharField(
+                            max_length=20, choices=HandicapMode.choices,
+                            default=HandicapMode.NET)
+    #: 50–100 in steps of 5, Net only. Gross ignores it.
+    net_percent       = models.PositiveSmallIntegerField(default=100)
+    #: The damage limiter, ON by default — net double bogey in Net, gross in
+    #: Gross. Applied BEFORE the pick, so a capped score is what the group is
+    #: choosing between.
+    net_max_double_bogey = models.BooleanField(default=True)
+
+    entry_fee         = models.DecimalField(
+                            max_digits=8, decimal_places=2, default=0.00,
+                            help_text='Per-golfer entry; the pool is a group prize.')
+    payouts           = models.JSONField(
+                            default=list,
+                            help_text="[{'place': 1, 'amount': 150.00}, …]")
+
+    class Meta:
+        verbose_name = '40 Balls Config'
+
+    def __str__(self):
+        return f'40 Balls (round {self.round_id})'
+
+
+class FortyBallsHoleCount(models.Model):
+    """How many balls one group spent on one hole.
+
+    `count` is what the group picked, 0..k. `app_set` marks the ones it had no
+    say in — once the remaining budget forces every later hole (`slack 0`) or
+    forbids them all (`budget spent`), the app fills them in, and the
+    leaderboard draws those amber so a run of 4s reads as arithmetic rather
+    than as a choice.
+    """
+    foursome    = models.ForeignKey(Foursome, on_delete=models.CASCADE,
+                                    related_name='forty_balls_counts')
+    hole_number = models.PositiveSmallIntegerField()
+    count       = models.PositiveSmallIntegerField()
+    app_set     = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['foursome', 'hole_number'],
+                                    name='forty_balls_one_count_per_hole'),
+        ]
+        ordering = ['hole_number']
+        verbose_name = '40 Balls Hole Count'
+
+    def __str__(self):
+        return f'hole {self.hole_number}: {self.count} balls'

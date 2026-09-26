@@ -48,6 +48,12 @@ class GameType(models.TextChoices):
     # par-4 5th. Two separate pools, gross and net. Individual events only,
     # 2+ rounds, every round 18 holes.
     ECLECTIC        = 'eclectic',        'Eclectic'
+    # 40 Balls: a tournament GROUP game in the Irish Rumble family, and the one
+    # where the group chooses how many balls count — AFTER seeing the hole's
+    # nets. A foursome gets 40 balls for the round (a threesome 30) and spends
+    # 0..k of them a hole; the best n nets count against n × par. A round runs
+    # one of 40 Balls, Irish Rumble or Better Ball, never two.
+    FORTY_BALLS     = 'forty_balls',     '40 Balls'
     SCRAMBLE        = 'scramble',        'Scramble'
     # Team-ball cup formats — one ball a side, entered as a single team score
     # per hole (no per-golfer score).  All route through TeamHoleScore + the
