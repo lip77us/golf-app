@@ -1688,6 +1688,33 @@ class StablefordChampionshipSetupSerializer(serializers.Serializer):
     pts_double    = serializers.IntegerField(default=0)
 
 
+class EclecticSetupSerializer(serializers.Serializer):
+    """POST /api/tournaments/{id}/eclectic/setup/
+
+    Two pools with a fee and a table each. **At least one pool must be on** —
+    an eclectic with neither is not a game, and the client's last-toggle guard
+    is a convenience, not the rule.
+    """
+    gross_on        = serializers.BooleanField(default=True)
+    net_on          = serializers.BooleanField(default=True)
+    gross_entry_fee = serializers.DecimalField(
+                          max_digits=8, decimal_places=2, default='0.00')
+    gross_payouts   = serializers.ListField(
+                          child=serializers.DictField(), default=list)
+    net_entry_fee   = serializers.DecimalField(
+                          max_digits=8, decimal_places=2, default='0.00')
+    net_payouts     = serializers.ListField(
+                          child=serializers.DictField(), default=list)
+    excluded_player_ids = serializers.ListField(
+                          child=serializers.IntegerField(), default=list)
+
+    def validate(self, attrs):
+        if not attrs.get('gross_on') and not attrs.get('net_on'):
+            raise serializers.ValidationError(
+                'Eclectic needs at least one pool — gross, net or both.')
+        return attrs
+
+
 class PinkBallSetupSerializer(serializers.Serializer):
     """POST /api/rounds/{id}/pink-ball/setup/"""
     # The app never asks the colour — it asks what the group CALLS the

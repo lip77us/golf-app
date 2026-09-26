@@ -2372,6 +2372,114 @@ class TournamentStablefordSetupView(APIView):
         return Response(self._dict(cfg), status=status.HTTP_201_CREATED)
 
 
+class TournamentEclecticSetupView(APIView):
+    """GET/POST/DELETE /api/tournaments/{id}/eclectic/setup/
+
+    The TD's two pools. DELETE turns the GAME off — a different act from
+    turning one POOL off, which is a POST with `gross_on`/`net_on`.
+    """
+
+    @staticmethod
+    def _num_players(tournament):
+        from tournament.models import FoursomeMembership
+        return (FoursomeMembership.objects
+                .filter(foursome__round__tournament=tournament,
+                        player__is_phantom=False)
+                .values('player_id').distinct().count())
+
+    def _dict(self, tournament, cfg):
+        from services.eclectic import eclectic_available, _round_meta
+        ok, reason = eclectic_available(tournament)
+        base = {
+            'num_players': self._num_players(tournament),
+            # The gate travels WITH the config so the setup screen says why it
+            # cannot be saved rather than re-deriving the rule client-side.
+            'available'  : ok,
+            'unavailable_reason': reason,
+            'rounds'     : _round_meta(tournament),
+        }
+        if cfg is None:
+            return {
+                **base,
+                'configured': False,
+                'gross_on': True, 'net_on': True,
+                'gross_entry_fee': 0.00, 'gross_payouts': [],
+                'net_entry_fee': 0.00, 'net_payouts': [],
+                'excluded_player_ids': [],
+            }
+        return {
+            **base,
+            'configured'     : True,
+            'gross_on'       : cfg.gross_on,
+            'net_on'         : cfg.net_on,
+            'gross_entry_fee': float(cfg.gross_entry_fee),
+            'gross_payouts'  : cfg.gross_payouts or [],
+            'net_entry_fee'  : float(cfg.net_entry_fee),
+            'net_payouts'    : cfg.net_payouts or [],
+            'excluded_player_ids': cfg.excluded_player_ids or [],
+        }
+
+    def get(self, request, pk):
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        from games.models import EclecticConfig
+        cfg = EclecticConfig.objects.filter(tournament=tournament).first()
+        return Response(self._dict(tournament, cfg))
+
+    def post(self, request, pk):
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        from services.eclectic import eclectic_available
+        ok, reason = eclectic_available(tournament)
+        if not ok:
+            # Refused at the API, not only greyed in the client: the rule is
+            # about the EVENT, and a round can be added or shortened after the
+            # screen was drawn.
+            return Response({'detail': reason},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        from api.serializers import EclecticSetupSerializer
+        ser = EclecticSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        from games.models import EclecticConfig
+        cfg, _ = EclecticConfig.objects.update_or_create(
+            tournament=tournament,
+            defaults={
+                'gross_on'       : d['gross_on'],
+                'net_on'         : d['net_on'],
+                'gross_entry_fee': d['gross_entry_fee'],
+                'gross_payouts'  : d['gross_payouts'],
+                'net_entry_fee'  : d['net_entry_fee'],
+                'net_payouts'    : d['net_payouts'],
+                'excluded_player_ids': d.get('excluded_player_ids', []),
+            },
+        )
+        if 'eclectic' not in (tournament.active_games or []):
+            tournament.active_games = (list(tournament.active_games or [])
+                                       + ['eclectic'])
+            tournament.save(update_fields=['active_games'])
+        return Response(self._dict(tournament, cfg),
+                        status=status.HTTP_201_CREATED)
+
+    def delete(self, request, pk):
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        from games.models import EclecticConfig
+        EclecticConfig.objects.filter(tournament=tournament).delete()
+        if 'eclectic' in (tournament.active_games or []):
+            tournament.active_games = [g for g in tournament.active_games
+                                       if g != 'eclectic']
+            tournament.save(update_fields=['active_games'])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class TournamentEclecticView(APIView):
+    """GET /api/tournaments/{id}/eclectic/ — both pools, ranked, with the cards."""
+    def get(self, request, pk):
+        tournament = tournament_for_reader(request.user, pk)
+        from services.eclectic import eclectic_summary
+        return Response(eclectic_summary(tournament))
+
+
 class TournamentStablefordView(APIView):
     """GET /api/tournaments/{id}/stableford/ — cumulative Stableford standings."""
     def get(self, request, pk):
@@ -2423,6 +2531,15 @@ class TournamentLeaderboardView(APIView):
                 'label': 'Stableford Championship',
                 **stableford_championship_summary(tournament),
             }
+
+        # Eclectic — the ONE side game that spans the event, so it takes no
+        # round suffix and sits between the championship and the per-round
+        # side games.
+        if 'eclectic' in active_games:
+            from services.eclectic import eclectic_summary
+            summary = eclectic_summary(tournament)
+            if summary:
+                games['eclectic'] = {'label': 'Eclectic', **summary}
 
         if 'match_play' in active_games:
             from services.tournament_match_play import tournament_match_play_summary

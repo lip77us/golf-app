@@ -244,6 +244,49 @@ def _group_member_ids(round_obj, foursome_id):
     )
 
 
+def _eclectic_pots(tournament, field_ids):
+    """Gross and Net — **two games, not one with two columns.**
+
+    A golfer may be in one, the other or both, so each has its own entry line
+    and its own prize line, and each balances on its own. And there is no round
+    suffix on either: the eclectic is the one side game that spans the event,
+    so `Eclectic · Gross` is the whole label.
+    """
+    config = getattr(tournament, 'eclectic_config', None)
+    if config is None:
+        return []
+
+    from services.eclectic import eclectic_standings
+
+    pots = []
+    for pool in config.pools:
+        fee = float(config.gross_entry_fee if pool == 'gross'
+                    else config.net_entry_fee)
+        pot = _Pot(f'eclectic_{pool}', f'Eclectic · {pool.title()}')
+        pot.enter(field_ids, fee)
+
+        # Read ONCE. The standings walk every round's cards for every golfer,
+        # so calling it per paid place would rebuild the whole game per line.
+        standings = eclectic_standings(tournament, pool)
+        ways_by_rank = {}
+        for row in standings:
+            ways_by_rank[row['rank']] = ways_by_rank.get(row['rank'], 0) + 1
+
+        for row in standings:
+            if not row.get('payout'):
+                continue
+            # **The tie and the split are both named.** A golfer who expected
+            # $60 for 2nd and got $30 needs the line to tell him why, and
+            # `T2 (2 ways)` is the whole answer.
+            place = f"T{row['rank']}" if row['tied'] else _ordinal(row['rank'])
+            ways = ways_by_rank.get(row['rank'], 1)
+            detail = (f"Eclectic {pool.title()}, {place}"
+                      + (f' ({ways} ways)' if row['tied'] else ''))
+            pot.pay(row['player_id'], row['payout'], detail=detail)
+        pots.append(pot)
+    return pots
+
+
 def _mini_singles_pots(tournament, carved):
     """Day 1 — a side bet per group. Day 2 — funded by the carve-out."""
     config = getattr(tournament, 'mini_singles_config', None)
@@ -348,6 +391,7 @@ def tournament_settlement(tournament) -> dict:
     pots = [p for p in [champ] if p is not None]
     pots += _mini_singles_pots(tournament, carved)
     pots += _group_game_pots(tournament)
+    pots += _eclectic_pots(tournament, field_ids)
     day_bet = _day_bet_pot(tournament)
     if day_bet is not None:
         pots.append(day_bet)
