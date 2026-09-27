@@ -1200,7 +1200,16 @@ def _leaderboard_active_games(round_obj, games_dict: dict) -> list:
     dynamically detected (e.g. three_person_match) so the Flutter tab bar
     always reflects what's actually in the games dict.
     """
-    active = list(round_obj.active_games or [])
+    # **Eclectic is a TOURNAMENT game and never a round tab.** The individual
+    # wizard writes side games onto the rounds, so a round in an eclectic
+    # event carries the slug — but this board has no eclectic block to draw
+    # (the game spans the whole event and is built by
+    # `TournamentLeaderboardView`), so the tab came up lowercase and empty:
+    # `eclectic` / `No data yet.` Reported from testing.
+    #
+    # The tournament board still reads the ROUNDS' lists to decide the event
+    # plays it, which is a different question asked one level up.
+    active = [g for g in (round_obj.active_games or []) if g != 'eclectic']
     for key in games_dict:
         # 'settlement' is a derived cross-game summary, not a real game. Keep it
         # OUT of active_games so older clients (which tab off active_games and

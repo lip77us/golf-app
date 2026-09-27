@@ -345,3 +345,34 @@ class TournamentCardOfferTests(_Base):
             f'/api/tournaments/{self.tourn.id}/leaderboard/').data
         self.assertEqual(self.card()['eclectic_offer'],
                          board['eclectic_offer'])
+
+
+class RoundBoardTests(_Base):
+    """Eclectic is a tournament game and never a ROUND tab.
+
+    The individual wizard writes side games onto the rounds, so a round in an
+    eclectic event carries the slug. The round leaderboard has no eclectic
+    block to draw — the game spans the event and is built one level up — so
+    the tab came up lowercase and empty: `eclectic` over `No data yet.`
+    """
+
+    def test_the_round_board_does_not_offer_an_eclectic_tab(self):
+        r = self.rounds[0]
+        r.active_games = ['eclectic']
+        r.save()
+        data = self.client.get(f'/api/rounds/{r.id}/leaderboard/').data
+        board = data.get('leaderboard', data)
+        self.assertNotIn('eclectic', board['active_games'])
+        self.assertNotIn('eclectic', board['games'])
+
+    def test_the_tournament_board_still_reads_the_rounds(self):
+        # The same slug on the round is what tells the EVENT it plays one —
+        # a different question, asked one level up.
+        self.tourn.active_games = []
+        self.tourn.save()
+        self.rounds[0].active_games = ['eclectic']
+        self.rounds[0].save()
+        board = self.client.get(
+            f'/api/tournaments/{self.tourn.id}/leaderboard/').data
+        self.assertIn('eclectic', board['active_games'])
+        self.assertIn('eclectic', board['games'])
