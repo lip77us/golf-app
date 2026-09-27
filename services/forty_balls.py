@@ -271,7 +271,11 @@ def hole_state(foursome, hole_number: int) -> dict:
     lo, hi = bounds(here, left, cap_after)
 
     nets, pars = _scores_for(foursome, config)
+    # Any hole with ANY score locks the ones before it — a later hole being
+    # part-entered still means the group has moved on.
+    touched = [h for h in holes if nets.get(h)]
     scored = _fully_scored(foursome, nets, holes, members)
+    locked = _is_locked(hole_number, holes, touched)
     picked = counts.get(hole_number)
 
     # **The budget can no longer come out.** Enough golfers dropped out that
@@ -299,24 +303,40 @@ def hole_state(foursome, hole_number: int) -> dict:
         # one included. Never below zero: at zero every remaining ball is
         # spoken for, which is the `all count` state.
         'slack'       : max(0, cap_here - left),
-        'can_pick'    : (not dq) and hole_number in scored and _is_editable(
-                            foursome, hole_number, scored, counts),
+        # **Not gated on the scores being IN.** The client shows the buttons
+        # as soon as the group has entered its scores locally and sends the
+        # count with the hole; the server still refuses a count for a hole it
+        # has no scores for (see `set_count`), which is where the integrity
+        # lives.
+        'can_pick'    : (not dq) and not locked,
+        'locked'      : locked,
         'scores_in'   : hole_number in scored,
+        # What the client needs to work the nets out locally, before the hole
+        # is posted — the same three settings `_scores_for` applies.
+        'handicap_mode': (config.handicap_mode if config else 'net'),
+        'net_percent' : (config.net_percent if config else 100),
+        'cap'         : (bool(config.net_max_double_bogey) if config else True),
         'par'         : pars.get(hole_number),
         'nets'        : nets.get(hole_number, {}),
     }
 
 
-def _is_editable(foursome, hole_number, scored, counts) -> bool:
-    """Only the most recent SCORED hole may be picked or changed.
+def _is_locked(hole_number, holes, scored) -> bool:
+    """A hole is settled once a LATER one has scores.
 
-    Once the next hole has scores the one before it is settled: the choice was
-    made with that hole's information, and re-making it later with the next
-    hole's is a different game.
+    The choice was made with that hole's information, and re-making it later
+    with the next hole's is a different game.
+
+    **Stated as "a later hole has scores" rather than "this is the most recent
+    scored hole"**, so it is answerable BEFORE this hole is scored — which is
+    what lets the group pick its count while it is still entering, with the
+    count riding along in the same save. The old form needed the hole to be
+    posted first, which meant posting, picking, and only then moving on.
     """
-    if hole_number not in scored:
-        return False
-    return hole_number == scored[-1]
+    if hole_number not in holes:
+        return True
+    pos = holes.index(hole_number)
+    return any(holes.index(h) > pos for h in scored)
 
 
 # ---------------------------------------------------------------------------
@@ -332,13 +352,15 @@ def set_count(foursome, hole_number: int, count: int) -> FortyBallsHoleCount:
             f"{state['capacity']} — the budget cannot come out, so it is out "
             f"of 40 Balls. Its scores still count for the championship.")
     if not state['scores_in']:
+        # The client sends the hole's scores FIRST and the count with them, so
+        # reaching this means the scores did not land — not that the group
+        # picked too early.
         raise FortyBallsLocked(
-            f'Hole {hole_number} is not fully scored yet — the group picks '
-            f'after it has seen the nets.')
-    if not state['can_pick']:
+            f'Hole {hole_number} has no scores on the server yet, so there is '
+            f'nothing to count.')
+    if state['locked']:
         raise FortyBallsLocked(
-            f'Hole {hole_number} is settled. Only the most recent scored hole '
-            f'can be changed.')
+            f'Hole {hole_number} is settled — the group has moved on.')
     if not state['lo'] <= count <= state['hi']:
         raise FortyBallsLocked(
             f"{count} balls is outside {state['lo']}–{state['hi']} on this "

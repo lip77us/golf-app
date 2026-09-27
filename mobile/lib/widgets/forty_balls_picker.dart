@@ -29,27 +29,47 @@ class FortyBallsPicker extends StatelessWidget {
   final ValueChanged<int> onPick;
   final bool busy;
 
+  /// The hole's nets as ENTERED, including scores not yet posted. This is what
+  /// lets the group pick while it is still filling the hole in — the server's
+  /// own `nets` only ever holds what has landed. Empty falls back to those.
+  final Map<int, int> localNets;
+
+  /// The count the group has chosen but not yet sent, because the hole has
+  /// not been posted. Overrides the server's.
+  final int? pendingCount;
+
   const FortyBallsPicker({
     super.key,
     required this.state,
     required this.names,
     required this.onPick,
     this.busy = false,
+    this.localNets = const {},
+    this.pendingCount,
   });
+
+  Map<int, int> get _nets =>
+      localNets.isNotEmpty ? localNets : state.nets;
+
+  int? get _count => pendingCount ?? state.count;
+
+  /// Every golfer on the hole has a score — locally or on the server. Until
+  /// then there is nothing to choose between.
+  bool get _ready => _nets.length >= state.activeHere && state.activeHere > 0;
 
   /// The nets that would count at [n] — the best ones, which is what the
   /// picker lights up as the scorer moves across the buttons.
   List<int> countedAt(int n) {
-    final sorted = state.nets.entries.toList()
+    final sorted = _nets.entries.toList()
       ..sort((a, b) => a.value.compareTo(b.value));
     return sorted.take(n).map((e) => e.key).toList();
   }
 
   /// `−2` for the hole, at the count currently picked.
   int? get result {
-    final n = state.count;
+    final n = _count;
     if (n == null || state.par == null) return null;
-    final sorted = state.nets.values.toList()..sort();
+    final sorted = _nets.values.toList()..sort();
     return sorted.take(n).fold<int>(0, (a, b) => a + b) - n * state.par!;
   }
 
@@ -68,7 +88,17 @@ class FortyBallsPicker extends StatelessWidget {
       ));
     }
 
-    if (!state.scoresIn) {
+    if (state.locked) {
+      return _shell(context, child: _Note(
+        icon: Icons.lock_outline,
+        colour: theme.colorScheme.onSurfaceVariant,
+        title: 'Settled',
+        body: 'The group has moved on, so this hole\'s count is fixed'
+              '${state.count == null ? '' : ' at ${state.count}'}.',
+      ));
+    }
+
+    if (!_ready) {
       return _shell(context, child: _Note(
         icon: Icons.hourglass_empty,
         colour: theme.colorScheme.onSurfaceVariant,
@@ -94,7 +124,7 @@ class FortyBallsPicker extends StatelessWidget {
             if (n > 0) const SizedBox(width: 8),
             Expanded(child: _CountButton(
               n        : n,
-              selected : state.count == n,
+              selected : _count == n,
               // Outside `lo..hi` the budget would not come out, so the button
               // is dead rather than a pick that gets refused.
               enabled  : !busy && state.canPick && n >= state.lo && n <= state.hi,
@@ -116,7 +146,7 @@ class FortyBallsPicker extends StatelessWidget {
                 : '${state.holesAfter} to play',
             // Both figures grey BEFORE a pick — they show the position
             // before this hole, which is not yet the position after it.
-            muted: state.count == null,
+            muted: _count == null,
           )),
           const SizedBox(width: 10),
           Expanded(child: _Figure(
@@ -127,7 +157,7 @@ class FortyBallsPicker extends StatelessWidget {
                 : (state.slack == 0
                     ? 'every ball counts from here'
                     : 'balls you can still skip'),
-            muted: state.count == null,
+            muted: _count == null,
             // Amber at zero: the group has no choices left, which is a
             // different thing from having made them.
             alert: state.slack == 0 && state.left > 0,
@@ -149,7 +179,7 @@ class FortyBallsPicker extends StatelessWidget {
 
   Widget _resultLine(BuildContext context) {
     final theme = Theme.of(context);
-    final n = state.count;
+    final n = _count;
     if (n == null) {
       return Align(
         alignment: Alignment.centerLeft,
@@ -360,6 +390,14 @@ class FortyBallsPickerCard extends StatefulWidget {
   /// the pager's gate needs it before the scorer touches anything.
   final ValueChanged<FortyBallsPickerState?>? onState;
 
+  /// The hole's nets as ENTERED, pending scores included.
+  final Map<int, int> localNets;
+
+  /// The count chosen but not yet sent, and the way to change it. The screen
+  /// owns it so it can ride along in the save.
+  final int? pendingCount;
+  final ValueChanged<int>? onPending;
+
   const FortyBallsPickerCard({
     super.key,
     required this.foursomeId,
@@ -367,6 +405,9 @@ class FortyBallsPickerCard extends StatefulWidget {
     this.names = const {},
     this.refreshToken,
     this.onState,
+    this.localNets = const {},
+    this.pendingCount,
+    this.onPending,
   });
 
   @override
@@ -405,6 +446,13 @@ class _FortyBallsPickerCardState extends State<FortyBallsPickerCard> {
   }
 
   Future<void> _pick(int n) async {
+    // **Not posted yet? Hold it.** The count goes with the hole's scores in
+    // one save — which is what lets the group pick while it is still entering,
+    // instead of posting, picking, and only then moving on.
+    if (!(_state?.scoresIn ?? false)) {
+      widget.onPending?.call(n);
+      return;
+    }
     setState(() => _busy = true);
     try {
       final r = await context.read<AuthProvider>().client
@@ -433,10 +481,12 @@ class _FortyBallsPickerCardState extends State<FortyBallsPickerCard> {
       );
     }
     return FortyBallsPicker(
-      state : s,
-      names : widget.names,
-      busy  : _busy,
-      onPick: _pick,
+      state       : s,
+      names       : widget.names,
+      busy        : _busy,
+      onPick      : _pick,
+      localNets   : widget.localNets,
+      pendingCount: widget.pendingCount,
     );
   }
 }

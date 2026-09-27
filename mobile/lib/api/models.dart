@@ -8167,7 +8167,15 @@ class FortyBallsPickerState {
   final double? average;
   final int  slack;
   final bool canPick;
+  /// A later hole already has scores — the group has moved on and this one's
+  /// count is settled.
+  final bool locked;
   final bool scoresIn;
+  /// What the client needs to work the nets out LOCALLY, before the hole is
+  /// posted — the same three settings the server applies.
+  final String handicapMode;
+  final int    netPercent;
+  final bool   cap;
   final int? par;
   final Map<int, int> nets;
 
@@ -8179,6 +8187,8 @@ class FortyBallsPickerState {
     required this.appSet, required this.average, required this.slack,
     required this.canPick, required this.scoresIn, required this.par,
     required this.nets,
+    this.locked = false, this.handicapMode = 'net', this.netPercent = 100,
+    this.cap = true,
   });
 
   /// No choice left and every remaining ball must count.
@@ -8205,7 +8215,11 @@ class FortyBallsPickerState {
         average   : (j['average'] as num?)?.toDouble(),
         slack     : (j['slack'] as num?)?.toInt() ?? 0,
         canPick   : j['can_pick'] as bool? ?? false,
+        locked    : j['locked'] as bool? ?? false,
         scoresIn  : j['scores_in'] as bool? ?? false,
+        handicapMode: j['handicap_mode'] as String? ?? 'net',
+        netPercent: (j['net_percent'] as num?)?.toInt() ?? 100,
+        cap       : j['cap'] as bool? ?? true,
         par       : (j['par'] as num?)?.toInt(),
         nets      : {
           for (final e in (j['nets'] as Map? ?? const {}).entries)

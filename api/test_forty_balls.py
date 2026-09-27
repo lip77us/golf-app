@@ -150,10 +150,25 @@ class CountTests(_Base):
     def test_a_refusal_is_409_and_says_what_is_wrong(self):
         # The body was well formed; the refusal is about the round's state,
         # which a client handles by re-reading rather than re-prompting.
+        #
+        # **The client sends the hole's scores FIRST and the count with them**,
+        # so reaching this means the scores did not land — not that the group
+        # picked too early. The message says so.
         r = self.client.post(self.count_url(),
                              {'hole_number': 1, 'count': 2}, format='json')
         self.assertEqual(r.status_code, 409)
-        self.assertIn('not fully scored', r.data['detail'])
+        self.assertIn('no scores on the server', r.data['detail'])
+
+    def test_the_bounds_come_back_before_the_hole_is_posted(self):
+        # So the picker can draw while the group is still entering.
+        r = self.client.get(self.count_url() + '?hole=1')
+        st = r.data['state']
+        self.assertTrue(st['can_pick'])
+        self.assertFalse(st['scores_in'])
+        self.assertEqual((st['lo'], st['hi']), (0, 4))
+        # And what the client needs to work the nets out locally.
+        self.assertEqual(st['handicap_mode'], 'net')
+        self.assertTrue(st['cap'])
 
     def test_a_count_above_the_group_size_is_a_400(self):
         # That one IS a malformed body — there is no fifth golfer.

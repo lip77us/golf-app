@@ -1261,6 +1261,18 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
 
     // Immediate reload (may be before sync drains — that's fine, gives quick
     // feedback for other games like Nassau/Skins that recalculate server-side).
+    // **The count goes with the hole it belongs to**, and before `_advance()`
+    // moves `_selectedHole` out from under it. `waitUntilIdle` first because
+    // the scores have to be ON the server: that is exactly what the server
+    // checks a count against.
+    if (_fbPending.containsKey(_selectedHole)) {
+      final hole = _selectedHole;
+      await context.read<SyncService>().waitUntilIdle();
+      if (!mounted) return;
+      await _flushFortyBalls(hole);
+      if (!mounted) return;
+    }
+
     _loadGameSummaries(rp);
 
     // Definitive reload after sync drain — guarantees match play and other
@@ -1294,6 +1306,54 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// The current hole's picker state, reported up by the card. Null until it
   /// loads, or when the round does not play 40 Balls.
   FortyBallsPickerState? _fbState;
+
+  /// Counts the group has chosen but not yet sent, by hole. **The count rides
+  /// with the hole's scores in one save**, so the group can pick while it is
+  /// still entering rather than posting first and picking after.
+  final Map<int, int> _fbPending = {};
+
+  /// The hole's nets as ENTERED — pending scores included — so the picker can
+  /// light the counted golfers before anything has landed. The same three
+  /// settings the server applies, read off the state it sent.
+  Map<int, int> _fbLocalNets(Scorecard sc, List<Membership> players, int hole) {
+    final st = _fbState;
+    if (st == null) return const {};
+    final gross = _effectiveScores(sc, hole);
+    final hd = sc.holeData(hole);
+    final out = <int, int>{};
+    for (final m in players) {
+      final g = gross[m.player.id];
+      if (g == null || g <= 0) continue;
+      final e = hd?.scoreFor(m.player.id);
+      final par = e?.par ?? st.par;
+      var v = st.handicapMode == 'gross'
+          ? g
+          : g - (e?.handicapStrokes ?? 0);
+      if (st.cap && par != null && v > par + 2) v = par + 2;
+      out[m.player.id] = v;
+    }
+    return out;
+  }
+
+  /// Send any held count once the hole's scores have landed. Called after a
+  /// successful submit — the order is the whole point: scores, then the count
+  /// the server can now check against them.
+  Future<void> _flushFortyBalls(int hole) async {
+    final n = _fbPending[hole];
+    if (n == null) return;
+    try {
+      final r = await context.read<AuthProvider>().client
+          .postFortyBallsCount(widget.foursomeId, hole, n);
+      if (!mounted) return;
+      setState(() {
+        _fbPending.remove(hole);
+        if (_selectedHole == hole) _fbState = r.state;
+      });
+    } catch (_) {
+      // Left pending: the hole saved, the count did not. The pager still
+      // names it and the next save tries again rather than losing the choice.
+    }
+  }
 
   bool _bankerRound(RoundProvider rp) =>
       resolvePrimary(rp.round?.primaryGame, rp.round?.activeGames.toSet() ?? {})
@@ -1365,6 +1425,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
 
     if (junkEdits != null && junkEdits.isNotEmpty) {
       await _submitJunk(_selectedHole, junkEdits);
+    }
+
+    if (_fbPending.containsKey(_selectedHole)) {
+      final hole = _selectedHole;
+      await context.read<SyncService>().waitUntilIdle();
+      if (!mounted) return false;
+      await _flushFortyBalls(hole);
+      if (!mounted) return false;
     }
 
     _loadGameSummaries(rp);
@@ -2567,27 +2635,18 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       // then move on.
       if (_fortyBallsRound(rp)) {
         final st = _fbState;
-        final posted = st?.scoresIn ?? false;
-        // A group that is OUT, or one the app has already filled in, has
-        // nothing to pick — it walks on like any other round.
-        final needsPick = posted && st != null && !st.dq &&
-            st.count == null && st.canPick;
+        // **No `Post the hole` step any more.** The group picks while it is
+        // still entering and the count rides along in the same save — which is
+        // what testing asked for after watching the buttons flash up on a post
+        // and then vanish.
+        //
+        // A group that is OUT, or one the app has already filled in because
+        // the budget left it no choice, has nothing to pick and walks on like
+        // any other round.
+        final chosen = _fbPending[_selectedHole] ?? st?.count;
+        final needsPick =
+            st != null && !st.dq && st.canPick && chosen == null;
 
-        if (!posted) {
-          return FilledButton.icon(
-            onPressed: (allDone && !rp.submitting)
-                ? () => _saveCurrentHole(ctx, players, par)
-                : null,
-            icon: rp.submitting
-                ? const SizedBox(
-                    width: 16, height: 16,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
-                : const Icon(Icons.check, size: 20),
-            label: Text(rp.submitting ? 'Saving…' : 'Post the hole'),
-            iconAlignment: IconAlignment.end,
-          );
-        }
         if (needsPick) {
           // Named rather than greyed and silent — the same rule the rest of
           // this pager follows for a missing score.
@@ -3025,6 +3084,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                   if (!mounted) return;
                   setState(() => _fbState = st);
                 },
+                fortyBallsLocalNets: games.contains('forty_balls')
+                    ? _fbLocalNets(sc, players, _selectedHole)
+                    : const {},
+                fortyBallsPending: _fbPending[_selectedHole],
+                onFortyBallsPending: (n) =>
+                    setState(() => _fbPending[_selectedHole] = n),
                 tournamentCard:
                     (rp.scorecard?.fieldStanding.isNotEmpty ?? false),
                 stablefordResult:
@@ -5179,6 +5244,10 @@ class _GameStatusSection extends StatelessWidget {
   final int?                        fortyBallsFoursomeId;
   final Object?                     fortyBallsToken;
   final ValueChanged<FortyBallsPickerState?>? onFortyBallsState;
+  /// The hole's nets as entered, and the count held for it.
+  final Map<int, int>               fortyBallsLocalNets;
+  final int?                        fortyBallsPending;
+  final ValueChanged<int>?          onFortyBallsPending;
 
   final bool                        tournamentCard;
   final String                      strokePlayHandicapMode;
@@ -5224,6 +5293,9 @@ class _GameStatusSection extends StatelessWidget {
     this.fortyBallsFoursomeId,
     this.fortyBallsToken,
     this.onFortyBallsState,
+    this.fortyBallsLocalNets = const {},
+    this.fortyBallsPending,
+    this.onFortyBallsPending,
     this.tournamentCard = false,
     this.strokePlayHandicapMode = 'net',
     this.strokePlayNetPercent   = 100,
@@ -5476,6 +5548,9 @@ class _GameStatusSection extends StatelessWidget {
             },
             refreshToken: fortyBallsToken,
             onState     : onFortyBallsState,
+            localNets   : fortyBallsLocalNets,
+            pendingCount: fortyBallsPending,
+            onPending   : onFortyBallsPending,
           ),
           const SizedBox(height: 12),
         ],

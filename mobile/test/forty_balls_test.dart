@@ -26,6 +26,7 @@ FortyBallsPickerState picker({
   int? count,
   bool canPick = true,
   bool scoresIn = true,
+  bool locked = false,
   bool dq = false,
   double? average = 2.4,
   Map<int, int> nets = const {1: 3, 2: 4, 3: 5, 4: 6},
@@ -36,6 +37,8 @@ FortyBallsPickerState picker({
       'holes_after': holesAfter, 'capacity': capacity, 'lo': lo, 'hi': hi,
       'dq': dq, 'count': count, 'app_set': false, 'average': average,
       'slack': slack, 'can_pick': canPick, 'scores_in': scoresIn,
+      'locked': locked, 'handicap_mode': 'net', 'net_percent': 100,
+      'cap': true,
       'par': 4,
       'nets': {for (final e in nets.entries) '${e.key}': e.value},
     });
@@ -79,11 +82,31 @@ void main() {
       expect(find.text('Pick how many balls count to move on'), findsOneWidget);
     });
 
-    testWidgets('it waits for the last score rather than showing dead buttons',
+    testWidgets('it waits on a MISSING NET, not on the hole being posted',
         (tester) async {
-      await pumpPicker(tester, picker(scoresIn: false));
+      // **The rule moved.** It used to wait for the server to have the scores,
+      // which meant it showed nothing while the group was entering. Now it
+      // waits for the nets — from wherever they are — so three of four is
+      // still not enough to choose on, but four unposted ones are.
+      await pumpPicker(tester,
+          picker(scoresIn: false, nets: const {1: 3, 2: 4, 3: 5}));
       expect(find.text('Waiting on the last score'), findsOneWidget);
       expect(find.text('0'), findsNothing);
+    });
+
+    testWidgets('four UNPOSTED nets are enough to pick on', (tester) async {
+      await pumpPicker(tester, picker(scoresIn: false));
+      expect(find.text('Waiting on the last score'), findsNothing);
+      for (final n in ['0', '1', '2', '3', '4']) {
+        expect(find.text(n), findsOneWidget);
+      }
+    });
+
+    testWidgets('a settled hole says so and offers nothing', (tester) async {
+      await pumpPicker(tester,
+          picker(count: 2, canPick: false, locked: true));
+      expect(find.text('Settled'), findsOneWidget);
+      expect(find.textContaining('fixed at 2'), findsOneWidget);
     });
 
     testWidgets('counts outside lo..hi cannot be tapped', (tester) async {
@@ -287,7 +310,27 @@ void main() {
       }
     });
 
-    test('score entry POSTS the hole and waits for the pick', () {
+    test('the count rides WITH the hole, not after it', () {
+      // **What testing asked for.** Scores are held locally until the hole is
+      // left, so a picker gated on the server having them showed nothing while
+      // the group was entering — and after a `Post the hole` step the buttons
+      // flashed up and vanished as the card reloaded.
+      //
+      // The group picks while it is entering; the count is held by hole and
+      // sent right after the scores land, before the screen moves on.
+      final src = File('lib/screens/score_entry_screen.dart').readAsStringSync();
+      expect(src.contains('_fbPending'), isTrue);
+      expect(src.contains('_flushFortyBalls('), isTrue);
+      expect(src.contains('_fbLocalNets('), isTrue,
+          reason: 'the picker needs the nets as ENTERED, not only as posted');
+      // And there is no longer a post-first step to get past.
+      expect(src.contains("'Post the hole'"), isTrue,
+          reason: "Banker still uses it — only 40 Balls dropped it");
+      expect(src.contains('final posted = st?.scoresIn'), isFalse,
+          reason: 'the pager must not gate the pick on the hole being posted');
+    });
+
+    test('score entry gates the pager on the pick', () {
       // **The flow the game needs, and the one testing found missing.** Scores
       // are held locally until the hole is left, so a picker that reads the
       // server can never see them: the scorer entered four scores, saw

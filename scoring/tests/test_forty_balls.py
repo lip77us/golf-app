@@ -93,15 +93,24 @@ class BoundsTests(TestCase):
 
 
 class PickingTests(_Base):
-    def test_the_picker_waits_for_the_LAST_score_on_the_hole(self):
-        # The group chooses between nets it has seen; three of four is not
-        # enough to choose on.
-        submit_hole(self.fs, 1, list(zip(self.pids[:3], [4, 4, 4])))
+    def test_the_bounds_are_offered_BEFORE_the_hole_is_posted(self):
+        # **The client shows the buttons while the group is still entering**,
+        # and the count rides along in the same save. Gating them on the
+        # server having the scores meant posting the hole, picking, and only
+        # then moving on — and the scorer saw the buttons flash up after a
+        # post and then go.
         state = hole_state(self.fs, 1)
+        self.assertTrue(state['can_pick'])
+        self.assertEqual((state['lo'], state['hi']), (0, 4))
         self.assertFalse(state['scores_in'])
-        self.assertFalse(state['can_pick'])
-        with self.assertRaises(FortyBallsLocked):
+
+    def test_the_SERVER_still_refuses_a_count_it_has_no_scores_for(self):
+        # That is where the integrity lives: the client sends the scores first.
+        submit_hole(self.fs, 1, list(zip(self.pids[:3], [4, 4, 4])))
+        self.assertFalse(hole_state(self.fs, 1)['scores_in'])
+        with self.assertRaises(FortyBallsLocked) as ctx:
             set_count(self.fs, 1, 2)
+        self.assertIn('no scores on the server', str(ctx.exception))
 
     def test_a_WITHDRAWN_golfer_does_not_hold_the_hole_open(self):
         # **He cannot post a score, so waiting for one waits for ever.** The
@@ -137,16 +146,26 @@ class PickingTests(_Base):
         with self.assertRaises(FortyBallsLocked):
             set_count(self.fs, 1, 5)          # more than the group has golfers
 
-    def test_only_the_most_recent_scored_hole_can_be_changed(self):
+    def test_a_hole_locks_once_the_group_has_MOVED_ON(self):
         # The choice was made with THAT hole's information; re-making it with
-        # the next hole's is a different game.
+        # the next hole's is a different game. Stated as "a later hole has
+        # scores", so it is answerable before this hole is scored too.
         self.par_hole(1, 0, 0, 0, 0)
         set_count(self.fs, 1, 2)
         self.par_hole(2, 0, 0, 0, 0)
+        self.assertTrue(hole_state(self.fs, 1)['locked'])
         self.assertFalse(hole_state(self.fs, 1)['can_pick'])
         self.assertTrue(hole_state(self.fs, 2)['can_pick'])
         with self.assertRaises(FortyBallsLocked):
             set_count(self.fs, 1, 3)
+
+    def test_even_a_PART_entered_later_hole_locks_the_one_before(self):
+        # The group has moved on; that the next hole is half-entered does not
+        # put the choice back.
+        self.par_hole(1, 0, 0, 0, 0)
+        set_count(self.fs, 1, 2)
+        submit_hole(self.fs, 2, list(zip(self.pids[:2], [4, 4])))
+        self.assertTrue(hole_state(self.fs, 1)['locked'])
 
     def test_the_most_recent_hole_CAN_be_changed_before_the_next_is_scored(self):
         self.par_hole(1, 0, 0, 0, 0)
