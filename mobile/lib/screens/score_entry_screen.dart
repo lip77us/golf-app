@@ -1298,8 +1298,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// True when Banker owns this round, in which case the hole is not finished
   /// when the scores are — the three bets still have to resolve and the bank
   /// still has to pass.
-  /// 40 Balls needs the hole POSTED before the group can pick — the count is
-  /// chosen from the nets, and the server only has them once the hole is saved.
+  /// 40 Balls does not finish with its scores either: the group still has to
+  /// say how many of the nets count, and the pager holds it there until it
+  /// does.
   bool _fortyBallsRound(RoundProvider rp) =>
       _activeGames(rp.round).contains('forty_balls');
 
@@ -2644,8 +2645,16 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         // the budget left it no choice, has nothing to pick and walks on like
         // any other round.
         final chosen = _fbPending[_selectedHole] ?? st?.count;
+        // **And it names the pick only once there IS one.** Walking onto a
+        // fresh hole, what is missing is four scores, not a count — a button
+        // reading `Pick how many balls count` over an empty hole describes a
+        // step the group cannot take yet. It reads `Hole N`, disabled, with
+        // the missing-scores note underneath, exactly like every other round,
+        // and becomes the pick when the last score lands.
+        final ready = st != null &&
+            fortyBallsReady(st, _fbLocalNets(sc, players, _selectedHole));
         final needsPick =
-            st != null && !st.dq && st.canPick && chosen == null;
+            st != null && ready && !st.dq && st.canPick && chosen == null;
 
         if (needsPick) {
           // Named rather than greyed and silent — the same rule the rest of

@@ -82,24 +82,56 @@ void main() {
       expect(find.text('Pick how many balls count to move on'), findsOneWidget);
     });
 
+    testWidgets('the counts are DRAWN on a hole nobody has played yet',
+        (tester) async {
+      // Reported from testing: hiding them behind `Waiting on the last score`
+      // read as an error on arriving at a fresh hole. The counts stand there
+      // dim, like the score boxes above them.
+      final taps = <int>[];
+      await pumpPicker(tester, picker(scoresIn: false, nets: const {}),
+          onPick: taps.add);
+      expect(find.text('Waiting on the last score'), findsNothing);
+      for (final n in ['0', '1', '2', '3', '4']) {
+        expect(find.text(n), findsOneWidget);
+      }
+      expect(find.text('Pick once every score on the hole is in'),
+          findsOneWidget);
+      // Drawn, but dead — there is nothing yet to choose between.
+      await tester.tap(find.text('2'));
+      expect(taps, isEmpty);
+    });
+
     testWidgets('it waits on a MISSING NET, not on the hole being posted',
         (tester) async {
       // **The rule moved.** It used to wait for the server to have the scores,
       // which meant it showed nothing while the group was entering. Now it
       // waits for the nets — from wherever they are — so three of four is
       // still not enough to choose on, but four unposted ones are.
+      final taps = <int>[];
       await pumpPicker(tester,
-          picker(scoresIn: false, nets: const {1: 3, 2: 4, 3: 5}));
-      expect(find.text('Waiting on the last score'), findsOneWidget);
-      expect(find.text('0'), findsNothing);
+          picker(scoresIn: false, nets: const {1: 3, 2: 4, 3: 5}),
+          onPick: taps.add);
+      await tester.tap(find.text('2'));
+      expect(taps, isEmpty);
     });
 
     testWidgets('four UNPOSTED nets are enough to pick on', (tester) async {
-      await pumpPicker(tester, picker(scoresIn: false));
-      expect(find.text('Waiting on the last score'), findsNothing);
+      final taps = <int>[];
+      await pumpPicker(tester, picker(scoresIn: false), onPick: taps.add);
       for (final n in ['0', '1', '2', '3', '4']) {
         expect(find.text(n), findsOneWidget);
       }
+      await tester.tap(find.text('2'));
+      expect(taps, [2]);
+    });
+
+    test('the pager and the picker share one readiness rule', () {
+      // Written twice they would drift, and the pager would name a pick the
+      // card was not offering.
+      final s = picker(scoresIn: false, nets: const {});
+      expect(fortyBallsReady(s, const {}), isFalse);
+      expect(fortyBallsReady(s, const {1: 3, 2: 4, 3: 5}), isFalse);
+      expect(fortyBallsReady(s, const {1: 3, 2: 4, 3: 5, 4: 6}), isTrue);
     });
 
     testWidgets('a settled hole says so and offers nothing', (tester) async {
@@ -343,6 +375,10 @@ void main() {
       expect(src.contains('_fortyBallsRound('), isTrue);
       expect(src.contains('Pick how many balls count'), isTrue,
           reason: 'the pager must NAME what is missing, not go grey');
+      // ...but only once the pick is the thing that is missing. On a hole
+      // with no scores on it, what is missing is scores.
+      expect(src.contains('fortyBallsReady(st,'), isTrue,
+          reason: 'a fresh hole reads `Hole N`, disabled, not `Pick…`');
       expect(src.contains("hole < 18 && !_fortyBallsRound(rp)"), isTrue,
           reason: 'auto-advance must not carry the scorer past the pick');
     });

@@ -3,14 +3,15 @@
 /// The 40 Balls picker — one card under the player rows in tournament score
 /// entry.
 ///
-/// **It appears once the LAST score on the hole is in**, because the whole
-/// game is that the group chooses having seen its nets. Before that there is
-/// nothing to choose between, and the card says what is missing rather than
-/// showing a row of dead buttons.
+/// **The card is drawn from the moment the hole opens**, counts and all, dim
+/// until every net is in. It used to hide them behind `Waiting on the last
+/// score`, which testing read as a failure rather than as the ordinary state
+/// of a hole nobody has played yet: the picker is part of the hole, so it
+/// stands there waiting like the score boxes above it.
 ///
-/// There is no default. The pager stays live but reads `Pick how many balls
-/// count to move on` — the same pattern a missing score uses, because it is the
-/// same kind of gap.
+/// There is no default. The buttons light when the last net lands, and the
+/// pager names the pick only from that moment — before it, what is missing is
+/// scores, and the pager says so.
 library;
 
 import 'package:flutter/material.dart';
@@ -21,6 +22,17 @@ import '../providers/auth_provider.dart';
 import 'error_view.dart';
 import '../theme/halved_brand.dart';
 import '../utils/stroke_play_standing.dart';
+
+/// Every golfer on the hole has a net — locally or on the server.
+///
+/// **Two readers, one rule.** The picker lights its buttons on it and the
+/// score-entry pager decides on it whether what is missing is a pick or a
+/// score; written twice they would eventually disagree, and the pager would
+/// name a pick the card was not offering.
+bool fortyBallsReady(FortyBallsPickerState state, Map<int, int> localNets) {
+  final nets = localNets.isNotEmpty ? localNets : state.nets;
+  return state.activeHere > 0 && nets.length >= state.activeHere;
+}
 
 class FortyBallsPicker extends StatelessWidget {
   final FortyBallsPickerState state;
@@ -53,9 +65,7 @@ class FortyBallsPicker extends StatelessWidget {
 
   int? get _count => pendingCount ?? state.count;
 
-  /// Every golfer on the hole has a score — locally or on the server. Until
-  /// then there is nothing to choose between.
-  bool get _ready => _nets.length >= state.activeHere && state.activeHere > 0;
+  bool get _ready => fortyBallsReady(state, localNets);
 
   /// The nets that would count at [n] — the best ones, which is what the
   /// picker lights up as the scorer moves across the buttons.
@@ -98,15 +108,6 @@ class FortyBallsPicker extends StatelessWidget {
       ));
     }
 
-    if (!_ready) {
-      return _shell(context, child: _Note(
-        icon: Icons.hourglass_empty,
-        colour: theme.colorScheme.onSurfaceVariant,
-        title: 'Waiting on the last score',
-        body: 'The group picks once it has seen every net on this hole.',
-      ));
-    }
-
     return _shell(
       context,
       header: Row(children: [
@@ -127,7 +128,11 @@ class FortyBallsPicker extends StatelessWidget {
               selected : _count == n,
               // Outside `lo..hi` the budget would not come out, so the button
               // is dead rather than a pick that gets refused.
-              enabled  : !busy && state.canPick && n >= state.lo && n <= state.hi,
+              // Dim until every net is in — the counts are there from the
+              // moment the hole opens, but there is nothing to choose
+              // between until the group can see what it is choosing.
+              enabled  : !busy && _ready && state.canPick &&
+                         n >= state.lo && n <= state.hi,
               onTap    : () => onPick(n),
             )),
           ],
@@ -180,6 +185,16 @@ class FortyBallsPicker extends StatelessWidget {
   Widget _resultLine(BuildContext context) {
     final theme = Theme.of(context);
     final n = _count;
+    if (!_ready) {
+      // Stated as the ordinary order of things, not as a fault: the scores
+      // come first and the pick follows them.
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Text('Pick once every score on the hole is in',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+      );
+    }
     if (n == null) {
       return Align(
         alignment: Alignment.centerLeft,
