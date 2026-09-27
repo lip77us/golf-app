@@ -13,6 +13,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
+import 'package:golf_mobile/game_catalog.dart';
 import 'package:golf_mobile/widgets/eclectic_board.dart';
 import 'package:golf_mobile/widgets/pinned_hole_grid.dart';
 
@@ -487,6 +488,24 @@ void main() {
       expect(src.contains("eclecticOffer['offer'] == true"), isTrue);
       expect(src.contains("eclecticOffer['available'] == true"), isTrue);
       expect(src.contains("activeGames.contains('eclectic')"), isFalse);
+    });
+  });
+
+  group('the game has a NAME, not a slug', () {
+    test('gameDisplayName capitalises it', () {
+      // `gameDisplayName` is the single source for every chip, badge, page
+      // title and leaderboard tab, and it falls through to the raw id for a
+      // game it does not know. Eclectic is set on the TOURNAMENT so it never
+      // reaches the casual picker's catalog — which is how a tab came up
+      // reading `eclectic`.
+      expect(gameDisplayName('eclectic'), 'Eclectic');
+    });
+
+    test('so does every other game a tournament can set', () {
+      // The same fall-through would hit any of these.
+      expect(gameDisplayName('forty_balls'), isNot('forty_balls'));
+      expect(gameDisplayName('stableford_championship'),
+          'Stableford Championship');
     });
   });
 }

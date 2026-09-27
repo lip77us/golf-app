@@ -792,6 +792,12 @@ const Map<String, String> _kExtraGameLabels = {
   // Hidden from the picker (see kChampionshipGames) but kept here so existing
   // tournaments using it still display a friendly name rather than the slug.
   'stableford_championship': 'Stableford Championship',
+  // **Eclectic is set on the TOURNAMENT, so it never reaches the casual
+  // picker** — and with no catalog entry `gameDisplayName` fell through to
+  // the slug, which is how a leaderboard tab came up reading `eclectic`.
+  // This map exists for exactly that: a name for a game the picker does not
+  // offer. Reported from testing.
+  'eclectic'               : 'Eclectic',
 };
 
 /// Display name for [gameId], falling back to the raw ID if unknown.
