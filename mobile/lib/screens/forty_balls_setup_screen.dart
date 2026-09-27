@@ -16,6 +16,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
+import '../widgets/handicap_mode_selector.dart';
 import '../widgets/payout_config_field.dart';
 
 /// The four rules, in reading order: who picks, what the budget is, what
@@ -252,47 +253,38 @@ class _FortyBallsSetupScreenState extends State<FortyBallsSetupScreen> {
           title: 'Scoring',
           trailing: _scoringTouched ? 'Set by you' : 'Default',
           child: Column(children: [
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'net', label: Text('Net')),
-                ButtonSegment(value: 'gross', label: Text('Gross')),
-              ],
-              selected: {_mode},
-              onSelectionChanged: (v) => setState(() {
-                _mode = v.first;
+            // **The app's shared control**, exactly as Irish Rumble and the
+            // other twenty setup screens use it — Net / Gross and the Net %
+            // slider, which already moves in steps of 5. A hand-rolled
+            // segmented button and stepper was the first version of this and
+            // it put a different handicap control on one screen.
+            //
+            // `allowStrokesOff: false` because the packet offers Net or Gross
+            // and nothing else: strokes-off anchors on a low handicap, and
+            // which low — the group's or the field's — is a question this game
+            // does not answer.
+            HandicapModeSelector(
+              mode            : _mode,
+              netPercent      : _netPercent,
+              allowStrokesOff : false,
+              wrapInCard      : false,
+              onModeChanged   : (m) => setState(() {
+                _mode = m;
+                _scoringTouched = true;
+              }),
+              onPercentChanged: (p) => setState(() {
+                _netPercent = p;
                 _scoringTouched = true;
               }),
             ),
-            // **Hidden in Gross**, not disabled: an allowance has no meaning
-            // there, and a greyed stepper invites the question anyway.
-            if (_mode == 'net') ...[
-              const SizedBox(height: 12),
-              Row(children: [
-                const Expanded(child: Text('Allowance')),
-                IconButton(
-                  icon: const Icon(Icons.remove_circle_outline),
-                  onPressed: _netPercent <= 50 ? null : () => setState(() {
-                    _netPercent -= 5;
-                    _scoringTouched = true;
-                  }),
-                ),
-                SizedBox(
-                  width: 54,
-                  child: Text('$_netPercent%',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.bold)),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline),
-                  onPressed: _netPercent >= 100 ? null : () => setState(() {
-                    _netPercent += 5;
-                    _scoringTouched = true;
-                  }),
-                ),
-              ]),
-            ],
             const Divider(height: 20),
+            // **Not `NetDoubleBogeyCard`, and the difference is real.** That
+            // card is the casual convention and hides itself unless the round
+            // is full Net at 100% — the cap being judged too surprising under
+            // a reduced allowance. Here the packet makes it 40 Balls' own
+            // setting, applied at ANY allowance and in Gross too, because it
+            // lands BEFORE the group picks: a capped score is one of the
+            // numbers it is choosing between, so it cannot quietly not apply.
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: _cap,
@@ -303,7 +295,8 @@ class _FortyBallsSetupScreenState extends State<FortyBallsSetupScreen> {
               title: const Text('Double bogey max'),
               subtitle: Text(
                   _mode == 'gross'
-                      ? 'No score counts worse than par + 2.'
+                      ? 'No score counts worse than par + 2. Applied before '
+                        'the group picks.'
                       : 'No net score counts worse than net par + 2. Applied '
                         'before the group picks, so a capped score is what it '
                         'is choosing between.',

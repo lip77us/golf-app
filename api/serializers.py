@@ -1697,8 +1697,14 @@ class FortyBallsSetupSerializer(serializers.Serializer):
     """
     handicap_mode = serializers.ChoiceField(
                         choices=['net', 'gross'], default='net')
-    #: 50–100 in steps of 5, Net only.
-    net_percent   = serializers.IntegerField(min_value=50, max_value=100,
+    #: **50–130 in steps of 5**, Net only.
+    #:
+    #: The packet writes 50–100, but the app's shared `HandicapModeSelector` —
+    #: the control Irish Rumble and nineteen other setup screens use — runs to
+    #: 130, because some formats give MORE than full allowance. A narrower
+    #: range here would reject what the control offers and leave a TD wondering
+    #: why this one screen stops early.
+    net_percent   = serializers.IntegerField(min_value=50, max_value=130,
                                              default=100)
     net_max_double_bogey = serializers.BooleanField(default=True)
     entry_fee     = serializers.DecimalField(

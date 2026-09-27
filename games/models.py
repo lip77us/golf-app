@@ -3842,7 +3842,8 @@ class FortyBallsConfig(models.Model):
     handicap_mode     = models.CharField(
                             max_length=20, choices=HandicapMode.choices,
                             default=HandicapMode.NET)
-    #: 50–100 in steps of 5, Net only. Gross ignores it.
+    #: 50–130 in steps of 5, Net only — the range the app's shared handicap
+    #: control offers. Gross ignores it.
     net_percent       = models.PositiveSmallIntegerField(default=100)
     #: The damage limiter, ON by default — net double bogey in Net, gross in
     #: Gross. Applied BEFORE the pick, so a capped score is what the group is

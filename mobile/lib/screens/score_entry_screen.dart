@@ -41,6 +41,7 @@ import '../widgets/triple_cup_pairings.dart';
 import '../widgets/standing_ribbon.dart';
 import '../widgets/stroke_play_progress_grid.dart';
 import '../utils/play_order.dart';
+import '../widgets/forty_balls_picker.dart';
 import '../widgets/hole_header.dart';
 import '../game_colors.dart';
 import '../providers/auth_provider.dart';
@@ -2956,6 +2957,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 // the game lives on the tournament and the round carries no
                 // `active_games` of its own — so the screen ended below the
                 // hole card with room to spare. The standard card goes there.
+                // 40 Balls: the picker reloads whenever a score on this
+                // hole might have changed — a save bumps the scorecard's
+                // identity, and moving hole changes the hole.
+                fortyBallsFoursomeId:
+                    games.contains('forty_balls') ? widget.foursomeId : null,
+                fortyBallsToken: '${_selectedHole}:'
+                    '${rp.scorecard?.holeData(_selectedHole)?.scores.length}',
+                onFortyBallsChanged: () => setState(() {}),
                 tournamentCard:
                     (rp.scorecard?.fieldStanding.isNotEmpty ?? false),
                 stablefordResult:
@@ -5104,6 +5113,13 @@ class _GameStatusSection extends StatelessWidget {
   /// TOURNAMENT's — there is no per-round primary to hang one off, so none of
   /// the branches below fire and the screen would otherwise end at the hole
   /// card.
+  /// 40 Balls: the foursome whose picker this is, and a token that changes
+  /// when the hole's scores might have. Null `fortyBallsFoursomeId` means the
+  /// round does not play it.
+  final int?                        fortyBallsFoursomeId;
+  final Object?                     fortyBallsToken;
+  final VoidCallback?               onFortyBallsChanged;
+
   final bool                        tournamentCard;
   final String                      strokePlayHandicapMode;
   final int                         strokePlayNetPercent;
@@ -5145,6 +5161,9 @@ class _GameStatusSection extends StatelessWidget {
     required this.onTapHole,
     this.irBallsConfig   = const [],
     this.irHandicapMode  = 'net',
+    this.fortyBallsFoursomeId,
+    this.fortyBallsToken,
+    this.onFortyBallsChanged,
     this.tournamentCard = false,
     this.strokePlayHandicapMode = 'net',
     this.strokePlayNetPercent   = 100,
@@ -5380,6 +5399,24 @@ class _GameStatusSection extends StatelessWidget {
               legend:       null,
               holesInPlay:  fourballSummary!.scorecardHolesInPlay,
             ),
+          const SizedBox(height: 12),
+        ],
+
+        // **40 Balls — the picker, under the player rows.** It is the game:
+        // the group chooses having seen its nets, so the card sits directly
+        // under the scores it is choosing between, and the scorecard goes
+        // under IT rather than between the two.
+        if (games.contains('forty_balls') &&
+            fortyBallsFoursomeId != null) ...[
+          FortyBallsPickerCard(
+            foursomeId  : fortyBallsFoursomeId!,
+            hole        : currentHole,
+            names       : {
+              for (final m in players) m.player.id: m.player.displayShort,
+            },
+            refreshToken: fortyBallsToken,
+            onChanged   : onFortyBallsChanged,
+          ),
           const SizedBox(height: 12),
         ],
 

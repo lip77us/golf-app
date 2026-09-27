@@ -14,8 +14,11 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../api/models.dart';
+import '../providers/auth_provider.dart';
+import 'error_view.dart';
 import '../theme/halved_brand.dart';
 import '../utils/stroke_play_standing.dart';
 
@@ -332,5 +335,107 @@ class _Note extends StatelessWidget {
         ]),
       ),
     ]);
+  }
+}
+
+// ---------------------------------------------------------------------------
+
+/// The picker, wired: it fetches its own hole state and posts the pick.
+///
+/// **Self-loading rather than provider-fed.** Its data is one hole of one
+/// foursome and it is the only consumer; threading a summary through
+/// `RoundProvider` and four load sites would be more moving parts for a card
+/// that has to refetch after every score anyway. [refreshToken] is what makes
+/// that work — the score-entry screen bumps it when a hole is saved or the
+/// hole changes, and the card reloads.
+class FortyBallsPickerCard extends StatefulWidget {
+  final int foursomeId;
+  final int hole;
+  /// Names by player id, for the counted-golfer line.
+  final Map<int, String> names;
+  /// Any value that changes when the hole's scores might have. Bump it and the
+  /// card re-reads.
+  final Object? refreshToken;
+  /// Called after a pick lands, so the screen can refresh anything else that
+  /// reads the count (the pager's gate).
+  final VoidCallback? onChanged;
+
+  const FortyBallsPickerCard({
+    super.key,
+    required this.foursomeId,
+    required this.hole,
+    this.names = const {},
+    this.refreshToken,
+    this.onChanged,
+  });
+
+  @override
+  State<FortyBallsPickerCard> createState() => _FortyBallsPickerCardState();
+}
+
+class _FortyBallsPickerCardState extends State<FortyBallsPickerCard> {
+  FortyBallsPickerState? _state;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant FortyBallsPickerCard old) {
+    super.didUpdateWidget(old);
+    if (old.hole != widget.hole || old.refreshToken != widget.refreshToken) {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    try {
+      final r = await context.read<AuthProvider>().client
+          .getFortyBallsHole(widget.foursomeId, widget.hole);
+      if (!mounted) return;
+      setState(() { _state = r.state; _error = null; });
+    } catch (e) {
+      if (mounted) setState(() => _error = friendlyError(e));
+    }
+  }
+
+  Future<void> _pick(int n) async {
+    setState(() => _busy = true);
+    try {
+      final r = await context.read<AuthProvider>().client
+          .postFortyBallsCount(widget.foursomeId, widget.hole, n);
+      if (!mounted) return;
+      setState(() { _state = r.state; _error = null; _busy = false; });
+      widget.onChanged?.call();
+    } catch (e) {
+      if (!mounted) return;
+      // A 409 means the round moved under us — the hole is settled, or the
+      // group is out. Re-read rather than re-prompt; the card then says which.
+      setState(() { _busy = false; _error = friendlyError(e); });
+      await _load();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = _state;
+    if (s == null) {
+      if (_error == null) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Text(_error!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error)),
+      );
+    }
+    return FortyBallsPicker(
+      state : s,
+      names : widget.names,
+      busy  : _busy,
+      onPick: _pick,
+    );
   }
 }

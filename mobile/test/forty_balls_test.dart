@@ -258,6 +258,35 @@ void main() {
           reason: 'add every game with a Configure button to this list');
     });
 
+    test('score entry RENDERS the picker', () {
+      // **The miss this test exists for.** The picker widget was built, the
+      // board was built, the setup screen was built — and nothing rendered the
+      // picker, so a scorer entered a hole and was never asked how many balls
+      // counted. A widget with no call site is not a feature.
+      final src = File('lib/screens/score_entry_screen.dart').readAsStringSync();
+      expect(src.contains('FortyBallsPickerCard('), isTrue,
+          reason: 'score entry must render the picker — it IS the game');
+      expect(src.contains("games.contains('forty_balls')"), isTrue,
+          reason: 'and only when the round plays it');
+    });
+
+    test('both ENTRY-POINT widgets are reached from a screen', () {
+      // The general form of the same mistake, stated at the right level: the
+      // two widgets a SCREEN is supposed to render. `FortyBallsPicker` itself
+      // is deliberately not in this list — it is presentational and its only
+      // caller is `FortyBallsPickerCard` in the same file, which is a sound
+      // arrangement rather than a gap.
+      for (final w in ['FortyBallsPickerCard', 'FortyBallsBoard']) {
+        final used = Directory('lib/screens')
+            .listSync(recursive: true)
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.dart'))
+            .any((f) => f.readAsStringSync().contains('$w('));
+        expect(used, isTrue,
+            reason: '$w is built but no screen renders it');
+      }
+    });
+
     test('the leaderboard dispatches the tab', () {
       final src = File('lib/screens/leaderboard_screen.dart').readAsStringSync();
       expect(src.contains("case 'forty_balls':"), isTrue);

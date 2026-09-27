@@ -103,6 +103,16 @@ class SetupTests(_Base):
         self.assertEqual(self.configure(net_percent=87).status_code, 400)
         self.assertEqual(self.configure(net_percent=85).status_code, 201)
 
+    def test_the_allowance_spans_what_the_SHARED_control_offers(self):
+        # The screen uses `HandicapModeSelector`, the same control Irish Rumble
+        # and nineteen others use, and its slider runs 50–130 — some formats
+        # give more than full allowance. A 50–100 validator would reject what
+        # the control can produce.
+        self.assertEqual(self.configure(net_percent=130).status_code, 201)
+        self.assertEqual(self.configure(net_percent=50).status_code, 201)
+        self.assertEqual(self.configure(net_percent=135).status_code, 400)
+        self.assertEqual(self.configure(net_percent=45).status_code, 400)
+
     def test_another_account_cannot_configure_it(self):
         other = Account.objects.create(name='Someone Else')
         user = User.objects.create_user(username='x', password='x',
