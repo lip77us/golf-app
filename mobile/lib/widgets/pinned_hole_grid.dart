@@ -134,7 +134,18 @@ class _PinnedHoleGridState extends State<PinnedHoleGrid> {
   @override
   void didUpdateWidget(PinnedHoleGrid old) {
     super.didUpdateWidget(old);
-    if (old.currentIndex != widget.currentIndex) _schedule();
+    // **Both signals, because for most grids only the second one moves.**
+    // Every caller with summary columns passes `currentIndex: edge == null ?
+    // -1 : 0` — a constant that says "there is an edge" — and hands the real
+    // target in `currentRightEdge`. Watching the index alone meant those
+    // grids scrolled once, on the hole they were built at, and never again:
+    // by the 7th the card still sat on the 1st. Reported from a 40 Balls
+    // round, and it was true of Wolf, Rabbit, Nassau, Quota Nassau, Survivor
+    // and match play as well.
+    if (old.currentIndex != widget.currentIndex ||
+        old.currentRightEdge != widget.currentRightEdge) {
+      _schedule();
+    }
   }
 
   @override

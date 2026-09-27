@@ -17,7 +17,7 @@ const double _cellW  = 34;
 const double _rowH   = 28;
 const double _viewportW = 375;   // a phone
 
-Widget _grid({required int currentIndex, int holes = 18}) {
+Widget _grid({required int currentIndex, int holes = 18, double? edge}) {
   Widget label(String t) => SizedBox(
       width: _labelW, height: _rowH,
       child: Align(alignment: Alignment.centerLeft, child: Text(t)));
@@ -33,6 +33,7 @@ Widget _grid({required int currentIndex, int holes = 18}) {
           cellWidth: _cellW,
           holeCount: holes,
           currentIndex: currentIndex,
+          currentRightEdge: edge,
           bands: [
             HoleGridBand(label('Hole'),
                 [for (int h = 1; h <= holes; h++) cell(h)]),
@@ -105,6 +106,24 @@ void main() {
       await t.pumpAndSettle();
       final old = (11 - 6) * _cellW;      // the retired target
       expect(_scroller(t).position.pixels, isNot(closeTo(old, 1)));
+    });
+
+    testWidgets('it follows the hole, not only the hole it was built at',
+        (t) async {
+      // **Every grid with OUT / IN / TOT columns pins `currentIndex` at 0**
+      // and hands the real target in `currentRightEdge` — so watching the
+      // index alone meant they scrolled once and never again. Reported from
+      // a 40 Balls round on the 7th with the card still showing the 1st.
+      final viewport = _viewportW - _labelW;
+      await t.pumpWidget(_grid(currentIndex: 0, edge: 3 * _cellW));
+      await t.pumpAndSettle();
+      expect(_scroller(t).position.pixels, 0);      // the 3rd already fits
+
+      await t.pumpWidget(_grid(currentIndex: 0, edge: 14 * _cellW));
+      await t.pumpAndSettle();
+      expect(_scroller(t).position.pixels,
+          closeTo(14 * _cellW - viewport, 0.5),
+          reason: 'the edge moved, so the grid moves with it');
     });
 
     testWidgets('an early hole does not scroll past the start', (t) async {
