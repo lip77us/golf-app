@@ -199,14 +199,29 @@ def _scores_for(foursome, config) -> tuple:
     return nets, pars
 
 
-def _fully_scored(foursome, nets, holes) -> list:
-    """Holes where EVERY real golfer has a score, in play order.
+def _fully_scored(foursome, nets, holes, members=None) -> list:
+    """Holes where every golfer WHO IS PLAYING THEM has a score, in play order.
 
     The picker appears only once the last score on a hole is in — the group
     cannot choose between nets it has not seen.
+
+    **Not `group_size`.** That is the budget's basis and counts every member,
+    including one who withdrew and one whose tee was never set; neither of them
+    can post a score, so measuring against it left the hole permanently one
+    short and the picker saying `Waiting on the last score` for ever. What has
+    to be in is everyone who can actually put a ball on the hole and has a tee
+    to score it from.
     """
-    k = group_size(foursome)
-    return [h for h in holes if len(nets.get(h, {})) >= k and k > 0]
+    members = members if members is not None else _real_members(foursome)
+    out = []
+    for h in holes:
+        expected = sum(
+            1 for m in members
+            if m.tee_id is not None
+            and (m.withdrew_after_hole is None or h <= m.withdrew_after_hole))
+        if expected and len(nets.get(h, {})) >= expected:
+            out.append(h)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +271,7 @@ def hole_state(foursome, hole_number: int) -> dict:
     lo, hi = bounds(here, left, cap_after)
 
     nets, pars = _scores_for(foursome, config)
-    scored = _fully_scored(foursome, nets, holes)
+    scored = _fully_scored(foursome, nets, holes, members)
     picked = counts.get(hole_number)
 
     # **The budget can no longer come out.** Enough golfers dropped out that

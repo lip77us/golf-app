@@ -103,6 +103,29 @@ class PickingTests(_Base):
         with self.assertRaises(FortyBallsLocked):
             set_count(self.fs, 1, 2)
 
+    def test_a_WITHDRAWN_golfer_does_not_hold_the_hole_open(self):
+        # **He cannot post a score, so waiting for one waits for ever.** The
+        # first version measured against `group_size` — the budget's basis,
+        # which counts every member — and the picker read `Waiting on the last
+        # score` on a hole the three remaining golfers had finished.
+        m = self.fs.memberships.order_by('id').last()
+        m.withdrew_after_hole = 0
+        m.save(update_fields=['withdrew_after_hole'])
+        submit_hole(self.fs, 1, list(zip(self.pids[:3], [4, 4, 4])))
+        state = hole_state(self.fs, 1)
+        self.assertTrue(state['scores_in'])
+        self.assertTrue(state['can_pick'])
+        self.assertEqual(state['hi'], 3)     # and only three balls to spend
+
+    def test_a_golfer_with_no_tee_does_not_hold_it_open_either(self):
+        # He has nothing to score against, so he contributes no net — and
+        # cannot be waited on.
+        m = self.fs.memberships.order_by('id').last()
+        m.tee = None
+        m.save(update_fields=['tee'])
+        submit_hole(self.fs, 1, list(zip(self.pids[:3], [4, 4, 4])))
+        self.assertTrue(hole_state(self.fs, 1)['scores_in'])
+
     def test_a_pick_is_recorded_and_is_the_groups_own(self):
         self.par_hole(1, 0, 0, 0, 0)
         row = set_count(self.fs, 1, 2)
