@@ -207,19 +207,20 @@ StrokePlayStanding? strokePlayStanding({
 /// Null before the reader has a score — the row draws `Tee off` for that,
 /// which is the caller's string and not one to invent here.
 ///
-/// **When the reader is not in the field at all, it reports the CARD.**
-/// [card] is the foursome's own golfers, best first after ranking, and the
-/// row names the leader among them: `AW 1st of 8`.
+/// **The row follows the GROUP ON SCREEN.** [card] is that group's golfers,
+/// in the order the rows are drawn. The reader gets his own standing when he
+/// is one of them; otherwise the row names the best-placed golfer on the
+/// card: `AW 1st of 8`.
 ///
-/// A TD or a scorer opens a group he is not playing in — and in a tournament
-/// that is the ordinary case, not the exception: every golfer in the field
-/// can be a login-less roster entry, so the one person holding the phone is
-/// frequently in none of them. The screen he gets is entirely about that
-/// group, and a row reporting nothing would report nothing about the thing
-/// in front of him. It said `Tee off` while the group was thru 1.
+/// It used to prefer the reader wherever he was, which is right on a casual
+/// round — his foursome IS the screen — and wrong on a tournament one, where
+/// a TD or a scorer routinely has another group in front of him. That read
+/// `AP T-1 of 8 · E thru 2` above four golfers who were thru 6: a true
+/// sentence about a man who is not on the screen. Everything else on this
+/// screen is about the group being scored, and so is this.
 ///
-/// The two cases are kept apart on purpose: a reader who IS in the field and
-/// has not teed off still gets `Tee off`, because that is true of him.
+/// A reader who IS on this card and has not teed off still gets `Tee off`,
+/// because that is true of him and of the screen he is looking at.
 ///
 /// **The row names its golfer in BOTH cases.** It used to name one only in
 /// the fallback, on the reasoning that a reader reading his own standing
@@ -251,8 +252,14 @@ StrokePlayStanding? tournamentFieldStanding(
     return StrokePlayStanding(who.isEmpty ? place : '$who $place', score);
   }
 
-  final me = playerId == null ? null : fieldStanding[playerId];
-  // He is in the field. Whatever it says about him is the row — including
+  // **On this card?** With no card at all there is nothing to follow, so the
+  // reader stands for the screen — which is the casual caller's case, and
+  // every one of them passes none.
+  final onThisCard = card.isEmpty || card.any((g) => g.id == playerId);
+  final me = (playerId == null || !onThisCard)
+      ? null
+      : fieldStanding[playerId];
+  // He is on it. Whatever the field says about him is the row — including
   // nothing, before he has teed off — and it says WHOSE.
   if (me != null) return format(me, nameOf?.call(playerId!) ?? '');
 

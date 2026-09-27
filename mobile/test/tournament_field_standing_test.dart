@@ -81,6 +81,16 @@ void main() {
       expect(st.place, 'T-1 of 8');
     });
 
+    test('with no card there is nothing to follow, so the reader stands',
+        () {
+      // Every casual caller passes none, and on a casual round his foursome
+      // IS the screen.
+      final st = tournamentFieldStanding(const {
+        _me: FieldPlace(rank: 4, field: 8, netToPar: 2, thru: 9),
+      }, _me, nameOf: (_) => 'AP')!;
+      expect(st.place, 'AP 4th of 8');
+    });
+
     test('a one-golfer event still reports the score alone', () {
       // There is no place to attach a name to, and `AP` over a bare score
       // would read as a place.
@@ -186,11 +196,37 @@ void main() {
           'AM T-2 of 8');
     });
 
-    test('a reader who IS in the field still gets his own, unnamed', () {
-      // The two cases are kept apart: the name marks a row that is about
-      // somebody else.
-      final st = tournamentFieldStanding(standings, 23, card: card)!;
-      expect(st.place, 'T-7 of 8');
+    test('a reader ON this card gets his own standing', () {
+      final st = tournamentFieldStanding(standings, 23, card: card,
+          nameOf: (_) => 'AB')!;
+      expect(st.place, 'AB T-7 of 8');
+    });
+
+    test('a reader in the field but in ANOTHER group follows the screen', () {
+      // The case that sent this back: the reader was in group 1 and scoring
+      // group 2, so the row reported HIS place and HIS thru over four
+      // golfers who were three holes further on. Everything else on the
+      // screen is about the group being scored.
+      const elsewhere = {
+        ...standings,
+        99: FieldPlace(rank: 1, field: 8, netToPar: 0, thru: 2),
+      };
+      final st = tournamentFieldStanding(elsewhere, 99, card: card,
+          nameOf: (id) => id == 99 ? 'AP' : 'AW')!;
+      expect(st.place, 'AW 1st of 8');
+      expect(st.score, '−1 thru 1');
+    });
+
+    test('a group that has not started reads Tee off, whoever is reading', () {
+      // Not the reader's own thru from another group — the screen has not
+      // started, and that is what the row reports.
+      expect(
+          tournamentFieldStanding(
+              const {21: FieldPlace(field: 8, thru: 0),
+                     99: FieldPlace(rank: 1, field: 8, netToPar: 0, thru: 2)},
+              99,
+              card: const [(id: 21, shortName: 'AW')]),
+          isNull);
     });
 
     test('a reader in the field who has not teed off still gets Tee off', () {
