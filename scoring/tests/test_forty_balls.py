@@ -55,27 +55,41 @@ class BudgetTests(_Base):
 
 
 class BoundsTests(TestCase):
-    """The arithmetic on its own — no database, because it is arithmetic."""
+    """The arithmetic on its own — no database, because it is arithmetic.
+
+    `bounds(here, left, capacity_after)`: how many golfers can hit a ball on
+    THIS hole, how many balls are still owed, and how many the later holes can
+    absorb between them. With nobody withdrawn `capacity_after` is just
+    `k × holes_after`, which is how these read.
+    """
 
     def test_the_opening_hole_of_a_foursome_allows_everything(self):
-        # 40 left, 17 holes after this one: even 0 leaves 40 reachable.
-        self.assertEqual(bounds(4, 40, 17), (0, 4))
+        # 40 left, 17 holes after this one (68 balls of room): even 0 leaves
+        # 40 reachable.
+        self.assertEqual(bounds(4, 40, 4 * 17), (0, 4))
 
     def test_the_floor_rises_when_the_holes_run_out(self):
         # 10 left with 2 holes after: 4 + 4 = 8, so this hole must take 2.
-        self.assertEqual(bounds(4, 10, 2), (2, 4))
+        self.assertEqual(bounds(4, 10, 4 * 2), (2, 4))
 
     def test_no_slack_left_pins_every_remaining_hole(self):
         # 12 left, 2 after: 4 on each of three. No choice.
-        self.assertEqual(bounds(4, 12, 2), (4, 4))
+        self.assertEqual(bounds(4, 12, 4 * 2), (4, 4))
 
     def test_a_spent_budget_pins_them_at_zero(self):
-        self.assertEqual(bounds(4, 0, 5), (0, 0))
+        self.assertEqual(bounds(4, 0, 4 * 5), (0, 0))
 
     def test_the_ceiling_is_the_group_size_not_the_balls_left(self):
-        self.assertEqual(bounds(3, 30, 17), (0, 3))
+        self.assertEqual(bounds(3, 30, 3 * 17), (0, 3))
         # …and the balls left when THEY are the smaller number.
-        self.assertEqual(bounds(4, 2, 9), (0, 2))
+        self.assertEqual(bounds(4, 2, 4 * 9), (0, 2))
+
+    def test_lo_above_hi_is_the_DQ_and_is_returned_UNCLAMPED(self):
+        # **Left visible on purpose.** 20 balls owed with two holes of room for
+        # three golfers is 6 — the budget cannot come out, and clamping the
+        # pair would hide that behind a legal-looking range.
+        lo, hi = bounds(3, 20, 3)
+        self.assertGreater(lo, hi)
 
 
 class PickingTests(_Base):
@@ -224,6 +238,131 @@ class ForcedTests(_Base):
         set_count(self.fs, 8, 4)
         self.assertFalse(FortyBallsHoleCount.objects
                          .filter(foursome=self.fs, app_set=True).exists())
+
+
+class DropoutTests(_Base):
+    """**The budget stands; a dropout costs CAPACITY, not debt.**
+
+    Ruled 26 Sep 2026. Two men left out of a threesome still owe 30 between
+    them; four out of a foursome still owe 40. And when the holes left cannot
+    absorb what is still owed, the group is out of 40 Balls — its scores still
+    standing for the championship, because the DQ is this game's and not the
+    round's.
+    """
+
+    def withdraw(self, index, after_hole):
+        m = self.fs.memberships.order_by('id')[index]
+        m.withdrew_after_hole = after_hole
+        m.save(update_fields=['withdrew_after_hole'])
+        return m
+
+    def test_the_budget_does_not_shrink_when_a_man_drops_out(self):
+        self.withdraw(3, 5)
+        self.assertEqual(budget(self.fs), 40)
+
+    def test_the_hole_ceiling_falls_to_who_is_still_playing(self):
+        # You cannot count a ball nobody hit.
+        self.withdraw(3, 5)
+        self.par_hole(6, 0, 0, 0)
+        state = hole_state(self.fs, 6)
+        self.assertEqual(state['active_here'], 3)
+        self.assertEqual(state['hi'], 3)
+        self.assertEqual(state['group_size'], 4)   # the budget's basis
+
+    def test_capacity_is_summed_per_hole_not_k_times_holes(self):
+        # After a withdrawal the holes are not all worth the same number of
+        # balls, so `k × after` would overstate the room.
+        self.withdraw(3, 9)
+        state = hole_state(self.fs, 1)
+        # Holes 1-9 hold four, holes 10-18 hold three.
+        self.assertEqual(state['capacity'], 9 * 4 + 9 * 3)
+
+    def _spend(self, upto, n):
+        """Play and pick `n` on each of the first `upto` holes.
+
+        **A DQ cannot be set up by underspending**, which is worth knowing: the
+        bounds forbid it. Spend nothing early enough and `lo` rises to pin the
+        rest at 4. So the only way a group falls short is a WITHDRAWAL taking
+        the room away after the fact, which is exactly the case the ruling is
+        about.
+        """
+        for h in range(1, upto + 1):
+            self.par_hole(h, 0, 0, 0, 0)
+            set_count(self.fs, h, n)
+
+    def test_a_group_that_cannot_reach_the_budget_is_DQd(self):
+        # Ten holes at 2 is 20 spent, 20 owed, eight holes left. With four
+        # golfers that is 32 of room — comfortable. Then two of them walk in.
+        self._spend(10, 2)
+        self.assertFalse(hole_state(self.fs, 11)['dq'])
+
+        self.withdraw(2, 10)
+        self.withdraw(3, 10)
+        state = hole_state(self.fs, 11)
+        self.assertTrue(state['dq'])
+        self.assertEqual(state['left'], 20)
+        self.assertEqual(state['capacity'], 8 * 2)   # 8 holes × 2 golfers
+        self.assertFalse(state['can_pick'])
+
+    def test_the_DQ_refusal_names_the_arithmetic_not_the_count(self):
+        self._spend(10, 2)
+        self.withdraw(2, 10)
+        self.withdraw(3, 10)
+        self.par_hole(11, 0, 0)
+        with self.assertRaises(FortyBallsLocked) as ctx:
+            set_count(self.fs, 11, 2)
+        msg = str(ctx.exception)
+        self.assertIn('20 balls', msg)
+        self.assertIn('16', msg)
+        self.assertIn('championship', msg)
+
+    def test_a_DQd_group_gets_no_app_set_counts(self):
+        # An app-set count on a DQ'd group is a number pretending the budget
+        # still comes out.
+        self._spend(10, 2)
+        self.withdraw(2, 10)
+        self.withdraw(3, 10)
+        from services.forty_balls import _fill_forced
+        _fill_forced(self.fs)
+        self.assertFalse(FortyBallsHoleCount.objects
+                         .filter(foursome=self.fs, app_set=True).exists())
+
+    def test_the_card_reports_the_DQ_and_offers_no_ranking_figure(self):
+        # A total built from a budget that cannot come out is not a result, and
+        # sorting on it would place the group.
+        self._spend(10, 2)
+        self.withdraw(2, 10)
+        self.withdraw(3, 10)
+        card = group_card(self.fs)
+        self.assertTrue(card['dq'])
+        self.assertIsNone(card['ranking_total'])
+        # The holes it did play are still on the card.
+        self.assertEqual(len([r for r in card['holes'] if r['result'] is not None]),
+                         10)
+
+    def test_a_dropout_the_group_can_still_absorb_is_NOT_a_DQ(self):
+        # Twelve holes at 3 is 36 spent, 4 owed. One man out still leaves three
+        # golfers over six holes — eighteen balls of room for four.
+        self._spend(12, 3)
+        self.withdraw(3, 12)
+        state = hole_state(self.fs, 13)
+        self.assertFalse(state['dq'])
+        self.assertEqual(state['left'], 4)
+        self.assertEqual(state['capacity'], 6 * 3)
+
+    def test_two_left_in_a_threesome_still_owe_thirty(self):
+        # The ruling's own example.
+        fs = make_foursome(self.round, [('Eve', 0), ('Fay', 0), ('Gus', 0)],
+                           tee=self.tee, group_number=2)
+        m = fs.memberships.order_by('id').last()
+        m.withdrew_after_hole = 4
+        m.save(update_fields=['withdrew_after_hole'])
+        self.assertEqual(budget(fs), 30)
+        state = hole_state(fs, 5)
+        self.assertEqual(state['left'], 30)
+        self.assertEqual(state['active_here'], 2)
+        self.assertEqual(state['capacity'], 14 * 2)   # holes 5-18, two golfers
+        self.assertTrue(state['dq'])
 
 
 class ThreesomeTests(_Base):
