@@ -164,9 +164,37 @@ class ResultEndpointTests(_Base):
         self.assertIn('eclectic', r.data['games'])
         self.assertEqual(r.data['games']['eclectic']['label'], 'Eclectic')
 
+    def test_the_tab_exists_BEFORE_the_config_does(self):
+        # **How a TD finds the setup.** Hiding the tab until he has configured
+        # the game means he has to already know it is there — and the setup was
+        # genuinely unreachable that way, reported from testing.
+        self.tourn.eclectic_config.delete()
+        self.tourn.refresh_from_db()
+        r = self.client.get(f'/api/tournaments/{self.tourn.id}/leaderboard/')
+        block = r.data['games']['eclectic']
+        self.assertEqual(block['label'], 'Eclectic')
+        self.assertEqual(block['pools'], [])
+        self.assertFalse(block['configured'])
+        self.assertTrue(block['available'])
+
+    def test_eclectic_on_a_ROUND_still_reaches_the_tournament_board(self):
+        # The wizard puts it on the tournament; the per-round picker can put it
+        # on a round. A TD who did that has said his event plays it, and the
+        # game must not be unreachable because of where he said it.
+        self.tourn.active_games = ['low_net']
+        self.tourn.save(update_fields=['active_games'])
+        self.rounds[0].active_games = ['eclectic']
+        self.rounds[0].save(update_fields=['active_games'])
+        r = self.client.get(f'/api/tournaments/{self.tourn.id}/leaderboard/')
+        self.assertIn('eclectic', r.data['active_games'])
+        self.assertIn('eclectic', r.data['games'])
+
     def test_no_block_when_the_game_is_off(self):
         self.tourn.active_games = []
         self.tourn.save(update_fields=['active_games'])
+        for r in self.rounds:
+            r.active_games = []
+            r.save(update_fields=['active_games'])
         r = self.client.get(f'/api/tournaments/{self.tourn.id}/leaderboard/')
         self.assertNotIn('eclectic', r.data['games'])
 

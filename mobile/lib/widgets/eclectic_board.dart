@@ -43,7 +43,14 @@ class EclecticBoard extends StatefulWidget {
   /// (a watch page) draw the same widget. Null simply tags nobody.
   final int? readerId;
 
-  const EclecticBoard({super.key, required this.data, this.readerId});
+  /// Opens the setup screen. The board draws before a config exists precisely
+  /// so there is somewhere to put this — a TD who has to find a gear menu to
+  /// set a game up has to already know the game is there.
+  final VoidCallback? onSetUp;
+
+  const EclecticBoard({
+    super.key, required this.data, this.readerId, this.onSetUp,
+  });
 
   @override
   State<EclecticBoard> createState() => _EclecticBoardState();
@@ -85,6 +92,8 @@ class _EclecticBoardState extends State<EclecticBoard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    if (_s.pools.isEmpty) return _notSetUp(context);
+
     final pool  = _current;
     if (pool == null || pool.standings.isEmpty) {
       return const Center(child: Text('No scores yet.'));
@@ -136,6 +145,43 @@ class _EclecticBoardState extends State<EclecticBoard> {
             theme   : theme,
           ),
       ],
+    );
+  }
+
+  /// The tab before the TD has set the pools — and the way IN to setting them.
+  Widget _notSetUp(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.flag_outlined, size: 32,
+              color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(height: 12),
+          Text('Eclectic is not set up yet',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          Text(
+            _s.available
+                ? 'Each golfer keeps his best score on each hole number across '
+                  'every round. Set the pools and what they are worth.'
+                : _s.unavailableReason,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          if (_s.available && widget.onSetUp != null) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: widget.onSetUp,
+              icon: const Icon(Icons.tune, size: 18),
+              label: const Text('Set up Eclectic'),
+            ),
+          ],
+        ]),
+      ),
     );
   }
 

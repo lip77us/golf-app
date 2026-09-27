@@ -285,23 +285,41 @@ class _FortyBallsSetupScreenState extends State<FortyBallsSetupScreen> {
             // setting, applied at ANY allowance and in Gross too, because it
             // lands BEFORE the group picks: a capped score is one of the
             // numbers it is choosing between, so it cannot quietly not apply.
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _cap,
-              onChanged: (v) => setState(() {
-                _cap = v;
-                _scoringTouched = true;
-              }),
-              title: const Text('Double bogey max'),
-              subtitle: Text(
-                  _mode == 'gross'
-                      ? 'No score counts worse than par + 2. Applied before '
-                        'the group picks.'
-                      : 'No net score counts worse than net par + 2. Applied '
-                        'before the group picks, so a capped score is what it '
-                        'is choosing between.',
-                  style: theme.textTheme.bodySmall),
-            ),
+            // **A Row and a Switch, not a `SwitchListTile`.** A ListTile paints
+            // its background and ink splash on the nearest Material ancestor,
+            // and `_Card` is a decorated Container — so the splash landed
+            // behind the card and Flutter asserted about it on every build.
+            // The pool toggles on the Eclectic setup screen are built the same
+            // way, for the same reason.
+            Row(children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Double bogey max',
+                        style: theme.textTheme.bodyMedium
+                            ?.copyWith(fontWeight: FontWeight.w600)),
+                    Text(
+                        _mode == 'gross'
+                            ? 'No score counts worse than par + 2. Applied '
+                              'before the group picks.'
+                            : 'No net score counts worse than net par + 2. '
+                              'Applied before the group picks, so a capped '
+                              'score is what it is choosing between.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Switch(
+                value: _cap,
+                onChanged: (v) => setState(() {
+                  _cap = v;
+                  _scoringTouched = true;
+                }),
+              ),
+            ]),
           ]),
         ),
         const SizedBox(height: 16),

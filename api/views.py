@@ -2516,7 +2516,19 @@ class TournamentLeaderboardView(APIView):
                 'rounds__foursomes__memberships__player',
             ),
         )
-        active_games = tournament.active_games or []
+        active_games = list(tournament.active_games or [])
+
+        # **Eclectic is an EVENT game, but it can end up on the rounds.** The
+        # wizard puts it on the tournament; the per-round game picker can put it
+        # on a round, and a TD who did that has said his event plays it — where
+        # he said it is not the point. Without this the tab never appears, the
+        # gear never offers `Configure Eclectic`, and the game is unreachable
+        # with its own rows sitting in the database. Reported from testing.
+        if ('eclectic' not in active_games
+                and any('eclectic' in (r.active_games or [])
+                        for r in tournament.rounds.all())):
+            active_games.append('eclectic')
+
         games: dict  = {}
 
         # Optional round_id filter — show standings for this round only
@@ -2546,10 +2558,28 @@ class TournamentLeaderboardView(APIView):
         # round suffix and sits between the championship and the per-round
         # side games.
         if 'eclectic' in active_games:
-            from services.eclectic import eclectic_summary
+            from services.eclectic import eclectic_available, eclectic_summary
             summary = eclectic_summary(tournament)
             if summary:
                 games['eclectic'] = {'label': 'Eclectic', **summary}
+            else:
+                # **The tab exists before the config does.** A game with no
+                # board is how a TD finds the setup — hiding it until he has
+                # configured it means he has to already know where to look.
+                ok, reason = eclectic_available(tournament)
+                games['eclectic'] = {
+                    'label': 'Eclectic',
+                    'pools': [],
+                    'rounds': [],
+                    'n_rounds': tournament.rounds.count(),
+                    'n_courses': 0,
+                    'course_legend': [],
+                    'live_label': '',
+                    'is_final': False,
+                    'configured': False,
+                    'available': ok,
+                    'unavailable_reason': reason,
+                }
 
         if 'match_play' in active_games:
             from services.tournament_match_play import tournament_match_play_summary

@@ -7951,12 +7951,18 @@ class EclecticSummary {
   final EclecticPool? gross;
   final EclecticPool? net;
 
+  /// The TD has not set the pools yet. The board still draws — a game with no
+  /// board is how he finds the setup.
+  final bool available;
+  final String unavailableReason;
+
   const EclecticSummary({
     required this.pools, required this.rounds, required this.nRounds,
     required this.nCourses, required this.courseLegend,
     required this.liveLabel, required this.isFinal,
     this.par = const {}, this.strokeIndex = const {},
     this.gross, this.net,
+    this.available = true, this.unavailableReason = '',
   });
 
   bool get isConfigured => pools.isNotEmpty;
@@ -7979,6 +7985,8 @@ class EclecticSummary {
         isFinal  : j['is_final'] as bool? ?? false,
         par: _holeMap(j['par']),
         strokeIndex: _holeMap(j['stroke_index']),
+        available: j['available'] as bool? ?? true,
+        unavailableReason: j['unavailable_reason'] as String? ?? '',
         gross: j['gross'] == null
             ? null
             : EclecticPool.fromJson(Map<String, dynamic>.from(j['gross'] as Map)),

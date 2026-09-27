@@ -233,6 +233,55 @@ void main() {
     });
   });
 
+  group('before the TD has set it up', () {
+    // **The tab exists before the config does**, and that is the whole point:
+    // a game with no board is how a TD finds its setup. Hiding it until he has
+    // configured it means he has to already know where to look — and the
+    // Eclectic setup was genuinely unreachable until this landed, reported
+    // from testing with the rows already in the database.
+    Map<String, dynamic> unset({bool available = true, String reason = ''}) => {
+          'pools': <String>[],
+          'rounds': <Map<String, dynamic>>[],
+          'n_rounds': 3, 'n_courses': 0,
+          'course_legend': <Map<String, String>>[],
+          'live_label': '', 'is_final': false,
+          'configured': false,
+          'available': available, 'unavailable_reason': reason,
+        };
+
+    testWidgets('it says so and offers the way in', (tester) async {
+      var tapped = 0;
+      tester.view.physicalSize = const Size(1400, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: EclecticBoard(
+            data: unset(), onSetUp: () => tapped++)),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Eclectic is not set up yet'), findsOneWidget);
+      await tester.tap(find.text('Set up Eclectic'));
+      expect(tapped, 1);
+    });
+
+    testWidgets('an ineligible event states the reason and offers nothing',
+        (tester) async {
+      tester.view.physicalSize = const Size(1400, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: EclecticBoard(
+            data: unset(available: false,
+                        reason: 'Needs every round to be 18 holes'),
+            onSetUp: () {})),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Needs every round to be 18 holes'), findsOneWidget);
+      expect(find.text('Set up Eclectic'), findsNothing);
+    });
+  });
+
   group('the pool switch', () {
     testWidgets('both pools give a switch carrying each pool\'s money',
         (tester) async {

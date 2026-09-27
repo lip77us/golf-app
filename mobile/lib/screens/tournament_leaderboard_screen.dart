@@ -267,7 +267,8 @@ class _TournamentLeaderboardScreenState
           child: _GameView(
               gameKey : g,
               data    : data,
-              readerId: context.read<AuthProvider>().player?.id),
+              readerId: context.read<AuthProvider>().player?.id,
+              onSetUpEclectic: () => _configure('eclectic')),
         );
       }).toList(),
     );
@@ -302,7 +303,10 @@ class _GameView extends StatelessWidget {
   final Map<String, dynamic> data;
   /// The signed-in golfer, for boards that mark the reader's own row.
   final int?               readerId;
-  const _GameView({required this.gameKey, required this.data, this.readerId});
+  /// Opens Eclectic's setup from its own empty state.
+  final VoidCallback?      onSetUpEclectic;
+  const _GameView({required this.gameKey, required this.data, this.readerId,
+                   this.onSetUpEclectic});
 
   @override
   Widget build(BuildContext context) {
@@ -314,7 +318,8 @@ class _GameView extends StatelessWidget {
       case 'match_play':
         return _MatchPlayChampView(data: data);
       case 'eclectic':
-        return EclecticBoard(data: data, readerId: readerId);
+        return EclecticBoard(
+            data: data, readerId: readerId, onSetUp: onSetUpEclectic);
       case 'day_bet':
         return _DayBetView(data: data);
       default:

@@ -287,6 +287,18 @@ void main() {
       }
     });
 
+    test('the setup screen has no ListTile inside its bordered cards', () {
+      // A ListTile paints its background and ink splash on the nearest
+      // Material ancestor, and `_Card` is a decorated Container — so the
+      // splash lands behind the card and Flutter asserts on every build.
+      // Reported from a hot restart. A Row and a Switch instead.
+      final src =
+          File('lib/screens/forty_balls_setup_screen.dart').readAsStringSync();
+      expect(src.contains('SwitchListTile('), isFalse,
+          reason: 'use a Row + Switch inside _Card — see the note there');
+      expect(src.contains('ListTile('), isFalse);
+    });
+
     test('the leaderboard dispatches the tab', () {
       final src = File('lib/screens/leaderboard_screen.dart').readAsStringSync();
       expect(src.contains("case 'forty_balls':"), isTrue);
