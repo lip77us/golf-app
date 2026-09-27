@@ -594,6 +594,15 @@ class Tournament {
   /// Whose event it is, for a guest. Null on your own.
   final String? hostName;
 
+  /// Whether this event can play an eclectic, and whether it already is —
+  /// `{available, reason, configured, offer}`.
+  ///
+  /// **From the server, not worked out here.** The rule is
+  /// `services.eclectic.eclectic_available`; a phone re-deriving it from
+  /// [rounds] would be a second copy of it. Empty on an older server, which
+  /// reads as no offer and draws no button.
+  final Map<String, dynamic> eclecticOffer;
+
   const Tournament({
     required this.id,
     required this.name,
@@ -604,6 +613,7 @@ class Tournament {
     this.activeGames = const [],
     this.isOwn = true,
     this.hostName,
+    this.eclecticOffer = const {},
   });
 
   factory Tournament.fromJson(Map<String, dynamic> j) => Tournament(
@@ -620,6 +630,8 @@ class Tournament {
             .toList(),
         isOwn: j['is_own'] as bool? ?? true,
         hostName: j['host_name'] as String?,
+        eclecticOffer: Map<String, dynamic>.from(
+            (j['eclectic_offer'] as Map?) ?? const {}),
       );
 }
 

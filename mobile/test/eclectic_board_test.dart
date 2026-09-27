@@ -465,4 +465,28 @@ void main() {
           src.contains("isStaff && (activeGames.isNotEmpty ||"), isTrue);
     });
   });
+
+  group('the tournament card carries a named button', () {
+    // The gear is an unlabelled icon two screens deep, between a refresh and
+    // a receipt — the exact spot `Settle up` hid in until somebody had to be
+    // told where it was, which is why THAT got a named button on this card.
+    final src =
+        File('lib/screens/tournament_list_screen.dart').readAsStringSync();
+
+    test('it sits beside the other tournament-level config', () {
+      expect(src.contains("'Configure Stroke Play Championship'"), isTrue);
+      expect(src.contains("'Set up Eclectic'"), isTrue);
+      expect(src.contains("'Configure Eclectic'"), isTrue);
+      expect(src.contains('EclecticSetupScreen(tournamentId: t.id)'), isTrue,
+          reason: 'the button has to actually open the screen');
+    });
+
+    test('it is gated on CAN play, never on already plays', () {
+      // Gating it the other way is what made the screen unreachable twice:
+      // the setup POST is the thing that turns the game on.
+      expect(src.contains("eclecticOffer['offer'] == true"), isTrue);
+      expect(src.contains("eclecticOffer['available'] == true"), isTrue);
+      expect(src.contains("activeGames.contains('eclectic')"), isFalse);
+    });
+  });
 }

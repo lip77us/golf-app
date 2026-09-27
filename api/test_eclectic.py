@@ -315,3 +315,33 @@ class ReachabilityTests(_Base):
         self.assertTrue(offer['offer'])
         self.assertFalse(offer['available'])
         self.assertEqual(offer['reason'], 'Needs every round to be 18 holes')
+
+
+class TournamentCardOfferTests(_Base):
+    """The tournament LIST carries the offer too, for the card's own button.
+
+    The gear is an unlabelled icon two screens deep — the spot `Settle up`
+    hid in until it was given a name on this card. The offer is computed
+    server-side in both places so the rule has one home.
+    """
+
+    def card(self):
+        rows = self.client.get('/api/tournaments/').data
+        rows = rows if isinstance(rows, list) else rows['results']
+        return next(t for t in rows if t['id'] == self.tourn.id)
+
+    def test_a_two_round_event_is_offered_it_before_it_plays_it(self):
+        offer = self.card()['eclectic_offer']
+        self.assertTrue(offer['offer'])
+        self.assertTrue(offer['available'])
+        self.assertFalse(offer['configured'])
+
+    def test_a_one_round_event_is_not(self):
+        self.rounds[1].delete()
+        self.assertFalse(self.card()['eclectic_offer']['offer'])
+
+    def test_the_list_and_the_board_agree(self):
+        board = self.client.get(
+            f'/api/tournaments/{self.tourn.id}/leaderboard/').data
+        self.assertEqual(self.card()['eclectic_offer'],
+                         board['eclectic_offer'])

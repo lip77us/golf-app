@@ -12,6 +12,7 @@ import '../widgets/golf_text_field.dart';
 import '../widgets/shared_round_card.dart';
 import 'new_round_wizard.dart';
 import 'player_list_screen.dart';
+import 'eclectic_setup_screen.dart';
 import 'tournament_low_net_setup_screen.dart';
 import 'setup_round_players_screen.dart';
 import 'tournament_leaderboard_screen.dart';
@@ -605,6 +606,11 @@ class _TournamentListScreenState extends State<TournamentListScreen>
                 ));
               }
             },
+            onConfigureEclectic: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => EclecticSetupScreen(tournamentId: t.id),
+              ),
+            ).then((_) => _load()),
             onDelete         : () => _deleteTournament(t),
           );
   }
@@ -622,6 +628,10 @@ class _TournamentCard extends StatelessWidget {
   /// Opens tournament settlement — the receipts and the field text.
   final VoidCallback onSettleUp;
   final VoidCallback onConfigureLowNet;
+  /// Opens the Eclectic setup. **A named button here rather than only the
+  /// gear two screens deep**, which is where `Settle up` used to hide before
+  /// somebody had to be told where it was.
+  final VoidCallback onConfigureEclectic;
   final VoidCallback onOpenCupDraft;
   final VoidCallback onOpenCupScoreboard;
   final void Function(RoundSummary round) onSetupCupRound;
@@ -639,6 +649,7 @@ class _TournamentCard extends StatelessWidget {
     required this.onViewLeaderboard,
     required this.onSettleUp,
     required this.onConfigureLowNet,
+    required this.onConfigureEclectic,
     required this.onOpenCupDraft,
     required this.onOpenCupScoreboard,
     required this.onSetupCupRound,
@@ -785,6 +796,21 @@ class _TournamentCard extends StatelessWidget {
                 icon : Icons.settings_outlined,
                 label: 'Configure Stroke Play Championship',
                 onTap: onConfigureLowNet,
+              ),
+            // **Eclectic can be added to an event that did not start with
+            // it** — its setup POST is what turns it on — so this is gated on
+            // whether the event CAN play one, never on whether it already
+            // does. Gating it the other way is what made the setup screen
+            // unreachable twice.
+            if (isStaff && !isComplete &&
+                tournament.eclecticOffer['offer'] == true &&
+                tournament.eclecticOffer['available'] == true)
+              _ActionButton(
+                icon : Icons.settings_outlined,
+                label: tournament.eclecticOffer['configured'] == true
+                    ? 'Configure Eclectic'
+                    : 'Set up Eclectic',
+                onTap: onConfigureEclectic,
               ),
           ],
         ]),
