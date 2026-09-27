@@ -1300,7 +1300,22 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       final t = await client.createTournament(
         name       : _nameCtrl.text.trim(),
         startDate  : dateStr,
-        activeGames: _tournamentActiveGames.toList(),
+        // **Eclectic goes on the TOURNAMENT, not only the rounds.** The two
+        // sets here divide by scope: `_tournamentActiveGames` is the
+        // championship, `_activeGames` is the side games, and side games ride
+        // on each round. Eclectic is the exception — it spans the rounds, its
+        // config is a OneToOne on the tournament, and its board reads the
+        // tournament — so a round flag alone left the game invisible to its
+        // own board until a repair rule on the server noticed it. This makes
+        // the data say what the model means.
+        //
+        // 40 Balls is NOT here on purpose: it is re-run every round with its own
+        // entry and pool, its config is a OneToOne on the ROUND, and the round
+        // flag is exactly right for it.
+        activeGames: [
+          ..._tournamentActiveGames,
+          if (_activeGames.contains(GameIds.eclectic)) GameIds.eclectic,
+        ],
         totalRounds: _numRounds,
         // Individual-play scoring is set ONCE here; every round and every
         // board reads it back rather than each carrying its own copy.

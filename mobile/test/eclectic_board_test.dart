@@ -8,6 +8,8 @@
 /// card is open at a time.
 library;
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
@@ -279,6 +281,32 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Needs every round to be 18 holes'), findsOneWidget);
       expect(find.text('Set up Eclectic'), findsNothing);
+    });
+  });
+
+  group('the wizard puts it where its board reads it', () {
+    // The wizard keeps two sets: `_tournamentActiveGames` is the championship
+    // and goes on the TOURNAMENT; `_activeGames` is the side games and goes on
+    // each ROUND. Eclectic is the exception — it spans the rounds, its config
+    // is a OneToOne on the tournament, and its board reads the tournament — so
+    // a round flag alone left the game invisible to its own board.
+    test('Eclectic is added to the tournament, not only the rounds', () {
+      final src =
+          File('lib/screens/new_round_wizard.dart').readAsStringSync();
+      expect(
+          src.contains(
+              'if (_activeGames.contains(GameIds.eclectic)) GameIds.eclectic'),
+          isTrue,
+          reason: 'createTournament must carry eclectic — its board reads the '
+              'tournament, not the rounds');
+    });
+
+    test('40 Balls is deliberately NOT', () {
+      // It is re-run every round with its own entry and pool, and its config
+      // is a OneToOne on the ROUND.
+      final src =
+          File('lib/screens/new_round_wizard.dart').readAsStringSync();
+      expect(src.contains('GameIds.fortyBalls) GameIds.fortyBalls'), isFalse);
     });
   });
 
