@@ -468,10 +468,19 @@ class RoundProvider extends ChangeNotifier {
       _localPendingByHole =
           await _localDb.pendingForFoursome(foursomeId);
 
-      // 3. If the sync service already drained the item (we were online),
-      //    do a quiet scorecard refresh to get updated net scores / totals.
-      if (_sync.isOnline && _sync.pendingCount == 0) {
-        _refreshScorecardQuietly(foursomeId);
+      // 3. Refresh the scorecard once the queue has DRAINED. The server
+      //    recomputes net scores, totals and — on a tournament round — the
+      //    field standing on the way in, and none of it reaches the screen
+      //    any other way.
+      //
+      //    This used to ask whether the queue was already empty, one line
+      //    after enqueueing into it, so it was almost never true: the
+      //    standing ribbon sat on whatever hole the screen had been opened
+      //    at. Reported from a 40 Balls round reading `E thru 2` on the 7th.
+      //    Unawaited, because the commit point is the local write above.
+      if (_sync.isOnline) {
+        unawaited(_sync.waitUntilIdle()
+            .then((_) => _refreshScorecardQuietly(foursomeId)));
       }
 
       // 4. Raise the lock screen on the FIRST score of the round, not at the

@@ -2659,15 +2659,20 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       // nowhere to put a wager and the role silently stuck on whoever held it.
       final banker = _bankerRound(rp);
 
+      // **The button always names the next hole.** It used to relabel itself
+      // `Pick how many balls count` while the pick was outstanding — two
+      // lines of wrapped text where a destination belongs, and a button whose
+      // words change under the thumb. The pager says where you are going; the
+      // picker card above it, which is the thing you have to act on, says
+      // what is missing. So this one just goes grey, like a hole waiting on
+      // its last score.
+      var needsPick = false;
+
       // **40 Balls does not walk on either, and for the same reason Banker
-      // does not.** The group picks its count from the nets, so the hole has
-      // to be POSTED before there is anything to pick from — and then it must
-      // not advance until the pick is made, or the scorer has to come back a
-      // hole to do it. That is what testing found: the picker only appeared
-      // after stepping back.
-      //
-      // So the button does three things in order: post, wait for the pick,
-      // then move on.
+      // does not.** The hole is not finished when its scores are: the group
+      // still has to say how many of the nets count, and leaving without that
+      // loses the pick — the next hole's first score settles this one for
+      // good. So the button waits, and the card above it holds the choice.
       if (_fortyBallsRound(rp)) {
         final st = _fbState;
         // **No `Post the hole` step any more.** The group picks while it is
@@ -2679,31 +2684,19 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         // the budget left it no choice, has nothing to pick and walks on like
         // any other round.
         final chosen = _fbPending[_selectedHole] ?? st?.count;
-        // **And it names the pick only once there IS one.** Walking onto a
-        // fresh hole, what is missing is four scores, not a count — a button
-        // reading `Pick how many balls count` over an empty hole describes a
-        // step the group cannot take yet. It reads `Hole N`, disabled, with
-        // the missing-scores note underneath, exactly like every other round,
-        // and becomes the pick when the last score lands.
+        // **And it only blocks once there IS a pick to make.** Walking onto
+        // a fresh hole, what is missing is four scores, not a count — the
+        // button is already disabled for that, with the missing-scores note
+        // underneath, and the picker holds its own line until the last net
+        // lands.
         final ready = st != null &&
             fortyBallsReady(st, _fbLocalNets(sc, players, _selectedHole));
-        final needsPick =
+        needsPick =
             st != null && ready && !st.dq && st.canPick && chosen == null;
-
-        if (needsPick) {
-          // Named rather than greyed and silent — the same rule the rest of
-          // this pager follows for a missing score.
-          return FilledButton.icon(
-            onPressed: null,
-            icon: const Icon(Icons.sports_golf, size: 20),
-            label: const Text('Pick how many balls count'),
-            iconAlignment: IconAlignment.end,
-          );
-        }
       }
 
       return FilledButton.icon(
-        onPressed: (allDone && !rp.submitting)
+        onPressed: (allDone && !needsPick && !rp.submitting)
             ? () => _saveAndAdvance(ctx, players, par)
             : null,
         icon: rp.submitting

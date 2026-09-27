@@ -444,12 +444,17 @@ void main() {
       // same three-step shape Banker already uses, and for the same reason.
       final src = File('lib/screens/score_entry_screen.dart').readAsStringSync();
       expect(src.contains('_fortyBallsRound('), isTrue);
-      expect(src.contains('Pick how many balls count'), isTrue,
-          reason: 'the pager must NAME what is missing, not go grey');
-      // ...but only once the pick is the thing that is missing. On a hole
-      // with no scores on it, what is missing is scores.
+      // **The button always names the next hole.** It used to relabel itself
+      // `Pick how many balls count`, which wrapped to two lines and changed
+      // the words under the thumb; the picker card is what says the pick is
+      // outstanding, and the pager just goes grey.
+      expect(src.contains("label: const Text('Pick how many balls count')"),
+          isFalse,
+          reason: 'the pager names the destination, not the gap');
       expect(src.contains('fortyBallsReady(st,'), isTrue,
-          reason: 'a fresh hole reads `Hole N`, disabled, not `Pick…`');
+          reason: 'the pick only blocks once every net on the hole is in');
+      expect(src.contains('allDone && !needsPick && !rp.submitting'), isTrue,
+          reason: 'an outstanding pick disables `Hole N`, it does not rename it');
       expect(src.contains("hole < 18 && !_fortyBallsRound(rp)"), isTrue,
           reason: 'auto-advance must not carry the scorer past the pick');
     });
