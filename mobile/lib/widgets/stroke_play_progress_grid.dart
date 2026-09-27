@@ -125,6 +125,18 @@ class StrokePlayProgressGridState extends State<StrokePlayProgressGrid> {
           ),
         );
 
+    // The stroke index off the scorecard's own hole data. Only drawn when the
+    // card carries it — an older payload has none, and a row of dashes is
+    // worse than no row.
+    final hasStrokeIndex =
+        holeRange.any((h) => (scorecard.holeData(h)?.strokeIndex ?? 0) > 0);
+    Widget siText(int h) {
+      final si = scorecard.holeData(h)?.strokeIndex ?? 0;
+      return Text(si > 0 ? '$si' : '–',
+          style: theme.textTheme.labelSmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant));
+    }
+
     Widget holeCell(int h, {required Widget child, Color? bg}) {
       final isCurrent = h == currentHole;
       return GestureDetector(
@@ -205,7 +217,13 @@ class StrokePlayProgressGridState extends State<StrokePlayProgressGrid> {
                 currentRightEdge: edge,
                 contentWidth: _cellW * holeRange.length + summaryW * nSummary,
                 bands: [
-                  // Hole numbers
+                  // **The house header, not a bare pair of rows.** Hole on
+                  // `surfaceContainerHighest`, Par and Index a step lighter
+                  // on `surfaceContainerLow` — the same bands
+                  // `HoleGridScorecard` draws, because every scorecard in the
+                  // app should read as the same object. The bands do the real
+                  // work outdoors: they separate the fixed course information
+                  // from the scores under it without a word of text.
                   HoleGridBand(
                     lbl('Hole', const TextStyle(
                         fontSize: 11, fontWeight: FontWeight.bold)),
@@ -223,7 +241,8 @@ class StrokePlayProgressGridState extends State<StrokePlayProgressGrid> {
                                   fontSize: 11, fontWeight: FontWeight.bold))),
                     if (showIn) headSummary('IN'),
                     if (showTot) headSummary('TOT'),
-                  ]),
+                  ], colour: theme.colorScheme.surfaceContainerHighest,
+                     height: _rowH),
                   // Par row
                   HoleGridBand(
                     lbl('Par', theme.textTheme.bodySmall
@@ -244,7 +263,25 @@ class StrokePlayProgressGridState extends State<StrokePlayProgressGrid> {
                           )),
                     if (showIn) parSummary(back),
                     if (showTot) parSummary([...front, ...back]),
-                  ]),
+                  ], colour: theme.colorScheme.surfaceContainerLow,
+                     height: _rowH),
+                  // **Index** — the hole's stroke index, so a golfer can see
+                  // which holes are hardest and read off where his strokes
+                  // fall. The dots above the score boxes say WHERE; this says
+                  // why. A nine has no index total, so those slots stay
+                  // empty, exactly as the standard card leaves them.
+                  if (hasStrokeIndex)
+                    HoleGridBand(
+                      lbl('Index', theme.textTheme.labelSmall
+                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                      [
+                      for (final h in front) holeCell(h, child: siText(h)),
+                      if (showOut) const SizedBox(width: summaryW, height: _rowH),
+                      for (final h in back) holeCell(h, child: siText(h)),
+                      if (showIn) const SizedBox(width: summaryW, height: _rowH),
+                      if (showTot) const SizedBox(width: summaryW, height: _rowH),
+                    ], colour: theme.colorScheme.surfaceContainerLow,
+                       height: _rowH),
                   const HoleGridBand.rule(),
                   // Per-player gross scores with stroke-dot indicators + the
                   // OUT / IN / TOT gross totals (matching the leaderboard).

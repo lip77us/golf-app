@@ -90,13 +90,34 @@ void main() {
       expect(find.text('P12'), findsOneWidget);
       expect(find.text('Hole'), findsOneWidget);
       expect(find.text('Par'), findsOneWidget);
-      // **Twice each, and that is the correct answer.** The hole row numbers
-      // 1..18, so a gross of 5 shares its glyph with hole 5 — there is no
-      // score a hole number cannot collide with. The count is the probe: one
-      // header cell plus one score cell. (4 is a par as well and appears
-      // eighteen more times, which is why it is not used here.)
-      expect(find.text('5'), findsNWidgets(2));   // hole 5 + P11 on the 2nd
-      expect(find.text('3'), findsNWidgets(2));   // hole 3 + P12 on the 1st
+      // The house header is three bands, not two: the index is what says
+      // which holes are hard, and the dots above the score boxes only say
+      // where the strokes fall.
+      expect(find.text('Index'), findsOneWidget);
+      // **Three each, and that is the correct answer.** The hole row numbers
+      // 1..18 and the index row repeats them (this fixture indexes every hole
+      // by its own number), so a gross of 5 shares its glyph with hole 5 and
+      // with index 5 — there is no score a hole number cannot collide with.
+      // The count is the probe: header cell + index cell + score cell. (4 is a
+      // par as well and appears eighteen more times, which is why it is not
+      // used here.)
+      expect(find.text('5'), findsNWidgets(3));   // hole 5, index 5, P11's 2nd
+      expect(find.text('3'), findsNWidgets(3));   // hole 3, index 3, P12's 1st
+    });
+
+    testWidgets('a card with no stroke index draws no Index row', (tester) async {
+      // A row of dashes is worse than no row, and an older payload has none.
+      final holes = [
+        for (var h = 1; h <= 18; h++)
+          ScorecardHole(holeNumber: h, par: 4, strokeIndex: 0, yards: 400,
+              scores: const []),
+      ];
+      await _pump(
+          tester,
+          Scorecard(foursomeId: 1, groupNumber: 1, holes: holes,
+              totals: const []));
+      expect(find.text('Hole'), findsOneWidget);
+      expect(find.text('Index'), findsNothing);
     });
 
     testWidgets('an unscored hole is a dash, not a blank or a zero',
@@ -147,9 +168,10 @@ void main() {
       final taps = <int>[];
       await _pump(tester, _card({_me: List.filled(18, 4)}),
           onTapHole: taps.add);
-      // The par cell of hole 12 — the label column is pinned and takes no
-      // taps, so any cell in the column will do.
-      await tester.tap(find.text('12'));
+      // The header cell of hole 12 — the label column is pinned and takes no
+      // taps, so any cell in the column will do. `.first` because the index
+      // row repeats the number in this fixture.
+      await tester.tap(find.text('12').first);
       expect(taps, [12]);
     });
   });

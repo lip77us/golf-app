@@ -31,7 +31,7 @@ import '../widgets/payout_config_field.dart';
 const _kHowItPlays = <List<String>>[
   ['Every round counts.', ' The best score ', 'to par',
    ' on each hole number is kept.'],
-  ['Those 18 bests are the golfer’s ', '', 'eclectic card',
+  ['Those 18 bests are the golfer’s ', '', 'Eclectic card',
    '. Lowest total to par wins.'],
   ['Net strokes are given ', '', 'per round',
    ', from that day’s course handicap and stroke index.'],
