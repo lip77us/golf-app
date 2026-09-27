@@ -8,14 +8,28 @@ may still have opted in (opt-in != install != sign-in != notifications).
 
 Run against prod:
 
-    railway run python manage.py shell < scripts/android_testers.py
+    railway ssh "/opt/venv/bin/python manage.py shell" < scripts/android_testers.py
 
-or paste the body into `python manage.py shell`.
+**Not `railway run`.** That runs on YOUR machine with prod's env injected, and
+`DATABASE_URL` names `postgres.railway.internal` — a private hostname that only
+resolves inside Railway's network, so it dies with "could not translate host
+name". `railway ssh` runs inside the container, where it does resolve. The
+container's Django lives in `/opt/venv`, not on the default PATH, so the full
+interpreter path is required. stdin is forwarded, hence the `<`.
+
+Locally: `poetry run python manage.py shell < scripts/android_testers.py`
+(the repo has no `.venv`; Django is in poetry's virtualenv).
 """
+
+from datetime import datetime, timezone
 
 from accounts.models import DeviceToken, User
 from accounts.phone import normalize
 from core.models import Player
+
+# Closed testing - Alpha went live 19 Sep 2026. Activity older than this
+# cannot be a closed-test install.
+CLOSED_TRACK_OPENED = datetime(2026, 9, 19, tzinfo=timezone.utc)
 
 # The Play closed-track tester list (Test and release -> Closed testing ->
 # Manage track -> Testers -> the arrow beside the list name).
@@ -41,6 +55,22 @@ def _name_for(user):
     return (p.name if p else None) or user.get_username()
 
 
+def _note(user, updated_at):
+    """Flag rows that are NOT a real tester who joined the closed test.
+
+    Two kinds turned up on the first prod run and both read as testers
+    otherwise: the `seed_demo` reviewer block, and golfers whose last activity
+    predates the closed track (leftover internal-testing installs).
+    """
+    notes = []
+    phone = (user.phone or "")
+    if phone.startswith("+1310555010"):
+        notes.append("seed_demo account, not a golfer")
+    if updated_at < CLOSED_TRACK_OPENED:
+        notes.append("predates the closed track — internal-testing leftover")
+    return "  <- " + "; ".join(notes) if notes else ""
+
+
 def main():
     line = "=" * 64
 
@@ -60,7 +90,8 @@ def main():
             continue          # one line per person, newest device first
         seen_users.add(d.user_id)
         print(f"  {_name_for(d.user):<24} {d.user.phone or '(no phone)':<16} "
-              f"last seen {d.updated_at:%Y-%m-%d %H:%M}")
+              f"last seen {d.updated_at:%Y-%m-%d %H:%M}"
+              f"{_note(d.user, d.updated_at)}")
     print(f"\n  {len(seen_users)} distinct golfer(s) on Android")
 
     # ---- 2. Platform split -------------------------------------------

@@ -103,13 +103,29 @@ The old internal join URL (`.../apps/internaltest/4701572945338269346`) is
   immediately before every upload.**)
 - Android App Links verified working -> §6.
 
+### THE 14-DAY CLOCK — started 2026-09-26
+
+**Twelfth tester opted in: Saturday 26 September 2026, ~21:19 PDT.** Confirmed
+in Play Console the same evening — `Have at least 12 testers opted-in to your
+closed test` went struck-through and its "N testers currently opted-in"
+subtitle disappeared.
+
+- **Earliest you can apply for production: Friday 10 October 2026.**
+  Leave it to **Saturday 11 October** for a clean fourteen elapsed days —
+  Google's wording is "opted in continuously for the *preceding* 14 days", and
+  there is nothing to gain from testing the boundary.
+- **Play shows a COUNT, never a countdown.** This entry is the only record of
+  when the clock started; the console will not tell you.
+- **It resets if the count drops below 12.** 17 names are on the list and ~12
+  have opted in, so there is little margin. Nobody should tap
+  `Leave test program` before 11 Oct.
+- Shipping new builds into the closed track does NOT reset it (2.9.2+43 went
+  out mid-clock). Only opting out does.
+
 ### Still to do, in order of what blocks the calendar
 
-- [ ] **Recruit 11 more testers — 1 of 12 opted in.** The 14-day clock starts
-      when the TWELFTH opts in and RESETS if the count drops below 12. Add them
-      to the `Halved Internal` email list; it is already attached to the closed
-      track. Being on the list is NOT the same as having opted in.
-- [ ] Run the closed test 14 days, then **Apply for production access** — a
+- [x] **12 testers opted in** — done 26 Sep 2026. See the clock above.
+- [ ] **Apply for production access on/after 11 Oct 2026** — a
       separate human-reviewed questionnaire about how the test went. Expect it
       to feel like the first submission, not like a routine update.
 - [ ] The two push defects + two QA findings -> `android-qa-findings.md`.
