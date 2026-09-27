@@ -1844,7 +1844,18 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           if (!m.player.isPhantom)
             (id: m.player.id, shortName: m.player.shortName),
       ];
-      final standing = tournamentFieldStanding(fieldStanding, me, card: card);
+      // The whole ROUND's golfers, so the reader can be named while he is
+      // looking at a group he is not in — which is when the name matters.
+      String nameOf(int id) {
+        for (final f in round.foursomes) {
+          for (final m in f.memberships) {
+            if (m.player.id == id) return m.player.shortName;
+          }
+        }
+        return '';
+      }
+      final standing = tournamentFieldStanding(fieldStanding, me,
+          card: card, nameOf: nameOf);
       return StandingRibbon(
         kind: StandingKind.result,
         // Before his first score there is still a way to the board, which is

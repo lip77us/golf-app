@@ -220,9 +220,20 @@ StrokePlayStanding? strokePlayStanding({
 ///
 /// The two cases are kept apart on purpose: a reader who IS in the field and
 /// has not teed off still gets `Tee off`, because that is true of him.
+///
+/// **The row names its golfer in BOTH cases.** It used to name one only in
+/// the fallback, on the reasoning that a reader reading his own standing
+/// knows whose it is. On a tournament screen he frequently is not: the card
+/// in front of him is another group's, and `T-1 of 8 · E thru 2` over four
+/// golfers who are thru 6 describes a man who is not on the screen. Reported
+/// from a round where the reader was in group 1 and scoring group 2.
+///
+/// [nameOf] resolves a short name anywhere in the ROUND, not just on this
+/// card, because that is exactly the case the name exists for.
 StrokePlayStanding? tournamentFieldStanding(
     Map<int, FieldPlace> fieldStanding, int? playerId,
-    {List<({int id, String shortName})> card = const []}) {
+    {List<({int id, String shortName})> card = const [],
+     String Function(int playerId)? nameOf}) {
   StrokePlayStanding? format(FieldPlace p, String who) {
     if (!p.hasFigure || p.thru == 0) return null;
     // **Stableford counts the other way up**, and says so in its own unit.
@@ -242,8 +253,8 @@ StrokePlayStanding? tournamentFieldStanding(
 
   final me = playerId == null ? null : fieldStanding[playerId];
   // He is in the field. Whatever it says about him is the row — including
-  // nothing, before he has teed off.
-  if (me != null) return format(me, '');
+  // nothing, before he has teed off — and it says WHOSE.
+  if (me != null) return format(me, nameOf?.call(playerId!) ?? '');
 
   // He is not. Report the best-placed golfer on this card, named — a tie
   // takes the first in card order, which is the order the rows are drawn in.

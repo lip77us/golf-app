@@ -57,6 +57,43 @@ void main() {
     });
   });
 
+  group('**the row says whose standing it is**', () {
+    // It used to name a golfer only when the reader was not in the field, on
+    // the reasoning that a man reading his own standing knows whose it is.
+    // On a tournament screen he frequently is not looking at his own group:
+    // `T-1 of 8 · E thru 2` over four golfers who are thru 6 describes a man
+    // who is not on the screen at all.
+    test('the reader is named too', () {
+      final st = tournamentFieldStanding(
+        const {_me: FieldPlace(rank: 1, tied: true, field: 8,
+                               netToPar: 0, thru: 3)},
+        _me,
+        nameOf: (id) => id == _me ? 'AP' : '',
+      )!;
+      expect(st.place, 'AP T-1 of 8');
+      expect(st.score, 'E thru 3');
+    });
+
+    test('no resolver, no name — every older caller is unchanged', () {
+      final st = tournamentFieldStanding(const {
+        _me: FieldPlace(rank: 1, tied: true, field: 8, netToPar: 0, thru: 3),
+      }, _me)!;
+      expect(st.place, 'T-1 of 8');
+    });
+
+    test('a one-golfer event still reports the score alone', () {
+      // There is no place to attach a name to, and `AP` over a bare score
+      // would read as a place.
+      final st = tournamentFieldStanding(
+        const {_me: FieldPlace(rank: 1, field: 1, netToPar: -1, thru: 3)},
+        _me,
+        nameOf: (_) => 'AP',
+      )!;
+      expect(st.place, 'AP');
+      expect(st.score, '−1 thru 3');
+    });
+  });
+
   group('**what it will not claim**', () {
     test('a golfer who has not teed off has no row', () {
       // Not level par — not on the board. The screen draws `Tee off`.
