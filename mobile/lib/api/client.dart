@@ -883,6 +883,62 @@ class ApiClient {
     return Map<String, dynamic>.from(data as Map);
   }
 
+  // ---- 40 Balls (tournament group game) ----
+
+  /// The TD's settings plus each group's derived budget. There is no ball plan
+  /// to fetch: the counts are the group's, picked hole by hole.
+  Future<Map<String, dynamic>> getFortyBallsSetup(int roundId) async {
+    final data = await _get('/rounds/$roundId/forty-balls/setup/');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  /// Saving this turns Irish Rumble and Better Ball OFF for the round — the
+  /// server does it, because the rule is about the round rather than about
+  /// this screen.
+  Future<Map<String, dynamic>> postFortyBallsSetup(
+    int roundId, {
+    required String                     handicapMode,
+    required int                        netPercent,
+    required bool                       netMaxDoubleBogey,
+    required double                     entryFee,
+    required List<Map<String, dynamic>> payouts,
+  }) async {
+    final data = await _post('/rounds/$roundId/forty-balls/setup/', {
+      'handicap_mode'        : handicapMode,
+      'net_percent'          : netPercent,
+      'net_max_double_bogey' : netMaxDoubleBogey,
+      'entry_fee'            : entryFee.toStringAsFixed(2),
+      'payouts'              : payouts,
+    });
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  Future<FortyBallsSummary> getFortyBalls(int roundId) async {
+    final data = await _get('/rounds/$roundId/forty-balls/');
+    return FortyBallsSummary.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  /// The picker's state for one hole, and the group's card.
+  Future<FortyBallsHoleState> getFortyBallsHole(
+      int foursomeId, int hole) async {
+    final data = await _get(
+        '/foursomes/$foursomeId/forty-balls/count/?hole=$hole');
+    return FortyBallsHoleState.fromJson(
+        Map<String, dynamic>.from(data as Map));
+  }
+
+  /// Record the group's pick. Throws on 409 — the hole is not fully scored, is
+  /// settled, or the group is out; the caller re-reads rather than re-prompts.
+  Future<FortyBallsHoleState> postFortyBallsCount(
+      int foursomeId, int hole, int count) async {
+    final data = await _post('/foursomes/$foursomeId/forty-balls/count/', {
+      'hole_number': hole,
+      'count'      : count,
+    });
+    return FortyBallsHoleState.fromJson(
+        Map<String, dynamic>.from(data as Map));
+  }
+
   // ---- Eclectic (tournament, multi-round side game) ----
 
   /// The TD's two pools, plus the availability gate and the round list the

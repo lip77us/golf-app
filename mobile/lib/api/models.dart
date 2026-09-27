@@ -7987,3 +7987,239 @@ class EclecticSummary {
             : EclecticPool.fromJson(Map<String, dynamic>.from(j['net'] as Map)),
       );
 }
+
+// ---------------------------------------------------------------------------
+// 40 Balls — the group picks how many of its nets count, hole by hole
+// ---------------------------------------------------------------------------
+
+/// One hole of one group's card.
+class FortyBallsHole {
+  final int  hole;
+  final int? par;
+  /// What the group spent. Null until it has picked.
+  final int? count;
+  /// The app filled this in because the group had no choice left — drawn amber,
+  /// so a run of 4s reads as arithmetic rather than as a decision.
+  final bool appSet;
+  /// Sum of the counted scores − count × par. Null until picked.
+  final int? result;
+  final List<int> countedIds;
+  /// Net (or gross, per the round's setting) by player id, already capped.
+  final Map<int, int> scores;
+
+  const FortyBallsHole({
+    required this.hole, required this.par, required this.count,
+    required this.appSet, required this.result, required this.countedIds,
+    required this.scores,
+  });
+
+  factory FortyBallsHole.fromJson(Map<String, dynamic> j) => FortyBallsHole(
+        hole   : (j['hole'] as num).toInt(),
+        par    : (j['par'] as num?)?.toInt(),
+        count  : (j['count'] as num?)?.toInt(),
+        appSet : j['app_set'] as bool? ?? false,
+        result : (j['result'] as num?)?.toInt(),
+        countedIds: ((j['counted_ids'] as List?) ?? const [])
+            .map((e) => (e as num).toInt()).toList(),
+        scores : {
+          for (final e in (j['scores'] as Map? ?? const {}).entries)
+            int.parse(e.key.toString()): (e.value as num).toInt(),
+        },
+      );
+}
+
+/// One group on the board, and the card its row opens.
+class FortyBallsGroup {
+  final int foursomeId;
+  final int groupNumber;
+  final int groupSize;
+  final int budget;
+  final int spent;
+  final int left;
+  /// Balls the group can still leave out over the holes it has left.
+  final int slack;
+  final int total;
+  /// `4/3` on a threesome, null on a foursome. Ranking only — the per-hole
+  /// figures on the card stay raw.
+  final String? factor;
+  /// The figure the board sorts on. **Null when the group is out**: a total
+  /// built from a budget that cannot come out is not a result.
+  final double? rankingTotal;
+  /// Out of 40 Balls — enough golfers dropped that the holes left cannot
+  /// absorb the balls still owed. Its scores still count for the championship.
+  final bool dq;
+  final int? rank;
+  final bool tied;
+  final double payout;
+  final double perPersonPayout;
+  final int splitWays;
+  /// Balls the holes it has left can absorb between them. Below [left] is the
+  /// DQ — the server decides it, this is what says by how much.
+  final int capacity;
+  /// Holes with no count yet.
+  final int holesLeft;
+  final List<FortyBallsHole> holes;
+  final List<int> holesInPlay;
+
+  const FortyBallsGroup({
+    required this.foursomeId, required this.groupNumber,
+    required this.groupSize, required this.budget, required this.spent,
+    required this.left, required this.slack, required this.total,
+    required this.factor, required this.rankingTotal, required this.dq,
+    required this.rank, required this.tied, required this.payout,
+    required this.perPersonPayout, required this.splitWays,
+    required this.capacity, required this.holesLeft,
+    required this.holes, required this.holesInPlay,
+  });
+
+  bool get isFinished => left == 0 && !dq;
+
+  factory FortyBallsGroup.fromJson(Map<String, dynamic> j) => FortyBallsGroup(
+        foursomeId : (j['foursome_id'] as num).toInt(),
+        groupNumber: (j['group_number'] as num?)?.toInt() ?? 0,
+        groupSize  : (j['group_size'] as num?)?.toInt() ?? 0,
+        budget     : (j['budget'] as num?)?.toInt() ?? 0,
+        spent      : (j['spent'] as num?)?.toInt() ?? 0,
+        left       : (j['left'] as num?)?.toInt() ?? 0,
+        slack      : (j['slack'] as num?)?.toInt() ?? 0,
+        total      : (j['total'] as num?)?.toInt() ?? 0,
+        factor     : j['factor'] as String?,
+        rankingTotal: (j['ranking_total'] as num?)?.toDouble(),
+        dq         : j['dq'] as bool? ?? false,
+        rank       : (j['rank'] as num?)?.toInt(),
+        tied       : j['tied'] as bool? ?? false,
+        payout     : (j['payout'] as num?)?.toDouble() ?? 0,
+        perPersonPayout: (j['per_person_payout'] as num?)?.toDouble() ?? 0,
+        splitWays  : (j['split_ways'] as num?)?.toInt() ?? 1,
+        capacity   : (j['capacity'] as num?)?.toInt() ?? 0,
+        holesLeft  : (j['holes_left'] as num?)?.toInt() ?? 0,
+        holes      : ((j['holes'] as List?) ?? const [])
+            .map((h) => FortyBallsHole.fromJson(
+                Map<String, dynamic>.from(h as Map)))
+            .toList(),
+        holesInPlay: ((j['holes_in_play'] as List?) ?? const [])
+            .map((e) => (e as num).toInt()).toList(),
+      );
+}
+
+class FortyBallsSummary {
+  final String handicapMode;
+  final int    netPercent;
+  final bool   netMaxDoubleBogey;
+  final double entryFee;
+  final double pool;
+  final List<Map<String, dynamic>> payouts;
+  final int    nGroups;
+  final List<FortyBallsGroup> results;
+
+  const FortyBallsSummary({
+    required this.handicapMode, required this.netPercent,
+    required this.netMaxDoubleBogey, required this.entryFee,
+    required this.pool, required this.payouts, required this.nGroups,
+    required this.results,
+  });
+
+  factory FortyBallsSummary.fromJson(Map<String, dynamic> j) =>
+      FortyBallsSummary(
+        handicapMode: j['handicap_mode'] as String? ?? 'net',
+        netPercent  : (j['net_percent'] as num?)?.toInt() ?? 100,
+        netMaxDoubleBogey: j['net_max_double_bogey'] as bool? ?? true,
+        entryFee    : (j['entry_fee'] as num?)?.toDouble() ?? 0,
+        pool        : (j['pool'] as num?)?.toDouble() ?? 0,
+        payouts     : ((j['payouts'] as List?) ?? const [])
+            .map((p) => Map<String, dynamic>.from(p as Map)).toList(),
+        nGroups     : (j['n_groups'] as num?)?.toInt() ?? 0,
+        results     : ((j['results'] as List?) ?? const [])
+            .map((r) => FortyBallsGroup.fromJson(
+                Map<String, dynamic>.from(r as Map)))
+            .toList(),
+      );
+}
+
+/// The picker's state for one hole.
+class FortyBallsPickerState {
+  final int  hole;
+  final int  groupSize;
+  /// How many golfers can put a ball on THIS hole — the ceiling. Below
+  /// [groupSize] once somebody has withdrawn.
+  final int  activeHere;
+  final int  budget;
+  final int  spent;
+  final int  left;
+  final int  holesAfter;
+  /// Balls the remaining holes can absorb between them.
+  final int  capacity;
+  final int  lo;
+  final int  hi;
+  /// The budget can no longer come out — the group is out of 40 Balls.
+  final bool dq;
+  final int? count;
+  final bool appSet;
+  /// `2.7 a hole` — balls left ÷ holes left, one decimal.
+  final double? average;
+  final int  slack;
+  final bool canPick;
+  final bool scoresIn;
+  final int? par;
+  final Map<int, int> nets;
+
+  const FortyBallsPickerState({
+    required this.hole, required this.groupSize, required this.activeHere,
+    required this.budget, required this.spent, required this.left,
+    required this.holesAfter, required this.capacity, required this.lo,
+    required this.hi, required this.dq, required this.count,
+    required this.appSet, required this.average, required this.slack,
+    required this.canPick, required this.scoresIn, required this.par,
+    required this.nets,
+  });
+
+  /// No choice left and every remaining ball must count.
+  bool get noSlack => lo == hi && hi > 0;
+
+  /// The budget is gone; scores still go in for the championship.
+  bool get spentOut => lo == 0 && hi == 0 && left == 0;
+
+  factory FortyBallsPickerState.fromJson(Map<String, dynamic> j) =>
+      FortyBallsPickerState(
+        hole      : (j['hole'] as num).toInt(),
+        groupSize : (j['group_size'] as num?)?.toInt() ?? 0,
+        activeHere: (j['active_here'] as num?)?.toInt() ?? 0,
+        budget    : (j['budget'] as num?)?.toInt() ?? 0,
+        spent     : (j['spent'] as num?)?.toInt() ?? 0,
+        left      : (j['left'] as num?)?.toInt() ?? 0,
+        holesAfter: (j['holes_after'] as num?)?.toInt() ?? 0,
+        capacity  : (j['capacity'] as num?)?.toInt() ?? 0,
+        lo        : (j['lo'] as num?)?.toInt() ?? 0,
+        hi        : (j['hi'] as num?)?.toInt() ?? 0,
+        dq        : j['dq'] as bool? ?? false,
+        count     : (j['count'] as num?)?.toInt(),
+        appSet    : j['app_set'] as bool? ?? false,
+        average   : (j['average'] as num?)?.toDouble(),
+        slack     : (j['slack'] as num?)?.toInt() ?? 0,
+        canPick   : j['can_pick'] as bool? ?? false,
+        scoresIn  : j['scores_in'] as bool? ?? false,
+        par       : (j['par'] as num?)?.toInt(),
+        nets      : {
+          for (final e in (j['nets'] as Map? ?? const {}).entries)
+            int.parse(e.key.toString()): (e.value as num).toInt(),
+        },
+      );
+}
+
+/// What the count endpoint returns: the picker's state and the group's card.
+class FortyBallsHoleState {
+  final FortyBallsPickerState? state;
+  final FortyBallsGroup card;
+
+  const FortyBallsHoleState({required this.state, required this.card});
+
+  factory FortyBallsHoleState.fromJson(Map<String, dynamic> j) =>
+      FortyBallsHoleState(
+        state: j['state'] == null
+            ? null
+            : FortyBallsPickerState.fromJson(
+                Map<String, dynamic>.from(j['state'] as Map)),
+        card: FortyBallsGroup.fromJson(
+            Map<String, dynamic>.from(j['card'] as Map? ?? const {})),
+      );
+}

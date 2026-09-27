@@ -3760,6 +3760,20 @@ class _StepSideGames extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _GameToggleCard(
+          on      : activeGames.contains(GameIds.fortyBalls),
+          title   : '40 Balls',
+          blurb   : 'The same group nets, but the group chooses. Each hole, '
+                    'AFTER the scores are in, it picks how many of its nets '
+                    'count — 0 to 4 — and must spend exactly 40 over the '
+                    'round. A threesome spends 30.',
+          moneyNote: 'Entry, payouts and how a score is measured are set on '
+                     'the 40 Balls screen, right after you create the '
+                     'tournament. The budget follows the group size — you set '
+                     'no balls.',
+          onToggle: (v) => onToggle(GameIds.fortyBalls, v),
+        ),
+        const SizedBox(height: 12),
+        _GameToggleCard(
           on      : activeGames.contains(GameIds.pinkBall),
           title   : 'Pink Ball',
           blurb   : 'One ball per group, no replacements — the last group '

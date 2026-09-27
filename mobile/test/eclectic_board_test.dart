@@ -102,7 +102,10 @@ void main() {
     testWidgets('the number is TO PAR, with E for level and a plus for over',
         (tester) async {
       await pump(tester, payload());
-      expect(find.text('-4'), findsOneWidget);
+      // **U+2212, not an ASCII hyphen.** The house minus, via the shared
+      // `toParLabel` — this board rolled its own format and drew a different
+      // dash from every other board in the app until 26 Sep 2026.
+      expect(find.text('\u22124'), findsOneWidget);
       expect(find.text('+2'), findsOneWidget);
       // A gross total would be a number like 63, which means nothing across
       // two courses with different pars.
@@ -200,7 +203,7 @@ void main() {
       expect(find.text('Dee'), findsOneWidget);
       // And his to-par is shown even though it is better than the leader's:
       // hiding it would be pretending he did not play those holes.
-      expect(find.text('-6'), findsOneWidget);
+      expect(find.text('\u22126'), findsOneWidget);
     });
 
     testWidgets('a golfer with nothing posted gets no count', (tester) async {

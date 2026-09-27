@@ -206,6 +206,7 @@ class _RoundScreenState extends State<RoundScreen> {
     final hasIrishRumble = round.activeGames.contains('irish_rumble');
     final hasBetterBall  = round.activeGames.contains('better_ball');
     final hasPinkBall    = round.activeGames.contains('pink_ball');
+    final hasFortyBalls  = round.activeGames.contains('forty_balls');
     final hasMatchPlay   = round.activeGames.contains('match_play');
     final hasMultiSkins  = round.activeGames.contains('multi_skins');
     // The round-level Mini Singles Bracket list is only useful for a
@@ -226,8 +227,12 @@ class _RoundScreenState extends State<RoundScreen> {
         !roundHasAnyScore && multiFoursome;
     final showStableford = round.activeGames.contains('stableford') &&
         !roundHasAnyScore && multiFoursome;
+    // **Every game with a Configure button has to be in this list**, or the
+    // card is hidden and the button it holds is unreachable. A round playing
+    // only 40 Balls is exactly that case, and it is the third time this shape
+    // has bitten (the casual receipt, the edit-window button).
     final hasSetupGames  = hasIrishRumble || hasBetterBall ||
-        showLowNet || hasPinkBall ||
+        showLowNet || hasPinkBall || hasFortyBalls ||
         showMatchPlaySetup || showStableford;
 
     return RefreshIndicator(
@@ -282,6 +287,7 @@ class _RoundScreenState extends State<RoundScreen> {
               hasBetterBall : hasBetterBall,
               showLowNet:     showLowNet,
               hasPinkBall:    hasPinkBall,
+              hasFortyBalls:  hasFortyBalls,
               hasMatchPlay:   showMatchPlaySetup,
               showStableford: showStableford,
               foursomes:      round.foursomes,
@@ -642,6 +648,7 @@ class _GameSetupCard extends StatelessWidget {
   final bool           hasBetterBall;
   final bool           showLowNet;
   final bool           hasPinkBall;
+  final bool           hasFortyBalls;
   final bool           hasMatchPlay;
   final bool           showStableford;
   final List<Foursome> foursomes;
@@ -652,6 +659,7 @@ class _GameSetupCard extends StatelessWidget {
     required this.hasBetterBall,
     required this.showLowNet,
     required this.hasPinkBall,
+    required this.hasFortyBalls,
     required this.hasMatchPlay,
     required this.showStableford,
     required this.foursomes,
@@ -676,7 +684,9 @@ class _GameSetupCard extends StatelessWidget {
     final hasGroupBoard   = hasIrishRumble || hasBetterBall;
     final beforeLowNet    = hasGroupBoard;
     final beforeStableford = hasGroupBoard || showLowNet;
-    final beforePinkBall  = hasGroupBoard || showLowNet || showStableford;
+    final beforeFortyBalls = hasGroupBoard || showLowNet || showStableford;
+    final beforePinkBall  = hasGroupBoard || showLowNet || showStableford
+                            || hasFortyBalls;
     final beforeMatchPlay = hasGroupBoard || showLowNet || showStableford ||
         hasPinkBall;
 
@@ -720,6 +730,15 @@ class _GameSetupCard extends StatelessWidget {
                     arguments: {'id': roundId, 'returnToHub': true}),
                 icon: const Icon(Icons.tune, size: 18),
                 label: const Text('Edit Stableford'),
+              ),
+            ],
+            if (hasFortyBalls) ...[
+              if (beforeFortyBalls) const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context)
+                    .pushNamed('/forty-balls-setup', arguments: roundId),
+                icon: const Icon(Icons.tune, size: 18),
+                label: const Text('Configure 40 Balls'),
               ),
             ],
             if (hasPinkBall) ...[

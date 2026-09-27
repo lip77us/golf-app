@@ -75,6 +75,10 @@ class GameIds {
 
   // Tournament-only, multi-foursome
   static const String irishRumble    = 'irish_rumble';
+  /// 40 Balls — the Irish Rumble family's one game where the GROUP decides. A
+  /// foursome gets 40 balls for the round and spends 0..4 a hole, picked AFTER
+  /// the scores are in; the best n nets count against n × par.
+  static const String fortyBalls     = 'forty_balls';
   // Better Ball — the same competition as Irish Rumble with the ball
   // count FIXED for all eighteen. Rumble's count moves and the movement
   // is the game; a count that never moves is a different game a golfer
@@ -699,7 +703,7 @@ const List<GameMeta> kGameCatalog = [
     tournament           : true,
     requiresMultiFoursome: true,
     minPlayers           : 2,
-    excludes             : {GameIds.betterBall},
+    excludes             : {GameIds.betterBall, GameIds.fortyBalls},
     // The group-vs-field card: the team's net to par, your place, and the
     // leader with the gap. The header's yardage becomes the ball count, which
     // is the one number that changes what the group does on the tee.
@@ -717,11 +721,28 @@ const List<GameMeta> kGameCatalog = [
     minPlayers           : 2,
     // One round runs one of them. Enforced on the server in both services
     // too — this is the half that stops the TD reaching a form he cannot save.
-    excludes             : {GameIds.irishRumble},
+    excludes             : {GameIds.irishRumble, GameIds.fortyBalls},
     // The same card as Irish Rumble's, with the count in the title instead of
     // the header — it cannot change mid-round, so a corner repeating it would
     // be the same three words eighteen times.
     hasLiveActivity      : true,
+  ),
+  GameMeta(
+    id                   : GameIds.fortyBalls,
+    displayName          : '40 Balls',
+    tournament           : true,
+    requiresMultiFoursome: true,
+    minPlayers           : 2,
+    // The third of the exclusive three, and the exclusion is stated in all
+    // three directions rather than relied on from one: the wizard removes what
+    // the game being turned ON excludes, so a one-way edge would let the pair
+    // through from the other side.
+    excludes             : {GameIds.irishRumble, GameIds.betterBall},
+    // **No live activity yet.** The Irish Rumble card's header carries the
+    // ball count, which is the one number that changes what the group does on
+    // the tee — and in 40 Balls that number does not exist until the hole is
+    // over and the group has chosen it. A card for this game is a different
+    // card, and the packet does not draw one.
   ),
   GameMeta(
     id                   : GameIds.pinkBall,

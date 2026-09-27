@@ -23,6 +23,7 @@ import 'package:flutter/material.dart';
 
 import '../api/models.dart';
 import '../theme/halved_brand.dart';
+import '../utils/stroke_play_standing.dart';
 import 'pinned_hole_grid.dart';
 import 'score_mark.dart';
 import 'stroke_dots.dart';
@@ -387,11 +388,10 @@ class _StandingRow extends StatelessWidget {
     );
   }
 
-  static String _toPar(int? v) {
-    if (v == null) return '–';
-    if (v == 0) return 'E';
-    return v > 0 ? '+$v' : '$v';
-  }
+  /// **`toParLabel`, not a local format.** The house minus is U+2212; this
+  /// rolled its own with an ASCII hyphen, which put a different dash on this
+  /// board from the one on every other.
+  static String _toPar(int? v) => v == null ? '–' : toParLabel(v);
 }
 
 class _Tag extends StatelessWidget {
@@ -657,7 +657,7 @@ class EclecticCardView extends StatelessWidget {
       return cell(Text('–', style: theme.textTheme.labelSmall
           ?.copyWith(color: theme.colorScheme.onSurfaceVariant)));
     }
-    return cell(Text(v == 0 ? 'E' : (v > 0 ? '+$v' : '$v'),
+    return cell(Text(toParLabel(v),
         style: theme.textTheme.labelSmall?.copyWith(
             fontWeight: FontWeight.bold,
             // Pine under, amber over — the same pair the Irish Rumble group
@@ -692,6 +692,6 @@ class EclecticCardView extends StatelessWidget {
     // candidate adds nothing to the eclectic total either, so a partial nine
     // is the honest running figure rather than a misleading one.
     if (!any) return '–';
-    return total == 0 ? 'E' : (total > 0 ? '+$total' : '$total');
+    return toParLabel(total);
   }
 }

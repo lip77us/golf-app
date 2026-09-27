@@ -8,6 +8,7 @@ import '../game_catalog.dart';
 import '../game_colors.dart';
 import '../utils/match_notation.dart';
 import '../utils/nassau_team_style.dart';
+import '../widgets/forty_balls_board.dart';
 import '../widgets/banker_board.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/icon_help_sheet.dart';
@@ -943,6 +944,8 @@ class _GameView extends StatelessWidget {
         // Standard mode: show segment ranking table.
         if (data['is_cup'] == true) return _CupIrishRumbleView(data: data);
         return _IrishRumbleView(data: data);
+      case 'forty_balls':
+        return FortyBallsBoard(data: data);
       case 'better_ball':
         // The same board — see _IrishRumbleView. No cup branch: a cup round
         // scores head-to-head, and Better Ball is a field competition.
