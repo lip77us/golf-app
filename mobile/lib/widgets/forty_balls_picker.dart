@@ -356,9 +356,9 @@ class FortyBallsPickerCard extends StatefulWidget {
   /// Any value that changes when the hole's scores might have. Bump it and the
   /// card re-reads.
   final Object? refreshToken;
-  /// Called after a pick lands, so the screen can refresh anything else that
-  /// reads the count (the pager's gate).
-  final VoidCallback? onChanged;
+  /// Reports the hole's state up — on LOAD as well as after a pick, because
+  /// the pager's gate needs it before the scorer touches anything.
+  final ValueChanged<FortyBallsPickerState?>? onState;
 
   const FortyBallsPickerCard({
     super.key,
@@ -366,7 +366,7 @@ class FortyBallsPickerCard extends StatefulWidget {
     required this.hole,
     this.names = const {},
     this.refreshToken,
-    this.onChanged,
+    this.onState,
   });
 
   @override
@@ -398,6 +398,7 @@ class _FortyBallsPickerCardState extends State<FortyBallsPickerCard> {
           .getFortyBallsHole(widget.foursomeId, widget.hole);
       if (!mounted) return;
       setState(() { _state = r.state; _error = null; });
+      widget.onState?.call(r.state);
     } catch (e) {
       if (mounted) setState(() => _error = friendlyError(e));
     }
@@ -410,7 +411,7 @@ class _FortyBallsPickerCardState extends State<FortyBallsPickerCard> {
           .postFortyBallsCount(widget.foursomeId, widget.hole, n);
       if (!mounted) return;
       setState(() { _state = r.state; _error = null; _busy = false; });
-      widget.onChanged?.call();
+      widget.onState?.call(r.state);
     } catch (e) {
       if (!mounted) return;
       // A 409 means the round moved under us — the hole is settled, or the

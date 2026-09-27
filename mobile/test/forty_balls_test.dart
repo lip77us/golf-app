@@ -287,6 +287,23 @@ void main() {
       }
     });
 
+    test('score entry POSTS the hole and waits for the pick', () {
+      // **The flow the game needs, and the one testing found missing.** Scores
+      // are held locally until the hole is left, so a picker that reads the
+      // server can never see them: the scorer entered four scores, saw
+      // `Waiting on the last score`, pressed next, and only found the picker
+      // by stepping BACK a hole.
+      //
+      // So the pager posts first, then names the pick, then advances — the
+      // same three-step shape Banker already uses, and for the same reason.
+      final src = File('lib/screens/score_entry_screen.dart').readAsStringSync();
+      expect(src.contains('_fortyBallsRound('), isTrue);
+      expect(src.contains('Pick how many balls count'), isTrue,
+          reason: 'the pager must NAME what is missing, not go grey');
+      expect(src.contains("hole < 18 && !_fortyBallsRound(rp)"), isTrue,
+          reason: 'auto-advance must not carry the scorer past the pick');
+    });
+
     test('the setup screen has no ListTile inside its bordered cards', () {
       // A ListTile paints its background and ink splash on the nearest
       // Material ancestor, and `_Card` is a decorated Container — so the

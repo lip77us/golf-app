@@ -1286,6 +1286,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// True when Banker owns this round, in which case the hole is not finished
   /// when the scores are — the three bets still have to resolve and the bank
   /// still has to pass.
+  /// 40 Balls needs the hole POSTED before the group can pick — the count is
+  /// chosen from the nets, and the server only has them once the hole is saved.
+  bool _fortyBallsRound(RoundProvider rp) =>
+      _activeGames(rp.round).contains('forty_balls');
+
+  /// The current hole's picker state, reported up by the card. Null until it
+  /// loads, or when the round does not play 40 Balls.
+  FortyBallsPickerState? _fbState;
+
   bool _bankerRound(RoundProvider rp) =>
       resolvePrimary(rp.round?.primaryGame, rp.round?.activeGames.toSet() ?? {})
           == GameIds.banker;
@@ -2546,6 +2555,51 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       // banks next. Walking straight into hole N+1 leaves the game with
       // nowhere to put a wager and the role silently stuck on whoever held it.
       final banker = _bankerRound(rp);
+
+      // **40 Balls does not walk on either, and for the same reason Banker
+      // does not.** The group picks its count from the nets, so the hole has
+      // to be POSTED before there is anything to pick from — and then it must
+      // not advance until the pick is made, or the scorer has to come back a
+      // hole to do it. That is what testing found: the picker only appeared
+      // after stepping back.
+      //
+      // So the button does three things in order: post, wait for the pick,
+      // then move on.
+      if (_fortyBallsRound(rp)) {
+        final st = _fbState;
+        final posted = st?.scoresIn ?? false;
+        // A group that is OUT, or one the app has already filled in, has
+        // nothing to pick — it walks on like any other round.
+        final needsPick = posted && st != null && !st.dq &&
+            st.count == null && st.canPick;
+
+        if (!posted) {
+          return FilledButton.icon(
+            onPressed: (allDone && !rp.submitting)
+                ? () => _saveCurrentHole(ctx, players, par)
+                : null,
+            icon: rp.submitting
+                ? const SizedBox(
+                    width: 16, height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.check, size: 20),
+            label: Text(rp.submitting ? 'Saving…' : 'Post the hole'),
+            iconAlignment: IconAlignment.end,
+          );
+        }
+        if (needsPick) {
+          // Named rather than greyed and silent — the same rule the rest of
+          // this pager follows for a missing score.
+          return FilledButton.icon(
+            onPressed: null,
+            icon: const Icon(Icons.sports_golf, size: 20),
+            label: const Text('Pick how many balls count'),
+            iconAlignment: IconAlignment.end,
+          );
+        }
+      }
+
       return FilledButton.icon(
         onPressed: (allDone && !rp.submitting)
             ? () => _saveAndAdvance(ctx, players, par)
@@ -2788,7 +2842,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                         if (_selectedHole != hole) return;
                         final rp = context.read<RoundProvider>();
                         if (rp.submitting) return;
-                        if (hole < 18) {
+                        // **40 Balls posts and STAYS.** Auto-advance would
+                        // carry the scorer past the one thing this game asks
+                        // him for; the pager then says what is missing.
+                        if (hole < 18 && !_fortyBallsRound(rp)) {
                           _saveAndAdvance(ctx, players, par);
                         } else {
                           _saveCurrentHole(ctx, players, par);
@@ -2964,7 +3021,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                     games.contains('forty_balls') ? widget.foursomeId : null,
                 fortyBallsToken: '${_selectedHole}:'
                     '${rp.scorecard?.holeData(_selectedHole)?.scores.length}',
-                onFortyBallsChanged: () => setState(() {}),
+                onFortyBallsState: (st) {
+                  if (!mounted) return;
+                  setState(() => _fbState = st);
+                },
                 tournamentCard:
                     (rp.scorecard?.fieldStanding.isNotEmpty ?? false),
                 stablefordResult:
@@ -5118,7 +5178,7 @@ class _GameStatusSection extends StatelessWidget {
   /// round does not play it.
   final int?                        fortyBallsFoursomeId;
   final Object?                     fortyBallsToken;
-  final VoidCallback?               onFortyBallsChanged;
+  final ValueChanged<FortyBallsPickerState?>? onFortyBallsState;
 
   final bool                        tournamentCard;
   final String                      strokePlayHandicapMode;
@@ -5163,7 +5223,7 @@ class _GameStatusSection extends StatelessWidget {
     this.irHandicapMode  = 'net',
     this.fortyBallsFoursomeId,
     this.fortyBallsToken,
-    this.onFortyBallsChanged,
+    this.onFortyBallsState,
     this.tournamentCard = false,
     this.strokePlayHandicapMode = 'net',
     this.strokePlayNetPercent   = 100,
@@ -5415,7 +5475,7 @@ class _GameStatusSection extends StatelessWidget {
               for (final m in players) m.player.id: m.player.displayShort,
             },
             refreshToken: fortyBallsToken,
-            onChanged   : onFortyBallsChanged,
+            onState     : onFortyBallsState,
           ),
           const SizedBox(height: 12),
         ],
