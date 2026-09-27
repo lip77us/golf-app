@@ -180,9 +180,12 @@ def _ordinal(n):
 
 def _group_game_pots(tournament):
     """
-    Irish Rumble and the ball game — **re-drawn every round**, so each appears
-    once per round, entered separately and won separately. A group that wins
-    the ball on both days collects twice.
+    Irish Rumble, 40 Balls and the ball game — **re-drawn every round**, so each
+    appears once per round, entered separately and won separately. A group that
+    wins the ball on both days collects twice.
+
+    A round carries at most ONE of Irish Rumble / 40 Balls / Better Ball, so
+    those three never both appear for the same round number.
 
     Both pay a GROUP, and the place splits among its real golfers: the
     borrowed 4th is not a person and cannot be paid.
@@ -208,6 +211,22 @@ def _group_game_pots(tournament):
                     pot.pay(m, share,
                             detail=f"{_ordinal(row['rank'])} — {row['group']} "
                                    f"({ways} ways)")
+            pots.append(pot)
+
+        if getattr(round_obj, 'forty_balls_config', None) is not None:
+            from services.forty_balls import forty_balls_summary
+            summary = forty_balls_summary(round_obj)
+            pot = _Pot('forty_balls', f'40 Balls · R{n}', n)
+            pot.enter(players, float(summary.get('entry_fee') or 0))
+            for row in summary.get('results', []):
+                share = row.get('per_person_payout') or 0
+                if not share:
+                    continue
+                ways = row.get('split_ways') or 1
+                for m in _group_member_ids(round_obj, row['foursome_id']):
+                    pot.pay(m, share,
+                            detail=f"{_ordinal(row['rank'])} — Group "
+                                   f"{row['group_number']} ({ways} ways)")
             pots.append(pot)
 
         if getattr(round_obj, 'pink_ball_config', None) is not None:

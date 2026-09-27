@@ -236,6 +236,10 @@ def _recalculate_games(foursome: Foursome) -> None:
         from services.irish_rumble import calculate_irish_rumble
         calculate_irish_rumble(round_obj)
 
+    # **40 Balls has no recalc step.** The counts ARE the data — the group
+    # chose them — and the card is derived from them and the scores at read
+    # time. There is nothing stored that a new score could invalidate.
+
     if 'better_ball' in active_games:
         from services.better_ball import calculate_better_ball
         calculate_better_ball(round_obj)
@@ -708,6 +712,12 @@ def _build_leaderboard(round_obj: Round) -> dict:
                 'label': 'Irish Rumble',
                 **summary,
             }
+
+    if 'forty_balls' in active_games:
+        from services.forty_balls import forty_balls_summary
+        summary = forty_balls_summary(round_obj)
+        if summary:
+            games['forty_balls'] = {'label': '40 Balls', **summary}
 
     if 'better_ball' in active_games:
         # **The label is the game's own name**, not the slug's — the app titles
@@ -7847,6 +7857,131 @@ _IR_DEFAULT_SEGMENTS = [
     {'start_hole': 13, 'end_hole': 17, 'balls_to_count': 3},
     {'start_hole': 18, 'end_hole': 18, 'balls_to_count': 4},
 ]
+
+
+class FortyBallsSetupView(APIView):
+    """GET/POST /api/rounds/{id}/forty-balls/setup/
+
+    **The exclusive three.** A round runs one of 40 Balls, Irish Rumble or
+    Better Ball, never two: they score the same group nets and a round carrying
+    two of them would collect two entries for one set of numbers. Turning this
+    on turns the other two off, server-side — the wizard's toggle is a
+    convenience, and a round can be edited from more than one place.
+    """
+    _EXCLUDES = ('irish_rumble', 'better_ball')
+
+    def _dict(self, round_obj, cfg):
+        from services.forty_balls import budget, group_size
+        groups = [
+            {'foursome_id' : fs.pk,
+             'group_number': fs.group_number,
+             'size'        : group_size(fs),
+             'budget'      : budget(fs)}
+            for fs in round_obj.foursomes.order_by('group_number')
+        ]
+        base = {
+            # The setup card reads the budgets off Groups & tees and states
+            # them; the TD sets nothing here.
+            'groups'     : groups,
+            'num_players': sum(g['size'] for g in groups),
+        }
+        if cfg is None:
+            return {**base, 'configured': False,
+                    'handicap_mode': 'net', 'net_percent': 100,
+                    'net_max_double_bogey': True,
+                    'entry_fee': 0.00, 'payouts': []}
+        return {
+            **base,
+            'configured'   : True,
+            'handicap_mode': cfg.handicap_mode,
+            'net_percent'  : cfg.net_percent,
+            'net_max_double_bogey': cfg.net_max_double_bogey,
+            'entry_fee'    : float(cfg.entry_fee),
+            'payouts'      : cfg.payouts or [],
+        }
+
+    def get(self, request, pk):
+        round_obj = get_object_or_404(
+            Round.objects.prefetch_related('foursomes__memberships__player'),
+            pk=pk)
+        from games.models import FortyBallsConfig
+        cfg = FortyBallsConfig.objects.filter(round=round_obj).first()
+        return Response(self._dict(round_obj, cfg))
+
+    def post(self, request, pk):
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
+        from api.serializers import FortyBallsSetupSerializer
+        ser = FortyBallsSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        from games.models import FortyBallsConfig
+        cfg, _ = FortyBallsConfig.objects.update_or_create(
+            round=round_obj,
+            defaults={
+                'handicap_mode': d['handicap_mode'],
+                'net_percent'  : d['net_percent'],
+                'net_max_double_bogey': d['net_max_double_bogey'],
+                'entry_fee'    : d['entry_fee'],
+                'payouts'      : d['payouts'],
+            },
+        )
+        active = [g for g in (round_obj.active_games or [])
+                  if g not in self._EXCLUDES]
+        if 'forty_balls' not in active:
+            active.append('forty_balls')
+        if active != (round_obj.active_games or []):
+            round_obj.active_games = active
+            round_obj.save(update_fields=['active_games'])
+        return Response(self._dict(round_obj, cfg),
+                        status=status.HTTP_201_CREATED)
+
+
+class FortyBallsResultView(APIView):
+    """GET /api/rounds/{id}/forty-balls/ — the board."""
+    def get(self, request, pk):
+        round_obj = round_for_reader(request.user, pk)
+        from services.forty_balls import forty_balls_summary
+        return Response(forty_balls_summary(round_obj))
+
+
+class FortyBallsCountView(APIView):
+    """GET/POST /api/foursomes/{id}/forty-balls/count/
+
+    GET reports the picker's state for one hole (`?hole=11`); POST records the
+    group's pick. Scorer-gated like every other per-foursome score write.
+    """
+    def get(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.forty_balls import group_card, hole_state
+        hole = request.query_params.get('hole')
+        card = group_card(foursome)
+        if hole:
+            try:
+                return Response({'state': hole_state(foursome, int(hole)),
+                                 'card': card})
+            except (TypeError, ValueError):
+                pass
+        return Response({'card': card})
+
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from api.serializers import FortyBallsCountSerializer
+        from services.forty_balls import (FortyBallsLocked, group_card,
+                                          hole_state, set_count)
+        ser = FortyBallsCountSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+        try:
+            set_count(foursome, d['hole_number'], d['count'])
+        except FortyBallsLocked as e:
+            # 409, not 400: the body was well formed and the refusal is about
+            # the round's state, which is a different thing for a client to
+            # handle — it re-reads rather than re-prompts.
+            return Response({'detail': str(e)},
+                            status=status.HTTP_409_CONFLICT)
+        return Response({'state': hole_state(foursome, d['hole_number']),
+                         'card': group_card(foursome)})
 
 
 class IrishRumbleSetupView(APIView):

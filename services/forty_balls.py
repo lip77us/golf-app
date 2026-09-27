@@ -453,3 +453,72 @@ def group_card(foursome) -> dict:
         'holes'       : rows,
         'holes_in_play': holes,
     }
+
+
+def forty_balls_summary(round_obj) -> dict:
+    """The board: every group ranked, each with its budget and its card.
+
+    **A DQ'd group is listed but not RANKED.** Its scores are real and stay
+    visible; what it has no honest claim to is a place, because its total came
+    from a budget that cannot come out. So it sorts to the bottom, carries no
+    rank number and takes no prize — the same shape the app already uses for a
+    golfer who is ranked but not paid, one level up.
+    """
+    config = _config(round_obj)
+    if config is None:
+        return {}
+
+    cards = [group_card(fs) for fs in
+             Foursome.objects.filter(round=round_obj).order_by('group_number')]
+    cards = [c for c in cards if c['group_size'] > 0]
+
+    live = [c for c in cards if not c['dq']]
+    dead = [c for c in cards if c['dq']]
+    live.sort(key=lambda c: c['ranking_total'])
+
+    # Groups level on the ranking figure share a rank and split the places they
+    # cover — the same rule Irish Rumble settles on, and the reason the factor
+    # is an exact Fraction rather than a float.
+    from services.payout import split_tied_places
+    payouts_cfg = {p['place']: float(p['amount']) for p in (config.payouts or [])}
+    ranks = []
+    rank = 1
+    for i, c in enumerate(live):
+        if i > 0 and c['ranking_total'] != live[i - 1]['ranking_total']:
+            rank = i + 1
+        ranks.append(rank)
+
+    shares = split_tied_places(payouts_cfg, ranks) if payouts_cfg else {}
+
+    results = []
+    for c, r in zip(live, ranks):
+        n_real = c['group_size']
+        group_prize = shares.get(r, 0.0)
+        results.append({
+            **c,
+            'rank'      : r,
+            'tied'      : ranks.count(r) > 1,
+            'payout'    : group_prize,
+            # A group prize splits among its REAL golfers — there is no
+            # borrowed 4th here to pay.
+            'per_person_payout': round(group_prize / n_real, 2) if n_real else 0,
+            'split_ways': n_real,
+        })
+    for c in dead:
+        results.append({**c, 'rank': None, 'tied': False,
+                        'payout': 0.0, 'per_person_payout': 0,
+                        'split_ways': c['group_size']})
+
+    fee = float(config.entry_fee)
+    golfers = sum(c['group_size'] for c in cards)
+    return {
+        'handicap_mode': config.handicap_mode,
+        'net_percent'  : config.net_percent,
+        'net_max_double_bogey': bool(config.net_max_double_bogey),
+        'entry_fee'    : fee,
+        'pool'         : round(fee * golfers, 2),
+        'payouts'      : [{'place': p['place'], 'amount': float(p['amount'])}
+                          for p in (config.payouts or [])],
+        'n_groups'     : len(cards),
+        'results'      : results,
+    }

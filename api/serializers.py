@@ -1688,6 +1688,37 @@ class StablefordChampionshipSetupSerializer(serializers.Serializer):
     pts_double    = serializers.IntegerField(default=0)
 
 
+class FortyBallsSetupSerializer(serializers.Serializer):
+    """POST /api/rounds/{id}/forty-balls/setup/
+
+    The TD sets how a score is MEASURED and what the round is worth. He sets no
+    budget and no ball plan: the budget follows the group size and the counts
+    are the group's, hole by hole.
+    """
+    handicap_mode = serializers.ChoiceField(
+                        choices=['net', 'gross'], default='net')
+    #: 50–100 in steps of 5, Net only.
+    net_percent   = serializers.IntegerField(min_value=50, max_value=100,
+                                             default=100)
+    net_max_double_bogey = serializers.BooleanField(default=True)
+    entry_fee     = serializers.DecimalField(
+                        max_digits=8, decimal_places=2, default='0.00')
+    payouts       = serializers.ListField(
+                        child=serializers.DictField(), default=list)
+
+    def validate_net_percent(self, v):
+        if v % 5:
+            raise serializers.ValidationError(
+                'The allowance moves in steps of 5.')
+        return v
+
+
+class FortyBallsCountSerializer(serializers.Serializer):
+    """POST /api/foursomes/{id}/forty-balls/count/ — the group's pick."""
+    hole_number = serializers.IntegerField(min_value=1, max_value=18)
+    count       = serializers.IntegerField(min_value=0, max_value=4)
+
+
 class EclecticSetupSerializer(serializers.Serializer):
     """POST /api/tournaments/{id}/eclectic/setup/
 
