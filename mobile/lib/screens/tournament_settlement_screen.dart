@@ -444,6 +444,11 @@ class _TournamentSettlementScreenState
   // ── By game — the TD's check ──────────────────────────────────────────
   List<Widget> _byGameRows(List<Map<String, dynamic>> games) {
     final theme = Theme.of(context);
+    // **A pot that has not awarded its prizes yet is unfinished, not wrong.**
+    // Eclectic pays nobody until a card is whole, so mid-event its entries
+    // are in and its prizes are zero — and the card claimed the payout table
+    // was at fault over a table the setup screen had just called correct.
+    final provisional = _data?['provisional'] == true;
     return [
       for (final g in games)
         Card(
@@ -462,11 +467,15 @@ class _TournamentSettlementScreenState
                   Icon(
                     (g['balanced'] == true)
                         ? Icons.check_circle_outline
-                        : Icons.error_outline,
+                        : (provisional
+                            ? Icons.hourglass_empty
+                            : Icons.error_outline),
                     size: 18,
                     color: (g['balanced'] == true)
                         ? Colors.green.shade700
-                        : theme.colorScheme.error,
+                        : (provisional
+                            ? theme.colorScheme.onSurfaceVariant
+                            : theme.colorScheme.error),
                   ),
                 ]),
                 const SizedBox(height: 6),
@@ -493,10 +502,15 @@ class _TournamentSettlementScreenState
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(
-                      'Out by ${_money(g['difference'] as num? ?? 0)} — the '
-                      'mistake is in this game\'s payout table.',
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: theme.colorScheme.error),
+                      provisional
+                          ? '${_money(g['difference'] as num? ?? 0)} still to '
+                            'be awarded — the event is live.'
+                          : 'Out by ${_money(g['difference'] as num? ?? 0)} — '
+                            'the mistake is in this game\'s payout table.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: provisional
+                              ? theme.colorScheme.onSurfaceVariant
+                              : theme.colorScheme.error),
                     ),
                   ),
               ],
@@ -514,14 +528,23 @@ class _TournamentSettlementScreenState
   Widget _sumZeroFooter() {
     final theme     = Theme.of(context);
     final collected = (_data!['total_collected'] as num?)?.toDouble() ?? 0;
-    final paid      = (_data!['total_paid'] as num?)?.toDouble() ?? 0;
-    final zero      = _data!['sum_zero'] == true;
+    final paid       = (_data!['total_paid'] as num?)?.toDouble() ?? 0;
+    final zero       = _data!['sum_zero'] == true;
+    // Live, the two sides genuinely do not cancel — a pot that has taken
+    // entries and awarded nothing yet is the difference — and calling that an
+    // arithmetic bug reports the same shortfall a second time under a worse
+    // name.
+    final provisional = _data?['provisional'] == true;
+    final alarm       = !zero && !provisional;
     return SectionCard(
       title: 'Balance',
       trailing: Icon(
-        zero ? Icons.check_circle : Icons.error_outline,
+        zero ? Icons.check_circle
+             : (provisional ? Icons.hourglass_empty : Icons.error_outline),
         size: 18,
-        color: zero ? Colors.green.shade700 : theme.colorScheme.error,
+        color: zero ? Colors.green.shade700
+                    : (provisional ? theme.colorScheme.onSurfaceVariant
+                                   : theme.colorScheme.error),
       ),
       child: Column(children: [
         _line('Collected', collected),
@@ -534,11 +557,23 @@ class _TournamentSettlementScreenState
             _money(collected - paid),
             style: TextStyle(
               fontWeight: FontWeight.w700,
-              color: zero
-                  ? theme.colorScheme.onSurface : theme.colorScheme.error,
+              color: alarm
+                  ? theme.colorScheme.error : theme.colorScheme.onSurface,
             ),
           ),
         ]),
+        if (!zero && provisional)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Prizes not yet awarded — this closes when every round does.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+          ),
       ]),
     );
   }

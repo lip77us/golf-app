@@ -394,3 +394,68 @@ class ReceiptPayloadTests(SettlementBase):
         SettlementSend.objects.create(tournament=self.tourn, mode='field',
                                       recipients=7)
         self.assertEqual(self._payload()['last_send']['recipients'], 7)
+
+
+class ProvisionalChecksTests(TestCase):
+    """**The arithmetic is not finished until the rounds are.**
+
+    Reported from testing on a live event: `Eclectic · Net does not balance —
+    $20.00 underpaid. The mistake is in its payout table` over a payout table
+    the setup screen called correct on the same data, and then the same $20
+    again as `Collected and paid do not cancel ... an arithmetic bug`.
+
+    Eclectic pays nobody until a card is WHOLE, so mid-event its entries are
+    in and its prizes are zero. That is the game working.
+    """
+
+    def setUp(self):
+        from datetime import date
+        from decimal import Decimal
+        from games.models import EclecticConfig
+        self.course = make_course('North Links')
+        self.tee = make_tee(course=self.course, holes=DEFAULT_HOLES)
+        self.tourn = make_tournament(name='Two Day')
+        self.tourn.total_rounds = 2
+        self.tourn.save()
+        self.ann = make_player('Ann', handicap_index=0)
+        self.bea = make_player('Bea', handicap_index=0)
+        self.rounds = []
+        for n in (1, 2):
+            r = make_round(course=self.course, tournament=self.tourn,
+                           round_number=n)
+            r.date = date(2026, 10, 10 + n)
+            r.save()
+            self.rounds.append(r)
+            make_foursome(r, [(self.ann, 0), (self.bea, 0)], tee=self.tee)
+        EclecticConfig.objects.create(
+            tournament=self.tourn, gross_on=False, net_on=True,
+            net_entry_fee=Decimal('5.00'),
+            net_payouts=[{'place': 1, 'amount': 10.00}])
+
+    def _settle(self):
+        from services.tournament_settlement import tournament_settlement
+        return tournament_settlement(self.tourn)
+
+    def test_a_live_event_does_not_blame_the_payout_table(self):
+        data = self._settle()
+        self.assertTrue(data['provisional'])
+        joined = ' '.join(data['blocking'])
+        self.assertNotIn('payout table', joined)
+        self.assertNotIn('arithmetic bug', joined)
+
+    def test_the_one_true_reason_is_the_only_one_and_comes_first(self):
+        data = self._settle()
+        self.assertEqual(len(data['blocking']), 1)
+        self.assertIn('closed before the tournament settles',
+                      data['blocking'][0])
+
+    def test_a_closed_event_runs_every_check(self):
+        # The table here really is short — $10 of a $10 pool paid to nobody
+        # eligible — and once the rounds close that IS worth naming.
+        for r in self.rounds:
+            r.status = RoundStatus.COMPLETE
+            r.save()
+        data = self._settle()
+        self.assertFalse(data['provisional'])
+        joined = ' '.join(data['blocking'])
+        self.assertIn('payout table', joined)

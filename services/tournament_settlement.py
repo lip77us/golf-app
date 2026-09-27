@@ -448,21 +448,18 @@ def tournament_settlement(tournament) -> dict:
     golfers.sort(key=lambda g: (-g['net'], g['name']))
 
     # ── The checks ────────────────────────────────────────────────────────
+    #
+    # **Order matters, and the true cause goes first.** An event with a round
+    # still open has prizes that have not been awarded, so every arithmetic
+    # check below it reports a consequence of that and nothing else.
     blocking = []
-    for pot in pots:
-        if not pot.balanced:
-            direction = 'over' if pot.difference < 0 else 'under'
-            blocking.append(
-                f"{pot.label} does not balance — ${abs(pot.difference):,.2f} "
-                f"{direction}paid. The mistake is in its payout table."
-            )
-
     rounds = list(tournament.rounds.all())
     # RoundStatus.COMPLETE is 'complete'.  Comparing to the literal
     # 'completed' matched nothing, so this blocked forever and Settle
     # could never be pressed on a finished tournament.
-    if not rounds or not all(r.status == RoundStatus.COMPLETE
-                             for r in rounds):
+    event_closed = bool(rounds) and all(r.status == RoundStatus.COMPLETE
+                                        for r in rounds)
+    if not event_closed:
         blocking.append(
             'Every round has to be closed before the tournament settles — the '
             'day bet cannot resolve until the championship does.'
@@ -471,17 +468,44 @@ def tournament_settlement(tournament) -> dict:
     total_collected = round(sum(g['net'] for g in golfers if g['net'] > 0), 2)
     total_paid      = round(-sum(g['net'] for g in golfers if g['net'] < 0), 2)
     sum_zero        = abs(total_collected - total_paid) <= CENT_SLACK
-    if not sum_zero:
-        blocking.append(
-            f'Collected (${total_collected:,.2f}) and paid '
-            f'(${total_paid:,.2f}) do not cancel. The golfers fund this '
-            f'entirely, so any other answer is an arithmetic bug.'
-        )
+
+    # **The arithmetic is not finished until the rounds are.** Reported from
+    # testing: a live event showed `Eclectic · Net does not balance — $20.00
+    # underpaid. The mistake is in its payout table` over a payout table that
+    # was correct, and the setup screen said so on the same data.
+    #
+    # Eclectic pays nobody until a card is WHOLE — eighteen hole numbers
+    # covered — so mid-event its entries are in and its prizes are zero. That
+    # is the game working, not a table to go and fix, and the sum-zero check
+    # then reports the same $20 a second time as an arithmetic bug.
+    #
+    # So these two run once the event is closed, which is also the only state
+    # in which their answer is final. A wrong table is still caught — at the
+    # moment the money is actually about to move.
+    if event_closed:
+        for pot in pots:
+            if not pot.balanced:
+                direction = 'over' if pot.difference < 0 else 'under'
+                blocking.append(
+                    f"{pot.label} does not balance — "
+                    f"${abs(pot.difference):,.2f} {direction}paid. The "
+                    f"mistake is in its payout table."
+                )
+        if not sum_zero:
+            blocking.append(
+                f'Collected (${total_collected:,.2f}) and paid '
+                f'(${total_paid:,.2f}) do not cancel. The golfers fund this '
+                f'entirely, so any other answer is an arithmetic bug.'
+            )
 
     return {
         'golfers'        : golfers,
         'games'          : [p.as_dict() for p in pots],
         'balanced'       : all(p.balanced for p in pots),
+        # **The money is not final yet.** The screen reads this before it
+        # calls a pot's shortfall a mistake: mid-event a pot that has not
+        # awarded its prizes is unfinished, not wrong.
+        'provisional'    : not event_closed,
         'blocking'       : blocking,
         'can_settle'     : not blocking,
         'total_collected': total_collected,
