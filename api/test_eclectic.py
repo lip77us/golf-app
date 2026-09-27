@@ -265,3 +265,53 @@ class SettlementTests(_Base):
         games = [e['game'] for e in bea['entries']]
         self.assertIn('Eclectic · Gross', games)
         self.assertIn('Eclectic · Net', games)
+
+
+class ReachabilityTests(_Base):
+    """**The only door was behind the door.**
+
+    The Eclectic tab and the gear's `Configure Eclectic` both keyed off the
+    tournament's `active_games`, and the thing that PUTS it there is the
+    setup POST — so an event created without Eclectic had no way to reach the
+    screen that would turn it on. Reported from testing twice.
+
+    The leaderboard now carries the offer whether or not the game is on.
+    """
+
+    def board(self):
+        return self.client.get(
+            f'/api/tournaments/{self.tourn.id}/leaderboard/').data
+
+    def test_an_event_that_never_turned_it_on_is_still_offered_it(self):
+        self.assertNotIn('eclectic', self.tourn.active_games or [])
+        offer = self.board()['eclectic_offer']
+        self.assertTrue(offer['offer'])
+        self.assertTrue(offer['available'])
+        self.assertFalse(offer['configured'])
+
+    def test_setting_it_up_turns_it_on_and_the_offer_says_so(self):
+        resp = self.client.post(self.url('setup/'), {
+            'pools': ['gross'],
+            'gross_entry_fee': '10.00', 'gross_payouts': [],
+            'net_entry_fee': '0.00', 'net_payouts': [],
+        }, format='json')
+        self.assertIn(resp.status_code, (200, 201))
+        offer = self.board()['eclectic_offer']
+        self.assertTrue(offer['configured'])
+        self.assertTrue(offer['available'])
+
+    def test_a_one_round_event_is_not_offered_it_at_all(self):
+        # Not a condition to explain — the wrong shape of event. The wizard
+        # hides its entry for the same reason rather than disabling it.
+        self.rounds[1].delete()
+        offer = self.board()['eclectic_offer']
+        self.assertFalse(offer['offer'])
+
+    def test_a_nine_hole_round_is_offered_it_DISABLED_with_the_reason(self):
+        # Two rounds, so the event is the right shape; one of them is not.
+        self.rounds[1].num_holes = 9
+        self.rounds[1].save()
+        offer = self.board()['eclectic_offer']
+        self.assertTrue(offer['offer'])
+        self.assertFalse(offer['available'])
+        self.assertEqual(offer['reason'], 'Needs every round to be 18 holes')

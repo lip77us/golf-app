@@ -184,6 +184,8 @@ class _TournamentLeaderboardScreenState
   @override
   Widget build(BuildContext context) {
     final isStaff = context.read<AuthProvider>().isAdmin;
+    final eclecticOffer =
+        (_payload?['eclectic_offer'] as Map?) ?? const {};
     final activeGames =
         (_payload?['active_games'] as List? ?? []).map((g) => g as String).toList();
 
@@ -208,7 +210,10 @@ class _TournamentLeaderboardScreenState
             )),
           ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
-          if (isStaff && activeGames.isNotEmpty)
+          // Not `activeGames.isNotEmpty`: a tournament with nothing
+          // configured is exactly the one that needs the menu.
+          if (isStaff && (activeGames.isNotEmpty ||
+                          eclecticOffer['offer'] == true))
             PopupMenuButton<String>(
               icon: const Icon(Icons.settings_outlined),
               tooltip: 'Configure',
@@ -222,10 +227,36 @@ class _TournamentLeaderboardScreenState
                   const PopupMenuItem(
                       value: 'stableford_championship',
                       child: Text('Configure Stableford')),
-                if (activeGames.contains('eclectic'))
-                  const PopupMenuItem(
-                      value: 'eclectic',
-                      child: Text('Configure Eclectic')),
+                // **Eclectic can be added to an event that did not start
+                // with it**, and it is the only tournament game that can —
+                // its setup POST is what turns it on. Keying this item off
+                // `active_games` meant the only door was behind the door: no
+                // tab, no gear item, no way in. Reported from testing twice.
+                //
+                // Under two rounds it is not offered at all — that is the
+                // wrong shape of event rather than a condition to explain,
+                // and the wizard hides its entry for the same reason.
+                if (eclecticOffer['offer'] == true)
+                  PopupMenuItem(
+                    value  : 'eclectic',
+                    enabled: eclecticOffer['available'] == true,
+                    child  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(eclecticOffer['configured'] == true
+                            ? 'Configure Eclectic'
+                            : 'Set up Eclectic'),
+                        // A disabled item that does not say why is a mystery.
+                        if (eclecticOffer['available'] != true)
+                          Text('${eclecticOffer['reason'] ?? ''}',
+                              style: Theme.of(context)
+                                  .textTheme.labelSmall
+                                  ?.copyWith(color: Theme.of(context)
+                                      .colorScheme.onSurfaceVariant)),
+                      ],
+                    ),
+                  ),
               ],
             ),
         ],

@@ -430,4 +430,39 @@ void main() {
       expect(find.text('–'), findsWidgets);      // In, and the unplayed holes
     });
   });
+
+  group('the gear is the way in when there is no tab', () {
+    // The board's empty state can only be reached through the Eclectic TAB,
+    // and the tab only exists once the game is in `active_games` — which the
+    // setup POST is what does. So an event created without Eclectic had no
+    // path to it at all: the only door was behind the door. The gear now
+    // reads a separate offer the server sends either way.
+    final src =
+        File('lib/screens/tournament_leaderboard_screen.dart').readAsStringSync();
+
+    test('the item is gated on the OFFER, not on active_games', () {
+      expect(src.contains("activeGames.contains('eclectic')"), isFalse,
+          reason: 'that gate is what made the setup unreachable');
+      expect(src.contains("eclecticOffer['offer'] == true"), isTrue);
+      expect(src.contains("_payload?['eclectic_offer']"), isTrue);
+    });
+
+    test('it names which job it is doing', () {
+      expect(src.contains("'Set up Eclectic'"), isTrue,
+          reason: 'an event that has not turned it on is SETTING it up');
+      expect(src.contains("'Configure Eclectic'"), isTrue);
+    });
+
+    test('a disabled item carries its reason', () {
+      expect(src.contains("eclecticOffer['available'] != true"), isTrue,
+          reason: 'a greyed item that does not say why is a mystery');
+    });
+
+    test('the menu itself survives a tournament with nothing configured', () {
+      // It was hidden on `activeGames.isEmpty`, which is exactly the event
+      // that needs it.
+      expect(
+          src.contains("isStaff && (activeGames.isNotEmpty ||"), isTrue);
+    });
+  });
 }

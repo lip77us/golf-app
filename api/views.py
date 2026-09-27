@@ -2581,6 +2581,25 @@ class TournamentLeaderboardView(APIView):
                     'unavailable_reason': reason,
                 }
 
+        # **The way IN, independent of whether the game is on.** The tab and
+        # the gear item both keyed off `active_games`, so an event created
+        # without Eclectic had no path to it at all — and the setup POST is
+        # what TURNS it on, so the only door was behind the door. Every other
+        # tournament game is configured at create time or never; this is the
+        # one that can be added later, and now can be. Reported from testing,
+        # twice.
+        from services.eclectic import eclectic_available as _ecl_ok
+        _ok, _reason = _ecl_ok(tournament)
+        eclectic_offer = {
+            'available'  : _ok,
+            'reason'     : _reason,
+            'configured' : 'eclectic' in active_games,
+            # Under two rounds the game is not a possibility to explain, it is
+            # the wrong shape of event — the wizard hides the entry for the
+            # same reason rather than disabling it.
+            'offer'      : tournament.rounds.count() >= 2,
+        }
+
         if 'match_play' in active_games:
             from services.tournament_match_play import tournament_match_play_summary
             brackets = []
@@ -2621,6 +2640,7 @@ class TournamentLeaderboardView(APIView):
             'tournament_id'  : tournament.id,
             'tournament_name': tournament.name,
             'active_games'   : active_games,
+            'eclectic_offer' : eclectic_offer,
             # The chip strip: mode, allowance and the counting rule, all read
             # from the tournament rather than guessed per board.
             'scoring'        : {
