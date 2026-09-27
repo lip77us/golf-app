@@ -153,12 +153,18 @@ def _config(round_obj):
     return getattr(round_obj, 'forty_balls_config', None)
 
 
-def _scores_for(foursome, config) -> tuple:
+def _scores_for(foursome, config, detail: dict = None) -> tuple:
     """``(nets, pars)`` — ``{hole: {player_id: score}}`` and ``{hole: par}``.
 
     The handicap adjustment and the double-bogey cap are applied HERE, before
     anything is chosen, because the group picks between the numbers it is shown
     and those are the numbers that count.
+
+    Pass ``detail`` (an empty dict) to also collect what the CARD draws — the
+    gross the golfer actually made and the strokes that came off it — since
+    the standard scorecard prints gross with stroke dots, not nets. Collected
+    here rather than re-derived because a second walk over the same rows with
+    the same allocator is the shape that eventually disagrees with this one.
     """
     mode = config.handicap_mode if config else HandicapMode.NET
     pct  = config.net_percent if config else 100
@@ -186,15 +192,18 @@ def _scores_for(foursome, config) -> tuple:
         hole = r['hole_number']
         par = pars.get(hole)
         if mode == HandicapMode.GROSS:
-            score = r['gross_score']
+            shots = 0
         else:
-            score = r['gross_score'] - strokes_fn(
-                effective_hcp_for(m, pct), m.tee, hole)
+            shots = strokes_fn(effective_hcp_for(m, pct), m.tee, hole)
+        score = r['gross_score'] - shots
         if cap and par is not None:
             # The damage limiter, applied before the pick — net double bogey in
             # Net, gross in Gross.
             score = min(score, par + 2)
         nets.setdefault(hole, {})[r['player_id']] = score
+        if detail is not None:
+            detail.setdefault(hole, {})[r['player_id']] = {
+                'gross': r['gross_score'], 'strokes': shots}
 
     return nets, pars
 
@@ -296,12 +305,17 @@ def hole_state(foursome, hole_number: int) -> dict:
         'dq'          : dq,
         'count'       : picked.count if picked else None,
         'app_set'     : bool(picked.app_set) if picked else False,
-        # `2.7 a hole, 15 to play` — the average the scorer is asked for.
-        'average'     : (round(left / (len(holes) - pos - 1), 1)
-                         if len(holes) - pos - 1 > 0 else None),
+        # **No `average` here.** `2.7 a hole, 15 to play` is a figure with a
+        # POSITION — before this hole while nothing is picked, after it once
+        # something is — and only the client knows which, because it holds
+        # picks the server has not been sent yet. It is worked out there from
+        # `left`, `holes_after`, `capacity` and `active_here`; a second
+        # version here would be the one that is wrong half the time.
+        #
         # Balls the group can still leave out over the holes it has left, this
-        # one included. Never below zero: at zero every remaining ball is
-        # spoken for, which is the `all count` state.
+        # one included — the BEFORE position, like `left` and `capacity`.
+        # Never below zero: at zero every remaining ball is spoken for, which
+        # is the `all count` state.
         'slack'       : max(0, cap_here - left),
         # **Not gated on the scores being IN.** The client shows the buttons
         # as soon as the group has entered its scores locally and sends the
@@ -428,8 +442,15 @@ def group_card(foursome) -> dict:
     k = group_size(foursome)
     B = budget(foursome)
     holes = play_order(round_obj, foursome)
-    nets, pars = _scores_for(foursome, config)
+    detail: dict = {}
+    nets, pars = _scores_for(foursome, config, detail)
     counts = {c.hole_number: c for c in foursome.forty_balls_counts.all()}
+    members = _real_members(foursome)
+    # The stroke index off the same tee the pars come from — the card prints
+    # ONE index row, as every scorecard in the app does.
+    first = next((m for m in members if m.tee_id), None)
+    sis = ({h['number']: h.get('stroke_index') for h in (first.tee.holes or [])}
+           if first else {})
 
     rows = []
     total = 0
@@ -450,16 +471,22 @@ def group_card(foursome) -> dict:
         rows.append({
             'hole'       : h,
             'par'        : par,
+            'stroke_index': sis.get(h),
             'count'      : n,
             'app_set'    : bool(picked.app_set) if picked else False,
             'result'     : result,
             'counted_ids': counted_ids,
+            # The nets are what the group CHOSE between; the gross and the
+            # strokes are what the card DRAWS.
             'scores'     : hole_nets,
+            'gross'      : {pid: d['gross']
+                            for pid, d in detail.get(h, {}).items()},
+            'strokes'    : {pid: d['strokes']
+                            for pid, d in detail.get(h, {}).items()},
         })
 
     unpicked = [r['hole'] for r in rows if r['count'] is None]
     left = B - spent
-    members = _real_members(foursome)
     capacity = _capacity(foursome, unpicked, members)
     # **Out of 40 Balls, not out of the round.** The scores below still stand
     # for the championship; what cannot happen any more is the budget coming
@@ -469,6 +496,15 @@ def group_card(foursome) -> dict:
         'foursome_id' : foursome.pk,
         'group_number': foursome.group_number,
         'group_size'  : k,
+        # **The card names its own golfers.** The board had no roster of its
+        # own and its one caller passed none, so every row on the leaderboard
+        # card drew an empty label — four anonymous lines of scores. It is
+        # sent with the card because the card is the thing that needs it, and
+        # in ROSTER order rather than by id.
+        'players'     : [{'player_id' : m.player_id,
+                          'short_name': m.player.short_name,
+                          'name'      : m.player.name}
+                         for m in members],
         'budget'      : B,
         'spent'       : spent,
         'left'        : left,

@@ -8013,13 +8013,25 @@ class FortyBallsHole {
   final int? result;
   final List<int> countedIds;
   /// Net (or gross, per the round's setting) by player id, already capped.
+  /// These are the numbers the group CHOSE between.
   final Map<int, int> scores;
+  /// The gross the golfer actually made, and the strokes that came off it —
+  /// what the standard scorecard DRAWS.
+  final Map<int, int> gross;
+  final Map<int, int> strokes;
+  final int? strokeIndex;
 
   const FortyBallsHole({
     required this.hole, required this.par, required this.count,
     required this.appSet, required this.result, required this.countedIds,
     required this.scores,
+    this.gross = const {}, this.strokes = const {}, this.strokeIndex,
   });
+
+  static Map<int, int> _intMap(dynamic raw) => {
+        for (final e in (raw as Map? ?? const {}).entries)
+          int.parse(e.key.toString()): (e.value as num).toInt(),
+      };
 
   factory FortyBallsHole.fromJson(Map<String, dynamic> j) => FortyBallsHole(
         hole   : (j['hole'] as num).toInt(),
@@ -8029,10 +8041,10 @@ class FortyBallsHole {
         result : (j['result'] as num?)?.toInt(),
         countedIds: ((j['counted_ids'] as List?) ?? const [])
             .map((e) => (e as num).toInt()).toList(),
-        scores : {
-          for (final e in (j['scores'] as Map? ?? const {}).entries)
-            int.parse(e.key.toString()): (e.value as num).toInt(),
-        },
+        scores : _intMap(j['scores']),
+        gross  : _intMap(j['gross']),
+        strokes: _intMap(j['strokes']),
+        strokeIndex: (j['stroke_index'] as num?)?.toInt(),
       );
 }
 
@@ -8068,6 +8080,10 @@ class FortyBallsGroup {
   final int holesLeft;
   final List<FortyBallsHole> holes;
   final List<int> holesInPlay;
+  /// The group's golfers, in roster order — `{player_id, short_name, name}`.
+  /// **The card names its own rows**: the board's one caller passed no roster
+  /// and every label drew empty.
+  final List<Map<String, dynamic>> players;
 
   const FortyBallsGroup({
     required this.foursomeId, required this.groupNumber,
@@ -8078,6 +8094,7 @@ class FortyBallsGroup {
     required this.perPersonPayout, required this.splitWays,
     required this.capacity, required this.holesLeft,
     required this.holes, required this.holesInPlay,
+    this.players = const [],
   });
 
   bool get isFinished => left == 0 && !dq;
@@ -8107,6 +8124,9 @@ class FortyBallsGroup {
             .toList(),
         holesInPlay: ((j['holes_in_play'] as List?) ?? const [])
             .map((e) => (e as num).toInt()).toList(),
+        players    : ((j['players'] as List?) ?? const [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList(),
       );
 }
 
@@ -8163,8 +8183,8 @@ class FortyBallsPickerState {
   final bool dq;
   final int? count;
   final bool appSet;
-  /// `2.7 a hole` — balls left ÷ holes left, one decimal.
-  final double? average;
+  /// Balls the group can still leave out over the holes it has left, THIS ONE
+  /// INCLUDED — the position before the hole, like [left] and [capacity].
   final int  slack;
   final bool canPick;
   /// A later hole already has scores — the group has moved on and this one's
@@ -8184,7 +8204,7 @@ class FortyBallsPickerState {
     required this.budget, required this.spent, required this.left,
     required this.holesAfter, required this.capacity, required this.lo,
     required this.hi, required this.dq, required this.count,
-    required this.appSet, required this.average, required this.slack,
+    required this.appSet, required this.slack,
     required this.canPick, required this.scoresIn, required this.par,
     required this.nets,
     this.locked = false, this.handicapMode = 'net', this.netPercent = 100,
@@ -8212,7 +8232,6 @@ class FortyBallsPickerState {
         dq        : j['dq'] as bool? ?? false,
         count     : (j['count'] as num?)?.toInt(),
         appSet    : j['app_set'] as bool? ?? false,
-        average   : (j['average'] as num?)?.toDouble(),
         slack     : (j['slack'] as num?)?.toInt() ?? 0,
         canPick   : j['can_pick'] as bool? ?? false,
         locked    : j['locked'] as bool? ?? false,

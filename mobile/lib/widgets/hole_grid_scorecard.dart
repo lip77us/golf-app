@@ -11,6 +11,35 @@ const _gold     = Color(0xFFB8860B);
 const _goldFill = Color(0xFFFBF0D6);
 const _goldLine = Color(0xFFE4D3A8);
 
+/// A row UNDER the golfers, drawn inside the grid rather than beside it.
+///
+/// 40 Balls needs two (`Balls`, `Group`) and drew them as a separate scroller
+/// underneath: its own label width, its own cell width and its own scroll
+/// offset, so the counts sat a column off the scores they described and
+/// stayed put while the card scrolled. A row that belongs to the grid has to
+/// be built by the grid.
+class HoleGridFooterRow {
+  final String label;
+
+  /// The cell for one hole — text, or null for an empty slot. The grid owns
+  /// the box, so a caller cannot get the geometry wrong.
+  final String? Function(int hole) text;
+
+  /// The colour of that cell's text. Null takes the ordinary one.
+  final Color? Function(int hole)? colour;
+
+  /// The OUT / IN / TOT slot. Null leaves it blank — a row with no nine total
+  /// says so with a gap rather than a made-up number.
+  final String? Function(List<int> holes)? summary;
+
+  const HoleGridFooterRow({
+    required this.label,
+    required this.text,
+    this.colour,
+    this.summary,
+  });
+}
+
 /// The shared per-hole scorecard grid — one widget behind every game's card.
 ///
 /// Columns: hole numbers + par (+ stroke index when the backend sends it).
@@ -43,6 +72,9 @@ class HoleGridScorecard extends StatefulWidget {
   /// back 9; 14,15,…,18,1 for a shotgun). Empty falls back to 1..18.
   final List<int> holesInPlay;
 
+  /// Rows under the golfers, inside the same grid — see [HoleGridFooterRow].
+  final List<HoleGridFooterRow> footerRows;
+
   const HoleGridScorecard({
     super.key,
     required this.holes,
@@ -50,6 +82,7 @@ class HoleGridScorecard extends StatefulWidget {
     this.showPoints = false,
     this.legend = 'green = skin winner',
     this.holesInPlay = const [],
+    this.footerRows = const [],
   });
 
   @override
@@ -215,7 +248,10 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
       if (mine.isEmpty || (gross == null && strokes == 0)) {
         return SizedBox(width: _cellW, height: _rowH);
       }
-      final isWinner = entry['winner_id'] == playerId;   // Skins per-player win
+      // A per-player win, however the game words it. 40 Balls sends
+      // `counted` — the ball the group spent — which is its version of the
+      // same fact and wears the same green. Every other game omits it.
+      final isWinner = entry['winner_id'] == playerId || mine['counted'] == true;
       // Survivor: this hole knocked the player out of the current Survivor.
       final isOut = mine['eliminated'] == true;
       // Survivor + Zombie Option: this hole is where he won his way back in.
@@ -522,6 +558,31 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
               (h) => scoreCell(p['player_id'] as int, h),
               summary: (holes) => grossTotal(p['player_id'] as int, holes),
             )));
+          }
+
+          // Rows that describe the GROUP rather than a golfer — 40 Balls'
+          // `Balls` and `Group`. Inside the grid, so they pin and scroll with
+          // everything above them.
+          if (widget.footerRows.isNotEmpty) {
+            rule();
+            for (final r in widget.footerRows) {
+              labelCol.add(textLabel(r.label,
+                  const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)));
+              cellCol.add(Row(children: withTotals(
+                (h) => SizedBox(
+                  width: _cellW, height: _rowH,
+                  child: Center(
+                    child: Text(r.text(h) ?? '',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: r.colour?.call(h))),
+                  ),
+                ),
+                summary: r.summary == null
+                    ? null
+                    : (holes) => summaryCell(r.summary!(holes) ?? ''),
+              )));
+            }
           }
 
           // Second block: per-player points won on each hole.

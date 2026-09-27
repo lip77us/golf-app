@@ -261,3 +261,63 @@ class SettlementTests(_Base):
         prize = next(p for p in winner['prizes'] if p['game'] == '40 Balls · R1')
         self.assertEqual(prize['amount'], 37.5)      # 150 / 4
         self.assertIn('4 ways', prize['detail'])
+
+
+class SetupLockTests(_Base):
+    """The scoring half is spent once a ball has been counted against it.
+
+    Reported from testing: the TD could still open Configure 40 Balls with
+    several holes played in both groups, and a change there would silently
+    re-net every hole a group had already chosen from — so the choice it made
+    was a choice about different numbers. Banker's window is zero for exactly
+    this reason; this is the same shape one level up.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.configure()
+
+    def _pick(self):
+        self.par_hole(1, 0, 0, 0, 0)
+        r = self.client.post(self.count_url(),
+                             {'hole_number': 1, 'count': 2}, format='json')
+        self.assertEqual(r.status_code, 200)
+
+    def test_it_is_open_before_the_first_count(self):
+        r = self.client.get(self.setup_url())
+        self.assertFalse(r.data['scoring_locked'])
+        self.assertEqual(r.data['scoring_lock_note'], '')
+
+    def test_a_count_locks_how_a_score_is_measured(self):
+        self._pick()
+        r = self.client.get(self.setup_url())
+        self.assertTrue(r.data['scoring_locked'])
+        self.assertIn('fixed for the round', r.data['scoring_lock_note'])
+
+        r = self.configure(handicap_mode='gross')
+        self.assertEqual(r.status_code, 409)
+        cfg = FortyBallsConfig.objects.get(round=self.round)
+        self.assertEqual(cfg.handicap_mode, 'net')
+
+    def test_another_group_s_pick_locks_it_too(self):
+        # The settings are the ROUND's, so any group counting against them
+        # spends them for everybody.
+        self.par_hole(1, 0, 0, 0, 0, fs=self.fs2)
+        r = self.client.post(self.count_url(self.fs2),
+                             {'hole_number': 1, 'count': 3}, format='json')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self.configure(net_percent=90).status_code, 409)
+
+    def test_the_money_still_moves(self):
+        # An entry fee is not something a hole was played against.
+        self._pick()
+        r = self.configure(entry_fee='25.00',
+                           payouts=[{'place': 1, 'amount': '100.00'}])
+        self.assertEqual(r.status_code, 201)
+        cfg = FortyBallsConfig.objects.get(round=self.round)
+        self.assertEqual(float(cfg.entry_fee), 25.0)
+
+    def test_saving_the_same_settings_is_not_a_change(self):
+        # A client that re-posts what it loaded is not asking for anything.
+        self._pick()
+        self.assertEqual(self.configure().status_code, 201)

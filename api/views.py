@@ -7900,6 +7900,20 @@ class FortyBallsSetupView(APIView):
     """
     _EXCLUDES = ('irish_rumble', 'better_ball')
 
+    #: The settings a PICK was made against. A group chose 2 balls on the 1st
+    #: having looked at four nets; change the allowance, the mode or the cap
+    #: afterwards and those are different numbers, so the choice it made was a
+    #: choice about something else. Banker's window is zero for exactly this
+    #: reason — every hole is priced when it is played — and 40 Balls is the
+    #: same shape one level up.
+    _PRICED_IN = ('handicap_mode', 'net_percent', 'net_max_double_bogey')
+
+    @staticmethod
+    def _picked(round_obj) -> bool:
+        from games.models import FortyBallsHoleCount
+        return FortyBallsHoleCount.objects.filter(
+            foursome__round=round_obj).exists()
+
     def _dict(self, round_obj, cfg):
         from services.forty_balls import budget, group_size
         groups = [
@@ -7909,11 +7923,20 @@ class FortyBallsSetupView(APIView):
              'budget'      : budget(fs)}
             for fs in round_obj.foursomes.order_by('group_number')
         ]
+        locked = self._picked(round_obj)
         base = {
             # The setup card reads the budgets off Groups & tees and states
             # them; the TD sets nothing here.
             'groups'     : groups,
             'num_players': sum(g['size'] for g in groups),
+            # **The scoring half is spent once the first count is picked.**
+            # The money is not: an entry fee is not something a hole was
+            # played against, so it stays open all round.
+            'scoring_locked': locked,
+            'scoring_lock_note': (
+                'Balls have been counted against these settings, so they are '
+                'fixed for the round. The entry and the payouts can still '
+                'change.' if locked else ''),
         }
         if cfg is None:
             return {**base, 'configured': False,
@@ -7946,6 +7969,19 @@ class FortyBallsSetupView(APIView):
         d = ser.validated_data
 
         from games.models import FortyBallsConfig
+        existing = FortyBallsConfig.objects.filter(round=round_obj).first()
+        if existing is not None and self._picked(round_obj):
+            changed = [f for f in self._PRICED_IN
+                       if getattr(existing, f) != d[f]]
+            if changed:
+                # 409 like every other 'the round has moved on' refusal — the
+                # body was fine, the round's state is the answer.
+                return Response(
+                    {'detail':
+                        'Balls have already been counted on these settings, '
+                        'so how a score is measured cannot change now. The '
+                        'entry and the payouts still can.'},
+                    status=status.HTTP_409_CONFLICT)
         cfg, _ = FortyBallsConfig.objects.update_or_create(
             round=round_obj,
             defaults={

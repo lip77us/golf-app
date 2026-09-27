@@ -52,6 +52,15 @@ class _FortyBallsSetupScreenState extends State<FortyBallsSetupScreen> {
   int _numPlayers = 0;
   List<Map<String, dynamic>> _groups = const [];
 
+  /// **Spent once the first count is picked.** A group chose 2 balls on the
+  /// 1st having looked at four nets; change the allowance, the mode or the cap
+  /// now and those are different numbers, so what it chose was a choice about
+  /// something else. The server refuses it — this is the screen saying so
+  /// before the TD types into a field that will not save. The MONEY stays
+  /// open: an entry fee is not something a hole was played against.
+  bool _scoringLocked = false;
+  String _lockNote = '';
+
   final _entryCtrl = TextEditingController();
   final _payoutCtrls =
       List<TextEditingController>.generate(4, (_) => TextEditingController());
@@ -92,6 +101,8 @@ class _FortyBallsSetupScreenState extends State<FortyBallsSetupScreen> {
         _netPercent = cfg['net_percent'] as int? ?? 100;
         _cap = cfg['net_max_double_bogey'] as bool? ?? true;
         _scoringTouched = cfg['configured'] as bool? ?? false;
+        _scoringLocked = cfg['scoring_locked'] as bool? ?? false;
+        _lockNote = cfg['scoring_lock_note'] as String? ?? '';
         _entryCtrl.text = _fmt(cfg['entry_fee'] as num? ?? 0);
         final payouts = (cfg['payouts'] as List? ?? const []);
         _numPayouts = payouts.length.clamp(0, 4);
@@ -251,8 +262,23 @@ class _FortyBallsSetupScreenState extends State<FortyBallsSetupScreen> {
 
         _Card(
           title: 'Scoring',
-          trailing: _scoringTouched ? 'Set by you' : 'Default',
+          trailing: _scoringLocked
+              ? 'Locked'
+              : (_scoringTouched ? 'Set by you' : 'Default'),
           child: Column(children: [
+            if (_scoringLocked) ...[
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Icon(Icons.lock_outline, size: 16,
+                    color: theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(_lockNote,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                ),
+              ]),
+              const SizedBox(height: 12),
+            ],
             // **The app's shared control**, exactly as Irish Rumble and the
             // other twenty setup screens use it — Net / Gross and the Net %
             // slider, which already moves in steps of 5. A hand-rolled
@@ -263,19 +289,25 @@ class _FortyBallsSetupScreenState extends State<FortyBallsSetupScreen> {
             // and nothing else: strokes-off anchors on a low handicap, and
             // which low — the group's or the field's — is a question this game
             // does not answer.
-            HandicapModeSelector(
-              mode            : _mode,
-              netPercent      : _netPercent,
-              allowStrokesOff : false,
-              wrapInCard      : false,
-              onModeChanged   : (m) => setState(() {
-                _mode = m;
-                _scoringTouched = true;
-              }),
-              onPercentChanged: (p) => setState(() {
-                _netPercent = p;
-                _scoringTouched = true;
-              }),
+            IgnorePointer(
+              ignoring: _scoringLocked,
+              child: Opacity(
+                opacity: _scoringLocked ? 0.55 : 1,
+                child: HandicapModeSelector(
+                  mode            : _mode,
+                  netPercent      : _netPercent,
+                  allowStrokesOff : false,
+                  wrapInCard      : false,
+                  onModeChanged   : (m) => setState(() {
+                    _mode = m;
+                    _scoringTouched = true;
+                  }),
+                  onPercentChanged: (p) => setState(() {
+                    _netPercent = p;
+                    _scoringTouched = true;
+                  }),
+                ),
+              ),
             ),
             const Divider(height: 20),
             // **Not `NetDoubleBogeyCard`, and the difference is real.** That
@@ -314,7 +346,7 @@ class _FortyBallsSetupScreenState extends State<FortyBallsSetupScreen> {
               const SizedBox(width: 8),
               Switch(
                 value: _cap,
-                onChanged: (v) => setState(() {
+                onChanged: _scoringLocked ? null : (v) => setState(() {
                   _cap = v;
                   _scoringTouched = true;
                 }),

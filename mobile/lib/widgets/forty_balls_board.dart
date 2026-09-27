@@ -192,52 +192,123 @@ class _GroupRow extends StatelessWidget {
   static String _raw(FortyBallsGroup g) => toParLabel(g.total);
 
   Widget _card(BuildContext context) {
-    // The app's standard scorecard, with a Balls row and a Group row under it.
+    final theme = Theme.of(context);
+    // **The standard card, whole.** Gross with stroke dots, a par band and an
+    // index band, the label column pinned — and the Balls and Group rows
+    // INSIDE it rather than as a second scroller underneath, which is what
+    // left the counts a column off the scores they describe.
     final holes = [
       for (final h in group.holes)
         {
           'hole'        : h.hole,
           'par'         : h.par,
+          'stroke_index': h.strokeIndex,
           'scores'      : [
-            for (final e in h.scores.entries)
+            for (final id in h.gross.keys)
               {
-                'player_id': e.key,
-                'gross'    : e.value,
-                'strokes'  : 0,
-                // The counted nets are tinted, which is what a group reads the
-                // card for: which balls it spent.
-                'team'     : h.countedIds.contains(e.key) ? 1 : 2,
+                'player_id': id,
+                'gross'    : h.gross[id],
+                'strokes'  : h.strokes[id] ?? 0,
+                // The ball the group spent — this game's version of winning
+                // the hole, and it wears the same green.
+                'counted'  : h.countedIds.contains(id),
               },
           ],
-          if (h.countedIds.isNotEmpty) 'winner_team': 1,
         },
     ];
     final participants = [
-      for (final id in _playerIds())
-        {'player_id': id, 'short_name': names[id] ?? ''},
+      for (final p in _roster())
+        {'player_id': p['player_id'], 'short_name': p['short_name'] ?? '',
+         'name': p['name'] ?? ''},
     ];
+    final byHole = {for (final h in group.holes) h.hole: h};
+
+    String? ballsText(int hole) {
+      final h = byHole[hole];
+      if (h == null) return null;
+      return h.count == null ? '·' : '${h.count}';
+    }
+
+    Color ballsColour(int hole) {
+      final h = byHole[hole];
+      // Zero is grey; an APP-SET count is amber, because the app set it and
+      // the group did not.
+      if (h == null) return theme.colorScheme.onSurfaceVariant;
+      if (h.appSet) return Halved.caution;
+      return h.count == 0 || h.count == null
+          ? theme.colorScheme.onSurfaceVariant
+          : theme.colorScheme.onSurface;
+    }
+
+    String? groupText(int hole) {
+      final r = byHole[hole]?.result;
+      return r == null ? '·' : toParLabel(r);
+    }
+
+    Color groupColour(int hole) {
+      final r = byHole[hole]?.result;
+      if (r == null || r == 0) return theme.colorScheme.onSurfaceVariant;
+      return r < 0 ? Halved.pine : Halved.caution;
+    }
+
+    /// A nine's figure is an em dash until every hole in it is counted — the
+    /// same rule the gross subtotals use, and for the same reason: a partial
+    /// sum of a budget reads as a smaller spend than it is.
+    int? sumOver(List<int> holes, int? Function(FortyBallsHole) of) {
+      var t = 0;
+      for (final h in holes) {
+        final v = byHole[h] == null ? null : of(byHole[h]!);
+        if (v == null) return null;
+        t += v;
+      }
+      return t;
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        HoleGridScorecard(
-          holes       : holes,
-          participants: participants,
-          holesInPlay : group.holesInPlay,
-          legend      : 'green = counted',
-        ),
-        const SizedBox(height: 8),
-        _BallsRow(group: group),
-      ]),
+      child: HoleGridScorecard(
+        holes       : holes,
+        participants: participants,
+        holesInPlay : group.holesInPlay,
+        legend      : 'green = counted',
+        footerRows  : [
+          HoleGridFooterRow(
+            label  : 'Balls',
+            text   : ballsText,
+            colour : ballsColour,
+            summary: (hs) {
+              final t = sumOver(hs, (h) => h.count);
+              return t == null ? '—' : '$t';
+            },
+          ),
+          HoleGridFooterRow(
+            label  : 'Group',
+            text   : groupText,
+            colour : groupColour,
+            summary: (hs) {
+              final t = sumOver(hs, (h) => h.result);
+              return t == null ? '—' : toParLabel(t);
+            },
+          ),
+        ],
+      ),
     );
   }
 
-  List<int> _playerIds() {
+  /// The group's golfers. The card names them itself; [names] is the fallback
+  /// for a caller that has a roster and an older payload that does not.
+  List<Map<String, dynamic>> _roster() {
+    if (group.players.isNotEmpty) return group.players;
     final seen = <int>{};
     for (final h in group.holes) {
+      seen.addAll(h.gross.keys);
       seen.addAll(h.scores.keys);
     }
     final list = seen.toList()..sort();
-    return list;
+    return [
+      for (final id in list)
+        {'player_id': id, 'short_name': names[id] ?? ''},
+    ];
   }
 }
 
@@ -299,60 +370,6 @@ class _BudgetLine extends StatelessWidget {
         ),
       ],
     ]);
-  }
-}
-
-/// The Balls row and the Group row, under the card.
-class _BallsRow extends StatelessWidget {
-  final FortyBallsGroup group;
-  const _BallsRow({required this.group});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          const SizedBox(width: 44, child: Text('Balls',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-          for (final h in group.holes)
-            SizedBox(
-              width: 26,
-              child: Text(h.count == null ? '·' : '${h.count}',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    // Zero is grey; an APP-SET count is amber, because the app
-                    // set it and the group did not.
-                    color: h.appSet
-                        ? Halved.caution
-                        : (h.count == 0
-                            ? theme.colorScheme.onSurfaceVariant
-                            : theme.colorScheme.onSurface),
-                  )),
-            ),
-        ]),
-        const SizedBox(height: 2),
-        Row(children: [
-          const SizedBox(width: 44, child: Text('Group',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))),
-          for (final h in group.holes)
-            SizedBox(
-              width: 26,
-              child: Text(
-                  h.result == null ? '·' : toParLabel(h.result!),
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: h.result == null || h.result == 0
-                        ? theme.colorScheme.onSurfaceVariant
-                        : (h.result! < 0 ? Halved.pine : Halved.caution),
-                  )),
-            ),
-        ]),
-      ]),
-    );
   }
 }
 

@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
 import 'package:golf_mobile/game_catalog.dart';
 import 'package:golf_mobile/widgets/forty_balls_board.dart';
+import 'package:golf_mobile/widgets/hole_grid_scorecard.dart';
 import 'package:golf_mobile/widgets/forty_balls_picker.dart';
 
 FortyBallsPickerState picker({
@@ -28,15 +29,13 @@ FortyBallsPickerState picker({
   bool scoresIn = true,
   bool locked = false,
   bool dq = false,
-  double? average = 2.4,
   Map<int, int> nets = const {1: 3, 2: 4, 3: 5, 4: 6},
 }) =>
     FortyBallsPickerState.fromJson({
       'hole': 11, 'group_size': groupSize, 'active_here': activeHere,
       'budget': groupSize * 10, 'spent': spent, 'left': left,
       'holes_after': holesAfter, 'capacity': capacity, 'lo': lo, 'hi': hi,
-      'dq': dq, 'count': count, 'app_set': false, 'average': average,
-      'slack': slack, 'can_pick': canPick, 'scores_in': scoresIn,
+      'dq': dq, 'count': count, 'app_set': false, 'slack': slack, 'can_pick': canPick, 'scores_in': scoresIn,
       'locked': locked, 'handicap_mode': 'net', 'net_percent': 100,
       'cap': true,
       'par': 4,
@@ -134,6 +133,27 @@ void main() {
       expect(fortyBallsReady(s, const {1: 3, 2: 4, 3: 5, 4: 6}), isTrue);
     });
 
+    testWidgets('the hole in front of you is one of the holes to play',
+        (tester) async {
+      // Reported from the 1st tee: `2.4 a hole, 17 to play` before a ball had
+      // been struck. The figure counted the holes AFTER this one while the
+      // slack beside it counted this one — two tiles, two moments.
+      await pumpPicker(tester, picker(holesAfter: 17, left: 40, capacity: 72));
+      expect(find.text('2.2 a hole'), findsOneWidget);
+      expect(find.text('18 to play'), findsOneWidget);
+      expect(find.text('32'), findsOneWidget);   // slack 4 x 18 - 40
+    });
+
+    testWidgets('a pick steps BOTH figures forward', (tester) async {
+      // 40 - 2 = 38 balls over the 17 holes after this one, and the slack
+      // loses the two balls this hole did not take.
+      await pumpPicker(tester,
+          picker(holesAfter: 17, left: 40, capacity: 72, count: 2));
+      expect(find.text('2.2 a hole'), findsOneWidget);
+      expect(find.text('17 to play'), findsOneWidget);
+      expect(find.text('30'), findsOneWidget);   // 68 - 38
+    });
+
     testWidgets('a settled hole says so and offers nothing', (tester) async {
       await pumpPicker(tester,
           picker(count: 2, canPick: false, locked: true));
@@ -176,7 +196,7 @@ void main() {
 
     testWidgets('a spent budget reads – on both figures', (tester) async {
       await pumpPicker(tester, picker(lo: 0, hi: 0, left: 0, spent: 40,
-          capacity: 28, slack: 0, average: null));
+          capacity: 28, slack: 0));
       expect(find.text('–'), findsNWidgets(2));
       expect(find.textContaining('budget spent'), findsWidgets);
       expect(find.textContaining('Budget spent'), findsOneWidget);
@@ -205,13 +225,23 @@ void main() {
           'dq': dq, 'rank': rank, 'tied': false,
           'payout': rank == 1 ? 150.0 : 0.0,
           'per_person_payout': rank == 1 ? 37.5 : 0.0, 'split_ways': size,
+          'players': [
+            for (final e in _names.entries)
+              {'player_id': e.key, 'short_name': e.value, 'name': e.value},
+          ],
           'holes': [
-            {'hole': 1, 'par': 4, 'count': 2, 'app_set': false, 'result': -1,
+            {'hole': 1, 'par': 4, 'stroke_index': 7,
+             'count': 2, 'app_set': false, 'result': -1,
              'counted_ids': [1, 2],
-             'scores': {'1': 3, '2': 4, '3': 5, '4': 6}},
-            {'hole': 2, 'par': 4, 'count': 4, 'app_set': true, 'result': 2,
+             'scores': {'1': 3, '2': 4, '3': 5, '4': 6},
+             'gross': {'1': 3, '2': 5, '3': 5, '4': 6},
+             'strokes': {'1': 0, '2': 1, '3': 0, '4': 0}},
+            {'hole': 2, 'par': 4, 'stroke_index': 11,
+             'count': 4, 'app_set': true, 'result': 2,
              'counted_ids': [1, 2, 3, 4],
-             'scores': {'1': 4, '2': 4, '3': 5, '4': 5}},
+             'scores': {'1': 4, '2': 4, '3': 5, '4': 5},
+             'gross': {'1': 4, '2': 4, '3': 5, '4': 5},
+             'strokes': {'1': 0, '2': 0, '3': 0, '4': 0}},
           ],
           'holes_in_play': [1, 2],
         };
@@ -270,6 +300,47 @@ void main() {
           [group(dq: true, rank: null, ranking: null, left: 20, capacity: 16)]);
       expect(find.text('OUT'), findsOneWidget);
       expect(find.textContaining('20 owed, room for 16'), findsOneWidget);
+    });
+
+    testWidgets('the card is the STANDARD card, named and indexed',
+        (tester) async {
+      // Reported from the course: four anonymous rows, no index, no dots, and
+      // the Balls row a column off the scores it described.
+      await pumpBoard(tester, [group()]);
+      await tester.tap(find.text('Group 1'));
+      await tester.pumpAndSettle();
+      final card = find.byType(HoleGridScorecard);
+      expect(card, findsOneWidget);
+      // The golfers are named — the board used to pass no roster at all.
+      for (final n in _names.values) {
+        // The label column draws a RichText (name + playing handicap), so the
+        // finder has to be told to look inside one.
+        expect(
+            find.descendant(
+                of: card, matching: find.text(n, findRichText: true)),
+            findsOneWidget);
+      }
+      // Par and Index bands, and the GROSS digit rather than the net.
+      expect(find.descendant(of: card, matching: find.text('Index')),
+          findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text('7')),
+          findsWidgets);
+      // Aldo made 5 gross on the 1st and netted 4; the card prints the 5.
+      expect(find.descendant(of: card, matching: find.text('5')),
+          findsWidgets);
+    });
+
+    testWidgets('Balls and Group live INSIDE the grid', (tester) async {
+      // They were a second scroller underneath with their own label width and
+      // their own offset, so they neither lined up nor scrolled along.
+      await pumpBoard(tester, [group()]);
+      await tester.tap(find.text('Group 1'));
+      await tester.pumpAndSettle();
+      final card = find.byType(HoleGridScorecard);
+      expect(find.descendant(of: card, matching: find.text('Balls')),
+          findsOneWidget);
+      expect(find.descendant(of: card, matching: find.text('Group')),
+          findsOneWidget);
     });
 
     testWidgets('the card marks app-set counts apart from the group\'s',

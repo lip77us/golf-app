@@ -67,6 +67,33 @@ class FortyBallsPicker extends StatelessWidget {
 
   bool get _ready => fortyBallsReady(state, localNets);
 
+  // ---- the two figures ----------------------------------------------------
+  //
+  // **One position, and the pick decides which.** Nothing picked yet means the
+  // hole has not happened: the balls and the holes both still include it, so
+  // standing on the 1st a foursome reads `2.2 a hole, 18 to play`. It used to
+  // read 17, because the server's figure counted the holes AFTER this one
+  // while the slack beside it counted this one — two tiles describing two
+  // different moments. Pick a count and both step forward together.
+
+  int get _ballsLeft => _count == null ? state.left : state.left - _count!;
+
+  int get _holesLeft =>
+      _count == null ? state.holesAfter + 1 : state.holesAfter;
+
+  /// The capacity the holes left can absorb. `state.capacity` counts this
+  /// hole; once its count is picked, that share is gone.
+  int get _capacityLeft => _count == null
+      ? state.capacity
+      : state.capacity - state.activeHere;
+
+  int get _slack => (_capacityLeft - _ballsLeft).clamp(0, 1 << 30);
+
+  /// `2.2 a hole` — balls left ÷ holes left. Null when there is nothing left
+  /// to spread, either because the budget is gone or the round is.
+  double? get _average =>
+      (_ballsLeft == 0 || _holesLeft <= 0) ? null : _ballsLeft / _holesLeft;
+
   /// The nets that would count at [n] — the best ones, which is what the
   /// picker lights up as the scorer moves across the buttons.
   List<int> countedAt(int n) {
@@ -143,29 +170,29 @@ class FortyBallsPicker extends StatelessWidget {
         Row(children: [
           Expanded(child: _Figure(
             label: 'To reach ${state.budget}',
-            value: state.average == null
+            value: _average == null
                 ? '–'
-                : '${state.average!.toStringAsFixed(1)} a hole',
-            note : state.average == null
+                : '${_average!.toStringAsFixed(1)} a hole',
+            note : _average == null
                 ? 'budget spent'
-                : '${state.holesAfter} to play',
-            // Both figures grey BEFORE a pick — they show the position
-            // before this hole, which is not yet the position after it.
+                : '$_holesLeft to play',
+            // Grey BEFORE a pick — they show the position going into this
+            // hole, which is not yet the position coming out of it.
             muted: _count == null,
           )),
           const SizedBox(width: 10),
           Expanded(child: _Figure(
             label: 'Slack',
-            value: state.left == 0 ? '–' : '${state.slack}',
-            note : state.left == 0
+            value: _ballsLeft == 0 ? '–' : '$_slack',
+            note : _ballsLeft == 0
                 ? 'budget spent'
-                : (state.slack == 0
+                : (_slack == 0
                     ? 'every ball counts from here'
                     : 'balls you can still skip'),
             muted: _count == null,
             // Amber at zero: the group has no choices left, which is a
             // different thing from having made them.
-            alert: state.slack == 0 && state.left > 0,
+            alert: _slack == 0 && _ballsLeft > 0,
           )),
         ]),
         if (state.lo == state.hi) ...[

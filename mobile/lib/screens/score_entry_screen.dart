@@ -41,6 +41,8 @@ import '../widgets/triple_cup_pairings.dart';
 import '../widgets/standing_ribbon.dart';
 import '../widgets/stroke_play_progress_grid.dart';
 import '../utils/play_order.dart';
+import '../api/client.dart' show NetworkException;
+import '../widgets/error_view.dart' show friendlyError;
 import '../widgets/forty_balls_picker.dart';
 import '../widgets/hole_header.dart';
 import '../game_colors.dart';
@@ -1218,6 +1220,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
 
     if ((scoreEdits == null || scoreEdits.isEmpty) &&
         (junkEdits == null || junkEdits.isEmpty)) {
+      // **Nothing to SAVE is not nothing to SEND.** Auto-advance posts the
+      // hole the instant the last score lands, so by the time the group picks
+      // its count there are no score edits left — and this return used to walk
+      // straight on, leaving the pick held. The next hole's first score then
+      // settled this one, and the count the group chose was never recorded:
+      // 4 balls read as 0 on the board. Found on the course, hole 2.
+      await _flushFortyBalls();
+      if (!mounted) return;
       _advance();
       return;
     }
@@ -1265,13 +1275,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // moves `_selectedHole` out from under it. `waitUntilIdle` first because
     // the scores have to be ON the server: that is exactly what the server
     // checks a count against.
-    if (_fbPending.containsKey(_selectedHole)) {
-      final hole = _selectedHole;
-      await context.read<SyncService>().waitUntilIdle();
-      if (!mounted) return;
-      await _flushFortyBalls(hole);
-      if (!mounted) return;
-    }
+    await _flushFortyBalls();
+    if (!mounted) return;
 
     _loadGameSummaries(rp);
 
@@ -1336,23 +1341,57 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     return out;
   }
 
-  /// Send any held count once the hole's scores have landed. Called after a
-  /// successful submit — the order is the whole point: scores, then the count
-  /// the server can now check against them.
-  Future<void> _flushFortyBalls(int hole) async {
-    final n = _fbPending[hole];
-    if (n == null) return;
+  bool _fbFlushing = false;
+
+  /// Send any held counts once their holes' scores have landed.
+  ///
+  /// **Every held hole, not just the one on screen.** A count that did not
+  /// land has a short life: the moment the NEXT hole gets a score this one is
+  /// settled and the server will refuse it for good. So every path that
+  /// leaves a hole flushes the lot, and a refusal is said out loud rather
+  /// than swallowed — a pick that quietly became a 0 is the worst outcome of
+  /// the three.
+  Future<void> _flushFortyBalls([int? only]) async {
+    if (_fbFlushing) return;
+    final due = (only == null ? _fbPending.keys.toList() : <int>[only])
+        .where(_fbPending.containsKey)
+        .toList();
+    if (due.isEmpty) return;
+    _fbFlushing = true;
     try {
-      final r = await context.read<AuthProvider>().client
-          .postFortyBallsCount(widget.foursomeId, hole, n);
+      // The scores have to be ON the server first: that is exactly what the
+      // server checks a count against.
+      await context.read<SyncService>().waitUntilIdle();
       if (!mounted) return;
-      setState(() {
-        _fbPending.remove(hole);
-        if (_selectedHole == hole) _fbState = r.state;
-      });
-    } catch (_) {
-      // Left pending: the hole saved, the count did not. The pager still
-      // names it and the next save tries again rather than losing the choice.
+      final client = context.read<AuthProvider>().client;
+      for (final hole in due) {
+        final n = _fbPending[hole];
+        if (n == null) continue;
+        try {
+          final r = await client.postFortyBallsCount(
+              widget.foursomeId, hole, n);
+          if (!mounted) return;
+          setState(() {
+            _fbPending.remove(hole);
+            if (_selectedHole == hole) _fbState = r.state;
+          });
+        } on NetworkException {
+          // Kept: the hole is still open and the next attempt may land it.
+          return;
+        } catch (e) {
+          if (!mounted) return;
+          // The server refused it, and its answer will not change — drop the
+          // hold rather than re-asking on every hole, and NAME it.
+          setState(() => _fbPending.remove(hole));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Hole $hole balls: ${friendlyError(e)}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            duration: const Duration(seconds: 6),
+          ));
+        }
+      }
+    } finally {
+      _fbFlushing = false;
     }
   }
 
@@ -1428,13 +1467,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       await _submitJunk(_selectedHole, junkEdits);
     }
 
-    if (_fbPending.containsKey(_selectedHole)) {
-      final hole = _selectedHole;
-      await context.read<SyncService>().waitUntilIdle();
-      if (!mounted) return false;
-      await _flushFortyBalls(hole);
-      if (!mounted) return false;
-    }
+    await _flushFortyBalls();
+    if (!mounted) return false;
 
     _loadGameSummaries(rp);
     context.read<SyncService>().waitUntilIdle().then((_) {
@@ -3092,6 +3126,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 onFortyBallsState: (st) {
                   if (!mounted) return;
                   setState(() => _fbState = st);
+                  // The hole's scores have reached the server and we are
+                  // still holding the pick — send it now, on the hole, rather
+                  // than waiting for the scorer to leave it.
+                  if (st != null && st.scoresIn &&
+                      _fbPending.containsKey(st.hole)) {
+                    _flushFortyBalls(st.hole);
+                  }
                 },
                 fortyBallsLocalNets: games.contains('forty_balls')
                     ? _fbLocalNets(sc, players, _selectedHole)
