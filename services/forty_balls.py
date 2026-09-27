@@ -455,6 +455,7 @@ def group_card(foursome) -> dict:
     rows = []
     total = 0
     spent = 0
+    pending = []
     for h in holes:
         par = pars.get(h)
         picked = counts.get(h)
@@ -462,12 +463,23 @@ def group_card(foursome) -> dict:
         hole_nets = nets.get(h, {})
         counted_ids = []
         result = None
-        if n is not None and par is not None:
+        # **A count is not a result until the balls exist.** Once the budget
+        # forces the tail the app writes 4 on every hole to the finish, and
+        # those holes have no scores — so `sum([]) - 4 × par` gave the group
+        # −20 on an unplayed par 5, and a total of −97 with eleven holes
+        # played. A count it cannot yet fill is a commitment, not a figure.
+        settled = n is not None and len(hole_nets) >= n
+        if settled and par is not None:
             best = sorted(hole_nets.items(), key=lambda kv: kv[1])[:n]
             counted_ids = [pid for pid, _ in best]
             result = sum(v for _, v in best) - n * par
             total += result
+        if settled:
             spent += n
+        else:
+            # Still to come, whether or not it already carries a count: its
+            # balls have to come out of the holes ahead.
+            pending.append(h)
         rows.append({
             'hole'       : h,
             'par'        : par,
@@ -485,9 +497,14 @@ def group_card(foursome) -> dict:
                             for pid, d in detail.get(h, {}).items()},
         })
 
-    unpicked = [r['hole'] for r in rows if r['count'] is None]
+    # **The budget line measures what has been PLAYED**, not what has been
+    # decided. A group whose tail is forced has committed every ball it has
+    # left, but it has not spent them: `40 of 40` on the 12th tee says the
+    # round is over when six holes are still to come. So a forced hole with
+    # no scores counts as pending — it holds its own capacity, which is
+    # exactly the count it is forced to.
     left = B - spent
-    capacity = _capacity(foursome, unpicked, members)
+    capacity = _capacity(foursome, pending, members)
     # **Out of 40 Balls, not out of the round.** The scores below still stand
     # for the championship; what cannot happen any more is the budget coming
     # out, so there is no honest total to rank.
@@ -512,7 +529,7 @@ def group_card(foursome) -> dict:
         # cannot go below zero — at zero every remaining ball is spoken for,
         # which is the `all count` state.
         'slack'       : max(0, capacity - left),
-        'holes_left'  : len(unpicked),
+        'holes_left'  : len(pending),
         'capacity'    : capacity,
         'dq'          : dq,
         'total'       : total,

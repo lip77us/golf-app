@@ -282,6 +282,80 @@ class ForcedTests(_Base):
                          .filter(foursome=self.fs, app_set=True).exists())
 
 
+class ForcedTailOnTheBoardTests(_Base):
+    """A forced tail is a COMMITMENT, not a round that has been played.
+
+    Reported from the course: a group eleven holes in read `40 of 40` with a
+    total of **−97**. Spending little early forces every remaining hole to
+    count all four, and the app writes those rows — correctly. The board then
+    read them as played: it summed `sum([]) − 4 × par` on holes nobody had
+    teed off, and counted their balls as spent.
+    """
+
+    def _force_the_tail(self):
+        # 0 on the first eight leaves 40 over ten holes: every one is a 4.
+        for h in range(1, 9):
+            self.par_hole(h, 0, 0, 0, 0)
+            set_count(self.fs, h, 0)
+
+    def test_an_unplayed_hole_has_no_result(self):
+        self._force_the_tail()
+        card = group_card(self.fs)
+        rows = {r['hole']: r for r in card['holes']}
+        # Forced to 4 and nobody has hit a shot: a count it cannot fill.
+        self.assertEqual(rows[12]['count'], 4)
+        self.assertIsNone(rows[12]['result'])
+        self.assertEqual(card['total'], 0)
+
+    def test_the_budget_line_counts_what_was_PLAYED(self):
+        self._force_the_tail()
+        card = group_card(self.fs)
+        self.assertEqual(card['spent'], 0)        # eight holes, no balls
+        self.assertEqual(card['left'], 40)
+        self.assertEqual(card['holes_left'], 10)
+        # Ten holes at four apiece is exactly what is owed — no slack, and
+        # emphatically not out.
+        self.assertEqual(card['capacity'], 40)
+        self.assertEqual(card['slack'], 0)
+        self.assertFalse(card['dq'])
+
+    def test_playing_a_forced_hole_spends_it(self):
+        self._force_the_tail()
+        self.par_hole(9, 0, 0, 0, 0)
+        card = group_card(self.fs)
+        self.assertEqual(card['spent'], 4)
+        self.assertEqual(card['left'], 36)
+        self.assertEqual(card['holes_left'], 9)
+        self.assertEqual(card['slack'], 0)
+        rows = {r['hole']: r for r in card['holes']}
+        self.assertEqual(rows[9]['result'], 0)    # four pars on a par 4
+
+    def test_a_spent_budget_forces_zeros_that_absorb_nothing(self):
+        for h in range(1, 11):
+            self.par_hole(h, 0, 0, 0, 0)
+            set_count(self.fs, h, 4)
+        card = group_card(self.fs)
+        self.assertEqual(card['spent'], 40)
+        self.assertEqual(card['left'], 0)
+        # A hole forced to zero can take no ball, so there is no slack to
+        # report and the group is not out.
+        self.assertEqual(card['capacity'], 0)
+        self.assertEqual(card['slack'], 0)
+        self.assertFalse(card['dq'])
+
+    def test_a_part_scored_hole_is_not_settled_either(self):
+        # Forced to four with three of the four scores in: the group cannot
+        # have counted four balls yet, so the hole is still to come.
+        self._force_the_tail()
+        submit_hole(self.fs, 9, list(zip(self.pids[:3], [4, 4, 4])))
+        card = group_card(self.fs)
+        rows = {r['hole']: r for r in card['holes']}
+        self.assertEqual(rows[9]['count'], 4)
+        self.assertIsNone(rows[9]['result'])
+        self.assertEqual(card['spent'], 0)
+        self.assertEqual(card['holes_left'], 10)
+
+
 class DropoutTests(_Base):
     """**The budget stands; a dropout costs CAPACITY, not debt.**
 
