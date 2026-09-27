@@ -76,28 +76,21 @@ def drop_placeholder_screenshots(body):
     return body
 
 
-# The formats Halved scores but has not written up yet. The design file lists
-# four that are wrong for this project — Bingo bango bongo is not a game Halved
-# scores at all — so the chips are replaced here rather than in the generated
-# file, or the next rebuild would put them back.
-COMING_SOON = ['Triple Nassau', 'Mini Single Bracket', 'Spots',
-               'Honors', 'Irish Rumble', 'Pink Ball']
-
-
-def retitle_coming_soon(body):
-    """Swap the 'Guides on the way' chips for the real backlog."""
-    i = body.find('Guides on the way')
-    if i == -1:
-        return body
-    chip = re.compile(
-        r'(<span style="border:1px solid #DCE5DD;border-radius:999px;'
-        r'padding:6px 13px;font-size:13.5px;color:#5C6B62">)([^<]+)(</span>)')
-    found = list(chip.finditer(body, i))
-    if not found:
-        return body
-    tmpl = found[0]
-    block = '\n'.join(tmpl.group(1) + name + tmpl.group(3) for name in COMING_SOON)
-    return body[:found[0].start()] + block + body[found[-1].end():]
+# **The 'Guides on the way' chips are the design file's own, again.**
+#
+# They were overridden here for one batch, because that file listed four
+# formats that were wrong for this project — Bingo bango bongo is not a game
+# Halved scores at all — and a fix in the generated page would have been
+# undone by the next rebuild.
+#
+# Batch 3 fixes it at the source: the six that were "on the way" now have real
+# cards and the chips read Match play / Stableford / Best ball. The override
+# outlived its cause and had started doing the damage it was written to
+# prevent — it put the six BACK as coming-soon on the same page that now links
+# them, in the old `Mini Single Bracket` spelling the packet asks us to drop.
+#
+# If a future packet is wrong again, say so to Design rather than restoring
+# this: a build script that rewrites copy is only ever right for one batch.
 
 
 def drop_missing_screenshots(body, img_dir):
@@ -279,8 +272,6 @@ def convert(src_dir, name, slug):
     if slug:
         body = drop_placeholder_screenshots(body)
     body = drop_missing_screenshots(body, os.path.join(OUT, 'img'))
-    if not slug:
-        body = retitle_coming_soon(body)
     body = drop_unwritten_cards(body)
     body = unlink_unwritten_inline(body)
 
