@@ -399,19 +399,19 @@ class ReceiptPayloadTests(SettlementBase):
 class ProvisionalChecksTests(TestCase):
     """**The arithmetic is not finished until the rounds are.**
 
-    Reported from testing on a live event: `Eclectic · Net does not balance —
+    Reported from testing on a live event: `Dream Round · Net does not balance —
     $20.00 underpaid. The mistake is in its payout table` over a payout table
     the setup screen called correct on the same data, and then the same $20
     again as `Collected and paid do not cancel ... an arithmetic bug`.
 
-    Eclectic pays nobody until a card is WHOLE, so mid-event its entries are
+    Dream Round pays nobody until a card is WHOLE, so mid-event its entries are
     in and its prizes are zero. That is the game working.
     """
 
     def setUp(self):
         from datetime import date
         from decimal import Decimal
-        from games.models import EclecticConfig
+        from games.models import DreamRoundConfig
         self.course = make_course('North Links')
         self.tee = make_tee(course=self.course, holes=DEFAULT_HOLES)
         self.tourn = make_tournament(name='Two Day')
@@ -427,7 +427,7 @@ class ProvisionalChecksTests(TestCase):
             r.save()
             self.rounds.append(r)
             make_foursome(r, [(self.ann, 0), (self.bea, 0)], tee=self.tee)
-        EclecticConfig.objects.create(
+        DreamRoundConfig.objects.create(
             tournament=self.tourn, gross_on=False, net_on=True,
             net_entry_fee=Decimal('5.00'),
             net_payouts=[{'place': 1, 'amount': 10.00}])

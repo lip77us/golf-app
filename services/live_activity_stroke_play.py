@@ -159,16 +159,16 @@ def stroke_play_activity_state(round_obj, foursome, *, player_id=None,
 
 
 def _footer(round_obj, foursome, player_id, played, field_size) -> dict:
-    """The footer, and the eclectic's one claim on this card.
+    """The footer, and the Dream Round's one claim on this card.
 
-    **The eclectic takes the QUIET SLOT while it has news** — the same rule the
+    **The Dream Round takes the QUIET SLOT while it has news** — the same rule the
     Vegas carry follows. The card does not grow: `FIELD n` moves one place
     right, into the slot beside it, so it stays on screen exactly as the packet
     requires. When there is no news, the footer is byte-for-byte what it was.
 
-    The line is composed server-side (`live_activity_eclectic.footer_line`), and
+    The line is composed server-side (`live_activity_dream_round.footer_line`), and
     the STRUCTURED block rides alongside it so a later Swift build can draw the
-    `ECLECTIC` label at its own weight without the two ever disagreeing about
+    `DREAM ROUND` label at its own weight without the two ever disagreeing about
     which pool is being named.
     """
     plain = {'footer': {'context': f'FIELD {field_size}', 'money': ''}}
@@ -177,7 +177,7 @@ def _footer(round_obj, foursome, player_id, played, field_size) -> dict:
     if tournament is None:
         return plain
 
-    from services.live_activity_eclectic import eclectic_news, footer_line
+    from services.live_activity_dream_round import dream_round_news, footer_line
     from services.hole_plan import play_order
 
     # The hole JUST POSTED — the last one in the group's own play order that
@@ -186,7 +186,7 @@ def _footer(round_obj, foursome, player_id, played, field_size) -> dict:
     last_hole = order[played - 1] if 0 < played <= len(order) else None
 
     try:
-        block = eclectic_news(tournament, round_obj, player_id, last_hole)
+        block = dream_round_news(tournament, round_obj, player_id, last_hole)
     except Exception:
         # A side game must never take the card down with it.
         return plain
@@ -200,8 +200,8 @@ def _footer(round_obj, foursome, player_id, played, field_size) -> dict:
         # line untagged rather than dropping it — which is why the tag and the
         # text are never the same string.
         'footer': {'context': line, 'money': f'FIELD {field_size}',
-                   'label': 'ECLECTIC'},
-        'eclectic': block,
+                   'label': 'DREAM ROUND'},
+        'dream_round': block,
     }
 
 

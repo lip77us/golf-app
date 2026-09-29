@@ -1,11 +1,11 @@
 """
-services/eclectic.py
+services/dream_round.py
 --------------------
-Eclectic — the best score on every hole number, across every round of the
+Dream Round — the best score on every hole number, across every round of the
 event. Eighteen bests make a golfer's card; lowest total wins.
 
 Rules (all settled 26 Sep 2026; see
-docs/design-review/handoff-eclectic/HANDOFF.md)
+docs/design-review/handoff-dream-round/HANDOFF.md)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 * **Matched by hole NUMBER**, across every round and every course.
 * **Compared to par** — that round's par for that hole. A gross total means
@@ -40,14 +40,14 @@ docs/design-review/handoff-eclectic/HANDOFF.md)
 Availability
 ~~~~~~~~~~~~
 Individual events with **2+ rounds, every one of them 18 holes**. One round is
-not an eclectic, it is the round; and a 9-hole round would put nine holes of
+not a Dream Round, it is the round; and a 9-hole round would put nine holes of
 the card permanently out of reach of half the field.
 
 Public API
 ~~~~~~~~~~
-    ok, reason = eclectic_available(tournament)
-    rows       = eclectic_standings(tournament, pool)   # 'gross' | 'net'
-    summary    = eclectic_summary(tournament)
+    ok, reason = dream_round_available(tournament)
+    rows       = dream_round_standings(tournament, pool)   # 'gross' | 'net'
+    summary    = dream_round_summary(tournament)
 """
 from core.models import RoundStatus
 from scoring.handicap import effective_hcp_for, make_strokes_fn
@@ -61,7 +61,7 @@ from tournament.models import Foursome
 #: that number came off an externally-managed card and is already final.
 FULL_ALLOWANCE = 100
 
-#: Every hole number an eclectic card has. The game is gated on 18-hole rounds,
+#: Every hole number a Dream Round card has. The game is gated on 18-hole rounds,
 #: so this is the card, not an assumption about a round.
 CARD_HOLES = list(range(1, 19))
 
@@ -70,8 +70,8 @@ CARD_HOLES = list(range(1, 19))
 # Availability
 # ---------------------------------------------------------------------------
 
-def eclectic_available(tournament) -> tuple:
-    """``(ok, reason)`` — whether this event can play an eclectic.
+def dream_round_available(tournament) -> tuple:
+    """``(ok, reason)`` — whether this event can play a Dream Round.
 
     The reason is written to be SHOWN: the wizard puts it under the game's name
     when the entry is disabled. An event with one round hides the entry
@@ -192,7 +192,7 @@ def _all_round_cards(tournament) -> list:
 
 
 def _build_cards(tournament, pool: str, per_round=None) -> tuple:
-    """``(cards, rounds)`` — every golfer's eclectic in ``pool``.
+    """``(cards, rounds)`` — every golfer's Dream Round in ``pool``.
 
     ``cards`` is ``{player_id: {'name', 'holes': {h: kept}, 'total',
     'holes_kept'}}``; ``rounds`` is the round list in play order.
@@ -250,7 +250,7 @@ def _build_cards(tournament, pool: str, per_round=None) -> tuple:
 # Standings
 # ---------------------------------------------------------------------------
 
-def eclectic_standings(tournament, pool: str, per_round=None,
+def dream_round_standings(tournament, pool: str, per_round=None,
                        cards=None) -> list:
     """Ranked rows for one pool, with the money.
 
@@ -258,7 +258,7 @@ def eclectic_standings(tournament, pool: str, per_round=None,
     rather than leading on a total of zero, which is what a bare ascending sort
     would do to him.
     """
-    config = getattr(tournament, 'eclectic_config', None)
+    config = getattr(tournament, 'dream_round_config', None)
     if config is None:
         return []
     if pool not in config.pools:
@@ -302,7 +302,7 @@ def eclectic_standings(tournament, pool: str, per_round=None,
         sort_key=_sort_key,
         rank_key=lambda kv: ((2, 0) if _bucket(kv[1]) == 2
                              else (_bucket(kv[1]), kv[1]['total'])),
-        # **Eclectic is never flighted.** The flights cut is the
+        # **Dream Round is never flighted.** The flights cut is the
         # championship's; a side game riding on it would pay two boards from
         # one table. One flight holding everybody is the same code path the
         # unflighted championship uses.
@@ -448,14 +448,14 @@ def _single_course_holes(tournament, rounds) -> dict:
     }
 
 
-def eclectic_summary(tournament) -> dict:
+def dream_round_summary(tournament) -> dict:
     """Everything the board draws, for both pools.
 
     ``cards`` carries the whole grid — every round's gross on every hole and
     which one was kept — because the row OPENS into it and a second request per
     golfer would be a request per row.
     """
-    config = getattr(tournament, 'eclectic_config', None)
+    config = getattr(tournament, 'dream_round_config', None)
     if config is None:
         return {}
 
@@ -470,7 +470,7 @@ def eclectic_summary(tournament) -> dict:
     pools = {}
     for pool in config.pools:
         cards, _ = _build_cards(tournament, pool, per_round)
-        standings = eclectic_standings(tournament, pool, per_round, cards)
+        standings = dream_round_standings(tournament, pool, per_round, cards)
 
         detail = {}
         for row in standings:

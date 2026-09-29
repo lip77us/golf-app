@@ -1,7 +1,7 @@
 """
-scoring/tests/test_eclectic.py
+scoring/tests/test_dream_round.py
 ------------------------------
-Eclectic — the best score on every hole number, across every round.
+Dream Round — the best score on every hole number, across every round.
 
 The engine's whole subject is SELECTION, so most of what follows is about
 which candidate wins and which is quietly dropped. Two cases carry the design:
@@ -17,9 +17,9 @@ from datetime import date
 
 from django.test import TestCase
 
-from games.models import EclecticConfig
-from services.eclectic import (
-    eclectic_available, eclectic_standings, eclectic_summary,
+from games.models import DreamRoundConfig
+from services.dream_round import (
+    dream_round_available, dream_round_standings, dream_round_summary,
 )
 from scoring.tests._helpers import (
     DEFAULT_HOLES, make_course, make_foursome, make_player, make_round,
@@ -54,7 +54,7 @@ class _Base(TestCase):
         self.ridge_tee = make_tee(course=self.ridge, holes=RIDGE_HOLES, par=73)
 
         self.tourn = make_tournament(name='Club Champs')
-        self.tourn.active_games = ['eclectic']
+        self.tourn.active_games = ['dream_round']
         self.tourn.total_rounds = self.n_rounds
         self.tourn.save()
 
@@ -76,7 +76,7 @@ class _Base(TestCase):
             self.rounds.append(r)
             self.foursomes.append(fs)
 
-        self.config = EclecticConfig.objects.create(
+        self.config = DreamRoundConfig.objects.create(
             tournament=self.tourn,
             gross_entry_fee=10, gross_payouts=[{'place': 1, 'amount': 160},
                                                {'place': 2, 'amount': 80}],
@@ -93,22 +93,22 @@ class _Base(TestCase):
                         [(player.id, pars[h] + delta)])
 
     def row(self, pool, player):
-        rows = eclectic_standings(self.tourn, pool)
+        rows = dream_round_standings(self.tourn, pool)
         return next(r for r in rows if r['player_id'] == player.id)
 
     def card(self, pool, player):
-        return eclectic_summary(self.tourn)[pool]['cards'][player.id]
+        return dream_round_summary(self.tourn)[pool]['cards'][player.id]
 
 
 class AvailabilityTests(_Base):
     def test_two_eighteen_hole_rounds_is_available(self):
-        ok, reason = eclectic_available(self.tourn)
+        ok, reason = dream_round_available(self.tourn)
         self.assertTrue(ok)
         self.assertEqual(reason, '')
 
-    def test_one_round_is_not_an_eclectic(self):
+    def test_one_round_is_not_an_dream_round(self):
         self.rounds[1].delete()
-        ok, reason = eclectic_available(self.tourn)
+        ok, reason = dream_round_available(self.tourn)
         self.assertFalse(ok)
         self.assertIn('two or more rounds', reason)
 
@@ -116,7 +116,7 @@ class AvailabilityTests(_Base):
         # Nine holes would put half the card permanently out of reach.
         self.rounds[1].num_holes = 9
         self.rounds[1].save(update_fields=['num_holes'])
-        ok, reason = eclectic_available(self.tourn)
+        ok, reason = dream_round_available(self.tourn)
         self.assertFalse(ok)
         self.assertEqual(reason, 'Needs every round to be 18 holes')
 
@@ -177,7 +177,7 @@ class SelectionTests(_Base):
         for h in range(1, 10):
             submit_hole(self.foursomes[1], h, [(self.ann.id, PAR[h] - 1)])
 
-        rows = eclectic_standings(self.tourn, 'gross')
+        rows = dream_round_standings(self.tourn, 'gross')
         self.assertEqual(rows[0]['player_id'], self.bea.id)
         self.assertEqual(rows[1]['player_id'], self.ann.id)
         self.assertLess(self.row('gross', self.ann)['total'],
@@ -199,7 +199,7 @@ class SelectionTests(_Base):
         # Not hidden: the golfer played those holes and the scores are real.
         for h in range(1, 10):
             submit_hole(self.foursomes[0], h, [(self.ann.id, PAR[h])])
-        rows = eclectic_standings(self.tourn, 'gross')
+        rows = dream_round_standings(self.tourn, 'gross')
         self.assertIn(self.ann.id, [r['player_id'] for r in rows])
         row = self.row('gross', self.ann)
         self.assertEqual(row['holes_kept'], 9)
@@ -212,7 +212,7 @@ class SelectionTests(_Base):
         for h in range(1, 10):
             submit_hole(self.foursomes[0], h, [(self.ann.id, PAR[h] - 1)])
             submit_hole(self.foursomes[0], h, [(self.bea.id, PAR[h] + 1)])
-        rows = eclectic_standings(self.tourn, 'gross')
+        rows = dream_round_standings(self.tourn, 'gross')
         self.assertEqual(rows[0]['player_id'], self.ann.id)
         self.assertFalse(rows[0]['card_complete'])
         self.assertFalse(rows[1]['card_complete'])
@@ -232,7 +232,7 @@ class SelectionTests(_Base):
     def test_a_golfer_who_has_not_teed_off_is_last_not_first(self):
         # A bare ascending sort would lead him on a total of zero.
         self.par_round(0, self.ann, offsets={4: 1})
-        rows = eclectic_standings(self.tourn, 'gross')
+        rows = dream_round_standings(self.tourn, 'gross')
         self.assertEqual(rows[0]['player_id'], self.ann.id)
         self.assertIsNone(rows[-1]['total'])
         self.assertEqual(rows[-1]['player_id'], self.bea.id)
@@ -267,7 +267,7 @@ class MixedCourseTests(_Base):
         self.assertEqual(card['best'][5], 0)
 
     def test_the_summary_names_the_courses_and_gives_each_an_initial(self):
-        s = eclectic_summary(self.tourn)
+        s = dream_round_summary(self.tourn)
         self.assertEqual(s['n_courses'], 2)
         self.assertEqual([r['course_initial'] for r in s['rounds']], ['N', 'T'])
 
@@ -282,11 +282,11 @@ class MixedCourseTests(_Base):
         # them is `B`, so this is the ordinary case at a resort, not an edge.
         self.ridge.name = 'North Ridge'
         self.ridge.save(update_fields=['name'])
-        s = eclectic_summary(self.tourn)
+        s = dream_round_summary(self.tourn)
         self.assertEqual([r['course_initial'] for r in s['rounds']], ['', ''])
 
     def test_the_legend_keys_on_the_initial_when_the_scheme_holds(self):
-        s = eclectic_summary(self.tourn)
+        s = dream_round_summary(self.tourn)
         self.assertEqual(s['course_legend'],
                          [{'key': 'N', 'course': 'North Links'},
                           {'key': 'T', 'course': 'The Ridge'}])
@@ -296,7 +296,7 @@ class MixedCourseTests(_Base):
         # label is already on the row.
         self.ridge.name = 'North Ridge'
         self.ridge.save(update_fields=['name'])
-        s = eclectic_summary(self.tourn)
+        s = dream_round_summary(self.tourn)
         self.assertEqual(s['course_legend'],
                          [{'key': 'R1', 'course': 'North Links'},
                           {'key': 'R2', 'course': 'North Ridge'}])
@@ -385,38 +385,38 @@ class MoneyTests(_Base):
         self.config.net_on = False
         self.config.save(update_fields=['net_on'])
         self.par_round(0, self.ann)
-        self.assertEqual(eclectic_standings(self.tourn, 'net'), [])
-        s = eclectic_summary(self.tourn)
+        self.assertEqual(dream_round_standings(self.tourn, 'net'), [])
+        s = dream_round_summary(self.tourn)
         self.assertEqual(s['pools'], ['gross'])
         self.assertNotIn('net', s)
 
     def test_no_config_means_no_game(self):
         self.config.delete()
         self.tourn.refresh_from_db()
-        self.assertEqual(eclectic_standings(self.tourn, 'gross'), [])
-        self.assertEqual(eclectic_summary(self.tourn), {})
+        self.assertEqual(dream_round_standings(self.tourn, 'gross'), [])
+        self.assertEqual(dream_round_summary(self.tourn), {})
 
 
 class SummaryTests(_Base):
     def test_the_chip_names_the_live_round_until_the_event_closes(self):
-        s = eclectic_summary(self.tourn)
+        s = dream_round_summary(self.tourn)
         self.assertFalse(s['is_final'])
         self.assertEqual(s['live_label'], '2 rounds live')
 
         from core.models import RoundStatus
         self.rounds[0].status = RoundStatus.COMPLETE
         self.rounds[0].save(update_fields=['status'])
-        self.assertEqual(eclectic_summary(self.tourn)['live_label'], 'R2 live')
+        self.assertEqual(dream_round_summary(self.tourn)['live_label'], 'R2 live')
 
         self.rounds[1].status = RoundStatus.COMPLETE
         self.rounds[1].save(update_fields=['status'])
-        s = eclectic_summary(self.tourn)
+        s = dream_round_summary(self.tourn)
         self.assertTrue(s['is_final'])
         self.assertEqual(s['live_label'], '')
 
     def test_the_pool_is_the_fee_times_the_field(self):
         self.par_round(0, self.ann)
         self.par_round(0, self.bea)
-        s = eclectic_summary(self.tourn)
+        s = dream_round_summary(self.tourn)
         self.assertEqual(s['gross']['entry_fee'], 10.0)
         self.assertEqual(s['gross']['pool'], 20.0)

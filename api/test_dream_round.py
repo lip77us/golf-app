@@ -1,9 +1,9 @@
 """
-api/test_eclectic.py
+api/test_dream_round.py
 --------------------
-The eclectic's endpoints, its leaderboard block and its two settlement pots.
+The Dream Round's endpoints, its leaderboard block and its two settlement pots.
 
-The engine is tested in `scoring/tests/test_eclectic.py`; what is here is the
+The engine is tested in `scoring/tests/test_dream_round.py`; what is here is the
 wiring — and the two things the wiring decides on its own: that the
 availability rule is enforced at the API rather than only greyed in the client,
 and that the two pools settle as two games.
@@ -14,7 +14,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from accounts.models import Account, User
-from games.models import EclecticConfig
+from games.models import DreamRoundConfig
 from scoring.tests._helpers import (
     DEFAULT_HOLES, make_course, make_foursome, make_player, make_round,
     make_tee, make_tournament, submit_hole,
@@ -51,7 +51,7 @@ class _Base(TestCase):
         self.client.force_authenticate(self.user)
 
     def url(self, suffix=''):
-        return f'/api/tournaments/{self.tourn.id}/eclectic/{suffix}'
+        return f'/api/tournaments/{self.tourn.id}/dream-round/{suffix}'
 
     def play(self, idx, player, offsets=None):
         for h in range(1, 19):
@@ -88,8 +88,8 @@ class SetupEndpointTests(_Base):
         }, format='json')
         self.assertEqual(r.status_code, 201)
         self.tourn.refresh_from_db()
-        self.assertIn('eclectic', self.tourn.active_games)
-        self.assertTrue(EclecticConfig.objects.filter(
+        self.assertIn('dream_round', self.tourn.active_games)
+        self.assertTrue(DreamRoundConfig.objects.filter(
             tournament=self.tourn).exists())
 
     def test_the_last_pool_cannot_be_turned_off(self):
@@ -108,7 +108,7 @@ class SetupEndpointTests(_Base):
         }, format='json')
         self.assertEqual(r.status_code, 400)
         self.assertIn('18 holes', r.data['detail'])
-        self.assertFalse(EclecticConfig.objects.filter(
+        self.assertFalse(DreamRoundConfig.objects.filter(
             tournament=self.tourn).exists())
 
     def test_a_one_round_event_is_refused(self):
@@ -123,8 +123,8 @@ class SetupEndpointTests(_Base):
         r = self.client.delete(self.url('setup/'))
         self.assertEqual(r.status_code, 204)
         self.tourn.refresh_from_db()
-        self.assertNotIn('eclectic', self.tourn.active_games)
-        self.assertFalse(EclecticConfig.objects.filter(
+        self.assertNotIn('dream_round', self.tourn.active_games)
+        self.assertFalse(DreamRoundConfig.objects.filter(
             tournament=self.tourn).exists())
 
     def test_another_account_gets_404(self):
@@ -139,11 +139,11 @@ class SetupEndpointTests(_Base):
 class ResultEndpointTests(_Base):
     def setUp(self):
         super().setUp()
-        EclecticConfig.objects.create(
+        DreamRoundConfig.objects.create(
             tournament=self.tourn, gross_entry_fee=10,
             gross_payouts=[{'place': 1, 'amount': 160}],
             net_entry_fee=10, net_payouts=[{'place': 1, 'amount': 160}])
-        self.tourn.active_games = ['eclectic']
+        self.tourn.active_games = ['dream_round']
         self.tourn.save(update_fields=['active_games'])
 
     def test_the_result_carries_both_pools_and_the_cards(self):
@@ -157,37 +157,37 @@ class ResultEndpointTests(_Base):
         self.assertEqual(len(card['rounds']), 2)
         self.assertEqual(card['best'][3], -1)
 
-    def test_the_leaderboard_gains_an_eclectic_block(self):
+    def test_the_leaderboard_gains_an_dream_round_block(self):
         self.play(0, self.ann)
         r = self.client.get(f'/api/tournaments/{self.tourn.id}/leaderboard/')
         self.assertEqual(r.status_code, 200)
-        self.assertIn('eclectic', r.data['games'])
-        self.assertEqual(r.data['games']['eclectic']['label'], 'Eclectic')
+        self.assertIn('dream_round', r.data['games'])
+        self.assertEqual(r.data['games']['dream_round']['label'], 'Dream Round')
 
     def test_the_tab_exists_BEFORE_the_config_does(self):
         # **How a TD finds the setup.** Hiding the tab until he has configured
         # the game means he has to already know it is there — and the setup was
         # genuinely unreachable that way, reported from testing.
-        self.tourn.eclectic_config.delete()
+        self.tourn.dream_round_config.delete()
         self.tourn.refresh_from_db()
         r = self.client.get(f'/api/tournaments/{self.tourn.id}/leaderboard/')
-        block = r.data['games']['eclectic']
-        self.assertEqual(block['label'], 'Eclectic')
+        block = r.data['games']['dream_round']
+        self.assertEqual(block['label'], 'Dream Round')
         self.assertEqual(block['pools'], [])
         self.assertFalse(block['configured'])
         self.assertTrue(block['available'])
 
-    def test_eclectic_on_a_ROUND_still_reaches_the_tournament_board(self):
+    def test_dream_round_on_a_ROUND_still_reaches_the_tournament_board(self):
         # The wizard puts it on the tournament; the per-round picker can put it
         # on a round. A TD who did that has said his event plays it, and the
         # game must not be unreachable because of where he said it.
         self.tourn.active_games = ['low_net']
         self.tourn.save(update_fields=['active_games'])
-        self.rounds[0].active_games = ['eclectic']
+        self.rounds[0].active_games = ['dream_round']
         self.rounds[0].save(update_fields=['active_games'])
         r = self.client.get(f'/api/tournaments/{self.tourn.id}/leaderboard/')
-        self.assertIn('eclectic', r.data['active_games'])
-        self.assertIn('eclectic', r.data['games'])
+        self.assertIn('dream_round', r.data['active_games'])
+        self.assertIn('dream_round', r.data['games'])
 
     def test_no_block_when_the_game_is_off(self):
         self.tourn.active_games = []
@@ -196,17 +196,17 @@ class ResultEndpointTests(_Base):
             r.active_games = []
             r.save(update_fields=['active_games'])
         r = self.client.get(f'/api/tournaments/{self.tourn.id}/leaderboard/')
-        self.assertNotIn('eclectic', r.data['games'])
+        self.assertNotIn('dream_round', r.data['games'])
 
 
 class SettlementTests(_Base):
     def setUp(self):
         super().setUp()
-        EclecticConfig.objects.create(
+        DreamRoundConfig.objects.create(
             tournament=self.tourn, gross_entry_fee=10,
             gross_payouts=[{'place': 1, 'amount': 20}],
             net_entry_fee=10, net_payouts=[{'place': 1, 'amount': 20}])
-        self.tourn.active_games = ['eclectic']
+        self.tourn.active_games = ['dream_round']
         self.tourn.save(update_fields=['active_games'])
 
     def _settle(self):
@@ -220,9 +220,9 @@ class SettlementTests(_Base):
         self.play(1, self.bea)
         s = self._settle()
         keys = {g['key']: g for g in s['games']}
-        self.assertIn('eclectic_gross', keys)
-        self.assertIn('eclectic_net', keys)
-        for k in ('eclectic_gross', 'eclectic_net'):
+        self.assertIn('dream_round_gross', keys)
+        self.assertIn('dream_round_net', keys)
+        for k in ('dream_round_gross', 'dream_round_net'):
             self.assertEqual(keys[k]['entries_in'], 20.0)   # $10 × 2 golfers
             self.assertEqual(keys[k]['prizes_out'], 20.0)
             self.assertTrue(keys[k]['balanced'])
@@ -231,8 +231,8 @@ class SettlementTests(_Base):
         # It is the one side game that spans the event.
         s = self._settle()
         labels = {g['label'] for g in s['games']}
-        self.assertIn('Eclectic · Gross', labels)
-        self.assertNotIn('Eclectic · Gross · R2', labels)
+        self.assertIn('Dream Round · Gross', labels)
+        self.assertNotIn('Dream Round · Gross · R2', labels)
 
     def test_the_prize_line_names_the_tie_and_the_split(self):
         # Both level: they share 1st, $20 becomes $10 each, and the line has
@@ -244,35 +244,35 @@ class SettlementTests(_Base):
         s = self._settle()
         ann = next(g for g in s['golfers'] if g['player_id'] == self.ann.id)
         prize = next(p for p in ann['prizes']
-                     if p['game'] == 'Eclectic · Gross')
+                     if p['game'] == 'Dream Round · Gross')
         self.assertEqual(prize['amount'], 10.0)
-        self.assertEqual(prize['detail'], 'Eclectic Gross, T1 (2 ways)')
+        self.assertEqual(prize['detail'], 'Dream Round Gross, T1 (2 ways)')
 
     def test_a_pool_that_is_off_has_no_pot(self):
-        cfg = self.tourn.eclectic_config
+        cfg = self.tourn.dream_round_config
         cfg.net_on = False
         cfg.save(update_fields=['net_on'])
         self.play(0, self.ann)
         s = self._settle()
         keys = {g['key'] for g in s['games']}
-        self.assertIn('eclectic_gross', keys)
-        self.assertNotIn('eclectic_net', keys)
+        self.assertIn('dream_round_gross', keys)
+        self.assertNotIn('dream_round_net', keys)
 
     def test_every_golfer_in_the_field_pays_both_entries(self):
         self.play(0, self.ann)
         s = self._settle()
         bea = next(g for g in s['golfers'] if g['player_id'] == self.bea.id)
         games = [e['game'] for e in bea['entries']]
-        self.assertIn('Eclectic · Gross', games)
-        self.assertIn('Eclectic · Net', games)
+        self.assertIn('Dream Round · Gross', games)
+        self.assertIn('Dream Round · Net', games)
 
 
 class ReachabilityTests(_Base):
     """**The only door was behind the door.**
 
-    The Eclectic tab and the gear's `Configure Eclectic` both keyed off the
+    The Dream Round tab and the gear's `Configure Dream Round` both keyed off the
     tournament's `active_games`, and the thing that PUTS it there is the
-    setup POST — so an event created without Eclectic had no way to reach the
+    setup POST — so an event created without Dream Round had no way to reach the
     screen that would turn it on. Reported from testing twice.
 
     The leaderboard now carries the offer whether or not the game is on.
@@ -283,8 +283,8 @@ class ReachabilityTests(_Base):
             f'/api/tournaments/{self.tourn.id}/leaderboard/').data
 
     def test_an_event_that_never_turned_it_on_is_still_offered_it(self):
-        self.assertNotIn('eclectic', self.tourn.active_games or [])
-        offer = self.board()['eclectic_offer']
+        self.assertNotIn('dream_round', self.tourn.active_games or [])
+        offer = self.board()['dream_round_offer']
         self.assertTrue(offer['offer'])
         self.assertTrue(offer['available'])
         self.assertFalse(offer['configured'])
@@ -296,7 +296,7 @@ class ReachabilityTests(_Base):
             'net_entry_fee': '0.00', 'net_payouts': [],
         }, format='json')
         self.assertIn(resp.status_code, (200, 201))
-        offer = self.board()['eclectic_offer']
+        offer = self.board()['dream_round_offer']
         self.assertTrue(offer['configured'])
         self.assertTrue(offer['available'])
 
@@ -304,14 +304,14 @@ class ReachabilityTests(_Base):
         # Not a condition to explain — the wrong shape of event. The wizard
         # hides its entry for the same reason rather than disabling it.
         self.rounds[1].delete()
-        offer = self.board()['eclectic_offer']
+        offer = self.board()['dream_round_offer']
         self.assertFalse(offer['offer'])
 
     def test_a_nine_hole_round_is_offered_it_DISABLED_with_the_reason(self):
         # Two rounds, so the event is the right shape; one of them is not.
         self.rounds[1].num_holes = 9
         self.rounds[1].save()
-        offer = self.board()['eclectic_offer']
+        offer = self.board()['dream_round_offer']
         self.assertTrue(offer['offer'])
         self.assertFalse(offer['available'])
         self.assertEqual(offer['reason'], 'Needs every round to be 18 holes')
@@ -331,48 +331,48 @@ class TournamentCardOfferTests(_Base):
         return next(t for t in rows if t['id'] == self.tourn.id)
 
     def test_a_two_round_event_is_offered_it_before_it_plays_it(self):
-        offer = self.card()['eclectic_offer']
+        offer = self.card()['dream_round_offer']
         self.assertTrue(offer['offer'])
         self.assertTrue(offer['available'])
         self.assertFalse(offer['configured'])
 
     def test_a_one_round_event_is_not(self):
         self.rounds[1].delete()
-        self.assertFalse(self.card()['eclectic_offer']['offer'])
+        self.assertFalse(self.card()['dream_round_offer']['offer'])
 
     def test_the_list_and_the_board_agree(self):
         board = self.client.get(
             f'/api/tournaments/{self.tourn.id}/leaderboard/').data
-        self.assertEqual(self.card()['eclectic_offer'],
-                         board['eclectic_offer'])
+        self.assertEqual(self.card()['dream_round_offer'],
+                         board['dream_round_offer'])
 
 
 class RoundBoardTests(_Base):
-    """Eclectic is a tournament game and never a ROUND tab.
+    """Dream Round is a tournament game and never a ROUND tab.
 
     The individual wizard writes side games onto the rounds, so a round in an
-    eclectic event carries the slug. The round leaderboard has no eclectic
+    Dream Round event carries the slug. The round leaderboard has no Dream Round
     block to draw — the game spans the event and is built one level up — so
-    the tab came up lowercase and empty: `eclectic` over `No data yet.`
+    the tab came up lowercase and empty: `dream_round` over `No data yet.`
     """
 
-    def test_the_round_board_does_not_offer_an_eclectic_tab(self):
+    def test_the_round_board_does_not_offer_an_dream_round_tab(self):
         r = self.rounds[0]
-        r.active_games = ['eclectic']
+        r.active_games = ['dream_round']
         r.save()
         data = self.client.get(f'/api/rounds/{r.id}/leaderboard/').data
         board = data.get('leaderboard', data)
-        self.assertNotIn('eclectic', board['active_games'])
-        self.assertNotIn('eclectic', board['games'])
+        self.assertNotIn('dream_round', board['active_games'])
+        self.assertNotIn('dream_round', board['games'])
 
     def test_the_tournament_board_still_reads_the_rounds(self):
         # The same slug on the round is what tells the EVENT it plays one —
         # a different question, asked one level up.
         self.tourn.active_games = []
         self.tourn.save()
-        self.rounds[0].active_games = ['eclectic']
+        self.rounds[0].active_games = ['dream_round']
         self.rounds[0].save()
         board = self.client.get(
             f'/api/tournaments/{self.tourn.id}/leaderboard/').data
-        self.assertIn('eclectic', board['active_games'])
-        self.assertIn('eclectic', board['games'])
+        self.assertIn('dream_round', board['active_games'])
+        self.assertIn('dream_round', board['games'])

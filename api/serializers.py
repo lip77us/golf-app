@@ -913,10 +913,10 @@ class TournamentSerializer(serializers.ModelSerializer):
                   'rounds_to_count', 'active_games', 'rounds',
                   'scoring_method', 'handicap_mode', 'net_percent',
                   'mini_singles_carve_pct', 'counting_rule',
-                  'is_own', 'host_name', 'eclectic_offer']
+                  'is_own', 'host_name', 'dream_round_offer']
         read_only_fields = ['id']
 
-    # **Whether this event can play an eclectic, and whether it already is.**
+    # **Whether this event can play a Dream Round, and whether it already is.**
     #
     # The card draws a named button from it, beside Configure Stroke Play
     # Championship, because that is where a TD looks for tournament-level
@@ -924,17 +924,17 @@ class TournamentSerializer(serializers.ModelSerializer):
     # before somebody complained about exactly this.
     #
     # Sent by the server rather than worked out from `rounds` on the phone:
-    # the rule lives in `services.eclectic.eclectic_available`, and a client
+    # the rule lives in `services.dream_round.dream_round_available`, and a client
     # that re-derived it would be a second copy of it.
-    eclectic_offer = serializers.SerializerMethodField()
+    dream_round_offer = serializers.SerializerMethodField()
 
-    def get_eclectic_offer(self, obj):
-        from services.eclectic import eclectic_available
-        ok, reason = eclectic_available(obj)
+    def get_dream_round_offer(self, obj):
+        from services.dream_round import dream_round_available
+        ok, reason = dream_round_available(obj)
         return {
             'available' : ok,
             'reason'    : reason,
-            'configured': 'eclectic' in (obj.active_games or []),
+            'configured': 'dream_round' in (obj.active_games or []),
             # Under two rounds it is not a condition to explain, it is the
             # wrong shape of event — the wizard hides its entry for the same
             # reason rather than disabling it.
@@ -1777,11 +1777,11 @@ class RoadTripSetupSerializer(serializers.Serializer):
         return attrs
 
 
-class EclecticSetupSerializer(serializers.Serializer):
-    """POST /api/tournaments/{id}/eclectic/setup/
+class DreamRoundSetupSerializer(serializers.Serializer):
+    """POST /api/tournaments/{id}/dream-round/setup/
 
     Two pools with a fee and a table each. **At least one pool must be on** —
-    an eclectic with neither is not a game, and the client's last-toggle guard
+    a Dream Round with neither is not a game, and the client's last-toggle guard
     is a convenience, not the rule.
     """
     gross_on        = serializers.BooleanField(default=True)
@@ -1800,7 +1800,7 @@ class EclecticSetupSerializer(serializers.Serializer):
     def validate(self, attrs):
         if not attrs.get('gross_on') and not attrs.get('net_on'):
             raise serializers.ValidationError(
-                'Eclectic needs at least one pool — gross, net or both.')
+                'Dream Round needs at least one pool — gross, net or both.')
         return attrs
 
 

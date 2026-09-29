@@ -2,7 +2,7 @@
 management command: seed_road_trip
 ----------------------------------
 Builds a standalone **multi-round Road Trip** for testing — WITHOUT touching
-the App-Store-reviewer `seed_demo` tenant, `seed_cup_demo` or `seed_eclectic`.
+the App-Store-reviewer `seed_demo` tenant, `seed_cup_demo` or `seed_dream_round`.
 
 Creates ONE tenant ("RoadTripDemo") with:
   * A TD admin login + two member logins (phone-verified, so the app's
@@ -49,7 +49,7 @@ Usage
     python manage.py seed_road_trip --reset         # tear down + rebuild
     python manage.py seed_road_trip --reset --thru 18   # finish round 5 too
 
-Sibling of `seed_eclectic` — same idioms.
+Sibling of `seed_dream_round` — same idioms.
 """
 from datetime import timedelta
 from decimal import Decimal

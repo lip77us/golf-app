@@ -1200,16 +1200,16 @@ def _leaderboard_active_games(round_obj, games_dict: dict) -> list:
     dynamically detected (e.g. three_person_match) so the Flutter tab bar
     always reflects what's actually in the games dict.
     """
-    # **Eclectic is a TOURNAMENT game and never a round tab.** The individual
-    # wizard writes side games onto the rounds, so a round in an eclectic
-    # event carries the slug — but this board has no eclectic block to draw
+    # **Dream Round is a TOURNAMENT game and never a round tab.** The individual
+    # wizard writes side games onto the rounds, so a round in a Dream Round
+    # event carries the slug — but this board has no Dream Round block to draw
     # (the game spans the whole event and is built by
     # `TournamentLeaderboardView`), so the tab came up lowercase and empty:
-    # `eclectic` / `No data yet.` Reported from testing.
+    # `dream_round` / `No data yet.` Reported from testing.
     #
     # The tournament board still reads the ROUNDS' lists to decide the event
     # plays it, which is a different question asked one level up.
-    active = [g for g in (round_obj.active_games or []) if g != 'eclectic']
+    active = [g for g in (round_obj.active_games or []) if g != 'dream_round']
     for key in games_dict:
         # 'settlement' is a derived cross-game summary, not a real game. Keep it
         # OUT of active_games so older clients (which tab off active_games and
@@ -2727,8 +2727,8 @@ class RoadTripResultView(APIView):
         return Response(road_trip_summary(tournament))
 
 
-class TournamentEclecticSetupView(APIView):
-    """GET/POST/DELETE /api/tournaments/{id}/eclectic/setup/
+class TournamentDreamRoundSetupView(APIView):
+    """GET/POST/DELETE /api/tournaments/{id}/dream-round/setup/
 
     The TD's two pools. DELETE turns the GAME off — a different act from
     turning one POOL off, which is a POST with `gross_on`/`net_on`.
@@ -2743,8 +2743,8 @@ class TournamentEclecticSetupView(APIView):
                 .values('player_id').distinct().count())
 
     def _dict(self, tournament, cfg):
-        from services.eclectic import eclectic_available, _round_meta
-        ok, reason = eclectic_available(tournament)
+        from services.dream_round import dream_round_available, _round_meta
+        ok, reason = dream_round_available(tournament)
         base = {
             'num_players': self._num_players(tournament),
             # The gate travels WITH the config so the setup screen says why it
@@ -2776,14 +2776,14 @@ class TournamentEclecticSetupView(APIView):
 
     def get(self, request, pk):
         tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
-        from games.models import EclecticConfig
-        cfg = EclecticConfig.objects.filter(tournament=tournament).first()
+        from games.models import DreamRoundConfig
+        cfg = DreamRoundConfig.objects.filter(tournament=tournament).first()
         return Response(self._dict(tournament, cfg))
 
     def post(self, request, pk):
         tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
-        from services.eclectic import eclectic_available
-        ok, reason = eclectic_available(tournament)
+        from services.dream_round import dream_round_available
+        ok, reason = dream_round_available(tournament)
         if not ok:
             # Refused at the API, not only greyed in the client: the rule is
             # about the EVENT, and a round can be added or shortened after the
@@ -2791,13 +2791,13 @@ class TournamentEclecticSetupView(APIView):
             return Response({'detail': reason},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        from api.serializers import EclecticSetupSerializer
-        ser = EclecticSetupSerializer(data=request.data)
+        from api.serializers import DreamRoundSetupSerializer
+        ser = DreamRoundSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
 
-        from games.models import EclecticConfig
-        cfg, _ = EclecticConfig.objects.update_or_create(
+        from games.models import DreamRoundConfig
+        cfg, _ = DreamRoundConfig.objects.update_or_create(
             tournament=tournament,
             defaults={
                 'gross_on'       : d['gross_on'],
@@ -2809,30 +2809,30 @@ class TournamentEclecticSetupView(APIView):
                 'excluded_player_ids': d.get('excluded_player_ids', []),
             },
         )
-        if 'eclectic' not in (tournament.active_games or []):
+        if 'dream_round' not in (tournament.active_games or []):
             tournament.active_games = (list(tournament.active_games or [])
-                                       + ['eclectic'])
+                                       + ['dream_round'])
             tournament.save(update_fields=['active_games'])
         return Response(self._dict(tournament, cfg),
                         status=status.HTTP_201_CREATED)
 
     def delete(self, request, pk):
         tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
-        from games.models import EclecticConfig
-        EclecticConfig.objects.filter(tournament=tournament).delete()
-        if 'eclectic' in (tournament.active_games or []):
+        from games.models import DreamRoundConfig
+        DreamRoundConfig.objects.filter(tournament=tournament).delete()
+        if 'dream_round' in (tournament.active_games or []):
             tournament.active_games = [g for g in tournament.active_games
-                                       if g != 'eclectic']
+                                       if g != 'dream_round']
             tournament.save(update_fields=['active_games'])
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class TournamentEclecticView(APIView):
-    """GET /api/tournaments/{id}/eclectic/ — both pools, ranked, with the cards."""
+class TournamentDreamRoundView(APIView):
+    """GET /api/tournaments/{id}/dream-round/ — both pools, ranked, with the cards."""
     def get(self, request, pk):
         tournament = tournament_for_reader(request.user, pk)
-        from services.eclectic import eclectic_summary
-        return Response(eclectic_summary(tournament))
+        from services.dream_round import dream_round_summary
+        return Response(dream_round_summary(tournament))
 
 
 class TournamentStablefordView(APIView):
@@ -2863,16 +2863,16 @@ class TournamentLeaderboardView(APIView):
         )
         active_games = list(tournament.active_games or [])
 
-        # **Eclectic is an EVENT game, but it can end up on the rounds.** The
+        # **Dream Round is an EVENT game, but it can end up on the rounds.** The
         # wizard puts it on the tournament; the per-round game picker can put it
         # on a round, and a TD who did that has said his event plays it — where
         # he said it is not the point. Without this the tab never appears, the
-        # gear never offers `Configure Eclectic`, and the game is unreachable
+        # gear never offers `Configure Dream Round`, and the game is unreachable
         # with its own rows sitting in the database. Reported from testing.
-        if ('eclectic' not in active_games
-                and any('eclectic' in (r.active_games or [])
+        if ('dream_round' not in active_games
+                and any('dream_round' in (r.active_games or [])
                         for r in tournament.rounds.all())):
-            active_games.append('eclectic')
+            active_games.append('dream_round')
 
         games: dict  = {}
 
@@ -2899,21 +2899,21 @@ class TournamentLeaderboardView(APIView):
                 **stableford_championship_summary(tournament),
             }
 
-        # Eclectic — the ONE side game that spans the event, so it takes no
+        # Dream Round — the ONE side game that spans the event, so it takes no
         # round suffix and sits between the championship and the per-round
         # side games.
-        if 'eclectic' in active_games:
-            from services.eclectic import eclectic_available, eclectic_summary
-            summary = eclectic_summary(tournament)
+        if 'dream_round' in active_games:
+            from services.dream_round import dream_round_available, dream_round_summary
+            summary = dream_round_summary(tournament)
             if summary:
-                games['eclectic'] = {'label': 'Eclectic', **summary}
+                games['dream_round'] = {'label': 'Dream Round', **summary}
             else:
                 # **The tab exists before the config does.** A game with no
                 # board is how a TD finds the setup — hiding it until he has
                 # configured it means he has to already know where to look.
-                ok, reason = eclectic_available(tournament)
-                games['eclectic'] = {
-                    'label': 'Eclectic',
+                ok, reason = dream_round_available(tournament)
+                games['dream_round'] = {
+                    'label': 'Dream Round',
                     'pools': [],
                     'rounds': [],
                     'n_rounds': tournament.rounds.count(),
@@ -2928,17 +2928,17 @@ class TournamentLeaderboardView(APIView):
 
         # **The way IN, independent of whether the game is on.** The tab and
         # the gear item both keyed off `active_games`, so an event created
-        # without Eclectic had no path to it at all — and the setup POST is
+        # without Dream Round had no path to it at all — and the setup POST is
         # what TURNS it on, so the only door was behind the door. Every other
         # tournament game is configured at create time or never; this is the
         # one that can be added later, and now can be. Reported from testing,
         # twice.
-        from services.eclectic import eclectic_available as _ecl_ok
+        from services.dream_round import dream_round_available as _ecl_ok
         _ok, _reason = _ecl_ok(tournament)
-        eclectic_offer = {
+        dream_round_offer = {
             'available'  : _ok,
             'reason'     : _reason,
-            'configured' : 'eclectic' in active_games,
+            'configured' : 'dream_round' in active_games,
             # Under two rounds the game is not a possibility to explain, it is
             # the wrong shape of event — the wizard hides the entry for the
             # same reason rather than disabling it.
@@ -2993,7 +2993,7 @@ class TournamentLeaderboardView(APIView):
             'tournament_id'  : tournament.id,
             'tournament_name': tournament.name,
             'active_games'   : active_games,
-            'eclectic_offer' : eclectic_offer,
+            'dream_round_offer' : dream_round_offer,
             # The chip strip: mode, allowance and the counting rule, all read
             # from the tournament rather than guessed per board.
             'scoring'        : {

@@ -1,7 +1,7 @@
 """
-scoring/tests/test_live_activity_eclectic.py
+scoring/tests/test_live_activity_dream_round.py
 --------------------------------------------
-Eclectic on the lock screen.
+Dream Round on the lock screen.
 
 It has no card of its own — side games never do — so what is tested is when it
 takes the tournament Stroke Play card's quiet slot and when it stays silent.
@@ -13,8 +13,8 @@ from datetime import date
 from django.test import TestCase
 
 from core.models import RoundStatus
-from games.models import EclecticConfig, LowNetChampionshipConfig
-from services.live_activity_eclectic import eclectic_news, footer_line
+from games.models import DreamRoundConfig, LowNetChampionshipConfig
+from services.live_activity_dream_round import dream_round_news, footer_line
 from services.live_activity_stroke_play import stroke_play_activity_state
 from scoring.tests._helpers import (
     DEFAULT_HOLES, make_course, make_foursome, make_player, make_round,
@@ -30,7 +30,7 @@ class _Base(TestCase):
         self.tee = make_tee(course=self.course, holes=DEFAULT_HOLES)
         self.tourn = make_tournament(name='Club Champs')
         self.tourn.total_rounds = 2
-        self.tourn.active_games = ['low_net', 'eclectic']
+        self.tourn.active_games = ['low_net', 'dream_round']
         self.tourn.save()
         LowNetChampionshipConfig.objects.create(tournament=self.tourn)
 
@@ -46,7 +46,7 @@ class _Base(TestCase):
             self.foursomes.append(make_foursome(
                 r, [(self.ann, 0), (self.bea, 0)], tee=self.tee))
 
-        self.cfg = EclecticConfig.objects.create(
+        self.cfg = DreamRoundConfig.objects.create(
             tournament=self.tourn, gross_entry_fee=10,
             gross_payouts=[{'place': 1, 'amount': 160}],
             net_entry_fee=10, net_payouts=[{'place': 1, 'amount': 160}])
@@ -57,7 +57,7 @@ class _Base(TestCase):
                         [(player.id, PAR[h] + (offsets or {}).get(h, 0))])
 
     def news(self, idx, hole, player=None):
-        return eclectic_news(self.tourn, self.rounds[idx],
+        return dream_round_news(self.tourn, self.rounds[idx],
                              (player or self.ann).id, hole)
 
 
@@ -77,10 +77,10 @@ class SilenceTests(_Base):
 
     def test_a_golfer_not_entered_gets_no_block(self):
         cal = make_player('Cal', handicap_index=0)
-        self.assertEqual(eclectic_news(self.tourn, self.rounds[1], cal.id, 7),
+        self.assertEqual(dream_round_news(self.tourn, self.rounds[1], cal.id, 7),
                          {})
 
-    def test_no_eclectic_means_no_block(self):
+    def test_no_dream_round_means_no_block(self):
         self.cfg.delete()
         self.tourn.refresh_from_db()
         self.assertEqual(self.news(1, 7), {})
@@ -89,7 +89,7 @@ class SilenceTests(_Base):
         self.rounds[1].delete()
         self.tourn.refresh_from_db()
         self.assertEqual(
-            eclectic_news(self.tourn, self.rounds[0], self.ann.id, 7), {})
+            dream_round_news(self.tourn, self.rounds[0], self.ann.id, 7), {})
 
 
 class ImprovementTests(_Base):
@@ -127,7 +127,7 @@ class ImprovementTests(_Base):
     def test_an_improvement_that_changes_NO_PLACE_still_shows(self):
         # **Ruled 26 Sep 2026**, settling the packet's one open question.
         #
-        # The eclectic is the one game a golfer cannot see on his own card: the
+        # The Dream Round is the one game a golfer cannot see on his own card: the
         # score he just made either went onto it or it did not, and only the
         # server knows which. Gating on a place change would mean a golfer who
         # just birdied a hole he had been carrying a double on is told nothing,
@@ -157,7 +157,7 @@ class ImprovementTests(_Base):
         # grow a "did the place move" test, because that is the behaviour the
         # ruling rejected.
         import inspect
-        from services import live_activity_eclectic as mod
+        from services import live_activity_dream_round as mod
         src = inspect.getsource(mod)
         for banned in ('previous_place', 'place_changed', 'prev_rank',
                        'last_place'):
@@ -174,7 +174,7 @@ class ImprovementTests(_Base):
         self.play(1, self.ann)
         self.play(0, cal)
         self.play(1, cal, upto=7, offsets={7: -1})
-        block = eclectic_news(self.tourn, self.rounds[1], cal.id, 7)
+        block = dream_round_news(self.tourn, self.rounds[1], cal.id, 7)
         # He is last gross and leads net, so the card names net.
         self.assertEqual(block['pool'], 'net')
 
@@ -221,7 +221,7 @@ class CardTests(_Base):
         self.play(0, self.bea, upto=7)
         state = self._state(0, 7)
         self.assertEqual(state['footer'], {'context': 'FIELD 2', 'money': ''})
-        self.assertNotIn('eclectic', state)
+        self.assertNotIn('dream_round', state)
 
     def test_with_news_it_takes_the_quiet_slot_and_FIELD_stays(self):
         # **The card does not grow.** `FIELD n` moves one slot right rather
@@ -233,19 +233,19 @@ class CardTests(_Base):
         state = self._state(1, 7)
         self.assertIn('Improved on 7', state['footer']['context'])
         self.assertEqual(state['footer']['money'], 'FIELD 2')
-        self.assertEqual(state['footer']['label'], 'ECLECTIC')
-        self.assertEqual(state['eclectic']['improved_hole'], 7)
+        self.assertEqual(state['footer']['label'], 'DREAM ROUND')
+        self.assertEqual(state['dream_round']['improved_hole'], 7)
 
     def test_the_tag_and_the_line_are_never_the_same_string(self):
         # An installed build does not know `label` and draws the line alone.
         # If the tag were inside the line too, a new build would print
-        # `ECLECTIC ECLECTIC · Improved on 7`.
+        # `DREAM ROUND DREAM ROUND · Improved on 7`.
         self.play(0, self.ann)
         self.play(0, self.bea)
         self.play(1, self.ann, upto=7, offsets={7: -1})
         self.play(1, self.bea, upto=7)
         footer = self._state(1, 7)['footer']
-        self.assertNotIn('ECLECTIC', footer['context'])
+        self.assertNotIn('DREAM ROUND', footer['context'])
 
     def test_it_clears_on_the_next_score(self):
         self.play(0, self.ann)

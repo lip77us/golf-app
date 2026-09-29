@@ -3731,9 +3731,9 @@ class BankerBet(models.Model):
         return f'{self.player_id} ${self.amount} x{self.own_multiplier}'
 
 
-class EclecticConfig(models.Model):
+class DreamRoundConfig(models.Model):
     """
-    Eclectic — the one side game that spans the whole event.
+    Dream Round — the one side game that spans the whole event.
 
     Each golfer keeps his best score on each hole NUMBER across every round,
     and those eighteen bests are his card. Lowest total wins.
@@ -3749,7 +3749,7 @@ class EclecticConfig(models.Model):
     **Two pools, not one game with a handicap setting.** Gross and Net are
     separate competitions with separate entries and separate money, because a
     golfer may be in one, the other or both. Both are on by default and the
-    last one on cannot be turned off — an eclectic with no pool is not a game.
+    last one on cannot be turned off — a Dream Round with no pool is not a game.
 
     **Net strokes are per round, before selection.** That round's handicap at
     full allowance, allocated on that course's stroke index. There is no
@@ -3765,12 +3765,12 @@ class EclecticConfig(models.Model):
 
         [{'place': 1, 'amount': 160.00}, {'place': 2, 'amount': 80.00}]
 
-    See docs/design-review/handoff-eclectic/HANDOFF.md.
+    See docs/design-review/handoff-dream-round/HANDOFF.md.
     """
     tournament        = models.OneToOneField(
                             'tournament.Tournament',
                             on_delete=models.CASCADE,
-                            related_name='eclectic_config',
+                            related_name='dream_round_config',
                         )
 
     # ── The two pools ────────────────────────────────────────────────────
@@ -3796,12 +3796,12 @@ class EclecticConfig(models.Model):
     excluded_player_ids = models.JSONField(default=list, blank=True)
 
     class Meta:
-        verbose_name = 'Eclectic Config'
+        verbose_name = 'Dream Round Config'
 
     def __str__(self):
         pools = '/'.join(
             p for p, on in (('gross', self.gross_on), ('net', self.net_on)) if on)
-        return f'Eclectic ({pools or "no pools"})'
+        return f'Dream Round ({pools or "no pools"})'
 
     @property
     def pools(self) -> list:

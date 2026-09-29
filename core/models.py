@@ -41,13 +41,13 @@ class GameType(models.TextChoices):
     TRIPLE_NASSAU   = 'triple_nassau',   'Triple Nassau'
     SIXES           = 'sixes',           'Sixes'
     PINK_BALL       = 'pink_ball',       'Pink Ball'
-    # Eclectic: a MULTI-ROUND field-wide side game. Each golfer keeps his best
+    # Dream Round: a MULTI-ROUND field-wide side game. Each golfer keeps his best
     # score on each hole NUMBER across every round of the event, and those
     # eighteen bests are his card. Matched by hole number across courses and
     # compared TO PAR, so a 4 on one course's par-5 5th beats a 4 on another's
     # par-4 5th. Two separate pools, gross and net. Individual events only,
     # 2+ rounds, every round 18 holes.
-    ECLECTIC        = 'eclectic',        'Eclectic'
+    DREAM_ROUND     = 'dream_round',     'Dream Round'
     # 40 Balls: a tournament GROUP game in the Irish Rumble family, and the one
     # where the group chooses how many balls count — AFTER seeing the hole's
     # nets. A foursome gets 40 balls for the round (a threesome 30) and spends

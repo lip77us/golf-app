@@ -222,8 +222,8 @@ urlpatterns = [
     path('tournaments/<int:pk>/road-trip/setup/', views.RoadTripSetupView.as_view(), name='api-road-trip-setup'),
     path('tournaments/<int:pk>/road-trip/handicaps/', views.RoadTripHandicapsView.as_view(), name='api-road-trip-handicaps'),
     path('tournaments/<int:pk>/road-trip/',       views.RoadTripResultView.as_view(), name='api-road-trip'),
-    path('tournaments/<int:pk>/eclectic/setup/', views.TournamentEclecticSetupView.as_view(), name='api-eclectic-setup'),
-    path('tournaments/<int:pk>/eclectic/',       views.TournamentEclecticView.as_view(),      name='api-eclectic'),
+    path('tournaments/<int:pk>/dream-round/setup/', views.TournamentDreamRoundSetupView.as_view(), name='api-dream-round-setup'),
+    path('tournaments/<int:pk>/dream-round/',       views.TournamentDreamRoundView.as_view(),      name='api-dream-round'),
     path('rounds/<int:pk>/pink-ball/setup/',      views.PinkBallSetupView.as_view(),          name='api-pink-ball-setup'),
     path('foursomes/<int:pk>/pink-ball/order/',   views.PinkBallFoursomeOrderView.as_view(),  name='api-pink-ball-order'),
 

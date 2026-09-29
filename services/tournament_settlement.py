@@ -263,30 +263,30 @@ def _group_member_ids(round_obj, foursome_id):
     )
 
 
-def _eclectic_pots(tournament, field_ids):
+def _dream_round_pots(tournament, field_ids):
     """Gross and Net — **two games, not one with two columns.**
 
     A golfer may be in one, the other or both, so each has its own entry line
     and its own prize line, and each balances on its own. And there is no round
-    suffix on either: the eclectic is the one side game that spans the event,
-    so `Eclectic · Gross` is the whole label.
+    suffix on either: the Dream Round is the one side game that spans the event,
+    so `Dream Round · Gross` is the whole label.
     """
-    config = getattr(tournament, 'eclectic_config', None)
+    config = getattr(tournament, 'dream_round_config', None)
     if config is None:
         return []
 
-    from services.eclectic import eclectic_standings
+    from services.dream_round import dream_round_standings
 
     pots = []
     for pool in config.pools:
         fee = float(config.gross_entry_fee if pool == 'gross'
                     else config.net_entry_fee)
-        pot = _Pot(f'eclectic_{pool}', f'Eclectic · {pool.title()}')
+        pot = _Pot(f'dream_round_{pool}', f'Dream Round · {pool.title()}')
         pot.enter(field_ids, fee)
 
         # Read ONCE. The standings walk every round's cards for every golfer,
         # so calling it per paid place would rebuild the whole game per line.
-        standings = eclectic_standings(tournament, pool)
+        standings = dream_round_standings(tournament, pool)
         ways_by_rank = {}
         for row in standings:
             ways_by_rank[row['rank']] = ways_by_rank.get(row['rank'], 0) + 1
@@ -299,7 +299,7 @@ def _eclectic_pots(tournament, field_ids):
             # `T2 (2 ways)` is the whole answer.
             place = f"T{row['rank']}" if row['tied'] else _ordinal(row['rank'])
             ways = ways_by_rank.get(row['rank'], 1)
-            detail = (f"Eclectic {pool.title()}, {place}"
+            detail = (f"Dream Round {pool.title()}, {place}"
                       + (f' ({ways} ways)' if row['tied'] else ''))
             pot.pay(row['player_id'], row['payout'], detail=detail)
         pots.append(pot)
@@ -410,7 +410,7 @@ def tournament_settlement(tournament) -> dict:
     pots = [p for p in [champ] if p is not None]
     pots += _mini_singles_pots(tournament, carved)
     pots += _group_game_pots(tournament)
-    pots += _eclectic_pots(tournament, field_ids)
+    pots += _dream_round_pots(tournament, field_ids)
     day_bet = _day_bet_pot(tournament)
     if day_bet is not None:
         pots.append(day_bet)
@@ -470,11 +470,11 @@ def tournament_settlement(tournament) -> dict:
     sum_zero        = abs(total_collected - total_paid) <= CENT_SLACK
 
     # **The arithmetic is not finished until the rounds are.** Reported from
-    # testing: a live event showed `Eclectic · Net does not balance — $20.00
+    # testing: a live event showed `Dream Round · Net does not balance — $20.00
     # underpaid. The mistake is in its payout table` over a payout table that
     # was correct, and the setup screen said so on the same data.
     #
-    # Eclectic pays nobody until a card is WHOLE — eighteen hole numbers
+    # Dream Round pays nobody until a card is WHOLE — eighteen hole numbers
     # covered — so mid-event its entries are in and its prizes are zero. That
     # is the game working, not a table to go and fix, and the sum-zero check
     # then reports the same $20 a second time as an arithmetic bug.

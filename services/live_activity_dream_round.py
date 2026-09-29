@@ -1,13 +1,13 @@
 """
-services/live_activity_eclectic.py
+services/live_activity_dream_round.py
 ----------------------------------
-Eclectic on the lock screen — **which it does not get a card of its own for.**
+Dream Round on the lock screen — **which it does not get a card of its own for.**
 
 Side games never do. The tournament's Stroke Play card stays where it is, and
-the eclectic appears on it only when it has NEWS: a hole just posted that
+the Dream Round appears on it only when it has NEWS: a hole just posted that
 improved the reader's card, or the event closing with his final places.
 
-Spec: `~/Downloads/handoff-eclectic/HANDOFF.md` §4.
+Spec: `~/Downloads/handoff-dream-round/HANDOFF.md` §4.
 
 Three rules, and each of them is about restraint
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -26,12 +26,12 @@ The packet left this open and asked for it to be flagged if it read as noisy.
 here compares the reader's place before and after, and nothing should be added
 that does.
 
-The reason is what the line is FOR. The eclectic is the one game a golfer
+The reason is what the line is FOR. The Dream Round is the one game a golfer
 cannot see on his own card: the score he just made either went onto it or it
 did not, and only the server knows which. A place is a different fact and it is
 already on the board. Gating the line on a place change would mean a golfer who
 just birdied a hole he had been carrying a double on — the single biggest thing
-that can happen to an eclectic card — is told nothing, because eleven other
+that can happen to a Dream Round card — is told nothing, because eleven other
 golfers did not move.
 
 It is bounded in practice: after round 1 (which never shows it at all) an
@@ -51,7 +51,7 @@ than a re-derivation: a kept score IS the best of the candidates, and the
 engine's tie rule keeps the EARLIER round, so a later round's score is kept
 only when it is strictly better than everything before it.
 """
-from services.eclectic import _all_round_cards, _build_cards
+from services.dream_round import _all_round_cards, _build_cards
 
 
 def _place_of(standings, player_id):
@@ -68,19 +68,19 @@ def _ordinal(n) -> str:
     return f"{n}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n if n < 20 else n % 10, 'th') }"
 
 
-def eclectic_news(tournament, round_obj, player_id, last_hole) -> dict:
-    """The optional `eclectic` block for the stroke play payload.
+def dream_round_news(tournament, round_obj, player_id, last_hole) -> dict:
+    """The optional `dream_round` block for the stroke play payload.
 
     Empty dict when there is nothing to say — the golfer is not entered, the
-    event has no eclectic, it is round 1, or the last hole posted changed
+    event has no Dream Round, it is round 1, or the last hole posted changed
     nothing. The caller omits the key entirely on an empty dict, so a card with
-    no eclectic is byte-for-byte what it was.
+    no Dream Round is byte-for-byte what it was.
     """
-    config = getattr(tournament, 'eclectic_config', None)
+    config = getattr(tournament, 'dream_round_config', None)
     if config is None or player_id is None:
         return {}
 
-    from services.eclectic import eclectic_standings
+    from services.dream_round import dream_round_standings
     from core.models import RoundStatus
 
     rounds = list(tournament.rounds.order_by('round_number'))
@@ -101,7 +101,7 @@ def eclectic_news(tournament, round_obj, player_id, last_hole) -> dict:
         mine = cards.get(player_id)
         if mine is None:
             continue
-        standings = eclectic_standings(tournament, pool, per_round, cards)
+        standings = dream_round_standings(tournament, pool, per_round, cards)
         rank, tied = _place_of(standings, player_id)
         if rank is None:
             continue

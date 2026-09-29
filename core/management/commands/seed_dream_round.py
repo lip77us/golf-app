@@ -1,11 +1,11 @@
 """
-management command: seed_eclectic
+management command: seed_dream_round
 ---------------------------------
 Builds a standalone **multi-round individual tournament** for testing
-Eclectic — WITHOUT touching the App-Store-reviewer `seed_demo` tenant or the
+Dream Round — WITHOUT touching the App-Store-reviewer `seed_demo` tenant or the
 `seed_cup_demo` one.
 
-Creates ONE tenant ("EclecticDemo") with:
+Creates ONE tenant ("DreamRoundDemo") with:
   * A TD admin login + two member logins (phone-verified, so the app's
     phone-first flow works locally)
   * 12 golfers over 3 foursomes, handicaps spread from scratch to 24 so the
@@ -15,7 +15,7 @@ Creates ONE tenant ("EclecticDemo") with:
     turns on is visible: a 4 on Ridgeview's par-5 5th is a birdie and beats a
     par 4 on Harbour Links' par-4 5th
   * A 3-round stroke-play tournament with the Stroke Play championship AND
-    Eclectic (both pools, $10 each), rounds 1 and 2 CLOSED and round 3 live
+    Dream Round (both pools, $10 each), rounds 1 and 2 CLOSED and round 3 live
     at ten holes
 
 Why it is left mid-round
@@ -28,10 +28,10 @@ to see the final state instead.
 
 Usage
 -----
-    python manage.py seed_eclectic                 # build (errors if it exists)
-    python manage.py seed_eclectic --reset         # tear down + rebuild
-    python manage.py seed_eclectic --reset --password 'MyPass1'
-    python manage.py seed_eclectic --reset --thru 18   # finish round 3 too
+    python manage.py seed_dream_round                 # build (errors if it exists)
+    python manage.py seed_dream_round --reset         # tear down + rebuild
+    python manage.py seed_dream_round --reset --password 'MyPass1'
+    python manage.py seed_dream_round --reset --thru 18   # finish round 3 too
 
 Sibling of `seed_cup_demo` — same idioms.
 """
@@ -48,14 +48,19 @@ from rest_framework.authtoken.models import Token
 from accounts.models import Account
 from core.models import (Course, HandicapMode, Player, PlayerSex, RoundStatus,
                          Tee)
-from games.models import EclecticConfig, LowNetChampionshipConfig
+from games.models import DreamRoundConfig, LowNetChampionshipConfig
 from scoring.models import HoleScore
 from tournament.models import Foursome, FoursomeMembership, Round, Tournament
 
 User = get_user_model()
 
-ACCOUNT_NAME = 'EclecticDemo'
-DEFAULT_PASSWORD = 'HalvedEclectic2026'
+ACCOUNT_NAME = 'DreamRoundDemo'
+#: What this tenant was called before the 29 Sep rename. `--reset` tears it
+#: down too: the golfers carry the same phone numbers, and `User.phone` is
+#: globally unique, so a stale EclecticDemo makes this command fail on a
+#: duplicate key rather than on anything to do with the trip it is seeding.
+LEGACY_ACCOUNT_NAME = 'EclecticDemo'
+DEFAULT_PASSWORD = 'HalvedDreamRound2026'
 
 TD_PHONE = '+13105550301'
 MEMBER_LOGINS = ['ecmember1', 'ecmember2']
@@ -116,12 +121,12 @@ ROSTER = [
 
 
 class Command(BaseCommand):
-    help = ("Build (or rebuild with --reset) the EclecticDemo tenant — a "
-            "3-round, 2-course individual tournament with Eclectic on.")
+    help = ("Build (or rebuild with --reset) the DreamRoundDemo tenant — a "
+            "3-round, 2-course individual tournament with Dream Round on.")
 
     def add_arguments(self, parser):
         parser.add_argument('--reset', action='store_true', default=False,
-                            help='Tear down an existing EclecticDemo and rebuild.')
+                            help='Tear down an existing DreamRoundDemo and rebuild.')
         parser.add_argument('--password', default=DEFAULT_PASSWORD)
         parser.add_argument('--thru', type=int, default=10,
                             help='Holes scored in the LIVE final round (1–18, '
@@ -139,13 +144,16 @@ class Command(BaseCommand):
             raise CommandError('--thru must be between 1 and 18.')
         self.rng = random.Random(options['seed'])
 
-        existing = Account.objects.filter(name__iexact=ACCOUNT_NAME).first()
+        existing = list(Account.objects.filter(
+            name__iexact=ACCOUNT_NAME)) + list(Account.objects.filter(
+                name__iexact=LEGACY_ACCOUNT_NAME))
         if existing:
             if not options['reset']:
                 raise CommandError(
-                    f"Account '{ACCOUNT_NAME}' already exists. "
+                    f"Account '{existing[0].name}' already exists. "
                     f"Pass --reset to tear it down and rebuild.")
-            self._teardown(existing)
+            for acct in existing:
+                self._teardown(acct)
 
         account = Account.objects.create(name=ACCOUNT_NAME)
         self.stdout.write(f'Created account: {account.name}')
@@ -161,7 +169,7 @@ class Command(BaseCommand):
         tourn = Tournament.objects.create(
             account=account, name='Autumn Three-Day',
             start_date=today - timedelta(days=2), total_rounds=3,
-            active_games=['low_net', 'eclectic'],
+            active_games=['low_net', 'dream_round'],
             scoring_method='stroke',
             handicap_mode=HandicapMode.NET, net_percent=100,
         )
@@ -170,7 +178,7 @@ class Command(BaseCommand):
             payouts=[{'place': 1, 'amount': 120.00},
                      {'place': 2, 'amount': 70.00},
                      {'place': 3, 'amount': 50.00}])
-        EclecticConfig.objects.create(
+        DreamRoundConfig.objects.create(
             tournament=tourn,
             gross_on=True, net_on=True,
             gross_entry_fee=Decimal('10.00'),
@@ -229,7 +237,7 @@ class Command(BaseCommand):
     def _login(self, account, player, username, *, admin, phone):
         user = User.objects.create_user(
             username=username, password=self.password, account=account)
-        user.email = f'{username}@eclecticdemo.golf'
+        user.email = f'{username}@dreamrounddemo.golf'
         user.is_account_admin = admin
         user.phone = phone
         user.phone_verified_at = timezone.now()
@@ -287,7 +295,7 @@ class Command(BaseCommand):
             #
             # **Tuned for the CARD, not for the round.** A first pass produced
             # believable round totals (77 to 108 off 0.8 to 24) on a 4% birdie
-            # rate — and an eclectic built from that is almost all pars and
+            # rate — and a Dream Round built from that is almost all pars and
             # bogeys, which shows none of the notation the card exists to draw.
             # The low handicaps birdie more here, and an eagle is possible on a
             # par 5, so the finished card carries circles and the odd double.
@@ -310,12 +318,12 @@ class Command(BaseCommand):
 
     # -----------------------------------------------------------------------
     def _summary(self, account, tourn, thru):
-        from services.eclectic import eclectic_standings
+        from services.dream_round import dream_round_standings
         w = self.stdout.write
         w('')
         w(self.style.SUCCESS('=' * 66))
-        w(self.style.SUCCESS('  EclecticDemo seeded — 3 rounds, 2 courses, '
-                             'Eclectic gross + net'))
+        w(self.style.SUCCESS('  DreamRoundDemo seeded — 3 rounds, 2 courses, '
+                             'Dream Round gross + net'))
         w(self.style.SUCCESS('=' * 66))
         w(f'  Account      : {account.name}')
         w(f'  Tournament   : {tourn.name}')
@@ -340,14 +348,14 @@ class Command(BaseCommand):
         w(f'    (shell / admin only: {account.name} / ectd / {self.password})')
         w('')
         for pool in ('gross', 'net'):
-            rows = eclectic_standings(tourn, pool)[:3]
-            w(f'  Eclectic {pool:<5} leaders: ' + ', '.join(
+            rows = dream_round_standings(tourn, pool)[:3]
+            w(f'  Dream Round {pool:<5} leaders: ' + ', '.join(
                 f"{r['player_name'].split()[0]} "
                 f"{'+' if (r['total'] or 0) > 0 else ''}{r['total']}"
                 for r in rows))
         w('')
         w('  What to look at:')
-        w('    Tournaments → Autumn Three-Day → Leaderboard → Eclectic tab.')
+        w('    Tournaments → Autumn Three-Day → Leaderboard → Dream Round tab.')
         w('      · the Gross/Net switch, each segment carrying its own pool')
         if thru < 18:
             w('      · `R3 live · projected` in amber, and the prize in italic')
@@ -362,14 +370,14 @@ class Command(BaseCommand):
         if thru < 18:
             w('        (and the eight holes R3 has not reached read `–` on')
             w('        his Best row)')
-        w('    ⚙ → Configure Eclectic for the setup screen.')
-        w('    Settle up → By game for `Eclectic · Gross` and `· Net`.')
+        w('    ⚙ → Configure Dream Round for the setup screen.')
+        w('    Settle up → By game for `Dream Round · Gross` and `· Net`.')
         w('')
         # The minimum-holes rule, shown working. This seed is what surfaced
         # the need for it: before the 26 Sep ruling the late arrival came out
         # T3 on −2 from TEN holes, level with a golfer who had played
         # fifty-four, because missing holes add nothing to the total.
-        rows = eclectic_standings(tourn, 'gross')
+        rows = dream_round_standings(tourn, 'gross')
         short = [r for r in rows if 0 < r['holes_kept'] < 18]
         if short:
             w('  The minimum-holes rule, working:')
@@ -387,5 +395,5 @@ class Command(BaseCommand):
             w('  To see the FINAL state (no chip, upright prize, and the')
             w('  lock screen naming both pools):')
             w(self.style.WARNING(
-                '    python manage.py seed_eclectic --reset --thru 18'))
+                '    python manage.py seed_dream_round --reset --thru 18'))
         w('')

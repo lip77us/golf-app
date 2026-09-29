@@ -191,7 +191,7 @@ struct SixesActivityAttributes: ActivityAttributes {
             /// `+$5 so far` — the only slot that differs between two phones in
             /// the same group.
             let money: String
-            /// A small caps tag claiming the quiet slot — `ECLECTIC` today.
+            /// A small caps tag claiming the quiet slot — `DREAM ROUND` today.
             ///
             /// **A side game never gets a card of its own**, so when it has
             /// news it borrows this row from the game that does. Optional and
