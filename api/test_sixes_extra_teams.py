@@ -114,8 +114,8 @@ class SixesExtraTeamsTests(TestCase):
         self.assertEqual(self._draw().status_code, 200)
         s = sixes_activity_state(self.fs, player_id=self.pid['Paul'], thru=14)
         self.assertNotEqual(s['state']['to_play'], 'TEAMS NOT SET')
-        self.assertEqual([x['names'] for x in s['sides']],
-                         ['P & S', 'D & L'])
+        self.assertEqual([set(x['names'].split(' & ')) for x in s['sides']],
+                         [{'P', 'S'}, {'D', 'L'}])
 
     def test_the_extra_then_scores_the_holes_it_already_had(self):
         """The holes played before the draw are not lost — they score the

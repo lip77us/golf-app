@@ -236,9 +236,9 @@ class PipTests(TestCase):
         ]
         self.assertEqual(self._pips(segs)[0], 'void')
 
-    def test_extra_holes_borrow_the_live_pip(self):
-        """Still three pips. The packet leaves the treatment open and asks which
-        of two; this is the one that cannot be wrong about the segment count."""
+    def test_an_extra_is_marked_apart_rather_than_counted(self):
+        """Three bars still count the three matches; the extra rides in the
+        tail. It used to borrow the live pip and take no bar at all."""
         segs = [
             {'status': 'complete', 'winner': 'Team 1'},
             {'status': 'pending', 'is_extra': True},
@@ -246,8 +246,43 @@ class PipTests(TestCase):
             {'status': 'pending'},
         ]
         pips = self._pips(segs)
-        self.assertEqual(len(pips), 3)
-        self.assertEqual(pips, [BLUE, 'live', 'unplayed'])
+        self.assertEqual(pips[:3], [BLUE, 'live', 'unplayed'])
+        self.assertEqual(pips[3], 'extra-live')
+
+    def test_the_strip_does_not_read_as_finished_while_an_extra_is_played(self):
+        """The reported bug. An extra is usually made by the LAST match
+        closing out, so all three are complete and there is no live pip to
+        borrow — the strip showed a finished round while a match was live."""
+        segs = [
+            {'status': 'complete', 'winner': 'Team 1'},
+            {'status': 'complete', 'winner': 'Team 2'},
+            {'status': 'complete', 'winner': 'Team 1'},
+            {'status': 'pending', 'is_extra': True},
+        ]
+        pips = self._pips(segs)
+        self.assertEqual(pips, [BLUE, ORANGE, BLUE, 'extra-live'])
+        self.assertIn('extra-live', pips,
+                      'something on the strip has to still be live')
+
+    def test_a_finished_extra_stays_marked_as_one(self):
+        segs = [
+            {'status': 'complete', 'winner': 'Team 1'},
+            {'status': 'complete', 'winner': 'Team 2'},
+            {'status': 'complete', 'winner': 'Team 1'},
+            {'status': 'complete', 'winner': 'Team 1', 'is_extra': True},
+        ]
+        self.assertEqual(self._pips(segs)[3], 'extra')
+
+    def test_a_round_can_play_two_extras(self):
+        """An extra that closes out early spawns another."""
+        segs = [
+            {'status': 'complete', 'winner': 'Team 1'},
+            {'status': 'complete', 'winner': 'Team 2'},
+            {'status': 'complete', 'winner': 'Team 1'},
+            {'status': 'complete', 'winner': 'Team 2', 'is_extra': True},
+            {'status': 'pending', 'is_extra': True},
+        ]
+        self.assertEqual(self._pips(segs)[3:], ['extra', 'extra-live'])
 
 
 class ContractTests(TestCase):

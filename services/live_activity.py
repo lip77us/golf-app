@@ -120,17 +120,28 @@ def _pips(segments):
     unplayed white at 20%. **Identical in every state** — it is the one element
     that never moves, so the eye learns where to look.
 
-    An extra-holes stretch is NOT a fourth pip. The packet leaves the treatment
-    open (split the finished segment's pip, or borrow the live one) and asks
-    which; until design rules, extras borrow the live pip, which is the option
-    that cannot be wrong about the segment count.
+    **An extra gets its own bar, and that is a change from the original rule.**
+    The packet left the treatment open and this borrowed the live pip instead,
+    "the option that cannot be wrong about the segment count". That holds only
+    while a standard match is still unplayed — and an extra is usually created
+    by the LAST match closing out, when all three are complete and there is no
+    live pip to borrow. The strip then showed three finished bars while a match
+    was being played: a card that reads as a round already over, which is
+    exactly how it was reported (28 Sep 2026, "no fourth match updates — they
+    stopped at 15").
+
+    The three bars still count the three matches; the extra is marked apart in
+    the tail rather than counted among them. `extra` / `extra-live` are the
+    tokens Rabbit's run strip already uses, so every installed build draws this
+    — no new build, and nothing else on the card moves.
     """
     out = []
     live_taken = False
+    extras = []
     for seg in segments:
-        # An extra-holes stretch is not a fourth segment, so it takes no pip of
-        # its own — it borrows the live one.
+        # Held back and marked apart: an extra is not one of the three.
         if seg.get('is_extra'):
+            extras.append(seg)
             continue
         if seg.get('status') == 'complete':
             if seg.get('is_void'):
@@ -149,7 +160,12 @@ def _pips(segments):
     # Sixes is always three segments; pad rather than render a short row.
     while len(out) < 3:
         out.append('unplayed')
-    return out[:3]
+    out = out[:3]
+    # Then the tail. One bar per extra, because an extra that closes out early
+    # spawns another and a round can genuinely play two.
+    for seg in extras:
+        out.append('extra' if seg.get('status') == 'complete' else 'extra-live')
+    return out
 
 
 def _teams_drawn(seg) -> bool:
