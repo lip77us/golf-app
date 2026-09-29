@@ -147,6 +147,19 @@ void main() {
       expect(find.text('R1'), findsOneWidget);
     });
 
+    testWidgets('a cut index is badged and explained', (t) async {
+      await _pump(t, _data(ranked: [
+        {..._row('Niamh', rank: 1, total: -4),
+         'adjusted': {'from_round': 6, 'index': 16.0,
+                      'reason': 'Net under par in four of the first five'}},
+      ]));
+      expect(find.text('HCP CUT'), findsOneWidget);
+      await t.tap(find.text('Niamh'));
+      await t.pumpAndSettle();
+      expect(find.textContaining('from R6'), findsOneWidget);
+      expect(find.textContaining('four of the first five'), findsOneWidget);
+    });
+
     testWidgets('a tie says which round settled it', (t) async {
       await _pump(t, _data(ranked: [
         _row('Ann', rank: 1, total: 0, tieNote: 'Lahinch'),

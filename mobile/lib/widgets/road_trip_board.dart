@@ -325,6 +325,15 @@ class _Row extends StatelessWidget {
                         const SizedBox(width: 6),
                         _Tag(text: 'YOU', colour: theme.colorScheme.primary),
                       ],
+                      // **A cut index is on the row, not only on the players
+                      // screen.** It changes what every later round is worth,
+                      // so a board showing the totals without it would be
+                      // reporting a competition whose rules moved silently.
+                      if (row['adjusted'] != null) ...[
+                        const SizedBox(width: 6),
+                        _Tag(text: 'HCP CUT',
+                            colour: theme.colorScheme.tertiary),
+                      ],
                     ]),
                     Text(_sub(),
                         style: theme.textTheme.labelSmall?.copyWith(
@@ -347,6 +356,17 @@ class _Row extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _RoundStrip(cells: _cells),
+                if (row['adjusted'] != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Index → ${row['adjusted']['index']} from '
+                    'R${row['adjusted']['from_round']}. '
+                    '${row['adjusted']['reason']}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        height: 1.4),
+                  ),
+                ],
                 if (row['tie_note'] != null) ...[
                   const SizedBox(height: 8),
                   Text('Tie decided on ${row['tie_note']}',

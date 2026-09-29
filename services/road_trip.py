@@ -80,22 +80,105 @@ def index_for(tournament, player, round_number: int) -> Decimal:
     Three inputs, in order of authority:
 
     1. **A manual adjustment** whose `from_round_number` has been reached. The
-       latest such adjustment wins, so a second cut supersedes a first.
-    2. **Locked mode** — the index the trip started on, which is the golfer's
-       index as it stands when nothing has adjusted it.
-    3. **Updated mode** — the golfer's current index.
-
-    Locked and updated differ only in what happens when the roster's index
-    moves mid-trip, and this function cannot see that movement: the golfer's
-    row holds one number. What makes `locked` real is that the trip STOPS
-    re-snapshotting it at each round's setup — see `apply_indexes`.
+       latest such wins, so a second cut supersedes a first. It outranks the
+       mode in BOTH directions — the packet is explicit that a manual change
+       is available whether the trip is locked or updated, and a locked trip
+       that ignored the organiser's own ruling would be locking him out.
+    2. **Locked** — the index recorded when the trip was set up.
+    3. **Updated** — the golfer's index as it stands now.
     """
     adj = [a for a in tournament.road_trip_index_adjustments.all()
            if a.player_id == player.id and a.from_round_number <= round_number]
     if adj:
-        return Decimal(str(max(adj, key=lambda a: (a.from_round_number,
-                                                   a.created_at)).handicap_index))
+        latest = max(adj, key=lambda a: (a.from_round_number, a.created_at))
+        return Decimal(str(latest.handicap_index))
+
+    config = _config(tournament)
+    if config is not None and config.handicap_mode == 'locked':
+        started = (config.starting_indexes or {}).get(str(player.id))
+        if started is not None:
+            return Decimal(str(started))
+        # **No recorded start is not a reason to invent one.** A golfer added
+        # after the trip was set up has no locked index; his current one is
+        # the honest answer, and `capture_starting_indexes` records it the
+        # next time the trip is saved.
     return Decimal(str(player.handicap_index))
+
+
+def capture_starting_indexes(tournament) -> dict:
+    """Record what every golfer in the field is playing off today.
+
+    Called when the trip is configured. **Existing entries are never
+    overwritten**: the whole point of a locked index is that it does not move,
+    and re-saving the setup screen on day four must not quietly relock
+    everybody on the numbers they have drifted to.
+    """
+    config = _config(tournament)
+    if config is None:
+        return {}
+    current = dict(config.starting_indexes or {})
+    for fs in (Foursome.objects.filter(round__tournament=tournament)
+               .prefetch_related('memberships__player')):
+        for m in fs.memberships.all():
+            if m.player.is_phantom:
+                continue
+            current.setdefault(str(m.player_id), str(m.player.handicap_index))
+    if current != (config.starting_indexes or {}):
+        config.starting_indexes = current
+        config.save(update_fields=['starting_indexes'])
+    return current
+
+
+def apply_indexes(tournament) -> int:
+    """Write each golfer's trip handicap onto the rounds he has NOT played.
+
+    This is what makes `locked` and a manual adjustment real. The engine reads
+    the membership, because the membership is what every stored
+    `handicap_strokes` came from — so the trip's index has to reach the round
+    before the round is scored, not be applied on top of it afterwards.
+
+    **Only rounds with no scores.** A round already under way keeps the
+    handicap it is being scored with; that is the same threshold a tee change
+    uses, and the same promise the adjust sheet makes.
+
+    Returns the number of memberships changed.
+    """
+    from scoring.models import HoleScore
+    config = _config(tournament)
+    if config is None:
+        return 0
+
+    rounds = _trip_rounds(tournament)
+    scored = set(
+        HoleScore.objects
+        .filter(foursome__round__tournament=tournament,
+                gross_score__isnull=False)
+        .values_list('foursome__round_id', flat=True)
+        .distinct()
+    )
+
+    changed = 0
+    for r in rounds:
+        if r.id in scored:
+            continue
+        for fs in r.foursomes.all():
+            for m in fs.memberships.all():
+                if m.player.is_phantom or m.tee_id is None:
+                    continue
+                want = course_handicap(
+                    index_for(tournament, m.player, r.round_number), m.tee)
+                if m.playing_handicap_override != want:
+                    m.playing_handicap_override = want
+                    # The hub shows CH and PH, and a forced number that left
+                    # them reading the old one would have the golfer playing
+                    # off a figure the screen does not show.
+                    m.course_handicap  = want
+                    m.playing_handicap = want
+                    m.save(update_fields=['playing_handicap_override',
+                                          'course_handicap',
+                                          'playing_handicap'])
+                    changed += 1
+    return changed
 
 
 def course_handicap(index, tee) -> int:
@@ -277,6 +360,19 @@ def road_trip_standings(tournament, title: str) -> dict:
     names = _field_names(tournament)
     key = f'{title}_to_par'
 
+    # The latest adjustment per golfer, for the row's own badge.
+    adjusted: dict = {}
+    for a in tournament.road_trip_index_adjustments.all():
+        prev = adjusted.get(a.player_id)
+        if prev is None or (a.from_round_number, a.created_at) > prev[0]:
+            adjusted[a.player_id] = (
+                (a.from_round_number, a.created_at),
+                {'from_round': a.from_round_number,
+                 'index'     : float(a.handicap_index),
+                 'reason'    : a.reason},
+            )
+    adjusted = {pid: v[1] for pid, v in adjusted.items()}
+
     # A round nobody can still play is spent, whatever its status says. What
     # is left to a golfer is the rounds he has NOT completed and which are not
     # already finished without him.
@@ -299,6 +395,7 @@ def road_trip_standings(tournament, title: str) -> dict:
         entries.append({
             'player_id' : pid,
             'name'      : names.get(pid, ''),
+            'adjusted'  : adjusted.get(pid),
             'rounds'    : by_round,
             'counted'   : counted,
             'total'     : sum(row[key] for _, row in best),
@@ -397,6 +494,11 @@ def _row(e, rounds, title, m) -> dict:
     return {
         'player_id': e['player_id'],
         'name'     : e['name'],
+        # **The cut travels with the row.** An index moved mid-trip changes
+        # what every later round is worth, so a board that showed the totals
+        # without it would be reporting a competition whose rules changed
+        # without saying so.
+        'adjusted' : e.get('adjusted'),
         'rank'     : e.get('rank'),
         'tied'     : e.get('tied', False),
         'tie_note' : e.get('tie_note'),

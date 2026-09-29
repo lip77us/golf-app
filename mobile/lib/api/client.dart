@@ -972,6 +972,32 @@ class ApiClient {
   Future<void> deleteRoadTripSetup(int tournamentId) =>
       _delete('/tournaments/$tournamentId/road-trip/setup/');
 
+  /// The trip's golfers, what each plays off, and where an adjustment would
+  /// start. The server decides that round — a client that drew its screen a
+  /// hole ago would name the wrong one.
+  Future<Map<String, dynamic>> getRoadTripHandicaps(int tournamentId) async {
+    final data =
+        await _get('/tournaments/$tournamentId/road-trip/handicaps/');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  /// Adjust one golfer's index from the next unplayed round. The reason is
+  /// required and is shown to the group.
+  Future<Map<String, dynamic>> adjustRoadTripIndex(
+    int tournamentId, {
+    required int    playerId,
+    required double handicapIndex,
+    required String reason,
+  }) async {
+    final data = await _post(
+        '/tournaments/$tournamentId/road-trip/handicaps/', {
+      'player_id'     : playerId,
+      'handicap_index': handicapIndex,
+      'reason'        : reason,
+    });
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   Future<Map<String, dynamic>> getRoadTrip(int tournamentId) async {
     final data = await _get('/tournaments/$tournamentId/road-trip/');
     return Map<String, dynamic>.from(data as Map);

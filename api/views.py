@@ -2447,6 +2447,14 @@ class RoadTripSetupView(APIView):
                 'gross_max_double_bogey': d['gross_max_double_bogey'],
             },
         )
+        # Record what everybody is playing off today, so `locked` has a
+        # number to lock TO. Never overwrites an existing entry.
+        from services.road_trip import apply_indexes, capture_starting_indexes
+        capture_starting_indexes(tournament)
+        # And push the resulting handicaps onto the rounds not yet played —
+        # switching to `locked` on day four has to reach round five.
+        apply_indexes(tournament)
+
         # **The trip REPLACES the championship it sits where.** A road trip is
         # its own best-m-of-n competition with its own two titles; leaving
         # `low_net` or `stableford_championship` on would put a second board
@@ -2573,6 +2581,142 @@ def _notify_field_games(round_obj, before, after):
         # Best-effort: a chat that will not post is not a reason to refuse a
         # change the TD has already made.
         pass
+
+
+class RoadTripHandicapsView(APIView):
+    """GET/POST /api/tournaments/{id}/road-trip/handicaps/
+
+    The trip's golfers and what they are playing off, and the organiser's
+    manual adjustment.
+
+    **An adjustment applies from the next UNPLAYED round.** Not from the round
+    the organiser happens to be looking at: a round with scores on it has
+    already been scored on the old number, and moving it would rewrite cards
+    the group has signed for. The server decides which round that is rather
+    than trusting a client that drew its screen a hole ago.
+
+    **A reason is required**, and it is shown to the group. An index cut
+    mid-trip is the organiser taking strokes off somebody in a competition he
+    is losing money in; stating why is what keeps it a ruling rather than a
+    rumour.
+    """
+
+    def _next_unplayed(self, tournament):
+        """The first round with no scores — where an adjustment starts."""
+        from scoring.models import HoleScore
+        scored = set(
+            HoleScore.objects
+            .filter(foursome__round__tournament=tournament,
+                    gross_score__isnull=False)
+            .values_list('foursome__round_id', flat=True).distinct())
+        for r in tournament.rounds.order_by('round_number'):
+            if r.id not in scored:
+                return r
+        return None
+
+    def _dict(self, tournament):
+        from services.road_trip import _config, index_for
+        from services.road_trip import road_trip_standings
+        config = _config(tournament)
+        if config is None:
+            return {}
+        nxt = self._next_unplayed(tournament)
+        adjustments = list(tournament.road_trip_index_adjustments.all())
+
+        # The field, and each golfer's average net so far — the figure the
+        # adjust sheet puts the decision beside, because "cut him" with no
+        # number attached is an argument rather than a ruling.
+        net_board = road_trip_standings(tournament, 'net') or {}
+        played, totals = {}, {}
+        for group in ('ranked', 'qualifying', 'ineligible'):
+            for row in net_board.get(group, []):
+                cells = [c for c in row['cells'] if c['to_par'] is not None]
+                if cells:
+                    played[row['player_id']] = len(cells)
+                    totals[row['player_id']] = sum(c['to_par'] for c in cells)
+
+        seen, golfers = set(), []
+        for fs in (Foursome.objects.filter(round__tournament=tournament)
+                   .prefetch_related('memberships__player')):
+            for m in fs.memberships.all():
+                if m.player.is_phantom or m.player_id in seen:
+                    continue
+                seen.add(m.player_id)
+                mine = [a for a in adjustments if a.player_id == m.player_id]
+                latest = max(mine, key=lambda a: (a.from_round_number,
+                                                  a.created_at)) if mine else None
+                n = played.get(m.player_id, 0)
+                golfers.append({
+                    'player_id'   : m.player_id,
+                    'name'        : m.player.name,
+                    'index'       : float(m.player.handicap_index),
+                    'trip_index'  : float(index_for(
+                        tournament, m.player,
+                        nxt.round_number if nxt else 1)),
+                    'rounds_played': n,
+                    'average_net_to_par': (round(totals[m.player_id] / n, 1)
+                                           if n else None),
+                    'adjusted'    : latest is not None,
+                    'adjustment'  : None if latest is None else {
+                        'from_round': latest.from_round_number,
+                        'index'     : float(latest.handicap_index),
+                        'reason'    : latest.reason,
+                    },
+                })
+        golfers.sort(key=lambda g: g['name'])
+        return {
+            'handicap_mode': config.handicap_mode,
+            'next_round'   : None if nxt is None else {
+                'round_number': nxt.round_number,
+                'course'      : nxt.course.name if nxt.course_id else '',
+            },
+            'golfers'      : golfers,
+        }
+
+    def get(self, request, pk):
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        return Response(self._dict(tournament))
+
+    def post(self, request, pk):
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        from games.models import RoadTripConfig, RoadTripIndexAdjustment
+        if not RoadTripConfig.objects.filter(tournament=tournament).exists():
+            return Response({'detail': 'This tournament is not a road trip.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        from decimal import Decimal
+        player_id = request.data.get('player_id')
+        index     = request.data.get('handicap_index')
+        reason    = (request.data.get('reason') or '').strip()
+        if not reason:
+            return Response(
+                {'detail': 'A reason is required — it is shown to the group.'},
+                status=status.HTTP_400_BAD_REQUEST)
+        try:
+            index = Decimal(str(index))
+        except Exception:
+            return Response({'detail': 'handicap_index must be a number.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        player = account_get_or_404(Player, request.user.account, pk=player_id)
+        nxt = self._next_unplayed(tournament)
+        if nxt is None:
+            return Response(
+                {'detail': 'Every round has been played, so there is nothing '
+                           'left for an adjustment to apply to.'},
+                status=status.HTTP_409_CONFLICT)
+
+        RoadTripIndexAdjustment.objects.create(
+            tournament=tournament, player=player,
+            from_round_number=nxt.round_number,
+            handicap_index=index, reason=reason)
+
+        # The adjustment is not a note — it has to reach the rounds it
+        # governs before they are scored.
+        from services.road_trip import apply_indexes
+        apply_indexes(tournament)
+        return Response(self._dict(tournament),
+                        status=status.HTTP_201_CREATED)
 
 
 class RoadTripResultView(APIView):

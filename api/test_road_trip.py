@@ -216,3 +216,170 @@ class FieldGamesTests(_Base):
         self.client.post(self.url_fg(), {'games': ['irish_rumble']},
                          format='json')
         self.assertEqual(Message.objects.count(), 0)
+
+
+class HandicapTests(_Base):
+    """The trip's indexes, and the organiser's manual adjustment."""
+
+    def setUp(self):
+        super().setUp()
+        self.client.post(self.url('setup/'), {}, format='json')
+
+    def url_h(self):
+        return self.url('handicaps/')
+
+    def test_it_lists_the_field_and_where_an_adjustment_would_start(self):
+        r = self.client.get(self.url_h())
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.data['handicap_mode'], 'updated')
+        self.assertEqual([g['name'] for g in r.data['golfers']], ['Ann'])
+        self.assertEqual(r.data['next_round']['round_number'], 1)
+
+    def test_a_reason_is_REQUIRED(self):
+        r = self.client.post(self.url_h(), {
+            'player_id': self.ann.id, 'handicap_index': 5.0, 'reason': '  '},
+            format='json')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('reason is required', r.data['detail'])
+
+    def test_it_applies_from_the_next_UNPLAYED_round(self):
+        from scoring.tests._helpers import submit_hole
+        from scoring.tests._helpers import DEFAULT_HOLES
+        r1 = self.tourn.rounds.order_by('round_number').first()
+        submit_hole(r1.foursomes.first(), 1, [(self.ann.id, 4)])
+        r = self.client.post(self.url_h(), {
+            'player_id': self.ann.id, 'handicap_index': 5.0,
+            'reason': 'Four net rounds under par'}, format='json')
+        self.assertEqual(r.status_code, 201)
+        adj = r.data['golfers'][0]['adjustment']
+        # Round 1 has a score on it, so the change starts at round 2 — the
+        # card already signed for is not rewritten.
+        self.assertEqual(adj['from_round'], 2)
+        self.assertEqual(adj['reason'], 'Four net rounds under par')
+
+    def test_it_reaches_the_rounds_it_governs(self):
+        # An adjustment is not a note. The engine reads the MEMBERSHIP, so the
+        # number has to be on the round before the round is scored.
+        self.client.post(self.url_h(), {
+            'player_id': self.ann.id, 'handicap_index': 10.0,
+            'reason': 'Playing off too low'}, format='json')
+        m = (self.tourn.rounds.order_by('round_number').last()
+             .foursomes.first().memberships.first())
+        m.refresh_from_db()
+        self.assertEqual(m.playing_handicap_override, 10)
+        self.assertEqual(m.playing_handicap, 10)
+
+    def test_a_round_already_PLAYED_keeps_the_handicap_it_was_scored_with(self):
+        # The packet's firmest rule, and the one an organiser is trusted on:
+        # nothing a golfer has signed for moves under him. Round 1 has a score
+        # on it, so its membership must be exactly as it was.
+        from scoring.tests._helpers import submit_hole
+        r1 = self.tourn.rounds.order_by('round_number').first()
+        submit_hole(r1.foursomes.first(), 1, [(self.ann.id, 4)])
+        m1 = r1.foursomes.first().memberships.first()
+        before_override = m1.playing_handicap_override
+        before_playing  = m1.playing_handicap
+
+        self.client.post(self.url_h(), {
+            'player_id': self.ann.id, 'handicap_index': 18.0,
+            'reason': 'Way off'}, format='json')
+
+        m1.refresh_from_db()
+        self.assertEqual(m1.playing_handicap_override, before_override)
+        self.assertEqual(m1.playing_handicap, before_playing)
+        # And the rounds ahead of it DID move.
+        m2 = (self.tourn.rounds.order_by('round_number')[1]
+              .foursomes.first().memberships.first())
+        self.assertEqual(m2.playing_handicap_override, 18)
+
+    def test_a_moving_ROSTER_index_does_not_rewrite_a_played_round(self):
+        # The case the unplayed-only guard is actually for. In `updated` mode
+        # the trip follows the roster — and on a trip whose own rounds feed
+        # the index, the roster moves mid-trip. A later write must not carry
+        # the new number back onto a round already scored on the old one.
+        from scoring.tests._helpers import submit_hole
+        from services.road_trip import apply_indexes
+        r1 = self.tourn.rounds.order_by('round_number').first()
+        submit_hole(r1.foursomes.first(), 1, [(self.ann.id, 4)])
+        m1 = r1.foursomes.first().memberships.first()
+        # Setting the trip up stamped every round with the index of the day —
+        # they were all unplayed then, and that is the right moment for it.
+        before_playing  = m1.playing_handicap
+        before_override = m1.playing_handicap_override
+
+        self.ann.handicap_index = Decimal('18.0')
+        self.ann.save()
+        self.tourn.refresh_from_db()
+        apply_indexes(self.tourn)
+
+        m1.refresh_from_db()
+        self.assertEqual(m1.playing_handicap, before_playing)
+        self.assertEqual(m1.playing_handicap_override, before_override)
+        # The rounds ahead DID pick the new index up.
+        m2 = (self.tourn.rounds.order_by('round_number')[1]
+              .foursomes.first().memberships.first())
+        self.assertEqual(m2.playing_handicap_override, 18)
+
+    def test_a_trip_with_every_round_played_has_nothing_to_adjust(self):
+        from core.models import RoundStatus
+        from scoring.tests._helpers import submit_hole
+        for r in self.tourn.rounds.all():
+            submit_hole(r.foursomes.first(), 1, [(self.ann.id, 4)])
+        r = self.client.post(self.url_h(), {
+            'player_id': self.ann.id, 'handicap_index': 5.0,
+            'reason': 'too late'}, format='json')
+        self.assertEqual(r.status_code, 409)
+
+
+class LockedIndexTests(_Base):
+    """`locked` has to hold a number, or it is a label on nothing."""
+
+    def test_setting_up_a_locked_trip_records_what_everybody_started_on(self):
+        self.client.post(self.url('setup/'), {'handicap_mode': 'locked'},
+                         format='json')
+        from games.models import RoadTripConfig
+        cfg = RoadTripConfig.objects.get(tournament=self.tourn)
+        self.assertEqual(cfg.starting_indexes[str(self.ann.id)], '0.0')
+
+    def test_a_locked_index_does_not_follow_the_roster(self):
+        from services.road_trip import index_for
+        self.client.post(self.url('setup/'), {'handicap_mode': 'locked'},
+                         format='json')
+        # His roster index moves mid-trip — on a trip whose own rounds feed
+        # the index, it moves BECAUSE of the trip.
+        self.ann.handicap_index = Decimal('6.0')
+        self.ann.save()
+        self.tourn.refresh_from_db()
+        self.assertEqual(index_for(self.tourn, self.ann, 3), Decimal('0.0'))
+
+    def test_updated_mode_DOES_follow_it(self):
+        from services.road_trip import index_for
+        self.client.post(self.url('setup/'), {}, format='json')
+        self.ann.handicap_index = Decimal('6.0')
+        self.ann.save()
+        self.tourn.refresh_from_db()
+        self.assertEqual(index_for(self.tourn, self.ann, 3), Decimal('6.0'))
+
+    def test_an_adjustment_outranks_a_locked_index(self):
+        # The packet is explicit that a manual change is available in EITHER
+        # mode. A locked trip ignoring the organiser's own ruling would be
+        # locking him out.
+        from services.road_trip import index_for
+        self.client.post(self.url('setup/'), {'handicap_mode': 'locked'},
+                         format='json')
+        self.client.post(self.url('handicaps/'), {
+            'player_id': self.ann.id, 'handicap_index': 4.0,
+            'reason': 'Scratch is generous'}, format='json')
+        self.tourn.refresh_from_db()
+        self.assertEqual(index_for(self.tourn, self.ann, 2), Decimal('4.0'))
+
+    def test_resaving_the_setup_does_not_relock_a_drifted_index(self):
+        self.client.post(self.url('setup/'), {'handicap_mode': 'locked'},
+                         format='json')
+        self.ann.handicap_index = Decimal('9.9')
+        self.ann.save()
+        self.client.post(self.url('setup/'), {'handicap_mode': 'locked'},
+                         format='json')
+        from games.models import RoadTripConfig
+        cfg = RoadTripConfig.objects.get(tournament=self.tourn)
+        self.assertEqual(cfg.starting_indexes[str(self.ann.id)], '0.0')

@@ -3947,6 +3947,16 @@ class RoadTripConfig(models.Model):
                             max_length=10, choices=HANDICAP_MODES,
                             default=UPDATED)
 
+    #: **The index each golfer started the trip on**, `{player_id: '12.3'}`,
+    #: captured when the trip is set up.
+    #:
+    #: Only `locked` mode reads it, and without it that mode would be a label
+    #: on nothing: `index_for` would fall through to the golfer's CURRENT
+    #: index, which is exactly the number locking is meant to hold still. A
+    #: ten-day trip is long enough for a roster index to move — and on a trip
+    #: whose own rounds feed the index, it moves BECAUSE of the trip.
+    starting_indexes = models.JSONField(default=dict, blank=True)
+
     #: Net double bogey — par + 2 + the strokes received on the hole.
     net_max_double_bogey   = models.BooleanField(default=True)
     #: Gross double bogey — par + 2, no strokes. Off by default: the gross
