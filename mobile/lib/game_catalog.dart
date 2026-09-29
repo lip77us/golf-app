@@ -91,10 +91,10 @@ class GameIds {
   static const String singlesNassau  = 'singles_nassau';
   static const String singles18      = 'singles_18';
   static const String pinkBall    = 'pink_ball';
-  /// Eclectic — the one side game that spans the EVENT rather than a round:
+  /// Dream Round — the one side game that spans the EVENT rather than a round:
   /// each golfer's best score on each hole number across every round. Offered
   /// only on individual events with 2+ rounds, all of them 18 holes.
-  static const String eclectic    = 'eclectic';
+  static const String dreamRound  = 'dream_round';
   static const String scramble    = 'scramble';
 
   // Tournament-level championship game IDs (sent to createTournament).
@@ -798,14 +798,14 @@ const Map<String, String> _kExtraGameLabels = {
   'stableford_championship': 'Stableford Championship',
   // A tournament SHAPE, never offered in the casual picker — so without an
   // entry here `gameDisplayName` would fall through to the slug and a board
-  // would read `road_trip`. Same gap Eclectic had.
+  // would read `road_trip`. Same gap Dream Round had.
   'road_trip'              : 'Road Trip',
-  // **Eclectic is set on the TOURNAMENT, so it never reaches the casual
+  // **Dream Round is set on the TOURNAMENT, so it never reaches the casual
   // picker** — and with no catalog entry `gameDisplayName` fell through to
-  // the slug, which is how a leaderboard tab came up reading `eclectic`.
+  // the slug, which is how a leaderboard tab came up reading `dream_round`.
   // This map exists for exactly that: a name for a game the picker does not
   // offer. Reported from testing.
-  'eclectic'               : 'Eclectic',
+  'dream_round'            : 'Dream Round',
 };
 
 /// Display name for [gameId], falling back to the raw ID if unknown.

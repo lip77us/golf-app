@@ -1,6 +1,6 @@
-/// test/eclectic_board_test.dart
+/// test/dream_round_board_test.dart
 /// ----------------------------
-/// The Eclectic board and the card it opens into.
+/// The Dream Round board and the card it opens into.
 ///
 /// Most of what is asserted here is a rule the DESIGN states and the data does
 /// not enforce: that the number is to par, that a pool that is off draws no
@@ -14,7 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
 import 'package:golf_mobile/game_catalog.dart';
-import 'package:golf_mobile/widgets/eclectic_board.dart';
+import 'package:golf_mobile/widgets/dream_round_board.dart';
 import 'package:golf_mobile/widgets/pinned_hole_grid.dart';
 
 /// A two-round payload in the server's own shape.
@@ -95,7 +95,7 @@ Future<void> pump(WidgetTester tester, Map<String, dynamic> data) async {
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(MaterialApp(
-    home: Scaffold(body: EclecticBoard(data: data)),
+    home: Scaffold(body: DreamRoundBoard(data: data)),
   ));
   await tester.pumpAndSettle();
 }
@@ -240,7 +240,7 @@ void main() {
     // **The tab exists before the config does**, and that is the whole point:
     // a game with no board is how a TD finds its setup. Hiding it until he has
     // configured it means he has to already know where to look — and the
-    // Eclectic setup was genuinely unreachable until this landed, reported
+    // Dream Round setup was genuinely unreachable until this landed, reported
     // from testing with the rows already in the database.
     Map<String, dynamic> unset({bool available = true, String reason = ''}) => {
           'pools': <String>[],
@@ -258,13 +258,13 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: EclecticBoard(
+        home: Scaffold(body: DreamRoundBoard(
             data: unset(), onSetUp: () => tapped++)),
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('Eclectic is not set up yet'), findsOneWidget);
-      await tester.tap(find.text('Set up Eclectic'));
+      expect(find.text('Dream Round is not set up yet'), findsOneWidget);
+      await tester.tap(find.text('Set up Dream Round'));
       expect(tapped, 1);
     });
 
@@ -274,31 +274,31 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: EclecticBoard(
+        home: Scaffold(body: DreamRoundBoard(
             data: unset(available: false,
                         reason: 'Needs every round to be 18 holes'),
             onSetUp: () {})),
       ));
       await tester.pumpAndSettle();
       expect(find.text('Needs every round to be 18 holes'), findsOneWidget);
-      expect(find.text('Set up Eclectic'), findsNothing);
+      expect(find.text('Set up Dream Round'), findsNothing);
     });
   });
 
   group('the wizard puts it where its board reads it', () {
     // The wizard keeps two sets: `_tournamentActiveGames` is the championship
     // and goes on the TOURNAMENT; `_activeGames` is the side games and goes on
-    // each ROUND. Eclectic is the exception — it spans the rounds, its config
+    // each ROUND. Dream Round is the exception — it spans the rounds, its config
     // is a OneToOne on the tournament, and its board reads the tournament — so
     // a round flag alone left the game invisible to its own board.
-    test('Eclectic is added to the tournament, not only the rounds', () {
+    test('Dream Round is added to the tournament, not only the rounds', () {
       final src =
           File('lib/screens/new_round_wizard.dart').readAsStringSync();
       expect(
           src.contains(
-              'if (_activeGames.contains(GameIds.eclectic)) GameIds.eclectic'),
+              'if (_activeGames.contains(GameIds.dreamRound)) GameIds.dreamRound'),
           isTrue,
-          reason: 'createTournament must carry eclectic — its board reads the '
+          reason: 'createTournament must carry Dream Round — its board reads the '
               'tournament, not the rounds');
     });
 
@@ -331,12 +331,12 @@ void main() {
       await pump(tester, payload());
       await tester.tap(find.text('Bea'));       // open the second row
       await tester.pumpAndSettle();
-      expect(find.text('Eclectic card'), findsOneWidget);
+      expect(find.text('Dream Round card'), findsOneWidget);
 
       await tester.tap(find.text('Net'));
       await tester.pumpAndSettle();
       // Still exactly one card open, and it is the leader's.
-      expect(find.text('Eclectic card'), findsOneWidget);
+      expect(find.text('Dream Round card'), findsOneWidget);
     });
   });
 
@@ -361,10 +361,10 @@ void main() {
     testWidgets('opens on the leader and shows one at a time',
         (tester) async {
       await pump(tester, payload());
-      expect(find.text('Eclectic card'), findsOneWidget);
+      expect(find.text('Dream Round card'), findsOneWidget);
       await tester.tap(find.text('Bea'));
       await tester.pumpAndSettle();
-      expect(find.text('Eclectic card'), findsOneWidget);
+      expect(find.text('Dream Round card'), findsOneWidget);
     });
 
     testWidgets('tapping the open row closes it', (tester) async {
@@ -372,10 +372,10 @@ void main() {
       await pump(tester, payload());
       await tester.tap(find.text('Ann'));
       await tester.pumpAndSettle();
-      expect(find.text('Eclectic card'), findsNothing);
+      expect(find.text('Dream Round card'), findsNothing);
     });
 
-    testWidgets('a row per round, plus the eclectic along the bottom',
+    testWidgets('a row per round, plus the Dream Round along the bottom',
         (tester) async {
       await pump(tester, payload());
       // The header row is labelled `Hole`, as on every other card in the app —
@@ -387,7 +387,7 @@ void main() {
       // `findRichText` because the label is a `Text.rich` — the course initial
       // is a smaller, quieter span on the same line (`R1 N`).
       Finder inCard(String t) => find.descendant(
-          of: find.byType(EclecticCardView),
+          of: find.byType(DreamRoundCardView),
           matching: find.textContaining(t, findRichText: true));
       expect(inCard('R1'), findsNWidgets(2));   // one per nine
       expect(inCard('R2'), findsNWidgets(2));
@@ -433,29 +433,29 @@ void main() {
   });
 
   group('the gear is the way in when there is no tab', () {
-    // The board's empty state can only be reached through the Eclectic TAB,
+    // The board's empty state can only be reached through the Dream Round TAB,
     // and the tab only exists once the game is in `active_games` — which the
-    // setup POST is what does. So an event created without Eclectic had no
+    // setup POST is what does. So an event created without Dream Round had no
     // path to it at all: the only door was behind the door. The gear now
     // reads a separate offer the server sends either way.
     final src =
         File('lib/screens/tournament_leaderboard_screen.dart').readAsStringSync();
 
     test('the item is gated on the OFFER, not on active_games', () {
-      expect(src.contains("activeGames.contains('eclectic')"), isFalse,
+      expect(src.contains("activeGames.contains('dream_round')"), isFalse,
           reason: 'that gate is what made the setup unreachable');
-      expect(src.contains("eclecticOffer['offer'] == true"), isTrue);
-      expect(src.contains("_payload?['eclectic_offer']"), isTrue);
+      expect(src.contains("dreamRoundOffer['offer'] == true"), isTrue);
+      expect(src.contains("_payload?['dream_round_offer']"), isTrue);
     });
 
     test('it names which job it is doing', () {
-      expect(src.contains("'Set up Eclectic'"), isTrue,
+      expect(src.contains("'Set up Dream Round'"), isTrue,
           reason: 'an event that has not turned it on is SETTING it up');
-      expect(src.contains("'Configure Eclectic'"), isTrue);
+      expect(src.contains("'Configure Dream Round'"), isTrue);
     });
 
     test('a disabled item carries its reason', () {
-      expect(src.contains("eclecticOffer['available'] != true"), isTrue,
+      expect(src.contains("dreamRoundOffer['available'] != true"), isTrue,
           reason: 'a greyed item that does not say why is a mystery');
     });
 
@@ -476,18 +476,18 @@ void main() {
 
     test('it sits beside the other tournament-level config', () {
       expect(src.contains("'Configure Stroke Play Championship'"), isTrue);
-      expect(src.contains("'Set up Eclectic'"), isTrue);
-      expect(src.contains("'Configure Eclectic'"), isTrue);
-      expect(src.contains('EclecticSetupScreen(tournamentId: t.id)'), isTrue,
+      expect(src.contains("'Set up Dream Round'"), isTrue);
+      expect(src.contains("'Configure Dream Round'"), isTrue);
+      expect(src.contains('DreamRoundSetupScreen(tournamentId: t.id)'), isTrue,
           reason: 'the button has to actually open the screen');
     });
 
     test('it is gated on CAN play, never on already plays', () {
       // Gating it the other way is what made the screen unreachable twice:
       // the setup POST is the thing that turns the game on.
-      expect(src.contains("eclecticOffer['offer'] == true"), isTrue);
-      expect(src.contains("eclecticOffer['available'] == true"), isTrue);
-      expect(src.contains("activeGames.contains('eclectic')"), isFalse);
+      expect(src.contains("dreamRoundOffer['offer'] == true"), isTrue);
+      expect(src.contains("dreamRoundOffer['available'] == true"), isTrue);
+      expect(src.contains("activeGames.contains('dream_round')"), isFalse);
     });
   });
 
@@ -495,10 +495,10 @@ void main() {
     test('gameDisplayName capitalises it', () {
       // `gameDisplayName` is the single source for every chip, badge, page
       // title and leaderboard tab, and it falls through to the raw id for a
-      // game it does not know. Eclectic is set on the TOURNAMENT so it never
+      // game it does not know. Dream Round is set on the TOURNAMENT so it never
       // reaches the casual picker's catalog — which is how a tab came up
-      // reading `eclectic`.
-      expect(gameDisplayName('eclectic'), 'Eclectic');
+      // reading `dream_round`.
+      expect(gameDisplayName('dream_round'), 'Dream Round');
     });
 
     test('so does every other game a tournament can set', () {

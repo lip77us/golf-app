@@ -61,7 +61,7 @@ void main() {
 
     test('the catalog gives it a NAME, not a slug', () {
       // Set on the tournament, so it never reaches the casual picker's
-      // catalog — exactly the gap that made a board read `eclectic`.
+      // catalog — exactly the gap that made a board read `dream_round`.
       expect(gameDisplayName(GameIds.roadTrip), 'Road Trip');
     });
   });

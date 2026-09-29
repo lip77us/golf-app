@@ -1,9 +1,9 @@
-/// screens/eclectic_setup_screen.dart
+/// screens/dream_round_setup_screen.dart
 /// ---------------------------------
-/// Eclectic setup — the TD's two pools.
+/// Dream Round setup — the TD's two pools.
 ///
 /// **The screen states the rules and asks for the money, and nothing else.**
-/// Everything about how an eclectic is scored is fixed: hole numbers matched
+/// Everything about how a Dream Round is scored is fixed: hole numbers matched
 /// across courses, best score to par kept, net strokes given per round at full
 /// allowance. There is no handicap picker and no tiebreak picker, because there
 /// is no decision behind either — so the Handicap card is read-only and says so
@@ -31,22 +31,22 @@ import '../widgets/payout_config_field.dart';
 const _kHowItPlays = <List<String>>[
   ['Every round counts.', ' The best score ', 'to par',
    ' on each hole number is kept.'],
-  ['Those 18 bests are the golfer’s ', '', 'Eclectic card',
+  ['Those 18 bests are the golfer’s ', '', 'Dream Round card',
    '. Lowest total to par wins.'],
   ['Net strokes are given ', '', 'per round',
    ', from that day’s course handicap and stroke index.'],
   ['Ties ', '', 'split the money', ' for the places they cover. No countback.'],
 ];
 
-class EclecticSetupScreen extends StatefulWidget {
+class DreamRoundSetupScreen extends StatefulWidget {
   final int tournamentId;
-  const EclecticSetupScreen({super.key, required this.tournamentId});
+  const DreamRoundSetupScreen({super.key, required this.tournamentId});
 
   @override
-  State<EclecticSetupScreen> createState() => _EclecticSetupScreenState();
+  State<DreamRoundSetupScreen> createState() => _DreamRoundSetupScreenState();
 }
 
-class _EclecticSetupScreenState extends State<EclecticSetupScreen> {
+class _DreamRoundSetupScreenState extends State<DreamRoundSetupScreen> {
   bool _grossOn = true;
   bool _netOn   = true;
   int  _numPlayers = 0;
@@ -89,7 +89,7 @@ class _EclecticSetupScreenState extends State<EclecticSetupScreen> {
     setState(() { _loading = true; _error = null; });
     try {
       final cfg = await context.read<AuthProvider>().client
-          .getEclecticSetup(widget.tournamentId);
+          .getDreamRoundSetup(widget.tournamentId);
       if (!mounted) return;
       setState(() {
         _numPlayers = cfg['num_players'] as int? ?? 0;
@@ -148,7 +148,7 @@ class _EclecticSetupScreenState extends State<EclecticSetupScreen> {
   Future<void> _save() async {
     setState(() { _saving = true; _error = null; });
     try {
-      await context.read<AuthProvider>().client.postEclecticSetup(
+      await context.read<AuthProvider>().client.postDreamRoundSetup(
         widget.tournamentId,
         grossOn      : _grossOn,
         netOn        : _netOn,
@@ -168,7 +168,7 @@ class _EclecticSetupScreenState extends State<EclecticSetupScreen> {
     final blocker = _blocker;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Eclectic'),
+        title: const Text('Dream Round'),
         actions: const [_FieldTag(), SizedBox(width: 12)],
       ),
       body: _loading
@@ -361,7 +361,7 @@ class _EclecticSetupScreenState extends State<EclecticSetupScreen> {
     required ValueChanged<bool> onChanged,
   }) {
     final theme = Theme.of(context);
-    // **The last pool on cannot be turned off.** An eclectic with no pool is
+    // **The last pool on cannot be turned off.** A Dream Round with no pool is
     // not a game. The switch simply does nothing rather than showing an error,
     // which is what the design specifies — and the server refuses it too, so
     // this is a convenience rather than the rule.

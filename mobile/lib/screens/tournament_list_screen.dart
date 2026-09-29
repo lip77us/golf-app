@@ -13,7 +13,7 @@ import '../widgets/golf_text_field.dart';
 import '../widgets/shared_round_card.dart';
 import 'new_round_wizard.dart';
 import 'player_list_screen.dart';
-import 'eclectic_setup_screen.dart';
+import 'dream_round_setup_screen.dart';
 import 'road_trip_players_screen.dart';
 import 'road_trip_rounds_screen.dart';
 import 'tournament_low_net_setup_screen.dart';
@@ -625,9 +625,9 @@ class _TournamentListScreenState extends State<TournamentListScreen>
                 ),
               ),
             ).then((_) => _load()),
-            onConfigureEclectic: () => Navigator.of(context).push(
+            onConfigureDreamRound: () => Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => EclecticSetupScreen(tournamentId: t.id),
+                builder: (_) => DreamRoundSetupScreen(tournamentId: t.id),
               ),
             ).then((_) => _load()),
             onDelete         : () => _deleteTournament(t),
@@ -647,10 +647,10 @@ class _TournamentCard extends StatelessWidget {
   /// Opens tournament settlement — the receipts and the field text.
   final VoidCallback onSettleUp;
   final VoidCallback onConfigureLowNet;
-  /// Opens the Eclectic setup. **A named button here rather than only the
+  /// Opens the Dream Round setup. **A named button here rather than only the
   /// gear two screens deep**, which is where `Settle up` used to hide before
   /// somebody had to be told where it was.
-  final VoidCallback onConfigureEclectic;
+  final VoidCallback onConfigureDreamRound;
   /// Opens the trip's rounds — a Road Trip is the one shape where the ROUNDS
   /// are what you navigate: ten courses over ten days, each with its own
   /// board and its own field games.
@@ -674,7 +674,7 @@ class _TournamentCard extends StatelessWidget {
     required this.onViewLeaderboard,
     required this.onSettleUp,
     required this.onConfigureLowNet,
-    required this.onConfigureEclectic,
+    required this.onConfigureDreamRound,
     required this.onOpenRoadTripRounds,
     required this.onOpenRoadTripPlayers,
     required this.onOpenCupDraft,
@@ -824,7 +824,7 @@ class _TournamentCard extends StatelessWidget {
                 label: 'Configure Stroke Play Championship',
                 onTap: onConfigureLowNet,
               ),
-            // **Eclectic can be added to an event that did not start with
+            // **Dream Round can be added to an event that did not start with
             // it** — its setup POST is what turns it on — so this is gated on
             // whether the event CAN play one, never on whether it already
             // does. Gating it the other way is what made the setup screen
@@ -843,14 +843,14 @@ class _TournamentCard extends StatelessWidget {
                 ),
             ],
             if (isStaff && !isComplete &&
-                tournament.eclecticOffer['offer'] == true &&
-                tournament.eclecticOffer['available'] == true)
+                tournament.dreamRoundOffer['offer'] == true &&
+                tournament.dreamRoundOffer['available'] == true)
               _ActionButton(
                 icon : Icons.settings_outlined,
-                label: tournament.eclecticOffer['configured'] == true
-                    ? 'Configure Eclectic'
-                    : 'Set up Eclectic',
-                onTap: onConfigureEclectic,
+                label: tournament.dreamRoundOffer['configured'] == true
+                    ? 'Configure Dream Round'
+                    : 'Set up Dream Round',
+                onTap: onConfigureDreamRound,
               ),
           ],
         ]),

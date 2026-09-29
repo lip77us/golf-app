@@ -1,6 +1,6 @@
-/// widgets/eclectic_board.dart
+/// widgets/dream_round_board.dart
 /// --------------------------
-/// The Eclectic tab: a ranked board whose rows open into the card they were
+/// The Dream Round tab: a ranked board whose rows open into the card they were
 /// drawn from.
 ///
 /// **The number is TO PAR**, not a gross total. A gross 63 means nothing across
@@ -10,7 +10,7 @@
 ///
 /// **The row opens the card** because the question a golfer asks of a −9 is
 /// *where did that come from*. So the card is every round, one row each, with
-/// the kept score marked, and the eclectic itself along the bottom.
+/// the kept score marked, and the Dream Round itself along the bottom.
 ///
 /// There is deliberately **no par row**. Two courses mean two pars on some
 /// holes, so a single row of pars would be wrong for half the card. The
@@ -34,7 +34,7 @@ import 'stroke_dots.dart';
 const _keptFill = Color(0xFFDCF2E4);
 const _keptText = Color(0xFF0B5B44);
 
-class EclecticBoard extends StatefulWidget {
+class DreamRoundBoard extends StatefulWidget {
   final Map<String, dynamic> data;
 
   /// The reader, for the `YOU` tag. **Passed in rather than read from a
@@ -48,16 +48,16 @@ class EclecticBoard extends StatefulWidget {
   /// set a game up has to already know the game is there.
   final VoidCallback? onSetUp;
 
-  const EclecticBoard({
+  const DreamRoundBoard({
     super.key, required this.data, this.readerId, this.onSetUp,
   });
 
   @override
-  State<EclecticBoard> createState() => _EclecticBoardState();
+  State<DreamRoundBoard> createState() => _DreamRoundBoardState();
 }
 
-class _EclecticBoardState extends State<EclecticBoard> {
-  late EclecticSummary _s = EclecticSummary.fromJson(widget.data);
+class _DreamRoundBoardState extends State<DreamRoundBoard> {
+  late DreamRoundSummary _s = DreamRoundSummary.fromJson(widget.data);
   String _pool = '';
   /// Which row is open. **One at a time** — the card is tall and two open at
   /// once turns the board into a scroll with no board in it.
@@ -71,18 +71,18 @@ class _EclecticBoardState extends State<EclecticBoard> {
   }
 
   @override
-  void didUpdateWidget(covariant EclecticBoard old) {
+  void didUpdateWidget(covariant DreamRoundBoard old) {
     super.didUpdateWidget(old);
     // A silent refresh re-enters with fresh data; keep the open row and the
     // chosen pool rather than snapping back to the leader under the reader's
     // thumb.
-    _s = EclecticSummary.fromJson(widget.data);
+    _s = DreamRoundSummary.fromJson(widget.data);
     if (!_s.pools.contains(_pool) && _s.pools.isNotEmpty) {
       _pool = _s.pools.first;
     }
   }
 
-  EclecticPool? get _current => _s.poolNamed(_pool);
+  DreamRoundPool? get _current => _s.poolNamed(_pool);
 
   int? get _leaderId {
     final rows = _current?.standings ?? const [];
@@ -158,7 +158,7 @@ class _EclecticBoardState extends State<EclecticBoard> {
           Icon(Icons.flag_outlined, size: 32,
               color: theme.colorScheme.onSurfaceVariant),
           const SizedBox(height: 12),
-          Text('Eclectic is not set up yet',
+          Text('Dream Round is not set up yet',
               textAlign: TextAlign.center,
               style: theme.textTheme.titleMedium
                   ?.copyWith(fontWeight: FontWeight.bold)),
@@ -177,7 +177,7 @@ class _EclecticBoardState extends State<EclecticBoard> {
             FilledButton.icon(
               onPressed: widget.onSetUp,
               icon: const Icon(Icons.tune, size: 18),
-              label: const Text('Set up Eclectic'),
+              label: const Text('Set up Dream Round'),
             ),
           ],
         ]),
@@ -189,7 +189,7 @@ class _EclecticBoardState extends State<EclecticBoard> {
   ///
   /// Built from the card's own cells rather than asking the server for a
   /// second set of totals, which would be two answers to one question.
-  String _subline(EclecticPool pool, int pid) {
+  String _subline(DreamRoundPool pool, int pid) {
     final card = pool.cards[pid];
     if (card == null) return 'not started';
     final parts = <String>[];
@@ -266,7 +266,7 @@ class _PoolSwitch extends StatelessWidget {
 }
 
 class _ChipRow extends StatelessWidget {
-  final EclecticSummary summary;
+  final DreamRoundSummary summary;
   const _ChipRow({required this.summary});
 
   @override
@@ -314,13 +314,13 @@ class _HeaderRow extends StatelessWidget {
 }
 
 class _StandingRow extends StatelessWidget {
-  final EclecticStanding row;
+  final DreamRoundStanding row;
   final bool isMe;
   final bool isOpen;
   final bool isLive;
   final String subline;
   final VoidCallback onTap;
-  final EclecticCard? card;
+  final DreamRoundCard? card;
   final List<Map<String, String>> legend;
   final bool isNet;
   final Map<int, int> par;
@@ -428,7 +428,7 @@ class _StandingRow extends StatelessWidget {
           ),
         ),
         if (isOpen && card != null)
-          EclecticCardView(card: card!, legend: legend, isNet: isNet,
+          DreamRoundCardView(card: card!, legend: legend, isNet: isNet,
               par: par, strokeIndex: strokeIndex),
       ]),
     );
@@ -465,7 +465,7 @@ class _Tag extends StatelessWidget {
 // The card
 // ---------------------------------------------------------------------------
 
-/// Front and back nines, a row per round, and the eclectic along the bottom.
+/// Front and back nines, a row per round, and the Dream Round along the bottom.
 ///
 /// **It reads as the same object as every other scorecard in the app** — the
 /// banded header (`Hole` on `surfaceContainerHighest`, `Par` and `Index` a step
@@ -487,8 +487,8 @@ class _Tag extends StatelessWidget {
 /// packet puts it on one surface today — but it is the kind of thing a
 /// settlement receipt or a watch page asks for next, and a copy of it would
 /// drift from this one.
-class EclecticCardView extends StatelessWidget {
-  final EclecticCard card;
+class DreamRoundCardView extends StatelessWidget {
+  final DreamRoundCard card;
   final List<Map<String, String>> legend;
   final bool isNet;
 
@@ -497,7 +497,7 @@ class EclecticCardView extends StatelessWidget {
   final Map<int, int> par;
   final Map<int, int> strokeIndex;
 
-  const EclecticCardView({
+  const DreamRoundCardView({
     super.key, required this.card, required this.legend, required this.isNet,
     this.par = const {}, this.strokeIndex = const {},
   });
@@ -517,7 +517,7 @@ class EclecticCardView extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Text('Eclectic card', style: theme.textTheme.labelMedium
+          Text('Dream Round card', style: theme.textTheme.labelMedium
               ?.copyWith(fontWeight: FontWeight.bold)),
           const Spacer(),
           Flexible(
@@ -671,7 +671,7 @@ class EclecticCardView extends StatelessWidget {
     );
   }
 
-  Widget _roundCell(BuildContext context, EclecticCardRound r, int h,
+  Widget _roundCell(BuildContext context, DreamRoundCardRound r, int h,
       Widget Function(Widget, {Color? bg}) cell) {
     final theme = Theme.of(context);
     final c = r.holes[h];
@@ -713,7 +713,7 @@ class EclecticCardView extends StatelessWidget {
                  : theme.colorScheme.onSurface)));
   }
 
-  String _nineGross(EclecticCardRound r, List<int> holes) {
+  String _nineGross(DreamRoundCardRound r, List<int> holes) {
     var total = 0;
     for (final h in holes) {
       final c = r.holes[h];
@@ -735,7 +735,7 @@ class EclecticCardView extends StatelessWidget {
       any = true;
     }
     // Unlike the gross nine, this one sums what is THERE: a hole with no
-    // candidate adds nothing to the eclectic total either, so a partial nine
+    // candidate adds nothing to the Dream Round total either, so a partial nine
     // is the honest running figure rather than a misleading one.
     if (!any) return '–';
     return toParLabel(total);

@@ -1011,18 +1011,18 @@ class ApiClient {
     return Map<String, dynamic>.from(data as Map);
   }
 
-  // ---- Eclectic (tournament, multi-round side game) ----
+  // ---- Dream Round (tournament, multi-round side game) ----
 
   /// The TD's two pools, plus the availability gate and the round list the
   /// setup screen draws. `available` / `unavailable_reason` come from the
   /// server so the rule lives in ONE place — the client states the reason, it
   /// does not derive it.
-  Future<Map<String, dynamic>> getEclecticSetup(int tournamentId) async {
-    final data = await _get('/tournaments/$tournamentId/eclectic/setup/');
+  Future<Map<String, dynamic>> getDreamRoundSetup(int tournamentId) async {
+    final data = await _get('/tournaments/$tournamentId/dream-round/setup/');
     return Map<String, dynamic>.from(data as Map);
   }
 
-  Future<Map<String, dynamic>> postEclecticSetup(
+  Future<Map<String, dynamic>> postDreamRoundSetup(
     int tournamentId, {
     required bool                       grossOn,
     required bool                       netOn,
@@ -1031,7 +1031,7 @@ class ApiClient {
     required double                     netEntryFee,
     required List<Map<String, dynamic>> netPayouts,
   }) async {
-    final data = await _post('/tournaments/$tournamentId/eclectic/setup/', {
+    final data = await _post('/tournaments/$tournamentId/dream-round/setup/', {
       'gross_on'       : grossOn,
       'net_on'         : netOn,
       'gross_entry_fee': grossEntryFee.toStringAsFixed(2),
@@ -1044,12 +1044,12 @@ class ApiClient {
 
   /// Turn the GAME off. Turning one POOL off is a POST — the server refuses
   /// the state where neither is on.
-  Future<void> deleteEclecticSetup(int tournamentId) =>
-      _delete('/tournaments/$tournamentId/eclectic/setup/');
+  Future<void> deleteDreamRoundSetup(int tournamentId) =>
+      _delete('/tournaments/$tournamentId/dream-round/setup/');
 
-  Future<EclecticSummary> getEclectic(int tournamentId) async {
-    final data = await _get('/tournaments/$tournamentId/eclectic/');
-    return EclecticSummary.fromJson(Map<String, dynamic>.from(data as Map));
+  Future<DreamRoundSummary> getDreamRound(int tournamentId) async {
+    final data = await _get('/tournaments/$tournamentId/dream-round/');
+    return DreamRoundSummary.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
   // ---- Rounds ----

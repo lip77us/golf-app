@@ -1346,10 +1346,10 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       final t = await client.createTournament(
         name       : _nameCtrl.text.trim(),
         startDate  : dateStr,
-        // **Eclectic goes on the TOURNAMENT, not only the rounds.** The two
+        // **Dream Round goes on the TOURNAMENT, not only the rounds.** The two
         // sets here divide by scope: `_tournamentActiveGames` is the
         // championship, `_activeGames` is the side games, and side games ride
-        // on each round. Eclectic is the exception — it spans the rounds, its
+        // on each round. Dream Round is the exception — it spans the rounds, its
         // config is a OneToOne on the tournament, and its board reads the
         // tournament — so a round flag alone left the game invisible to its
         // own board until a repair rule on the server noticed it. This makes
@@ -1360,7 +1360,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         // flag is exactly right for it.
         activeGames: [
           ..._tournamentActiveGames,
-          if (_activeGames.contains(GameIds.eclectic)) GameIds.eclectic,
+          if (_activeGames.contains(GameIds.dreamRound)) GameIds.dreamRound,
         ],
         totalRounds: _numRounds,
         // Individual-play scoring is set ONCE here; every round and every
@@ -4151,9 +4151,9 @@ class _StepSideGames extends StatelessWidget {
         ),
         const SizedBox(height: 12),
 
-        // ── Eclectic ────────────────────────────────────────────────────
+        // ── Dream Round ────────────────────────────────────────────────────
         // **Hidden on a one-round event**, not disabled: with one round an
-        // eclectic IS the round, so there is nothing to explain and a struck
+        // Dream Round IS the round, so there is nothing to explain and a struck
         // row would invite the TD to work out why.
         //
         // The other half of the rule — every round 18 holes — is enforced by
@@ -4162,15 +4162,15 @@ class _StepSideGames extends StatelessWidget {
         // row here would be a control for a state it cannot produce.
         if (numRounds > 1) ...[
           _GameToggleCard(
-            on      : activeGames.contains(GameIds.eclectic),
-            title   : 'Eclectic',
+            on      : activeGames.contains(GameIds.dreamRound),
+            title   : 'Dream Round',
             blurb   : 'Each golfer keeps his best score on each hole number '
                       'across all $numRounds rounds. Those eighteen bests are '
                       'his card, and the lowest wins.',
             moneyNote: 'Gross and net are two separate pools with two entries. '
-                       'Both are set on the Eclectic screen, right after you '
+                       'Both are set on the Dream Round screen, right after you '
                        'create the tournament.',
-            onToggle: (v) => onToggle(GameIds.eclectic, v),
+            onToggle: (v) => onToggle(GameIds.dreamRound, v),
           ),
           const SizedBox(height: 12),
         ],

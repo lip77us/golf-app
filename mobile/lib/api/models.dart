@@ -594,14 +594,14 @@ class Tournament {
   /// Whose event it is, for a guest. Null on your own.
   final String? hostName;
 
-  /// Whether this event can play an eclectic, and whether it already is —
+  /// Whether this event can play a Dream Round, and whether it already is —
   /// `{available, reason, configured, offer}`.
   ///
   /// **From the server, not worked out here.** The rule is
-  /// `services.eclectic.eclectic_available`; a phone re-deriving it from
+  /// `services.dream_round.dream_round_available`; a phone re-deriving it from
   /// [rounds] would be a second copy of it. Empty on an older server, which
   /// reads as no offer and draws no button.
-  final Map<String, dynamic> eclecticOffer;
+  final Map<String, dynamic> dreamRoundOffer;
 
   const Tournament({
     required this.id,
@@ -613,7 +613,7 @@ class Tournament {
     this.activeGames = const [],
     this.isOwn = true,
     this.hostName,
-    this.eclecticOffer = const {},
+    this.dreamRoundOffer = const {},
   });
 
   factory Tournament.fromJson(Map<String, dynamic> j) => Tournament(
@@ -630,8 +630,8 @@ class Tournament {
             .toList(),
         isOwn: j['is_own'] as bool? ?? true,
         hostName: j['host_name'] as String?,
-        eclecticOffer: Map<String, dynamic>.from(
-            (j['eclectic_offer'] as Map?) ?? const {}),
+        dreamRoundOffer: Map<String, dynamic>.from(
+            (j['dream_round_offer'] as Map?) ?? const {}),
       );
 }
 
@@ -7749,11 +7749,11 @@ double _d(dynamic v) =>
     v == null ? 0.0 : (v is num ? v.toDouble() : double.tryParse('$v') ?? 0.0);
 
 // ---------------------------------------------------------------------------
-// Eclectic — the best score on every hole number, across every round
+// Dream Round — the best score on every hole number, across every round
 // ---------------------------------------------------------------------------
 
-/// One round's place in the event, as the eclectic card labels it.
-class EclecticRound {
+/// One round's place in the event, as the Dream Round card labels it.
+class DreamRoundRound {
   final int    index;
   final String label;        // `R1`
   final String course;
@@ -7766,13 +7766,13 @@ class EclecticRound {
   final int?   par;
   final bool   isComplete;
 
-  const EclecticRound({
+  const DreamRoundRound({
     required this.index, required this.label, required this.course,
     required this.courseInitial, required this.date,
     required this.par, required this.isComplete,
   });
 
-  factory EclecticRound.fromJson(Map<String, dynamic> j) => EclecticRound(
+  factory DreamRoundRound.fromJson(Map<String, dynamic> j) => DreamRoundRound(
         index        : j['index'] as int? ?? 0,
         label        : j['label'] as String? ?? '',
         course       : j['course'] as String? ?? '',
@@ -7784,7 +7784,7 @@ class EclecticRound {
 }
 
 /// One golfer's row on the board.
-class EclecticStanding {
+class DreamRoundStanding {
   final int     playerId;
   final String  playerName;
   final int     rank;
@@ -7809,14 +7809,14 @@ class EclecticStanding {
   /// row's `10 of 18` is the server's own arithmetic.
   final int     cardHoles;
 
-  const EclecticStanding({
+  const DreamRoundStanding({
     required this.playerId, required this.playerName, required this.rank,
     required this.tied, required this.total, required this.holesKept,
     required this.payout, required this.excluded,
     this.cardComplete = true, this.cardHoles = 18,
   });
 
-  factory EclecticStanding.fromJson(Map<String, dynamic> j) => EclecticStanding(
+  factory DreamRoundStanding.fromJson(Map<String, dynamic> j) => DreamRoundStanding(
         playerId  : j['player_id'] as int,
         playerName: j['player_name'] as String? ?? '',
         rank      : (j['rank'] as num?)?.toInt() ?? 0,
@@ -7834,21 +7834,21 @@ class EclecticStanding {
 }
 
 /// One hole of one round, inside a golfer's card.
-class EclecticCell {
+class DreamRoundCell {
   final int  gross;
   final int  par;
   /// Strokes that round gave on this hole. Always 0 in the gross pool.
   final int  strokes;
   final int  toPar;
-  /// This is the score the eclectic kept for that hole number.
+  /// This is the score the Dream Round kept for that hole number.
   final bool kept;
 
-  const EclecticCell({
+  const DreamRoundCell({
     required this.gross, required this.par, required this.strokes,
     required this.toPar, required this.kept,
   });
 
-  factory EclecticCell.fromJson(Map<String, dynamic> j) => EclecticCell(
+  factory DreamRoundCell.fromJson(Map<String, dynamic> j) => DreamRoundCell(
         gross  : (j['gross'] as num?)?.toInt() ?? 0,
         par    : (j['par'] as num?)?.toInt() ?? 0,
         strokes: (j['strokes'] as num?)?.toInt() ?? 0,
@@ -7858,39 +7858,39 @@ class EclecticCell {
 }
 
 /// One round's row inside the card.
-class EclecticCardRound {
+class DreamRoundCardRound {
   final String label;
   final String courseInitial;
-  final Map<int, EclecticCell> holes;
+  final Map<int, DreamRoundCell> holes;
 
-  const EclecticCardRound({
+  const DreamRoundCardRound({
     required this.label, required this.courseInitial, required this.holes,
   });
 
-  factory EclecticCardRound.fromJson(Map<String, dynamic> j) =>
-      EclecticCardRound(
+  factory DreamRoundCardRound.fromJson(Map<String, dynamic> j) =>
+      DreamRoundCardRound(
         label        : j['label'] as String? ?? '',
         courseInitial: j['course_initial'] as String? ?? '',
         holes        : {
           for (final e in (j['holes'] as Map? ?? const {}).entries)
             int.parse(e.key.toString()):
-                EclecticCell.fromJson(Map<String, dynamic>.from(e.value as Map)),
+                DreamRoundCell.fromJson(Map<String, dynamic>.from(e.value as Map)),
         },
       );
 }
 
 /// The grid a row opens into — every round, and the kept score per hole.
-class EclecticCard {
-  final List<EclecticCardRound> rounds;
+class DreamRoundCard {
+  final List<DreamRoundCardRound> rounds;
   /// Kept to-par per hole number. A hole nobody has played is absent, not 0.
   final Map<int, int> best;
 
-  const EclecticCard({required this.rounds, required this.best});
+  const DreamRoundCard({required this.rounds, required this.best});
 
-  factory EclecticCard.fromJson(Map<String, dynamic> j) => EclecticCard(
+  factory DreamRoundCard.fromJson(Map<String, dynamic> j) => DreamRoundCard(
         rounds: (j['rounds'] as List? ?? const [])
             .map((r) =>
-                EclecticCardRound.fromJson(Map<String, dynamic>.from(r as Map)))
+                DreamRoundCardRound.fromJson(Map<String, dynamic>.from(r as Map)))
             .toList(),
         best: {
           for (final e in (j['best'] as Map? ?? const {}).entries)
@@ -7901,19 +7901,19 @@ class EclecticCard {
 
 /// One pool — gross or net. They are separate competitions with separate
 /// money, not two columns of one game.
-class EclecticPool {
+class DreamRoundPool {
   final double entryFee;
   final double pool;
   final List<Map<String, dynamic>> payouts;
-  final List<EclecticStanding> standings;
-  final Map<int, EclecticCard> cards;
+  final List<DreamRoundStanding> standings;
+  final Map<int, DreamRoundCard> cards;
 
-  const EclecticPool({
+  const DreamRoundPool({
     required this.entryFee, required this.pool, required this.payouts,
     required this.standings, required this.cards,
   });
 
-  factory EclecticPool.fromJson(Map<String, dynamic> j) => EclecticPool(
+  factory DreamRoundPool.fromJson(Map<String, dynamic> j) => DreamRoundPool(
         entryFee : (j['entry_fee'] as num?)?.toDouble() ?? 0,
         pool     : (j['pool'] as num?)?.toDouble() ?? 0,
         payouts  : (j['payouts'] as List? ?? const [])
@@ -7921,12 +7921,12 @@ class EclecticPool {
             .toList(),
         standings: (j['standings'] as List? ?? const [])
             .map((r) =>
-                EclecticStanding.fromJson(Map<String, dynamic>.from(r as Map)))
+                DreamRoundStanding.fromJson(Map<String, dynamic>.from(r as Map)))
             .toList(),
         cards: {
           for (final e in (j['cards'] as Map? ?? const {}).entries)
             int.parse(e.key.toString()):
-                EclecticCard.fromJson(Map<String, dynamic>.from(e.value as Map)),
+                DreamRoundCard.fromJson(Map<String, dynamic>.from(e.value as Map)),
         },
       );
 }
@@ -7937,12 +7937,12 @@ Map<int, int> _holeMap(dynamic raw) => {
         if (e.value != null) int.parse(e.key.toString()): (e.value as num).toInt(),
     };
 
-class EclecticSummary {
+class DreamRoundSummary {
   /// Which pools are being played, in display order. **A pool that is off is
   /// absent from [gross]/[net] entirely**, so an empty board cannot be
   /// mistaken for a real one.
   final List<String> pools;
-  final List<EclecticRound> rounds;
+  final List<DreamRoundRound> rounds;
   final int nRounds;
   final int nCourses;
   /// `[{key, course}]` — what the card header spells out. Keyed on the initial
@@ -7960,15 +7960,15 @@ class EclecticSummary {
   final Map<int, int> par;
   final Map<int, int> strokeIndex;
 
-  final EclecticPool? gross;
-  final EclecticPool? net;
+  final DreamRoundPool? gross;
+  final DreamRoundPool? net;
 
   /// The TD has not set the pools yet. The board still draws — a game with no
   /// board is how he finds the setup.
   final bool available;
   final String unavailableReason;
 
-  const EclecticSummary({
+  const DreamRoundSummary({
     required this.pools, required this.rounds, required this.nRounds,
     required this.nCourses, required this.courseLegend,
     required this.liveLabel, required this.isFinal,
@@ -7979,13 +7979,13 @@ class EclecticSummary {
 
   bool get isConfigured => pools.isNotEmpty;
 
-  EclecticPool? poolNamed(String name) => name == 'net' ? net : gross;
+  DreamRoundPool? poolNamed(String name) => name == 'net' ? net : gross;
 
-  factory EclecticSummary.fromJson(Map<String, dynamic> j) => EclecticSummary(
+  factory DreamRoundSummary.fromJson(Map<String, dynamic> j) => DreamRoundSummary(
         pools : (j['pools'] as List? ?? const []).cast<String>(),
         rounds: (j['rounds'] as List? ?? const [])
             .map((r) =>
-                EclecticRound.fromJson(Map<String, dynamic>.from(r as Map)))
+                DreamRoundRound.fromJson(Map<String, dynamic>.from(r as Map)))
             .toList(),
         nRounds : (j['n_rounds'] as num?)?.toInt() ?? 0,
         nCourses: (j['n_courses'] as num?)?.toInt() ?? 0,
@@ -8001,10 +8001,10 @@ class EclecticSummary {
         unavailableReason: j['unavailable_reason'] as String? ?? '',
         gross: j['gross'] == null
             ? null
-            : EclecticPool.fromJson(Map<String, dynamic>.from(j['gross'] as Map)),
+            : DreamRoundPool.fromJson(Map<String, dynamic>.from(j['gross'] as Map)),
         net: j['net'] == null
             ? null
-            : EclecticPool.fromJson(Map<String, dynamic>.from(j['net'] as Map)),
+            : DreamRoundPool.fromJson(Map<String, dynamic>.from(j['net'] as Map)),
       );
 }
 

@@ -18,9 +18,9 @@ import '../widgets/inline_message.dart';
 import '../widgets/stroke_play_strip.dart';
 import '../widgets/synced_scroll_group.dart';
 import '../widgets/flight_header.dart';
-import '../widgets/eclectic_board.dart';
+import '../widgets/dream_round_board.dart';
 import '../widgets/road_trip_board.dart';
-import 'eclectic_setup_screen.dart';
+import 'dream_round_setup_screen.dart';
 import 'tournament_settlement_screen.dart';
 import 'tournament_low_net_setup_screen.dart';
 import 'tournament_stableford_setup_screen.dart';
@@ -114,7 +114,7 @@ class _TournamentLeaderboardScreenState
       for (final g in activeGames) {
         if (gamesMap.containsKey(g) && !tabs.contains(g)) tabs.add(g);
       }
-      // **Eclectic sits between the championship and the per-round side
+      // **Dream Round sits between the championship and the per-round side
       // games**, and is moved there explicitly rather than left wherever the
       // wizard's toggle order put it in `active_games`. It is the only side
       // game that spans the whole event, which is also why its tab takes no
@@ -123,13 +123,13 @@ class _TournamentLeaderboardScreenState
       // golfer opens the screen for, and it replaces the stroke-play one
       // rather than sitting beside it.
       if (tabs.remove('road_trip')) tabs.insert(0, 'road_trip');
-      if (tabs.remove('eclectic')) {
+      if (tabs.remove('dream_round')) {
         const champs = ['low_net', 'stableford_championship', 'road_trip'];
         var at = 0;
         for (var i = 0; i < tabs.length; i++) {
           if (champs.contains(tabs[i])) at = i + 1;
         }
-        tabs.insert(at, 'eclectic');
+        tabs.insert(at, 'dream_round');
       }
       // The day bet is not a tournament-level active game — it belongs to the
       // final round — but it IS a tab, and it is the LAST one. Tabs are named
@@ -171,7 +171,7 @@ class _TournamentLeaderboardScreenState
     'low_net_round': 'Stroke Play',
     'stableford_championship': 'Stableford',
     'match_play'   : 'Mini Singles Bracket',
-    'eclectic'     : 'Eclectic',
+    'dream_round'     : 'Dream Round',
     'road_trip'    : 'Road Trip',
   };
 
@@ -190,8 +190,8 @@ class _TournamentLeaderboardScreenState
   @override
   Widget build(BuildContext context) {
     final isStaff = context.read<AuthProvider>().isAdmin;
-    final eclecticOffer =
-        (_payload?['eclectic_offer'] as Map?) ?? const {};
+    final dreamRoundOffer =
+        (_payload?['dream_round_offer'] as Map?) ?? const {};
     final activeGames =
         (_payload?['active_games'] as List? ?? []).map((g) => g as String).toList();
 
@@ -219,7 +219,7 @@ class _TournamentLeaderboardScreenState
           // Not `activeGames.isNotEmpty`: a tournament with nothing
           // configured is exactly the one that needs the menu.
           if (isStaff && (activeGames.isNotEmpty ||
-                          eclecticOffer['offer'] == true))
+                          dreamRoundOffer['offer'] == true))
             PopupMenuButton<String>(
               icon: const Icon(Icons.settings_outlined),
               tooltip: 'Configure',
@@ -233,7 +233,7 @@ class _TournamentLeaderboardScreenState
                   const PopupMenuItem(
                       value: 'stableford_championship',
                       child: Text('Configure Stableford')),
-                // **Eclectic can be added to an event that did not start
+                // **Dream Round can be added to an event that did not start
                 // with it**, and it is the only tournament game that can —
                 // its setup POST is what turns it on. Keying this item off
                 // `active_games` meant the only door was behind the door: no
@@ -242,20 +242,20 @@ class _TournamentLeaderboardScreenState
                 // Under two rounds it is not offered at all — that is the
                 // wrong shape of event rather than a condition to explain,
                 // and the wizard hides its entry for the same reason.
-                if (eclecticOffer['offer'] == true)
+                if (dreamRoundOffer['offer'] == true)
                   PopupMenuItem(
-                    value  : 'eclectic',
-                    enabled: eclecticOffer['available'] == true,
+                    value  : 'dream_round',
+                    enabled: dreamRoundOffer['available'] == true,
                     child  : Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(eclecticOffer['configured'] == true
-                            ? 'Configure Eclectic'
-                            : 'Set up Eclectic'),
+                        Text(dreamRoundOffer['configured'] == true
+                            ? 'Configure Dream Round'
+                            : 'Set up Dream Round'),
                         // A disabled item that does not say why is a mystery.
-                        if (eclecticOffer['available'] != true)
-                          Text('${eclecticOffer['reason'] ?? ''}',
+                        if (dreamRoundOffer['available'] != true)
+                          Text('${dreamRoundOffer['reason'] ?? ''}',
                               style: Theme.of(context)
                                   .textTheme.labelSmall
                                   ?.copyWith(color: Theme.of(context)
@@ -305,7 +305,7 @@ class _TournamentLeaderboardScreenState
               gameKey : g,
               data    : data,
               readerId: context.read<AuthProvider>().player?.id,
-              onSetUpEclectic: () => _configure('eclectic')),
+              onSetUpDreamRound: () => _configure('dream_round')),
         );
       }).toList(),
     );
@@ -322,9 +322,9 @@ class _TournamentLeaderboardScreenState
         builder: (_) => TournamentStablefordSetupScreen(
             tournamentId: widget.tournamentId),
       )).then((_) => _load());
-    } else if (game == 'eclectic') {
+    } else if (game == 'dream_round') {
       Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => EclecticSetupScreen(
+        builder: (_) => DreamRoundSetupScreen(
             tournamentId: widget.tournamentId),
       )).then((_) => _load());
     }
@@ -340,10 +340,10 @@ class _GameView extends StatelessWidget {
   final Map<String, dynamic> data;
   /// The signed-in golfer, for boards that mark the reader's own row.
   final int?               readerId;
-  /// Opens Eclectic's setup from its own empty state.
-  final VoidCallback?      onSetUpEclectic;
+  /// Opens Dream Round's setup from its own empty state.
+  final VoidCallback?      onSetUpDreamRound;
   const _GameView({required this.gameKey, required this.data, this.readerId,
-                   this.onSetUpEclectic});
+                   this.onSetUpDreamRound});
 
   @override
   Widget build(BuildContext context) {
@@ -356,9 +356,9 @@ class _GameView extends StatelessWidget {
         return _MatchPlayChampView(data: data);
       case 'road_trip':
         return RoadTripBoard(data: data, readerId: readerId);
-      case 'eclectic':
-        return EclecticBoard(
-            data: data, readerId: readerId, onSetUp: onSetUpEclectic);
+      case 'dream_round':
+        return DreamRoundBoard(
+            data: data, readerId: readerId, onSetUp: onSetUpDreamRound);
       case 'day_bet':
         return _DayBetView(data: data);
       default:

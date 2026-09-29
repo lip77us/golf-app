@@ -445,7 +445,7 @@ class _TournamentSettlementScreenState
   List<Widget> _byGameRows(List<Map<String, dynamic>> games) {
     final theme = Theme.of(context);
     // **A pot that has not awarded its prizes yet is unfinished, not wrong.**
-    // Eclectic pays nobody until a card is whole, so mid-event its entries
+    // Dream Round pays nobody until a card is whole, so mid-event its entries
     // are in and its prizes are zero — and the card claimed the payout table
     // was at fault over a table the setup screen had just called correct.
     final provisional = _data?['provisional'] == true;

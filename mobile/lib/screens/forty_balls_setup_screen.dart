@@ -321,7 +321,7 @@ class _FortyBallsSetupScreenState extends State<FortyBallsSetupScreen> {
             // its background and ink splash on the nearest Material ancestor,
             // and `_Card` is a decorated Container — so the splash landed
             // behind the card and Flutter asserted about it on every build.
-            // The pool toggles on the Eclectic setup screen are built the same
+            // The pool toggles on the Dream Round setup screen are built the same
             // way, for the same reason.
             Row(children: [
               Expanded(
