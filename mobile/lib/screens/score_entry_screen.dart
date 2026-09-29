@@ -74,6 +74,7 @@ import '../widgets/stroke_dots.dart';
 import '../widgets/pinned_hole_grid.dart';
 import '../widgets/combo_tee_chip.dart';
 import '../utils/nine_totals.dart';
+import '../utils/watcher_invite.dart';
 
 // `_effectiveHandicap` was here — the round-total allocation, which had
 // exactly one reader in the end: the `gets N` chip. It went with it on
@@ -2411,6 +2412,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 case 'refresh':
                   if (rp.round != null) _refresh();
                   break;
+                case 'invite':
+                  if (rp.round != null) {
+                    inviteWatcher(context, roundId: rp.round!.id);
+                  }
+                  break;
                 case 'finish':
                   if (sc == null) return;
                   final players = _orderedPlayers(
@@ -2461,6 +2467,23 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                   title: Text('Refresh scores'),
                 ),
               ),
+              // **The same wording and the same glyph as the leaderboard's.**
+              // It is one action reachable from two screens, so a golfer who
+              // learned it on one must not have to recognise it again on the
+              // other. Here because the scorer lives on this screen: the
+              // watcher is invited on the first tee, and going to the board
+              // and back to do it is a detour from the only screen he is
+              // going to be on all day.
+              if (rp.round != null)
+                const PopupMenuItem(
+                  value: 'invite',
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.visibility_outlined),
+                    title: Text('Invite a watcher'),
+                  ),
+                ),
               if (!isComplete && sc != null)
                 const PopupMenuItem(
                   value: 'finish',
