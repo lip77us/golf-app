@@ -1,0 +1,12 @@
+# Cloudflare Pages redirects. One rule per line: <from> <to> <status>.
+#
+# Eclectic was renamed Dream Round on 29 Sep 2026. The old URL is linked from
+# other sites, so it redirects rather than 404s — a 301 passes the ranking on
+# to the new page, which a meta-refresh or a soft 404 would not.
+#
+# The old directory is DELETED rather than left in place: Cloudflare serves a
+# matching static file, so leaving games/eclectic/index.html there would shadow
+# this rule and keep the old page live as duplicate content under a name the
+# app no longer uses.
+/games/eclectic     /games/dream-round     301
+/games/eclectic/*   /games/dream-round/:splat  301

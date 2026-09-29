@@ -32,10 +32,10 @@ override.
 - **title** (56 chars): Banker Golf Game Rules: Doubles and the Counter | Halved
 - **description** (137 chars): Banker is a golf game where one golfer plays the whole group, one bet at a time. Setting the bet, doubles, the counter and par 3 triples.
 
-## `/games/eclectic/`
+## `/games/dream-round/`
 
-- **title** (54 chars): Eclectic Golf Game Rules: Best Score Per Hole | Halved
-- **description** (132 chars): Eclectic keeps your best score on each hole across every round of an event, and the lowest eighteen wins. Full rules, gross and net.
+- **title** (54 chars): Dream Round Golf Game Rules: Best Score Per Hole | Halved
+- **description** (132 chars): Dream Round keeps your best score on each hole across every round of an event, and the lowest eighteen wins. Full rules, gross and net.
 
 ## `/games/honors/`
 

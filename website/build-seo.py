@@ -127,10 +127,14 @@ OVERRIDES = {
         'description': 'Banker is a golf game where one golfer plays the whole group, one '
                        'bet at a time. Setting the bet, doubles, the counter and par 3 triples.',
     },
-    'games/eclectic/index.html': {
-        'title': 'Eclectic Golf Game Rules: Best Score Per Hole | Halved',
-        'description': 'Eclectic keeps your best score on each hole across every round of '
-                       'an event, and the lowest eighteen wins. Full rules, gross and net.',
+    'games/dream-round/index.html': {
+        # Shorter than the page's own pair, which is what this override is for:
+        # the design title runs to 80 characters and trips the length warning.
+        # "also known as an eclectic" stays in the page body, where the search
+        # term still does its work.
+        'title': 'Dream Round Golf Game Rules: Best Score Per Hole | Halved',
+        'description': 'Dream Round keeps your best score on each hole across every round '
+                       'of an event, and the lowest eighteen wins. Full rules, gross and net.',
     },
     'games/honors/index.html': {
         'description': 'Honors is a group game with one token: low score on a hole takes '

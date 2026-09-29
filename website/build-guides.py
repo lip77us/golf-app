@@ -40,7 +40,11 @@ def pages(src_dir):
 
 # Guides that were cross-linked but never written.  Design: drop them rather
 # than ship 404s on day one.
-UNWRITTEN = ('sixes',)   # banker and rabbit shipped 2026-09-11
+# Road Trip added 2026-09-29: the games index that came with the Dream Round
+# packet carries a card for it, and its own packet shipped only a prototype —
+# no design-reference source — so there is no page to link to yet. The audit
+# caught it as a broken link, which is what this list is for.
+UNWRITTEN = ('sixes', 'road-trip')   # banker and rabbit shipped 2026-09-11
 
 
 def slice_element(s, start):
@@ -121,7 +125,11 @@ def drop_missing_screenshots(body, img_dir):
 def drop_unwritten_cards(body):
     """Remove the 'if you like X' cards pointing at guides that don't exist."""
     for slug in UNWRITTEN:
-        pat = re.compile(r'<a href="/games/%s/?"[^>]*>.*?</a>\n?' % slug, re.S)
+        # `[^>]*?` before href: the games-index card is
+        # `<a class="gcard" href=…>`, and a pattern anchored on `<a href=`
+        # matched the related-games cards only — so the index kept a live link
+        # to a guide that does not exist and the audit failed on it.
+        pat = re.compile(r'<a [^>]*?href="/games/%s/?"[^>]*>.*?</a>\n?' % slug, re.S)
         body = pat.sub('', body)
     return body
 
@@ -129,7 +137,7 @@ def drop_unwritten_cards(body):
 def unlink_unwritten_inline(body):
     """Inline prose links to unwritten guides become plain text."""
     for slug in UNWRITTEN:
-        pat = re.compile(r'<a href="/games/%s/?"[^>]*>(.*?)</a>' % slug, re.S)
+        pat = re.compile(r'<a [^>]*?href="/games/%s/?"[^>]*>(.*?)</a>' % slug, re.S)
         body = pat.sub(r'\1', body)
     return body
 
