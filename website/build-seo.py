@@ -76,6 +76,121 @@ DESCRIPTIONS = {
 # Pages to keep out of search and out of the sitemap, by file path.
 NOINDEX = set()
 
+# **Search-facing copy the SEO step owns**, for pages whose own tags fail the
+# audit. The guides are regenerated from Claude Design's files by
+# build-guides.py, so a title fixed in a generated page is undone by the next
+# rebuild; fixed here it survives. Each value REPLACES the page's own tag (the
+# old one is removed and the new one lives in the generated block).
+#
+# Titles ≤ 60 characters with the suffix, descriptions 120–160: Google trims
+# past that, mid-phrase. og:title / og:description are left alone unless listed
+# — social cards have more room, and they are Design's voice.
+#
+# When Design adopts these in its own files, delete the entry — the page's own
+# tags then carry the same copy, and this table stays a list of open gaps.
+OVERRIDES = {
+    'index.html': {
+        'description': "Halved is the scorecard for your group's golf games. Track Nassau, "
+                       "Skins, presses and whole tournaments, with handicaps applied "
+                       "automatically.",
+    },
+    'games/index.html': {
+        'description': 'How to play the games your group bets on: Nassau, Skins, Wolf, '
+                       'Banker, Las Vegas, Survivor and more. Full rules and the money '
+                       'worked out.',
+    },
+    'games/40-balls/index.html': {
+        'title': '40 Balls Golf Game: Rules and How to Play | Halved',
+        'description': '40 Balls is a foursome team game: after each hole the group picks '
+                       'which net scores count, and over the round it must count exactly 40.',
+    },
+    'games/banker/index.html': {
+        'title': 'Banker Golf Game Rules: Doubles and the Counter | Halved',
+        'description': 'Banker is a golf game where one golfer plays the whole group, one '
+                       'bet at a time. Setting the bet, doubles, the counter and par 3 triples.',
+    },
+    'games/eclectic/index.html': {
+        'title': 'Eclectic Golf Game Rules: Best Score Per Hole | Halved',
+        'description': 'Eclectic keeps your best score on each hole across every round of '
+                       'an event, and the lowest eighteen wins. Full rules, gross and net.',
+    },
+    'games/honors/index.html': {
+        'description': 'Honors is a group game with one token: low score on a hole takes '
+                       'the honor, and you score a point for every hole you hold it.',
+    },
+    'games/irish-rumble/index.html': {
+        'title': 'Irish Rumble Golf Game: Rules and Variants | Halved',
+        'description': 'Irish Rumble is a tournament team game: each foursome counts its '
+                       'best net scores, and the number that counts climbs through the round.',
+    },
+    'games/las-vegas/index.html': {
+        'title': 'Las Vegas Golf Game Rules: The Flip and Scoring | Halved',
+        'description': "Las Vegas is a 2v2 golf game: each team's scores form a two-digit "
+                       'number and the low number wins the difference. Rules and the flip.',
+    },
+    'games/mini-singles-bracket/index.html': {
+        'title': 'Mini Singles Bracket: Match Play Side Game | Halved',
+        'description': 'A two-day match play side game: each group plays a four-man '
+                       'knockout on day 1, and the group winners play for the title on day 2.',
+    },
+    'games/nassau/index.html': {
+        'description': 'A Nassau is three bets in one round: front nine, back nine and all '
+                       'eighteen. Full rules, when a press fires, and the money worked out.',
+    },
+    'games/pink-ball/index.html': {
+        'title': 'Pink Ball Golf Game Rules: One Ball Per Group | Halved',
+        'description': 'Pink Ball is a tournament side game: one ball per group, played by '
+                       'each golfer in turn. The last group still holding it wins.',
+    },
+    'games/points-5-3-1/index.html': {
+        'title': 'Points 5-3-1 Golf Game: Rules for Threesomes | Halved',
+        'description': 'Points 5-3-1 is a three-player golf game: 5 points for low score on '
+                       'a hole, 3 for second, 1 for third. Full rules and how ties split.',
+    },
+    'games/rabbit/index.html': {
+        'title': 'Rabbit Golf Game Rules: Catching the Rabbit | Halved',
+        'description': 'Rabbit is a three-golfer chase: win a hole outright to catch the '
+                       'rabbit, and hold it to the end of the match to win the pot.',
+    },
+    'games/sequoya-threes/index.html': {
+        'title': 'Sequoya 3s Golf Game: Rules, Presses, Scoring | Halved',
+        'description': 'Sequoya 3s splits a foursome into six three-hole 2v2 matches, '
+                       'rotating partners every third hole. Full rules, presses and money.',
+    },
+    'games/skins/index.html': {
+        'title': 'Skins Golf Game Rules: How to Play, Carryovers | Halved',
+        'description': 'Skins makes every hole its own bet: low score wins the skin, and a '
+                       'tie carries it to the next hole. Full rules and carryovers worked out.',
+    },
+    'games/spots/index.html': {
+        'title': 'Spots Golf Game Rules: One-Putts, Sandies, Barkies | Halved',
+        'description': 'Spots is a side bet on whatever your group agrees to count: '
+                       'one-putts, sandies, barkies. Tally them hole by hole and settle up.',
+    },
+    'games/survivor/index.html': {
+        'title': 'Survivor Golf Game Rules: Elimination, Zombies | Halved',
+        'description': 'Survivor is a three-player golf game: the worst score on each hole '
+                       'is knocked out and the last two play for the pot. The Zombie rule too.',
+    },
+    # "Ryder Cup" is a PGA mark the app scrubbed from every user-visible string.
+    'games/triple-cup/index.html': {
+        'title': 'Triple Cup Golf Format: Fourball, Foursomes, Singles | Halved',
+        'description': 'The Triple Cup is a one-round team match for four golfers: six holes '
+                       'each of fourball, foursomes and singles, four points at stake.',
+        'og:title': 'Triple Cup: How to Play a One-Round Team Match',
+    },
+    'games/triple-nassau/index.html': {
+        'title': 'Triple Nassau Golf Rules: A Nassau for Three | Halved',
+        'description': 'Triple Nassau is three one-on-one Nassaus in a threesome: front, '
+                       'back and overall in every match. Full rules, strokes and presses.',
+    },
+    'games/wolf/index.html': {
+        'title': 'Wolf Golf Game Rules: How to Play, Lone Wolf | Halved',
+        'description': 'Wolf is a four-player golf game where a different golfer picks a '
+                       'partner off the tee each hole, or goes Lone Wolf for triple.',
+    },
+}
+
 # Files that are not pages on the site.
 SKIP_DIRS = {'.git', 'node_modules'}
 
@@ -204,6 +319,48 @@ def strip_block(text):
     return BLOCK_RE.sub('', text)
 
 
+_META_KEYS = {'description': 'name', 'og:title': 'property', 'og:description': 'property'}
+
+
+def apply_overrides(rel, text):
+    """Take out the page's own tags for every field OVERRIDES owns; the
+    replacements are written into the generated block by build_block. Returns
+    (text, the fields removed that the page actually had)."""
+    fields = OVERRIDES.get(rel, {})
+    for key in fields:
+        if key == 'title':
+            text = re.sub(r'<title>.*?</title>\n?', '', text, count=1, flags=re.S)
+        elif key in _META_KEYS:
+            text = re.sub(r'<meta\s+%s="%s"\s+content="[^"]*"\s*/?>\n?'
+                          % (_META_KEYS[key], re.escape(key)), '', text, count=1)
+        else:
+            raise KeyError('OVERRIDES[%r] has unknown field %r' % (rel, key))
+    return text
+
+
+def rewrite_links(rel, text, files):
+    """Point internal links at the URL Cloudflare actually serves, so a click
+    doesn't take a redirect: `privacy.html` → `/privacy`, `/games/wolf` →
+    `/games/wolf/`. Anchors and query strings are kept."""
+    path = url_path(rel)
+
+    def fix(m):
+        href = m.group(2)
+        status, _, target = resolve(path, href, files)
+        if status != 'redirect' or not target:
+            return m.group(0)
+        tail = re.search(r'[?#].*$', href)
+        return '%s"%s%s"' % (m.group(1), url_path(target), tail.group(0) if tail else '')
+    return re.sub(r'(<a\b[^>]*?\bhref=)"([^"]*)"', fix, text)
+
+
+def prepare(rel, original, files):
+    """The page as this script publishes it, minus the generated block. Dates
+    are hashed from THIS, not from the file on disk, so a guide rebuild that
+    restores Design's original title doesn't count as a content change."""
+    return rewrite_links(rel, apply_overrides(rel, strip_block(original)), files)
+
+
 def game_name(h1, path):
     """'How to play a Nassau' -> 'Nassau'. Falls back to the slug."""
     name = re.sub(r'^how to play\s+(?:a |an |the )?', '', h1 or '', flags=re.I).strip()
@@ -316,10 +473,13 @@ def build_block(rel, page, guides, published, modified):
     path = url_path(rel)
     url = SITE + path
     kind = kind_of(path)
-    title = page.title or BRAND
-    desc = page.first('description') or DESCRIPTIONS.get(rel)
+    ov = OVERRIDES.get(rel, {})
+    title = ov.get('title') or page.title or BRAND
+    desc = ov.get('description') or page.first('description') or DESCRIPTIONS.get(rel)
     lines = []
 
+    if 'title' in ov:
+        lines.append('<title>%s</title>' % html.escape(ov['title'], quote=False))
     if not page.links.get('canonical'):
         lines.append('<link rel="canonical" href="%s">' % url)
     if not page.first('description') and desc:
@@ -327,8 +487,8 @@ def build_block(rel, page, guides, published, modified):
     if rel in NOINDEX and not page.noindex:
         lines.append(meta_tag('name', 'robots', 'noindex'))
 
-    og = {'og:title': title,
-          'og:description': desc,
+    og = {'og:title': ov.get('og:title', title),
+          'og:description': ov.get('og:description', desc),
           'og:url': url,
           'og:type': 'article' if kind == 'guide' else 'website',
           'og:site_name': BRAND,
@@ -529,7 +689,9 @@ def main():
 
     rels = sorted(find_pages(), key=sort_key)
     originals = {r: open(os.path.join(ROOT, r), encoding='utf-8').read() for r in rels}
-    bare = {r: parse(strip_block(t)) for r, t in originals.items()}
+    files = set(rels)
+    prepared = {r: prepare(r, t, files) for r, t in originals.items()}
+    bare = {r: parse(t) for r, t in prepared.items()}
 
     # The hub's guide list, in the order the hub itself presents them.
     guides, seen = [], set()
@@ -544,9 +706,9 @@ def main():
 
     built, sitemap_rows = {}, []
     for r in rels:
-        published, modified = dates_for(r, originals[r], manifest, seeds, today)
+        published, modified = dates_for(r, prepared[r], manifest, seeds, today)
         block = build_block(r, bare[r], guides, published, modified)
-        built[r] = insert_block(originals[r], block)
+        built[r] = insert_block(prepared[r], block)
         if r not in NOINDEX:
             sitemap_rows.append((SITE + url_path(r), modified))
     for gone in set(manifest) - set(rels):

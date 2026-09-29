@@ -1,122 +1,122 @@
 {
  "delete-account.html": {
-  "hash": "ed53fde4cddcf6c6",
+  "hash": "2bd572373bd2353c",
   "published": "2026-09-24",
-  "modified": "2026-09-24"
+  "modified": "2026-09-28"
  },
  "games/40-balls/index.html": {
-  "hash": "e5ad18f6de13b305",
+  "hash": "24e3c5689507f85d",
   "published": "2026-09-26",
-  "modified": "2026-09-26"
+  "modified": "2026-09-28"
  },
  "games/banker/index.html": {
-  "hash": "f2cdd7b0abe95419",
+  "hash": "c6eed6a1324efedd",
   "published": "2026-09-13",
-  "modified": "2026-09-13"
+  "modified": "2026-09-28"
  },
  "games/eclectic/index.html": {
-  "hash": "fd6c4186fdf86c29",
+  "hash": "91adc84d4dd458e6",
   "published": "2026-09-26",
-  "modified": "2026-09-27"
+  "modified": "2026-09-28"
  },
  "games/honors/index.html": {
-  "hash": "489a29b3df686f47",
+  "hash": "0f2ab92722d935a7",
   "published": "2026-09-27",
-  "modified": "2026-09-27"
+  "modified": "2026-09-28"
  },
  "games/index.html": {
-  "hash": "cdb470963d0069bc",
+  "hash": "32e71b2efa335306",
   "published": "2026-09-13",
-  "modified": "2026-09-27"
+  "modified": "2026-09-28"
  },
  "games/irish-rumble/index.html": {
-  "hash": "210d3ae86c6c4029",
+  "hash": "0e764847c704cd76",
   "published": "2026-09-27",
-  "modified": "2026-09-27"
+  "modified": "2026-09-28"
  },
  "games/las-vegas/index.html": {
-  "hash": "c687a60a242f86c1",
+  "hash": "bf971937941e75c6",
   "published": "2026-09-13",
-  "modified": "2026-09-13"
+  "modified": "2026-09-28"
  },
  "games/mini-singles-bracket/index.html": {
-  "hash": "06a0c35511dbc9db",
+  "hash": "01811721ab13424f",
   "published": "2026-09-27",
-  "modified": "2026-09-27"
+  "modified": "2026-09-28"
  },
  "games/nassau/index.html": {
-  "hash": "bf51c3d4e7782a0d",
+  "hash": "20506d43b287af8a",
   "published": "2026-09-13",
-  "modified": "2026-09-13"
+  "modified": "2026-09-28"
  },
  "games/pink-ball/index.html": {
-  "hash": "52afefa5e906e5b0",
+  "hash": "4b6a37fab7d0cb7f",
   "published": "2026-09-27",
-  "modified": "2026-09-27"
+  "modified": "2026-09-28"
  },
  "games/points-5-3-1/index.html": {
-  "hash": "60accea68648cf34",
+  "hash": "ed1f1605d8ff4cf7",
   "published": "2026-09-13",
-  "modified": "2026-09-27"
+  "modified": "2026-09-28"
  },
  "games/rabbit/index.html": {
-  "hash": "f705f8c132e5e561",
+  "hash": "c52f9950709ef520",
   "published": "2026-09-13",
-  "modified": "2026-09-13"
+  "modified": "2026-09-28"
  },
  "games/sequoya-threes/index.html": {
-  "hash": "61ff78b98a48c52d",
+  "hash": "f9daa92d70eb489c",
   "published": "2026-09-13",
-  "modified": "2026-09-13"
+  "modified": "2026-09-28"
  },
  "games/skins/index.html": {
-  "hash": "39c9dd0a37cda696",
+  "hash": "0c1724bf636ce0b8",
   "published": "2026-09-13",
-  "modified": "2026-09-27"
+  "modified": "2026-09-28"
  },
  "games/spots/index.html": {
-  "hash": "ac40c4c2630dce35",
+  "hash": "f8dc189eb2352078",
   "published": "2026-09-27",
-  "modified": "2026-09-27"
+  "modified": "2026-09-28"
  },
  "games/survivor/index.html": {
-  "hash": "988dce1af8b99b82",
+  "hash": "f905e6fb2fa34d15",
   "published": "2026-09-13",
-  "modified": "2026-09-13"
+  "modified": "2026-09-28"
  },
  "games/triple-cup/index.html": {
-  "hash": "3b5d4eff75770ffd",
+  "hash": "8eaa8ca59a83c531",
   "published": "2026-09-13",
-  "modified": "2026-09-13"
+  "modified": "2026-09-28"
  },
  "games/triple-nassau/index.html": {
-  "hash": "419a12437d406914",
+  "hash": "b98f9fb6a7015d03",
   "published": "2026-09-27",
-  "modified": "2026-09-27"
+  "modified": "2026-09-28"
  },
  "games/wolf/index.html": {
-  "hash": "b6a0ed2cc15651cb",
+  "hash": "0caa83b401b341b7",
   "published": "2026-09-13",
-  "modified": "2026-09-13"
+  "modified": "2026-09-28"
  },
  "index.html": {
-  "hash": "50d0e5aaabc7ac46",
+  "hash": "65429a17fd9de76e",
   "published": "2026-06-08",
-  "modified": "2026-09-27"
+  "modified": "2026-09-28"
  },
  "privacy.html": {
-  "hash": "288a6c4bf41d1228",
+  "hash": "76bffc55d084df81",
   "published": "2026-05-29",
-  "modified": "2026-09-24"
+  "modified": "2026-09-28"
  },
  "sms-consent.html": {
-  "hash": "a5f3cfd8770475fa",
+  "hash": "b54ea4e51c49d6c3",
   "published": "2026-06-05",
-  "modified": "2026-09-11"
+  "modified": "2026-09-28"
  },
  "support.html": {
-  "hash": "f2e290f5e04b653f",
+  "hash": "151b14ed62bace70",
   "published": "2026-05-29",
-  "modified": "2026-09-24"
+  "modified": "2026-09-28"
  }
 }
