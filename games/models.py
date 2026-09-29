@@ -3889,3 +3889,120 @@ class FortyBallsHoleCount(models.Model):
 
     def __str__(self):
         return f'hole {self.hole_number}: {self.count} balls'
+
+
+class RoadTripConfig(models.Model):
+    """Road Trip — **best m of n rounds, scored to par, with two titles.**
+
+    A trip plays n rounds (2–14), usually at a different course each day, and
+    each golfer's best m of them count. Everything else in the app that counts
+    rounds does it for ONE championship; a trip runs two side by side, Net and
+    Gross, and **each picks its own best rounds** — a golfer's counted set can
+    differ between the titles, which is the whole reason they are separate
+    competitions rather than two views of one.
+
+    **To par, never to strokes.** Ten courses with ten pars cannot be compared
+    on raw totals, so every round is scored against that round's course par.
+    That is also what makes a dropped round meaningful: it is dropped on its
+    own merit, not because the course was hard.
+
+    **The double bogey cap is set per title**, net on and gross off by default.
+    They are different competitions and a ceiling is a rule about one of them;
+    forcing a single switch would make the gross title a function of the net
+    one's damage limiter.
+
+    The handicap MODE — locked for the trip, or updated before each round —
+    decides what index a round is scored on. Either way a round already played
+    keeps the handicap it was scored with; see `RoadTripIndexAdjustment`.
+
+    Marked on the tournament by `road_trip` in `active_games`, the same way
+    `team_cup` and `team_play` mark their shapes: the trip sits ON TOP of
+    ordinary rounds, which keep their own side games and settle among
+    themselves.
+
+    See docs/design-review/handoff-road-trip/HANDOFF.md.
+    """
+    tournament        = models.OneToOneField(
+                            'tournament.Tournament',
+                            on_delete=models.CASCADE,
+                            related_name='road_trip_config')
+
+    # ── The two titles ───────────────────────────────────────────────────
+    #: Both on by default, and the last one on cannot be turned off — a trip
+    #: with no title is not a championship.
+    net_on            = models.BooleanField(default=True)
+    gross_on          = models.BooleanField(default=True)
+
+    # ── Handicaps ────────────────────────────────────────────────────────
+    LOCKED  = 'locked'
+    UPDATED = 'updated'
+    HANDICAP_MODES = [
+        (LOCKED,  'Locked for the trip'),
+        (UPDATED, 'Updated before each round'),
+    ]
+    #: `updated` is the default: a ten-day trip is long enough for an index to
+    #: move, and a golfer playing off a stale number is the complaint this
+    #: setting exists to answer.
+    handicap_mode     = models.CharField(
+                            max_length=10, choices=HANDICAP_MODES,
+                            default=UPDATED)
+
+    #: Net double bogey — par + 2 + the strokes received on the hole.
+    net_max_double_bogey   = models.BooleanField(default=True)
+    #: Gross double bogey — par + 2, no strokes. Off by default: the gross
+    #: title is the scratch competition and a ceiling on it is unusual.
+    gross_max_double_bogey = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = 'Road Trip Config'
+
+    @property
+    def titles(self) -> list:
+        """The titles actually being played, in display order."""
+        return [t for t, on in (('net', self.net_on), ('gross', self.gross_on))
+                if on]
+
+    def caps(self, title: str) -> bool:
+        return (self.net_max_double_bogey if title == 'net'
+                else self.gross_max_double_bogey)
+
+    def __str__(self):
+        return f'Road Trip (tournament {self.tournament_id})'
+
+
+class RoadTripIndexAdjustment(models.Model):
+    """One organiser-set index change, from one round onward.
+
+    **A round already played keeps the handicap it was scored with.** That is
+    the rule the `from_round_number` exists to keep: an adjustment applies from
+    the next UNPLAYED round, never retroactively, so nothing a golfer has
+    already signed for moves under him.
+
+    **The reason is required and is shown to the group.** An index cut mid-trip
+    is the organiser taking strokes off somebody in a competition he is losing
+    money in; stating why on the golfer's own row is what keeps that a ruling
+    rather than a rumour.
+
+    Kept as a LOG rather than a field on the membership: a trip can adjust the
+    same golfer twice, and the second adjustment has to be able to say what it
+    changed from.
+    """
+    tournament        = models.ForeignKey(
+                            'tournament.Tournament', on_delete=models.CASCADE,
+                            related_name='road_trip_index_adjustments')
+    player            = models.ForeignKey(Player, on_delete=models.CASCADE,
+                                          related_name='road_trip_adjustments')
+    #: The first round this index applies to — always a round not yet played.
+    from_round_number = models.PositiveSmallIntegerField()
+    handicap_index    = models.DecimalField(max_digits=4, decimal_places=1)
+    reason            = models.CharField(max_length=200)
+    created_at        = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Road Trip Index Adjustment'
+        ordering = ['from_round_number', 'created_at']
+        indexes = [models.Index(fields=['tournament', 'player'])]
+
+    def __str__(self):
+        return (f'{self.player_id} → {self.handicap_index} '
+                f'from round {self.from_round_number}')
