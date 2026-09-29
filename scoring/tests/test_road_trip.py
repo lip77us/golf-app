@@ -162,11 +162,27 @@ class EligibilityTests(_Base):
         # No total is claimed for a golfer who has not got his rounds in.
         self.assertIsNone(board['qualifying'][0]['total'])
 
-    def test_a_ranked_board_stops_being_provisional(self):
+    def test_a_ranked_board_is_STILL_provisional_with_a_round_left(self):
+        """Both have their two of three — and round 3 can still change it.
+
+        This asserted the opposite until 29 Sep. The flag came down as soon as
+        everybody held m rounds, while the board's own note read *Provisional
+        until every golfer has finished all n rounds* and the prize above it
+        was drawn upright. A round still to play can replace a counted one, so
+        the money is not settled and must not read as though it is.
+        """
         for i in (0, 1):
             for p in (self.ann, self.bea):
                 self.play(i, p, 0)
             self.close(i)
+        board = self.board()
+        self.assertEqual(len(board['ranked']), 2)
+        self.assertTrue(board['provisional'])
+
+        # Play the last one out and it settles.
+        for p in (self.ann, self.bea):
+            self.play(2, p, 1)
+        self.close(2)
         self.assertFalse(self.board()['provisional'])
 
 
@@ -282,3 +298,122 @@ class SummaryTests(_Base):
                          ['Links 1', 'Links 2', 'Links 3'])
         self.assertEqual(summary['counts'], 2)
         self.assertEqual(summary['n_rounds'], 3)
+
+
+
+class TieBreakTests(_Base):
+    """The walk back from the final round, and what it is allowed to read.
+
+    Found by seeding a real trip (`seed_road_trip`): two golfers tied on net
+    carried the note `Tie decided on Ballybunion`, which was the round they
+    were still out playing.
+
+    `play(i, p, d)` is d over par on all eighteen, so a round is worth 18*d.
+    Each golfer below counts his two level rounds and drops the third, which
+    leaves the totals equal and puts the decision in the dropped round.
+    """
+    n_rounds = 3
+    counts   = 2
+
+    def _tie_on_two_rounds(self, ann_r3, bea_r3, holes=18):
+        for p in (self.ann, self.bea):
+            self.play(0, p, 1)
+            self.play(1, p, 1)
+        self.close(0)
+        self.close(1)
+        self.play(2, self.ann, ann_r3, holes=holes)
+        self.play(2, self.bea, bea_r3, holes=holes)
+
+    def test_a_tie_is_settled_by_the_later_round_even_when_it_was_dropped(self):
+        # Both count 18+18; the third round is dropped by both and is still
+        # what separates them — "who played better, not whose card was tidier".
+        self._tie_on_two_rounds(ann_r3=3, bea_r3=2)
+        self.close(2)
+        ranked = self.board('gross')['ranked']
+        self.assertEqual([r['total'] for r in ranked], [36, 36],
+                         'the counted totals must actually be level')
+        self.assertEqual([r['name'] for r in ranked], ['Bea', 'Ann'])
+        self.assertEqual([r['rank'] for r in ranked], [1, 2])
+        self.assertEqual(ranked[0]['tie_note'], 'Links 3')
+        r3 = [c for c in ranked[0]['cells'] if c['round'] == 3][0]
+        self.assertEqual(r3['state'], 'dropped')
+
+    def test_an_UNFINISHED_round_never_settles_a_tie(self):
+        """The bug the seed found.
+
+        Both are level on their two finished rounds. Both are four holes into
+        round 3 and Bea is playing it better — which the walk-back would read
+        as a result if it did not check. It is not one: a part-played card
+        reports a to-par against the holes it has, and an hour later it says
+        something else.
+        """
+        self._tie_on_two_rounds(ann_r3=2, bea_r3=0, holes=4)
+
+        ranked = self.board('gross')['ranked']
+        self.assertEqual(len(ranked), 2)
+        self.assertEqual([r['total'] for r in ranked], [36, 36])
+        self.assertTrue(all(r['tied'] for r in ranked),
+                        'both golfers should still be tied')
+        self.assertEqual([r['rank'] for r in ranked], [1, 1])
+        for r in ranked:
+            self.assertIsNone(
+                r['tie_note'],
+                'a live round must not be named as settling a tie')
+        # The cell reports no figure either — the same rule, one line down.
+        r3 = [c for c in ranked[0]['cells'] if c['round'] == 3][0]
+        self.assertEqual(r3['state'], 'pending')
+        self.assertIsNone(r3['to_par'])
+
+
+class ProvisionalTests(_Base):
+    """The chip that keeps the prize italic, and when it comes down."""
+    n_rounds = 3
+    counts   = 2
+
+    def _play_all(self, *deltas, close=True):
+        for i, d in enumerate(deltas):
+            for p in (self.ann, self.bea):
+                self.play(i, p, d)
+            if close:
+                self.close(i)
+
+    def test_an_open_round_keeps_the_board_provisional(self):
+        self._play_all(1, 1)          # two closed, one still to come
+        self.assertTrue(self.board('gross')['provisional'])
+
+    def test_a_golfer_still_qualifying_keeps_it_provisional(self):
+        # Ann has her two; Bea has one and round 3 is still open to her.
+        self.play(0, self.ann, 1)
+        self.play(0, self.bea, 1)
+        self.play(1, self.ann, 1)
+        self.close(0)
+        self.close(1)
+        board = self.board('gross')
+        self.assertEqual([r['name'] for r in board['qualifying']], ['Bea'])
+        self.assertTrue(board['provisional'])
+
+    def test_a_FINISHED_trip_is_not_provisional(self):
+        self._play_all(1, 1, 1)
+        board = self.board('gross')
+        self.assertEqual(len(board['ranked']), 2)
+        self.assertFalse(board['provisional'])
+
+    def test_a_man_who_went_home_does_not_keep_it_provisional_forever(self):
+        """The bug the seed found.
+
+        Bea played the first round and left. She can never reach two of three,
+        so she is ineligible — and a board that waited for her would show the
+        chip, and an italic prize, on a trip that finished days ago.
+        """
+        for i in range(3):
+            self.play(i, self.ann, 1)
+        self.play(0, self.bea, 1)
+        for i in range(3):
+            self.close(i)
+
+        board = self.board('gross')
+        self.assertEqual([r['name'] for r in board['ineligible']], ['Bea'])
+        self.assertEqual([r['name'] for r in board['ranked']], ['Ann'])
+        self.assertFalse(board['provisional'],
+                         'an ineligible golfer can never reach the minimum, '
+                         'so the board must not wait for him')

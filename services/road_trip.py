@@ -330,12 +330,21 @@ def _tie_break(a_rows, b_rows, n_rounds, title) -> int:
     Skipping rather than treating a missed round as a loss: the rule is about
     who played the better golf on the days they BOTH played, and a golfer who
     sat out the 9th did not lose it. Reads that title's score whether or not
-    the round counted, because the question is who played better, not whose
-    card was tidier.
+    the round COUNTED, because the question is who played better, not whose
+    card was tidier — a dropped round is still a round he played.
+
+    **An unfinished round is skipped like a missed one.** It is not a round
+    either man has played yet, and reading it walks into the trap `_row`
+    names: a part-played card reports a to-par against the holes it has, so
+    four holes at level par reads as E and beats a finished 74. Two golfers
+    in different groups can be thru 11 and thru 4, and the one with fewer
+    holes behind him would take the tie for having had less chance to go
+    wrong — then lose it again an hour later. A tie settled by a round still
+    being played is not settled.
     """
     for i in range(n_rounds - 1, -1, -1):
         x, y = a_rows.get(i), b_rows.get(i)
-        if not x or not y:
+        if not x or not y or not x['complete'] or not y['complete']:
             continue
         key = f'{title}_to_par'
         if x[key] != y[key]:
@@ -451,9 +460,20 @@ def road_trip_standings(tournament, title: str) -> dict:
         'title'      : title,
         'counts'     : m,
         'rounds'     : n,
-        # **Provisional until every ranked golfer has his m rounds in.** Until
-        # then the board is comparing full cards with part-built ones.
-        'provisional': any(e['played'] < m for e in entries) or not ranked,
+        # **Provisional while the board can still move**: a round is open or
+        # unplayed, or somebody is still qualifying. Until then it is
+        # comparing full cards with part-built ones, and the client draws the
+        # chip and keeps the prize italic.
+        #
+        # **Not `any golfer with fewer than m rounds`**, which is what this
+        # read before: an INELIGIBLE golfer never reaches m by definition, so
+        # one man going home early left a finished trip permanently
+        # provisional — the chip up and the prize italic with every round
+        # closed and nothing left to play.
+        'provisional': (bool(qualifying)
+                        or any(r.status != RoundStatus.COMPLETE
+                               for r in rounds)
+                        or not ranked),
         'ranked'     : [_row(e, rounds, title, m) for e in ranked],
         'qualifying' : [_row(e, rounds, title, m) for e in qualifying],
         'ineligible' : [_row(e, rounds, title, m) for e in ineligible],
