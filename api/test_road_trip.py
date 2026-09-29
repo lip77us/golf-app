@@ -145,3 +145,74 @@ class LeaderboardTests(_Base):
         data = self.client.get(
             f'/api/tournaments/{self.tourn.id}/leaderboard/').data
         self.assertNotIn('road_trip', data['games'])
+
+
+class FieldGamesTests(_Base):
+    """The organiser's games for one round — editable until it closes."""
+
+    def setUp(self):
+        super().setUp()
+        self.round = self.tourn.rounds.order_by('round_number').first()
+
+    def url_fg(self, r=None):
+        return f'/api/rounds/{(r or self.round).id}/field-games/'
+
+    def test_setting_them_writes_the_round_s_list(self):
+        r = self.client.post(self.url_fg(),
+                             {'games': ['irish_rumble', 'forty_balls']},
+                             format='json')
+        self.assertEqual(r.status_code, 200)
+        self.round.refresh_from_db()
+        self.assertEqual(self.round.active_games,
+                         ['irish_rumble', 'forty_balls'])
+
+    def test_a_group_s_OWN_games_are_left_alone(self):
+        # This endpoint speaks for the organiser. Skins is the group's, set
+        # and settled by the group, and must survive a field-game edit.
+        self.round.active_games = ['skins', 'irish_rumble']
+        self.round.save()
+        r = self.client.post(self.url_fg(), {'games': ['forty_balls']},
+                             format='json')
+        self.assertEqual(r.status_code, 200)
+        self.round.refresh_from_db()
+        self.assertIn('skins', self.round.active_games)
+        self.assertIn('forty_balls', self.round.active_games)
+        self.assertNotIn('irish_rumble', self.round.active_games)
+
+    def test_a_COMPLETE_round_refuses(self):
+        from core.models import RoundStatus
+        self.round.status = RoundStatus.COMPLETE
+        self.round.save()
+        r = self.client.post(self.url_fg(), {'games': ['irish_rumble']},
+                             format='json')
+        self.assertEqual(r.status_code, 409)
+        self.assertIn('final', r.data['detail'])
+
+    def test_a_round_IN_PROGRESS_still_accepts(self):
+        # The packet's rule: any time before or during the round. A game added
+        # mid-round is scored from hole 1 off the scores already entered.
+        r = self.client.post(self.url_fg(), {'games': ['irish_rumble']},
+                             format='json')
+        self.assertEqual(r.status_code, 200)
+
+    def test_only_a_FIELD_game_is_accepted(self):
+        r = self.client.post(self.url_fg(), {'games': ['skins']},
+                             format='json')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('Not a field game', r.data['detail'])
+
+    def test_the_group_is_told_what_changed(self):
+        from tournament.models import Message
+        self.client.post(self.url_fg(), {'games': ['irish_rumble']},
+                         format='json')
+        bodies = [m.body for m in Message.objects.all()]
+        self.assertTrue(any('Irish Rumble' in b for b in bodies), bodies)
+        self.assertTrue(any('added' in b for b in bodies), bodies)
+
+    def test_no_change_says_nothing(self):
+        from tournament.models import Message
+        self.round.active_games = ['irish_rumble']
+        self.round.save()
+        self.client.post(self.url_fg(), {'games': ['irish_rumble']},
+                         format='json')
+        self.assertEqual(Message.objects.count(), 0)

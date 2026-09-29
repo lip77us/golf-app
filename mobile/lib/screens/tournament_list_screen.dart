@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api/client.dart';
 import '../api/models.dart';
+import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../theme/halved_brand.dart';
 import '../utils/shared_round.dart';
@@ -13,6 +14,7 @@ import '../widgets/shared_round_card.dart';
 import 'new_round_wizard.dart';
 import 'player_list_screen.dart';
 import 'eclectic_setup_screen.dart';
+import 'road_trip_rounds_screen.dart';
 import 'tournament_low_net_setup_screen.dart';
 import 'setup_round_players_screen.dart';
 import 'tournament_leaderboard_screen.dart';
@@ -606,6 +608,14 @@ class _TournamentListScreenState extends State<TournamentListScreen>
                 ));
               }
             },
+            onOpenRoadTripRounds: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => RoadTripRoundsScreen(
+                  tournamentId  : t.id,
+                  tournamentName: t.name,
+                ),
+              ),
+            ).then((_) => _load()),
             onConfigureEclectic: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => EclecticSetupScreen(tournamentId: t.id),
@@ -632,6 +642,10 @@ class _TournamentCard extends StatelessWidget {
   /// gear two screens deep**, which is where `Settle up` used to hide before
   /// somebody had to be told where it was.
   final VoidCallback onConfigureEclectic;
+  /// Opens the trip's rounds — a Road Trip is the one shape where the ROUNDS
+  /// are what you navigate: ten courses over ten days, each with its own
+  /// board and its own field games.
+  final VoidCallback onOpenRoadTripRounds;
   final VoidCallback onOpenCupDraft;
   final VoidCallback onOpenCupScoreboard;
   final void Function(RoundSummary round) onSetupCupRound;
@@ -650,6 +664,7 @@ class _TournamentCard extends StatelessWidget {
     required this.onSettleUp,
     required this.onConfigureLowNet,
     required this.onConfigureEclectic,
+    required this.onOpenRoadTripRounds,
     required this.onOpenCupDraft,
     required this.onOpenCupScoreboard,
     required this.onSetupCupRound,
@@ -802,6 +817,12 @@ class _TournamentCard extends StatelessWidget {
             // whether the event CAN play one, never on whether it already
             // does. Gating it the other way is what made the setup screen
             // unreachable twice.
+            if (tournament.activeGames.contains(GameIds.roadTrip))
+              _ActionButton(
+                icon : Icons.flag_outlined,
+                label: 'Rounds & Side Games',
+                onTap: onOpenRoadTripRounds,
+              ),
             if (isStaff && !isComplete &&
                 tournament.eclecticOffer['offer'] == true &&
                 tournament.eclecticOffer['available'] == true)

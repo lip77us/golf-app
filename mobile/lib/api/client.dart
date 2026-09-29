@@ -977,6 +977,14 @@ class ApiClient {
     return Map<String, dynamic>.from(data as Map);
   }
 
+  /// Set a round's FIELD games — the organiser's, as against a group's own.
+  /// 409 once the round is complete: those results have been read.
+  Future<Map<String, dynamic>> setRoundFieldGames(
+      int roundId, List<String> games) async {
+    final data = await _post('/rounds/$roundId/field-games/', {'games': games});
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   // ---- Eclectic (tournament, multi-round side game) ----
 
   /// The TD's two pools, plus the availability gate and the round list the

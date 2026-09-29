@@ -2472,6 +2472,109 @@ class RoadTripSetupView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+class RoundFieldGamesView(APIView):
+    """POST /api/rounds/{id}/field-games/ — set a round's FIELD games.
+
+    The organiser's games for one round, as against a group's own, which the
+    group sets and settles for itself.
+
+    **Editable any time before or during the round; final once it closes.**
+    A game added mid-round is scored from hole 1 off the scores already
+    entered — every engine in this app reads the round's holes rather than
+    accumulating as it goes, so there is nothing to back-fill. What cannot
+    happen is a change after the round is complete: those results have been
+    read, and in a trip they have already been settled among the groups.
+
+    Round-level only. A game the TD turns OFF is removed from
+    `active_games`; its config row is LEFT where it is, so turning it back on
+    in the same breath does not lose the stake and the payout table. A round
+    that finishes with the game off simply never reads it.
+    """
+    #: The games a field plays together — every group scored on one board.
+    #: A group's own games (Skins, Nassau, Wolf) are not here: the group sets
+    #: them on its own screen and settles them itself.
+    FIELD_GAMES = ('low_net_round', 'better_ball', 'irish_rumble',
+                   'forty_balls')
+
+    def post(self, request, pk):
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
+        from core.models import RoundStatus as _RS
+        if round_obj.status == _RS.COMPLETE:
+            return Response(
+                {'detail': f'Round {round_obj.round_number} is complete, so '
+                           f'its side games are final.'},
+                status=status.HTTP_409_CONFLICT)
+
+        wanted = request.data.get('games')
+        if not isinstance(wanted, list):
+            return Response({'detail': 'games must be a list.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        bad = [g for g in wanted if g not in self.FIELD_GAMES]
+        if bad:
+            return Response(
+                {'detail': f"Not a field game: {', '.join(map(str, bad))}."},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        before = list(round_obj.active_games or [])
+        # Everything that is NOT a field game is the group's and is left
+        # exactly as it is — this endpoint speaks for the organiser only.
+        keep = [g for g in before if g not in self.FIELD_GAMES]
+        after = keep + [g for g in self.FIELD_GAMES if g in wanted]
+        if after != before:
+            round_obj.active_games = after
+            round_obj.save(update_fields=['active_games'])
+            _notify_field_games(round_obj, before, after)
+        return Response({
+            'round_id'    : round_obj.id,
+            'round_number': round_obj.round_number,
+            'active_games': after,
+            'field_games' : [g for g in after if g in self.FIELD_GAMES],
+            'editable'    : True,
+        })
+
+
+def _notify_field_games(round_obj, before, after):
+    """Tell the group what the organiser changed.
+
+    **The group is notified** (the packet's rule): a game that appears on the
+    board mid-round without a word looks like a fault, and one that vanishes
+    looks like money disappearing. Best-effort — a chat that will not post is
+    not a reason to refuse the change the TD has already made.
+    """
+    labels = {'low_net_round': 'Stroke Play', 'better_ball': 'Better Ball',
+              'irish_rumble': 'Irish Rumble', 'forty_balls': '40 Balls'}
+    fields = RoundFieldGamesView.FIELD_GAMES
+    added   = [g for g in after if g in fields and g not in before]
+    removed = [g for g in before if g in fields and g not in after]
+    if not (added or removed):
+        return
+    parts = []
+    if added:
+        parts.append('added ' + ', '.join(labels[g] for g in added))
+    if removed:
+        parts.append('removed ' + ', '.join(labels[g] for g in removed))
+    try:
+        from django.utils import timezone
+        from services.messaging import get_or_create_thread, post_event
+        post_event(
+            get_or_create_thread(round_obj),
+            # Keyed on WHAT changed plus the minute it changed in. Keyed on
+            # the resulting state alone, a TD who removed a game and put it
+            # back would get no second notice — and the group would be told
+            # once about a board that had moved twice. The minute collapses a
+            # double-submit, which is the only duplicate worth swallowing.
+            event_key=('field_games:{}:{}:{}:{}'.format(
+                round_obj.id, ','.join(added), ','.join(removed),
+                timezone.now().strftime('%Y%m%d%H%M'))),
+            body=(f'Side games for round {round_obj.round_number}: '
+                  + ' and '.join(parts) + '.'),
+        )
+    except Exception:
+        # Best-effort: a chat that will not post is not a reason to refuse a
+        # change the TD has already made.
+        pass
+
+
 class RoadTripResultView(APIView):
     """GET /api/tournaments/{id}/road-trip/ — both titles, ranked."""
     def get(self, request, pk):
@@ -6448,6 +6551,14 @@ class SixesExtraTeamsView(APIView):
         # despite every hole being scored.
         from services.sixes import calculate_sixes
         calculate_sixes(foursome)
+
+        # **Drawing the teams is a change the card must show, and it is not a
+        # score.** Without this the board stays on `TEAMS NOT SET` until the
+        # next hole is posted — and when the draw happens on the LAST hole,
+        # which is when a group usually gets to it, no next hole ever comes and
+        # the extra match never appears on anybody's lock screen at all. Same
+        # reasoning as Banker's declared hole.
+        _push_lock_screen(foursome.round)
 
         return Response(sixes_summary(foursome), status=status.HTTP_200_OK)
 

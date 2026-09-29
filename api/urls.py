@@ -218,6 +218,7 @@ urlpatterns = [
     path('rounds/<int:pk>/stableford/',       views.StablefordResultView.as_view(), name='api-stableford-result'),
 
     # ---- Pink Ball setup (round-level) + per-foursome order ----
+    path('rounds/<int:pk>/field-games/', views.RoundFieldGamesView.as_view(), name='api-round-field-games'),
     path('tournaments/<int:pk>/road-trip/setup/', views.RoadTripSetupView.as_view(), name='api-road-trip-setup'),
     path('tournaments/<int:pk>/road-trip/',       views.RoadTripResultView.as_view(), name='api-road-trip'),
     path('tournaments/<int:pk>/eclectic/setup/', views.TournamentEclecticSetupView.as_view(), name='api-eclectic-setup'),

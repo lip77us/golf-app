@@ -152,6 +152,26 @@ def _pips(segments):
     return out[:3]
 
 
+def _teams_drawn(seg) -> bool:
+    """Whether this segment's two pairings exist yet.
+
+    **An extra match is the one segment whose teams are not derived.** The
+    three standard ones are set at setup and never blank; an extra is created
+    by the ENGINE the moment a match closes out early, with no teams, and waits
+    for somebody to draw them on the phone. Until that happens the engine
+    cannot score the extra at all — it has no sides to score — so every hole
+    played into it lands nowhere.
+
+    That is what produced a lock screen frozen at the close-out hole: the card
+    drew a live-looking board (`ALL SQ`, two empty names, a count that never
+    moved) for the rest of the round, and a watcher reasonably read it as the
+    round having stopped.
+    """
+    t1 = (seg.get('team1') or {}).get('players') or []
+    t2 = (seg.get('team2') or {}).get('players') or []
+    return bool(t1 and t2)
+
+
 def _sides(seg):
     """Both pairings, leader first is NOT the rule — team1 is always first so the
     rows do not swap under the reader when the lead changes. The leader is
@@ -205,6 +225,7 @@ def sixes_activity_state(foursome, *, player_id=None, thru=None) -> dict:
     high_low  = (summary.get('scoring_format') == 'high_low')
     played    = len([h for h in (seg.get('holes') or []) if h.get('winner')])
     holes_left = max(0, (seg.get('num_holes') or 0) - played)
+    drawn     = _teams_drawn(seg)
 
     game = 'SIXES · HIGH-LOW' if high_low else 'SIXES'
     stake = float(foursome.round.bet_unit or 0)
@@ -226,11 +247,19 @@ def sixes_activity_state(foursome, *, player_id=None, thru=None) -> dict:
         'ribbon': ribbon,
         'tee'   : tee,
         'header': {'game': game, 'segment': _seg_label(segments, seg)},
-        'number': _number(seg, high_low),
-        'sides' : _sides(seg),
+        # An extra match with no pairings yet is REPORTED as waiting, not drawn
+        # as a level match between two nameless sides. `ALL SQ` asserts a match
+        # that is standing still; the truth is that there is not a match yet,
+        # and saying so is what stops the card reading as broken.
+        'number': _number(seg, high_low) if drawn
+                  else {'text': '—', 'colour': NEUTRAL},
+        'sides' : _sides(seg) if drawn else [
+            {'names': 'Waiting on the draw', 'colour': '', 'leading': False},
+        ],
         'state' : {
-            'word'      : _state_word(seg, holes_left),
-            'to_play'   : f'{holes_left} TO PLAY',
+            'word'      : _state_word(seg, holes_left) if drawn else '—',
+            'to_play'   : (f'{holes_left} TO PLAY' if drawn
+                           else 'TEAMS NOT SET'),
         },
         'pips'  : _pips(segments),
         # Always present so the Swift `final: Final?` decodes on every state
