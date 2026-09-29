@@ -1,0 +1,122 @@
+{
+ "delete-account.html": {
+  "hash": "ed53fde4cddcf6c6",
+  "published": "2026-09-24",
+  "modified": "2026-09-24"
+ },
+ "games/40-balls/index.html": {
+  "hash": "e5ad18f6de13b305",
+  "published": "2026-09-26",
+  "modified": "2026-09-26"
+ },
+ "games/banker/index.html": {
+  "hash": "f2cdd7b0abe95419",
+  "published": "2026-09-13",
+  "modified": "2026-09-13"
+ },
+ "games/eclectic/index.html": {
+  "hash": "fd6c4186fdf86c29",
+  "published": "2026-09-26",
+  "modified": "2026-09-27"
+ },
+ "games/honors/index.html": {
+  "hash": "489a29b3df686f47",
+  "published": "2026-09-27",
+  "modified": "2026-09-27"
+ },
+ "games/index.html": {
+  "hash": "cdb470963d0069bc",
+  "published": "2026-09-13",
+  "modified": "2026-09-27"
+ },
+ "games/irish-rumble/index.html": {
+  "hash": "210d3ae86c6c4029",
+  "published": "2026-09-27",
+  "modified": "2026-09-27"
+ },
+ "games/las-vegas/index.html": {
+  "hash": "c687a60a242f86c1",
+  "published": "2026-09-13",
+  "modified": "2026-09-13"
+ },
+ "games/mini-singles-bracket/index.html": {
+  "hash": "06a0c35511dbc9db",
+  "published": "2026-09-27",
+  "modified": "2026-09-27"
+ },
+ "games/nassau/index.html": {
+  "hash": "bf51c3d4e7782a0d",
+  "published": "2026-09-13",
+  "modified": "2026-09-13"
+ },
+ "games/pink-ball/index.html": {
+  "hash": "52afefa5e906e5b0",
+  "published": "2026-09-27",
+  "modified": "2026-09-27"
+ },
+ "games/points-5-3-1/index.html": {
+  "hash": "60accea68648cf34",
+  "published": "2026-09-13",
+  "modified": "2026-09-27"
+ },
+ "games/rabbit/index.html": {
+  "hash": "f705f8c132e5e561",
+  "published": "2026-09-13",
+  "modified": "2026-09-13"
+ },
+ "games/sequoya-threes/index.html": {
+  "hash": "61ff78b98a48c52d",
+  "published": "2026-09-13",
+  "modified": "2026-09-13"
+ },
+ "games/skins/index.html": {
+  "hash": "39c9dd0a37cda696",
+  "published": "2026-09-13",
+  "modified": "2026-09-27"
+ },
+ "games/spots/index.html": {
+  "hash": "ac40c4c2630dce35",
+  "published": "2026-09-27",
+  "modified": "2026-09-27"
+ },
+ "games/survivor/index.html": {
+  "hash": "988dce1af8b99b82",
+  "published": "2026-09-13",
+  "modified": "2026-09-13"
+ },
+ "games/triple-cup/index.html": {
+  "hash": "3b5d4eff75770ffd",
+  "published": "2026-09-13",
+  "modified": "2026-09-13"
+ },
+ "games/triple-nassau/index.html": {
+  "hash": "419a12437d406914",
+  "published": "2026-09-27",
+  "modified": "2026-09-27"
+ },
+ "games/wolf/index.html": {
+  "hash": "b6a0ed2cc15651cb",
+  "published": "2026-09-13",
+  "modified": "2026-09-13"
+ },
+ "index.html": {
+  "hash": "50d0e5aaabc7ac46",
+  "published": "2026-06-08",
+  "modified": "2026-09-27"
+ },
+ "privacy.html": {
+  "hash": "288a6c4bf41d1228",
+  "published": "2026-05-29",
+  "modified": "2026-09-24"
+ },
+ "sms-consent.html": {
+  "hash": "a5f3cfd8770475fa",
+  "published": "2026-06-05",
+  "modified": "2026-09-11"
+ },
+ "support.html": {
+  "hash": "f2e290f5e04b653f",
+  "published": "2026-05-29",
+  "modified": "2026-09-24"
+ }
+}

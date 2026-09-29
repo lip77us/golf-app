@@ -7,9 +7,14 @@ set -euo pipefail
 cd "$(dirname "$0")"          # the website/ directory
 out="$HOME/Downloads/halved-site.zip"
 
+# Refresh the SEO block + sitemap, and stop here if the audit finds errors —
+# a broken link or a missing canonical should never reach the live site.
+./build-seo.py
+
 rm -f "$out"
 zip -rX "$out" . \
-  -x '.DS_Store' '*/.DS_Store' 'build-zip.sh' 'build-guides.py' >/dev/null
+  -x '.DS_Store' '*/.DS_Store' 'build-zip.sh' 'build-guides.py' \
+     'build-seo.py' 'seo-manifest.json' 'SEO.md' >/dev/null
 
 echo "Built $out"
 unzip -l "$out"

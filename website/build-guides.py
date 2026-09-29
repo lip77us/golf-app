@@ -305,5 +305,5 @@ if __name__ == '__main__':
         sys.exit('no .dc.html files in %s' % src_dir)
     for name, slug in found:
         convert(src_dir, name, slug)
-    print('\nCopy any new img/ assets into website/games/img/, add the new URLs to\n'
-          'sitemap.xml, and add the format to the homepage marquee.')
+    print('\nCopy any new img/ assets into website/games/img/, run ./build-seo.py\n'
+          '(sitemap, schema and audit), and add the format to the homepage marquee.')

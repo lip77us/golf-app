@@ -3755,3 +3755,34 @@ different engine.
 The rest of `changed-since-delivery/` is CSS-level and already matches how we
 built it — the Skins header fix and the inlined state slot were the two parts
 that applied.
+
+---
+
+## Website SEO pipeline — `website/build-seo.py`
+
+halved.golf is static HTML zipped to Cloudflare Pages (`website/build-zip.sh`).
+`build-seo.py` runs inside `build-zip.sh` before zipping and **aborts the zip on
+audit errors**. Standard library only. `./build-seo.py --check` writes nothing
+and fails if anything is stale or wrong (for CI).
+
+- **Generated `<head>` block** between `<!-- seo:begin … -->` / `<!-- seo:end -->`
+  on every page, rebuilt from scratch each run — never hand-edit inside it. The
+  page's own tags always win; the block only fills gaps (canonical, description,
+  OG/Twitter) and adds the iOS Smart App Banner (`apple-itunes-app`) plus JSON-LD:
+  Organization + WebSite + MobileApplication (home), CollectionPage + ItemList
+  (`/games/`), Article + BreadcrumbList (each guide). FAQPage schema stays in
+  `build-guides.py`. Game name for breadcrumbs comes from the H1 ("How to play X").
+- **`sitemap.xml` is generated** — don't edit it. `<lastmod>` only moves when a
+  page's content (minus the SEO block) changes, tracked by hash in
+  `seo-manifest.json` (commit it). Rebuilding guides doesn't reset dates.
+- **URL model:** `x/index.html` → `/x/`, `x.html` → `/x` (Pages 308s the `.html`
+  form). Canonicals/sitemap use those; the audit warns on links that redirect.
+- **Config** at the top of the script: descriptions for pages without one,
+  `NOINDEX`, and `PLAY_PACKAGE` — set it to `golf.halved.app` once Android leaves
+  closed testing to add Android to the app schema.
+- **Audit:** errors = missing title/description, canonical ≠ served URL, ≠1 H1,
+  img without alt, invalid JSON-LD, broken internal links, duplicate titles,
+  page missing from sitemap. Warnings = titles >65 chars, descriptions outside
+  50–165, redirecting links, orphan pages.
+- No `aggregateRating` in the app schema on purpose — never fabricate ratings;
+  Google's app rich result needs real review data.
