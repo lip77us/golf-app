@@ -2698,6 +2698,14 @@ class TournamentLeaderboardView(APIView):
             'offer'      : tournament.rounds.count() >= 2,
         }
 
+        # Road Trip — the tournament's own championship when it is a trip,
+        # so it takes the FIRST tab, where the stroke-play board would be.
+        if 'road_trip' in active_games:
+            from services.road_trip import road_trip_summary
+            summary = road_trip_summary(tournament)
+            if summary:
+                games['road_trip'] = {'label': 'Road Trip', **summary}
+
         if 'match_play' in active_games:
             from services.tournament_match_play import tournament_match_play_summary
             brackets = []

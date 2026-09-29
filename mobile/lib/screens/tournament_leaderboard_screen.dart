@@ -19,6 +19,7 @@ import '../widgets/stroke_play_strip.dart';
 import '../widgets/synced_scroll_group.dart';
 import '../widgets/flight_header.dart';
 import '../widgets/eclectic_board.dart';
+import '../widgets/road_trip_board.dart';
 import 'eclectic_setup_screen.dart';
 import 'tournament_settlement_screen.dart';
 import 'tournament_low_net_setup_screen.dart';
@@ -118,8 +119,12 @@ class _TournamentLeaderboardScreenState
       // wizard's toggle order put it in `active_games`. It is the only side
       // game that spans the whole event, which is also why its tab takes no
       // round suffix.
+      // **A trip IS the championship**, so its tab leads — it is the board a
+      // golfer opens the screen for, and it replaces the stroke-play one
+      // rather than sitting beside it.
+      if (tabs.remove('road_trip')) tabs.insert(0, 'road_trip');
       if (tabs.remove('eclectic')) {
-        const champs = ['low_net', 'stableford_championship'];
+        const champs = ['low_net', 'stableford_championship', 'road_trip'];
         var at = 0;
         for (var i = 0; i < tabs.length; i++) {
           if (champs.contains(tabs[i])) at = i + 1;
@@ -167,6 +172,7 @@ class _TournamentLeaderboardScreenState
     'stableford_championship': 'Stableford',
     'match_play'   : 'Mini Singles Bracket',
     'eclectic'     : 'Eclectic',
+    'road_trip'    : 'Road Trip',
   };
 
   /// Tabs read the name the TD set — the ball game as he typed it, and
@@ -348,6 +354,8 @@ class _GameView extends StatelessWidget {
         return _StablefordChampView(data: data);
       case 'match_play':
         return _MatchPlayChampView(data: data);
+      case 'road_trip':
+        return RoadTripBoard(data: data, readerId: readerId);
       case 'eclectic':
         return EclecticBoard(
             data: data, readerId: readerId, onSetUp: onSetUpEclectic);

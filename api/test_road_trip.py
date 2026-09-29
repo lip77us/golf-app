@@ -120,3 +120,28 @@ class ResultTests(_Base):
 
     def test_an_unconfigured_tournament_reports_nothing(self):
         self.assertEqual(self.client.get(self.url()).data, {})
+
+
+class LeaderboardTests(_Base):
+    """The trip's block on the tournament board."""
+
+    def test_the_board_carries_the_trip_and_drops_the_championship(self):
+        self.client.post(self.url('setup/'), {}, format='json')
+        data = self.client.get(
+            f'/api/tournaments/{self.tourn.id}/leaderboard/').data
+        self.assertIn('road_trip', data['active_games'])
+        self.assertIn('road_trip', data['games'])
+        self.assertEqual(data['games']['road_trip']['label'], 'Road Trip')
+        # The board it replaced is gone, not sitting beside it ranking the
+        # same golfers by a different rule.
+        self.assertNotIn('low_net', data['games'])
+
+    def test_an_unconfigured_trip_draws_no_block(self):
+        # The marker without the config is a game configured by not being
+        # configured — the tab would be empty. `road_trip_summary` returns
+        # nothing and the block is absent, which is the honest state.
+        self.tourn.active_games = ['road_trip']
+        self.tourn.save()
+        data = self.client.get(
+            f'/api/tournaments/{self.tourn.id}/leaderboard/').data
+        self.assertNotIn('road_trip', data['games'])
