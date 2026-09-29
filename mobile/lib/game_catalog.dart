@@ -103,6 +103,10 @@ class GameIds {
   // cross-day accumulator.
   static const String championshipStrokePlay  = 'low_net';
   static const String championshipStableford  = 'stableford_championship';
+  /// Road Trip — best m of n rounds to par, with a Net and a Gross title.
+  /// A tournament SHAPE marker like `team_cup` and `team_play`: the trip sits
+  /// on top of ordinary rounds, which keep their own side games.
+  static const String roadTrip                = 'road_trip';
 
   // Team Cup (Ryder Cup style).  Stored in tournament.active_games so the
   // tournament list screen can detect it and show cup-specific buttons.
@@ -792,6 +796,10 @@ const Map<String, String> _kExtraGameLabels = {
   // Hidden from the picker (see kChampionshipGames) but kept here so existing
   // tournaments using it still display a friendly name rather than the slug.
   'stableford_championship': 'Stableford Championship',
+  // A tournament SHAPE, never offered in the casual picker — so without an
+  // entry here `gameDisplayName` would fall through to the slug and a board
+  // would read `road_trip`. Same gap Eclectic had.
+  'road_trip'              : 'Road Trip',
   // **Eclectic is set on the TOURNAMENT, so it never reaches the casual
   // picker** — and with no catalog entry `gameDisplayName` fell through to
   // the slug, which is how a leaderboard tab came up reading `eclectic`.
@@ -857,6 +865,7 @@ const List<(String, String)> kChampionshipGames = [
   (GameIds.championshipStrokePlay, 'Stroke Play Championship'),
   (GameIds.championshipStableford, 'Stableford Championship'),
   (GameIds.teamCup,                'Team (Cup) Play'),
+  (GameIds.roadTrip,               'Road Trip'),
 ];
 
 // ── Combination logic ─────────────────────────────────────────────────────────

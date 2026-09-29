@@ -1750,6 +1750,33 @@ class FortyBallsCountSerializer(serializers.Serializer):
     count       = serializers.IntegerField(min_value=0, max_value=4)
 
 
+class RoadTripSetupSerializer(serializers.Serializer):
+    """POST /api/tournaments/{id}/road-trip/setup/
+
+    The trip's own settings. `total_rounds` and `rounds_to_count` are the
+    TOURNAMENT's and are set with the rest of the event, so they are not here:
+    n and m belong to the tournament whether or not it is a trip, and writing
+    them from two places is how they come to disagree.
+
+    **At least one title must be on** — a trip with neither is not a
+    championship, and the client's last-toggle guard is a convenience rather
+    than the rule.
+    """
+    net_on                 = serializers.BooleanField(default=True)
+    gross_on               = serializers.BooleanField(default=True)
+    handicap_mode          = serializers.ChoiceField(
+                                 choices=['locked', 'updated'],
+                                 default='updated')
+    net_max_double_bogey   = serializers.BooleanField(default=True)
+    gross_max_double_bogey = serializers.BooleanField(default=False)
+
+    def validate(self, attrs):
+        if not (attrs.get('net_on') or attrs.get('gross_on')):
+            raise serializers.ValidationError(
+                'A road trip needs at least one title — net or gross.')
+        return attrs
+
+
 class EclecticSetupSerializer(serializers.Serializer):
     """POST /api/tournaments/{id}/eclectic/setup/
 

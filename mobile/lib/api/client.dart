@@ -939,6 +939,44 @@ class ApiClient {
         Map<String, dynamic>.from(data as Map));
   }
 
+  // ---- Road Trip (tournament shape: best m of n, two titles) ----
+
+  /// The trip's own settings. `total_rounds` / `rounds_to_count` come back
+  /// with them but belong to the TOURNAMENT and are set with the rest of the
+  /// event — n and m are the tournament's whether or not it is a trip.
+  Future<Map<String, dynamic>> getRoadTripSetup(int tournamentId) async {
+    final data = await _get('/tournaments/$tournamentId/road-trip/setup/');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  Future<Map<String, dynamic>> postRoadTripSetup(
+    int tournamentId, {
+    required bool   netOn,
+    required bool   grossOn,
+    required String handicapMode,        // 'locked' | 'updated'
+    required bool   netMaxDoubleBogey,
+    required bool   grossMaxDoubleBogey,
+  }) async {
+    final data = await _post('/tournaments/$tournamentId/road-trip/setup/', {
+      'net_on'                : netOn,
+      'gross_on'              : grossOn,
+      'handicap_mode'         : handicapMode,
+      'net_max_double_bogey'  : netMaxDoubleBogey,
+      'gross_max_double_bogey': grossMaxDoubleBogey,
+    });
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  /// Turn the FORMAT off. Turning one TITLE off is a POST — the server
+  /// refuses the state where neither is on.
+  Future<void> deleteRoadTripSetup(int tournamentId) =>
+      _delete('/tournaments/$tournamentId/road-trip/setup/');
+
+  Future<Map<String, dynamic>> getRoadTrip(int tournamentId) async {
+    final data = await _get('/tournaments/$tournamentId/road-trip/');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   // ---- Eclectic (tournament, multi-round side game) ----
 
   /// The TD's two pools, plus the availability gate and the round list the

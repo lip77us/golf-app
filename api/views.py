@@ -2391,6 +2391,95 @@ class TournamentStablefordSetupView(APIView):
         return Response(self._dict(cfg), status=status.HTTP_201_CREATED)
 
 
+class RoadTripSetupView(APIView):
+    """GET/POST/DELETE /api/tournaments/{id}/road-trip/setup/
+
+    The trip's settings. DELETE turns the FORMAT off — a different act from
+    turning one TITLE off, which is a POST with `net_on`/`gross_on`.
+    """
+
+    def _dict(self, tournament, cfg):
+        from services.road_trip import road_trip_on
+        base = {
+            'on'             : road_trip_on(tournament),
+            'total_rounds'   : tournament.total_rounds,
+            'rounds_to_count': (tournament.rounds_to_count
+                                or tournament.total_rounds),
+            'counting_rule'  : tournament.counting_rule_label,
+        }
+        if cfg is None:
+            return {**base, 'configured': False,
+                    'net_on': True, 'gross_on': True,
+                    'handicap_mode': 'updated',
+                    'net_max_double_bogey': True,
+                    'gross_max_double_bogey': False}
+        return {
+            **base,
+            'configured'            : True,
+            'net_on'                : cfg.net_on,
+            'gross_on'              : cfg.gross_on,
+            'handicap_mode'         : cfg.handicap_mode,
+            'net_max_double_bogey'  : cfg.net_max_double_bogey,
+            'gross_max_double_bogey': cfg.gross_max_double_bogey,
+        }
+
+    def get(self, request, pk):
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        from games.models import RoadTripConfig
+        cfg = RoadTripConfig.objects.filter(tournament=tournament).first()
+        return Response(self._dict(tournament, cfg))
+
+    def post(self, request, pk):
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        from api.serializers import RoadTripSetupSerializer
+        ser = RoadTripSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        from games.models import RoadTripConfig
+        cfg, _ = RoadTripConfig.objects.update_or_create(
+            tournament=tournament,
+            defaults={
+                'net_on'                : d['net_on'],
+                'gross_on'              : d['gross_on'],
+                'handicap_mode'         : d['handicap_mode'],
+                'net_max_double_bogey'  : d['net_max_double_bogey'],
+                'gross_max_double_bogey': d['gross_max_double_bogey'],
+            },
+        )
+        # **The trip REPLACES the championship it sits where.** A road trip is
+        # its own best-m-of-n competition with its own two titles; leaving
+        # `low_net` or `stableford_championship` on would put a second board
+        # beside it ranking the same golfers by a different rule.
+        active = [g for g in (tournament.active_games or [])
+                  if g not in ('low_net', 'stableford_championship')]
+        if 'road_trip' not in active:
+            active.append('road_trip')
+        if active != (tournament.active_games or []):
+            tournament.active_games = active
+            tournament.save(update_fields=['active_games'])
+        return Response(self._dict(tournament, cfg),
+                        status=status.HTTP_201_CREATED)
+
+    def delete(self, request, pk):
+        tournament = account_get_or_404(Tournament, request.user.account, pk=pk)
+        from games.models import RoadTripConfig
+        RoadTripConfig.objects.filter(tournament=tournament).delete()
+        if 'road_trip' in (tournament.active_games or []):
+            tournament.active_games = [g for g in tournament.active_games
+                                       if g != 'road_trip']
+            tournament.save(update_fields=['active_games'])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class RoadTripResultView(APIView):
+    """GET /api/tournaments/{id}/road-trip/ — both titles, ranked."""
+    def get(self, request, pk):
+        tournament = tournament_for_reader(request.user, pk)
+        from services.road_trip import road_trip_summary
+        return Response(road_trip_summary(tournament))
+
+
 class TournamentEclecticSetupView(APIView):
     """GET/POST/DELETE /api/tournaments/{id}/eclectic/setup/
 

@@ -66,6 +66,7 @@ enum _StepKind {
   eventDetails, // New/existing, name, event course, rounds by date
   handicap,     // Cup: handicap mode (+ net double-bogey cap)
   scoring,      // Individual: method, cap-as-a-rule, allowance, rounds counted
+  roadTrip,     // Individual + Road Trip: best m of n, two titles, handicaps
   stablefordPoints, // Individual + Stableford only: the points table
   cupDesign,    // Cup: team count + colours
   cupGamePlan,  // Cup: per-round game plan
@@ -113,6 +114,14 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   bool get _isCupTournament =>
       _createNewTournament &&
       _tournamentActiveGames.contains(GameIds.teamCup);
+
+  /// Road Trip — an individual event over several rounds, usually at several
+  /// courses, where each golfer's best m count. A tournament SHAPE like
+  /// `team_cup`, so it is marked in `active_games` rather than being a
+  /// per-round game.
+  bool get _isRoadTrip =>
+      _createNewTournament && _eventType == _EventType.solo &&
+      _soloFormat == 'road_trip';
 
   /// Team Play — many small teams, ONE round, one leaderboard. Foursomes or
   /// pairs; the size is `_tpTeamSize`.
@@ -166,6 +175,22 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
     // table (the max is not a question, so stroke play does not), and the day
     // bet only appears on the side-game step when the event has more than one
     // round. The header count reads this list, so it is always honest.
+    // **A Road Trip swaps two steps and drops one.** Its own step replaces
+    // Scoring — that step asks "net or gross at what allowance", and a trip
+    // answers it with two championships rather than one mode. And it has no
+    // Payouts step: the trip's money is not in this packet's scope, while a
+    // round's side games each carry their own fee on the Games step.
+    if (_isRoadTrip) {
+      return [
+        _StepKind.typeFormat,
+        _StepKind.eventDetails,
+        _StepKind.roadTrip,
+        _StepKind.players,
+        _StepKind.groups,
+        _StepKind.games,
+        _StepKind.review,
+      ];
+    }
     return [
       _StepKind.typeFormat,
       _StepKind.eventDetails,
@@ -403,7 +428,17 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   // the low index with it.
   _EventType _eventType  = _EventType.solo;
   String     _cupFormat  = 'mixed';    // mixed | triple  (triple = exclusive)
-  String     _soloFormat = 'stroke';   // stroke | stableford
+  String     _soloFormat = 'stroke';   // stroke | stableford | road_trip
+
+  // ── Road Trip ──────────────────────────────────────────────────────────
+  // Both titles on, net capped and gross not, indexes updated before each
+  // round — the packet's defaults, and each is the answer a trip usually
+  // wants rather than a neutral one.
+  bool   _rtNetOn        = true;
+  bool   _rtGrossOn      = true;
+  bool   _rtNetCap       = true;
+  bool   _rtGrossCap     = false;
+  String _rtHandicapMode = 'updated';   // updated | locked
 
   /// How many boards the field is cut into. 1 is one board, which is the
   /// ordinary event and the default.
@@ -843,6 +878,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         return _existingTournament != null && _selectedCourseId != null;
       case _StepKind.handicap:
       case _StepKind.scoring:
+      case _StepKind.roadTrip:
       case _StepKind.stablefordPoints:
         // Every answer on these steps is valid — the TD sets the points as they
         // sees fit, and there is always a live method and allowance.
@@ -924,6 +960,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       GameIds.teamPlay,
       GameIds.championshipStrokePlay,
       GameIds.championshipStableford,
+      GameIds.roadTrip,
     });
     switch (_eventType) {
       case _EventType.cup:
@@ -933,11 +970,18 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         });
         break;
       case _EventType.solo:
-        _tournamentActiveGames
-          ..remove('low_net')
-          ..add(_soloFormat == 'stableford'
+        _tournamentActiveGames.remove('low_net');
+        // **A trip is its own championship.** It runs best-m-of-n to par with
+        // two titles, so adding the stroke-play board beside it would rank
+        // the same golfers by a different rule on the next tab. The marker is
+        // the tournament's SHAPE, like team_cup.
+        if (_soloFormat == 'road_trip') {
+          _tournamentActiveGames.add(GameIds.roadTrip);
+        } else {
+          _tournamentActiveGames.add(_soloFormat == 'stableford'
               ? GameIds.championshipStableford
               : GameIds.championshipStrokePlay);
+        }
         break;
       case _EventType.quad:
       case _EventType.pair:
@@ -1057,6 +1101,8 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
               (label: 'Handicap', sub: 'How strokes are given', perRound: false),
             _StepKind.scoring =>
               (label: 'Scoring', sub: 'Method, handicap and rounds counted', perRound: false),
+            _StepKind.roadTrip =>
+              (label: 'The trip', sub: 'Rounds that count, titles, handicaps', perRound: false),
             _StepKind.stablefordPoints =>
               (label: 'Points table', sub: 'The Stableford scale', perRound: false),
             _StepKind.payouts =>
@@ -1381,6 +1427,24 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           'bogey'    : _stablefordPoints[4],
           'double'   : _stablefordPoints[5],
         },
+      );
+    }
+    if (!mounted) return;
+
+    // 1c-ii. Road Trip — the trip's own settings. **Always posted when the
+    // format is a trip**, with no money gate: unlike the two championships
+    // above, a trip's config is not a stake, it is what the board is scored
+    // on. Without it `road_trip_summary` returns nothing and the tab is
+    // empty — a game configured by not being configured.
+    if (tournamentId != null &&
+        _tournamentActiveGames.contains(GameIds.roadTrip)) {
+      await client.postRoadTripSetup(
+        tournamentId,
+        netOn              : _rtNetOn,
+        grossOn            : _rtGrossOn,
+        handicapMode       : _rtHandicapMode,
+        netMaxDoubleBogey  : _rtNetCap,
+        grossMaxDoubleBogey: _rtGrossCap,
       );
     }
     if (!mounted) return;
@@ -1976,6 +2040,26 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           }),
           onChangeRoundsToCount: (n) => setState(() => _roundsToCount = n),
         );
+      case _StepKind.roadTrip:
+        return _StepRoadTrip(
+          numRounds    : _numRounds,
+          roundsToCount: _roundsToCount,
+          netOn        : _rtNetOn,
+          grossOn      : _rtGrossOn,
+          netCap       : _rtNetCap,
+          grossCap     : _rtGrossCap,
+          handicapMode : _rtHandicapMode,
+          onChangeRoundsToCount: (n) => setState(() => _roundsToCount = n),
+          onChangeTitles: (net, gross) => setState(() {
+            _rtNetOn = net;
+            _rtGrossOn = gross;
+          }),
+          onChangeCaps: (net, gross) => setState(() {
+            _rtNetCap = net;
+            _rtGrossCap = gross;
+          }),
+          onChangeHandicapMode: (m) => setState(() => _rtHandicapMode = m),
+        );
       case _StepKind.stablefordPoints:
         return _StepStablefordPoints(
           tournamentName: _createNewTournament
@@ -2103,9 +2187,36 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           championshipFee      : _lowNetEntryFee,
           carvePct             : _activeGames.contains(GameIds.matchPlay)
               ? _miniCarvePct : 0,
+          roadTrip             : _isRoadTrip ? _roadTripReview() : null,
           createError          : _createError,
         );
     }
+  }
+
+  /// The trip's review lines. Written out rather than derived on the review
+  /// screen, because every one of them restates a rule the TD has just set
+  /// and the wording is the rule: `up to 3 can be dropped or missed` is what
+  /// `Best 7 of 10` MEANS, and it is the sentence a group argues about.
+  _RoadTripReview _roadTripReview() {
+    final m = _roundsToCount ?? _numRounds;
+    final titles = [if (_rtNetOn) 'Net', if (_rtGrossOn) 'Gross'].join(' and ');
+    final caps = [
+      if (_rtNetOn) 'Net ${_rtNetCap ? 'on' : 'off'}',
+      if (_rtGrossOn) 'Gross ${_rtGrossCap ? 'on' : 'off'}',
+    ].join(' · ');
+    return _RoadTripReview(
+      counting : m >= _numRounds
+          ? 'All $_numRounds rounds, to par'
+          : 'Best $m of $_numRounds, to par · up to ${_numRounds - m} can be '
+            'dropped or missed',
+      titles   : titles,
+      caps     : caps,
+      eligible : '$m+ finished rounds',
+      handicaps: (_rtHandicapMode == 'locked'
+              ? 'Locked for the trip'
+              : 'Updated before each round') +
+          ' · manual adjust from any unplayed round',
+    );
   }
 
   /// Team summaries for the cup review: name, badge and colour per team.
@@ -2317,6 +2428,12 @@ class _Step1TypeFormat extends StatelessWidget {
   static const _soloFormats = <(String, String, String, bool)>[
     ('stroke', 'Stroke play', 'Gross or net against the field.', false),
     ('stableford', 'Stableford', 'Points per hole against par.', false),
+    // **Exclusive**: a trip is its own best-m-of-n championship with two
+    // titles, so it replaces the stroke-play board rather than sitting beside
+    // one that would rank the same golfers by a different rule.
+    ('road_trip', 'Road Trip',
+        'Several rounds, usually at different courses. Each golfer\'s best '
+        'rounds count, scored to par. Net and gross titles.', true),
   ];
 
   static const _cardBorder = Color(0xFFD3DED6);
@@ -3371,6 +3488,240 @@ class _StepScoring extends StatelessWidget {
     );
   }
 
+}
+
+// ===========================================================================
+// Road Trip — best m of n, to par, with two titles
+// ===========================================================================
+
+/// The trip's own settings, in the slot the scoring step holds for the other
+/// formats.
+///
+/// **It replaces `_StepScoring` rather than adding to it.** That step's
+/// question is "net or gross, and at what allowance" — and a trip answers it
+/// differently: net and gross are not a mode here, they are two championships
+/// running at once, each picking its own best rounds. Bolting the titles onto
+/// a step built around a single mode would have asked the same question twice
+/// with two different shapes of answer.
+class _StepRoadTrip extends StatelessWidget {
+  final int     numRounds;
+  final int?    roundsToCount;
+  final bool    netOn;
+  final bool    grossOn;
+  final bool    netCap;
+  final bool    grossCap;
+  final String  handicapMode;        // locked | updated
+  final ValueChanged<int?>    onChangeRoundsToCount;
+  final void Function(bool net, bool gross) onChangeTitles;
+  final void Function(bool net, bool gross) onChangeCaps;
+  final ValueChanged<String>  onChangeHandicapMode;
+
+  const _StepRoadTrip({
+    required this.numRounds,
+    required this.roundsToCount,
+    required this.netOn,
+    required this.grossOn,
+    required this.netCap,
+    required this.grossCap,
+    required this.handicapMode,
+    required this.onChangeRoundsToCount,
+    required this.onChangeTitles,
+    required this.onChangeCaps,
+    required this.onChangeHandicapMode,
+  });
+
+  int get _counts => roundsToCount ?? numRounds;
+
+  @override
+  Widget build(BuildContext context) {
+    return _pinnedStep(
+      context,
+      title: 'The trip',
+      subtitle: 'Rounds over several days, usually at different courses. '
+          "Each golfer's best rounds count.",
+      children: [
+        _roundsThatCount(context),
+        const SizedBox(height: 16),
+        _titles(context),
+        const SizedBox(height: 16),
+        _caps(context),
+        const SizedBox(height: 16),
+        _handicaps(context),
+      ],
+    );
+  }
+
+  // ── Best m of n ───────────────────────────────────────────────────────
+  Widget _roundsThatCount(BuildContext context) {
+    final theme = Theme.of(context);
+    // **Down to 1, unlike the other formats.** A championship counting one
+    // round of ten is a legitimate trip — the best day wins — where in a
+    // two-round club event it would be a strange thing to ask for.
+    final options = <int?>[null, for (int n = numRounds - 1; n >= 1; n--) n];
+    return SectionCard(
+      title: 'Rounds that count',
+      trailing: Text(
+        roundsToCount == null ? 'All $numRounds' : 'Best $roundsToCount of $numRounds',
+        style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.primary, fontWeight: FontWeight.w700),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final n in options)
+            ChoiceChip(
+              selected: roundsToCount == n,
+              onSelected: (_) => onChangeRoundsToCount(n),
+              label: Text(n == null ? 'All $numRounds' : 'Best $n'),
+            ),
+        ]),
+        const SizedBox(height: 10),
+        Text(
+          _counts >= numRounds
+              ? 'Every round counts. A golfer needs all $numRounds to be '
+                'eligible.'
+              : 'Best $_counts of $numRounds · up to ${numRounds - _counts} '
+                'can be dropped or missed. A golfer needs $_counts finished '
+                'rounds to be eligible.',
+          style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.primary, fontWeight: FontWeight.w600),
+        ),
+      ]),
+    );
+  }
+
+  // ── The two titles ────────────────────────────────────────────────────
+  Widget _titles(BuildContext context) {
+    final theme = Theme.of(context);
+    return SectionCard(
+      title: 'Championships',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Wrap(spacing: 8, children: [
+          // **The last one on cannot be turned off.** A trip with no title is
+          // not a championship, and the server refuses it — this is the
+          // screen not offering a tap that would be rejected.
+          FilterChip(
+            selected: netOn,
+            onSelected: (v) =>
+                (!v && !grossOn) ? null : onChangeTitles(v, grossOn),
+            label: const Text('Net'),
+          ),
+          FilterChip(
+            selected: grossOn,
+            onSelected: (v) =>
+                (!v && !netOn) ? null : onChangeTitles(netOn, v),
+            label: const Text('Gross'),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        Text(
+          'Every round is scored to par for its own course, so different '
+          'courses compare fairly. Net and gross pick their best rounds '
+          'separately — a golfer can drop different rounds in each.',
+          style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant, height: 1.45),
+        ),
+      ]),
+    );
+  }
+
+  // ── A cap per title ───────────────────────────────────────────────────
+  Widget _caps(BuildContext context) {
+    final theme = Theme.of(context);
+    // **A Row and a Switch, not a SwitchListTile.** A ListTile paints its ink
+    // splash on the nearest Material ancestor, and SectionCard is a decorated
+    // container — the splash lands behind the card and Flutter asserts on
+    // every build. The same reason the 40 Balls setup screen uses a Row.
+    Widget row(String label, String note, bool value, VoidCallback onTap) =>
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: theme.textTheme.bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.w600)),
+                  Text(note, style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Switch(value: value, onChanged: (_) => onTap()),
+          ]),
+        );
+
+    return SectionCard(
+      title: 'Double bogey cap',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(
+          'Set separately for each championship — they are different '
+          'competitions, and a ceiling is a rule about one of them.',
+          style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant, height: 1.45),
+        ),
+        const SizedBox(height: 6),
+        if (netOn)
+          row('Net championship', 'Net double bogey — par + 2 + strokes given',
+              netCap, () => onChangeCaps(!netCap, grossCap)),
+        if (grossOn)
+          row('Gross championship', 'Gross double bogey — par + 2',
+              grossCap, () => onChangeCaps(netCap, !grossCap)),
+      ]),
+    );
+  }
+
+  // ── Locked or updated ─────────────────────────────────────────────────
+  Widget _handicaps(BuildContext context) {
+    final theme = Theme.of(context);
+    Widget option(String value, String label, String note) {
+      final on = handicapMode == value;
+      return InkWell(
+        onTap: () => onChangeHandicapMode(value),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(on ? Icons.radio_button_checked : Icons.radio_button_off,
+                size: 20,
+                color: on ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: theme.textTheme.bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.w600)),
+                  Text(note, style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant, height: 1.4)),
+                ],
+              ),
+            ),
+          ]),
+        ),
+      );
+    }
+
+    return SectionCard(
+      title: 'Handicap index',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        option('updated', 'Updated before each round',
+            "Uses each golfer's current index. Best for a long trip, where "
+            'the rounds themselves feed the index.'),
+        option('locked', 'Locked for the trip',
+            'Everyone keeps the index they start with.'),
+        const SizedBox(height: 6),
+        Text(
+          "Either way you can adjust a golfer's index by hand, and it applies "
+          'from the next unplayed round — a round already played keeps the '
+          'handicap it was scored with.',
+          style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant, height: 1.45),
+        ),
+      ]),
+    );
+  }
 }
 
 // ===========================================================================
@@ -6757,6 +7108,24 @@ class _StepCupReview extends StatelessWidget {
   }
 }
 
+/// The six lines a trip's review shows. A record rather than six parameters:
+/// they are one answer, composed in one place, and the review's job is to
+/// print them.
+class _RoadTripReview {
+  final String counting;
+  final String titles;
+  final String caps;
+  final String eligible;
+  final String handicaps;
+  const _RoadTripReview({
+    required this.counting,
+    required this.titles,
+    required this.caps,
+    required this.eligible,
+    required this.handicaps,
+  });
+}
+
 class _Step5Review extends StatelessWidget {
   final bool               createNew;
   final String             tournamentName;
@@ -6789,6 +7158,9 @@ class _Step5Review extends StatelessWidget {
   /// where the old fill-to-four rule stands.
   final int?               teamPlaySize;
 
+  /// The trip's summary lines, or null when the event is not one.
+  final _RoadTripReview?   roadTrip;
+
   const _Step5Review({
     required this.createNew,
     required this.tournamentName,
@@ -6806,6 +7178,7 @@ class _Step5Review extends StatelessWidget {
     this.championshipFee = 0,
     this.carvePct        = 0,
     this.teamPlaySize,
+    this.roadTrip,
     this.createError,
   });
 
@@ -6870,6 +7243,31 @@ class _Step5Review extends StatelessWidget {
                       : ''),
             ),
         ]),
+
+        // **The trip's own review rows.** A Road Trip's whole shape — how
+        // many rounds count, which titles, which caps, which handicap rule —
+        // is set on one step and is invisible on this screen otherwise: the
+        // chip strip below would say `Road Trip` and nothing else.
+        if (roadTrip != null) ...[
+          const SizedBox(height: 16),
+          Text('Road Trip',
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.bold, color: Colors.grey)),
+          const SizedBox(height: 8),
+          _ReviewCard(children: [
+            _ReviewRow(Icons.emoji_events_outlined, 'Championship',
+                roadTrip!.counting),
+            _ReviewRow(Icons.workspace_premium_outlined, 'Titles',
+                roadTrip!.titles),
+            _ReviewRow(Icons.shield_outlined, 'Double bogey cap',
+                roadTrip!.caps),
+            _ReviewRow(Icons.check_circle_outline, 'Eligible with',
+                roadTrip!.eligible),
+            _ReviewRow(Icons.compare_arrows, 'Tiebreak',
+                'Final round, then back one at a time'),
+            _ReviewRow(Icons.tune, 'Handicaps', roadTrip!.handicaps),
+          ]),
+        ],
 
         if (tournamentActiveGames.isNotEmpty) ...[
           const SizedBox(height: 16),
