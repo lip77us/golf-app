@@ -3777,6 +3777,14 @@ and fails if anything is stale or wrong (for CI).
   `seo-manifest.json` (commit it). Rebuilding guides doesn't reset dates.
 - **URL model:** `x/index.html` → `/x/`, `x.html` → `/x` (Pages 308s the `.html`
   form). Canonicals/sitemap use those; the audit warns on links that redirect.
+- **Search-tool verification:** `SITE_VERIFICATION` holds the meta-tag codes for
+  Search Console, Ahrefs Webmaster Tools and Bing, emitted on the homepage only.
+  Prefer DNS verification for Search Console (a Domain property in Cloudflare) and
+  let Ahrefs/Bing import it — then these stay empty. Removing a code in use
+  un-verifies the site.
+- **Search copy overrides:** `OVERRIDES` replaces titles/descriptions that run past
+  Google's limits, surviving guide rebuilds; `docs/seo-copy-for-design.md` carries
+  them back to Design.
 - **Config** at the top of the script: descriptions for pages without one,
   `NOINDEX`, and `PLAY_PACKAGE` — set it to `golf.halved.app` once Android leaves
   closed testing to add Android to the app schema.

@@ -76,6 +76,24 @@ DESCRIPTIONS = {
 # Pages to keep out of search and out of the sitemap, by file path.
 NOINDEX = set()
 
+# **Search-tool ownership codes**, emitted on the homepage only (every service
+# checks the homepage). Paste the `content` value each tool gives you — the
+# code, not the whole <meta> tag. Empty = nothing emitted.
+#
+# These are only needed for the META-TAG method. Google Search Console is
+# better verified as a *Domain* property through a DNS TXT record in Cloudflare
+# (covers every subdomain, survives any site rebuild), and Ahrefs Webmaster
+# Tools and Bing can both import a verified Search Console property — in which
+# case all three stay empty. Keep a code here for as long as the property is
+# verified by it: removing the tag un-verifies the site.
+#
+# The codes are not secrets; they appear in the page source by design.
+SITE_VERIFICATION = {
+    'google-site-verification': '',   # Google Search Console (URL-prefix property)
+    'ahrefs-site-verification': '',   # Ahrefs Webmaster Tools
+    'msvalidate.01': '',              # Bing Webmaster Tools
+}
+
 # **Search-facing copy the SEO step owns**, for pages whose own tags fail the
 # audit. The guides are regenerated from Claude Design's files by
 # build-guides.py, so a title fixed in a generated page is undone by the next
@@ -508,6 +526,11 @@ def build_block(rel, page, guides, published, modified):
     # iOS Safari's Smart App Banner: a native "Open / Get" bar for the listing.
     if not page.first('apple-itunes-app'):
         lines.append(meta_tag('name', 'apple-itunes-app', 'app-id=' + APP_STORE_ID))
+
+    if kind == 'home':
+        for key, code in SITE_VERIFICATION.items():
+            if code and not page.first(key):
+                lines.append(meta_tag('name', key, code.strip()))
 
     home_crumb = (BRAND, SITE + '/')
     hub_crumb = ('Game guides', SITE + '/games/')
