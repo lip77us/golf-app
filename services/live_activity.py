@@ -67,15 +67,28 @@ def _seg_label(segments, seg) -> str:
     return f'SEGMENT {segment_ordinal(segments, seg)} · HOLES {holes}'
 
 
+# A segment is over when it is COMPLETE or HALVED. Sixes emits both — a match
+# that goes the distance all square is `halved`, not `complete` — and code that
+# tests only for `complete` treats a finished match as still being played.
+FINISHED = ('complete', 'halved')
+
+
 def _live_segment(segments):
-    """The segment the group is on: the first not complete, else the last.
+    """The segment the group is on: the first not finished, else the last.
 
     A finished round holds on its last segment rather than falling off the end —
     the final state replaces the board anyway, and a blank header in between
     would read as a fault.
+
+    **`halved` counts as finished, and missing that froze the card.** This read
+    `status != 'complete'`, so a match halved on its last hole was picked as the
+    live one for the rest of the round: the board sat on that segment, `ALL SQ`,
+    `0 TO PLAY`, while three more holes were played into an extra it never
+    showed. Reported 28 Sep 2026 — round 390, segment 3 halved on the 15th, and
+    the watcher's card stopped there.
     """
     for seg in segments:
-        if seg.get('status') != 'complete':
+        if seg.get('status') not in FINISHED:
             return seg
     return segments[-1] if segments else None
 
@@ -143,7 +156,7 @@ def _pips(segments):
         if seg.get('is_extra'):
             extras.append(seg)
             continue
-        if seg.get('status') == 'complete':
+        if seg.get('status') in FINISHED:
             if seg.get('is_void'):
                 out.append('void')
             elif seg.get('winner') == 'Team 1':
@@ -164,7 +177,7 @@ def _pips(segments):
     # Then the tail. One bar per extra, because an extra that closes out early
     # spawns another and a round can genuinely play two.
     for seg in extras:
-        out.append('extra' if seg.get('status') == 'complete' else 'extra-live')
+        out.append('extra' if seg.get('status') in FINISHED else 'extra-live')
     return out
 
 

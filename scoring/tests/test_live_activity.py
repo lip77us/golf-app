@@ -264,6 +264,35 @@ class PipTests(TestCase):
         self.assertIn('extra-live', pips,
                       'something on the strip has to still be live')
 
+    def test_a_halved_segment_is_finished_and_wears_its_mark(self):
+        """A match that goes the distance all square is `halved`, not
+        `complete`. Reading only `complete` drew a finished match as the LIVE
+        one — round 390's segment 3, on the card for the rest of the day."""
+        segs = [
+            {'status': 'complete', 'winner': 'Team 1'},
+            {'status': 'complete', 'winner': 'Team 1'},
+            {'status': 'halved',   'winner': 'Halved'},
+        ]
+        self.assertEqual(self._pips(segs), [BLUE, BLUE, 'halved'])
+
+    def test_a_halved_third_match_does_not_hold_the_card(self):
+        """The reported freeze, at the level it happened: the live segment.
+        Segment 3 halves on the 15th, an extra takes 16-18, and the board has
+        to move onto it."""
+        from services.live_activity import _live_segment
+        segs = [
+            {'status': 'complete', 'winner': 'Team 1'},
+            {'status': 'complete', 'winner': 'Team 1'},
+            {'status': 'halved',   'winner': 'Halved', 'start_hole': 10,
+             'end_hole': 15},
+            {'status': 'pending', 'is_extra': True, 'start_hole': 16,
+             'end_hole': 18},
+        ]
+        live = _live_segment(segs)
+        self.assertTrue(live.get('is_extra'),
+                        'the extra is what is being played, not the halved match')
+        self.assertEqual(live['start_hole'], 16)
+
     def test_a_finished_extra_stays_marked_as_one(self):
         segs = [
             {'status': 'complete', 'winner': 'Team 1'},
