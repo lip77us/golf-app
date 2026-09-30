@@ -1014,3 +1014,57 @@ class CupAllowanceTests(TestCase):
         self.assertEqual(seen, {(90, 100, 40, 40)},
                          'every round of one cup must play off the same '
                          'allowances')
+
+
+class PhantomOnTheCardTests(TestCase):
+    """**The phantom is a four-ball row and nothing else.**
+
+    In a 2v1 the phantom is the solo side's four-ball partner, scored from a
+    cross-foursome donor — the one ball on the card a reader is genuinely
+    waiting for, and until now the only way to see what it got was to walk
+    back to the hole it was posted on.
+
+    The score-entry card draws a row per player in each match, so THIS is what
+    makes that row populate across the four-ball holes and stay blank on the
+    rest — with no hole filtering on the client. A phantom that leaked into
+    the foursomes or singles match would draw scores on holes it does not
+    play, and nothing on the client would catch it.
+
+    Asserted on `_build_match_plan`, which is pure: a 2v1 needs a cup round
+    with a second foursome to donate from, and the plan is where the fact
+    actually lives.
+    """
+
+    PHANTOM = 500
+
+    def _plan(self, **kw):
+        return _build_match_plan([1, 2], [99], phantom_pid=self.PHANTOM, **kw)
+
+    def _segments_with_phantom(self, plan):
+        return {e['segment'] for e in plan
+                if self.PHANTOM in e['team1_ids'] + e['team2_ids']}
+
+    def test_only_the_four_ball_carries_it(self):
+        self.assertEqual(self._segments_with_phantom(self._plan()),
+                         {'fourball'})
+
+    def test_it_partners_the_SOLO_side(self):
+        plan = self._plan()
+        fb = next(e for e in plan if e['segment'] == 'fourball')
+        solo_side = (fb['team1_ids'] if 99 in fb['team1_ids']
+                     else fb['team2_ids'])
+        self.assertIn(self.PHANTOM, solo_side,
+                      'the phantom is the solo player\u2019s second ball')
+        self.assertEqual(sorted(solo_side), sorted([99, self.PHANTOM]))
+
+    def test_it_holds_when_the_segments_are_swapped(self):
+        """Foursomes-first moves the four-ball to 7-12; the phantom follows
+        the SEGMENT, not the hole numbers."""
+        self.assertEqual(
+            self._segments_with_phantom(self._plan(foursomes_first=True)),
+            {'fourball'})
+
+    def test_no_phantom_means_no_phantom_anywhere(self):
+        plan = _build_match_plan([1, 2], [3, 4])
+        everyone = {p for e in plan for p in e['team1_ids'] + e['team2_ids']}
+        self.assertEqual(everyone, {1, 2, 3, 4})

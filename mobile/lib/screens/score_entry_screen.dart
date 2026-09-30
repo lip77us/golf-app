@@ -5164,16 +5164,31 @@ List<Map<String, dynamic>> _tripleCupCardHoles(TripleCupSummary tc) {
 }
 
 /// The roster, in the order the card draws its rows.
+///
+/// **The phantom gets a row.** In a 2v1 it is the solo side's four-ball
+/// partner, and its scores come from a cross-foursome donor — so it is the one
+/// ball on the card the reader is genuinely WAITING for, and the only way to
+/// see what it got was to walk back to the hole it was posted on.
+///
+/// It needs no hole filtering: the phantom is in the four-ball match and no
+/// other (`_build_match_plan` appends it to the solo's side there alone), and
+/// the cells are built per match, so the row populates across the four-ball
+/// holes and is blank everywhere else by construction. A rule that filtered
+/// holes here would be a second copy of that fact, waiting to disagree.
+///
+/// Labelled `Phantom`, which is what the score-entry row above the card calls
+/// it — its `short_name` is `P`, which names nothing. The donor rotates hole
+/// by hole, so no golfer's name is right for the row.
 List<Map<String, dynamic>> _tripleCupCardPlayers(TripleCupSummary tc) {
   final seen = <int>{};
   final out = <Map<String, dynamic>>[];
   for (final m in tc.matches) {
     for (final p in m.players) {
-      if (p.isPhantom || !seen.add(p.playerId)) continue;
+      if (!seen.add(p.playerId)) continue;
       out.add({
         'player_id' : p.playerId,
-        'name'      : p.name,
-        'short_name': p.shortName,
+        'name'      : p.isPhantom ? 'Phantom' : p.name,
+        'short_name': p.isPhantom ? 'Phantom' : p.shortName,
         'team'      : p.teamNumber,
       });
     }
