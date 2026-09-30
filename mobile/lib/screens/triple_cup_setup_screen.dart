@@ -294,7 +294,11 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
         team1Ids:                  _orderedTeamIds(1),
         team2Ids:                  _orderedTeamIds(2),
         handicapMode:              _mode,
-        netPercent:                _netPercent,
+        // The legacy single allowance still travels in the payload and is
+        // what an OLDER client draws in its `NET n%` badge. Send the
+        // four-ball number so that badge reads something true rather than a
+        // slider value that is no longer set anywhere.
+        netPercent:                _fourballPct,
         fourballPercent:           _fourballPct,
         singlesPercent:            _singlesPct,
         altShotLowPct:             _altLowPct,
@@ -518,11 +522,17 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
             const SizedBox(height: 16),
 
             // ── Handicap mode ────────────────────────────────────────
+            // **Mode only.** The allowance is per segment — see the card
+            // below — so a single Net % slider here had nothing to set.
             HandicapModeSelector(
               mode:             _mode,
               netPercent:       _netPercent,
               onModeChanged:    (m) => setState(() => _mode = m),
               onPercentChanged: (p) => setState(() => _netPercent = p),
+              showPercent:      false,
+              percentNote:
+                  'Triple Cup plays three formats, so the allowance is set '
+                  'per segment below \u2014 four-ball, alt-shot and singles.',
             ),
 
             const SizedBox(height: 16),

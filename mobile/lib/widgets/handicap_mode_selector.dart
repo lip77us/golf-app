@@ -37,12 +37,26 @@ class HandicapModeSelector extends StatelessWidget {
   /// e.g. Stableford, which only offers full-handicap-% or gross.
   final bool allowStrokesOff;
 
+  /// When false, the Net % slider is hidden and only the MODE is chosen here.
+  ///
+  /// For a game whose allowance is set per segment — Triple Cup, which plays
+  /// four-ball, alt-shot and singles off three different numbers — one slider
+  /// cannot say it. It sat here doing nothing, which is worse than absent: a
+  /// control that looks like it sets the allowance and does not is a setting
+  /// a TD will believe he has made. [percentNote] says where it moved to.
+  final bool showPercent;
+
+  /// Shown in place of the slider when [showPercent] is false.
+  final String? percentNote;
+
   const HandicapModeSelector({
     super.key,
     required this.mode,
     required this.netPercent,
     required this.onModeChanged,
     required this.onPercentChanged,
+    this.showPercent = true,
+    this.percentNote,
     this.wrapInCard = true,
     this.soNote,
     this.allowStrokesOff = true,
@@ -80,22 +94,29 @@ class HandicapModeSelector extends StatelessWidget {
           // allocation by net_percent (100% = full allowance, 90% =
           // USGA recommended for 2v2 best-ball, etc.).
           const SizedBox(height: 12),
-          Row(children: [
-            // The same Net % is used in both modes — in SO Low it scales
-            // each player's handicap before subtracting the low handicap.
-            // Calling it "Net %" in both modes avoids confusing "SO %"
-            // with the "50%" lower bound of the slider value.
-            const Text('Net %  '),
-            Expanded(
-              child: Slider(
-                min: 50, max: 130, divisions: 16,
-                value: netPercent.toDouble().clamp(50.0, 130.0),
-                label: '$netPercent%',
-                onChanged: (v) => onPercentChanged(v.round()),
+          if (!showPercent)
+            Text(
+              percentNote ?? 'The allowance is set below.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            )
+          else
+            Row(children: [
+              // The same Net % is used in both modes — in SO Low it scales
+              // each player's handicap before subtracting the low handicap.
+              // Calling it "Net %" in both modes avoids confusing "SO %"
+              // with the "50%" lower bound of the slider value.
+              const Text('Net %  '),
+              Expanded(
+                child: Slider(
+                  min: 50, max: 130, divisions: 16,
+                  value: netPercent.toDouble().clamp(50.0, 130.0),
+                  label: '$netPercent%',
+                  onChanged: (v) => onPercentChanged(v.round()),
+                ),
               ),
-            ),
-            SizedBox(width: 48, child: Text('$netPercent%')),
-          ]),
+              SizedBox(width: 48, child: Text('$netPercent%')),
+            ]),
           if (mode == 'strokes_off') ...[
             const SizedBox(height: 4),
             Text(

@@ -116,10 +116,19 @@ class _HandicapBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mode = summary.handicapMode;
+    // **Two numbers when the segments differ**, because one would be wrong
+    // for one of them: four-ball and singles are played off separate
+    // allowances (WHS 90% and 100%). Alt-shot is not here at all — its
+    // allowance is a share of the pair's combined handicap, which does not
+    // reduce to a percentage of one player's.
+    final fb = summary.fourballPercent;
+    final sg = summary.singlesPercent;
+    final pct = fb == sg ? '$fb%' : '$fb/$sg%';
     final label = switch (mode) {
       'gross'       => 'GROSS',
+      // Left as it shipped: SO has never carried the percentage here.
       'strokes_off' => 'SO',
-      _             => 'NET ${summary.netPercent}%',
+      _             => 'NET $pct',
     };
     return Center(
       child: Container(

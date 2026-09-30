@@ -1912,7 +1912,13 @@ def triple_cup_summary(foursome, *, with_cup: bool = False) -> dict | None:
     # a "Waiting for Glenn..." placeholder when the donor hasn't
     # posted that hole yet.  Same shape nassau exposes.
     from scoring.phantom import build_phantom_info
-    phantom_info = build_phantom_info(foursome, game.net_percent)
+    # **The four-ball allowance, not the legacy one.** The cross-foursome
+    # phantom exists for the 2v1 FOUR-BALL, so its donor SO badge has to be
+    # scaled by the same number `_fourball_donor_so_by_hole` uses — otherwise
+    # two four-ball badges on one screen disagree the moment the four-ball
+    # allowance differs from `net_percent`.
+    phantom_info = build_phantom_info(
+        foursome, segment_percent(game, 'fourball'))
 
     # Ordered real-player rosters per side, so the setup screen can restore the
     # user's team picks on re-edit.  Singles matches define the within-team
