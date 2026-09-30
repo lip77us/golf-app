@@ -17,6 +17,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../game_colors.dart';
 import '../providers/round_provider.dart';
+import '../utils/triple_cup_allowance.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/round_chat_button.dart';
@@ -81,7 +82,7 @@ class _TripleCupScreenState extends State<TripleCupScreen> {
                       const SizedBox(height: 16),
                       ...summary.matches.map((m) => Padding(
                             padding: const EdgeInsets.only(bottom: 12),
-                            child: _MatchCard(match: m),
+                            child: _MatchCard(match: m, summary: summary),
                           )),
                       if (summary.money.isNotEmpty) ...[
                         const SizedBox(height: 8),
@@ -218,7 +219,21 @@ String _formatPoints(double p) {
 
 class _MatchCard extends StatelessWidget {
   final TripleCupMatch match;
-  const _MatchCard({required this.match});
+  /// Needed for the segment's handicap allowance — see [_allowanceNote].
+  final TripleCupSummary summary;
+  const _MatchCard({required this.match, required this.summary});
+
+  /// The segment's allowance, drawn under the header. The rule lives in
+  /// `utils/triple_cup_allowance.dart` so it is testable, and so a second
+  /// surface cannot end up wording it differently.
+  String? _allowanceNote() => tripleCupAllowanceNote(
+        mode:            summary.handicapMode,
+        segment:         match.segment,
+        fourballPercent: summary.fourballPercent,
+        singlesPercent:  summary.singlesPercent,
+        altShotLowPct:   summary.altShotLowPct,
+        altShotHighPct:  summary.altShotHighPct,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -284,6 +299,13 @@ class _MatchCard extends StatelessWidget {
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant)),
             ]),
+
+            if (_allowanceNote() case final note?) ...[
+              const SizedBox(height: 4),
+              Text(note,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ],
 
             const SizedBox(height: 12),
 
