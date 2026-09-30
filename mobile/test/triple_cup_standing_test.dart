@@ -66,6 +66,9 @@ TripleCupSummary _summary({
     TripleCupSummary(
       status: 'in_progress', groupSize: 4,
       handicapMode: 'net', netPercent: 100,
+      // One allowance per segment: WHS 90% four-ball, 100% singles. The
+      // double carries them because every summary does.
+      fourballPercent: 90, singlesPercent: 100,
       altShotLowPct: 50, altShotHighPct: 50,
       matches: matches,
       team1Wins: 0, team2Wins: 0, halves: 0,

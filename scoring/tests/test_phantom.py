@@ -71,7 +71,17 @@ class _Member:
 
 
 class _Game:
+    """The handicap knobs `_whs_so_net_index` reads, and nothing else.
+
+    It asks for a per-SEGMENT allowance now — four-ball and singles are
+    different formats and WHS gives them different numbers — so the double
+    carries all three. A stub that lags the model is what made these three
+    tests fail with `AttributeError` rather than a wrong number, which is the
+    better of the two ways to find out.
+    """
     net_percent = 100
+    fourball_percent = 100
+    singles_percent = 100
 
 
 class FourballPerHoleDonorSOTests(SimpleTestCase):

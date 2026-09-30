@@ -13,7 +13,7 @@ from django.test import TestCase
 
 from services.triple_cup import (
     setup_triple_cup, calculate_triple_cup, triple_cup_summary,
-    _alt_shot_team_combined, _build_match_plan,
+    _alt_shot_team_combined, _build_match_plan, segment_percent,
 )
 
 from ._helpers import (
@@ -376,12 +376,91 @@ class TripleCupFoursomesTeamSODisplayTests(TestCase):
         # (Course-hcp average would be (26+19)/2 = 22.5 → 23.)
         self.assertEqual(_alt_shot_team_combined(g, [pa.id, pb.id], mbp)[0], 22)
 
-        # net% comes off BOTH the pair and the solo, rounded 0.5 up.
+        # **The weights are the allowance, and nothing else scales them.**
+        # This asserted the opposite until 30 Sep: `net_percent` multiplied
+        # the alt-shot figure as well, so the four-ball allowance silently
+        # moved the alt-shot one and "40% of combined with the four-ball at
+        # 90%" could not be expressed — it came out 36%.
         g.net_percent = 90
-        # pair: 22.31 * 0.9 = 20.08 → 20
+        g.fourball_percent = 90
+        self.assertEqual(
+            _alt_shot_team_combined(g, [pa.id, pb.id], mbp)[0], 22,
+            'the four-ball allowance must not move the alt-shot figure')
+
+        # 90% of the pair's combined is written as the weights: 22.31 * .9
+        # = 20.08 → 20.
+        g.alt_shot_low_pct = g.alt_shot_high_pct = 45
         self.assertEqual(_alt_shot_team_combined(g, [pa.id, pb.id], mbp)[0], 20)
-        # solo: own CH 25 * 0.9 = 22.5 → round-half-up → 23
-        self.assertEqual(_alt_shot_team_combined(g, [ps.id], mbp)[0], 23)
+
+        # Solo at 50 + 50 is his own figure once: 24.61 → 25.
+        g.alt_shot_low_pct = g.alt_shot_high_pct = 50
+        self.assertEqual(_alt_shot_team_combined(g, [ps.id], mbp)[0], 25)
+
+
+class AltShotAllowanceTests(TestCase):
+    """The allowance a side plays the alt-shot segment off.
+
+    `low + high` is a share of the pair's COMBINED handicap, so 50 + 50 is
+    the USGA half-of-combined and 40 + 40 is 40% of combined — which is the
+    same number as 80% of half, and is what the match's stroke difference is
+    then taken from.
+    """
+
+    def _game(self, low, high):
+        tee = make_tee(slope=113, course_rating=72.0, par=72)   # CH == index
+        round_ = make_round(tee.course)
+        a = make_player('A', 20)
+        b = make_player('B', 10)
+        s = make_player('S', 14)
+        f = make_player('F', 6)
+        fs = make_foursome(round_, [(a, 20), (b, 10), (s, 14), (f, 6)], tee=tee)
+        setup_triple_cup(fs, team1_ids=[a.id, b.id], team2_ids=[s.id, f.id],
+                         alt_shot_low_pct=low, alt_shot_high_pct=high)
+        from games.models import TripleCupGame
+        g = TripleCupGame.objects.get(foursome=fs)
+        mbp = {m.player_id: m
+               for m in fs.memberships.select_related('player', 'tee')}
+        return g, mbp, (a, b, s, f)
+
+    def test_forty_and_forty_is_forty_percent_of_combined(self):
+        g, mbp, (a, b, s, f) = self._game(40, 40)
+        # 20 + 10 = 30 combined; 40% of 30 = 12.
+        self.assertEqual(_alt_shot_team_combined(g, [a.id, b.id], mbp)[0], 12)
+        # 14 + 6 = 20 combined; 40% of 20 = 8.
+        self.assertEqual(_alt_shot_team_combined(g, [s.id, f.id], mbp)[0], 8)
+
+    def test_it_is_the_same_as_eighty_percent_of_half(self):
+        """The two ways of saying it have to produce one number."""
+        g, mbp, (a, b, _s, _f) = self._game(40, 40)
+        combined = 20 + 10
+        self.assertEqual(_alt_shot_team_combined(g, [a.id, b.id], mbp)[0],
+                         round(0.40 * combined))
+        self.assertEqual(round(0.40 * combined), round(0.80 * combined / 2))
+
+    def test_the_match_plays_off_the_DIFFERENCE(self):
+        g, mbp, (a, b, s, f) = self._game(40, 40)
+        t1 = _alt_shot_team_combined(g, [a.id, b.id], mbp)[0]
+        t2 = _alt_shot_team_combined(g, [s.id, f.id], mbp)[0]
+        # 40% of (30 − 20) = 4 — the strokes the higher side receives.
+        self.assertEqual(t1 - t2, 4)
+
+    def test_a_SOLO_side_plays_off_his_own_handicap_TWICE(self):
+        """Alt-shot is a two-ball format; a side of one still plays a
+        combined figure, so the lone player counts twice.
+
+        Reading his handicap ONCE made his side cheaper than a pair's for any
+        weighting that did not happen to sum to 100 — at 40 + 40 he would
+        have carried 40% of one handicap against a pair's 40% of two.
+        """
+        g, mbp, (a, _b, _s, _f) = self._game(40, 40)
+        # A is off 20. Twice is 40 combined; 40% of that is 16.
+        self.assertEqual(_alt_shot_team_combined(g, [a.id], mbp)[0], 16)
+
+    def test_fifty_fifty_leaves_a_solo_on_his_own_figure(self):
+        """The historic default has to be unchanged: 50 + 50 of a doubled
+        handicap is the handicap."""
+        g, mbp, (a, _b, _s, _f) = self._game(50, 50)
+        self.assertEqual(_alt_shot_team_combined(g, [a.id], mbp)[0], 20)
 
 
 class TripleCupStrokesOffTests(TestCase):
@@ -750,3 +829,152 @@ class TripleCupDetailProspectiveStrokesTests(TestCase):
         self.assertEqual(cell(6, 'Hi9A')['strokes'], 0)
         # Low is the scratch baseline → no strokes anywhere.
         self.assertEqual(cell(1, 'Low')['strokes'], 0)
+
+
+class SegmentAllowanceTests(TestCase):
+    """One allowance per segment.
+
+    A Triple Cup plays three different formats in one round, and WHS gives
+    them different allowances — 90% four-ball, 100% singles. Until these were
+    separate fields a single `net_percent` drove both, so asking for 90%
+    four-ball and full-index singles set them to the same number.
+    """
+
+    def _game(self, **kw):
+        tee = make_tee(slope=113, course_rating=72.0, par=72)   # CH == index
+        round_ = make_round(tee.course)
+        a = make_player('A', 20)
+        b = make_player('B', 10)
+        s = make_player('S', 14)
+        f = make_player('F', 6)
+        fs = make_foursome(round_, [(a, 20), (b, 10), (s, 14), (f, 6)], tee=tee)
+        setup_triple_cup(fs, team1_ids=[a.id, b.id], team2_ids=[s.id, f.id],
+                         **kw)
+        from games.models import TripleCupGame
+        return TripleCupGame.objects.get(foursome=fs), fs
+
+    def test_the_two_segments_are_set_independently(self):
+        g, _fs = self._game(fourball_percent=90, singles_percent=100)
+        self.assertEqual(segment_percent(g, 'fourball'), 90)
+        self.assertEqual(segment_percent(g, 'singles'), 100)
+
+    def test_four_ball_at_ninety_does_not_move_the_singles(self):
+        """The defect these fields exist to fix."""
+        g, _fs = self._game(fourball_percent=90, singles_percent=100)
+        self.assertNotEqual(segment_percent(g, 'fourball'),
+                            segment_percent(g, 'singles'))
+
+    def test_a_caller_that_knows_only_net_percent_is_unchanged(self):
+        """What the cup round does: it passes the round's one allowance and
+        knows nothing about segments, so both must land on it."""
+        g, _fs = self._game(net_percent=90)
+        self.assertEqual(segment_percent(g, 'fourball'), 90)
+        self.assertEqual(segment_percent(g, 'singles'), 90)
+
+    def test_the_defaults_are_the_WHS_numbers(self):
+        g, _fs = self._game()
+        self.assertEqual(segment_percent(g, 'fourball'), 100)
+        self.assertEqual(segment_percent(g, 'singles'), 100)
+        # …and an explicit pair survives the round-trip.
+        g2, _ = self._game(fourball_percent=90, singles_percent=100)
+        self.assertEqual((g2.fourball_percent, g2.singles_percent), (90, 100))
+
+    def test_alt_shot_is_NOT_one_of_them(self):
+        """Its allowance is the low/high weighting of two handicaps, not a
+        percentage of one — `segment_percent` must never be asked for it."""
+        g, _fs = self._game(fourball_percent=90, singles_percent=100)
+        # 'foursomes' falls back rather than raising, but the weights are what
+        # the alt-shot engine reads; this pins that they are independent.
+        self.assertEqual(g.alt_shot_low_pct, 50)
+        self.assertEqual(g.alt_shot_high_pct, 50)
+
+    def test_the_singles_strokes_follow_the_singles_allowance(self):
+        """End to end: the strokes a singles match allocates move when the
+        singles allowance moves, and do NOT move when the four-ball's does.
+        """
+        from services.triple_cup import _expected_strokes_per_match
+        strokes = {}
+        for label, kw in (('full',  dict(fourball_percent=100, singles_percent=100)),
+                          ('half',  dict(fourball_percent=100, singles_percent=50)),
+                          ('fb50',  dict(fourball_percent=50,  singles_percent=100))):
+            g, fs = self._game(**kw)
+            mbp = {m.player_id: m
+                   for m in fs.memberships.select_related('player', 'tee')}
+            match = next(m for m in g.matches.all() if m.segment == 'singles')
+            t1 = list(match.teams.get(team_number=1).players
+                      .values_list('id', flat=True))
+            t2 = list(match.teams.get(team_number=2).players
+                      .values_list('id', flat=True))
+            got = _expected_strokes_per_match(match, list(g.matches.all()),
+                                              t1, t2, g, mbp, None)
+            strokes[label] = sum(sum(h.values()) for h in got.values())
+
+        self.assertGreater(strokes['full'], strokes['half'],
+                           'the singles allowance must change singles strokes')
+        self.assertEqual(strokes['full'], strokes['fb50'],
+                         'the four-ball allowance must not touch the singles')
+
+
+class CupRoundAllowanceTests(TestCase):
+    """**The cup round's allowances reach the game.**
+
+    The cup path called `setup_triple_cup` with the round's single
+    `net_percent` and nothing else — no segment split and no alt-shot weights
+    — so a cup Triple Cup was stuck on one allowance and the USGA 50/50 while
+    the casual setup screen had both. That is the gap `triple_cup_allowances`
+    closes, and this is the test that would have caught it.
+    """
+
+    def test_an_unset_config_asks_for_nothing(self):
+        """Null means "as before": no kwargs, so the engine's own fallback
+        applies and an existing cup round does not move."""
+        from tournament.models import RyderCupRoundConfig
+        cfg = RyderCupRoundConfig()
+        self.assertEqual(cfg.triple_cup_allowances(), {})
+
+    def test_what_the_TD_sets_is_what_the_engine_is_asked_for(self):
+        from tournament.models import RyderCupRoundConfig
+        cfg = RyderCupRoundConfig(
+            tc_fourball_percent=90, tc_singles_percent=100,
+            tc_alt_shot_low_pct=40, tc_alt_shot_high_pct=40)
+        self.assertEqual(cfg.triple_cup_allowances(), {
+            'fourball_percent': 90,
+            'singles_percent': 100,
+            'alt_shot_low_pct': 40,
+            'alt_shot_high_pct': 40,
+        })
+
+    def test_a_partly_set_config_passes_only_what_was_set(self):
+        """A key that is absent must stay absent, not arrive as None — the
+        engine reads `is None` to mean "fall back to net_percent", and a
+        None passed positionally would work while a None in the payload
+        would not."""
+        from tournament.models import RyderCupRoundConfig
+        cfg = RyderCupRoundConfig(tc_singles_percent=100)
+        self.assertEqual(cfg.triple_cup_allowances(),
+                         {'singles_percent': 100})
+
+    def test_those_kwargs_land_on_the_game(self):
+        """End to end: the dict the config produces is accepted by setup and
+        stored, so the two halves cannot drift."""
+        from tournament.models import RyderCupRoundConfig
+        from games.models import TripleCupGame
+        tee = make_tee(slope=113, course_rating=72.0, par=72)
+        round_ = make_round(tee.course)
+        a = make_player('A', 20)
+        b = make_player('B', 10)
+        c = make_player('C', 14)
+        d = make_player('D', 6)
+        fs = make_foursome(round_, [(a, 20), (b, 10), (c, 14), (d, 6)], tee=tee)
+        kwargs = RyderCupRoundConfig(
+            tc_fourball_percent=90, tc_singles_percent=100,
+            tc_alt_shot_low_pct=40, tc_alt_shot_high_pct=40,
+        ).triple_cup_allowances()
+        setup_triple_cup(fs, team1_ids=[a.id, b.id], team2_ids=[c.id, d.id],
+                         net_percent=75, **kwargs)
+        g = TripleCupGame.objects.get(foursome=fs)
+        self.assertEqual(segment_percent(g, 'fourball'), 90)
+        self.assertEqual(segment_percent(g, 'singles'), 100)
+        self.assertEqual((g.alt_shot_low_pct, g.alt_shot_high_pct), (40, 40))
+        # The round's own net% is stored but no longer drives a segment.
+        self.assertEqual(g.net_percent, 75)

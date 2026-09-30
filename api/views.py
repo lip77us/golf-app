@@ -7656,6 +7656,8 @@ class TripleCupSetupView(APIView):
                 team2_ids                  = d['team2_player_ids'],
                 handicap_mode              = d.get('handicap_mode', 'net'),
                 net_percent                = d.get('net_percent', 100),
+                fourball_percent           = d.get('fourball_percent'),
+                singles_percent            = d.get('singles_percent'),
                 alt_shot_low_pct           = d.get('alt_shot_low_pct', 50),
                 alt_shot_high_pct          = d.get('alt_shot_high_pct', 50),
                 foursomes_first            = d.get('foursomes_first', False),
@@ -10243,6 +10245,10 @@ class RyderCupRoundSetupView(APIView):
             point_multiplier   = d['point_multiplier'],
             notes              = d['notes'],
             round_format       = round_format,
+            tc_fourball_percent  = d.get('tc_fourball_percent'),
+            tc_singles_percent   = d.get('tc_singles_percent'),
+            tc_alt_shot_low_pct  = d.get('tc_alt_shot_low_pct'),
+            tc_alt_shot_high_pct = d.get('tc_alt_shot_high_pct'),
         )
 
         # Per-foursome configs
@@ -10483,12 +10489,23 @@ class RyderCupRoundSetupView(APIView):
                 t2_ids = [p.pk for p in (team2.players.all() if team2 else [])
                           if p.pk in real_pids_tc]
                 try:
+                    # **The cup round's own Triple Cup allowances.** This
+                    # used to pass the round's single `net_percent` and
+                    # nothing else, so a cup Triple Cup could not be given
+                    # the four-ball/singles split at all and its alt-shot sat
+                    # on the USGA 50/50 default with no way to change it —
+                    # while the casual setup screen had both. Read off the
+                    # round config, which is where a cup TD sets them.
+                    _cfg = getattr(round_obj, 'ryder_cup_config', None)
+                    _tc = (_cfg.triple_cup_allowances() if _cfg is not None
+                           else {})
                     setup_triple_cup(
                         foursome,
                         team1_ids     = t1_ids,
                         team2_ids     = t2_ids,
                         handicap_mode = round_obj.handicap_mode,
                         net_percent   = round_obj.net_percent,
+                        **_tc,
                     )
                 except (ValueError, Exception) as _e:
                     import logging
@@ -10966,6 +10983,11 @@ def _round_ryder_config(rc: RyderCupRoundConfig) -> dict:
         'nassau_point_value': float(rc.nassau_point_value),
         'point_multiplier'  : float(rc.point_multiplier),
         'notes'             : rc.notes,
+        # Null means "as before" — the client draws the fallback, not a zero.
+        'tc_fourball_percent' : rc.tc_fourball_percent,
+        'tc_singles_percent'  : rc.tc_singles_percent,
+        'tc_alt_shot_low_pct' : rc.tc_alt_shot_low_pct,
+        'tc_alt_shot_high_pct': rc.tc_alt_shot_high_pct,
         'team_totals'       : [
             {'team': name, 'points': pts} for name, pts in team_totals.items()
         ],

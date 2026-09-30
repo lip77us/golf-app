@@ -2265,6 +2265,15 @@ class TripleCupSummary {
   final int groupSize;       // 2 | 3 | 4
   final String handicapMode; // 'net' | 'gross' | 'strokes_off'
   final int netPercent;
+  /// **One allowance per segment.** Four-ball and singles are different games
+  /// played by the same four people in one round, and WHS gives them
+  /// different numbers (90% and 100%). They default to [netPercent] so an
+  /// older payload, or a cup round that passes only the round's allowance,
+  /// reads exactly as it used to.
+  final int fourballPercent;
+  final int singlesPercent;
+  /// Alt-shot: a share of the PAIR's combined handicap, which is its whole
+  /// allowance — 50 + 50 is half of combined, 40 + 40 is 40% of it.
   final int altShotLowPct;
   final int altShotHighPct;
   /// Foursomes (alt-shot) plays holes 1-6 and fourball 7-12 when true;
@@ -2314,6 +2323,8 @@ class TripleCupSummary {
     required this.groupSize,
     required this.handicapMode,
     required this.netPercent,
+    required this.fourballPercent,
+    required this.singlesPercent,
     required this.altShotLowPct,
     required this.altShotHighPct,
     this.foursomesFirst = false,
@@ -2362,6 +2373,12 @@ class TripleCupSummary {
       groupSize:        j['group_size'] as int? ?? 4,
       handicapMode:     hcap['mode']                as String? ?? 'net',
       netPercent:       hcap['net_percent']         as int?    ?? 100,
+      // Fall back to net% rather than to a literal: that is what the server
+      // does when a caller does not name a segment, so the two agree.
+      fourballPercent:  hcap['fourball_percent']    as int?
+                            ?? hcap['net_percent']  as int?    ?? 100,
+      singlesPercent:   hcap['singles_percent']     as int?
+                            ?? hcap['net_percent']  as int?    ?? 100,
       altShotLowPct:    hcap['alt_shot_low_pct']    as int?    ?? 50,
       altShotHighPct:   hcap['alt_shot_high_pct']   as int?    ?? 50,
       foursomesFirst:   j['foursomes_first'] as bool? ?? false,

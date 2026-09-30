@@ -23,8 +23,15 @@ winner, halves split.  Match counts by group size:
 Public API
 ~~~~~~~~~~
     setup_triple_cup(foursome, team1_ids, team2_ids, *, handicap_mode='net',
-                     net_percent=100, alt_shot_low_pct=50,
+                     net_percent=100, fourball_percent=None,
+                     singles_percent=None, alt_shot_low_pct=50,
                      alt_shot_high_pct=50, phantom_score_mode='net_par')
+
+One allowance per segment: four-ball and singles each take a percentage of
+the player's handicap (WHS says 90 and 100), and alt-shot takes a weighted
+share of the pair's combined figure — `low + high`, so 50 + 50 is half of
+combined and 40 + 40 is 40% of it. `fourball_percent` / `singles_percent`
+fall back to `net_percent`, which is what a cup round passes.
     calculate_triple_cup(foursome)
     triple_cup_summary(foursome)
 
@@ -196,8 +203,14 @@ def _whs_so_net_index(
                 low = low_real
                 hcp = base_hcp
             so = max(0, hcp - low)
-            if game.net_percent != 100:
-                so = int(round_half_up(so * game.net_percent / 100.0))
+            # **Per HOLE, not per index.** This one dict covers the whole
+            # round, and the four-ball and singles holes in it are played off
+            # different allowances; the builder already knows which holes are
+            # which, so it can say so. (Foursomes holes land here too and are
+            # never read — alt-shot scores off `_foursomes_team_strokes`.)
+            pct = segment_percent(game, 'fourball' if in_fb else 'singles')
+            if pct != 100:
+                so = int(round_half_up(so * pct / 100.0))
             si = m.tee.hole(hole).get('stroke_index', 18)
             strokes = 0
             if si <= so:
@@ -390,6 +403,8 @@ def reconfigure_triple_cup(
         hcap_kwargs = {
             'handicap_mode'   : tc_game.handicap_mode,
             'net_percent'     : tc_game.net_percent,
+            'fourball_percent': tc_game.fourball_percent,
+            'singles_percent' : tc_game.singles_percent,
             'alt_shot_low_pct': tc_game.alt_shot_low_pct,
             'alt_shot_high_pct': tc_game.alt_shot_high_pct,
         }
@@ -692,6 +707,11 @@ def setup_triple_cup(
     *,
     handicap_mode: str = HandicapMode.NET,
     net_percent: int = 100,
+    # **Both default to `net_percent` when the caller does not say.** A cup
+    # round passes the round's single allowance and knows nothing about
+    # segments, so leaving these unset has to mean exactly what it used to.
+    fourball_percent: int | None = None,
+    singles_percent: int | None = None,
     alt_shot_low_pct: int = 50,
     alt_shot_high_pct: int = 50,
     foursomes_first: bool = False,
@@ -763,6 +783,10 @@ def setup_triple_cup(
         status             = MatchStatus.PENDING,
         handicap_mode      = handicap_mode,
         net_percent        = max(0, min(200, int(net_percent))),
+        fourball_percent   = max(0, min(200, int(
+            net_percent if fourball_percent is None else fourball_percent))),
+        singles_percent    = max(0, min(200, int(
+            net_percent if singles_percent is None else singles_percent))),
         alt_shot_low_pct   = max(0, min(100, int(alt_shot_low_pct))),
         alt_shot_high_pct  = max(0, min(100, int(alt_shot_high_pct))),
         group_size         = len(team1_ids) + len(team2_ids),
@@ -885,15 +909,43 @@ def _alt_shot_team_combined(
     tee = members[0].tee
 
     if len(members) == 1:
-        # Solo — net% off their own course handicap.
-        combined = (members[0].playing_handicap or 0) * game.net_percent / 100.0
+        # **Solo — his own handicap used TWICE**, because alt-shot is a
+        # two-ball format and a side of one still plays a combined figure.
+        # Running him through the same weights is what keeps him on the same
+        # rule as everyone else: at 40 + 40 a pair gets 40% of their two and
+        # he gets 40% of his, counted twice. Reading his single handicap
+        # instead made the lone player's side cheaper than a pair's for any
+        # weighting that did not happen to sum to 100.
+        raw = _raw_ch(members[0])
+        combined = (raw * game.alt_shot_low_pct
+                    + raw * game.alt_shot_high_pct) / 100.0
     else:
-        # Pair — weight the unrounded course handicaps, then net%.
+        # Pair — weight the unrounded course handicaps. The weights are the
+        # allowance and nothing else multiplies them: 50 + 50 is the USGA
+        # half-of-combined, 40 + 40 is 40% of combined.
         raws = sorted(_raw_ch(m) for m in members)
-        weighted = (raws[0] * game.alt_shot_low_pct
+        combined = (raws[0] * game.alt_shot_low_pct
                     + raws[-1] * game.alt_shot_high_pct) / 100.0
-        combined = weighted * game.net_percent / 100.0
     return math.floor(combined + 0.5), tee   # round half UP
+
+
+def segment_percent(game, segment: str) -> int:
+    """The handicap allowance for one segment of the Triple Cup.
+
+    **Three formats, three allowances.** Four-ball and singles are different
+    games played by the same four people on the same afternoon, and WHS gives
+    them different numbers — 90% and 100%. Until these were separate fields a
+    single `net_percent` drove both, so setting the four-ball set the singles.
+
+    Alt-shot is NOT here: its allowance is the low/high weighting of the
+    pair's combined handicap (`_foursomes_team_strokes`), which is a share of
+    two handicaps rather than a percentage of one, and scaling it by this as
+    well was the double-count that made "40% of combined" unreachable
+    whenever the four-ball was not at 100.
+    """
+    if segment == 'singles':
+        return int(game.singles_percent)
+    return int(game.fourball_percent)
 
 
 def _allocate_whs(strokes: int, hole_range, tee) -> dict[int, int]:
@@ -952,8 +1004,9 @@ def _fourball_donor_so_by_hole(
                 low = min(low_real, donor_hcp)
                 hcp = donor_hcp if is_ph else (m.playing_handicap or 0)
             so = max(0, hcp - low)
-            if game.net_percent != 100:
-                so = int(round_half_up(so * game.net_percent / 100.0))
+            fb_pct = segment_percent(game, 'fourball')
+            if fb_pct != 100:
+                so = int(round_half_up(so * fb_pct / 100.0))
             out.setdefault(pid, {})[h] = so
     return out
 
@@ -1039,8 +1092,9 @@ def _expected_strokes_per_match(
                         low = min(low_real, donor_hcp)
                         hcp = donor_hcp if is_ph else (m.playing_handicap or 0)
                     so = max(0, hcp - low)
-                    if game.net_percent != 100:
-                        so = int(round_half_up(so * game.net_percent / 100.0))
+                    fb_pct = segment_percent(game, 'fourball')
+                    if fb_pct != 100:
+                        so = int(round_half_up(so * fb_pct / 100.0))
                     si = m.tee.hole(h).get('stroke_index', 18)
                     result[pid][h] = (
                         1 + (1 if si + 18 <= so else 0) if si <= so else 0
@@ -1078,8 +1132,9 @@ def _expected_strokes_per_match(
         if m is None or m.tee_id is None:
             continue
         eff = max(0, (m.playing_handicap or 0) - baseline)
-        if game.net_percent != 100:
-            eff = int(round_half_up(eff * game.net_percent / 100.0))
+        pct = segment_percent(game, match.segment)
+        if pct != 100:
+            eff = int(round_half_up(eff * pct / 100.0))
         result[pid] = _allocate_whs(eff, seg_range, m.tee)
     return result
 
@@ -1262,7 +1317,7 @@ def calculate_triple_cup(foursome) -> list[TripleCupHoleResult]:
     members_by_pid = _membership_by_pid(foursome)
 
     # Indexes are shared between scoring (here) and the summary view.
-    gross_index, net_index, pair_indexes = _build_score_indexes(
+    gross_index, net_by_segment, pair_indexes = _build_score_indexes(
         game, foursome, matches, members_by_pid,
     )
 
@@ -1291,7 +1346,8 @@ def calculate_triple_cup(foursome) -> list[TripleCupHoleResult]:
             )
         else:
             # SO-reset singles matches are handled via pair_indexes.
-            index_for_match = pair_indexes.get(match.id, net_index)
+            index_for_match = (pair_indexes.get(match.id)
+                               or net_by_segment[match.segment])
             results, finished_on = _score_fourball_or_singles(
                 match, team1_pids, team2_pids, index_for_match,
             )
@@ -1383,7 +1439,10 @@ def _player_shorts(pids: list[int], members_by_pid: dict) -> list[str]:
 
 def _build_score_indexes(game, foursome, matches, members_by_pid):
     """Shared between calculate_triple_cup and triple_cup_summary.
-    Returns (gross_index, net_index, pair_indexes_by_match_id).
+    Returns (gross_index, net_by_segment, pair_indexes_by_match_id).
+
+    `net_by_segment` is keyed by segment because the three formats are
+    played off different allowances; pick with `net_by_segment[match.segment]`.
 
     pair_indexes_by_match_id is non-empty only in SO mode: it carries
     the per-pair SO override score index for the singles match(es)
@@ -1413,13 +1472,28 @@ def _build_score_indexes(game, foursome, matches, members_by_pid):
             include_phantom=include_phantom,
             fourball_holes=fourball_holes,
         )
+        net_by_segment = {seg: net_index
+                          for seg in ('fourball', 'singles', 'foursomes')}
     else:
-        net_index = build_score_index(
-            foursome,
-            handicap_mode   = game.handicap_mode,
-            net_percent     = game.net_percent,
-            include_phantom = include_phantom,
-        )
+        # **One index per allowance.** `build_score_index` nets the whole
+        # round at a single percentage, so four-ball and singles need one
+        # each; they are the same object when the two allowances agree, which
+        # is the common case and saves the second pass.
+        def _at(pct):
+            return build_score_index(
+                foursome,
+                handicap_mode   = game.handicap_mode,
+                net_percent     = pct,
+                include_phantom = include_phantom,
+            )
+        fb_pct = segment_percent(game, 'fourball')
+        sg_pct = segment_percent(game, 'singles')
+        fb_index = _at(fb_pct)
+        sg_index = fb_index if sg_pct == fb_pct else _at(sg_pct)
+        # Foursomes never reads this — alt-shot scores off its own team
+        # strokes — but the key exists so a segment lookup cannot KeyError.
+        net_by_segment = {'fourball': fb_index, 'singles': sg_index,
+                          'foursomes': fb_index}
 
     pair_indexes: dict = {}
     if game.handicap_mode == HandicapMode.STROKES_OFF:
@@ -1440,9 +1514,10 @@ def _build_score_indexes(game, foursome, matches, members_by_pid):
                     continue
                 pair_indexes[match.id] = _singles_pair_so_index(
                     t1p + t2p, gross_index, members_by_pid,
-                    _match_hole_list(match), game.net_percent,
+                    _match_hole_list(match),
+                    segment_percent(game, 'singles'),
                 )
-    return gross_index, net_index, pair_indexes
+    return gross_index, net_by_segment, pair_indexes
 
 
 def triple_cup_summary(foursome, *, with_cup: bool = False) -> dict | None:
@@ -1456,6 +1531,8 @@ def triple_cup_summary(foursome, *, with_cup: bool = False) -> dict | None:
         'status'              : 'pending'|'in_progress'|'complete',
         'group_size'          : 2|3|4,
         'handicap'            : {'mode': str, 'net_percent': int,
+                                 'fourball_percent': int,
+                                 'singles_percent': int,
                                  'alt_shot_low_pct': int,
                                  'alt_shot_high_pct': int,
                                  'phantom_score_mode': str},
@@ -1512,7 +1589,7 @@ def triple_cup_summary(foursome, *, with_cup: bool = False) -> dict | None:
     # strokes/net reflect the game's actual handicap mode (NET %, SO
     # foursome-wide, or SO per-pair singles override) — not the raw
     # HoleScore.handicap_strokes which always carries full-net-at-100.
-    gross_index, net_index, pair_indexes = _build_score_indexes(
+    gross_index, net_by_segment, pair_indexes = _build_score_indexes(
         game, foursome, matches, members_by_pid,
     )
     foursome_low_pid = (
@@ -1603,7 +1680,8 @@ def triple_cup_summary(foursome, *, with_cup: bool = False) -> dict | None:
         # leaderboard can render a Nassau-style detail grid per
         # segment without joining against the scorecard endpoint.
         match_pids   = list(team1_pids) + list(team2_pids)
-        match_index  = pair_indexes.get(match.id, net_index)
+        match_index  = (pair_indexes.get(match.id)
+                        or net_by_segment[match.segment])
 
         # Expected strokes per player per hole — same numbers the
         # entry-screen dot display reads, the leaderboard per-player
@@ -1878,6 +1956,8 @@ def triple_cup_summary(foursome, *, with_cup: bool = False) -> dict | None:
         'handicap'   : {
             'mode'              : game.handicap_mode,
             'net_percent'       : game.net_percent,
+            'fourball_percent'  : game.fourball_percent,
+            'singles_percent'   : game.singles_percent,
             'alt_shot_low_pct'  : game.alt_shot_low_pct,
             'alt_shot_high_pct' : game.alt_shot_high_pct,
         },

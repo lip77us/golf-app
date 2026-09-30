@@ -25,6 +25,8 @@ import '../providers/auth_provider.dart';
 import '../utils/cup_colors.dart';
 import '../utils/grouping.dart';
 import '../widgets/error_view.dart';
+import '../widgets/golf_text_field.dart';
+import '../widgets/section_card.dart';
 import '../widgets/irish_rumble_variant.dart';
 import '../widgets/tee_assignment.dart' show TeePicker;
 
@@ -192,6 +194,18 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
   /// Locked once the first foursome is committed so we can't end up
   /// with mixed formats in the payload.
   String _roundFormat = 'custom';
+
+  /// **Triple Cup handicap allowances, per segment.** A cup Triple Cup used
+  /// to be handed the round's single net % and nothing else, so its four-ball
+  /// and singles shared one allowance and its alt-shot sat on the USGA 50/50
+  /// with no way to change it — while the CASUAL setup screen had both. These
+  /// are the cup TD's equivalents. WHS: 90% four-ball, 100% singles; alt-shot
+  /// weights are a share of the pair's combined handicap, so 50 + 50 is half
+  /// of combined and 40 + 40 is 40% of it.
+  int _tcFourballPct = 90;
+  int _tcSinglesPct  = 100;
+  int _tcAltLowPct   = 50;
+  int _tcAltHighPct  = 50;
 
   // Current-foursome draft
   String?        _gameType;
@@ -799,6 +813,12 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
         pointMultiplier  : 1.0,
         roundFormat      : _roundFormat,
         foursomes        : foursomesPayload,
+        // Only when the round actually plays Triple Cup — sending them for a
+        // Nassau round would store settings nothing reads.
+        tcFourballPercent: _playsTripleCup ? _tcFourballPct : null,
+        tcSinglesPercent : _playsTripleCup ? _tcSinglesPct  : null,
+        tcAltShotLowPct  : _playsTripleCup ? _tcAltLowPct   : null,
+        tcAltShotHighPct : _playsTripleCup ? _tcAltHighPct  : null,
         irishRumbleVariant: hasIrishRumble ? _irVariant : null,
         irishRumbleCustomBalls:
             hasIrishRumble && _irVariant == 'custom' ? _irCustomBalls : null,
@@ -899,6 +919,86 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
     );
   }
 
+  /// True when this round plays Triple Cup, so the allowances are worth
+  /// storing. A mixed cup keeps its wizard plan, which can include Triple Cup
+  /// groups, so the preset toggle is not the only way in.
+  bool get _playsTripleCup =>
+      _roundFormat == 'triple_cup' ||
+      _foursomes.any((f) => f.gameType == 'triple_cup');
+
+  /// The cup TD's per-segment allowances. The casual screen has had these;
+  /// the cup path passed the round's one net % and nothing else, so a cup
+  /// Triple Cup could not be given a four-ball/singles split at all.
+  Widget _tcAllowanceCard() {
+    final theme = Theme.of(context);
+    Widget pct(String label, int value, ValueChanged<int> onChanged,
+        {int max = 100}) {
+      return GolfTextField(
+        initialValue: value.toString(),
+        label: label,
+        suffixText: '%',
+        keyboardType: TextInputType.number,
+        onChanged: (t) {
+          final v = int.tryParse(t.trim());
+          if (v != null && v >= 0 && v <= max) onChanged(v);
+        },
+      );
+    }
+
+    final same = _tcAltLowPct == _tcAltHighPct;
+    return SectionCard(
+      title: 'Handicap allowance per segment',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Each segment is its own format, so each takes its own allowance. '
+            'WHS is 90% for four-ball match play and 100% for singles.',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: pct('Four-ball %', _tcFourballPct,
+                (v) => setState(() => _tcFourballPct = v), max: 200)),
+            const SizedBox(width: 12),
+            Expanded(child: pct('Singles %', _tcSinglesPct,
+                (v) => setState(() => _tcSinglesPct = v), max: 200)),
+          ]),
+          const Divider(height: 24),
+          Text('Foursomes (alt-shot)', style: theme.textTheme.labelLarge),
+          const SizedBox(height: 4),
+          Text(
+            'A share of the pair\u2019s COMBINED handicap, and the match plays '
+            'off the difference. A side of one plays off his own handicap '
+            'counted twice.',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: pct('Low %', _tcAltLowPct,
+                (v) => setState(() => _tcAltLowPct = v))),
+            const SizedBox(width: 12),
+            Expanded(child: pct('High %', _tcAltHighPct,
+                (v) => setState(() => _tcAltHighPct = v))),
+          ]),
+          const SizedBox(height: 6),
+          Text(
+            same
+                ? 'That is $_tcAltLowPct% of the pair\u2019s combined handicap '
+                    '\u2014 the same as ${_tcAltLowPct * 2}% of half.'
+                : 'Weighted: $_tcAltLowPct% of the lower handicap + '
+                    '$_tcAltHighPct% of the higher.',
+            style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontStyle: FontStyle.italic),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBody() {
     switch (_buildStep) {
       case _BuildStep.gameType:
@@ -928,9 +1028,15 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
               }),
             ),
           if (!hasMixedPlan && _roundFormat == 'triple_cup')
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: _TripleCupFormatNote(),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                children: [
+                  const _TripleCupFormatNote(),
+                  const SizedBox(height: 16),
+                  _tcAllowanceCard(),
+                ],
+              ),
             )
           else
             Expanded(child: _GameTypePicker(

@@ -53,6 +53,11 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
   // _load() from the persisted setup.
   String _mode             = 'strokes_off';
   int    _netPercent       = 100;
+  /// **One allowance per segment.** Four-ball and singles are different games
+  /// played by the same four people in one round; WHS says 90% and 100%.
+  /// A single percentage could not express that — setting one set the other.
+  int    _fourballPct      = 100;
+  int    _singlesPct       = 100;
   int    _altLowPct        = 50;
   int    _altHighPct       = 50;
   /// false = Fourball first (1-6) then Foursomes (7-12); true swaps them.
@@ -205,6 +210,8 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
           _editing       = true;
           _mode          = existing.handicapMode;
           _netPercent    = existing.netPercent;
+          _fourballPct   = existing.fourballPercent;
+          _singlesPct    = existing.singlesPercent;
           _altLowPct     = existing.altShotLowPct;
           _altHighPct    = existing.altShotHighPct;
           _foursomesFirst = existing.foursomesFirst;
@@ -288,6 +295,8 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
         team2Ids:                  _orderedTeamIds(2),
         handicapMode:              _mode,
         netPercent:                _netPercent,
+        fourballPercent:           _fourballPct,
+        singlesPercent:            _singlesPct,
         altShotLowPct:             _altLowPct,
         altShotHighPct:            _altHighPct,
         foursomesFirst:            _foursomesFirst,
@@ -545,16 +554,54 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
 
             const SizedBox(height: 16),
 
-            // ── Alt-shot allowance ───────────────────────────────────
+            // ── Per-segment allowances ───────────────────────────────
+            // Three formats in one round, so three allowances. The card is
+            // ordered the way the round is played, and each line names the
+            // holes it governs so the numbers are not abstract.
             SectionCard(
-              title: 'Foursomes (alt-shot) handicap',
+              title: 'Handicap allowance per segment',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Combined team handicap for the alt-shot segment '
-                    '(holes ${_foursomesFirst ? '1–6' : '7–12'}).  '
-                    'USGA default is 50% low + 50% high.',
+                    'Each segment is its own format, so each takes its own '
+                    'allowance. WHS is 90% for four-ball match play and 100% '
+                    'for singles.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    Expanded(child: _pctField(
+                        'Four-ball %', _fourballPct,
+                        (v) => setState(() => _fourballPct = v),
+                        max: 200)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _pctField(
+                        'Singles %', _singlesPct,
+                        (v) => setState(() => _singlesPct = v),
+                        max: 200)),
+                  ]),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Four-ball holes ${_foursomesFirst ? '7–12' : '1–6'}  ·  '
+                    'Singles holes 13–18',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  const Divider(height: 24),
+                  Text(
+                    'Foursomes (alt-shot), holes '
+                    '${_foursomesFirst ? '1–6' : '7–12'}',
+                    style: theme.textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'A share of the pair\u2019s COMBINED handicap, and the '
+                    'match plays off the difference. 50 + 50 is the USGA half '
+                    'of combined; 40 + 40 is 40% of combined \u2014 the same '
+                    'thing as 80% of half. A side of one plays off his own '
+                    'handicap counted twice.',
                     style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant),
                   ),
@@ -566,6 +613,13 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
                     Expanded(child: _pctField('High %', _altHighPct,
                         (v) => setState(() => _altHighPct = v))),
                   ]),
+                  const SizedBox(height: 6),
+                  Text(
+                    _altCombinedNote(),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontStyle: FontStyle.italic),
+                  ),
                 ],
               ),
             ),
@@ -669,7 +723,8 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
     return [...t1, ...t2];
   }
 
-  Widget _pctField(String label, int value, ValueChanged<int> onChanged) {
+  Widget _pctField(String label, int value, ValueChanged<int> onChanged,
+      {int max = 100}) {
     return GolfTextField(
       initialValue: value.toString(),
       label: label,
@@ -677,9 +732,26 @@ class _TripleCupSetupScreenState extends State<TripleCupSetupScreen> {
       keyboardType: TextInputType.number,
       onChanged: (s) {
         final v = int.tryParse(s.trim());
-        if (v != null && v >= 0 && v <= 100) onChanged(v);
+        if (v != null && v >= 0 && v <= max) onChanged(v);
       },
     );
+  }
+
+  /// States the weights back as the one number they add up to, because that
+  /// is the figure a TD is actually trying to hit: two knobs that must be
+  /// read together are easy to set to something nobody meant.
+  String _altCombinedNote() {
+    if (_altLowPct != _altHighPct) {
+      return 'Weighted: $_altLowPct% of the lower handicap + '
+          '$_altHighPct% of the higher.';
+    }
+    // **Equal weights ARE the percentage of combined**, not their sum:
+    // (L + H) x p/100 is p% of the combined figure. Adding them was wrong and
+    // would have read "40 + 40 = 80% of combined" on the very setting this
+    // was built for, which is 40%.
+    final pct = _altLowPct;
+    return 'That is $pct% of the pair\u2019s combined handicap \u2014 '
+        'the same as ${pct * 2}% of half.';
   }
 
 }

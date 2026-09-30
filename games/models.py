@@ -2848,11 +2848,14 @@ class TripleCupGame(models.Model):
     config knobs; the actual matches and hole-by-hole results live on
     TripleCupMatch / TripleCupHoleResult rows.
 
-    alt_shot_low_pct / alt_shot_high_pct
-        Combined-team handicap formula for the foursomes (alt-shot)
-        segment.  USGA default is 50% low + 50% high; we expose both
-        knobs so a group can override to e.g. 0.6 × low + 0 × high
-        without code changes.
+    fourball_percent / alt_shot_low_pct + alt_shot_high_pct / singles_percent
+        One allowance per segment.  Four-ball and singles take a % of each
+        player's playing handicap; alt-shot takes a weighted share of the
+        PAIR's two handicaps, which is its allowance — it is NOT scaled by
+        anything else.  `low + high` is a share of the combined figure, so
+        50 + 50 is the USGA half-of-combined and 40 + 40 is 40% of combined
+        (the same thing as 80% of half).  Weighting the two separately is
+        what allows e.g. 0.6 × low + 0 × high.
 
     phantom_score_mode
         Only used in 2v1 (one player vs two) during the fourball
@@ -2893,6 +2896,29 @@ class TripleCupGame(models.Model):
                             default=50,
                             validators=[MinValueValidator(0), MaxValueValidator(100)],
                             help_text="% of the higher partner's handicap used in foursomes (alt-shot).",
+                        )
+    #: **One allowance per segment, because the three are different games.**
+    #: A Triple Cup plays four-ball, alt-shot and singles in one round, and
+    #: the handicap allowance a format is played off is a property of THAT
+    #: format — WHS says 90% for four-ball match play and 100% for singles.
+    #: Until these existed there was a single `net_percent` driving all
+    #: three, so "90% four-ball and full-index singles" could not be
+    #: expressed at all: setting one set the other.
+    #:
+    #: `net_percent` is kept as the value these DEFAULT from at setup, so a
+    #: caller that knows nothing about segments (the cup round, which passes
+    #: the round's own allowance) behaves exactly as before.
+    fourball_percent    = models.PositiveSmallIntegerField(
+                            default=90,
+                            validators=[MinValueValidator(0), MaxValueValidator(200)],
+                            help_text=("% of playing handicap in the four-ball "
+                                       "segment. WHS four-ball match play is 90%."),
+                        )
+    singles_percent     = models.PositiveSmallIntegerField(
+                            default=100,
+                            validators=[MinValueValidator(0), MaxValueValidator(200)],
+                            help_text=("% of playing handicap in the singles "
+                                       "segment. WHS singles match play is 100%."),
                         )
     group_size          = models.PositiveSmallIntegerField(
                             default=4,

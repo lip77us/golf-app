@@ -1884,6 +1884,10 @@ class ApiClient {
     required List<int> team2Ids,
     String handicapMode             = 'net',
     int    netPercent               = 100,
+    /// Null means "use netPercent" — the server's own fallback, so an
+    /// unspecified segment behaves exactly as it did before segments existed.
+    int?   fourballPercent,
+    int?   singlesPercent,
     int    altShotLowPct            = 50,
     int    altShotHighPct           = 50,
     bool   foursomesFirst           = false,
@@ -1895,6 +1899,8 @@ class ApiClient {
       'team2_player_ids'           : team2Ids,
       'handicap_mode'              : handicapMode,
       'net_percent'                : netPercent,
+      if (fourballPercent != null) 'fourball_percent' : fourballPercent,
+      if (singlesPercent != null)  'singles_percent'  : singlesPercent,
       'alt_shot_low_pct'           : altShotLowPct,
       'alt_shot_high_pct'          : altShotHighPct,
       'foursomes_first'            : foursomesFirst,
@@ -2779,12 +2785,23 @@ class ApiClient {
     String? irishRumbleVariant,
     /// Per-hole balls (18 ints) — only sent/used when variant == 'custom'.
     List<int>? irishRumbleCustomBalls,
+    /// Triple Cup handicap allowances, one per segment. Null means "as
+    /// before": four-ball and singles take the round's net %, alt-shot 50/50.
+    /// Only meaningful when the round plays Triple Cup.
+    int? tcFourballPercent,
+    int? tcSinglesPercent,
+    int? tcAltShotLowPct,
+    int? tcAltShotHighPct,
   }) async {
     final data = await _post('/rounds/$roundId/ryder-cup/setup/', {
       'nassau_point_value'  : nassauPointValue,
       'point_multiplier'    : pointMultiplier,
       'notes'               : notes,
       'round_format'        : roundFormat,
+      if (tcFourballPercent != null) 'tc_fourball_percent' : tcFourballPercent,
+      if (tcSinglesPercent != null)  'tc_singles_percent'  : tcSinglesPercent,
+      if (tcAltShotLowPct != null)   'tc_alt_shot_low_pct' : tcAltShotLowPct,
+      if (tcAltShotHighPct != null)  'tc_alt_shot_high_pct': tcAltShotHighPct,
       'foursomes'           : foursomes,
       'irish_rumble_pairings': irishRumblePairings,
       if (irishRumbleVariant != null)
