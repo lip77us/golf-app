@@ -10050,6 +10050,10 @@ class TeamTournamentSetupView(APIView):
             cup_name         = d['cup_name'],
             players_per_team = d['players_per_team'],
             draft_complete   = False,
+            tc_fourball_percent  = d.get('tc_fourball_percent'),
+            tc_singles_percent   = d.get('tc_singles_percent'),
+            tc_alt_shot_low_pct  = d.get('tc_alt_shot_low_pct'),
+            tc_alt_shot_high_pct = d.get('tc_alt_shot_high_pct'),
         )
         for team_data in d['teams']:
             TournamentTeam.objects.create(
@@ -10245,10 +10249,6 @@ class RyderCupRoundSetupView(APIView):
             point_multiplier   = d['point_multiplier'],
             notes              = d['notes'],
             round_format       = round_format,
-            tc_fourball_percent  = d.get('tc_fourball_percent'),
-            tc_singles_percent   = d.get('tc_singles_percent'),
-            tc_alt_shot_low_pct  = d.get('tc_alt_shot_low_pct'),
-            tc_alt_shot_high_pct = d.get('tc_alt_shot_high_pct'),
         )
 
         # Per-foursome configs
@@ -10496,8 +10496,12 @@ class RyderCupRoundSetupView(APIView):
                     # on the USGA 50/50 default with no way to change it —
                     # while the casual setup screen had both. Read off the
                     # round config, which is where a cup TD sets them.
+                    # **Off the CUP, not the round.** A multi-day cup plays
+                    # the same allowances every day; reading them per round
+                    # would let two days of one cup disagree.
                     _cfg = getattr(round_obj, 'ryder_cup_config', None)
-                    _tc = (_cfg.triple_cup_allowances() if _cfg is not None
+                    _tt = _cfg.tournament if _cfg is not None else None
+                    _tc = (_tt.triple_cup_allowances() if _tt is not None
                            else {})
                     setup_triple_cup(
                         foursome,
@@ -10983,11 +10987,6 @@ def _round_ryder_config(rc: RyderCupRoundConfig) -> dict:
         'nassau_point_value': float(rc.nassau_point_value),
         'point_multiplier'  : float(rc.point_multiplier),
         'notes'             : rc.notes,
-        # Null means "as before" — the client draws the fallback, not a zero.
-        'tc_fourball_percent' : rc.tc_fourball_percent,
-        'tc_singles_percent'  : rc.tc_singles_percent,
-        'tc_alt_shot_low_pct' : rc.tc_alt_shot_low_pct,
-        'tc_alt_shot_high_pct': rc.tc_alt_shot_high_pct,
         'team_totals'       : [
             {'team': name, 'points': pts} for name, pts in team_totals.items()
         ],

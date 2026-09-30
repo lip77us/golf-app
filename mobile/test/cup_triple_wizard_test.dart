@@ -104,4 +104,58 @@ void main() {
       expect(wizard.substring(i, i + 260).contains('four-ball'), isTrue);
     });
   });
+
+  group('the cup allowances are set once, here', () {
+    test('the step draws the per-segment card', () {
+      expect(wizard.contains('Widget _tripleCupAllowanceCard('), isTrue);
+      expect(wizard.contains('_tripleCupAllowanceCard(context)'), isTrue);
+    });
+
+    test('all three segments are settable', () {
+      final i = wizard.indexOf('Widget _tripleCupAllowanceCard(');
+      final body = wizard.substring(i, i + 3200);
+      for (final label in ['Four-ball %', 'Singles %', 'Low %', 'High %']) {
+        expect(body.contains(label), isTrue, reason: '$label is not settable');
+      }
+    });
+
+    test('they go up with the CUP, not with a round', () {
+      // A multi-day cup plays the same allowances every day, so they belong
+      // to the event. Posting them per round let day 2 disagree with day 1.
+      expect(wizard.contains('tcFourballPercent: _cupFormat ==') ||
+              wizard.contains("tcFourballPercent: _cupFormat == 'triple'"),
+          isTrue);
+      final i = wizard.indexOf('postTeamTournamentSetup(');
+      expect(wizard.substring(i, i + 900).contains('tcFourballPercent'), isTrue,
+          reason: 'the cup create call has to carry them');
+    });
+
+    test('a MIXED cup sends none of them', () {
+      // Its games set their own handicaps; storing these would keep settings
+      // nothing reads.
+      final i = wizard.indexOf('postTeamTournamentSetup(');
+      final body = wizard.substring(i, i + 900);
+      expect(body.contains("_cupFormat == 'triple' ?"), isTrue);
+      expect(body.contains(': null'), isTrue);
+    });
+
+    test('the wording comes from the shared rule, not a second copy', () {
+      expect(wizard.contains('tripleCupAllowanceNote('), isTrue);
+    });
+  });
+
+  group('the round setup no longer owns them', () {
+    final cupRound =
+        File('lib/screens/cup_round_setup_screen.dart').readAsStringSync();
+
+    test('its card is gone', () {
+      expect(cupRound.contains('_tcAllowanceCard'), isFalse);
+      expect(cupRound.contains('int _tcFourballPct'), isFalse);
+    });
+
+    test('and it says where they went', () {
+      // So the next person does not add a second copy back.
+      expect(cupRound.contains('set ONCE, on the cup'), isTrue);
+    });
+  });
 }

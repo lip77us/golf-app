@@ -915,49 +915,60 @@ class SegmentAllowanceTests(TestCase):
                          'the four-ball allowance must not touch the singles')
 
 
-class CupRoundAllowanceTests(TestCase):
-    """**The cup round's allowances reach the game.**
+class CupAllowanceTests(TestCase):
+    """**The cup's allowances reach the game.**
 
     The cup path called `setup_triple_cup` with the round's single
     `net_percent` and nothing else — no segment split and no alt-shot weights
     — so a cup Triple Cup was stuck on one allowance and the USGA 50/50 while
-    the casual setup screen had both. That is the gap `triple_cup_allowances`
-    closes, and this is the test that would have caught it.
+    the casual setup screen had both.
+
+    They live on the **TeamTournament**, not the round config: a multi-day cup
+    plays the same allowances every day, so one answer for the event. Asking
+    per round would let day 2 disagree with day 1 with nothing saying so.
     """
 
-    def test_an_unset_config_asks_for_nothing(self):
+    def test_an_unset_cup_asks_for_nothing(self):
         """Null means "as before": no kwargs, so the engine's own fallback
-        applies and an existing cup round does not move."""
-        from tournament.models import RyderCupRoundConfig
-        cfg = RyderCupRoundConfig()
-        self.assertEqual(cfg.triple_cup_allowances(), {})
+        applies and an existing cup does not move."""
+        from tournament.models import TeamTournament
+        self.assertEqual(TeamTournament().triple_cup_allowances(), {})
 
     def test_what_the_TD_sets_is_what_the_engine_is_asked_for(self):
-        from tournament.models import RyderCupRoundConfig
-        cfg = RyderCupRoundConfig(
+        from tournament.models import TeamTournament
+        tt = TeamTournament(
             tc_fourball_percent=90, tc_singles_percent=100,
             tc_alt_shot_low_pct=40, tc_alt_shot_high_pct=40)
-        self.assertEqual(cfg.triple_cup_allowances(), {
+        self.assertEqual(tt.triple_cup_allowances(), {
             'fourball_percent': 90,
             'singles_percent': 100,
             'alt_shot_low_pct': 40,
             'alt_shot_high_pct': 40,
         })
 
-    def test_a_partly_set_config_passes_only_what_was_set(self):
+    def test_a_partly_set_cup_passes_only_what_was_set(self):
         """A key that is absent must stay absent, not arrive as None — the
-        engine reads `is None` to mean "fall back to net_percent", and a
-        None passed positionally would work while a None in the payload
-        would not."""
+        engine reads `is None` to mean "fall back to net_percent"."""
+        from tournament.models import TeamTournament
+        self.assertEqual(
+            TeamTournament(tc_singles_percent=100).triple_cup_allowances(),
+            {'singles_percent': 100})
+
+    def test_the_round_config_no_longer_owns_them(self):
+        """One fact, one owner. They were briefly on the round too, which
+        would have let the second round of a cup carry a different four-ball
+        allowance from the first."""
         from tournament.models import RyderCupRoundConfig
-        cfg = RyderCupRoundConfig(tc_singles_percent=100)
-        self.assertEqual(cfg.triple_cup_allowances(),
-                         {'singles_percent': 100})
+        for f in ('tc_fourball_percent', 'tc_singles_percent',
+                  'tc_alt_shot_low_pct', 'tc_alt_shot_high_pct'):
+            self.assertFalse(
+                hasattr(RyderCupRoundConfig(), f),
+                f'{f} should live on the cup, not the round')
 
     def test_those_kwargs_land_on_the_game(self):
-        """End to end: the dict the config produces is accepted by setup and
+        """End to end: the dict the cup produces is accepted by setup and
         stored, so the two halves cannot drift."""
-        from tournament.models import RyderCupRoundConfig
+        from tournament.models import TeamTournament
         from games.models import TripleCupGame
         tee = make_tee(slope=113, course_rating=72.0, par=72)
         round_ = make_round(tee.course)
@@ -966,7 +977,7 @@ class CupRoundAllowanceTests(TestCase):
         c = make_player('C', 14)
         d = make_player('D', 6)
         fs = make_foursome(round_, [(a, 20), (b, 10), (c, 14), (d, 6)], tee=tee)
-        kwargs = RyderCupRoundConfig(
+        kwargs = TeamTournament(
             tc_fourball_percent=90, tc_singles_percent=100,
             tc_alt_shot_low_pct=40, tc_alt_shot_high_pct=40,
         ).triple_cup_allowances()
@@ -978,3 +989,28 @@ class CupRoundAllowanceTests(TestCase):
         self.assertEqual((g.alt_shot_low_pct, g.alt_shot_high_pct), (40, 40))
         # The round's own net% is stored but no longer drives a segment.
         self.assertEqual(g.net_percent, 75)
+
+    def test_every_round_of_a_multi_day_cup_gets_the_SAME_ones(self):
+        """The reason they are on the event: two rounds, one answer."""
+        from tournament.models import TeamTournament
+        from games.models import TripleCupGame
+        tt = TeamTournament(tc_fourball_percent=90, tc_singles_percent=100,
+                            tc_alt_shot_low_pct=40, tc_alt_shot_high_pct=40)
+        kwargs = tt.triple_cup_allowances()
+        seen = set()
+        for day in range(2):
+            tee = make_tee(slope=113, course_rating=72.0, par=72)
+            round_ = make_round(tee.course)
+            ps = [make_player(f'D{day}{i}', h)
+                  for i, h in enumerate((20, 10, 14, 6))]
+            fs = make_foursome(
+                round_, [(p, int(p.handicap_index)) for p in ps], tee=tee)
+            setup_triple_cup(fs,
+                             team1_ids=[ps[0].id, ps[1].id],
+                             team2_ids=[ps[2].id, ps[3].id], **kwargs)
+            g = TripleCupGame.objects.get(foursome=fs)
+            seen.add((g.fourball_percent, g.singles_percent,
+                      g.alt_shot_low_pct, g.alt_shot_high_pct))
+        self.assertEqual(seen, {(90, 100, 40, 40)},
+                         'every round of one cup must play off the same '
+                         'allowances')

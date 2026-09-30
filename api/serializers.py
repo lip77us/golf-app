@@ -2249,6 +2249,20 @@ class TeamTournamentSetupSerializer(serializers.Serializer):
         }
     """
     cup_name         = serializers.CharField(max_length=100, required=False, default='Ryder Cup')
+    # Triple Cup allowances — one answer for the whole cup, which is why they
+    # are here and not on the round. Nullable: absent means "as before".
+    tc_fourball_percent  = serializers.IntegerField(
+                               min_value=0, max_value=200,
+                               required=False, allow_null=True)
+    tc_singles_percent   = serializers.IntegerField(
+                               min_value=0, max_value=200,
+                               required=False, allow_null=True)
+    tc_alt_shot_low_pct  = serializers.IntegerField(
+                               min_value=0, max_value=100,
+                               required=False, allow_null=True)
+    tc_alt_shot_high_pct = serializers.IntegerField(
+                               min_value=0, max_value=100,
+                               required=False, allow_null=True)
     players_per_team = serializers.IntegerField(min_value=1, default=6)
     teams            = TeamSetupSerializer(many=True)
 
@@ -2352,21 +2366,7 @@ class RyderCupRoundSetupSerializer(serializers.Serializer):
                                choices=['custom', 'triple_cup'],
                                required=False, default='custom',
                            )
-    # Triple Cup handicap allowances, one per segment. All optional and all
-    # nullable: absent or null means "as before" — four-ball and singles take
-    # the round's net %, alt-shot takes 50/50.
-    tc_fourball_percent  = serializers.IntegerField(
-                               min_value=0, max_value=200,
-                               required=False, allow_null=True)
-    tc_singles_percent   = serializers.IntegerField(
-                               min_value=0, max_value=200,
-                               required=False, allow_null=True)
-    tc_alt_shot_low_pct  = serializers.IntegerField(
-                               min_value=0, max_value=100,
-                               required=False, allow_null=True)
-    tc_alt_shot_high_pct = serializers.IntegerField(
-                               min_value=0, max_value=100,
-                               required=False, allow_null=True)
+
     foursomes            = FoursomeRyderConfigSerializer(many=True, required=False, default=list)
     irish_rumble_pairings = IrishRumblePairingSerializer(many=True, required=False, default=list)
 

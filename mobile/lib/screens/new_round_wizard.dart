@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../api/models.dart';
 import '../game_catalog.dart';
+import '../utils/triple_cup_allowance.dart';
 import '../providers/auth_provider.dart';
 import '../utils/flight_share.dart';
 import '../utils/cup_colors.dart';
@@ -431,6 +432,17 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   // the low index with it.
   _EventType _eventType  = _EventType.solo;
   String     _cupFormat  = 'mixed';    // mixed | triple  (triple = exclusive)
+
+  /// **Triple Cup allowances, set once for the whole cup.** A multi-day cup
+  /// plays the same ones every day, so they belong to the EVENT — asking per
+  /// round would ask the same question again and let two days disagree. WHS:
+  /// 90% four-ball, 100% singles; the alt-shot weights are a share of the
+  /// pair's combined handicap, so 50 + 50 is half of combined and 40 + 40 is
+  /// 40% of it.
+  int _tcFourballPct = 90;
+  int _tcSinglesPct  = 100;
+  int _tcAltLowPct   = 50;
+  int _tcAltHighPct  = 50;
   String     _soloFormat = 'stroke';   // stroke | stableford | road_trip
 
   // ── Road Trip ──────────────────────────────────────────────────────────
@@ -1346,6 +1358,12 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
       cupName        : _nameCtrl.text.trim(),   // one name: the tournament name
       playersPerTeam : 1,          // placeholder; real value set in Phase 2
       teams          : teams,
+      // Only for a Triple Cup: a mixed cup's games set their own handicaps,
+      // and storing these on it would keep settings nothing reads.
+      tcFourballPercent: _cupFormat == 'triple' ? _tcFourballPct : null,
+      tcSinglesPercent : _cupFormat == 'triple' ? _tcSinglesPct  : null,
+      tcAltShotLowPct  : _cupFormat == 'triple' ? _tcAltLowPct   : null,
+      tcAltShotHighPct : _cupFormat == 'triple' ? _tcAltHighPct  : null,
     );
     if (!mounted) return;
 
@@ -2002,6 +2020,16 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
               _tournamentActiveGames.contains(GameIds.championshipStableford),
           isMatchPlay: _isCupTournament,
           isTripleCup: _isCupTournament && _cupFormat == 'triple',
+          tcFourballPct: _tcFourballPct,
+          tcSinglesPct : _tcSinglesPct,
+          tcAltLowPct  : _tcAltLowPct,
+          tcAltHighPct : _tcAltHighPct,
+          onChangeTripleCupAllowance: (fb, sg, lo, hi) => setState(() {
+            _tcFourballPct = fb;
+            _tcSinglesPct  = sg;
+            _tcAltLowPct   = lo;
+            _tcAltHighPct  = hi;
+          }),
         );
       case _StepKind.players:
         return _Step2Players(
@@ -3216,6 +3244,15 @@ class _StepHandicap extends StatelessWidget {
   /// to the whole cup — so only the percentage stands down.
   final bool isTripleCup;
 
+  /// The cup's Triple Cup allowances, and the one callback that sets them.
+  /// Only drawn when [isTripleCup].
+  final int tcFourballPct;
+  final int tcSinglesPct;
+  final int tcAltLowPct;
+  final int tcAltHighPct;
+  final void Function(int fourball, int singles, int altLow, int altHigh)?
+      onChangeTripleCupAllowance;
+
   const _StepHandicap({
     required this.handicapMode,
     required this.netPercent,
@@ -3225,6 +3262,11 @@ class _StepHandicap extends StatelessWidget {
     this.isStablefordChampionship = false,
     this.isMatchPlay = false,
     this.isTripleCup = false,
+    this.tcFourballPct = 90,
+    this.tcSinglesPct = 100,
+    this.tcAltLowPct = 50,
+    this.tcAltHighPct = 50,
+    this.onChangeTripleCupAllowance,
   });
 
   @override
@@ -3256,6 +3298,10 @@ class _StepHandicap extends StatelessWidget {
                   'to 0.  Other players get strokes proportional to '
                   '(their HCP − foursome low HCP), scaled by Net %.',
         ),
+        if (isTripleCup && onChangeTripleCupAllowance != null) ...[
+          const SizedBox(height: 16),
+          _tripleCupAllowanceCard(context),
+        ],
         if (isMatchPlay) ...[
           const SizedBox(height: 16),
           _struckCapCard(context),
@@ -3271,6 +3317,87 @@ class _StepHandicap extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+
+  /// **The cup's three allowances, asked once.** Set here rather than on each
+  /// round because a multi-day cup plays the same ones every day; the step's
+  /// own subtitle already promises "applies to every round".
+  Widget _tripleCupAllowanceCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final set = onChangeTripleCupAllowance!;
+
+    Widget pct(String label, int value, ValueChanged<int> onChanged,
+        {int max = 100}) {
+      return GolfTextField(
+        initialValue: value.toString(),
+        label: label,
+        suffixText: '%',
+        keyboardType: TextInputType.number,
+        onChanged: (t) {
+          final v = int.tryParse(t.trim());
+          if (v != null && v >= 0 && v <= max) onChanged(v);
+        },
+      );
+    }
+
+    return SectionCard(
+      title: 'Allowance per segment',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Each segment is its own format, so each takes its own allowance. '
+            'WHS is 90% for four-ball match play and 100% for singles. Every '
+            'round of the cup plays off these.',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: pct('Four-ball %', tcFourballPct,
+                (v) => set(v, tcSinglesPct, tcAltLowPct, tcAltHighPct),
+                max: 200)),
+            const SizedBox(width: 12),
+            Expanded(child: pct('Singles %', tcSinglesPct,
+                (v) => set(tcFourballPct, v, tcAltLowPct, tcAltHighPct),
+                max: 200)),
+          ]),
+          const Divider(height: 24),
+          Text('Foursomes (alt-shot)', style: theme.textTheme.labelLarge),
+          const SizedBox(height: 4),
+          Text(
+            'A share of the pair\u2019s COMBINED handicap, and the match plays '
+            'off the difference. A side of one plays off his own handicap '
+            'counted twice.',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: pct('Low %', tcAltLowPct,
+                (v) => set(tcFourballPct, tcSinglesPct, v, tcAltHighPct))),
+            const SizedBox(width: 12),
+            Expanded(child: pct('High %', tcAltHighPct,
+                (v) => set(tcFourballPct, tcSinglesPct, tcAltLowPct, v))),
+          ]),
+          const SizedBox(height: 6),
+          Text(
+            tripleCupAllowanceNote(
+                  mode: handicapMode,
+                  segment: 'foursomes',
+                  fourballPercent: tcFourballPct,
+                  singlesPercent: tcSinglesPct,
+                  altShotLowPct: tcAltLowPct,
+                  altShotHighPct: tcAltHighPct,
+                ) ??
+                'Gross \u2014 no strokes are given.',
+            style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontStyle: FontStyle.italic),
+          ),
+        ],
+      ),
     );
   }
 

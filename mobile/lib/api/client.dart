@@ -2676,11 +2676,21 @@ class ApiClient {
     required String             cupName,
     required int                playersPerTeam,
     required List<Map<String, dynamic>> teams,
+    /// Triple Cup allowances — one answer for the whole cup, because a
+    /// multi-day cup plays the same ones every day. Null means "as before".
+    int? tcFourballPercent,
+    int? tcSinglesPercent,
+    int? tcAltShotLowPct,
+    int? tcAltShotHighPct,
   }) async {
     final data = await _post('/tournaments/$tournamentId/team-tournament/setup/', {
       'cup_name'        : cupName,
       'players_per_team': playersPerTeam,
       'teams'           : teams,
+      if (tcFourballPercent != null) 'tc_fourball_percent' : tcFourballPercent,
+      if (tcSinglesPercent != null)  'tc_singles_percent'  : tcSinglesPercent,
+      if (tcAltShotLowPct != null)   'tc_alt_shot_low_pct' : tcAltShotLowPct,
+      if (tcAltShotHighPct != null)  'tc_alt_shot_high_pct': tcAltShotHighPct,
     });
     return data as Map<String, dynamic>;
   }
@@ -2785,23 +2795,12 @@ class ApiClient {
     String? irishRumbleVariant,
     /// Per-hole balls (18 ints) — only sent/used when variant == 'custom'.
     List<int>? irishRumbleCustomBalls,
-    /// Triple Cup handicap allowances, one per segment. Null means "as
-    /// before": four-ball and singles take the round's net %, alt-shot 50/50.
-    /// Only meaningful when the round plays Triple Cup.
-    int? tcFourballPercent,
-    int? tcSinglesPercent,
-    int? tcAltShotLowPct,
-    int? tcAltShotHighPct,
   }) async {
     final data = await _post('/rounds/$roundId/ryder-cup/setup/', {
       'nassau_point_value'  : nassauPointValue,
       'point_multiplier'    : pointMultiplier,
       'notes'               : notes,
       'round_format'        : roundFormat,
-      if (tcFourballPercent != null) 'tc_fourball_percent' : tcFourballPercent,
-      if (tcSinglesPercent != null)  'tc_singles_percent'  : tcSinglesPercent,
-      if (tcAltShotLowPct != null)   'tc_alt_shot_low_pct' : tcAltShotLowPct,
-      if (tcAltShotHighPct != null)  'tc_alt_shot_high_pct': tcAltShotHighPct,
       'foursomes'           : foursomes,
       'irish_rumble_pairings': irishRumblePairings,
       if (irishRumbleVariant != null)

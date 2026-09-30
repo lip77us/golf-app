@@ -645,6 +645,66 @@ class TeamTournament(models.Model):
                                "Shown in the app header and scoreboard."
                            )
                        )
+    #: **Triple Cup handicap allowances, set once for the whole cup.**
+    #:
+    #: On the EVENT and not the round: a multi-day cup plays the same
+    #: allowances every day, so asking per round would be asking the same
+    #: question again and inviting two days of one cup to disagree. The
+    #: wizard's Handicap step already says "applies to every round" — this is
+    #: what it now applies.
+    #:
+    #: Every one is nullable and **null means "as before"**: four-ball and
+    #: singles fall back to the round's net %, alt-shot to the USGA 50/50.
+    #:
+    #: `alt_shot_low + high` is a share of the pair's COMBINED handicap, so
+    #: 50 + 50 is half of combined and 40 + 40 is 40% of it — the same thing
+    #: as 80% of half.
+    tc_fourball_percent  = models.PositiveSmallIntegerField(
+                               null=True, blank=True,
+                               validators=[MinValueValidator(0),
+                                           MaxValueValidator(200)],
+                               help_text=("Triple Cup four-ball allowance %. "
+                                          "Blank = the round's net %."))
+    tc_singles_percent   = models.PositiveSmallIntegerField(
+                               null=True, blank=True,
+                               validators=[MinValueValidator(0),
+                                           MaxValueValidator(200)],
+                               help_text=("Triple Cup singles allowance %. "
+                                          "Blank = the round's net %."))
+    tc_alt_shot_low_pct  = models.PositiveSmallIntegerField(
+                               null=True, blank=True,
+                               validators=[MinValueValidator(0),
+                                           MaxValueValidator(100)],
+                               help_text=("Triple Cup alt-shot: % of the "
+                                          "LOWER partner's handicap. "
+                                          "Blank = 50."))
+    tc_alt_shot_high_pct = models.PositiveSmallIntegerField(
+                               null=True, blank=True,
+                               validators=[MinValueValidator(0),
+                                           MaxValueValidator(100)],
+                               help_text=("Triple Cup alt-shot: % of the "
+                                          "HIGHER partner's handicap. "
+                                          "Blank = 50."))
+
+    def triple_cup_allowances(self) -> dict:
+        """The `setup_triple_cup` kwargs this cup implies.
+
+        Keys are omitted rather than passed as None where the TD has not set
+        one, so the engine's own fallback applies — four-ball and singles to
+        the round's `net_percent`, alt-shot to 50/50.
+        """
+        out = {}
+        for field, kwarg in (
+            ('tc_fourball_percent',  'fourball_percent'),
+            ('tc_singles_percent',   'singles_percent'),
+            ('tc_alt_shot_low_pct',  'alt_shot_low_pct'),
+            ('tc_alt_shot_high_pct', 'alt_shot_high_pct'),
+        ):
+            v = getattr(self, field)
+            if v is not None:
+                out[kwarg] = int(v)
+        return out
+
     players_per_team = models.PositiveSmallIntegerField(
                            default=6,
                            help_text=(
@@ -786,63 +846,6 @@ class RyderCupRoundConfig(models.Model):
                                   "every foursome to Triple Cup."
                               ),
                           )
-
-    #: **Triple Cup handicap allowances, set by the cup TD.**
-    #:
-    #: A cup Triple Cup used to be handed the round's single `net_percent`
-    #: and nothing else, so its four-ball and singles shared one allowance
-    #: and its alt-shot was stuck on the USGA 50/50 default — while the
-    #: casual setup screen had both knobs. These are where a cup TD sets
-    #: them; every one is nullable and **null means "as before"**, so an
-    #: existing cup round is untouched until somebody sets one.
-    #:
-    #: `alt_shot_low + high` is a share of the pair's COMBINED handicap, so
-    #: 50 + 50 is half of combined and 40 + 40 is 40% of it.
-    tc_fourball_percent  = models.PositiveSmallIntegerField(
-                               null=True, blank=True,
-                               validators=[MinValueValidator(0),
-                                           MaxValueValidator(200)],
-                               help_text=("Triple Cup four-ball allowance %. "
-                                          "Blank = the round's net %."))
-    tc_singles_percent   = models.PositiveSmallIntegerField(
-                               null=True, blank=True,
-                               validators=[MinValueValidator(0),
-                                           MaxValueValidator(200)],
-                               help_text=("Triple Cup singles allowance %. "
-                                          "Blank = the round's net %."))
-    tc_alt_shot_low_pct  = models.PositiveSmallIntegerField(
-                               null=True, blank=True,
-                               validators=[MinValueValidator(0),
-                                           MaxValueValidator(100)],
-                               help_text=("Triple Cup alt-shot: % of the "
-                                          "LOWER partner's handicap. "
-                                          "Blank = 50."))
-    tc_alt_shot_high_pct = models.PositiveSmallIntegerField(
-                               null=True, blank=True,
-                               validators=[MinValueValidator(0),
-                                           MaxValueValidator(100)],
-                               help_text=("Triple Cup alt-shot: % of the "
-                                          "HIGHER partner's handicap. "
-                                          "Blank = 50."))
-
-    def triple_cup_allowances(self) -> dict:
-        """The `setup_triple_cup` kwargs this cup round implies.
-
-        Keys are omitted rather than passed as None where the TD has not set
-        one, so the engine's own fallback applies — four-ball and singles to
-        the round's `net_percent`, alt-shot to 50/50.
-        """
-        out = {}
-        for field, kwarg in (
-            ('tc_fourball_percent',  'fourball_percent'),
-            ('tc_singles_percent',   'singles_percent'),
-            ('tc_alt_shot_low_pct',  'alt_shot_low_pct'),
-            ('tc_alt_shot_high_pct', 'alt_shot_high_pct'),
-        ):
-            v = getattr(self, field)
-            if v is not None:
-                out[kwarg] = int(v)
-        return out
 
     def __str__(self):
         return f"Ryder Cup config — {self.round}"
