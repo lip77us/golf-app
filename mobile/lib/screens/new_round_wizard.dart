@@ -141,7 +141,10 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
         _StepKind.eventDetails,
         _StepKind.handicap,
         _StepKind.cupDesign,
-        _StepKind.cupGamePlan,
+        // **Only for a mixed cup.** Triple Cup is a preset day, so the format
+        // card already said what every round plays; `_applyTripleCupPlan`
+        // writes it. See that method.
+        if (_cupFormat != 'triple') _StepKind.cupGamePlan,
         // No tournament side-game step in cup play — field-wide side games belong
         // to individual tournaments. A cup's point-bearing games (incl. Irish
         // Rumble) are set on the games-by-round plan above.
@@ -1080,7 +1083,31 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   /// "Best 3 of 4" cannot survive the tournament shrinking to two rounds.
   /// Dropping back to "every round counts" is the honest answer — it is also
   /// the only one the Scoring step would offer at that size.
+  /// **A Triple Cup event has no game plan left to make.** The format IS the
+  /// plan — every round, every group, Fourball + Foursomes + two Singles for
+  /// four points. Asking again on a later step was asking a question already
+  /// answered on the format card, and the only valid answer was the one
+  /// already given there.
+  ///
+  /// So the step is dropped from the flow and its state is written here
+  /// instead, for every round. Applied whenever the format or the round count
+  /// changes, because a round added after the format was picked would
+  /// otherwise reach Review with no game on it.
+  void _applyTripleCupPlan() {
+    if (!(_isCupTournament && _cupFormat == 'triple')) return;
+    for (var r = 0; r < _numRounds; r++) {
+      _roundCupGames[r]  = const ['triple_cup'];
+      _roundCupPoints[r] = const {'triple_cup': 1.0};
+    }
+    _roundCupGames.removeWhere((r, _) => r >= _numRounds);
+    _roundCupPoints.removeWhere((r, _) => r >= _numRounds);
+    // Triple Cup spends six holes in alt-shot, where individual net scoring
+    // does not apply — the same reason the game-plan step dropped it.
+    _tournamentActiveGames.remove(GameIds.championshipStrokePlay);
+  }
+
   void _clampRoundsToCount() {
+    _applyTripleCupPlan();
     final n = _roundsToCount;
     if (n != null && (_numRounds <= 2 || n >= _numRounds)) {
       _roundsToCount = null;
@@ -1754,6 +1781,14 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
             if (!_handicapModeTouched) {
               _handicapMode = _defaultHandicapForFormat();
             }
+            // Picking Triple Cup answers the game plan, so write it now and
+            // drop the step. Picking Mixed hands the question back.
+            if (f == 'triple') {
+              _applyTripleCupPlan();
+            } else {
+              _roundCupGames.clear();
+              _roundCupPoints.clear();
+            }
           }),
           onPickSoloFormat: (f) => setState(() {
             _soloFormat = f;
@@ -1966,6 +2001,7 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
           isStablefordChampionship:
               _tournamentActiveGames.contains(GameIds.championshipStableford),
           isMatchPlay: _isCupTournament,
+          isTripleCup: _isCupTournament && _cupFormat == 'triple',
         );
       case _StepKind.players:
         return _Step2Players(
@@ -3173,6 +3209,13 @@ class _StepHandicap extends StatelessWidget {
   /// reason rather than offered as a live toggle.
   final bool isMatchPlay;
 
+  /// **Triple Cup sets its allowance per segment, so there is no single Net %
+  /// to ask for here.** Four-ball, alt-shot and singles are three formats off
+  /// three different numbers; a slider on this step could only set one of
+  /// them, and set it for all three. The MODE still belongs here — it applies
+  /// to the whole cup — so only the percentage stands down.
+  final bool isTripleCup;
+
   const _StepHandicap({
     required this.handicapMode,
     required this.netPercent,
@@ -3181,6 +3224,7 @@ class _StepHandicap extends StatelessWidget {
     required this.onChangeNetMaxDoubleBogey,
     this.isStablefordChampionship = false,
     this.isMatchPlay = false,
+    this.isTripleCup = false,
   });
 
   @override
@@ -3198,9 +3242,19 @@ class _StepHandicap extends StatelessWidget {
           allowStrokesOff:  !isStablefordChampionship,
           onModeChanged:    (m) => onChangeHandicap(m, netPercent),
           onPercentChanged: (p) => onChangeHandicap(handicapMode, p),
-          soNote: 'The lowest-handicap player in each foursome plays '
-              'to 0.  Other players get strokes proportional to '
-              '(their HCP − foursome low HCP), scaled by Net %.',
+          showPercent: !isTripleCup,
+          percentNote:
+              'Triple Cup plays three formats off three allowances \u2014 '
+              'four-ball, alt-shot and singles. They are set on the round, '
+              'where the groups are drawn.',
+          soNote: isTripleCup
+              ? 'The lowest-handicap player in each foursome plays to 0. '
+                  'Other players get strokes proportional to (their HCP '
+                  '\u2212 foursome low HCP), scaled by each segment\u2019s '
+                  'own allowance.'
+              : 'The lowest-handicap player in each foursome plays '
+                  'to 0.  Other players get strokes proportional to '
+                  '(their HCP − foursome low HCP), scaled by Net %.',
         ),
         if (isMatchPlay) ...[
           const SizedBox(height: 16),
