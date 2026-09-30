@@ -1139,6 +1139,43 @@ def _expected_strokes_per_match(
     return result
 
 
+def _play_positions(game) -> dict:
+    """``{hole_number: position}`` along this group's own play order.
+
+    **Withdrawal is a point in the ROUND, not a hole number.** A group off a
+    shotgun on the 13th that loses a man after the 15th is short for 16, 17,
+    18 and then 1 through 12 — every one of which is a LOWER number than 15.
+    The convention stated in `services/skins.py` and reused by 40 Balls and
+    Spots compares hole numbers (`h <= withdrew_after_hole`), which is the
+    same integer only when the round starts on the 1st. A cup day is very
+    often a shotgun, so this reads position instead.
+    """
+    from services.hole_plan import play_order
+    fs = game.foursome
+    return {h: i for i, h in enumerate(play_order(fs.round, fs))}
+
+
+def _active_on_hole(pids, members_by_pid: dict, hole: int,
+                    positions: dict) -> list:
+    """Which of *pids* can still put a ball on *hole*."""
+    out = []
+    for pid in pids:
+        m = members_by_pid.get(pid)
+        if m is None:
+            continue
+        wd = m.withdrew_after_hole
+        if wd is None:
+            out.append(pid)
+            continue
+        # Unknown holes sort last, so a hole outside the plan never counts a
+        # withdrawn player as active.
+        here = positions.get(hole, 1 << 30)
+        after = positions.get(wd, -1)
+        if here <= after:
+            out.append(pid)
+    return out
+
+
 def _foursomes_team_strokes(
     game: TripleCupGame,
     t1_pids: list[int],
@@ -1153,25 +1190,53 @@ def _foursomes_team_strokes(
     receives the differential — so the dots on the entry screen and
     leaderboard read as a head-to-head between two synthetic
     "team" players whose handicaps are their alt-shot allowances."""
-    c1, tee1 = _alt_shot_team_combined(game, t1_pids, members_by_pid)
-    c2, tee2 = _alt_shot_team_combined(game, t2_pids, members_by_pid)
-    tee = tee1 or tee2
-    if game.handicap_mode == HandicapMode.STROKES_OFF:
-        # Team-vs-team SO: low team plays scratch, high team gets
-        # the differential.  Then WHS-allocate that differential
-        # across all 18 holes by SI — we only render what lands
-        # inside the foursomes range (7–12).
-        if c1 <= c2:
-            t1_eff, t2_eff = 0, c2 - c1
-        else:
-            t1_eff, t2_eff = c1 - c2, 0
-    else:
-        # NET mode: each team carries its full combined handicap.
-        t1_eff, t2_eff = c1, c2
-    return (
-        _allocate_whs(t1_eff, hole_range, tee),
-        _allocate_whs(t2_eff, hole_range, tee),
-    )
+    # **Per hole, because a side can lose a man part-way through.** Alt-shot
+    # is a two-ball format; when a partner withdraws the survivor plays on
+    # alone, and `_alt_shot_team_combined` then gives him his OWN handicap
+    # counted twice rather than the pair's two. Reading the pair figure for
+    # the whole segment would have left him playing alone while receiving
+    # strokes for a partner who had gone in.
+    #
+    # Grouped by which players are active, so the common case — nobody
+    # withdrawn — is one allocation per side exactly as before.
+    #
+    # **A stroke lost to the change is lost.** The allocation is re-read from
+    # the new combined figure, so a hole whose stroke index sat under the old
+    # threshold and not the new one simply stops carrying a stroke. Nothing is
+    # re-spread to preserve a total: settled 30 Sep, and re-spreading would
+    # move strokes onto holes the group has already played.
+    positions = _play_positions(game)
+    t1_out: dict[int, int] = {}
+    t2_out: dict[int, int] = {}
+    cache: dict = {}
+
+    for h in hole_range:
+        a1 = _active_on_hole(t1_pids, members_by_pid, h, positions) or t1_pids
+        a2 = _active_on_hole(t2_pids, members_by_pid, h, positions) or t2_pids
+        key = (tuple(a1), tuple(a2))
+        if key not in cache:
+            c1, tee1 = _alt_shot_team_combined(game, list(a1), members_by_pid)
+            c2, tee2 = _alt_shot_team_combined(game, list(a2), members_by_pid)
+            tee = tee1 or tee2
+            if game.handicap_mode == HandicapMode.STROKES_OFF:
+                # Team-vs-team SO: low team plays scratch, high team gets
+                # the differential.  Then WHS-allocate that differential
+                # across all 18 holes by SI — we only render what lands
+                # inside the foursomes range (7–12).
+                if c1 <= c2:
+                    t1_eff, t2_eff = 0, c2 - c1
+                else:
+                    t1_eff, t2_eff = c1 - c2, 0
+            else:
+                # NET mode: each team carries its full combined handicap.
+                t1_eff, t2_eff = c1, c2
+            cache[key] = (_allocate_whs(t1_eff, hole_range, tee),
+                          _allocate_whs(t2_eff, hole_range, tee))
+        alloc1, alloc2 = cache[key]
+        t1_out[h] = alloc1.get(h, 0)
+        t2_out[h] = alloc2.get(h, 0)
+
+    return t1_out, t2_out
 
 
 def _score_fourball_or_singles(
@@ -1296,6 +1361,74 @@ def _score_foursomes(
 # ---------------------------------------------------------------------------
 
 @transaction.atomic
+def _singles_segment_started(game, singles) -> bool:
+    """Has anybody posted a gross on a singles hole yet?
+
+    The line between the two withdrawal answers. Before the segment there is
+    nothing scored to protect, so the pairing can be redrawn; after it starts,
+    redrawing would rewrite holes the group has played.
+    """
+    from scoring.models import HoleScore
+    holes = {h for m in singles for h in _match_hole_list(m)}
+    if not holes:
+        return False
+    return HoleScore.objects.filter(
+        foursome=game.foursome, hole_number__in=holes,
+        gross_score__isnull=False).exists()
+
+
+def singles_substitutions(game, matches, members_by_pid,
+                          positions) -> dict:
+    """``{match_id: {team_number: [player_id, ...]}}`` for singles matches a
+    withdrawal has redrawn. Empty in the ordinary case.
+
+    **A withdrawal before the singles makes it a threesome.** Three men left
+    play it the way a three-ball always has: the odd man plays BOTH opponents,
+    two matches at once. That is exactly the 2v1 shape `_build_match_plan`
+    already draws, so the survivor is substituted into the emptied side — the
+    singles a group of three would have been given had it started that way.
+    The cup still pays two points for the two matches.
+
+    Only while the segment is unscored. Once a singles hole is posted the
+    pairing is what those holes were played under, and a withdrawal there is a
+    concession instead (see `calculate_triple_cup`).
+
+    **DERIVED, never written.** An earlier version set the match's team rows,
+    which destroyed the drawn pairing — so reinstating the golfer could not
+    put it back, because nothing remembered it. The match rows stay the record
+    of what was drawn; this is read on top, by the scorer and the summary
+    alike, so the two cannot disagree and a reinstatement needs no undo.
+    """
+    singles = [m for m in matches if m.segment == 'singles']
+    if len(singles) < 2 or _singles_segment_started(game, singles):
+        return {}
+
+    # Everyone on each cup side, across both matches — the survivor to
+    # substitute comes from the withdrawn player's OWN side.
+    side_pids: dict = {1: [], 2: []}
+    for m in singles:
+        for t in m.teams.all():
+            for pid in t.players.values_list('id', flat=True):
+                if pid not in side_pids[t.team_number]:
+                    side_pids[t.team_number].append(pid)
+
+    out: dict = {}
+    for m in singles:
+        first = _match_hole_list(m)[0]
+        for t in m.teams.all():
+            pids = list(t.players.values_list('id', flat=True))
+            if _active_on_hole(pids, members_by_pid, first, positions):
+                continue
+            survivors = _active_on_hole(
+                side_pids[t.team_number], members_by_pid, first, positions)
+            if not survivors:
+                # Both of a side are gone. There is no threesome to play and
+                # nothing to substitute; the concession path handles it.
+                continue
+            out.setdefault(m.id, {})[t.team_number] = [survivors[0]]
+    return out
+
+
 def calculate_triple_cup(foursome) -> list[TripleCupHoleResult]:
     """
     Score all Triple Cup matches for this foursome.  Idempotent —
@@ -1315,6 +1448,12 @@ def calculate_triple_cup(foursome) -> list[TripleCupHoleResult]:
         return []
 
     members_by_pid = _membership_by_pid(foursome)
+
+    # **Before scoring**, because the pairing decides what gets scored. Runs
+    # on every recalc rather than once from the withdraw endpoint, so a
+    # reinstatement puts the original singles back with no second code path.
+    positions = _play_positions(game)
+    subs = singles_substitutions(game, matches, members_by_pid, positions)
 
     # Indexes are shared between scoring (here) and the summary view.
     gross_index, net_by_segment, pair_indexes = _build_score_indexes(
@@ -1337,6 +1476,9 @@ def calculate_triple_cup(foursome) -> list[TripleCupHoleResult]:
 
         team1_pids = list(t1.players.values_list('id', flat=True))
         team2_pids = list(t2.players.values_list('id', flat=True))
+        sub = subs.get(match.id, {})
+        team1_pids = sub.get(1, team1_pids)
+        team2_pids = sub.get(2, team2_pids)
 
         TripleCupHoleResult.objects.filter(match=match).delete()
 
@@ -1358,6 +1500,38 @@ def calculate_triple_cup(foursome) -> list[TripleCupHoleResult]:
         holes_played = len(results)
         holes_in_seg = len(_match_hole_list(match))
         holes_up     = results[-1].holes_up_after if results else 0
+
+        # **A singles match one side walked out of is conceded.** The scorer
+        # stops at the first hole with no ball on a side, so without this the
+        # match froze at its running margin: status IN_PROGRESS, result None,
+        # the game never COMPLETE and that cup point never awarded — a cup
+        # score short by a point nobody won, with nothing saying so.
+        #
+        # Only a REAL absence concedes. A hole nobody has reached yet also has
+        # no score, which is why this reads the withdrawal and not the gap.
+        if match.segment == 'singles' and holes_played < holes_in_seg:
+            gone1 = not _active_on_hole(
+                team1_pids, members_by_pid,
+                _match_hole_list(match)[holes_played], positions)
+            gone2 = not _active_on_hole(
+                team2_pids, members_by_pid,
+                _match_hole_list(match)[holes_played], positions)
+            if gone1 != gone2:
+                match.status = MatchStatus.COMPLETE
+                match.result = 'team2' if gone1 else 'team1'
+                match.finished_on_hole = (
+                    _match_hole_list(match)[holes_played - 1]
+                    if holes_played else _match_hole_list(match)[0])
+                match.holes_up_after_final = holes_up
+                t1.is_winner, t2.is_winner = (not gone1), (not gone2)
+                any_started = True
+                match.save(update_fields=[
+                    'status', 'result', 'finished_on_hole',
+                    'holes_up_after_final',
+                ])
+                t1.save(update_fields=['is_winner'])
+                t2.save(update_fields=['is_winner'])
+                continue
 
         if holes_played == 0:
             match.status               = MatchStatus.PENDING
@@ -1597,6 +1771,12 @@ def triple_cup_summary(foursome, *, with_cup: bool = False) -> dict | None:
         if game.handicap_mode == HandicapMode.STROKES_OFF else None
     )
 
+    # A withdrawal before the singles redraws them as a threesome. Derived
+    # here the same way the scorer derives it, off the same function, so the
+    # board cannot name a pairing the holes were not scored under.
+    _subs = singles_substitutions(
+        game, matches, members_by_pid, _play_positions(game))
+
     bet_unit       = float(foursome.round.bet_unit)
     money_totals: dict = {}
     t1_wins = t2_wins = halves = 0
@@ -1623,6 +1803,11 @@ def triple_cup_summary(foursome, *, with_cup: bool = False) -> dict | None:
         t2 = next((t for t in match.teams.all() if t.team_number == 2), None)
         team1_pids = list(t1.players.values_list('id', flat=True)) if t1 else []
         team2_pids = list(t2.players.values_list('id', flat=True)) if t2 else []
+        # The same substitution the scorer applies, so the board names the
+        # pairing the holes are actually being scored under.
+        _sub = _subs.get(match.id, {})
+        team1_pids = _sub.get(1, team1_pids)
+        team2_pids = _sub.get(2, team2_pids)
 
         # Tally cup points per decided match.  Most TC formats award
         # 1 point per match (4-player 2v2 = 4 matches × 1 = 4 pts;

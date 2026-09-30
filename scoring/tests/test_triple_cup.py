@@ -11,9 +11,13 @@ per-foursome game.  Pins:
 """
 from django.test import TestCase
 
+from core.models import MatchStatus
+
 from services.triple_cup import (
     setup_triple_cup, calculate_triple_cup, triple_cup_summary,
     _alt_shot_team_combined, _build_match_plan, segment_percent,
+    _foursomes_team_strokes, _active_on_hole, _play_positions,
+    _match_hole_list,
 )
 
 from ._helpers import (
@@ -1068,3 +1072,272 @@ class PhantomOnTheCardTests(TestCase):
         plan = _build_match_plan([1, 2], [3, 4])
         everyone = {p for e in plan for p in e['team1_ids'] + e['team2_ids']}
         self.assertEqual(everyone, {1, 2, 3, 4})
+
+
+class WithdrawalTests(TestCase):
+    """**A mid-round withdrawal in a Triple Cup.**
+
+    Reported 30 Sep: the engine had no reference to `withdrew_after_hole` at
+    all, so nothing happened. Three answers, one per segment, settled by Paul:
+
+      * **Four-ball** — plays on one ball against two. Best-ball of one ball
+        IS that ball, so this needed no code; a phantom would need a
+        cross-foursome donor who has already played the remaining holes, and
+        the first group out has nobody ahead of it.
+      * **Alt-shot** — the survivor plays on off his OWN handicap counted
+        twice, from whichever hole he is alone, including before the segment
+        starts. A stroke lost to the smaller figure is lost.
+      * **Singles** — before the segment, three men play it as a threesome
+        (the odd man plays both opponents). Once it has started, the side that
+        walked out concedes.
+    """
+
+    def _group(self, hcps=(20, 8, 14, 6)):
+        tee = make_tee(slope=113, course_rating=72.0, par=72)   # CH == index
+        round_ = make_round(tee.course)
+        ps = [make_player(n, h) for n, h in zip('ABCD', hcps)]
+        fs = make_foursome(round_, list(zip(ps, hcps)), tee=tee)
+        setup_triple_cup(fs, team1_ids=[ps[0].id, ps[1].id],
+                         team2_ids=[ps[2].id, ps[3].id],
+                         alt_shot_low_pct=40, alt_shot_high_pct=40)
+        from games.models import TripleCupGame
+        return TripleCupGame.objects.get(foursome=fs), fs, ps
+
+    def _wd(self, fs, player, after_hole):
+        m = fs.memberships.get(player=player)
+        m.withdrew_after_hole = after_hole
+        m.save(update_fields=['withdrew_after_hole'])
+
+    def _members(self, fs):
+        return {m.player_id: m
+                for m in fs.memberships.select_related('player', 'tee')}
+
+    # ── alt-shot ──────────────────────────────────────────────────────
+    def test_alt_shot_survivor_plays_off_his_OWN_handicap_twice(self):
+        """A is 12 and B is 8. Together at 40 + 40 that is 40% of 20 = 8.
+        With B gone A plays off 40% of (12 twice) = 9.6 -> 10."""
+        game, fs, ps = self._group()
+        a, b, c, d = ps
+        mbp = self._members(fs)
+        seg = list(range(7, 13))
+
+        # **Through `_foursomes_team_strokes`**, which is the function the
+        # scorer calls. An earlier version of this test computed the active
+        # roster itself and asked `_alt_shot_team_combined` directly — so it
+        # passed with the withdrawal check removed, proving only that the
+        # helper works and nothing about whether anything uses it.
+        both, _ = _foursomes_team_strokes(
+            game, [a.id, b.id], [c.id, d.id], mbp, seg)
+
+        self._wd(fs, b, 6)          # out before the alt-shot begins
+        alone, _ = _foursomes_team_strokes(
+            game, [a.id, b.id], [c.id, d.id], self._members(fs), seg)
+
+        # Pair: 40% of (20 + 8) = 11. Alone: 40% of (20 twice) = 16. Holes
+        # 7-12 carry SI 17, 11, 5, 8, 4, 16 — so 11 strokes reach four of
+        # them and 16 reach five.
+        self.assertEqual(sum(both.values()), 4)
+        self.assertEqual(sum(alone.values()), 5,
+                         'the survivor carries his OWN handicap twice, not '
+                         'the pair’s two')
+
+    def test_alt_shot_changes_only_from_the_hole_he_is_GONE(self):
+        """Holes he played keep the pair's figure — the withdrawal is not
+        retroactive."""
+        game, fs, ps = self._group()
+        a, b, c, d = ps
+        seg = list(range(7, 13))
+        before, _ = _foursomes_team_strokes(
+            game, [a.id, b.id], [c.id, d.id], self._members(fs), seg)
+        self._wd(fs, b, 9)          # plays 7, 8, 9; out 10, 11, 12
+        after, _ = _foursomes_team_strokes(
+            game, [a.id, b.id], [c.id, d.id], self._members(fs), seg)
+        for h in (7, 8, 9):
+            self.assertEqual(after[h], before[h],
+                             f'hole {h} was played as a pair')
+
+    def test_nobody_withdrawn_is_byte_for_byte_what_it_was(self):
+        game, fs, ps = self._group()
+        a, b, c, d = ps
+        seg = list(range(7, 13))
+        t1, t2 = _foursomes_team_strokes(
+            game, [a.id, b.id], [c.id, d.id], self._members(fs), seg)
+        # 40 + 40 of (20 + 8) = 11 for team 1, of (14 + 6) = 8 for team 2.
+        self.assertEqual(sorted(t1), seg)
+        self.assertEqual(sum(t1.values()),
+                         sum(1 for h in seg if _si(fs, h) <= 11))
+        self.assertEqual(sum(t2.values()),
+                         sum(1 for h in seg if _si(fs, h) <= 8))
+
+    # ── singles, before the segment ───────────────────────────────────
+    def test_singles_becomes_a_threesome_when_nobody_has_teed_off(self):
+        game, fs, ps = self._group()
+        a, b, c, d = ps
+        self._wd(fs, b, 12)         # out for 13-18, the whole singles
+        calculate_triple_cup(fs)
+
+        summary = triple_cup_summary(fs)
+        singles = [m for m in summary['matches'] if m['segment'] == 'singles']
+        self.assertEqual(len(singles), 2,
+                         'still two matches, still two points')
+        names = [set(m['team1']['players']) | set(m['team2']['players'])
+                 for m in singles]
+        # A plays both C and D; B is on neither board.
+        self.assertNotIn(b.name, set().union(*names),
+                         'the withdrawn golfer is off the singles')
+        self.assertTrue(all(a.name in n for n in names),
+                        'the survivor plays both opponents')
+        self.assertEqual(set().union(*names) - {a.name}, {c.name, d.name})
+
+        # And the drawn pairing is still on the match rows, unharmed — which
+        # is what lets a reinstatement put it back.
+        drawn = {p for m in game.matches.filter(segment='singles')
+                 for t in m.teams.all()
+                 for p in t.players.values_list('id', flat=True)}
+        self.assertIn(b.id, drawn,
+                      'the substitution must be derived, never written')
+
+    def test_a_reinstatement_puts_the_original_singles_back(self):
+        """The reshape runs on every recalc, so there is no second path to
+        undo it."""
+        game, fs, ps = self._group()
+        a, b, c, d = ps
+        self._wd(fs, b, 12)
+        calculate_triple_cup(fs)
+        m = fs.memberships.get(player=b)
+        m.withdrew_after_hole = None
+        m.save(update_fields=['withdrew_after_hole'])
+        calculate_triple_cup(fs)
+        singles = [mm for mm in triple_cup_summary(fs)['matches']
+                   if mm['segment'] == 'singles']
+        everyone = set().union(*[
+            set(mm['team1']['players']) | set(mm['team2']['players'])
+            for mm in singles])
+        self.assertEqual(everyone, {a.name, b.name, c.name, d.name},
+                         'the original singles are back')
+
+    # ── singles, once it has started ──────────────────────────────────
+    def test_a_side_that_walks_out_mid_singles_CONCEDES(self):
+        game, fs, ps = self._group()
+        a, b, c, d = ps
+        # Singles 13-18. Play 13 and 14, then B goes in.
+        for h in (13, 14):
+            submit_hole(fs, h, [(p.id, 4) for p in ps])
+        self._wd(fs, b, 14)
+        calculate_triple_cup(fs)
+
+        match = next(m for m in game.matches.all()
+                     if m.segment == 'singles'
+                     and b.id in [p for t in m.teams.all()
+                                  for p in t.players.values_list('id',
+                                                                 flat=True)])
+        self.assertEqual(match.status, MatchStatus.COMPLETE,
+                         'a conceded match is finished, not frozen')
+        self.assertIsNotNone(match.result)
+        winner = next(t for t in match.teams.all() if t.is_winner)
+        self.assertNotIn(b.id,
+                         list(winner.players.values_list('id', flat=True)),
+                         'the point goes to the side still standing')
+
+    def test_the_OTHER_singles_match_is_untouched(self):
+        game, fs, ps = self._group()
+        a, b, c, d = ps
+        for h in (13, 14):
+            submit_hole(fs, h, [(p.id, 4) for p in ps])
+        self._wd(fs, b, 14)
+        calculate_triple_cup(fs)
+        others = [m for m in game.matches.all()
+                  if m.segment == 'singles'
+                  and b.id not in [p for t in m.teams.all()
+                                   for p in t.players.values_list('id',
+                                                                  flat=True)]]
+        self.assertEqual(len(others), 1)
+        self.assertNotEqual(others[0].status, MatchStatus.COMPLETE,
+                            'two level holes decide nothing')
+
+
+class WithdrawalShotgunTests(TestCase):
+    """**A withdrawal is a point in the ROUND, not a hole number.**
+
+    The convention `services/skins.py` states — and 40 Balls and Spots reuse —
+    compares hole numbers: active while `h <= withdrew_after_hole`. That is the
+    same integer only when the round starts on the 1st. A cup day is very often
+    a shotgun, so Triple Cup reads position along the group's own play order
+    instead.
+
+    Off the 13th the order is 13-18 then 1-12, so the four-ball is 13-18, the
+    alt-shot 1-6 and the singles 7-12. A man who walks in after the 2nd has
+    PLAYED 13-18 and 1-2; every hole he played except two carries a number
+    HIGHER than 2, which is exactly what a hole-number test gets wrong.
+
+    Without this the choice is unpinned: every other withdrawal test here
+    starts on the 1st, where position and number coincide and the two rules
+    cannot be told apart.
+    """
+
+    def _shotgun_group(self):
+        tee = make_tee(slope=113, course_rating=72.0, par=72)
+        round_ = make_round(tee.course)
+        round_.starting_hole = 13
+        round_.save(update_fields=['starting_hole'])
+        ps = [make_player(n, h) for n, h in zip('ABCD', (20, 8, 14, 6))]
+        fs = make_foursome(round_, list(zip(ps, (20, 8, 14, 6))), tee=tee)
+        setup_triple_cup(fs, team1_ids=[ps[0].id, ps[1].id],
+                         team2_ids=[ps[2].id, ps[3].id],
+                         alt_shot_low_pct=40, alt_shot_high_pct=40)
+        from games.models import TripleCupGame
+        return TripleCupGame.objects.get(foursome=fs), fs, ps
+
+    def test_the_segments_follow_the_shotgun(self):
+        game, _fs, _ps = self._shotgun_group()
+        seg = {m.segment: sorted(_match_hole_list(m))
+               for m in game.matches.filter(segment__in=('fourball',
+                                                         'foursomes'))}
+        self.assertEqual(seg['fourball'], [13, 14, 15, 16, 17, 18])
+        self.assertEqual(seg['foursomes'], [1, 2, 3, 4, 5, 6])
+
+    def test_holes_he_PLAYED_still_count_him_in(self):
+        game, fs, ps = self._shotgun_group()
+        a, b, _c, _d = ps
+        m = fs.memberships.get(player=b)
+        m.withdrew_after_hole = 2      # played 13-18 and 1-2
+        m.save(update_fields=['withdrew_after_hole'])
+        mbp = {mm.player_id: mm
+               for mm in fs.memberships.select_related('player', 'tee')}
+        positions = _play_positions(game)
+
+        for h in (13, 18, 1, 2):
+            self.assertIn(
+                b.id, _active_on_hole([a.id, b.id], mbp, h, positions),
+                f'he played hole {h} — a hole-number test drops him from it')
+        for h in (3, 6, 7, 12):
+            self.assertNotIn(
+                b.id, _active_on_hole([a.id, b.id], mbp, h, positions),
+                f'he was gone by hole {h}')
+
+    def test_the_alt_shot_figure_changes_only_after_he_goes(self):
+        game, fs, ps = self._shotgun_group()
+        a, b, c, d = ps
+        seg = [1, 2, 3, 4, 5, 6]
+        before, _ = _foursomes_team_strokes(
+            game, [a.id, b.id], [c.id, d.id],
+            {mm.player_id: mm for mm in fs.memberships.select_related(
+                'player', 'tee')}, seg)
+        m = fs.memberships.get(player=b)
+        m.withdrew_after_hole = 2
+        m.save(update_fields=['withdrew_after_hole'])
+        after, _ = _foursomes_team_strokes(
+            game, [a.id, b.id], [c.id, d.id],
+            {mm.player_id: mm for mm in fs.memberships.select_related(
+                'player', 'tee')}, seg)
+        for h in (1, 2):
+            self.assertEqual(after[h], before[h],
+                             f'hole {h} was played as a pair')
+        self.assertGreater(sum(after[h] for h in (3, 4, 5, 6)),
+                           sum(before[h] for h in (3, 4, 5, 6)),
+                           'alone he carries his own handicap twice')
+
+
+def _si(fs, hole: int) -> int:
+    tee = fs.memberships.first().tee
+    return tee.hole(hole).get('stroke_index', 18)
