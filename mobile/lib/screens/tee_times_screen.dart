@@ -1,7 +1,8 @@
 /// screens/tee_times_screen.dart
 /// The tee sheet — edit each group's tee time on an already-set-up round.
 ///
-/// Reached from the round hub's "Round setup" section.  Each change persists
+/// Reached from the round hub (above the Foursomes list) and from the
+/// tournament card.  Each change persists
 /// IMMEDIATELY via `setTeeTimes` — a non-destructive PATCH that only updates
 /// `foursome.tee_time` (no re-setup, no effect on scores).  This is the live
 /// counterpart to the tee-time pencil in the initial group builder, which only

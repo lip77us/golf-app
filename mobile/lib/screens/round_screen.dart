@@ -5,6 +5,7 @@ import '../ui_labels.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import 'tee_times_screen.dart';
 import '../widgets/cup_tally.dart';
 import '../widgets/error_view.dart';
 import '../widgets/game_chip.dart';
@@ -291,6 +292,36 @@ class _RoundScreenState extends State<RoundScreen> {
               hasMatchPlay:   showMatchPlaySetup,
               showStableford: showStableford,
               foursomes:      round.foursomes,
+            ),
+          ],
+          // **The tee sheet, from the Hub.** It already existed — fill
+          // forward from the first group, collision warning, sorted into play
+          // order — and was reachable only from the tournament card, which is
+          // not where a TD stands when he is looking at the groups. Its own
+          // docstring said "reached from the round hub", which was the
+          // intention and never the wiring.
+          //
+          // Above Foursomes on purpose: it is the schedule those cards are
+          // ordered by, so it reads as the heading to the list rather than an
+          // afterthought under it.
+          if (canManage && !isComplete && round.foursomes.length > 1) ...[
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.schedule),
+                title: const Text('Tee times'),
+                subtitle: const Text(
+                    'Set the first group and fill the rest forward'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context)
+                    .push(MaterialPageRoute(
+                      builder: (_) => TeeTimesScreen(
+                        roundId: widget.roundId,
+                        tournamentName: round.course.name,
+                      ),
+                    ))
+                    .then((_) => _reloadRound()),
+              ),
             ),
           ],
           const SizedBox(height: 16),
