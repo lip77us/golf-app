@@ -334,3 +334,73 @@ class FourballScorecardTests(FourballBase):
         d_row = next(sc for sc in h1['scores'] if sc['player_id'] == d_id)
         si1 = self.tee.hole(1)['stroke_index']
         self.assertEqual(d_row['strokes'], 1 if si1 <= 4 else 0, (si1, d_row))
+
+
+class FourballScorecardDotsTests(FourballBase):
+    """**The dots belong on the holes ahead of you.**
+
+    Reported from a fourball on 1 Oct 2026 — strokes-off at 100%. The card
+    drew dots on the holes already in and nothing on the rest, which is the
+    one state they are no use in: a stroke dot says where a stroke FALLS, and
+    you want that before you play the hole, not after.
+
+    The card derived them as `gross - net`, so an unscored hole had no gross,
+    no net and therefore no stroke. It reads the allocator now — the same one
+    the match lock card uses for this game, so the two cannot disagree.
+    """
+
+    def _card(self):
+        return fourball_summary(self.fs)['scorecard']
+
+    def _dots(self, pid):
+        return {h['hole']: next(sc['strokes'] for sc in h['scores']
+                                if sc['player_id'] == pid)
+                for h in self._card()}
+
+    def test_strokes_off_shows_dots_before_a_ball_is_struck(self):
+        # D off 12 against a scratch low man: twelve strokes, so a dot on the
+        # twelve hardest holes — from the first tee, with nothing scored.
+        self._make_fs((0, 0, 0, 12))
+        self._setup(hmode='strokes_off', net_percent=100)
+        dots = self._dots(self.p[3].id)
+        self.assertEqual(len(dots), 18, 'every hole in play is on the card')
+        self.assertEqual(sum(dots.values()), 12,
+                         'twelve strokes off the low man, all eighteen holes '
+                         'unplayed')
+
+    def test_they_land_on_the_TWELVE_HARDEST_holes(self):
+        self._make_fs((0, 0, 0, 12))
+        self._setup(hmode='strokes_off', net_percent=100)
+        dots = self._dots(self.p[3].id)
+        tee = self.fs.memberships.first().tee
+        for h, n in dots.items():
+            si = tee.hole(h).get('stroke_index', 18)
+            self.assertEqual(n, 1 if si <= 12 else 0,
+                             f'hole {h} (SI {si}) should have '
+                             f'{1 if si <= 12 else 0}')
+
+    def test_a_scored_hole_keeps_the_same_dots(self):
+        """The count must not change as the hole comes in — a dot that moves
+        when a score lands is how this was found."""
+        self._make_fs((0, 0, 0, 12))
+        self._setup(hmode='strokes_off', net_percent=100)
+        before = self._dots(self.p[3].id)
+        self._play(1, 4, 4, 4, 5)
+        self.assertEqual(self._dots(self.p[3].id), before)
+
+    def test_net_mode_shows_them_too(self):
+        self._make_fs((0, 0, 0, 9))
+        self._setup(hmode='net', net_percent=100)
+        dots = self._dots(self.p[3].id)
+        self.assertEqual(sum(dots.values()), 9)
+
+    def test_gross_gives_nobody_a_dot(self):
+        self._make_fs((0, 0, 0, 12))
+        self._setup(hmode='gross')
+        for pl in self.p:
+            self.assertEqual(sum(self._dots(pl.id).values()), 0)
+
+    def test_the_low_man_carries_none_in_strokes_off(self):
+        self._make_fs((0, 0, 0, 12))
+        self._setup(hmode='strokes_off', net_percent=100)
+        self.assertEqual(sum(self._dots(self.p[0].id).values()), 0)

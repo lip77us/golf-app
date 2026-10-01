@@ -441,14 +441,33 @@ def fourball_summary(foursome) -> dict | None:
         for h in holes_out
     }
     holes_in_play = _order or list(range(1, 19))
+    # **The dots have to be on the holes AHEAD of you** — they say where the
+    # strokes fall, which is only useful before the hole is played. This read
+    # `gross - net`, so an unscored hole had no gross, no net and no dots.
+    # Reported from a fourball on 1 Oct 2026, strokes-off at 100%: dots on the
+    # holes already in and nothing on the rest.
+    #
+    # `full_round_strokes` is the allocator the match LOCK CARD already uses
+    # for this game, so the card and the ribbon cannot disagree, and it is the
+    # same anchor the engine measures strokes-off against. (It allocates over
+    # a full 18 rather than scaling for a part round — fourball is an 18-hole
+    # match, so that is not a case it has.)
+    from services.live_activity_registry import full_round_strokes
+    strokes_by = full_round_strokes(
+        foursome,
+        handicap_mode=game.handicap_mode,
+        net_percent=game.net_percent,
+        holes=holes_in_play,
+    )
     scorecard = []
     for hn in holes_in_play:
         row_scores = []
         for pid in real_pids:
-            g   = gross_by.get((pid, hn))
-            net = net_index.get(pid, {}).get(hn)
-            strokes = max(0, g - net) if (g is not None and net is not None) else 0
-            row_scores.append({'player_id': pid, 'gross': g, 'strokes': strokes})
+            g = gross_by.get((pid, hn))
+            row_scores.append({
+                'player_id': pid, 'gross': g,
+                'strokes'  : strokes_by.get(pid, {}).get(hn, 0),
+            })
         scorecard.append({
             'hole'        : hn,
             'par'         : par_by_hole.get(hn),
