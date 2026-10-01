@@ -54,7 +54,7 @@ from core.models import HandicapMode, MatchStatus, Player
 from games.models import (
     MultiSkinsGame, MultiSkinsHoleResult, MultiSkinsLinkedRound,
 )
-from scoring.handicap import build_score_index
+from scoring.handicap import build_score_index, _strokes_on_hole
 from scoring.models import HoleScore
 from core.handicap_math import round_half_up
 
@@ -707,24 +707,36 @@ def _summary_for_game(game: MultiSkinsGame) -> dict:
 
     winner_by_hole = {hr.hole_number: hr for hr in hole_results}
 
+    # **Every hole, and the dots on the ones nobody has reached.** A stroke dot
+    # says where a stroke FALLS, so it is only useful before the hole is
+    # played. This skipped unscored holes entirely and derived strokes as
+    # `gross - net`, which needs a gross — so the card showed the holes already
+    # in and nothing ahead of them. Same defect fixed in fourball (63610a2);
+    # Skins has always done it the right way round and says so in its own
+    # comment.
+    #
+    # `_phcp_in_play` is the pool's in-play handicap — gross, net% or
+    # strokes-off against the POOL's low — so these are the strokes skins
+    # actually issues, just computed before the hole rather than after.
+    # Allocated on each participant's OWN tee, like the scoring does: the pool
+    # is one course but not necessarily one set of tees.
     holes_out: list = []
     for hole_num in range(1, 19):
         hr = winner_by_hole.get(hole_num)
-        scored_cids = [
-            cid for cid in participant_ids
-            if hole_num in gross_index.get(cid, {})
-        ]
-        if hr is None and not scored_cids:
-            continue
         scores = []
-        for cid in scored_cids:
-            gross   = gross_index[cid][hole_num]
-            net     = score_index.get(cid, {}).get(hole_num)
-            strokes = (gross - net) if net is not None else 0
+        for cid in participant_ids:
+            m = member_by_canon.get(cid)
+            si = 18
+            if m is not None and m.tee_id is not None:
+                si = m.tee.hole(hole_num).get('stroke_index', 18)
+            elif si_by_hole.get(hole_num):
+                si = si_by_hole[hole_num]
+            phcp = _phcp_in_play(
+                (m.playing_handicap or 0) if m is not None else 0)
             scores.append({
                 'player_id': cid,
-                'gross'    : gross,
-                'strokes'  : max(0, strokes),
+                'gross'    : gross_index.get(cid, {}).get(hole_num),
+                'strokes'  : _strokes_on_hole(phcp, si),
             })
         holes_out.append({
             'hole'        : hole_num,

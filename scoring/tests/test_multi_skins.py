@@ -422,3 +422,80 @@ class MultiSkinsParticipantInBothRoundsTests(TestCase):
     def pid_g(self, name):
         return next(m.player_id for m in self.gg.memberships.select_related('player')
                     if m.player.name == name)
+
+
+class MultiSkinsScorecardDotsTests(TestCase):
+    """**The dots belong on the holes ahead of you.**
+
+    Same defect as fourball (63610a2), one surface over: the card skipped
+    unscored holes entirely and derived strokes as `gross - net`, which needs a
+    gross. So the grid — on the leaderboard and on the watch page — showed the
+    holes already in and nothing ahead of them, which is the one state a stroke
+    dot is no use in.
+
+    Skins itself has always done this the right way round and says so in its
+    own comment; this brings the POOL into line with it.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, handicap_mode='net',
+                                net_max_double_bogey=False)
+        self.g1 = make_foursome(
+            self.round, [('A1', 0), ('A2', 9)], tee=self.tee, group_number=1)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.g1.memberships.select_related('player')}
+
+    def _pool(self, mode='net', npct=100):
+        setup_multi_skins(
+            self.round,
+            participant_ids=[self.pid['A1'], self.pid['A2']],
+            handicap_mode=mode, net_percent=npct)
+        calculate_multi_skins(self.round)
+        return multi_skins_summary(self.round)
+
+    def _dots(self, summary, pid):
+        return {h['hole']: next(s['strokes'] for s in h['scores']
+                                if s['player_id'] == pid)
+                for h in summary['holes']}
+
+    def test_every_hole_is_on_the_card_before_a_ball_is_struck(self):
+        s = self._pool()
+        self.assertEqual(len(s['holes']), 18,
+                         'the grid used to start empty and grow')
+
+    def test_a_nine_handicap_shows_nine_dots_from_the_first_tee(self):
+        s = self._pool()
+        dots = self._dots(s, self.pid['A2'])
+        self.assertEqual(sum(dots.values()), 9,
+                         'nine strokes, nothing played')
+
+    def test_they_land_on_the_nine_hardest_holes(self):
+        s = self._pool()
+        dots = self._dots(s, self.pid['A2'])
+        m = self.g1.memberships.get(player_id=self.pid['A2'])
+        for h, n in dots.items():
+            si = m.tee.hole(h).get('stroke_index', 18)
+            self.assertEqual(n, 1 if si <= 9 else 0, f'hole {h} (SI {si})')
+
+    def test_the_count_does_not_change_as_a_hole_comes_in(self):
+        s = self._pool()
+        before = self._dots(s, self.pid['A2'])
+        submit_hole(self.g1, 1, [(self.pid['A1'], 4), (self.pid['A2'], 5)])
+        calculate_multi_skins(self.round)
+        self.assertEqual(
+            self._dots(multi_skins_summary(self.round), self.pid['A2']),
+            before,
+            'a dot that moves when a score lands is how this was found')
+
+    def test_gross_gives_nobody_a_dot(self):
+        s = self._pool(mode='gross')
+        for name in ('A1', 'A2'):
+            self.assertEqual(sum(self._dots(s, self.pid[name]).values()), 0)
+
+    def test_strokes_off_measures_against_the_POOL_low(self):
+        s = self._pool(mode='strokes_off')
+        # A1 is the pool's low at scratch, so A2 carries the 9 difference and
+        # A1 carries none.
+        self.assertEqual(sum(self._dots(s, self.pid['A1']).values()), 0)
+        self.assertEqual(sum(self._dots(s, self.pid['A2']).values()), 9)
