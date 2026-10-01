@@ -121,17 +121,23 @@ def budget(foursome) -> int:
     return BALLS_PER_GOLFER * group_size(foursome)
 
 
-def active_on_hole(foursome, hole_number: int, members=None) -> int:
+def active_on_hole(foursome, hole_number: int, members=None,
+                   positions=None) -> int:
     """How many of the group can put a ball on this hole.
 
-    A golfer is active on hole h until the hole he withdrew after — the same
-    convention `services/skins.py` uses, stated once there and reused rather
-    than re-derived.
+    The rule lives in `services/withdrawal.py` — read along the group's PLAY
+    ORDER, because a withdrawal is a point in the round. This compared hole
+    NUMBERS until 30 Sep 2026, which off a shotgun counted a golfer out of the
+    holes he had played and into the ones he had missed.
+
+    [positions] is accepted so a caller looping over holes builds the index
+    once instead of per hole.
     """
+    from services.withdrawal import active_count, play_plan
     members = members if members is not None else _real_members(foursome)
-    return sum(1 for m in members
-               if m.withdrew_after_hole is None
-               or hole_number <= m.withdrew_after_hole)
+    if positions is None:
+        _order, positions = play_plan(foursome)
+    return active_count(members, hole_number, positions)
 
 
 def _capacity(foursome, holes: list, members=None) -> int:
@@ -141,8 +147,10 @@ def _capacity(foursome, holes: list, members=None) -> int:
     are not all worth the same number of balls. With nobody withdrawn the two
     are identical.
     """
+    from services.withdrawal import play_plan
     members = members if members is not None else _real_members(foursome)
-    return sum(active_on_hole(foursome, h, members) for h in holes)
+    _order, positions = play_plan(foursome)
+    return sum(active_on_hole(foursome, h, members, positions) for h in holes)
 
 
 # ---------------------------------------------------------------------------

@@ -86,16 +86,16 @@ def tally_spots(foursome, hole_number: int, entries: list) -> SpotsGame:
     return game
 
 
-def _active_roster_by_hole(real_members) -> dict:
-    """{hole: [player_id, ...]} of players active on each hole (not withdrawn
-    before it). Mirrors Skins' active-on-hole rule."""
-    all_pids = [m.player_id for m in real_members]
-    wd = {m.player_id: m.withdrew_after_hole
-          for m in real_members if m.withdrew_after_hole is not None}
-    return {
-        h: [pid for pid in all_pids if pid not in wd or h <= wd[pid]]
-        for h in range(1, 19)
-    }
+def _active_roster_by_hole(real_members, foursome) -> dict:
+    """{hole: [player_id, ...]} of players active on each hole.
+
+    The rule lives in `services/withdrawal.py`, read along the group's PLAY
+    ORDER. This compared hole NUMBERS until 30 Sep 2026 — the same integer only
+    on a round starting at the 1st, and inverted off a shotgun.
+    """
+    from services.withdrawal import active_pids, play_plan
+    order, positions = play_plan(foursome)
+    return {h: active_pids(real_members, h, positions) for h in order}
 
 
 def spots_summary(foursome) -> dict:
@@ -133,7 +133,7 @@ def spots_summary(foursome) -> dict:
         .filter(player__is_phantom=False)
     )
     bet_unit = float(game.bet_unit)
-    roster   = _active_roster_by_hole(real_members)
+    roster   = _active_roster_by_hole(real_members, foursome)
 
     rows = list(SpotsPlayerHoleResult.objects
                 .filter(game=game).exclude(count=0)

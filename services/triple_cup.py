@@ -1142,38 +1142,22 @@ def _expected_strokes_per_match(
 def _play_positions(game) -> dict:
     """``{hole_number: position}`` along this group's own play order.
 
-    **Withdrawal is a point in the ROUND, not a hole number.** A group off a
-    shotgun on the 13th that loses a man after the 15th is short for 16, 17,
-    18 and then 1 through 12 — every one of which is a LOWER number than 15.
-    The convention stated in `services/skins.py` and reused by 40 Balls and
-    Spots compares hole numbers (`h <= withdrew_after_hole`), which is the
-    same integer only when the round starts on the 1st. A cup day is very
-    often a shotgun, so this reads position instead.
+    A thin alias over `services.withdrawal.play_plan` so the call sites here
+    read off a game rather than a foursome. The rule itself — and the reason a
+    withdrawal is read by position and not by hole number — lives there, shared
+    with Skins, 40 Balls and Spots.
     """
-    from services.hole_plan import play_order
-    fs = game.foursome
-    return {h: i for i, h in enumerate(play_order(fs.round, fs))}
+    from services.withdrawal import play_plan
+    return play_plan(game.foursome)[1]
 
 
 def _active_on_hole(pids, members_by_pid: dict, hole: int,
                     positions: dict) -> list:
     """Which of *pids* can still put a ball on *hole*."""
-    out = []
-    for pid in pids:
-        m = members_by_pid.get(pid)
-        if m is None:
-            continue
-        wd = m.withdrew_after_hole
-        if wd is None:
-            out.append(pid)
-            continue
-        # Unknown holes sort last, so a hole outside the plan never counts a
-        # withdrawn player as active.
-        here = positions.get(hole, 1 << 30)
-        after = positions.get(wd, -1)
-        if here <= after:
-            out.append(pid)
-    return out
+    from services.withdrawal import is_active
+    return [pid for pid in pids
+            if pid in members_by_pid
+            and is_active(members_by_pid[pid], hole, positions)]
 
 
 def _foursomes_team_strokes(

@@ -159,7 +159,7 @@ def _build_so_score_index(foursome, net_percent: int = 100) -> dict:
 # Mid-round withdrawal — segment plan
 # ---------------------------------------------------------------------------
 
-def _skins_withdrawal_plan(real_members) -> dict:
+def _skins_withdrawal_plan(real_members, foursome) -> dict:
     """
     Derive the segment structure a mid-round withdrawal imposes on Skins.
 
@@ -175,8 +175,10 @@ def _skins_withdrawal_plan(real_members) -> dict:
           'withdrawals'  : [{'player_id', 'after_hole', 'killed_next_hole'}],
         }
 
-    A real member is *active* on hole h iff they have not withdrawn before it
-    (``withdrew_after_hole`` is None or ``h <= withdrew_after_hole``).  A hole
+    A real member is *active* on hole h iff they have not withdrawn before it —
+    read along the group's PLAY ORDER by `services/withdrawal.py`, which is the
+    one place that rule lives. (It used to compare hole numbers here, which is
+    the same integer only when the round starts on the 1st.)  A hole
     is *eligible* (contested) when it is not killed and ≥ 2 players are active
     — fewer than two players is "game over", so those holes evaporate.
     Segments are maximal runs of consecutive eligible holes that share the same
@@ -192,28 +194,26 @@ def _skins_withdrawal_plan(real_members) -> dict:
     fresh calculation for the survivor segment). This helper still gives them
     the right hole→segment partition; only the money math differs.
     """
-    all_pids = [m.player_id for m in real_members]
+    from services.withdrawal import (
+        active_pids, killed_holes, play_plan,
+    )
+    order, positions = play_plan(foursome)
     wd = {
         m.player_id: m.withdrew_after_hole
         for m in real_members
         if m.withdrew_after_hole is not None
     }
-    killed = {
-        m.withdrew_after_hole + 1
-        for m in real_members
-        if m.withdrew_after_hole is not None
-        and m.withdrew_killed_next_hole
-        and m.withdrew_after_hole + 1 <= 18
-    }
-
-    def active_on(h):
-        return [pid for pid in all_pids if pid not in wd or h <= wd[pid]]
+    killed = killed_holes(real_members, order, positions)
 
     segments: list = []
     eligible: set = set()
     cur = None  # current run: {'holes': [...], 'roster': [...]}
-    for h in range(1, 19):
-        roster = active_on(h)
+    # **The group's own play order, not 1..18.** A run of holes is consecutive
+    # in the order they were PLAYED: 18 and 1 are adjacent off a shotgun and
+    # are not adjacent numbers, so walking the numbers split a segment the
+    # group never stopped in and joined two it did.
+    for h in order:
+        roster = active_pids(real_members, h, positions)
         if h in killed or len(roster) < 2:
             cur = None  # boundary — close the current run, carry dies
             continue
@@ -299,7 +299,7 @@ def calculate_skins(foursome) -> list:
     # Mid-round withdrawals partition the round into constant-roster segments
     # (one segment over all 18 holes when nobody withdrew). The carry pot is
     # scoped to a segment — it never crosses a withdrawal or a killed hole.
-    plan          = _skins_withdrawal_plan(real_members)
+    plan          = _skins_withdrawal_plan(real_members, foursome)
     total_eligible = len(plan['eligible'])
     rows          = []
     scored        = 0   # eligible holes where the active roster all scored
@@ -516,7 +516,7 @@ def skins_summary(foursome) -> dict:
     # two players are in no segment, so those stakes evaporate. With no
     # withdrawal there's one 18-hole segment with the full roster, so this is
     # identical to the historical "pool × skins / total_skins" split.
-    plan        = _skins_withdrawal_plan(real_members)
+    plan        = _skins_withdrawal_plan(real_members, foursome)
     hr_by_hole  = {hr.hole_number: hr for hr in hole_results}
     payout_by_pid: dict = {m.player_id: 0.0 for m in real_members}
     # What each player actually anted (pool mode) — one bet_unit spread over 18
