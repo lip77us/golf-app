@@ -1,8 +1,64 @@
-# App Store listing copy — Halved (v2.9.1)
+# App Store listing copy — Halved (v2.10.0)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
 Only list shipping, enabled games (Scramble is still hidden — `enabled:false`).
+
+## What's New (v2.10.0)
+Three new ways to run an event.
+
+40 BALLS — a foursome gets 40 balls for the round and a threesome 30, and
+spends them hole by hole AFTER the scores are in. Two balls on a hole counts
+the best two nets against two pars; spend four on the one everybody birdied and
+the closing stretch is thin. The group sees what it has and decides what each
+hole is worth. The budget is what you started with — losing a player does not
+reduce it.
+
+DREAM ROUND — the best score on every hole number, across every round of the
+event. Eighteen bests make a card. Scored against that round's par, so two
+courses can be compared, with gross and net ranked and paid separately. Every
+improvement shows on the board as it lands.
+
+ROAD TRIP — several courses over several days, with the best rounds counting.
+Net and Gross each pick their own best, scored to par so a hard course is not
+a penalty. A round still being played can never knock out a finished one, and
+a golfer who can no longer reach the count is shown rather than hidden.
+
+WATCH ANY GAME — send someone the round link and they can follow along in a
+browser with no app. Survivor, Rabbit, Honors, Spots, Fourball, Triple Nassau,
+Better Ball, Sequoya 3s, Quota Nassau, Banker and Foursome Play all have a page
+of their own now, so nothing you can start opens a link that shows nothing.
+
+TRIPLE CUP
+• One handicap allowance per segment — 90% in the four-balls, 40% of the
+  combined handicaps in alternate shot, full index in the singles, all settable
+• The allowances belong to the cup, so a multi-day event uses one set
+• Every match says what it is played off, on the screen you score on
+• The phantom has a row on the scorecard, so you can see what it made without
+  going back a hole
+• A mid-round withdrawal is answered per segment: the alternate-shot survivor
+  plays off twice his handicap, and a singles side plays two matches against one
+
+ALSO IN THIS RELEASE
+• Flights are asked for in the create wizard and cut when the tournament is
+  created, rather than waiting on the championship screen — and once the cut is
+  taken it can no longer be re-cut out from under golfers already playing
+• Quota Nassau can be picked again — the mixed-cup planner had dropped it, so
+  it could not be reached at all
+• Pink Ball has a scorecard, names the carrier once instead of twice, and its
+  rotation follows position in the round rather than hole number
+• The standing bar reaches the cup and tournament screens
+• Set the tee times from the round hub — one time propagates to the groups
+  below it
+• Stroke dots on the holes still to come in Fourball and Multi-Group Skins, so
+  you can see where your strokes fall before you get there
+• Invite a watcher from the score entry screen, not only the leaderboard
+• A halved Sixes match now counts as finished, so the round no longer sticks
+• Five screens were showing the wrong golfer's par and stroke index
+• Scorecards with an OUT column scroll every time, not only the first
+• Shotgun starts: a position marker on every screen that names a hole, and the
+  withdrawal rule and hole numbering in Skins, 40 Balls and Spots now count the
+  holes actually played
 
 ## Name
 Halved Golf
@@ -40,7 +96,10 @@ lead on.)
 (Skins/Nassau are already in the subtitle, so they're omitted here — Apple
 indexes the subtitle words anyway; keywords spend the budget on new terms.)
 
-## Promotional text (170 max, editable without review) — 2.9.1, 164 chars
+## Promotional text (170 max, editable without review) — 2.10.0, 163 chars
+New: 40 Balls, Dream Round and Road Trip — three new ways to run an event. Plus a watch page for every game, so anyone with the link can follow along in a browser.
+
+## Promotional text — previous (v2.9.1, 164 chars)
 New: every game shows where you stand right under its title — your match, your place, your points — one tap from the full leaderboard. Plus Better Ball and flights.
 
 ## Promotional text — previous (v2.8.3, 166 chars)
@@ -117,62 +176,6 @@ seconds, with no spreadsheets and no napkin math.
 
 Halved is built for friendly play among friends. It tracks informal stakes for
 scoring purposes only and does not process payments.
-
-## What's New (v2.10.0)
-Three new ways to run an event.
-
-40 BALLS — a foursome gets 40 balls for the round and a threesome 30, and
-spends them hole by hole AFTER the scores are in. Two balls on a hole counts
-the best two nets against two pars; spend four on the one everybody birdied and
-the closing stretch is thin. The group sees what it has and decides what each
-hole is worth. The budget is what you started with — losing a player does not
-reduce it.
-
-DREAM ROUND — the best score on every hole number, across every round of the
-event. Eighteen bests make a card. Scored against that round's par, so two
-courses can be compared, with gross and net ranked and paid separately. Every
-improvement shows on the board as it lands.
-
-ROAD TRIP — several courses over several days, with the best rounds counting.
-Net and Gross each pick their own best, scored to par so a hard course is not
-a penalty. A round still being played can never knock out a finished one, and
-a golfer who can no longer reach the count is shown rather than hidden.
-
-WATCH ANY GAME — send someone the round link and they can follow along in a
-browser with no app. Survivor, Rabbit, Honors, Spots, Fourball, Triple Nassau,
-Better Ball, Sequoya 3s, Quota Nassau, Banker and Foursome Play all have a page
-of their own now, so nothing you can start opens a link that shows nothing.
-
-TRIPLE CUP
-• One handicap allowance per segment — 90% in the four-balls, 40% of the
-  combined handicaps in alternate shot, full index in the singles, all settable
-• The allowances belong to the cup, so a multi-day event uses one set
-• Every match says what it is played off, on the screen you score on
-• The phantom has a row on the scorecard, so you can see what it made without
-  going back a hole
-• A mid-round withdrawal is answered per segment: the alternate-shot survivor
-  plays off twice his handicap, and a singles side plays two matches against one
-
-ALSO IN THIS RELEASE
-• Flights are asked for in the create wizard and cut when the tournament is
-  created, rather than waiting on the championship screen — and once the cut is
-  taken it can no longer be re-cut out from under golfers already playing
-• Quota Nassau can be picked again — the mixed-cup planner had dropped it, so
-  it could not be reached at all
-• Pink Ball has a scorecard, names the carrier once instead of twice, and its
-  rotation follows position in the round rather than hole number
-• The standing bar reaches the cup and tournament screens
-• Set the tee times from the round hub — one time propagates to the groups
-  below it
-• Stroke dots on the holes still to come in Fourball and Multi-Group Skins, so
-  you can see where your strokes fall before you get there
-• Invite a watcher from the score entry screen, not only the leaderboard
-• A halved Sixes match now counts as finished, so the round no longer sticks
-• Five screens were showing the wrong golfer's par and stroke index
-• Scorecards with an OUT column scroll every time, not only the first
-• Shotgun starts: a position marker on every screen that names a hole, and the
-  withdrawal rule and hole numbering in Skins, 40 Balls and Spots now count the
-  holes actually played
 
 ## What's New (v2.9.1)
 Where you stand, without leaving the hole.
