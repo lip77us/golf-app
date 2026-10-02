@@ -1,6 +1,6 @@
 name: golf_mobile
 description: Golf group scorecard and games app.
-version: 2.9.2+43
+version: 2.10.0+44
 
 environment:
   sdk: '>=3.3.0 <4.0.0'

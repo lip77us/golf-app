@@ -118,6 +118,47 @@ seconds, with no spreadsheets and no napkin math.
 Halved is built for friendly play among friends. It tracks informal stakes for
 scoring purposes only and does not process payments.
 
+## What's New (v2.10.0)
+Three new ways to run an event.
+
+40 BALLS — a foursome gets 40 balls for the round and a threesome 30, and
+spends them hole by hole AFTER the scores are in. Two balls on a hole counts
+the best two nets against two pars; spend four on the one everybody birdied and
+the closing stretch is thin. The group sees what it has and decides what each
+hole is worth. The budget is what you started with — losing a player does not
+reduce it.
+
+DREAM ROUND — the best score on every hole number, across every round of the
+event. Eighteen bests make a card. Scored against that round's par, so two
+courses can be compared, with gross and net ranked and paid separately. Every
+improvement shows on the board as it lands.
+
+ROAD TRIP — several courses over several days, with the best rounds counting.
+Net and Gross each pick their own best, scored to par so a hard course is not
+a penalty. A round still being played can never knock out a finished one, and
+a golfer who can no longer reach the count is shown rather than hidden.
+
+TRIPLE CUP
+• One handicap allowance per segment — 90% in the four-balls, 40% of the
+  combined handicaps in alternate shot, full index in the singles, all settable
+• The allowances belong to the cup, so a multi-day event uses one set
+• Every match says what it is played off, on the screen you score on
+• The phantom has a row on the scorecard, so you can see what it made without
+  going back a hole
+• A mid-round withdrawal is answered per segment: the alternate-shot survivor
+  plays off twice his handicap, and a singles side plays two matches against one
+
+ALSO IN THIS RELEASE
+• Set the tee times from the round hub — one time propagates to the groups
+  below it
+• Stroke dots on the holes still to come in Fourball and Multi-Group Skins, so
+  you can see where your strokes fall before you get there
+• Invite a watcher from the score entry screen, not only the leaderboard
+• A halved Sixes match is finished — the fix for the reported freeze
+• Scorecards with an OUT column scroll every time, not only the first
+• Shotgun starts: the withdrawal rule and the hole numbering in Skins, 40 Balls
+  and Spots now count the holes actually played
+
 ## What's New (v2.9.1)
 Where you stand, without leaving the hole.
 
