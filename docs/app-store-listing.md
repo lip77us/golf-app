@@ -96,8 +96,8 @@ lead on.)
 (Skins/Nassau are already in the subtitle, so they're omitted here — Apple
 indexes the subtitle words anyway; keywords spend the budget on new terms.)
 
-## Promotional text (170 max, editable without review) — 2.10.0, 163 chars
-New: 40 Balls, Dream Round and Road Trip — three new ways to run an event. Plus a watch page for every game, so anyone with the link can follow along in a browser.
+## Promotional text (170 max, editable without review) — 2.10.0, 158 chars
+New: 40 Balls — 40 for the round, spent hole by hole after the scores are in. Spend big early and the closing stretch is thin. Plus Dream Round and Road Trip.
 
 ## Promotional text — previous (v2.9.1, 164 chars)
 New: every game shows where you stand right under its title — your match, your place, your points — one tap from the full leaderboard. Plus Better Ball and flights.
