@@ -138,6 +138,11 @@ Net and Gross each pick their own best, scored to par so a hard course is not
 a penalty. A round still being played can never knock out a finished one, and
 a golfer who can no longer reach the count is shown rather than hidden.
 
+WATCH ANY GAME — send someone the round link and they can follow along in a
+browser with no app. Survivor, Rabbit, Honors, Spots, Fourball, Triple Nassau,
+Better Ball, Sequoya 3s, Quota Nassau, Banker and Foursome Play all have a page
+of their own now, so nothing you can start opens a link that shows nothing.
+
 TRIPLE CUP
 • One handicap allowance per segment — 90% in the four-balls, 40% of the
   combined handicaps in alternate shot, full index in the singles, all settable
@@ -149,15 +154,25 @@ TRIPLE CUP
   plays off twice his handicap, and a singles side plays two matches against one
 
 ALSO IN THIS RELEASE
+• Flights are asked for in the create wizard and cut when the tournament is
+  created, rather than waiting on the championship screen — and once the cut is
+  taken it can no longer be re-cut out from under golfers already playing
+• Quota Nassau can be picked again — the mixed-cup planner had dropped it, so
+  it could not be reached at all
+• Pink Ball has a scorecard, names the carrier once instead of twice, and its
+  rotation follows position in the round rather than hole number
+• The standing bar reaches the cup and tournament screens
 • Set the tee times from the round hub — one time propagates to the groups
   below it
 • Stroke dots on the holes still to come in Fourball and Multi-Group Skins, so
   you can see where your strokes fall before you get there
 • Invite a watcher from the score entry screen, not only the leaderboard
-• A halved Sixes match is finished — the fix for the reported freeze
+• A halved Sixes match now counts as finished, so the round no longer sticks
+• Five screens were showing the wrong golfer's par and stroke index
 • Scorecards with an OUT column scroll every time, not only the first
-• Shotgun starts: the withdrawal rule and the hole numbering in Skins, 40 Balls
-  and Spots now count the holes actually played
+• Shotgun starts: a position marker on every screen that names a hole, and the
+  withdrawal rule and hole numbering in Skins, 40 Balls and Spots now count the
+  holes actually played
 
 ## What's New (v2.9.1)
 Where you stand, without leaving the hole.
