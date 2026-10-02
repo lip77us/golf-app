@@ -385,9 +385,9 @@ sign up with that number → badge appears; same match as Phase 2a).
   per-golfer **Invite** button (personalized share) appears on the rest;
   `shareInvite(..., inviteeName:)` builds a named message.
 - Final logo: `mobile/assets/icon/halved_mark.svg` (H + flagstick in a mint cup)
-  is bundled and used for the connected badge. **Still pending for the next App
-  Store upload:** swap the app icon (re-run `flutter_launcher_icons` from a
-  1024px PNG of this mark) and the splash/drawer text wordmarks → `Image`/`Svg`.
+  is bundled and used for the connected badge, and is now the app icon and the
+  drawer/splash mark as well — the swap this note used to list as pending for
+  the next App Store upload SHIPPED in August 2026.
 - Demo: `seed_demo` mirrors each login user's phone onto its `Player.phone`, so
   the 4 login golfers show "On Halved" and the 8 others show as invitable.
 - Prerequisite for delegated cross-account scoring (below).
@@ -743,9 +743,10 @@ candidates for trademark / App Store / domain conflicts:
   no golf app or brand collision).
 - Rename DONE across the app: in-app title + About dialog → "Halved"
   ([main.dart], [app_drawer.dart]); iOS `CFBundleDisplayName`/`CFBundleName`
-  → "Halved"; drawer + splash logo replaced with a temporary **text wordmark**;
-  app icon regenerated via `flutter_launcher_icons` from
-  `mobile/assets/icon/halved_icon.png` (a green "Halved" text placeholder).
+  → "Halved"; drawer + splash render `assets/icon/halved_mark.svg` through
+  `SvgPicture.asset`; app icon generated via `flutter_launcher_icons` from
+  `mobile/assets/icon/halved_icon.png`, which is that same mark (it began as a
+  green text placeholder and was replaced in August 2026).
   Cup-name hint examples and the leaderboard cup fallback ("Bandon Cup" → "Cup")
   were neutralized. Internal-only `__bandon_cup__` key + `_BandonCup*` class
   names were intentionally left (not user-visible).
@@ -759,25 +760,32 @@ candidates for trademark / App Store / domain conflicts:
   "One-Round Triple Cup". Internal slugs (`triple_cup`, `team_cup`), the
   `/ryder-cup/` API routes, `RyderCup*` class/file names, and code
   comments/docstrings were intentionally left (not user-visible).
-- App Store listing copy drafted in `docs/app-store-listing.md` (name, subtitle,
-  keywords, promo text, description, what's-new). Support page in
-  `docs/support.html` → host as `support.html` in the `halved-legal` repo
-  (→ https://lip77us.github.io/halved-legal/support.html) for the App Store
-  Connect Support URL field.
-- LOGO UPGRADE (delivery 2): replace `assets/icon/halved_icon.png` with the
-  final cut-golf-ball mark and re-run `dart run flutter_launcher_icons`; swap
-  the temporary `Text('Halved')` wordmarks in app_drawer + splash_screen for an
-  `Image.asset` of the real lockup.
+- App Store listing copy lives in `docs/app-store-listing.md` (name, subtitle,
+  keywords, promo text, description, what's-new), **newest version at the top**
+  — the What's New and the promotional text are per-submission, so they are
+  what you open that file for, and burying them under the description means
+  they get missed. The two URL fields are served from the website:
+  **https://halved.golf/support** and **https://halved.golf/privacy**.
+- The logo upgrade (delivery 2) is DONE. Re-run `dart run flutter_launcher_icons`
+  after changing any source art — it regenerates iOS plus the Android adaptive
+  layers. The one surviving `Text('Halved')` is the About dialog's TITLE, which
+  is a dialog title and not a wordmark; leave it.
 
 ### Privacy policy (Guideline 5.1.1 / App Privacy) — PUBLISHED
-Live at **https://lip77us.github.io/halved-legal/privacy.html** (GitHub Pages,
-repo `lip77us/halved-legal`, file `privacy.html`). Publisher = Paul Lipkin,
-contact `paul@lipkin.us`, effective date May 30, 2026. App Store listing name
-is **"Halved Golf"** (standalone "Halved" was taken; in-app/home-screen name
-stays "Halved"). Source of truth for the
-text is `docs/privacy-policy.html` in this repo — edit there, then copy into the
-`halved-legal` repo to update. Goes in App Store Connect → App Information →
-Privacy Policy URL.
+Live at **https://halved.golf/privacy**, which is what App Store Connect →
+App Information → Privacy Policy URL points at. Publisher = Paul Lipkin,
+contact `info@halved.golf`. App Store listing name is **"Halved Golf"**
+(standalone "Halved" was taken; in-app/home-screen name stays "Halved").
+
+Source of truth is `docs/privacy-policy.html`; `website/privacy.html` is the
+published page and `build-zip.sh` ships it to Cloudflare Pages, so editing the
+two together is the whole update — there is no copy step into another repo.
+
+**The GitHub Pages copy at `lip77us/halved-legal` is abandoned, not a mirror.**
+It is frozen at May 30, 2026 and predates the Cloudflare Web Analytics
+disclosure. Nothing points at it any more; do not refresh it and do not
+restore it as the listing URL. Two published copies of one policy is how one
+of them comes to say something that is no longer true.
 
 (original draft notes:)
 ### Privacy policy (Guideline 5.1.1 / App Privacy) — drafted
