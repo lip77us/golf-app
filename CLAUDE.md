@@ -787,15 +787,21 @@ disclosure. Nothing points at it any more; do not refresh it and do not
 restore it as the listing URL. Two published copies of one policy is how one
 of them comes to say something that is no longer true.
 
-(original draft notes:)
-### Privacy policy (Guideline 5.1.1 / App Privacy) — drafted
-`docs/privacy-policy.html` — self-contained HTML page ready for GitHub Pages,
-publisher = Paul Lipkin (individual). Reflects the real data inventory (no
-location/camera/tracking/ads; data stored on the Railway backend; course
-lookups to GolfCourseAPI send no PII) and an account-deletion section matching
-the implemented feature. Remaining placeholders before publishing:
-`[EFFECTIVE DATE]` and `[CONTACT EMAIL]`. Once hosted, the URL goes in App
-Store Connect → App Privacy, and ideally an in-app "Privacy Policy" link.
+**The data inventory behind the App Privacy answers** (checked 2 Oct 2026):
+`Info.plist` declares NO location, camera, photo-library, microphone or
+tracking usage description — the app never asks for any of them. Data lives on
+the Railway backend; course lookups to GolfCourseAPI carry no PII; the
+account-deletion section matches the implemented feature. The website's
+Cloudflare Web Analytics is cookieless and aggregate and is NOT the app, so it
+does not move these answers. Re-check against `Info.plist` before answering the
+questionnaire rather than copying this line forward on trust.
+
+**Still open: nothing in the app links to the policy.** Settings has a Privacy
+section, but it holds the findable-by-name switch — no screen links to
+halved.golf/privacy. Apple accepts the listing URL, so this is a nicety rather
+than a 5.1.1 requirement; it is the one item from the original draft notes that
+was never done, and it is recorded here because deleting those notes would
+otherwise have lost it.
 
 ### Demo account for App Store review — `seed_demo`
 `core/management/commands/seed_demo.py` builds a deterministic **DemoClub**
