@@ -21,18 +21,10 @@ import '../utils/add_halved_golfer.dart';
 import '../utils/golfer_invite.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_text_field.dart';
+import '../widgets/group_size_editor.dart';
 import '../widgets/halved_mark.dart';
 import '../widgets/tee_assignment.dart';
 import 'player_form_screen.dart';
-
-// Group badge colours — mirrors new_round_wizard.dart
-const _groupColors = [
-  Color(0xFF1565C0),
-  Color(0xFF2E7D32),
-  Color(0xFFB71C1C),
-  Color(0xFFE65100),
-  Color(0xFF6A1B9A),
-];
 
 class SetupRoundPlayersScreen extends StatefulWidget {
   final int roundId;
@@ -65,6 +57,23 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
 
   // ── Step 2: Groups + tees ─────────────────────────────────────────────────
   List<int>          _orderedIds = [];
+
+  /// The TD's override of the auto-balance; null = use it.
+  ///
+  /// A cup round never enters `new_round_wizard`, so until this existed the
+  /// server's `[4, 3, 3, 3]` rule was the only grouping reachable here — a
+  /// 46-golfer field could not be set as 11 foursomes and a twosome.
+  List<int>?         _groupSizesOverride;
+
+  /// The sizes in force. One getter, so the header chips, the group list and
+  /// the save all read the same answer and cannot drift.
+  List<int> get _effectiveSizes =>
+      _groupSizesOverride ?? groupSizes(_orderedPlayers.length);
+
+  /// Any roster change invalidates a size list built for a different count —
+  /// 11 fours and a two does not fit 45 golfers. Drop back to auto-balance
+  /// rather than save a total that no longer adds up.
+  void _dropSizeOverride() => _groupSizesOverride = null;
   Map<int, TeeInfo?> _playerTees = {};
 
   // ── Create ────────────────────────────────────────────────────────────────
@@ -189,6 +198,7 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
           ..sort((a, b) => a.name.compareTo(b.name));
       }
       _selectedIds.add(created.id);
+      _dropSizeOverride();
     });
   }
 
@@ -240,11 +250,23 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
     setState(() { _saving = true; _saveError = null; });
     try {
       final client = context.read<AuthProvider>().client;
-      final playersList = _orderedIds.map((id) {
+      // The backend takes its explicit-groups path when ANY entry carries a
+      // `group_number`, slicing the order we send by exactly these sizes.
+      // Without an override we omit the field entirely, so the default path
+      // is byte-identical to before and still auto-balances server-side.
+      final override = _groupSizesOverride;
+      final groupNos = override == null
+          ? const <int>[]
+          : assignGroupNumbers(_orderedIds.length, override);
+      final playersList = <Map<String, int>>[];
+      for (var i = 0; i < _orderedIds.length; i++) {
+        final id  = _orderedIds[i];
         final tee = _playerTees[id];
         if (tee == null) throw Exception('Player $id has no tee selected.');
-        return {'player_id': id, 'tee_id': tee.id};
-      }).toList();
+        final entry = <String, int>{'player_id': id, 'tee_id': tee.id};
+        if (override != null) entry['group_number'] = groupNos[i];
+        playersList.add(entry);
+      }
 
       await client.setupRound(
         widget.roundId,
@@ -391,7 +413,7 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
           const SizedBox(height: 4),
           Text(
             '${_selectedIds.length} selected  •  '
-            '${groupSizes(_selectedIds.length).length} group(s)',
+            '${_effectiveSizes.length} group(s)',
             style: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(color: Colors.grey),
           ),
@@ -433,12 +455,17 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
           ),
           const SizedBox(width: 8),
           TextButton(
-            onPressed: () => setState(() =>
-                _selectedIds.addAll(_allPlayers.map((p) => p.id))),
+            onPressed: () => setState(() {
+              _selectedIds.addAll(_allPlayers.map((p) => p.id));
+              _dropSizeOverride();
+            }),
             child: const Text('All'),
           ),
           TextButton(
-            onPressed: () => setState(() => _selectedIds.clear()),
+            onPressed: () => setState(() {
+              _selectedIds.clear();
+              _dropSizeOverride();
+            }),
             child: const Text('None'),
           ),
         ]),
@@ -483,6 +510,7 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
                         sel
                             ? _selectedIds.remove(p.id)
                             : _selectedIds.add(p.id);
+                        _dropSizeOverride();
                       });
                       _reselectSearch();
                     },
@@ -549,7 +577,8 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
   Widget _buildGroupsStep() {
     final theme      = Theme.of(context);
     final players    = _orderedPlayers;
-    final sizes      = groupSizes(players.length);
+    final sizes      = _effectiveSizes;
+    final overridden = _groupSizesOverride != null;
     final groupCount = sizes.length;
 
     return SingleChildScrollView(
@@ -558,15 +587,44 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
         Text('Groups & Tees', style: theme.textTheme.headlineSmall),
         const SizedBox(height: 4),
         Text(
-          'Drag  ≡  to reorder. Foursomes fill first; remaining players '
-          'form threesomes.',
+          overridden
+              ? 'Drag  ≡  to reorder. Group sizes are set by you.'
+              : 'Drag  ≡  to reorder. Foursomes fill first; remaining '
+                'players form threesomes.',
           style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            icon : const Icon(Icons.tune, size: 16),
+            // The asterisk is the TD's tell that an override survived — the
+            // roster edits that silently drop it are exactly the ones made
+            // on the morning of an event.
+            label: Text(overridden ? 'Edit sizes *' : 'Edit sizes'),
+            onPressed: players.isEmpty ? null : () async {
+              final result = await showDialog<List<int>?>(
+                context: context,
+                builder: (_) => GroupSizeEditor(
+                  initialSizes: List<int>.from(sizes),
+                  autoBalance : groupSizes(players.length),
+                  totalPlayers: players.length,
+                  // A cup foursome is 2..4: a twosome plays 1v1 (three
+                  // matches), which is a real Triple Cup shape.
+                  minSize: 2,
+                  maxSize: 4,
+                ),
+              );
+              if (result == null) return;          // dismissed
+              setState(() =>                       // empty = back to auto
+                  _groupSizesOverride = result.isEmpty ? null : result);
+            },
+          ),
         ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 6,
           children: List.generate(groupCount, (i) {
-            final color = _groupColors[i % _groupColors.length];
+            final color = kGroupColors[i % kGroupColors.length];
             return Chip(
               label: Text('Group ${i + 1}',
                   style: TextStyle(
@@ -660,7 +718,7 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
                 final idx      = entry.key;
                 final player   = entry.value;
                 final groupNum = groupOf(idx, sizes);
-                final color    = _groupColors[(groupNum - 1) % _groupColors.length];
+                final color    = kGroupColors[(groupNum - 1) % kGroupColors.length];
                 final tee      = _playerTees[player.id];
 
                 final playerTeeOptions = _courseTees

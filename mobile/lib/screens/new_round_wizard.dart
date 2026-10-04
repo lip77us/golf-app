@@ -38,15 +38,9 @@ import 'irish_rumble_setup_screen.dart'; // also exports LowNetSetupScreen
 import 'pink_ball_setup_screen.dart';
 import 'player_form_screen.dart';
 import 'ryder_cup_draft_screen.dart';
+import '../widgets/group_size_editor.dart';
 
 // Group badge colours — cycles for > 4 foursomes
-const _groupColors = [
-  Color(0xFF1565C0), // blue
-  Color(0xFF2E7D32), // green
-  Color(0xFFB71C1C), // red
-  Color(0xFFE65100), // orange
-  Color(0xFF6A1B9A), // purple
-];
 
 // ---------------------------------------------------------------------------
 // Per-round draft for additional rounds (2..N) in a multi-round tournament
@@ -5208,7 +5202,7 @@ class _Step3GroupsAndTees extends StatelessWidget {
                 spacing: 6,
                 runSpacing: 4,
                 children: List.generate(groupCount, (i) {
-                  final color = _groupColors[i % _groupColors.length];
+                  final color = kGroupColors[i % kGroupColors.length];
                   return Chip(
                     label: Text(
                       'Group ${i + 1} · ${sizes[i]}',
@@ -5229,7 +5223,7 @@ class _Step3GroupsAndTees extends StatelessWidget {
               onPressed: () async {
                 final result = await showDialog<List<int>?>(
                   context: context,
-                  builder: (_) => _GroupSizeEditor(
+                  builder: (_) => GroupSizeEditor(
                     initialSizes: List<int>.from(sizes),
                     totalPlayers: orderedPlayers.length,
                     autoBalance: autoBalance,
@@ -5271,7 +5265,7 @@ class _Step3GroupsAndTees extends StatelessWidget {
                   final player   = entry.value;
                   final groupNum = groupOf(idx, sizes);
                   final color    =
-                      _groupColors[(groupNum - 1) % _groupColors.length];
+                      kGroupColors[(groupNum - 1) % kGroupColors.length];
                   final tee      = playerTees[player.id];
 
                   // First player in a group gets a stronger top border
@@ -6751,202 +6745,6 @@ class _RoundGameSlotsState extends State<_RoundGameSlots> {
 //   • Empty list when the user taps "Reset to default" (signals revert)
 //   • null when the dialog is dismissed (no change)
 
-class _GroupSizeEditor extends StatefulWidget {
-  final List<int> initialSizes;
-  final List<int> autoBalance;
-  final int       totalPlayers;
-  /// A foursome round groups in 2s to 4s. **A pairs round groups in twos** —
-  /// with a trailing ONE when the field is odd, which has to be representable
-  /// here or a 13-golfer field cannot be saved at all, and a THREE only when
-  /// the format is best ball (the one way out that counts a third ball).
-  final int       minSize;
-  final int       maxSize;
-  final String    noun;
-
-  const _GroupSizeEditor({
-    required this.initialSizes,
-    required this.autoBalance,
-    required this.totalPlayers,
-    this.minSize = 2,
-    this.maxSize = 4,
-    this.noun    = 'Group',
-  });
-
-  @override
-  State<_GroupSizeEditor> createState() => _GroupSizeEditorState();
-}
-
-class _GroupSizeEditorState extends State<_GroupSizeEditor> {
-  late List<int> _sizes;
-
-  @override
-  void initState() {
-    super.initState();
-    _sizes = List<int>.from(widget.initialSizes);
-  }
-
-  int  get _total     => _sizes.fold(0, (s, x) => s + x);
-  int  get _remaining => widget.totalPlayers - _total;
-  bool get _isValid   => _total == widget.totalPlayers &&
-                         _sizes.every(
-                             (s) => s >= widget.minSize && s <= widget.maxSize) &&
-                         _sizes.isNotEmpty;
-
-  void _inc(int idx) {
-    if (_sizes[idx] >= widget.maxSize) return;
-    setState(() => _sizes[idx] = _sizes[idx] + 1);
-  }
-  void _dec(int idx) {
-    if (_sizes[idx] <= widget.minSize) return;
-    setState(() => _sizes[idx] = _sizes[idx] - 1);
-  }
-  void _remove(int idx) {
-    if (_sizes.length <= 1) return;
-    setState(() => _sizes.removeAt(idx));
-  }
-  void _addGroup() {
-    // Default a new group to the biggest size that fits, floored at the
-    // minimum — a pairs field adds twos, a foursome field adds fours.
-    final spaceLeft = widget.totalPlayers - _total;
-    final initial   = spaceLeft >= widget.maxSize
-        ? widget.maxSize
-        : (spaceLeft >= widget.minSize ? spaceLeft : widget.maxSize);
-    setState(() => _sizes.add(initial));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return AlertDialog(
-      // `scrollable: true` wraps the dialog body in a SingleChildScrollView
-      // so a long group list (many players → many rows) scrolls inside the
-      // dialog rather than overflowing the screen.  Combined with the
-      // bounded-width SizedBox below, this also avoids the
-      // "RenderShrinkWrappingViewport does not support returning intrinsic
-      // dimensions" crash a bare ListView produces inside AlertDialog's
-      // IntrinsicWidth wrapper.
-      scrollable: true,
-      title: Text('Edit ${widget.noun} Sizes'),
-      content: SizedBox(
-        width: 320,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Each ${widget.noun.toLowerCase()} must have '
-              '${[for (var n = widget.minSize; n <= widget.maxSize; n++) '$n']
-                  .join(', ')} '
-              'player${widget.maxSize == 1 ? '' : 's'}. Total must '
-              'equal ${widget.totalPlayers}.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Auto-balance: ${widget.autoBalance.join(" + ")} '
-              '= ${widget.totalPlayers}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontStyle: FontStyle.italic),
-            ),
-            const SizedBox(height: 12),
-            // Group rows with steppers — built inline so the row height
-            // grows with the group count rather than reserving a fixed
-            // ListView height (which left a 280-px hole when only two
-            // groups were configured and pushed the footer off-screen).
-            for (int i = 0; i < _sizes.length; i++) ...[
-              if (i > 0) const SizedBox(height: 4),
-              Row(children: [
-                SizedBox(
-                  width: 72,
-                  child: Text('${widget.noun} ${i + 1}',
-                      style: TextStyle(
-                          color: _groupColors[i % _groupColors.length],
-                          fontWeight: FontWeight.bold)),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.remove_circle_outline),
-                  iconSize: 22,
-                  visualDensity: VisualDensity.compact,
-                  onPressed: _sizes[i] > 2 ? () => _dec(i) : null,
-                ),
-                SizedBox(
-                  width: 28,
-                  child: Center(
-                    child: Text('${_sizes[i]}',
-                        style: theme.textTheme.titleMedium),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline),
-                  iconSize: 22,
-                  visualDensity: VisualDensity.compact,
-                  onPressed: _sizes[i] < 4 ? () => _inc(i) : null,
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  iconSize: 20,
-                  visualDensity: VisualDensity.compact,
-                  tooltip: 'Remove group',
-                  onPressed: _sizes.length > 1 ? () => _remove(i) : null,
-                ),
-              ]),
-            ],
-            const SizedBox(height: 8),
-            Row(children: [
-              TextButton.icon(
-                icon : const Icon(Icons.add, size: 18),
-                label: const Text('Add group'),
-                onPressed: _addGroup,
-              ),
-              const Spacer(),
-              Text(
-                'Total: $_total / ${widget.totalPlayers}',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: _isValid
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.error,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ]),
-            if (!_isValid && _remaining != 0) ...[
-              const SizedBox(height: 4),
-              Text(
-                _remaining > 0
-                    ? '$_remaining more player${_remaining == 1 ? "" : "s"} '
-                      'to place — add a group or +1 to an existing one.'
-                    : '${(-_remaining)} too many — -1 from a group or '
-                      'remove one.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.error),
-              ),
-            ],
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(<int>[]),
-          child: const Text('Reset to default'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _isValid
-              ? () => Navigator.of(context).pop(_sizes)
-              : null,
-          child: const Text('Apply'),
-        ),
-      ],
-    );
-  }
-}
-
 // ===========================================================================
 // Step 5 — Review
 // ===========================================================================
@@ -7504,7 +7302,7 @@ class _Step5Review extends StatelessWidget {
               .where((e) => groupOf(e.key, sizes) == g + 1)
               .map((e) => e.value)
               .toList();
-          final color = _groupColors[g % _groupColors.length];
+          final color = kGroupColors[g % kGroupColors.length];
           // A group is short only against the size its shape actually fills.
           // A pairs event fills to TWO, so a complete pair was being labelled
           // "+ 1 phantom" for being two golfers — which is the whole team.

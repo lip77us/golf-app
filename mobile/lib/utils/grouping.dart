@@ -140,3 +140,32 @@ bool isGroupBoundary(int idx, List<int> sizes) {
   }
   return false;
 }
+
+/// Group number (1-based) for each position in the TD's ordered roster,
+/// given the group `sizes` in force.
+///
+/// The backend slices the order it is sent by exactly these sizes, so this is
+/// the client half of that contract and both screens that can override the
+/// auto-balance read it. It lived inline in two of them; a second copy of a
+/// slicing loop is how one screen comes to disagree with the other about
+/// which group the 13th golfer is in.
+///
+/// Positions past the end of `sizes` fall into the last group rather than
+/// throwing — a size list that does not cover the roster is a validation
+/// failure the editor already prevents, and losing a golfer entirely would
+/// be worse than putting them in the final group.
+List<int> assignGroupNumbers(int count, List<int> sizes) {
+  if (count <= 0) return const [];
+  if (sizes.isEmpty) return List<int>.filled(count, 1);
+  final out = <int>[];
+  var groupIdx = 0, placed = 0;
+  for (var i = 0; i < count; i++) {
+    while (groupIdx < sizes.length - 1 && placed >= sizes[groupIdx]) {
+      groupIdx += 1;
+      placed = 0;
+    }
+    out.add(groupIdx + 1);
+    placed += 1;
+  }
+  return out;
+}
