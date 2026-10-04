@@ -4,6 +4,17 @@ Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
 Only list shipping, enabled games (Scramble is still hidden — `enabled:false`).
 
+## What's New (v2.10.1)
+Cup play fixes, from a tournament director setting up a 46-golfer Ryder Cup.
+
+• The groups you build are the groups you get — a foursome, a threesome and a
+  twosome now survive the save instead of being rebalanced
+• Drop a no-show from a group that has not teed off, even after the first
+  group is away. A borrowed score in a threesome no longer reads as that
+  group having started
+• A two-player cup group is worth the same four points as any other: it plays
+  a Nassau, with the Overall counting double
+
 ## What's New (v2.10.0)
 Three new ways to run an event.
 
