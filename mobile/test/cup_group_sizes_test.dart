@@ -62,6 +62,32 @@ void main() {
     });
   });
 
+  group('the CUP round-setup screen sends its own groups', () {
+    // This is the screen a Triple Cup actually uses —
+    // `setup_round_players_screen.dart` is for multi-day round stubs.
+    final src =
+        File('lib/screens/cup_round_setup_screen.dart').readAsStringSync();
+
+    test('every entry carries the group the TD built it into', () {
+      // Without this, `round_setup` takes its auto-balance path and
+      // re-slices: a deliberate 4 + 3 + 2 came back as 3 + 3 + 3.
+      expect(src.contains("'group_number': gi + 1"), isTrue);
+    });
+
+    test('the old flat-list claim is gone', () {
+      // The comment asserted the backend "groups first-N into group 1,
+      // next-N into group 2" — true only when N happens to match.
+      expect(src.contains('backend groups first-N into group 1'), isFalse);
+    });
+
+    test('a twosome is a legal cup group, so it can be built at all', () {
+      // 1 v 1 — a Triple Cup twosome plays three matches.
+      expect(src.contains('if (n != 4 && n != 3 && n != 2) return false;'),
+          isTrue);
+      expect(src.contains('return a == 1 && b == 1;'), isTrue);
+    });
+  });
+
   group('the cup setup screen is actually wired', () {
     final src =
         File('lib/screens/setup_round_players_screen.dart').readAsStringSync();

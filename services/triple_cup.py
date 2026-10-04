@@ -451,11 +451,25 @@ def reconfigure_triple_cup(
 def _ensure_phantom_for_2v1(foursome, team1_ids: list[int],
                             team2_ids: list[int]) -> int:
     """
-    Verify the foursome has a phantom membership and that its donor
+    Ensure the foursome has a phantom membership and that its donor
     rotation is configured for the solo's team.  Returns the phantom
-    player ID.  Raises ValueError if the round isn't set up to
-    support 2v1 (no phantom membership, or solo isn't on a cup team).
+    player ID.  Raises ValueError only when the solo isn't on a cup team
+    or no donor is available.
+
+    **It CREATES the membership when missing.**  It used to require one,
+    on the assumption that `round_setup` had padded the group — but
+    round-setup only pads a group it AUTO-BALANCED, never one the TD set
+    explicitly (padding an explicit 2-player group would distort a
+    multi-foursome skins pool, which is the case that rule exists for).
+    So the moment a cup round posts explicit group numbers — which is the
+    only way a TD can say "one foursome, one threesome, one twosome" —
+    every threesome arrived here unpadded and this raised.  The creation
+    block is the one `reconfigure_triple_cup_for_size` already uses for a
+    4->3 no-show; there is no second rule, only a second entry point.
     """
+    from tournament.models import FoursomeMembership
+    from services.round_setup import _get_or_create_phantom
+
     phantom_m = (
         foursome.memberships
         .filter(player__is_phantom=True)
@@ -463,12 +477,21 @@ def _ensure_phantom_for_2v1(foursome, team1_ids: list[int],
         .first()
     )
     if phantom_m is None:
-        raise ValueError(
-            "2v1 Triple Cup requires a phantom membership in the foursome. "
-            "Use the cup setup wizard to add the 3-player group — it "
-            "auto-creates the phantom so cross-foursome donors can post "
-            "fourball scores."
+        real_m = (
+            foursome.memberships
+            .filter(player__is_phantom=False)
+            .select_related('tee')
+            .first()
         )
+        phantom_m = FoursomeMembership.objects.create(
+            foursome         = foursome,
+            player           = _get_or_create_phantom(foursome.round.account),
+            tee              = real_m.tee if real_m else None,
+            course_handicap  = 0,   # scratch — D1 contract
+            playing_handicap = 0,
+        )
+        foursome.has_phantom = True
+        foursome.save(update_fields=['has_phantom'])
 
     # If donor rotation isn't already configured (e.g. user is wiring up
     # Triple Cup manually after the wizard ran for a different game),

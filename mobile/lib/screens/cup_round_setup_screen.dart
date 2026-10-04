@@ -752,14 +752,26 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
       final sorted = [..._foursomes]
         ..sort((a, b) => (a.teeTime ?? '~').compareTo(b.teeTime ?? '~'));
 
-      // Build flat ordered player list for setupRound.
-      // Players from each foursome appear in order; backend groups first-N
-      // into group 1, next-N into group 2, etc. (randomise=false).
-      // Singles groups may have 2 real players → backend adds 2 phantoms.
+      // Build the player list for setupRound, each entry carrying the group
+      // the TD actually built it into.
+      //
+      // **`group_number` is what makes the TD's groups stick.** The old
+      // comment here claimed the backend "groups first-N into group 1,
+      // next-N into group 2" from a flat list — which is only true when N
+      // happens to match. It does not: without this field `round_setup`
+      // takes its AUTO-BALANCE path and re-slices by its own rule, so a
+      // deliberate 4 + 3 + 2 came back as 3 + 3 + 3. Reported from a Ryder
+      // Cup build-up, where the TD had composed the groups by hand under
+      // this screen's own team-composition rules and watched them dissolve
+      // on save.
       final flatPlayers = <Map<String, int>>[];
-      for (final f in sorted) {
+      for (var gi = 0; gi < sorted.length; gi++) {
+        final f = sorted[gi];
         for (final pid in f.playerIds) {
-          final entry = <String, int>{'player_id': pid};
+          final entry = <String, int>{
+            'player_id'   : pid,
+            'group_number': gi + 1,
+          };
           final teeId = f.playerTees[pid];
           if (teeId != null) entry['tee_id'] = teeId;
           flatPlayers.add(entry);
