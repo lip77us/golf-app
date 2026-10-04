@@ -5598,7 +5598,9 @@ class FoursomeRemovePlayerView(APIView):
     Triple Cup game on the foursome to match.
 
     Refused when:
-      • The foursome has any HoleScore rows (scoring has begun).
+      • A REAL player in the foursome has posted a gross score.
+        (A donor phantom's score does not count — it arrives when
+        another group posts, not when this one tees off.)
       • The removal would leave the foursome with <2 real players.
       • The removal would push a downstream short-roster foursome
         below its donor-pool floor — the response carries the same
@@ -5648,7 +5650,20 @@ class FoursomeRemovePlayerView(APIView):
         # Refuse once scoring has started — partial-round removals are
         # a much harder problem (need to retire that player's posted
         # scores from running match-play results) and not in scope.
-        if HoleScore.objects.filter(foursome=foursome).exists():
+        #
+        # A PHANTOM's score is not this group starting.  A threesome in a
+        # cup round carries a cross-foursome donor phantom, and that
+        # phantom's HoleScore lands when the DONOR group posts — so an
+        # unguarded .exists() locked every threesome in the round the
+        # moment the first group teed off, which is exactly when no-shows
+        # get reported.  Same rule the Sixes team lock and the edit window
+        # already use: a phantom padding a short group never locks it.
+        # `gross_score__isnull=False` for the same reason they carry it —
+        # a row can exist before a number does.
+        if HoleScore.objects.filter(
+                foursome=foursome,
+                gross_score__isnull=False,
+                player__is_phantom=False).exists():
             return Response(
                 {'detail': 'Cannot remove a player after scoring has begun. '
                            'Reopen + reset the foursome first, or finish '
@@ -6012,8 +6027,14 @@ class FoursomeSwapPositionView(APIView):
             )
 
         # Pre-play only on both sides — same rule as remove/move.
+        # A donor PHANTOM's score is not either group starting: it lands
+        # when the donor group posts.  Swapping tee positions is the
+        # documented recovery for a no-show in the earliest group, so an
+        # unguarded check disabled the fix for the very bug it follows.
         if HoleScore.objects.filter(
-            foursome__in=[this_fs, other_fs]
+            foursome__in=[this_fs, other_fs],
+            gross_score__isnull=False,
+            player__is_phantom=False,
         ).exists():
             return Response(
                 {'detail': 'Cannot swap positions after scoring has '
@@ -6160,7 +6181,9 @@ class RoundMovePlayerView(APIView):
         # already would corrupt match results; refuse rather than try
         # to invent semantics for mid-round roster swaps.
         if HoleScore.objects.filter(
-            foursome__in=[from_fs, to_fs]
+            foursome__in=[from_fs, to_fs],
+            gross_score__isnull=False,
+            player__is_phantom=False,
         ).exists():
             return Response(
                 {'detail': 'Cannot move a player after scoring has begun '

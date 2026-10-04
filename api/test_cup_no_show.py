@@ -225,6 +225,54 @@ class CupNoShowTests(TestCase):
             'scores must be untouched by a refused removal',
         )
 
+    def test_remove_allowed_when_only_a_donor_phantom_has_scored(self):
+        """A threesome's phantom scores when the DONOR group posts, not when
+        this group tees off.
+
+        Reported during Ryder Cup build-up (Oct 2026): every threesome in the
+        round refused a no-show removal the moment the FIRST group was away —
+        which is precisely when no-shows get reported.  The gate counted any
+        HoleScore on the foursome, and a cross-foursome phantom has one as
+        soon as its donor posts.
+        """
+        from scoring.phantom import propagate_phantom_score
+        ctx = self._build_cup_round()
+        fs1, fs2, m1, m2 = ctx['fs1'], ctx['fs2'], ctx['m1'], ctx['m2']
+        round_ = ctx['round']
+
+        # First no-show: 2v2 -> 2v1, which seats a cross-foursome phantom.
+        self.assertEqual(self._remove(fs2, m2['F'].player).status_code, 200)
+        fs2 = Foursome.objects.get(pk=fs2.id)
+        self.assertTrue(fs2.has_phantom, 'setup: 2v1 should seat a phantom')
+
+        # The EARLIER group tees off.  Its scores feed fs2's phantom.
+        donors = [(m1[k].player_id, 4) for k in ('A', 'B', 'C', 'D')]
+        submit_hole(fs1, 1, donors)
+        for pid, gross in donors:
+            propagate_phantom_score(round_, 1, pid, gross)
+
+        # fs2 now HAS a HoleScore — and it belongs to the phantom alone.
+        self.assertTrue(
+            HoleScore.objects.filter(
+                foursome=fs2, player__is_phantom=True).exists(),
+            'setup: the donor group should have fed the phantom',
+        )
+        self.assertFalse(
+            HoleScore.objects.filter(
+                foursome=fs2, player__is_phantom=False,
+                gross_score__isnull=False).exists(),
+            'setup: no REAL player in fs2 has posted — it has not teed off',
+        )
+
+        # The bug: this returned 409 "scoring has begun" for a group still
+        # standing on the tee.
+        resp = self._remove(fs2, m2['G'].player)
+        self.assertEqual(
+            resp.status_code, 200, 
+            'a group whose only score is a donor phantom has not started: '
+            f'{resp.content}',
+        )
+
     # ------------------------------------------------------------------ #
     # Early group with no full prior → rejected; tee swap recovers it
     # ------------------------------------------------------------------ #
