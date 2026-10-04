@@ -259,14 +259,28 @@ def _extract_foursome_points(
     # stored standings match the live cup scorecard.  point_value is PER MATCH
     # — a TC group decides 4 matches.
     elif gtype == GameType.TRIPLE_CUP:
-        from services.triple_cup import triple_cup_summary
+        from services.triple_cup import (
+            triple_cup_summary, _tc_match_point_value,
+        )
         try:
             tcs = triple_cup_summary(foursome) or {}
         except Exception:
             tcs = {}
+        # **Not every TC match is worth one point.** A 1v1 twosome plays a
+        # Nassau — F9 = 1, B9 = 1, Overall = 2 — so that every group shape
+        # contributes 4 to the cup regardless of size. `_tc_match_point_value`
+        # is that rule, and `triple_cup_summary` has always used it for the
+        # card's own `points_available` and running totals. This writer did
+        # not, so the play screen said "of 4" while the cup standings awarded
+        # 3 — the board and the result disagreed, on the one group shape
+        # where it is hardest to notice. 2v2 and 2v1 are 4 x 1 either way.
+        tc_game = getattr(foursome, 'triple_cup_game', None)
+        gsize   = getattr(tc_game, 'group_size', 4) or 4
         for tcm in tcs.get('matches', []):
             result   = tcm.get('result')   # 'team1'|'team2'|'halved'|None
-            t1p, t2p = _pts(result, pv, mul)
+            weight   = Decimal(str(_tc_match_point_value(
+                gsize, tcm.get('match_number') or 0)))
+            t1p, t2p = _pts(result, pv * weight, mul)
             rows.append(RyderCupMatchPoints(
                 round_config = fs_config.round_config,
                 team1        = t1,

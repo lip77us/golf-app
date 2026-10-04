@@ -18,7 +18,9 @@ winner, halves split.  Match counts by group size:
     2v1 (solo)        4 matches  (fourball uses a phantom partner for solo,
                                   foursomes = solo plays every shot,
                                   singles = solo plays both opponents)   → 4 pv
-    1v1               3 matches  (every segment played as singles)        → 3 pv
+    1v1               3 matches  (Nassau: F9 = 1, B9 = 1, Overall = 2)   → 4 pv
+                                 — see `_tc_match_point_value`; every group
+                                 shape contributes 4 whatever its size.
 
 Public API
 ~~~~~~~~~~

@@ -17,6 +17,7 @@ group numbers left every Triple Cup threesome unpadded and
 `_ensure_phantom_for_2v1` raised. It creates the membership now.
 """
 from datetime import date
+from decimal import Decimal
 
 from django.test import TestCase
 
@@ -43,7 +44,13 @@ class CupExplicitGroupsTests(TestCase):
             tournament=self.tourn, cup_name='Thursday Cup', players_per_team=5)
         # 2v1 needs a real cup round — it draws donor scores from sibling
         # foursomes, which only a cup round is guaranteed to have.
-        RyderCupRoundConfig.objects.create(round=self.round, tournament=self.tt)
+        RyderCupRoundConfig.objects.create(
+            round=self.round, tournament=self.tt,
+            # Explicit rather than relying on the model default: that default
+            # is the STRING '1.00', and an instance used without a reload
+            # hands `_pts` a str, which fails on `point_value * multiplier`.
+            nassau_point_value=Decimal('1.00'),
+            point_multiplier=Decimal('1.00'))
         self.teams = [
             TournamentTeam.objects.create(
                 tournament=self.tt, name=n, team_number=i + 1, colour=c)
@@ -127,6 +134,39 @@ class CupExplicitGroupsTests(TestCase):
         setup_triple_cup(twosome, team1_ids=t1, team2_ids=t2,
                          handicap_mode='gross')
         self.assertEqual(twosome.triple_cup_game.matches.count(), 3)
+        # What the twosome is WORTH to the cup. The module docstring says
+        # 3 point-values; an inline comment in `_build_match_plan` claims
+        # "Overall (1-18, 2 pts) = 4 points total, same cup contribution as a
+        # 4-player TC group". `_pts` weights every match row identically, so
+        # only one of those can be true — pin it.
+        from services.ryder_cup import calculate_ryder_cup_points
+        from tournament.models import RyderCupMatchPoints
+        from scoring.tests._helpers import submit_hole
+        from tournament.models import RyderCupFoursomeConfig
+        from core.models import GameType
+        RyderCupFoursomeConfig.objects.create(
+            foursome=twosome, round_config=self.round.ryder_cup_config,
+            game_type=GameType.TRIPLE_CUP,
+            team1=self.teams[0], team2=self.teams[1])
+        # Team 1's golfer wins every hole, so every match resolves to team1
+        # and the rows carry the full award rather than an undecided 0.
+        for h in range(1, 19):
+            submit_hole(twosome, h, [(t1[0], 3), (t2[0], 5)])
+        from services.triple_cup import calculate_triple_cup
+        calculate_triple_cup(twosome)       # the API does this on every score
+        calculate_ryder_cup_points(self.round)
+        rows = RyderCupMatchPoints.objects.filter(foursome=twosome)
+        total = sum((r.team1_points + r.team2_points) for r in rows)
+        self.assertEqual(rows.count(), 3)
+        self.assertEqual(total, Decimal('4.00'),
+                         'a 1v1 plays a Nassau worth F9 1 + B9 1 + Overall 2, '
+                         'so every group shape contributes 4 to the cup '
+                         'whatever its size — the rule the card already '
+                         'displayed as "of 4" while this writer paid 3.')
+        by_seg = sorted(r.team1_points + r.team2_points for r in rows)
+        self.assertEqual(by_seg, [Decimal('1.00'), Decimal('1.00'),
+                                  Decimal('2.00')],
+                         'the Overall is the marquee bet, weighted 2x')
         self.assertFalse(
             twosome.memberships.filter(player__is_phantom=True).exists(),
             'a 1v1 uses no phantom partner',
