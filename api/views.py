@@ -299,6 +299,7 @@ def _push_lock_screen(round_obj) -> None:
     if round_has_board(round_obj):
         def _push():
             try:
+                from services.live_activity_android import push_round_android
                 from services.live_activity_push import (
                     push_round, push_start_to_absent)
                 # Update the cards that exist, then raise one on every phone
@@ -307,6 +308,10 @@ def _push_lock_screen(round_obj) -> None:
                 # registered-token table to know who to skip.
                 push_round(round_obj)
                 push_start_to_absent(round_obj)
+                # Android has no Live Activity, so its board is a notification
+                # that rewrites itself in place. Same state, same recipients,
+                # different surface — and off unless ANDROID_BOARD is set.
+                push_round_android(round_obj)
             except Exception:
                 logger.exception('live activity push failed for round %s',
                                  round_obj.id)

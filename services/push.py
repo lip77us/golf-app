@@ -34,6 +34,7 @@ NOTIFICATION_CATEGORIES = {
     'match_result':   True,   # Nassau nine / Sixes segment / cup match decided
     'watch_invite':   True,   # someone invited you to watch their round/tournament
     'chat':           True,   # human chat (currently unused — no chat push yet)
+    'board':          True,   # the Android lock-screen board, per hole
 }
 
 
@@ -47,26 +48,35 @@ def category_enabled(user, category) -> bool:
 # Delivery
 # --------------------------------------------------------------------------
 
-def send_push(tokens, title, body, data=None):
+def send_push(tokens, title, body, data=None, android=None):
     """Deliver one notification to a list of device tokens. Returns the set of
     tokens FCM reported as unregistered (so callers can prune them). Never
-    raises."""
+    raises.
+
+    `android` is an optional plain dict of Android delivery options —
+    `tag`, `collapse_key`, `channel_id`, `priority` — resolved into an
+    `AndroidConfig` in `_send_fcm`. A dict rather than the firebase-admin
+    object so callers never have to import it; see
+    `services/live_activity_android.py`, which uses `tag` to make one
+    notification rewrite itself every hole instead of stacking eighteen.
+    """
     tokens = [t for t in (tokens or []) if t]
     if not tokens:
         return set()
     backend = getattr(settings, 'PUSH_BACKEND', 'console')
     try:
         if backend == 'fcm':
-            return _send_fcm(tokens, title, body, data or {})
-        return _send_console(tokens, title, body, data or {})
+            return _send_fcm(tokens, title, body, data or {}, android)
+        return _send_console(tokens, title, body, data or {}, android)
     except Exception:  # pragma: no cover - defensive; never break scoring
         logger.exception('push: send failed (%s)', backend)
         return set()
 
 
-def _send_console(tokens, title, body, data):
-    logger.info('[push:console] → %d device(s): %r / %r %r',
-                len(tokens), title, body, data)
+def _send_console(tokens, title, body, data, android=None):
+    logger.info('[push:console] → %d device(s): %r / %r %r%s',
+                len(tokens), title, body, data,
+                f' android={android!r}' if android else '')
     return set()
 
 
@@ -90,7 +100,28 @@ def _fcm_app():  # pragma: no cover - needs creds
     return _FCM_APP
 
 
-def _send_fcm(tokens, title, body, data):  # pragma: no cover - needs creds
+def _android_config(messaging, android):
+    """An `AndroidConfig` from the plain dict `send_push` was given, or None.
+
+    `channel_id` may legitimately name a channel the installed app has not
+    created — FCM falls back to the manifest default in that case, which is
+    what lets the board be named forward onto a quiet channel before the build
+    that creates it exists.
+    """
+    if not android:
+        return None
+    return messaging.AndroidConfig(
+        collapse_key=android.get('collapse_key') or None,
+        priority=android.get('priority') or 'high',
+        notification=messaging.AndroidNotification(
+            # The whole point: same tag replaces, rather than stacks.
+            tag=android.get('tag') or None,
+            channel_id=android.get('channel_id') or None,
+        ),
+    )
+
+
+def _send_fcm(tokens, title, body, data, android=None):  # pragma: no cover - needs creds
     """FCM HTTP v1 multicast send. Returns the tokens FCM reports as no longer
     registered (so callers prune them)."""
     app = _fcm_app()
@@ -103,6 +134,7 @@ def _send_fcm(tokens, title, body, data):  # pragma: no cover - needs creds
         tokens=toks,
         notification=messaging.Notification(title=title, body=body),
         data={k: str(v) for k, v in (data or {}).items()},
+        android=_android_config(messaging, android),
     )
     resp = messaging.send_each_for_multicast(msg, app=app)
     dead = set()

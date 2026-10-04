@@ -3658,6 +3658,127 @@ introducing a second purple two shades away: they never appear on the same
 card, and two near-identical hexes for one semantic slot is how a palette
 drifts. Worth a design confirmation.
 
+## The Android board — a notification, because Android has no Live Activity
+
+`services/live_activity_android.py`. **Off unless `ANDROID_BOARD=1`.**
+
+There is no phone-side Android surface that behaves like a Live Activity: lock
+screen widgets returned in Android 14 on TABLETS only, and Android 16's "Live
+Updates" are a promoted ongoing notification shaped around a progress bar
+(delivery, rideshare, navigation) and gated well above what the closed-test
+fleet runs. So this does not port the card. It is a different object answering
+the same question — **one notification per round that rewrites itself every
+hole.**
+
+**The whole composition layer is reused unchanged.** `activity_state(rnd, user)`
+was already platform-neutral and already built per recipient (which is what
+makes the money line right on each phone), so this module only flattens and
+delivers. A game with a builder has an Android board for free; there is no
+second list to add to.
+
+It rides the hook that already exists — `api/views.py` `_push_lock_screen`,
+which fires on every scoring AND betting change, runs `on_commit`, and swallows
+its own exceptions. One call after the two APNs ones.
+
+### What it does and does not do
+
+**`AndroidNotification.tag` is the mechanism**: a second notification with the
+same tag REPLACES the first instead of stacking, so four hours leaves one row
+rather than eighteen. The tag is the ROUND (`halved-board-<id>`), not the
+foursome — keyed on the foursome a TD watching a multi-group tournament would
+carry one row per group, each claiming to be the board.
+
+**Deliberately NOT `sticky=True`.** A sticky notification cannot be swiped away
+and **FCM cannot cancel a notification it has displayed** — removing one needs
+`NotificationManager.cancel` on the device, which is client code this tier does
+not have. A sticky board would outlive its round and be undismissable.
+
+**The text is a degraded view on purpose.** When FCM displays a notification
+itself, the Firebase SDK uses `setContentText` with no `BigTextStyle` — so the
+body is one truncated line with nothing to expand. The full ordered board still
+travels as `lines` in the data payload, read by nothing today: a client that can
+draw `BigTextStyle` or a RemoteViews layout renders the rich version with **no
+server change**. That is the seam, and it is why `notification_text` returns
+`lines` rather than only the two strings it can use.
+
+**The body is ordered by what it costs to lose**, because the system truncates
+it: ribbon (only present on a hole where the reader actually strokes), money
+(the point of the game), segment (the card's own hole/par/yards corner), thru,
+then the game LABEL last — the only one of the five a reader can infer from the
+title and from being in the round at all.
+
+**`channel_id` is named forward.** `halved_board` exists on no shipped build;
+FCM falls back to the manifest's `halved_default` for a channel the app has not
+created, so naming it is inert today and correct the moment the Kotlin lands.
+Until then the board posts on the default channel and **makes a sound** — on
+Android 8+ sound is a property of the CHANNEL, not of the message, so no field
+here can silence it. `default_sound=False` would be theatre. **Tier 1 is ~15
+lines of Kotlin in `MainActivity` creating `halved_board` at
+`IMPORTANCE_LOW`**, and needs no server change at all.
+
+`services/push.py` gained an `android` passthrough (a plain dict of tag /
+collapse_key / channel_id / priority, resolved into an `AndroidConfig` in
+`_send_fcm`) so `firebase_admin` stays confined to the module that owns the
+credentials. `'board'` is its own `NOTIFICATION_CATEGORIES` entry, so muting the
+board does not mute birdies.
+
+### The three defects the real fleet found
+
+Rendering all 51 live boards against the production database turned up three
+things no fixture would have shown, because all three are shapes the cards emit
+legitimately and draw correctly in a laid-out column. **Flattening to one line
+is what exposes them.**
+
+- **Sixes sends `—` as its state word** once a segment is done (5 of 51 boards).
+  A dash between two middots reads as a value that failed to load.
+- **Rabbit sends the same string twice** — `number.text` and `state.word` are
+  both `LOOSE` while the rabbit is loose. The card draws them in two different
+  places; one line printed `LOOSE · LOOSE`.
+- **Nassau empties all three headline slots** on a finished round. The card
+  survives it because its header and sides rows carry the round; an Android
+  notification with no title renders as the app name alone, which reads as a
+  fault rather than as a round that has ended. **The header is now the floor.**
+
+### The double space that must NOT be fixed upstream
+
+`live_activity_registry.group_stroke_band` emits `POPPING  YOU · MA` with a
+deliberate double space, and its docstring says why: the label is a separate
+span drawn at reduced opacity, and the gap is what separates the spans on a
+build that has not learnt the layout. **That is correct there.** It is wrong
+only in a notification, which is one run of text where the gap reads as a hole
+in the sentence — so `_squash` collapses internal whitespace in this module and
+the registry is left alone. (I went looking for a stray f-string before reading
+the comment four lines above it.)
+
+### The allowlist, and why empty means everyone
+
+`ANDROID_BOARD_PHONES` is a comma-separated E.164 list narrowing the board to
+those golfers — phones rather than user ids, following `accounts/otp.py`
+`_review_bypass_phones`, because the phone is the identity the whole app
+already matches on and it is a value you know rather than one you look up.
+Normalized on both sides, so a pasted `(510) 282-3126` works.
+
+**Empty means EVERYONE, not nobody.** `ANDROID_BOARD` is the feature switch and
+this is a narrowing on top of it; a narrowing that defaulted to nobody would
+make `ANDROID_BOARD=1` on its own do nothing at all — the shipped-tested-and-
+unreachable failure this codebase has already hit twice (the casual receipt no
+round could open, and the setup-edit button gated on the rule it replaced). A
+switch that silently does nothing is worse than one that does the whole thing,
+because the whole thing is at least visible.
+
+The cost is that turning the feature on without also setting the list reaches
+every Android phone following any round with a board. That is documented rather
+than a trap, and it is why both are meant to be set in ONE change.
+
+Checked BEFORE `activity_state`, which is the expensive call: a trial
+restricted to one phone should not cost a summary per golfer.
+
+Tests: `scoring/tests/test_live_activity_android.py` (40) — the flattener's
+judgements as pure tests, the three fleet defects as regressions, and the
+recipient claim: the set is the INTERSECTION of "can read this round" and "has
+an Android phone", so an iOS follower who already has the real card never gets
+the degraded one as well.
+
 ## The shotgun sweep — one mistake, six places
 
 Run 17 Sep 2026 after a round at Ranch Solano turned up three shotgun bugs in
