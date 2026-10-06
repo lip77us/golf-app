@@ -37,12 +37,32 @@ def course_hole_count(round) -> int:
     course all share a hole count, so we take the max present. Falls back to 18
     when no tee holes are available.
     """
+    # **Memoised on the round instance.** `play_order` calls this, and
+    # `play_order` has 59 call sites — a cup leaderboard walks every match of
+    # every foursome and re-asked the database for the same course's tees each
+    # time. Profiling a 3-group round: 46 of its 191 queries were this one
+    # line, which extrapolates to ~180 on a 12-group cup, and on Railway each
+    # is a network round trip.
+    #
+    # Safe because a course's hole count cannot change inside a request: the
+    # cache lives on the instance and dies with it, so a later request (or a
+    # re-fetched Round) recomputes. Guarded with try/except because a deferred
+    # or otherwise exotic instance may refuse the attribute, and a slow answer
+    # beats a crash.
+    cached = getattr(round, '_hole_count_cache', None)
+    if cached is not None:
+        return cached
     counts = [
         len(t.holes)
         for t in round.course.tees.filter(superseded_by__isnull=True)
         if t.holes
     ]
-    return max(counts) if counts else DEFAULT_HOLE_COUNT
+    value = max(counts) if counts else DEFAULT_HOLE_COUNT
+    try:
+        round._hole_count_cache = value
+    except Exception:
+        pass
+    return value
 
 
 def effective_start(round, foursome=None) -> int:

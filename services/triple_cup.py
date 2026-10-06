@@ -1536,7 +1536,7 @@ def singles_substitutions(game, matches, members_by_pid,
     side_pids: dict = {1: [], 2: []}
     for m in singles:
         for t in m.teams.all():
-            for pid in t.players.values_list('id', flat=True):
+            for pid in (p.id for p in t.players.all()):
                 if pid not in side_pids[t.team_number]:
                     side_pids[t.team_number].append(pid)
 
@@ -1544,7 +1544,7 @@ def singles_substitutions(game, matches, members_by_pid,
     for m in singles:
         first = _match_hole_list(m)[0]
         for t in m.teams.all():
-            pids = list(t.players.values_list('id', flat=True))
+            pids = [p.id for p in t.players.all()]
             if _active_on_hole(pids, members_by_pid, first, positions):
                 continue
             survivors = _active_on_hole(
@@ -1602,8 +1602,8 @@ def calculate_triple_cup(foursome) -> list[TripleCupHoleResult]:
             all_done = False
             continue
 
-        team1_pids = list(t1.players.values_list('id', flat=True))
-        team2_pids = list(t2.players.values_list('id', flat=True))
+        team1_pids = [p.id for p in t1.players.all()]
+        team2_pids = [p.id for p in t2.players.all()]
         sub = subs.get(match.id, {})
         team1_pids = sub.get(1, team1_pids)
         team2_pids = sub.get(2, team2_pids)
@@ -1810,8 +1810,8 @@ def _build_score_indexes(game, foursome, matches, members_by_pid):
                            if t.team_number == 2), None)
                 if not t1 or not t2:
                     continue
-                t1p = list(t1.players.values_list('id', flat=True))
-                t2p = list(t2.players.values_list('id', flat=True))
+                t1p = [p.id for p in t1.players.all()]
+                t2p = [p.id for p in t2.players.all()]
                 if foursome_low_pid in t1p + t2p:
                     continue
                 pair_indexes[match.id] = _singles_pair_so_index(
@@ -1922,15 +1922,15 @@ def triple_cup_summary(foursome, *, with_cup: bool = False) -> dict | None:
         t1_first = next((t for t in first.teams.all() if t.team_number == 1), None)
         t2_first = next((t for t in first.teams.all() if t.team_number == 2), None)
         if t1_first:
-            cup_red_pids  = list(t1_first.players.values_list('id', flat=True))
+            cup_red_pids  = [p.id for p in t1_first.players.all()]
         if t2_first:
-            cup_blue_pids = list(t2_first.players.values_list('id', flat=True))
+            cup_blue_pids = [p.id for p in t2_first.players.all()]
 
     for match in matches:
         t1 = next((t for t in match.teams.all() if t.team_number == 1), None)
         t2 = next((t for t in match.teams.all() if t.team_number == 2), None)
-        team1_pids = list(t1.players.values_list('id', flat=True)) if t1 else []
-        team2_pids = list(t2.players.values_list('id', flat=True)) if t2 else []
+        team1_pids = [p.id for p in t1.players.all()] if t1 else []
+        team2_pids = [p.id for p in t2.players.all()] if t2 else []
         # The same substitution the scorer applies, so the board names the
         # pairing the holes are actually being scored under.
         _sub = _subs.get(match.id, {})
@@ -2269,7 +2269,7 @@ def triple_cup_summary(foursome, *, with_cup: bool = False) -> dict | None:
                       if x.team_number == team_number), None)
             if t is None:
                 continue
-            for pid in t.players.values_list('id', flat=True):
+            for pid in (p.id for p in t.players.all()):
                 if pid in real_pids and pid not in out:
                     out.append(pid)
         for pid in fallback:
