@@ -756,6 +756,37 @@ class _PlayerPickerDialog extends StatefulWidget {
 
 class _PlayerPickerDialogState extends State<_PlayerPickerDialog> {
   String _search = '';
+
+  /// The search box owns a controller and focus so the text can be
+  /// RE-SELECTED after each pick — see [_reselectSearch].
+  final TextEditingController _searchCtrl  = TextEditingController();
+  final FocusNode             _searchFocus = FocusNode();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  /// Select the whole query after a pick, so the next name types straight
+  /// over it.
+  ///
+  /// Building a 48-golfer cup roster out of 250 golfers means ~48 rounds of
+  /// search → tick → clear, and the clear was the part costing a gesture
+  /// every time: reach up, erase, retype. Leaving the text SELECTED means the
+  /// first keystroke of the next name replaces it. Same behaviour the casual
+  /// round picker, the new-round wizard and `UnifiedPlayerSearch` already
+  /// have; this dialog was the one that missed out.
+  void _reselectSearch() {
+    if (_searchCtrl.text.isEmpty) return;
+    final keyboardUp = MediaQuery.viewInsetsOf(context).bottom > 0;
+    if (keyboardUp && !_searchFocus.hasFocus) {
+      _searchFocus.requestFocus();
+    }
+    _searchCtrl.selection = TextSelection(
+      baseOffset: 0, extentOffset: _searchCtrl.text.length);
+  }
   /// IDs of golfers currently held (staged), persisted across search changes.
   final Set<int> _selectedIds = <int>{};
 
@@ -776,6 +807,7 @@ class _PlayerPickerDialogState extends State<_PlayerPickerDialog> {
     setState(() {
       if (!_selectedIds.add(p.id)) _selectedIds.remove(p.id);
     });
+    _reselectSearch();
   }
 
   void _commit() {
@@ -847,6 +879,8 @@ class _PlayerPickerDialogState extends State<_PlayerPickerDialog> {
         height: dialogH,
         child: Column(children: [
           TextField(
+            controller: _searchCtrl,
+            focusNode : _searchFocus,
             autofocus: true,
             autocorrect: false,
             enableSuggestions: false,
