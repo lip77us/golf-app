@@ -347,15 +347,47 @@ def _resolve_first_tee(
     return _sort_by_handicap(real_pids, members_by_pid)[0]
 
 
+def _unrounded_ch(m) -> float:
+    """Course handicap BEFORE rounding — `idx × slope/113 + (rating − par)`.
+
+    `course_handicap` and `playing_handicap` are both SmallIntegerFields, so
+    by the time anything reads them the fraction is gone and two golfers on
+    16.6 and 16.9 are indistinguishable. This is the only finer figure that
+    still respects the tee, which the raw index does not.
+    """
+    t = getattr(m, 'tee', None)
+    idx = float(m.player.effective_handicap_index() or 0)
+    if t is None:
+        return idx
+    return (idx * float(t.slope) / 113.0
+            + float(t.course_rating) - float(t.par))
+
+
 def _sort_by_handicap(player_ids: list[int], members_by_pid: dict) -> list[int]:
     """Return *player_ids* re-ordered by ascending playing_handicap
     (lowest first).  Players we can't find a membership for keep their
-    original position at the end."""
+    original position at the end.
+
+    **Ties break on the UNROUNDED course handicap.** Playing handicap is
+    stored rounded, so two golfers on 16.6 and 16.9 both arrive as 17 and the
+    sort saw a tie — which `sorted` then resolved stably, i.e. by whatever
+    order the setup screen happened to send. Deterministic, but it meant the
+    singles pairings in a cup foursome were decided by the TD's click order
+    rather than by who is actually the lower golfer. Reported from a real
+    draw where Dan (16.6) was pulled behind CC (16.9).
+
+    A FORCED playing handicap is exempt: the override IS the final number, so
+    the unrounded figure behind it describes a handicap that was deliberately
+    replaced and must not speak for it. Those compare at their face value.
+    """
     def key(pid):
         m = members_by_pid.get(pid)
         if m is None or m.playing_handicap is None:
-            return (1, 0)  # unknowns sink to the bottom
-        return (0, m.playing_handicap)
+            return (1, 0, 0.0)  # unknowns sink to the bottom
+        fine = (float(m.playing_handicap)
+                if getattr(m, 'playing_handicap_override', None) is not None
+                else _unrounded_ch(m))
+        return (0, m.playing_handicap, fine)
     return sorted(player_ids, key=key)
 
 
@@ -923,12 +955,6 @@ def _alt_shot_team_combined(
     course handicap.  net_percent (the SO allowance) comes off the combined
     value in BOTH cases.
     """
-    def _raw_ch(m) -> float:
-        t = m.tee
-        idx = float(m.player.effective_handicap_index() or 0)
-        return (idx * float(t.slope) / 113.0
-                + float(t.course_rating) - float(t.par))
-
     members = [m for m in (members_by_pid.get(p) for p in team_player_ids)
                if m is not None and m.tee_id is not None]
     if not members:
@@ -943,14 +969,14 @@ def _alt_shot_team_combined(
         # he gets 40% of his, counted twice. Reading his single handicap
         # instead made the lone player's side cheaper than a pair's for any
         # weighting that did not happen to sum to 100.
-        raw = _raw_ch(members[0])
+        raw = _unrounded_ch(members[0])
         combined = (raw * game.alt_shot_low_pct
                     + raw * game.alt_shot_high_pct) / 100.0
     else:
         # Pair — weight the unrounded course handicaps. The weights are the
         # allowance and nothing else multiplies them: 50 + 50 is the USGA
         # half-of-combined, 40 + 40 is 40% of combined.
-        raws = sorted(_raw_ch(m) for m in members)
+        raws = sorted(_unrounded_ch(m) for m in members)
         combined = (raws[0] * game.alt_shot_low_pct
                     + raws[-1] * game.alt_shot_high_pct) / 100.0
     if not rounded:
