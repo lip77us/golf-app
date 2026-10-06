@@ -910,7 +910,9 @@ def _alt_shot_team_combined(
     game: TripleCupGame,
     team_player_ids: list[int],
     members_by_pid: dict,
-) -> tuple[int, object | None]:
+    *,
+    rounded: bool = True,
+) -> tuple[float, object | None]:
     """Combined alt-shot handicap for a team (course-handicap units), with
     net_percent applied and a SINGLE round at the end (0.5 → up).
 
@@ -951,6 +953,10 @@ def _alt_shot_team_combined(
         raws = sorted(_raw_ch(m) for m in members)
         combined = (raws[0] * game.alt_shot_low_pct
                     + raws[-1] * game.alt_shot_high_pct) / 100.0
+    if not rounded:
+        # The half-stroke rule differences the two sides BEFORE
+        # rounding, so it needs the raw figure.
+        return combined, tee
     return math.floor(combined + 0.5), tee   # round half UP
 
 
@@ -1185,6 +1191,70 @@ def _active_on_hole(pids, members_by_pid: dict, hole: int,
             and is_active(members_by_pid[pid], hole, positions)]
 
 
+def _alt_shot_half_plan(game, t1_pids, t2_pids, members_by_pid, hole_range):
+    """`(full_t1, full_t2, half_team, half_hole)` for an alt-shot match under
+    the half-stroke rule.
+
+    The rule, as the TD's committee stated it: take each side's combined
+    alt-shot figure at whatever percentages are set, **subtract them
+    UNROUNDED**, and round the difference to the nearest half. The whole part
+    is allocated exactly as it is today; a leftover half is played on the
+    hardest hole inside the alt-shot segment.
+
+    **The half sits on the NEXT stroke index, and is dropped if that hole is
+    not one of the six.** 2.5 strokes means a stroke on SI 1, a stroke on SI 2
+    and the half on SI 3 — it follows the course's stroke index exactly as
+    whole strokes do, rather than being moved to whichever of the six holes
+    happens to be hardest. A half whose index falls outside the segment is
+    lost, the same way a whole stroke is.
+
+    The one departure from the whole-stroke path is that **the rounding moves
+    to the difference**: today each side's combined is rounded to a whole
+    first and those are subtracted, so 14.4 against 15.4 differences to 1.
+    Rounding the difference instead still gives 1 there, but gives 0.5 for
+    14.4 against 14.9 — the case the half rule exists to express.
+    """
+    c1, tee1 = _alt_shot_team_combined(game, list(t1_pids), members_by_pid,
+                                       rounded=False)
+    c2, tee2 = _alt_shot_team_combined(game, list(t2_pids), members_by_pid,
+                                       rounded=False)
+    diff = abs(c1 - c2)
+    # Nearest half: 1.24 -> 1.0, 1.25 -> 1.5, 1.74 -> 1.5, 1.75 -> 2.0.
+    halves = math.floor(diff * 2 + 0.5)
+    full   = halves // 2
+    has_half = bool(halves % 2)
+
+    # The side with the HIGHER combined receives; equal gives nothing.
+    if c1 == c2:
+        recv = None
+    else:
+        recv = 1 if c1 > c2 else 2
+
+    full_t1 = full if recv == 1 else 0
+    full_t2 = full if recv == 2 else 0
+
+    # **The RECEIVING side's card decides where the half falls.** Men and
+    # women play different stroke indexes: on this TD's course the men's SI 2
+    # is the 12th while the women's SI 1 is the 8th, so reading one card for
+    # both sides would put a woman's stroke on a hole her card does not rank
+    # there. The whole-stroke path above still reads `tee1 or tee2`; that is
+    # older behaviour and a separate question, not changed here two days out.
+    tee = (tee1 if recv == 1 else tee2) or tee1 or tee2
+
+    half_hole = None
+    if has_half and recv is not None and tee is not None:
+        # The half is the next index after the whole strokes: 2.5 -> SI 3.
+        half_si = full + 1
+        if half_si > 18:                     # second cycle, vanishingly rare
+            half_si -= 18
+        half_hole = next(
+            (h for h in hole_range
+             if tee.hole(h).get('stroke_index', 18) == half_si),
+            None,                            # that index is not in the six
+        )
+    return full_t1, full_t2, (recv if half_hole is not None else None), half_hole
+
+
 def _foursomes_team_strokes(
     game: TripleCupGame,
     t1_pids: list[int],
@@ -1232,7 +1302,13 @@ def _foursomes_team_strokes(
                 # the differential.  Then WHS-allocate that differential
                 # across all 18 holes by SI — we only render what lands
                 # inside the foursomes range (7–12).
-                if c1 <= c2:
+                if getattr(game, 'alt_shot_half_strokes', False):
+                    # Difference the UNROUNDED figures and round to the
+                    # nearest half; the whole part allocates as usual and the
+                    # half is handled by the scorer, not by a stroke value.
+                    t1_eff, t2_eff, _recv, _hh = _alt_shot_half_plan(
+                        game, list(a1), list(a2), members_by_pid, hole_range)
+                elif c1 <= c2:
                     t1_eff, t2_eff = 0, c2 - c1
                 else:
                     t1_eff, t2_eff = c1 - c2, 0
@@ -1323,6 +1399,19 @@ def _score_foursomes(
         game, team1_pids, team2_pids, members_by_pid, seg_range,
     )
 
+    # **The half stroke is a tie-break, not a stroke value.** In a one-ball
+    # match-play format with integer gross scores, half a stroke can change
+    # exactly one thing: a hole where the two nets are otherwise EQUAL. It can
+    # never turn a loss into a win. Deciding it here rather than subtracting
+    # 0.5 keeps `team1_net`/`team2_net` whole — they are SmallIntegerFields,
+    # and `strokes` on the wire stays an int, which the shipped client casts
+    # with `as int?` and would throw on a 4.5.
+    half_team = half_hole = None
+    if (getattr(game, 'alt_shot_half_strokes', False)
+            and game.handicap_mode == HandicapMode.STROKES_OFF):
+        _f1, _f2, half_team, half_hole = _alt_shot_half_plan(
+            game, team1_pids, team2_pids, members_by_pid, seg_range)
+
     holes_up    = 0
     finished_on = None
     results     = []
@@ -1344,6 +1433,10 @@ def _score_foursomes(
         elif t2_net < t1_net:
             holes_up -= 1
             winner = 2
+        elif half_hole == h and half_team is not None:
+            # Level on the hole the half is played on — the half takes it.
+            holes_up += 1 if half_team == 1 else -1
+            winner = half_team
         else:
             winner = None
 
@@ -2019,10 +2112,28 @@ def triple_cup_summary(foursome, *, with_cup: bool = False) -> dict | None:
                     'so_by_hole'       : so_by_hole_map.get(pid, {}),
                 })
 
+        # **The half stroke is otherwise invisible.** It carries no dot — the
+        # dots come from an integer count — so a level hole would flip to one
+        # side with nothing on screen saying why. The label is free text the
+        # client renders directly (`Text(match.label …)`), so naming it there
+        # costs no client build.
+        _label = match.label or match.get_segment_display()
+        if (match.segment == 'foursomes'
+                and getattr(game, 'alt_shot_half_strokes', False)
+                and game.handicap_mode == HandicapMode.STROKES_OFF):
+            _f1, _f2, _recv, _hh = _alt_shot_half_plan(
+                game, team1_pids, team2_pids, members_by_pid,
+                _match_hole_list(match))
+            if _hh is not None and _recv is not None:
+                # `TripleCupTeam` carries no name of its own — the cup teams
+                # are named a level up — so the side is identified the way the
+                # rest of this match's payload identifies it.
+                _label = f'{_label} · ½ to Team {_recv} on {_hh}'
+
         matches_out.append({
             'match_number'    : match.match_number,
             'segment'         : match.segment,
-            'label'           : match.label or match.get_segment_display(),
+            'label'           : _label,
             'start_hole'      : match.start_hole,
             'end_hole'        : match.end_hole,
             'display_end_hole': display_end,

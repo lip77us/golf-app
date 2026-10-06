@@ -2897,6 +2897,31 @@ class TripleCupGame(models.Model):
                             validators=[MinValueValidator(0), MaxValueValidator(100)],
                             help_text="% of the higher partner's handicap used in foursomes (alt-shot).",
                         )
+    #: **Half strokes in alternate shot.** Off by default; the whole-stroke
+    #: rule above is unchanged when this is false.
+    #:
+    #: When on, the two teams' combined alt-shot figures are differenced
+    #: BEFORE rounding and the difference is rounded to the nearest HALF
+    #: rather than the nearest whole. The whole part allocates exactly as it
+    #: does today (course-wide SI, rendered where it lands in the segment);
+    #: the leftover half is awarded on the HARDEST HOLE INSIDE the alt-shot
+    #: segment — the lowest stroke index among those six.
+    #:
+    #: A half stroke in a one-ball match-play format can change exactly one
+    #: thing: a hole where the two sides' nets are otherwise EQUAL. It can
+    #: never turn a loss into a win. So it is scored as a tie-break on that
+    #: one hole and no stroke value anywhere becomes fractional — which is
+    #: what keeps this server-side: `strokes` stays an int on the wire, and
+    #: the shipped client casts it with `as int?` and would throw on a 4.5.
+    alt_shot_half_strokes = models.BooleanField(
+                            default=False,
+                            help_text=(
+                                "Round the alt-shot differential to the "
+                                "nearest half stroke; the half is played on "
+                                "the hardest hole in the segment and wins "
+                                "that hole if the nets are level."
+                            ),
+                        )
     #: **One allowance per segment, because the three are different games.**
     #: A Triple Cup plays four-ball, alt-shot and singles in one round, and
     #: the handicap allowance a format is played off is a property of THAT
