@@ -327,6 +327,21 @@ def _send_apns(device_token, payload) -> bool:  # pragma: no cover - needs creds
                         headers=_headers(token),
                         content=json.dumps(payload))
     if resp.status_code == 200:
+        # **Log the ACCEPTED ones too.** Failures have always been logged and
+        # dead tokens dropped, so a push that Apple rejects is already
+        # visible. The case we could not see is the one actually happening:
+        # seventeen phones are sent a start push on every cooldown lapse,
+        # Apple takes it, and no activity ever registers — so the push is
+        # accepted and discarded on the device. Without the apns-id there is
+        # nothing to carry to Apple and no way to tell "delivered and
+        # ignored" from "never sent".
+        #
+        # INFO, and only the token prefix: this runs once per recipient per
+        # push, and a full device token in a log is a credential.
+        logger.info('live_activity_push: APNs 200 %s… apns-id=%s push-type=%s',
+                    device_token[:12],
+                    resp.headers.get('apns-id', '?'),
+                    payload.get('aps', {}).get('event', 'update'))
         return True
     logger.error('live_activity_push: APNs %s for %s… — %s',
                  resp.status_code, device_token[:12], resp.text)
@@ -424,6 +439,16 @@ def push_start_to_absent(round_obj) -> int:
                 .filter(user_id__in=absent).select_related('user'))
     if not rows:
         return 0
+
+    # **The conversion line.** A start push that works raises a card, after
+    # which that phone has a `LiveActivityToken` and is served by
+    # `push_round` instead — so `absent` should SHRINK round over round. It
+    # has not: the same seventeen are pushed every cooldown lapse. Logging
+    # the two counts together is what makes that visible without a database
+    # query, and tells the next reader whether a fix worked.
+    logger.info('live_activity_push: round %s start-push — %s running, '
+                '%s absent, %s have a start token',
+                round_obj.id, len(running), len(absent), len(rows))
 
     course_name = getattr(getattr(round_obj, 'course', None), 'name', '') or ''
 
