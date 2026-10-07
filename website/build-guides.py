@@ -66,6 +66,44 @@ def slice_element(s, start):
     raise ValueError('unbalanced div')
 
 
+def drop_interactive_figures(body):
+    """Remove <figure> blocks that still carry design-tool templating.
+
+    The guides ship an interactive stepper — `<sc-for>` elements, `{{ }}`
+    bindings and a runtime `<script src="<uuid>">`. That runtime belongs to
+    the design tool, not to this site, so the markup reached readers as
+    literal `{{ x.net }}` and the script 404ed. Six published pages were in
+    that state before `build-seo.py` learned to fail on it.
+
+    The block is self-contained in a <figure> on most guides, so it comes out
+    whole rather than half-resolved. **Sequoya 3s is the exception**: its
+    stepper sits in plain <div>s and is NOT caught here — that one still needs
+    the .dc.html source and a proper conversion, rather than a second guess at
+    its boundaries.
+    """
+    out, i = [], 0
+    while True:
+        f = body.find('<figure', i)
+        if f == -1:
+            out.append(body[i:]); break
+        e = body.find('</figure>', f)
+        if e == -1:
+            out.append(body[i:]); break
+        e += len('</figure>')
+        block = body[f:e]
+        out.append(body[i:f] if ('{{' in block or '<sc-' in block)
+                   else body[i:e])
+        i = e
+    return ''.join(out)
+
+
+def drop_design_runtime(body):
+    """Drop the design tool's runtime `<script src="<uuid>">`, which 404s."""
+    return re.sub(
+        r'<script src="[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}'
+        r'-[0-9a-f]{4}-[0-9a-f]{12}"></script>\s*', '', body)
+
+
 def drop_placeholder_screenshots(body):
     """Nassau, Wolf and Survivor draw dashed placeholder boxes where app
     screenshots go.  Only Skins has real captures, so drop the whole row."""
@@ -278,6 +316,8 @@ def convert(src_dir, name, slug):
     body = body.replace('src="./img/', 'src="/games/img/')
 
     if slug:
+        body = drop_interactive_figures(body)
+        body = drop_design_runtime(body)
         body = drop_placeholder_screenshots(body)
     body = drop_missing_screenshots(body, os.path.join(OUT, 'img'))
     body = drop_unwritten_cards(body)

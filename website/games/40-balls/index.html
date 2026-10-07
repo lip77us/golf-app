@@ -159,7 +159,6 @@
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 </style>
-<script src="94e01247-e30f-4741-918f-ae0ccb92d28a"></script>
 <style>html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}body{margin:0;background:#F3F1EA}*{box-sizing:border-box}img{display:block;max-width:100%}a{color:#0F6E56}a:hover{color:#0B1F1A}
 @keyframes fbIn{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}</style>
 <meta name="twitter:image" content="https://halved.golf/og.png">
@@ -301,30 +300,7 @@
 <p style="margin:0;font-size:16.5px;line-height:1.62;color:#D7E5DE;text-wrap:pretty">After each hole the group picks <strong style="color:#fff;font-weight:600">how many nets count, from 0 to 4</strong>, and the best ones count. Over the round the group must count <strong style="color:#fff;font-weight:600">exactly 40</strong>, or 30 in a threesome. <strong style="color:#fff;font-weight:600">Lowest total against par wins.</strong></p>
 </div>
 </div>
-<figure style="flex:1 1 400px;min-width:300px;margin:0;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.13);border-radius:16px;padding:16px 16px 14px">
-<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;margin-bottom:12px"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:10px;letter-spacing:1.2px;color:#3BD89A">{{ holeLabel }}</div><div style="margin-left:auto;font-size:12px;color:#8FB3A5">{{ totalLine }}</div></div>
-<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-bottom:12px">
-<sc-for list="{{ nets }}" as="x" hint-placeholder-count="4">
-<div style="background:rgba(59,216,154,.2);border:1px solid rgba(59,216,154,.55);border-radius:10px;padding:8px 6px;text-align:center"><div style="font-size:10.5px;font-weight:700;letter-spacing:.6px;color:#3BD89A">{{ x.who }}</div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-size:20px;font-weight:700;color:#fff;margin-top:1px">{{ x.net }}</div><div style="font-size:10px;color:#3BD89A">counts</div></div><div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px 6px;text-align:center"><div style="font-size:10.5px;font-weight:700;letter-spacing:.6px;color:#6E8A7B">{{ x.who }}</div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-size:20px;font-weight:700;color:#6E8A7B;margin-top:1px">{{ x.net }}</div><div style="font-size:10px;color:#56705F">&nbsp;</div></div></sc-for>
-</div>
-<div style="display:grid;grid-template-columns:repeat(20,minmax(0,1fr));gap:4px;padding:10px;background:rgba(0,0,0,.18);border-radius:10px">
-<sc-for list="{{ dots }}" as="d" hint-placeholder-count="40">
-<div style="aspect-ratio:1;border-radius:50%;background:#3BD89A;animation:fbIn .35s ease"></div><div style="aspect-ratio:1;border-radius:50%;background:#2A7C62"></div><div style="aspect-ratio:1;border-radius:50%;border:1.5px solid rgba(255,255,255,.28)"></div></sc-for>
-</div>
-<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px">
-<div><div style="font-size:10px;font-weight:700;letter-spacing:.8px;color:#6E8A7B">COUNTED</div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-size:22px;font-weight:700;color:#fff">{{ usedTxt }}</div></div>
-<div><div style="font-size:10px;font-weight:700;letter-spacing:.8px;color:#6E8A7B">AVERAGE NEEDED</div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-size:22px;font-weight:700;color:#fff">{{ avgTxt }}</div></div>
-<div><div style="font-size:10px;font-weight:700;letter-spacing:.8px;color:#6E8A7B">SLACK</div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-size:22px;font-weight:700;color:#3BD89A">{{ slackTxt }}</div></div>
-</div>
-<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.14);display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start">
-<div style="flex:1 1 220px;min-width:0"><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:10.5px;letter-spacing:1.2px;color:#3BD89A;margin-bottom:5px">{{ stepLabel }}</div><div style="font-size:14px;line-height:1.55;color:#D7E5DE;text-wrap:pretty">{{ caption }}</div></div>
-<div style="flex:0 0 auto;display:flex;align-items:center;gap:8px;margin-left:auto">
-<button type="button" sc-camel-on-click="{{ prev }}" aria-label="Previous hole" style="width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,.28);background:transparent;color:#D7E5DE;font-size:14px;cursor:pointer;font-family:'Spline Sans',system-ui,sans-serif">←</button>
-<button type="button" sc-camel-on-click="{{ next }}" aria-label="Next hole" style="width:32px;height:32px;border-radius:50%;border:1px solid #3BD89A;background:#3BD89A;color:#0B1F1A;font-size:14px;cursor:pointer;font-family:'Spline Sans',system-ui,sans-serif">→</button>
-</div>
-</div>
-<figcaption style="margin-top:12px;font-size:13px;line-height:1.5;color:#8FB3A5">The first five holes for one foursome. Each dot is one of the forty balls. Nets are after strokes.</figcaption>
-</figure>
+
 </div>
 <div style="display:flex;flex-wrap:wrap;gap:28px;margin-top:32px;padding-top:24px;border-top:1px solid rgba(255,255,255,.14)">
 <div><div style="font-family:'Schibsted Grotesk',system-ui,sans-serif;font-weight:700;font-size:26px;color:#3BD89A;letter-spacing:-.6px">40</div><div style="font-size:12.5px;color:#8FB3A5;margin-top:3px">balls for a foursome</div></div>

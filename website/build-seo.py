@@ -639,6 +639,25 @@ def audit(pages, sitemap_xml):
         err = lambda m: found.append(('error', rel, m))
         warn = lambda m: found.append(('warn', rel, m))
 
+        # **Design-tool templating that reached the published page.**
+        # `build-guides.py` converts the .dc.html prototypes to static HTML,
+        # and it only strips the constructs it has been taught. The 40 Balls
+        # and Dream Round guides shipped an interactive stepper it had never
+        # seen, so `<sc-for>` elements, `{{ bindings }}` and a runtime
+        # `<script src="<uuid>">` went out verbatim — every reader saw
+        # `{{ x.net }}` on a live page, and the script 404s.
+        #
+        # An ERROR, not a warning: it is never correct, it is invisible to
+        # anyone not reading the rendered page, and the zip aborts on errors,
+        # which is the only thing that would have caught it.
+        for needle, what in (('{{', 'unrendered {{ }} template binding'),
+                             ('<sc-', 'unresolved <sc-*> design-tool element')):
+            if needle in text:
+                err('%s — build-guides.py did not resolve it' % what)
+        if re.search(r'<script src="[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}'
+                     r'-[0-9a-f]{4}-[0-9a-f]{12}"', text):
+            err('design-tool runtime <script src="<uuid>"> — it 404s')
+
         if not p.title:
             err('no <title>')
         else:
