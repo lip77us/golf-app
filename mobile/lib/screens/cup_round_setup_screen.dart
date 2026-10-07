@@ -743,7 +743,67 @@ class _CupRoundSetupScreenState extends State<CupRoundSetupScreen> {
 
   // ── Submit ─────────────────────────────────────────────────────────────────
 
+  /// Confirm before starting a round that is not fully grouped.
+  ///
+  /// **"Start Round" and "Add Group" occupy the same slot.** The bottom bar
+  /// shows one or the other, and the screen flips to review after every
+  /// group — so the button a TD has just tapped eleven times becomes the one
+  /// that commits. Reported after losing a part-built draw: `_submit` posts
+  /// the foursomes built SO FAR, and `setup_round` wipes the round's existing
+  /// foursomes first, so an early tap is not a no-op.
+  ///
+  /// Starting short is legitimate (uneven singles leave golfers out), so this
+  /// asks rather than blocks — and it names the number, because "some golfers
+  /// are unassigned" is the kind of warning people learn to tap through.
+  Future<bool> _confirmIncompleteStart() async {
+    final missing = _sittingOut.length;
+    final short   = _expectedGroupCount - _foursomes.length;
+    if (missing == 0 && short <= 0) return true;
+
+    final lines = <String>[
+      if (short > 0)
+        '$short more ${short == 1 ? "group has" : "groups have"} not been '
+        'built yet.',
+      if (missing > 0)
+        '$missing ${missing == 1 ? "golfer is" : "golfers are"} not in a '
+        'group and will sit this round out.',
+    ];
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('Start the round now?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ...lines.map((t) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(t),
+                )),
+            const Text(
+              'Starting now replaces this round\'s groups with the ones '
+              'built so far.',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(d).pop(false),
+            child: const Text('Keep building'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(d).pop(true),
+            child: const Text('Start anyway'),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
+  }
+
   Future<void> _submit() async {
+    if (!await _confirmIncompleteStart()) return;
+    if (!mounted) return;
     setState(() { _submitting = true; _submitError = null; });
     try {
       // Group numbers follow tee time: submit foursomes in tee-time order so the
