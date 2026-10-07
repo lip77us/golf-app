@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
 
 # Load .env file from the project root if it exists.
@@ -490,3 +491,13 @@ class _DisableMigrations:
 
 if 'test' in sys.argv:
     MIGRATION_MODULES = _DisableMigrations()
+
+
+# True while `manage.py test` is running.
+#
+# Read by `services.offload`, which puts background work back in the calling
+# thread under test: a ThreadPoolExecutor plus TestCase's wrapping transaction
+# is nondeterministic — the thread cannot see uncommitted rows, and an
+# assertion about whether the task ran becomes a race. Deterministic tests
+# matter more here than exercising the pool, which has its own tests.
+TESTING = 'test' in sys.argv

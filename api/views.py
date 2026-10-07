@@ -326,8 +326,14 @@ def _push_lock_screen(round_obj) -> None:
         # Deferring past the commit makes that structurally impossible, and is
         # more correct anyway: nothing should announce a board built from
         # scores that might still roll back.
+        # on_commit defers past the commit; `run_off_request` takes it out of
+        # the request thread as well. Both are needed: the first stops a board
+        # being announced from scores that might roll back, the second stops
+        # the scorer waiting on Apple before his score is acknowledged.
         from django.db import transaction as _txn
-        _txn.on_commit(_push)
+        from services.offload import run_off_request
+        _txn.on_commit(
+            lambda: run_off_request(_push, label=f'board push r{round_obj.id}'))
 
 
 def _build_scorecard(foursome: Foursome) -> dict:

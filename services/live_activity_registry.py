@@ -818,14 +818,24 @@ def board_recipients(rnd) -> set:
     user_ids = set()
     phones   = set()
 
-    for fs in rnd.foursomes.all():
-        for m in fs.memberships.all():
-            if m.player.user_id:
-                user_ids.add(m.player.user_id)
-            if m.player.phone:
-                p = normalize(m.player.phone)
-                if p:
-                    phones.add(p)
+    # **One query for the whole round's roster, not one per golfer.** This
+    # runs inside a SCORING request — every posted score reaches it — and the
+    # loop walked `fs.memberships.all()` then touched `m.player` with no
+    # select_related, so a 12-group cup spent ~50 queries here per score. The
+    # docstring's "four golfers and a couple of watchers" is true of a casual
+    # round and badly wrong of a cup.
+    from tournament.models import FoursomeMembership
+    for user_id, phone in (
+        FoursomeMembership.objects
+        .filter(foursome__round=rnd)
+        .values_list('player__user_id', 'player__phone')
+    ):
+        if user_id:
+            user_ids.add(user_id)
+        if phone:
+            p = normalize(phone)
+            if p:
+                phones.add(p)
 
     for w in Watcher.objects.filter(round=rnd):
         p = normalize(w.phone or '')
