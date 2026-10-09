@@ -39,6 +39,12 @@ override.
 
 ## `/games/honors/`
 
+Not overridden, but the tightest title on the site at 592px — 8px of margin.
+Worth a look next time it is edited: "Score a Point" instead of "Score the
+Hole" is both 12px shorter and closer to the rule, since a point comes from
+holding the honor rather than from scoring the hole.
+
+
 - **description** (125 chars): Honors is a group game with one token: low score on a hole takes the honor, and you score a point for every hole you hold it.
 
 ## `/games/irish-rumble/`
@@ -58,6 +64,12 @@ override.
 
 ## `/games/nassau/`
 
+Google cuts a desktop title at about 600px, and Design's lands on exactly 600
+in Arial 20px — no margin, so any variance cuts it. Dropping the Oxford "and"
+buys 39px and loses nothing. **Character count is the wrong test**: Triple Cup
+at 61 characters is 553px while this was 65 characters and 600px.
+
+- **title** (61 chars): Nassau Golf Bet Rules: How to Play, Presses, Scoring | Halved
 - **description** (134 chars): A Nassau is three bets in one round: front nine, back nine and all eighteen. Full rules, when a press fires, and the money worked out.
 
 ## `/games/pink-ball/`
