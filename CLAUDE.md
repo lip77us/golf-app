@@ -781,11 +781,24 @@ Source of truth is `docs/privacy-policy.html`; `website/privacy.html` is the
 published page and `build-zip.sh` ships it to Cloudflare Pages, so editing the
 two together is the whole update — there is no copy step into another repo.
 
-**The GitHub Pages copy at `lip77us/halved-legal` is abandoned, not a mirror.**
-It is frozen at May 30, 2026 and predates the Cloudflare Web Analytics
-disclosure. Nothing points at it any more; do not refresh it and do not
-restore it as the listing URL. Two published copies of one policy is how one
-of them comes to say something that is no longer true.
+**The GitHub Pages copy at `lip77us/halved-legal` is UNPUBLISHED** (9 Oct 2026,
+`gh api -X DELETE repos/lip77us/halved-legal/pages`; the repo and its history
+are untouched, `has_pages` is now false). Do not re-enable it, and do not
+restore it as the listing URL.
+
+It had been abandoned rather than mirrored, and by the time it came down the
+drift was exactly what that risk predicts: it still carried **the same
+effective date as the live policy, May 30, 2026, while omitting the Cloudflare
+Web Analytics disclosure the live one makes.** A second published copy of a
+policy does not stay a copy — it becomes a document that contradicts the real
+one while claiming to be current, and it is readable by anyone with the link.
+
+Found while chasing a Search Console duplicate report, not by anyone reading
+the policy. One published copy, at halved.golf, is the rule.
+
+Note the delete printed `404 Not Found` and had nonetheless worked — GitHub
+answers 404 once the Pages config is gone. `has_pages` and the site root are
+the things to check, not the command's exit.
 
 **The data inventory behind the App Privacy answers** (checked 2 Oct 2026):
 `Info.plist` declares NO location, camera, photo-library, microphone or
