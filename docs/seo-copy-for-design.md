@@ -64,12 +64,12 @@ holding the honor rather than from scoring the hole.
 
 ## `/games/nassau/`
 
-Google cuts a desktop title at about 600px, and Design's lands on exactly 600
-in Arial 20px — no margin, so any variance cuts it. Dropping the Oxford "and"
-buys 39px and loses nothing. **Character count is the wrong test**: Triple Cup
-at 61 characters is 553px while this was 65 characters and 600px.
+Shortened by Design on 9 Oct from 61 characters to 52 — the old one measured
+exactly 600px, Google's desktop cut, with no margin. Kept here because the
+delivered page carries its copy INSIDE the generated `seo` block, so this
+entry is the only source the build has.
 
-- **title** (61 chars): Nassau Golf Bet Rules: How to Play, Presses, Scoring | Halved
+- **title** (52 chars): Nassau Golf Bet Rules: How to Play, Presses | Halved
 - **description** (134 chars): A Nassau is three bets in one round: front nine, back nine and all eighteen. Full rules, when a press fires, and the money worked out.
 
 ## `/games/pink-ball/`

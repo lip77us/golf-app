@@ -156,13 +156,21 @@ OVERRIDES = {
                        'knockout on day 1, and the group winners play for the title on day 2.',
     },
     'games/nassau/index.html': {
-        # Measured, not counted: Google cuts a desktop title at about 600px, and
-        # Design's lands on exactly 600 in Arial 20px — no margin at all, so any
-        # variance cuts it.  Dropping the Oxford "and" buys 39px, loses nothing,
-        # and matches the comma lists Spots, Survivor, Skins and Sequoya use.
-        'title': 'Nassau Golf Bet Rules: How to Play, Presses, Scoring | Halved',
-        'description': 'A Nassau is three bets in one round: front nine, back nine and all '
-                       'eighteen. Full rules, when a press fires, and the money worked out.',
+        # **The override IS the source for this page.** Design delivers
+        # finished HTML built from the published page, so its <title> and
+        # description sit INSIDE the seo:begin/seo:end block, which this
+        # script regenerates from scratch — the page's own <head> carries
+        # neither. Deleting this entry therefore does not hand the copy back
+        # to the page, it leaves the page with no copy at all, and the audit
+        # fails with "no <title>". Tried on 9 Oct 2026; that is how we know.
+        #
+        # Shortened by Design in that delivery, from 61 characters to 52:
+        # the old one measured exactly 600px, which is Google's desktop cut
+        # with no margin.
+        'title': 'Nassau Golf Bet Rules: How to Play, Presses | Halved',
+        'description': 'A Nassau is three bets in one round: front nine, back '
+                       'nine and all eighteen. Full rules, when a press fires, '
+                       'and the money worked out.',
     },
     'games/pink-ball/index.html': {
         'title': 'Pink Ball Golf Game Rules: One Ball Per Group | Halved',

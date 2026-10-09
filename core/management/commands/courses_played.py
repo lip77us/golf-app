@@ -42,6 +42,10 @@ class Command(BaseCommand):
                             help='Only rounds on or after this date.')
         parser.add_argument('--include-unplayed', action='store_true',
                             help='Also count rounds with no score posted.')
+        parser.add_argument('--map', action='store_true', dest='as_map',
+                            help="Emit the homepage map's COURSES array: "
+                                 '[name, lat, lon, country, rounds]. Only '
+                                 'courses that carry coordinates.')
         parser.add_argument('--raw', action='store_true',
                             help='One row per Course record, ungrouped — the '
                                  'per-account clones kept apart so you can '
@@ -61,6 +65,8 @@ class Command(BaseCommand):
                 .values_list('foursome__round_id', flat=True).distinct())
             rounds = rounds.filter(id__in=played)
 
+        if o['as_map']:
+            return self._map(rounds)
         if o['raw']:
             return self._raw(rounds, as_csv=o['csv'])
 
@@ -164,3 +170,50 @@ class Command(BaseCommand):
                 f'{(c.golf_api_id or "-"):<12} {g["account"][:22]:<22} '
                 f'{c.name}{"  (" + where + ")" if where else ""}')
         self.stdout.write('')
+
+    def _map(self, rounds):
+        """The homepage map's COURSES array, from real played rounds.
+
+        Grouped by name like the default view, because the map should show one
+        dot per course and not one per club that happens to own a copy.
+
+        **A course with no coordinates is dropped, and said so on stderr.**
+        Only imported courses carry lat/lon — a pasted one has none — so a
+        silent omission would make the map quietly under-report, which is
+        worse than a short map you know is short.
+        """
+        import json
+        import sys as _sys
+
+        groups = defaultdict(lambda: {'name': '', 'rounds': 0,
+                                      'lat': None, 'lon': None,
+                                      'country': ''})
+        for r in rounds:
+            c = r.course
+            if c is None:
+                continue
+            g = groups[_norm(c.name)]
+            g['name'] = g['name'] or c.name
+            g['rounds'] += 1
+            if g['lat'] is None and c.latitude is not None:
+                g['lat'], g['lon'] = float(c.latitude), float(c.longitude or 0)
+                g['country'] = (c.country or 'US').upper()[:2] or 'US'
+
+        placed = [g for g in groups.values() if g['lat'] is not None]
+        missing = [g for g in groups.values() if g['lat'] is None]
+        placed.sort(key=lambda g: (-g['rounds'], g['name']))
+
+        self.stdout.write('var COURSES=[')
+        self.stdout.write(','.join(
+            '[%s,%s,%s,%s,%d]' % (json.dumps(g['name']), round(g['lat'], 4),
+                                  round(g['lon'], 4), json.dumps(g['country']),
+                                  g['rounds'])
+            for g in placed))
+        self.stdout.write('];')
+
+        if missing:
+            _sys.stderr.write(
+                f'\n{len(missing)} course(s) have no coordinates and are NOT '
+                f'on the map:\n')
+            for g in sorted(missing, key=lambda g: -g['rounds']):
+                _sys.stderr.write(f'  {g["rounds"]:>3} rounds  {g["name"]}\n')

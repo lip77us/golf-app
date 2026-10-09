@@ -78,6 +78,24 @@ Arial 20px. Triple Cup at 61 characters is 553px; Nassau at 65 was exactly
 600 — no margin at all, so any variance cut it. Character count is a proxy
 that fails in both directions.
 
+### 8 · Title and description in the page's OWN `<head>`
+Outside the `<!-- seo:begin … seo:end -->` block.
+
+`build-seo.py` REGENERATES everything between those markers on every run. A
+page whose `<title>` lives inside the block therefore has no title of its own
+— the build has nothing to copy forward, and the audit fails with
+`no <title>`, which aborts the zip.
+
+*This bites when Design builds from an already-published page, which is the
+normal way to deliver an edit. On 9 Oct the new Nassau title arrived inside
+the block; the entry in `OVERRIDES` was the only thing supplying it, so
+retiring that entry — which the workflow in `seo-copy-for-design.md` says to
+do once the source carries the copy — broke the build instead of handing the
+copy back.*
+
+Until a packet does this, `OVERRIDES` **is** the source for those two fields
+and its entry must stay.
+
 ### 7 · One H1, alt text on every image
 `build-seo.py`'s audit treats both as errors and **aborts the zip**, so a page
 that breaks either cannot be deployed at all.
