@@ -3910,8 +3910,15 @@ and fails if anything is stale or wrong (for CI).
 - **`sitemap.xml` is generated** — don't edit it. `<lastmod>` only moves when a
   page's content (minus the SEO block) changes, tracked by hash in
   `seo-manifest.json` (commit it). Rebuilding guides doesn't reset dates.
-- **URL model:** `x/index.html` → `/x/`, `x.html` → `/x` (Pages 308s the `.html`
-  form). Canonicals/sitemap use those; the audit warns on links that redirect.
+- **URL model:** `x/index.html` → `/x/`, `x.html` → `/x`. Canonicals/sitemap use
+  those; the audit warns on links that redirect. **Pages canonicalises with a
+  307 — temporary — not a 308**, measured against the live site 9 Oct 2026, and
+  it does it to FOUR forms per page: `/x`, `/x/index.html`, `/x.html` and
+  `/x/`. A temporary redirect never consolidates the duplicate pair, so
+  `build_redirects()` emits an explicit **301** for every one of them into the
+  generated half of `_redirects` (55 rules). Hand-written rules stay ABOVE the
+  block and must point at the FINAL form — the Eclectic rule aimed at
+  `/games/dream-round` and chained through a second hop to add the slash.
 - **Search-tool verification:** `SITE_VERIFICATION` holds the meta-tag codes for
   Search Console, Ahrefs Webmaster Tools and Bing, emitted on the homepage only.
   Prefer DNS verification for Search Console (a Domain property in Cloudflare) and

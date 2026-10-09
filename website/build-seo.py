@@ -612,27 +612,53 @@ def build_sitemap(entries):
 def build_redirects(rels, existing):
     """Rewrite the generated half of `_redirects`.
 
-    Cloudflare Pages normalises `/games/skins` to `/games/skins/` on its own,
-    but with a **307 — temporary**, so search engines are told the slashless
-    URL may come back and the two are not consolidated. Cloudflare's own
-    documentation gives `/trailing /trailing/ 301` as the way to say otherwise,
-    so every directory page gets an explicit permanent rule.
+    Cloudflare Pages canonicalises URLs on its own, but with a **307 —
+    temporary**, so search engines are told the other form may come back and
+    the two are never consolidated. Measured against the live site on
+    9 Oct 2026, FOUR forms per page answer 307:
+
+        /games/skins             -> /games/skins/
+        /games/skins/index.html  -> /games/skins/
+        /privacy.html            -> /privacy
+        /privacy/                -> /privacy
+
+    Cloudflare's own documentation gives `/trailing /trailing/ 301` as the way
+    to say otherwise, so each one gets an explicit permanent rule. The first
+    form was already covered; the other three were not, and the note that bare
+    pages "need no rule" was wrong — being served 200 at `/privacy` does not
+    stop `/privacy.html` and `/privacy/` answering 307 as well.
 
     Generated from the pages on disk, between markers, because a hand-kept
-    list of nineteen rules drifts the first time a guide is added. Hand-written
-    rules above the block are preserved — the Eclectic redirects live there and
-    must stay FIRST, since Cloudflare applies the top-most matching rule and
-    those send the old URL somewhere else entirely.
-
-    Bare pages (`privacy.html` at `/privacy`) need no rule: they are served
-    without a trailing slash and answer 200.
+    list drifts the first time a guide is added. Hand-written rules above the
+    block are preserved — the Eclectic redirects live there and must stay
+    FIRST, since Cloudflare applies the top-most matching rule and those send
+    the old URL somewhere else entirely.
     """
-    paths = sorted(url_path(r) for r in rels
-                   if r.endswith('/index.html') and r != 'index.html')
-    rows = ''.join('%-34s %-34s 301\n' % (p.rstrip('/'), p) for p in paths)
+    dirs = sorted(url_path(r) for r in rels
+                  if r.endswith('/index.html') and r != 'index.html')
+    # 'index.html' at the root is NOT a bare page: its url_path is '/', which
+    # would build the nonsense rules '/.html' and '//'.  It gets its own rule
+    # below.
+    bare = sorted(url_path(r) for r in rels
+                  if not r.endswith('index.html'))
+
+    rule = lambda frm, to: '%-34s %-34s 301\n' % (frm, to)
+    rows = ''
+    # /games/skins -> /games/skins/ and /games/skins/index.html -> /games/skins/
+    for d in dirs:
+        rows += rule(d.rstrip('/'), d)
+        rows += rule(d + 'index.html', d)
+    # /privacy.html -> /privacy and /privacy/ -> /privacy
+    for b in bare:
+        rows += rule(b + '.html', b)
+        rows += rule(b + '/', b)
+    # the home page, whose url_path is '/'
+    rows += rule('/index.html', '/')
+
     block = (BEGIN_REDIRECTS + '\n'
-             '# Permanent trailing-slash redirects, one per directory page.\n'
-             '# Without these Cloudflare Pages answers 307 (temporary).\n'
+             '# Permanent canonicalisation, generated per page.  Cloudflare Pages\n'
+             '# does all four of these itself with a 307 (temporary), which never\n'
+             '# consolidates the duplicate pair.  See build_redirects().\n'
              + rows + END_REDIRECTS + '\n')
     head = existing.split(BEGIN_REDIRECTS)[0].rstrip('\n')
     return (head + '\n\n' + block) if head else block
