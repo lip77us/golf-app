@@ -667,6 +667,13 @@ class FoursomeSerializer(serializers.ModelSerializer):
         # above reports off `irish_rumble_results` because it has some; Better
         # Ball persists nothing (one segment, board computed live), so the row
         # that says the TD has set it up is the config itself.
+        # Hot Spot, same reasoning: HotSpotResult rows exist only once a
+        # score lands, so the config is what says the TD has set it up.
+        try:
+            rnd.hot_spot_config
+            games.append('hot_spot')
+        except ObjectDoesNotExist:
+            pass
         try:
             rnd.better_ball_config
             games.append('better_ball')
@@ -1586,6 +1593,42 @@ class IrishRumbleSetupSerializer(serializers.Serializer):
                     'custom_balls': 'Must be 18 integers for the custom variant.',
                 })
         return attrs
+
+
+class HotSpotSetupSerializer(serializers.Serializer):
+    """POST /api/rounds/{id}/hot-spot/setup/
+
+    No anchor order here, deliberately: each GROUP sets its own on the first
+    tee, so it is a per-foursome write (HotSpotOrderSerializer) and not an
+    organiser setting.
+    """
+    scoring       = serializers.ChoiceField(
+                        choices=['to_par', 'stableford'], default='to_par')
+    # Net or gross only. Strokes off the low golfer needs ONE low golfer and
+    # a field of groups does not have one — the same reason individual play
+    # does not offer it. The service refuses it too, so a hand-rolled POST
+    # cannot get past this.
+    handicap_mode = serializers.ChoiceField(
+                        choices=['net', 'gross'], default='net')
+    net_percent   = serializers.IntegerField(
+                        min_value=50, max_value=130, default=85,
+                        help_text="85% by default; the setup slider is 50-130.")
+    finish_rule   = serializers.ChoiceField(
+                        choices=['keep_rotating', 'best_2', 'three_then_four'],
+                        default='keep_rotating')
+    entry_fee     = serializers.DecimalField(
+                        max_digits=8, decimal_places=2, default='0.00')
+    payouts       = serializers.ListField(
+                        child=serializers.DictField(), default=list)
+
+
+class HotSpotOrderSerializer(serializers.Serializer):
+    """POST /api/foursomes/{id}/hot-spot/order/ — the group's anchor order."""
+    player_ids = serializers.ListField(
+                     child=serializers.IntegerField(), allow_empty=False,
+                     help_text="Every REAL golfer in the group, exactly once, "
+                               "in anchor order. The borrowed 4th never "
+                               "anchors and is not named here.")
 
 
 class BetterBallSetupSerializer(serializers.Serializer):

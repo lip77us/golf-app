@@ -362,6 +362,26 @@ class Foursome(models.Model):
                             default=list,
                             help_text="Ordered list of player PKs for pink ball rotation."
                         )
+    # Hot Spot's anchor rotation.  Unlike pink_ball_order, which stores one
+    # entry PER HOLE, this is the ORDER ONLY — a list of the group's real
+    # player pks, and the anchor for a hole is derived from its position in
+    # the group's play order.  Two reasons it is not eighteen entries: the
+    # order repeats every four holes so eighteen would be the same four facts
+    # written four and a half times, and the organiser's 17-and-18 rule
+    # (HotSpotConfig.finish_rule) would be baked into the data, so changing
+    # that setting would silently need every group's list rewritten.
+    #
+    # Real golfers only.  A borrowed 4th can be the best net of the others but
+    # never anchors, so a threesome rotates three and the list holds three.
+    hot_spot_order      = models.JSONField(
+                            default=list,
+                            help_text=(
+                                "Hot Spot anchor order: real player PKs, the "
+                                "anchor for a hole derived from play-order "
+                                "position. Empty until the group sets it on "
+                                "the first tee; locked by the first score."
+                            )
+                        )
     active_games        = models.JSONField(
                             default=list,
                             help_text=(

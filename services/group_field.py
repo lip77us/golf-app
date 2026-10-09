@@ -64,13 +64,27 @@ def player_counts(round_obj) -> dict:
 
 
 def group_standings(round_obj, *, balls_by_hole, score_index, par_by_hole,
-                    entry_fee, payouts, net_percent) -> list:
+                    entry_fee, payouts, net_percent, select_scores=None) -> list:
     """The overall board — one row per group, ranked, with the money on it.
 
     `score_index` is `{foursome_id: {player_id: {hole: capped_score}}}` as
     `irish_rumble._build_ir_score_index` builds it; the caller owns the
     handicap treatment, because that is the other thing the two games can
     legitimately disagree about.
+
+    `select_scores` is the third. Rumble and Better Ball both take the best N
+    of the group, so the default does that and `balls_by_hole` says what N is.
+    Hot Spot does not: one named golfer counts whatever he scores, plus the
+    best of the rest. Passing a selector keeps that ONE difference here
+    instead of forking the board — and the board is where the running total,
+    the tie rule and the pool split live, which is the thing two copies would
+    eventually disagree about.
+
+    A selector takes `(foursome_id, hole_number, fs_scores, n_players)` and
+    returns the list of scores that COUNT on that hole, or `[]` for a hole it
+    cannot score yet. The par reference follows its LENGTH, not `balls_by_hole`,
+    so a selector that counts a different number of balls on different holes
+    is measured against the right par without telling the board anything else.
     """
     from services.payout import (payouts_by_place, per_person_share,
                                  split_tied_places)
@@ -97,13 +111,19 @@ def group_standings(round_obj, *, balls_by_hole, score_index, par_by_hole,
         score_acc = par_acc = 0
         has_any   = False
         for hole_num in range(1, 19):
-            balls = min(balls_by_hole.get(hole_num, 1), n_players)
-            on_hole = sorted([ph[hole_num] for ph in fs_scores.values()
-                              if hole_num in ph])
-            if not on_hole:
+            if select_scores is not None:
+                counting = select_scores(fid, hole_num, fs_scores, n_players)
+            else:
+                balls = min(balls_by_hole.get(hole_num, 1), n_players)
+                on_hole = sorted([ph[hole_num] for ph in fs_scores.values()
+                                  if hole_num in ph])
+                counting = on_hole[:balls]
+            if not counting:
                 continue
-            score_acc += sum(on_hole[:balls])
-            par_acc   += par_by_hole.get(hole_num, 4) * balls
+            score_acc += sum(counting)
+            # Against the number of balls that actually counted — a selector
+            # may count two on one hole and four on another.
+            par_acc   += par_by_hole.get(hole_num, 4) * len(counting)
             has_any    = True
         if has_any:
             running[fid] = {'score': score_acc, 'par': par_acc}

@@ -1569,6 +1569,103 @@ class IrishRumbleConfig(models.Model):
         return f"Irish Rumble config — {self.round}"
 
 
+class HotSpotConfig(models.Model):
+    """
+    Hot Spot for a round: one ANCHOR per hole whose score always counts, plus
+    the best net of the other three.
+
+    Shares Irish Rumble's engine (``_build_ir_score_index`` for handicap and
+    the cap, ``ensure_irish_rumble_phantom`` for the borrowed 4th) and Rumble's
+    money model verbatim — a field pool paid to the winning GROUP and split
+    among its REAL golfers.  What is NOT shared is the per-hole selection, and
+    that is the game: Rumble takes the best N of four, Hot Spot takes one named
+    golfer plus the best of the rest.
+
+    The anchor ORDER is not here.  It belongs to each group, who set it on the
+    first tee, so it lives on ``Foursome.hot_spot_order``.
+
+    The cap is a RULE, not a setting (the handoff: "every score is capped at
+    net double bogey ... including the anchor's"), so the service passes
+    ``force_cap=True`` the way Better Ball and individual play do, rather than
+    reading ``Round.net_max_double_bogey``.  Without it the whole point of the
+    format — that a blow-up from the anchor has to be carried — would be
+    unbounded, and one hole would decide the field.
+    """
+    SCORING_CHOICES = (
+        ('to_par',     'Strokes to par'),
+        ('stableford', 'Stableford'),
+    )
+    # What happens over the last two holes, which do not divide by four.
+    #   keep_rotating   — the rotation just carries on, so the first two
+    #                     golfers in the order anchor five holes and the other
+    #                     two anchor four.
+    #   best_2          — no anchor; the best two nets count.
+    #   three_then_four — no anchor; three count on the 17th and all four on
+    #                     the 18th, which is how Rumble finishes.
+    FINISH_CHOICES = (
+        ('keep_rotating',   'Keep rotating'),
+        ('best_2',          'Best 2'),
+        ('three_then_four', '3 then 4'),
+    )
+
+    round           = models.OneToOneField(
+                        Round, on_delete=models.CASCADE,
+                        related_name='hot_spot_config')
+    scoring         = models.CharField(
+                        max_length=12, choices=SCORING_CHOICES, default='to_par')
+    handicap_mode   = models.CharField(
+                        max_length=20, choices=HandicapMode.choices,
+                        default=HandicapMode.NET,
+                        help_text="Net or gross only — there is no low golfer "
+                                  "to play strokes off against a whole field.")
+    net_percent     = models.PositiveSmallIntegerField(
+                        default=85,
+                        help_text="Allowance applied to the playing handicap. "
+                                  "85% by default, as the handoff specifies; "
+                                  "the setup slider runs 50-130.")
+    finish_rule     = models.CharField(
+                        max_length=20, choices=FINISH_CHOICES,
+                        default='keep_rotating')
+    entry_fee       = models.DecimalField(
+                        max_digits=8, decimal_places=2, default=0.00,
+                        help_text="Entry fee per foursome; pool = fee x groups.")
+    payouts         = models.JSONField(
+                        default=list,
+                        help_text="Payout per finishing place, as Irish Rumble: "
+                                  "[{'place': 1, 'amount': 50.00}, ...]")
+
+    def __str__(self):
+        return f"Hot Spot config — {self.round}"
+
+
+class HotSpotResult(models.Model):
+    """
+    One row per foursome — Hot Spot has no segments, so unlike
+    ``IrishRumbleSegmentResult`` there is nothing to key a second dimension on.
+
+    ``total`` is null while the group still has an unscored hole, which is what
+    keeps an unfinished group off the ranking rather than at the top of it.
+    """
+    round       = models.ForeignKey(Round, on_delete=models.CASCADE,
+                                    related_name='hot_spot_results')
+    foursome    = models.ForeignKey('tournament.Foursome', on_delete=models.CASCADE,
+                                    related_name='hot_spot_results')
+    total       = models.IntegerField(
+                    null=True, blank=True,
+                    help_text="Net-to-par under to_par scoring, or total points "
+                              "under stableford.  Null until every hole is in.")
+    holes_in    = models.PositiveSmallIntegerField(
+                    default=0, help_text="Holes fully scored, for the live board.")
+    rank        = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('round', 'foursome')
+        ordering = ('rank', 'foursome__group_number')
+
+    def __str__(self):
+        return f"Hot Spot — {self.foursome} = {self.total}"
+
+
 class IrishRumbleSegmentResult(models.Model):
     """
     The total net score for a Foursome in one Irish Rumble segment.

@@ -91,6 +91,7 @@ from .serializers import (
     SixesSetupSerializer, CourseSerializer,
     Points531SetupSerializer, CasualRoundSummarySerializer,
     BetterBallSetupSerializer,
+    HotSpotOrderSerializer, HotSpotSetupSerializer,
     IrishRumbleSetupSerializer, LowNetSetupSerializer,
     ThreePersonMatchSetupSerializer, MessageSerializer, VegasSetupSerializer,
     FourballSetupSerializer, HonorsSetupSerializer,
@@ -235,6 +236,10 @@ def _recalculate_games(foursome: Foursome) -> None:
     if 'irish_rumble' in active_games:
         from services.irish_rumble import calculate_irish_rumble
         calculate_irish_rumble(round_obj)
+
+    if 'hot_spot' in active_games:
+        from services.hot_spot import calculate_hot_spot
+        calculate_hot_spot(round_obj)
 
     # **40 Balls has no recalc step.** The counts ARE the data — the group
     # chose them — and the card is derived from them and the scores at read
@@ -740,6 +745,13 @@ def _build_leaderboard(round_obj: Round) -> dict:
         games['better_ball'] = {
             'label': summary.get('name') or 'Better Ball',
             **summary,
+        }
+
+    if 'hot_spot' in active_games:
+        from services.hot_spot import hot_spot_summary
+        games['hot_spot'] = {
+            'label': 'Hot Spot',
+            **hot_spot_summary(round_obj),
         }
 
     if 'scramble' in active_games:
@@ -8723,6 +8735,105 @@ class IrishRumbleResultView(APIView):
         round_obj = round_for_reader(request.user, pk)
         from services.irish_rumble import irish_rumble_summary
         return Response(irish_rumble_summary(round_obj))
+
+
+# ---------------------------------------------------------------------------
+# Hot Spot (round-level config, per-foursome anchor order)
+# ---------------------------------------------------------------------------
+
+class HotSpotSetupView(APIView):
+    """
+    GET  /api/rounds/{id}/hot-spot/setup/  — current config or defaults
+    POST /api/rounds/{id}/hot-spot/setup/  — create or update
+
+    No anchor order here. Each group sets its own on the first tee, so that is
+    a per-foursome write (`HotSpotOrderView`) rather than an organiser choice.
+    """
+
+    def _config_dict(self, config):
+        return {
+            'configured'   : True,
+            'scoring'      : config.scoring,
+            'handicap_mode': config.handicap_mode,
+            'net_percent'  : config.net_percent,
+            'finish_rule'  : config.finish_rule,
+            'entry_fee'    : float(config.entry_fee),
+            'payouts'      : config.payouts or [],
+        }
+
+    def get(self, request, pk):
+        round_obj = get_object_or_404(
+            Round.objects.prefetch_related('foursomes__memberships__player'),
+            pk=pk)
+        from games.models import HotSpotConfig
+        try:
+            data = self._config_dict(round_obj.hot_spot_config)
+        except HotSpotConfig.DoesNotExist:
+            data = {
+                'configured'   : False,
+                'scoring'      : 'to_par',
+                'handicap_mode': 'net',
+                'net_percent'  : 85,
+                'finish_rule'  : 'keep_rotating',
+                'entry_fee'    : 0.00,
+                'payouts'      : [],
+            }
+        data['num_players'] = sum(
+            1 for fs in round_obj.foursomes.all()
+              for m in fs.memberships.all() if not m.player.is_phantom)
+        data['is_tournament_round'] = round_obj.tournament_id is not None
+        # Per-group real-player counts, so the money card can say what a
+        # group prize splits to — the same helper Irish Rumble's screen uses.
+        data['group_sizes'] = [
+            sum(1 for m in fs.memberships.all() if not m.player.is_phantom)
+            for fs in round_obj.foursomes.all()]
+        return Response(data)
+
+    def post(self, request, pk):
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
+        ser = HotSpotSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+        from services.hot_spot import setup_hot_spot
+        config = setup_hot_spot(
+            round_obj,
+            scoring       = d['scoring'],
+            handicap_mode = d['handicap_mode'],
+            net_percent   = d['net_percent'],
+            finish_rule   = d['finish_rule'],
+            entry_fee     = d['entry_fee'],
+            payouts       = d['payouts'],
+        )
+        return Response(self._config_dict(config), status=status.HTTP_200_OK)
+
+
+class HotSpotResultView(APIView):
+    """GET /api/rounds/{id}/hot-spot/ → the board plus each group's card."""
+    def get(self, request, pk):
+        round_obj = round_for_reader(request.user, pk)
+        from services.hot_spot import hot_spot_summary
+        return Response(hot_spot_summary(round_obj))
+
+
+class HotSpotOrderView(APIView):
+    """POST /api/foursomes/{id}/hot-spot/order/ — the group's anchor order.
+
+    `foursome_for_scorer`, not own-account: the group sets this on its own
+    first tee and a designated scorer is exactly who does it.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        ser = HotSpotOrderSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        from services.hot_spot import (HotSpotLocked, calculate_hot_spot,
+                                       set_anchor_order)
+        try:
+            order = set_anchor_order(foursome, ser.validated_data['player_ids'])
+        except HotSpotLocked as exc:
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        calculate_hot_spot(foursome.round)
+        return Response({'player_ids': order})
 
 
 # ---------------------------------------------------------------------------

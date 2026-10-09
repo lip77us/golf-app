@@ -24,6 +24,16 @@ class GameType(models.TextChoices):
     # Rumble's money model unchanged: a field pool paid to the winning GROUP
     # and split among its REAL golfers, since a borrowed 4th cannot be paid.
     BETTER_BALL     = 'better_ball',     'Better Ball'
+    # Hot Spot: one golfer ANCHORS each hole — his score counts whatever it is —
+    # and the team adds the best net of the other three.  Same family as Irish
+    # Rumble (a field of foursomes, one pool, paid to the winning GROUP) and it
+    # shares Rumble's engine for handicap, the net-double-bogey cap and the
+    # borrowed 4th.  What is its own is the per-hole SELECTION: Rumble takes the
+    # best N of four, Hot Spot takes one FIXED golfer plus the best of the rest,
+    # so a bad hole from the anchor cannot be hidden.  The anchor rotates on an
+    # order each group sets on the first tee, which is why it is not a Rumble
+    # variant: the count is not a setting, the identity of the counted ball is.
+    HOT_SPOT        = 'hot_spot',        'Hot Spot'
     NASSAU          = 'nassau',          'Nassau'
     # Nassau over the holes actually played, as ONE match (no F9/B9 split) with
     # presses — the Nassau to reach for on a 9-hole / partial round.
