@@ -25,7 +25,7 @@
   "modified": "2026-09-28"
  },
  "games/index.html": {
-  "hash": "0ef0806357243ebc",
+  "hash": "02ffa5393cb97951",
   "published": "2026-09-13",
   "modified": "2026-10-09"
  },
@@ -70,8 +70,13 @@
   "modified": "2026-10-09"
  },
  "games/sequoya-threes/index.html": {
-  "hash": "a9adfc3df5246161",
+  "hash": "b2bfd37b97ef4cda",
   "published": "2026-09-13",
+  "modified": "2026-10-09"
+ },
+ "games/sixes/index.html": {
+  "hash": "292fdc1b20551ff5",
+  "published": "2026-10-09",
   "modified": "2026-10-09"
  },
  "games/skins/index.html": {
@@ -105,9 +110,9 @@
   "modified": "2026-09-28"
  },
  "games/wolf/index.html": {
-  "hash": "0caa83b401b341b7",
+  "hash": "18b02962539381d2",
   "published": "2026-09-13",
-  "modified": "2026-09-28"
+  "modified": "2026-10-09"
  },
  "index.html": {
   "hash": "5093ef8661c440b4",
