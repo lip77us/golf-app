@@ -240,11 +240,16 @@ def _selector(round_obj, config, foursomes):
     return select, plans
 
 
-def _score_index(round_obj, config):
+def _score_index(round_obj, config, capped_out=None):
     """Capped, handicapped scores. ``force_cap`` because the cap is a RULE of
-    Hot Spot, not the round's opt-in setting — see the module docstring."""
+    Hot Spot, not the round's opt-in setting — see the module docstring.
+
+    ``capped_out`` collects which scores were actually clamped, for the card's
+    amber outline. A capped score reads ``par + 2`` exactly like a genuine net
+    double bogey, so it cannot be told apart after the fact."""
     return _build_ir_score_index(
-        round_obj, config.handicap_mode, config.net_percent, force_cap=True)
+        round_obj, config.handicap_mode, config.net_percent,
+        force_cap=True, capped_out=capped_out)
 
 
 # ── calculate / summary ─────────────────────────────────────────────────────
@@ -336,7 +341,8 @@ def hot_spot_summary(round_obj) -> dict:
     # no-anchor hole.
     counts = player_counts(round_obj)
     rows = _standings(round_obj, config, foursomes)
-    score_index = _score_index(round_obj, config)
+    capped: dict = {}
+    score_index = _score_index(round_obj, config, capped_out=capped)
     par_by_hole = _par_index_for_round(round_obj)
     plans = {fs.pk: hole_plan_for(round_obj, fs, config) for fs in foursomes}
 
@@ -381,6 +387,8 @@ def hot_spot_summary(round_obj) -> dict:
                 'count': p['count'],
                 'scores': {str(pid): s for pid, s in hole_scores.items()},
                 'counted_ids': counted_ids,
+                'capped_ids': sorted(
+                    capped.get(fs.pk, {}).get(hole_num, set())),
                 'counted_total': sum(counting) if counting else None,
                 'to_par': (sum(counting) - par * len(counting))
                           if counting else None,

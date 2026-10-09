@@ -2440,6 +2440,54 @@ class ApiClient {
     return data as Map<String, dynamic>;
   }
 
+  // ── Hot Spot ──────────────────────────────────────────────────────────
+  // Same family as Irish Rumble and Better Ball, and the same two round-level
+  // calls. The third is the odd one: the anchor ORDER belongs to each GROUP,
+  // who set it on their own first tee, so it is a per-foursome write.
+
+  Future<Map<String, dynamic>> getHotSpotConfig(int roundId) async {
+    final data = await _get('/rounds/$roundId/hot-spot/setup/');
+    return data as Map<String, dynamic>;
+  }
+
+  /// The board plus each group's card — `groups[].holes[]` carries the anchor,
+  /// the scores and which player ids COUNTED, so the card can tint without
+  /// re-deriving the rule the server already applied.
+  Future<Map<String, dynamic>> getHotSpotResult(int roundId) async {
+    final data = await _get('/rounds/$roundId/hot-spot/');
+    return data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> postHotSpotSetup(
+    int roundId, {
+    required String                     scoring,
+    required String                     handicapMode,
+    required int                        netPercent,
+    required String                     finishRule,
+    required double                     entryFee,
+    required List<Map<String, dynamic>> payouts,
+  }) async {
+    final data = await _post('/rounds/$roundId/hot-spot/setup/', {
+      'scoring'      : scoring,
+      'handicap_mode': handicapMode,
+      'net_percent'  : netPercent,
+      'finish_rule'  : finishRule,
+      'entry_fee'    : entryFee.toStringAsFixed(2),
+      'payouts'      : payouts,
+    });
+    return data as Map<String, dynamic>;
+  }
+
+  /// Set a group's anchor order. Every REAL golfer, once, in order — the
+  /// borrowed 4th never anchors and is not named. 400 once a score is in.
+  Future<List<int>> postHotSpotOrder(int foursomeId,
+                                     List<int> playerIds) async {
+    final data = await _post('/foursomes/$foursomeId/hot-spot/order/',
+                             {'player_ids': playerIds});
+    return ((data as Map<String, dynamic>)['player_ids'] as List)
+        .map((e) => e as int).toList();
+  }
+
   // ---- Course import (GolfCourseAPI) ----
 
   /// Search golf courses by name via GolfCourseAPI.

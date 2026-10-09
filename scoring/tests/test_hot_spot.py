@@ -290,3 +290,27 @@ class TheFieldAndTheMoneyTests(_Base):
         with self.assertRaises(ValueError):
             setup_hot_spot(self.round,
                            handicap_mode=HandicapMode.STROKES_OFF)
+
+
+class TheCardKnowsWhatWasCappedTests(_Base):
+    """A capped score reads `par + 2` exactly like a genuine net double bogey,
+    so the card cannot tell them apart after the fact — the index has to say
+    so while it is clamping."""
+
+    def test_a_clamped_score_is_named(self):
+        self._gross()
+        pids = self._pids(self.fs)
+        set_anchor_order(self.fs, pids)
+        self._play(self.fs, 1, [9, 4, 4, 4])     # A's 9 is clamped to 6
+        hole = next(g for g in hot_spot_summary(self.round)['groups']
+                    if g['foursome_id'] == self.fs.pk)['holes'][0]
+        self.assertEqual(hole['capped_ids'], [pids[0]])
+
+    def test_a_real_double_bogey_is_not_named(self):
+        """Par 4, a 6 is a double bogey on its own merits — nothing clamped."""
+        self._gross()
+        set_anchor_order(self.fs, self._pids(self.fs))
+        self._play(self.fs, 1, [6, 4, 4, 4])
+        hole = next(g for g in hot_spot_summary(self.round)['groups']
+                    if g['foursome_id'] == self.fs.pk)['holes'][0]
+        self.assertEqual(hole['capped_ids'], [])

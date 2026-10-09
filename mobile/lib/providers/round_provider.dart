@@ -938,6 +938,49 @@ class RoundProvider extends ChangeNotifier {
     }
   }
 
+  // ── Hot Spot ────────────────────────────────────────────────────────────
+  // Round-level, not per-foursome: the board ranks every group against the
+  // field, and each group's card rides in the same payload.
+
+  Map<String, dynamic>? _hotSpot;
+  Map<String, dynamic>? get hotSpotSummary => _hotSpot;
+
+  /// This group's block of the summary, or null when it is not in it.
+  Map<String, dynamic>? hotSpotGroup(int foursomeId) {
+    final groups = _hotSpot?['groups'] as List?;
+    if (groups == null) return null;
+    for (final g in groups) {
+      if ((g as Map)['foursome_id'] == foursomeId) {
+        return Map<String, dynamic>.from(g);
+      }
+    }
+    return null;
+  }
+
+  /// The plan for one hole of one group: `{anchor_id, anchor_short, count}`.
+  /// Keyed by hole NUMBER, which is what the entry screen has in hand — the
+  /// server already resolved the play-order rotation behind it.
+  Map<String, dynamic>? hotSpotHole(int foursomeId, int hole) {
+    final holes = hotSpotGroup(foursomeId)?['holes'] as List?;
+    if (holes == null) return null;
+    for (final h in holes) {
+      if ((h as Map)['hole'] == hole) return Map<String, dynamic>.from(h);
+    }
+    return null;
+  }
+
+  /// Non-fatal on network errors, so the entry screen keeps working offline.
+  Future<void> loadHotSpot(int roundId) async {
+    try {
+      _hotSpot = await _client.getHotSpotResult(roundId);
+      notifyListeners();
+    } on NetworkException {
+      // Offline — keep whatever we had.
+    } catch (e) {
+      debugPrint('loadHotSpot error: $e');
+    }
+  }
+
   /// Replace the cached Survivor summary directly (e.g. after a setup POST
   /// returns a fresh one) so the screen repaints without a round-trip.
   void setSurvivorSummary(SurvivorSummary summary) {

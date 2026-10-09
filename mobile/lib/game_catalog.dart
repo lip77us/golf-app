@@ -85,6 +85,10 @@ class GameIds {
   // plays differently. Mutually exclusive with Rumble: they rank the same
   // groups the same way into the same kind of pool.
   static const String betterBall     = 'better_ball';
+  /// Hot Spot — the Irish Rumble family's game where WHICH ball counts is
+  /// fixed in advance. One golfer anchors each hole and his score counts
+  /// whatever it is; the team adds the best net of the other three.
+  static const String hotSpot       = 'hot_spot';
   // Cup singles formats — two 1v1 matches per foursome.
   // singlesNassau: each match has F9/B9/Overall (pv × 6/foursome).
   // singles18:     each match is 18-hole overall only  (pv × 2/foursome).
@@ -730,6 +734,22 @@ const List<GameMeta> kGameCatalog = [
     // the header — it cannot change mid-round, so a corner repeating it would
     // be the same three words eighteen times.
     hasLiveActivity      : true,
+  ),
+  GameMeta(
+    id                   : GameIds.hotSpot,
+    displayName          : 'Hot Spot',
+    tournament           : true,
+    requiresMultiFoursome: true,
+    minPlayers           : 2,
+    // One of the family per round, same as the other three: they rank the
+    // same groups into the same pool and a round cannot pay two of them.
+    excludes             : {GameIds.irishRumble, GameIds.betterBall,
+                            GameIds.fortyBalls},
+    // The card is NOT wired yet — the builder and the Swift slot are the
+    // remaining piece of this packet. A true here would put a lock screen in
+    // the catalog with nothing behind it, which is how Banker played a round
+    // with a card that was ready and never started.
+    hasLiveActivity      : false,
   ),
   GameMeta(
     id                   : GameIds.fortyBalls,

@@ -206,6 +206,7 @@ class _RoundScreenState extends State<RoundScreen> {
 
     final hasIrishRumble = round.activeGames.contains('irish_rumble');
     final hasBetterBall  = round.activeGames.contains('better_ball');
+    final hasHotSpot     = round.activeGames.contains('hot_spot');
     final hasPinkBall    = round.activeGames.contains('pink_ball');
     final hasFortyBalls  = round.activeGames.contains('forty_balls');
     final hasMatchPlay   = round.activeGames.contains('match_play');
@@ -232,7 +233,7 @@ class _RoundScreenState extends State<RoundScreen> {
     // card is hidden and the button it holds is unreachable. A round playing
     // only 40 Balls is exactly that case, and it is the third time this shape
     // has bitten (the casual receipt, the edit-window button).
-    final hasSetupGames  = hasIrishRumble || hasBetterBall ||
+    final hasSetupGames  = hasIrishRumble || hasBetterBall || hasHotSpot ||
         showLowNet || hasPinkBall || hasFortyBalls ||
         showMatchPlaySetup || showStableford;
 
@@ -286,6 +287,7 @@ class _RoundScreenState extends State<RoundScreen> {
               roundId:        widget.roundId,
               hasIrishRumble: hasIrishRumble,
               hasBetterBall : hasBetterBall,
+              hasHotSpot    : hasHotSpot,
               showLowNet:     showLowNet,
               hasPinkBall:    hasPinkBall,
               hasFortyBalls:  hasFortyBalls,
@@ -677,6 +679,7 @@ class _GameSetupCard extends StatelessWidget {
   final int            roundId;
   final bool           hasIrishRumble;
   final bool           hasBetterBall;
+  final bool           hasHotSpot;
   final bool           showLowNet;
   final bool           hasPinkBall;
   final bool           hasFortyBalls;
@@ -688,6 +691,7 @@ class _GameSetupCard extends StatelessWidget {
     required this.roundId,
     required this.hasIrishRumble,
     required this.hasBetterBall,
+    required this.hasHotSpot,
     required this.showLowNet,
     required this.hasPinkBall,
     required this.hasFortyBalls,
@@ -712,7 +716,7 @@ class _GameSetupCard extends StatelessWidget {
     // Spacer helpers: only add gaps between sections that are actually present
     // Better Ball and Irish Rumble occupy one slot — a round runs one of
     // them — so they share every spacer below rather than each adding one.
-    final hasGroupBoard   = hasIrishRumble || hasBetterBall;
+    final hasGroupBoard   = hasIrishRumble || hasBetterBall || hasHotSpot;
     final beforeLowNet    = hasGroupBoard;
     final beforeStableford = hasGroupBoard || showLowNet;
     final beforeFortyBalls = hasGroupBoard || showLowNet || showStableford;
@@ -740,6 +744,13 @@ class _GameSetupCard extends StatelessWidget {
                     .pushNamed('/better-ball-setup', arguments: roundId),
                 icon: const Icon(Icons.tune, size: 18),
                 label: const Text('Configure Better Ball'),
+              ),
+            if (hasHotSpot)
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context)
+                    .pushNamed('/hot-spot-setup', arguments: roundId),
+                icon: const Icon(Icons.tune, size: 18),
+                label: const Text('Configure Hot Spot'),
               ),
             if (showLowNet) ...[
               if (beforeLowNet) const SizedBox(height: 8),

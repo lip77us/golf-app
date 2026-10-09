@@ -50,6 +50,7 @@ import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
 import '../theme/halved_brand.dart';
+import '../widgets/hot_spot_order_sheet.dart';
 import '../sync/sync_service.dart';
 import '../utils/match_handicap.dart';
 import '../utils/nassau_team_style.dart';
@@ -341,6 +342,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         configured.contains('skins') ||
         rp.skinsSummary != null) {
       futures.add(rp.loadSkins(widget.foursomeId));
+    }
+    // Hot Spot is round-level — the anchor plan for every group rides in one
+    // payload, and the banner needs it on first paint: a golfer standing on
+    // the tee is asking whose hole it is.
+    if (games.contains(GameIds.hotSpot) ||
+        configured.contains(GameIds.hotSpot)) {
+      final rid = rp.round?.id;
+      if (rid != null) futures.add(rp.loadHotSpot(rid));
     }
     if (games.contains('spots') ||
         configured.contains('spots') ||
@@ -2549,6 +2558,122 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     );
   }
 
+  /// Whose hole it is, and who is counting with him.
+  ///
+  /// A banner rather than a pill on the row: `_PlayerRow.teamLabel` is a
+  /// 28px badge built for `T1`/`T2` and "Anchor" does not fit in it. The row
+  /// treatment the handoff draws needs its own parameter — see the note in
+  /// the Hot Spot commit — and this carries the same two facts meanwhile.
+  Widget _hotSpotBanner(BuildContext ctx, RoundProvider rp) {
+    final theme = Theme.of(ctx);
+    final group = rp.hotSpotGroup(widget.foursomeId);
+    if (group == null) return const SizedBox.shrink();
+
+    final locked = group['order_locked'] == true;
+    final isSet = group['order_is_set'] == true;
+    final hole = rp.hotSpotHole(widget.foursomeId, _selectedHole);
+
+    // Before the first score the group still owes an order, and that is the
+    // only moment it can be set — so the prompt outranks the anchor line.
+    if (!locked && !isSet) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Halved.cautionGround,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Halved.caution.withValues(alpha: 0.4)),
+        ),
+        child: Row(children: [
+          const Icon(Icons.swap_vert, size: 16, color: Halved.caution),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text('Set your Hot Spot order before the first score.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: Halved.caution)),
+          ),
+          TextButton(
+            onPressed: () => _openHotSpotOrder(ctx, rp),
+            child: const Text('Set order'),
+          ),
+        ]),
+      );
+    }
+
+    final anchorShort = hole?['anchor_short'] as String?;
+    final count = (hole?['count'] as num?)?.toInt() ?? 2;
+    final label = anchorShort != null
+        ? 'Anchor · $anchorShort'
+        : 'No anchor · best $count count';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer.withOpacity(0.6),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(children: [
+        Icon(Icons.center_focus_strong, size: 16,
+            color: theme.colorScheme.onSecondaryContainer),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            anchorShort != null
+                ? '$label — his score counts, plus the best net of the others'
+                : label,
+            style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSecondaryContainer),
+          ),
+        ),
+        // The way back, until the first score spends it.
+        if (!locked)
+          TextButton(
+            onPressed: () => _openHotSpotOrder(ctx, rp),
+            child: const Text('Change'),
+          ),
+      ]),
+    );
+  }
+
+  Future<void> _openHotSpotOrder(BuildContext ctx, RoundProvider rp) async {
+    final fs = rp.round?.foursomes
+        .where((f) => f.id == widget.foursomeId)
+        .firstOrNull;
+    final rid = rp.round?.id;
+    if (fs == null || rid == null) return;
+    final group = rp.hotSpotGroup(widget.foursomeId);
+    // Real golfers only — the borrowed 4th can be the best net of the others
+    // and never anchors, so it is not in the order.
+    final stored = ((group?['order'] as List?) ?? const []).cast<int>();
+    final byId = {
+      for (final m in fs.memberships)
+        if (!m.player.isPhantom) m.player.id: m.player.shortName.isNotEmpty
+            ? m.player.shortName
+            : m.player.name,
+    };
+    final ordered = <({int id, String name})>[
+      for (final pid in stored)
+        if (byId.containsKey(pid)) (id: pid, name: byId[pid]!),
+      for (final e in byId.entries)
+        if (!stored.contains(e.key)) (id: e.key, name: e.value),
+    ];
+    if (ordered.isEmpty) return;
+    final holes = ((group?['holes'] as List?) ?? const [])
+        .map((h) => (h as Map)['hole'] as int)
+        .toList();
+    await showModalBottomSheet<bool>(
+      context: ctx,
+      isScrollControlled: true,
+      builder: (_) => HotSpotOrderSheet(
+        foursomeId: widget.foursomeId,
+        roundId: rid,
+        golfers: ordered,
+        playOrder: holes,
+      ),
+    );
+  }
+
   // ── Bottom bar ────────────────────────────────────────────────────────────────
 
   Widget _buildBottomBar(
@@ -2876,6 +3001,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               // Irish Rumble balls-counted banner — at the top, matching the
               // Pink Ball screen (was previously a footer strip).
               if (games.contains('irish_rumble')) _irBallsBanner(ctx, rp),
+              if (games.contains(GameIds.hotSpot))
+                _hotSpotBanner(ctx, rp),
               // **Who is playing whom on this hole.**
               //
               // Four rows tinted blue and orange say which SIDE a golfer is

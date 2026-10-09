@@ -950,6 +950,11 @@ class _GameView extends StatelessWidget {
         // The same board — see _IrishRumbleView. No cup branch: a cup round
         // scores head-to-head, and Better Ball is a field competition.
         return _IrishRumbleView(data: data, betterBall: true);
+      case 'hot_spot':
+        // Its own view rather than _IrishRumbleView's: the board is the same
+        // shape, but the CARD is the game — anchor order down the rows, with
+        // the counted balls marked — and that is not a flag on the other one.
+        return _HotSpotView(data: data);
       default:
         return _RawJsonView(data: data);
     }
@@ -11569,4 +11574,383 @@ class _SkinsStandingsBlockState extends State<_SkinsStandingsBlock> {
       ),
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Hot Spot — the group-vs-field board, with each group's card in anchor order
+// ---------------------------------------------------------------------------
+
+/// One anchor per hole whose score always counts, plus the best net of the
+/// other three.
+///
+/// The board is the same shape as Irish Rumble's — groups ranked against the
+/// field, money to the winning GROUP — and the card is where the game shows:
+/// the group is listed in ANCHOR order, so the dark cells run diagonally down
+/// it and a glance says whose hole it was.
+///
+/// Three marks, and each is a different fact:
+///   * **dark** — the anchor's score, which counted whatever it was;
+///   * **green** — the best net of the other three, the second counted ball
+///     (`Halved.mint`, the counted-ball green the family already uses);
+///   * **amber outline** — clamped at net double bogey. `Halved.caution`
+///     rather than `warning`, because the cap is a RULE of the game and not a
+///     mistake the golfer made.
+class _HotSpotView extends StatefulWidget {
+  final Map<String, dynamic> data;
+  const _HotSpotView({required this.data});
+
+  @override
+  State<_HotSpotView> createState() => _HotSpotViewState();
+}
+
+class _HotSpotViewState extends State<_HotSpotView> {
+  int? _openGroup;
+
+  static String _ntp(int? n) {
+    if (n == null) return '—';
+    if (n == 0) return 'E';
+    return n < 0 ? '$n' : '+$n';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final data = widget.data;
+    if (data['configured'] != true) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('Hot Spot has not been set up for this round yet.',
+              textAlign: TextAlign.center),
+        ),
+      );
+    }
+
+    final overall = (data['overall'] as List? ?? []);
+    final groups = {
+      for (final g in (data['groups'] as List? ?? []))
+        (g as Map)['foursome_id'] as int: g,
+    };
+    final stableford = data['scoring'] == 'stableford';
+    final mode = data['handicap_mode']?.toString() ?? 'net';
+    final pct = (data['net_percent'] as num?)?.toInt() ?? 85;
+    final pool = (data['pool'] as num?)?.toDouble() ?? 0.0;
+
+    // Stableford ranks high to low; the server ranks one way and the column
+    // is a presentation of it, so the ordering is NOT recomputed here — it
+    // would be a second authority over one competition.
+    final rows = List<Map<String, dynamic>>.from(
+        overall.map((e) => Map<String, dynamic>.from(e as Map)));
+
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            _hsChip(theme, stableford ? 'Stableford' : 'Net to par'),
+            _hsChip(theme, mode == 'gross' ? 'Gross' : 'Net $pct%'),
+            _hsChip(theme, _finishLabel(data['finish_rule']?.toString())),
+            if (pool > 0) _hsChip(theme, 'Pot \$${pool.toStringAsFixed(0)}'),
+          ],
+        ),
+        const SizedBox(height: 12),
+        for (final row in rows) ...[
+          _groupRow(theme, row, groups, stableford),
+          const SizedBox(height: 8),
+        ],
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  static String _finishLabel(String? rule) {
+    switch (rule) {
+      case 'best_2':
+        return '17 & 18: best 2';
+      case 'three_then_four':
+        return '17 & 18: 3 then 4';
+      default:
+        return '17 & 18: keep rotating';
+    }
+  }
+
+  Widget _hsChip(ThemeData theme, String text) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(text, style: theme.textTheme.labelSmall),
+      );
+
+  Widget _groupRow(ThemeData theme, Map<String, dynamic> row,
+      Map<int, dynamic> groups, bool stableford) {
+    final fid = row['foursome_id'] as int?;
+    final rank = row['rank'] as int?;
+    final thru = row['current_hole'] as int?;
+    final payout = (row['payout'] as num?)?.toDouble() ?? 0.0;
+    final group = fid == null ? null : groups[fid] as Map?;
+    final open = _openGroup == fid;
+
+    final figure = stableford
+        ? ((row['points'] as num?)?.toInt().toString() ?? '—')
+        : _ntp(row['net_to_par'] as int?);
+
+    // **"Anchor · Name · hole N" while the group is still out.** A finished
+    // group drops the line: there is no hole in front of it, and a stale
+    // anchor would read as the one who decided the round.
+    String? anchorLine;
+    if (group != null && thru != null && thru < 18) {
+      final holes = (group['holes'] as List? ?? []);
+      // The next hole in the group's own play order — the first without a
+      // counted total, not `thru + 1`, which off a shotgun is a hole number
+      // the group may already have played.
+      final next = holes.cast<Map?>().firstWhere(
+          (h) => h != null && h['counted_total'] == null,
+          orElse: () => null);
+      if (next != null && next['anchor_short'] != null) {
+        anchorLine = 'Anchor · ${next['anchor_short']} · hole ${next['hole']}';
+      } else if (next != null) {
+        anchorLine = 'No anchor · hole ${next['hole']}';
+      }
+    }
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Column(
+        children: [
+          InkWell(
+            onTap: group == null
+                ? null
+                : () => setState(() => _openGroup = open ? null : fid),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 28,
+                    child: Text(rank == null ? '—' : '$rank',
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold)),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(row['group']?.toString() ?? '',
+                            style: theme.textTheme.titleSmall),
+                        if ((row['players'] ?? '').toString().isNotEmpty)
+                          Text(row['players'].toString(),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant)),
+                        if (anchorLine != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(anchorLine,
+                                style: theme.textTheme.labelSmall
+                                    ?.copyWith(color: Halved.pine)),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(figure,
+                          style: theme.textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold)),
+                      Text(
+                        thru == null
+                            ? 'not started'
+                            : (thru >= 18 ? 'F' : 'thru $thru'),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                      if (payout > 0)
+                        Text('\$${payout.toStringAsFixed(0)}',
+                            style: theme.textTheme.labelSmall
+                                ?.copyWith(color: Halved.pine)),
+                    ],
+                  ),
+                  if (group != null)
+                    Icon(open ? Icons.expand_less : Icons.expand_more,
+                        size: 20, color: theme.colorScheme.onSurfaceVariant),
+                ],
+              ),
+            ),
+          ),
+          if (open && group != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+              child: _HotSpotCard(group: group, stableford: stableford),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The group's card: one row per golfer **in anchor order**, so the dark
+/// cells run diagonally and the rotation is visible rather than stated.
+class _HotSpotCard extends StatelessWidget {
+  final Map group;
+  final bool stableford;
+  const _HotSpotCard({required this.group, required this.stableford});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final holes = (group['holes'] as List? ?? []).cast<Map>();
+    if (holes.isEmpty) {
+      return Text('No holes scored yet.', style: theme.textTheme.bodySmall);
+    }
+    final order = (group['order'] as List? ?? []).cast<int>();
+    final shorts = (group['order_short'] as List? ?? []).cast<String?>();
+
+    const cellW = 34.0;
+    const labelW = 64.0;
+    const rowH = 28.0;
+
+    // The hole in play is the first without a counted total; none means the
+    // card is read after the fact, so it opens on the last column.
+    var current = holes.indexWhere((h) => h['counted_total'] == null);
+    if (current < 0) current = holes.length - 1;
+
+    Widget head(String s) => Center(
+        child: Text(s,
+            style: theme.textTheme.labelSmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)));
+
+    final bands = <HoleGridBand>[
+      HoleGridBand(head('Hole'),
+          [for (final h in holes) head('${h['hole']}')], height: rowH),
+      HoleGridBand(head('Par'),
+          [for (final h in holes) head('${h['par']}')], height: rowH),
+      const HoleGridBand.rule(),
+      for (var i = 0; i < order.length; i++)
+        HoleGridBand(
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(shorts.length > i ? (shorts[i] ?? '') : '',
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall),
+            ),
+          ),
+          [for (final h in holes) _cell(theme, h, order[i])],
+          height: rowH,
+        ),
+      const HoleGridBand.rule(),
+      // The two counted scores against par for that hole — what the group
+      // actually banked, which is the number the board is built from.
+      HoleGridBand(
+        Padding(
+          padding: const EdgeInsets.only(left: 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(stableford ? 'Pts' : 'Hole',
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+          ),
+        ),
+        [
+          for (final h in holes)
+            Center(
+              child: Text(
+                _holeFigure(h),
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ),
+        ],
+        height: rowH,
+      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        PinnedHoleGrid(
+          bands: bands,
+          labelWidth: labelW,
+          cellWidth: cellW,
+          holeCount: holes.length,
+          currentIndex: current,
+        ),
+        const SizedBox(height: 8),
+        Wrap(spacing: 12, runSpacing: 4, children: [
+          _key(theme, Halved.deepPine, 'Anchor'),
+          _key(theme, Halved.mint, 'Counted'),
+          _key(theme, Halved.cautionGround, 'Capped',
+              border: Halved.caution),
+        ]),
+      ],
+    );
+  }
+
+  String _holeFigure(Map h) {
+    final toPar = h['to_par'] as int?;
+    if (toPar == null) return '—';
+    if (stableford) {
+      // Points for the counted balls: 2 each, less what they were over.
+      final n = (h['counted_ids'] as List? ?? []).length;
+      return '${2 * n - toPar}';
+    }
+    if (toPar == 0) return 'E';
+    return toPar < 0 ? '$toPar' : '+$toPar';
+  }
+
+  Widget _cell(ThemeData theme, Map h, int pid) {
+    final scores = (h['scores'] as Map?) ?? const {};
+    final raw = scores['$pid'];
+    final isAnchor = h['anchor_id'] == pid;
+    final counted = (h['counted_ids'] as List? ?? []).contains(pid);
+    final capped = (h['capped_ids'] as List? ?? []).contains(pid);
+
+    Color? bg;
+    Color fg = theme.colorScheme.onSurface;
+    if (isAnchor && counted) {
+      bg = Halved.deepPine;
+      fg = Halved.cream;
+    } else if (counted) {
+      bg = Halved.mint.withOpacity(0.22);
+    }
+
+    return Container(
+      alignment: Alignment.center,
+      margin: const EdgeInsets.all(1),
+      decoration: BoxDecoration(
+        color: capped && bg == null ? Halved.cautionGround : bg,
+        borderRadius: BorderRadius.circular(4),
+        border: capped
+            ? Border.all(color: Halved.caution, width: 1.2)
+            : null,
+      ),
+      child: Text(raw == null ? '' : '$raw',
+          style: theme.textTheme.labelSmall?.copyWith(
+              color: fg,
+              fontWeight: counted ? FontWeight.bold : FontWeight.normal)),
+    );
+  }
+
+  Widget _key(ThemeData theme, Color c, String label, {Color? border}) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: c,
+              borderRadius: BorderRadius.circular(3),
+              border: border == null ? null : Border.all(color: border),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(label, style: theme.textTheme.labelSmall),
+        ],
+      );
 }

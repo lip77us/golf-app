@@ -358,7 +358,7 @@ def _ensure_borrowed_fourth(round_obj) -> int:
 # ---------------------------------------------------------------------------
 
 def _build_ir_score_index(round_obj, handicap_mode, net_percent, *,
-                          force_cap=False):
+                          force_cap=False, capped_out=None):
     """
     Build {foursome_id: {player_id: {hole_number: capped_score}}} for all
     real players in the round.
@@ -372,6 +372,13 @@ def _build_ir_score_index(round_obj, handicap_mode, net_percent, *,
     RULE of individual play rather than the round's own opt-in setting. Same
     call `low_net_round` makes. Rumble does not pass it, so its behaviour is
     unchanged.
+
+    `capped_out`, when a dict is passed, records which scores were actually
+    CLAMPED as `{foursome_id: {hole: {player_id, ...}}}`. A capped score is
+    indistinguishable from a genuine net double bogey once it is in the
+    index — both read `par + 2` — so a card that wants to mark one cannot
+    derive it afterwards. Hot Spot's does. Default None, so nothing else
+    pays for it.
     """
     cap_enabled = force_cap or bool(round_obj.net_max_double_bogey)
     foursomes = list(
@@ -459,7 +466,11 @@ def _build_ir_score_index(round_obj, handicap_mode, net_percent, *,
         # ── Net-double-bogey cap (round-level toggle) ───────────────────────
         if cap_enabled:
             par     = par_index.get(fid, {}).get(hole, 4)
-            adjusted = min(adjusted, par + 2)
+            if adjusted > par + 2:
+                if capped_out is not None:
+                    capped_out.setdefault(fid, {}).setdefault(
+                        hole, set()).add(pid)
+                adjusted = par + 2
 
         result.setdefault(fid, {}).setdefault(pid, {})[hole] = adjusted
 
@@ -553,7 +564,11 @@ def _build_ir_score_index(round_obj, handicap_mode, net_percent, *,
                 # Legacy phantom keeps the receiving foursome's par; a borrowed
                 # ball uses the donor's own tee par (computed above).
                 par      = hole_par if is_cross else par_index.get(fs.pk, {}).get(hole, 4)
-                adjusted = min(adjusted, par + 2)
+                if adjusted > par + 2:
+                    if capped_out is not None:
+                        capped_out.setdefault(fs.pk, {}).setdefault(
+                            hole, set()).add(phantom_pid)
+                    adjusted = par + 2
 
             result.setdefault(fs.pk, {}).setdefault(phantom_pid, {})[hole] = adjusted
 
