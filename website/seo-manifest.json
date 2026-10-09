@@ -24,8 +24,13 @@
   "published": "2026-09-27",
   "modified": "2026-09-28"
  },
+ "games/hot-spot/index.html": {
+  "hash": "20bfface79bee921",
+  "published": "2026-10-09",
+  "modified": "2026-10-09"
+ },
  "games/index.html": {
-  "hash": "02ffa5393cb97951",
+  "hash": "d50f903bb42418cf",
   "published": "2026-09-13",
   "modified": "2026-10-09"
  },
