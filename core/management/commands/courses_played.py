@@ -26,6 +26,21 @@ from scoring.models import HoleScore
 from tournament.models import Round
 
 
+def demo_account_names():
+    """The accounts `seed_demo` builds, read from the command that builds them.
+
+    Imported rather than hardcoded so a rename there cannot silently put the
+    App Store reviewer's fake club back onto a public map. Falls back to the
+    known names if that module ever moves.
+    """
+    try:
+        from core.management.commands.seed_demo import (ACCOUNT_NAME,
+                                                        FRIEND_ACCOUNT_NAME)
+        return {ACCOUNT_NAME, FRIEND_ACCOUNT_NAME}
+    except Exception:                                   # noqa: BLE001
+        return {'DemoClub', 'Saturday Crew'}
+
+
 # The API stores a country NAME ("United States"), and the homepage map tests
 # for the two-letter code. Truncating the name gives "UN", which matches
 # nothing — that is why the first generated array drew no dots at all.
@@ -69,6 +84,11 @@ class Command(BaseCommand):
                             help='Only rounds on or after this date.')
         parser.add_argument('--include-unplayed', action='store_true',
                             help='Also count rounds with no score posted.')
+        parser.add_argument('--include-demo', action='store_true',
+                            help="Include seed_demo's accounts. They are OUT "
+                                 'by default: the reviewer tenant is fake golf '
+                                 'and a map of where Halved is played must not '
+                                 'claim it.')
         parser.add_argument('--map', action='store_true', dest='as_map',
                             help="Emit the homepage map's COURSES array: "
                                  '[name, lat, lon, country, rounds]. Only '
@@ -80,6 +100,8 @@ class Command(BaseCommand):
 
     def handle(self, *args, **o):
         rounds = Round.objects.select_related('course', 'account')
+        if not o['include_demo']:
+            rounds = rounds.exclude(account__name__in=demo_account_names())
         if o['account']:
             rounds = rounds.filter(account__name=o['account'])
         if o['since']:
