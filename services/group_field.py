@@ -34,9 +34,9 @@ share 1st and 2nd, rather than halving 1st and leaving 2nd unclaimed. No
 countbacks: a tie can be no action, and an arbitrary tiebreak decides real
 money on a rule nobody agreed to.
 """
-from django.db.models import Max
 
 from scoring.models import HoleScore
+from services.hole_plan import play_order
 from tournament.models import Foursome, FoursomeMembership
 
 
@@ -92,16 +92,19 @@ def group_standings(round_obj, *, balls_by_hole, score_index, par_by_hole,
     foursomes = {fs.pk: fs for fs in Foursome.objects.filter(round=round_obj)}
     counts    = player_counts(round_obj)
 
-    hole_progress = {
-        row['foursome_id']: row['max_hole']
-        for row in (
-            HoleScore.objects
-            .filter(foursome__round=round_obj, player__is_phantom=False)
-            .exclude(gross_score=None)
-            .values('foursome_id')
-            .annotate(max_hole=Max('hole_number'))
-        )
-    }
+    # **Holes PLAYED, counted along each group's own play order** — not the
+    # highest hole number scored, which is the `Max('hole_number')` this used
+    # to be. The two are the same integer only on a round starting at the 1st,
+    # and off a shotgun from the 7th the old form read "Thru 8" after two
+    # holes and then "F" on the group's TWELFTH, because the client treats 18
+    # as finished. The shotgun sweep's "progress" shape, one file it missed.
+    scored_holes: dict = {}
+    for row in (HoleScore.objects
+                .filter(foursome__round=round_obj, player__is_phantom=False)
+                .exclude(gross_score=None)
+                .values('foursome_id', 'hole_number').distinct()):
+        scored_holes.setdefault(row['foursome_id'], set()).add(
+            row['hole_number'])
 
     # Running total, hole by hole — live from the first one.
     running: dict = {}
@@ -164,16 +167,20 @@ def group_standings(round_obj, *, balls_by_hole, score_index, par_by_hole,
         # its donor has posted too, so cap at the last contiguous hole where
         # the borrowed ball is also in — otherwise a group reads "thru 2"
         # while still waiting on hole 2.
-        current_hole = hole_progress.get(fid)
+        order = play_order(round_obj, fs)
+        played = scored_holes.get(fid, set())
+        current_hole = sum(1 for h in order if h in played) or None
         if fs.has_phantom and current_hole:
             fs_scores = score_index.get(fid, {})
             real_pids = {m.player_id for m in real_members}
             phantom_scores = next(
                 (h for pid, h in fs_scores.items() if pid not in real_pids), {})
+            # Walk the group's OWN order, not 1..N: a hole is not complete
+            # until its donor has posted too.
             complete_thru = 0
-            for h in range(1, current_hole + 1):
-                if h in phantom_scores:
-                    complete_thru = h
+            for h in order:
+                if h in played and h in phantom_scores:
+                    complete_thru += 1
                 else:
                     break
             current_hole = complete_thru or None

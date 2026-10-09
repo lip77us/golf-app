@@ -349,3 +349,53 @@ class OneRoundRunsOneOfThemTests(_Base):
         self.assertEqual(
             self._row(self.fs, better_ball_summary(self.round))['total_score'],
             8)
+
+
+class ThruCountsHolesPlayedTests(_Base):
+    """`current_hole` is what the board renders as "Thru N", and the client
+    treats 18 as finished.
+
+    It used to be `Max('hole_number')` — the highest hole number scored — which
+    is the same integer as the COUNT only on a round starting at the 1st. Off a
+    shotgun it read "Thru 8" after two holes and reached 18, i.e. "F", on the
+    group's twelfth. The shotgun sweep's "progress" shape, in a file it missed;
+    the fix serves Irish Rumble and Hot Spot too, since all three share the
+    board.
+    """
+
+    def _thru(self, fs):
+        row = self._row(fs, better_ball_summary(self.round))
+        return row['current_hole']
+
+    def test_an_ordinary_round_is_unchanged(self):
+        setup_better_ball(self.round, balls_to_count=2,
+                          handicap_mode=HandicapMode.GROSS)
+        for h in (1, 2, 3):
+            self._play(self.fs, h, [4, 4, 4, 4])
+        self.assertEqual(self._thru(self.fs), 3)
+
+    def test_a_shotgun_group_counts_its_own_holes(self):
+        self.fs.starting_hole = 7
+        self.fs.save(update_fields=['starting_hole'])
+        setup_better_ball(self.round, balls_to_count=2,
+                          handicap_mode=HandicapMode.GROSS)
+        self._play(self.fs, 7, [4, 4, 4, 4])
+        self._play(self.fs, 8, [4, 4, 4, 4])
+        self.assertEqual(self._thru(self.fs), 2,
+                         'two holes played is "Thru 2", not "Thru 8"')
+
+    def test_a_shotgun_group_does_not_read_finished_at_hole_18(self):
+        """Hole 18 is the TWELFTH hole for a group that started on the 7th."""
+        self.fs.starting_hole = 7
+        self.fs.save(update_fields=['starting_hole'])
+        setup_better_ball(self.round, balls_to_count=2,
+                          handicap_mode=HandicapMode.GROSS)
+        for h in list(range(7, 19)):
+            self._play(self.fs, h, [4, 4, 4, 4])
+        self.assertEqual(self._thru(self.fs), 12)
+        self.assertNotEqual(self._thru(self.fs), 18)
+
+    def test_nobody_started_is_none(self):
+        setup_better_ball(self.round, balls_to_count=2,
+                          handicap_mode=HandicapMode.GROSS)
+        self.assertIsNone(self._thru(self.fs))
