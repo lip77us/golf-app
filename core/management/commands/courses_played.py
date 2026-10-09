@@ -26,6 +26,33 @@ from scoring.models import HoleScore
 from tournament.models import Round
 
 
+# The API stores a country NAME ("United States"), and the homepage map tests
+# for the two-letter code. Truncating the name gives "UN", which matches
+# nothing — that is why the first generated array drew no dots at all.
+#
+# A blank country stays blank rather than defaulting to US. Halved has rounds
+# at Ballybunion, Lahinch, Portmarnock, Royal County Down, Royal Portrush and
+# Portstewart; guessing US for an unknown would put Irish links in Kansas.
+_COUNTRY_ISO2 = {
+    'united states': 'US', 'usa': 'US', 'us': 'US',
+    'ireland': 'IE', 'republic of ireland': 'IE',
+    'united kingdom': 'GB', 'uk': 'GB', 'great britain': 'GB',
+    'scotland': 'GB', 'england': 'GB', 'wales': 'GB',
+    'northern ireland': 'GB',
+    'canada': 'CA', 'australia': 'AU', 'new zealand': 'NZ',
+    'mexico': 'MX', 'spain': 'ES', 'portugal': 'PT', 'france': 'FR',
+}
+
+
+def _iso2(country):
+    raw = (country or '').strip()
+    if not raw:
+        return ''
+    if len(raw) == 2:
+        return raw.upper()
+    return _COUNTRY_ISO2.get(raw.lower(), '')
+
+
 def _norm(s):
     return re.sub(r'[^a-z0-9]+', ' ', (s or '').lower()).strip()
 
@@ -197,7 +224,7 @@ class Command(BaseCommand):
             g['rounds'] += 1
             if g['lat'] is None and c.latitude is not None:
                 g['lat'], g['lon'] = float(c.latitude), float(c.longitude or 0)
-                g['country'] = (c.country or 'US').upper()[:2] or 'US'
+                g['country'] = _iso2(c.country)
 
         placed = [g for g in groups.values() if g['lat'] is not None]
         missing = [g for g in groups.values() if g['lat'] is None]
