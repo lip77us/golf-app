@@ -40,11 +40,16 @@ def pages(src_dir):
 
 # Guides that were cross-linked but never written.  Design: drop them rather
 # than ship 404s on day one.
-# Road Trip added 2026-09-29: the games index that came with the Dream Round
-# packet carries a card for it, and its own packet shipped only a prototype —
-# no design-reference source — so there is no page to link to yet. The audit
-# caught it as a broken link, which is what this list is for.
-UNWRITTEN = ('sixes', 'road-trip')   # banker and rabbit shipped 2026-09-11
+# Sixes is the last one, and the only game of the twenty without a page.  It is
+# wanted: the Sequoya guide argues from it in prose ("Sixes is three matches of
+# six holes; Sequoya is six of three"), so that mention is unlinked rather than
+# cut, the same as Wolf's and Triple Nassau's.
+#
+# NOTE this list only protects pages built FROM a .dc.html source.  A packet
+# that arrives as finished static HTML bypasses this module completely, so its
+# dead links have to be caught by hand — which is how /games/sixes reached the
+# published Sequoya page.  See the build-seo.py audit, which does catch them.
+UNWRITTEN = ('sixes',)   # banker + rabbit 2026-09-11; road-trip 2026-10-09
 
 
 def slice_element(s, start):

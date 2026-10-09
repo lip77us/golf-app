@@ -174,6 +174,16 @@ OVERRIDES = {
         'description': 'Rabbit is a three-golfer chase: win a hole outright to catch the '
                        'rabbit, and hold it to the end of the match to win the pot.',
     },
+    'games/road-trip/index.html': {
+        # Design's pair is the longest in the set: an 80-character title and a
+        # 219-character description.  "Across a Golf Trip" goes because "Road
+        # Trip" and "Golf Tournament" already carry the query; the trip itself
+        # is the first thing the description says.
+        'title': 'Road Trip Golf Tournament Rules: Best Rounds Count | Halved',
+        'description': 'Road Trip is a championship for a golf trip: several rounds on '
+                       'different courses, and your best rounds to par count. Net and '
+                       'gross titles, ties and eligibility.',
+    },
     'games/sequoya-threes/index.html': {
         'title': 'Sequoya 3s Golf Game: Rules, Presses, Scoring | Halved',
         'description': 'Sequoya 3s splits a foursome into six three-hole 2v2 matches, '

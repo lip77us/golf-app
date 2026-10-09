@@ -75,6 +75,16 @@ override.
 - **title** (52 chars): Rabbit Golf Game Rules: Catching the Rabbit | Halved
 - **description** (124 chars): Rabbit is a three-golfer chase: win a hole outright to catch the rabbit, and hold it to the end of the match to win the pot.
 
+## `/games/road-trip/`
+
+Design's pair is the longest in the set — an 80-character title and a
+219-character description. "Across a Golf Trip" went because "Road Trip" and
+"Golf Tournament" already carry the query, and the trip is the first thing the
+description says.
+
+- **title** (59 chars): Road Trip Golf Tournament Rules: Best Rounds Count | Halved
+- **description** (160 chars): Road Trip is a championship for a golf trip: several rounds on different courses, and your best rounds to par count. Net and gross titles, ties and eligibility.
+
 ## `/games/sequoya-threes/`
 
 - **title** (54 chars): Sequoya 3s Golf Game: Rules, Presses, Scoring | Halved
