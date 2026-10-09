@@ -9,9 +9,6 @@
 <meta property="og:description" content="Track every game on your round, apply handicaps automatically, and see exactly where everyone stands. Just enter your scores.">
 <meta property="og:url" content="https://halved.golf/">
 <meta property="og:image" content="https://halved.golf/og.png">
-<!-- Some clients will not render the card large until they know its size, and
-     they need that BEFORE fetching the image. The file is a 2x export; the
-     dimensions declared are the 1:1 ones. -->
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Halved — every game on your round, scored live and settled to the dollar.">
@@ -19,295 +16,179 @@
 <meta name="twitter:image" content="https://halved.golf/og.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&family=Spline+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;600;700;800&family=Spline+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/d3@7.9.0/dist/d3.min.js" integrity="sha384-CjloA8y00+1SDAUkjs099PVfnY2KmDC2BZnws9kh8D/lX1s46w6EPhpXdqMfjK6i" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js" integrity="sha384-Ukv1p/xTma6P4/2bY5KzWBw+ydSpXmhCMtyciIQVDJ1RmOxtCYNMF1uXT9T63H67" crossorigin="anonymous"></script>
 <style>
-  :root{
-    --pine:#0B1F1A; --pine-2:#0E2A22; --green:#0F6E56; --mint:#1D9E75;
-    --mint-bright:#3BD89A; --mint-soft:#9FE1CB; --cream:#F3F1EA; --ink:#06120E;
-    --line:rgba(159,225,203,.14); --line-2:rgba(159,225,203,.28);
-    --display:'Schibsted Grotesk',sans-serif; --body:'Spline Sans',sans-serif;
-  }
-  *{margin:0;padding:0;box-sizing:border-box}
-  html{scroll-behavior:smooth}
-  body{font-family:var(--body);background:var(--pine);color:var(--cream);
-    -webkit-font-smoothing:antialiased;overflow-x:hidden;line-height:1.6}
-  .wrap{max-width:1120px;margin:0 auto;padding:0 28px}
-  a{color:inherit;text-decoration:none}
-  ::selection{background:var(--mint-bright);color:var(--ink)}
-  .tnum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
-
-  /* NAV */
-  nav{position:fixed;top:0;left:0;right:0;z-index:300;
-    backdrop-filter:blur(14px);background:rgba(11,31,26,.72);
-    border-bottom:1px solid var(--line);transition:.3s}
-  .nav-in{display:flex;align-items:center;justify-content:space-between;
-    height:70px;max-width:1120px;margin:0 auto;padding:0 28px}
-  .logo{font-family:var(--display);font-weight:800;font-size:23px;letter-spacing:-.5px;
-    display:flex;align-items:center;gap:9px}
-  .logo .dot{width:11px;height:11px;border-radius:50%;
-    background:var(--mint-bright);box-shadow:0 0 16px var(--mint-bright);position:relative}
-  .logo .dot::after{content:"";position:absolute;inset:-5px;border-radius:50%;
-    border:1.5px solid var(--mint-soft);opacity:.5}
-  .nav-links{display:flex;gap:34px;align-items:center;font-size:14.5px;color:var(--mint-soft)}
-  .nav-links a{transition:.2s}
-  .nav-links a:hover{color:var(--cream)}
-  .nav-cta{font-family:var(--display);font-weight:600;background:var(--mint-bright);
-    color:var(--ink);padding:10px 20px;border-radius:100px;font-size:14px;transition:.2s}
-  .nav-cta:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(59,216,154,.3)}
-  /* ONE breakpoint governs the header. The desktop items used to vanish at 760
-     while the design asked for a hamburger at 820, which would leave a 60px band
-     showing both. Below this width the items and the mailto go and the sheet
-     button takes over; above it, the reverse. */
-  @media(max-width:820px){
-    .nav-links{display:none}
-    .nav-cta{display:none}
-  }
-
-  /* HERO */
-  header{position:relative;padding:170px 0 90px;overflow:hidden}
-  .glow{position:absolute;border-radius:50%;filter:blur(120px);opacity:.5;pointer-events:none}
-  .g1{width:560px;height:560px;background:#0F6E56;top:-180px;right:-160px}
-  .g2{width:440px;height:440px;background:#04342C;bottom:-220px;left:-140px;opacity:.7}
-  .grid-bg{position:absolute;inset:0;opacity:.4;pointer-events:none;
-    background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
-    background-size:54px 54px;mask-image:radial-gradient(ellipse 80% 60% at 50% 30%,#000 0%,transparent 75%)}
-  .hero{position:relative;z-index:2;display:grid;grid-template-columns:1.15fr .85fr;gap:56px;align-items:center}
-  @media(max-width:900px){.hero{grid-template-columns:1fr;gap:48px}}
-  .badge{display:inline-flex;align-items:center;gap:8px;font-size:13px;
-    color:var(--mint-soft);border:1px solid var(--line-2);padding:7px 15px;
-    border-radius:100px;margin-bottom:26px;font-weight:500}
-  .badge .pulse{width:7px;height:7px;border-radius:50%;background:var(--mint-bright);
-    animation:pulse 2s infinite}
-  @keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(59,216,154,.5)}50%{opacity:.6;box-shadow:0 0 0 6px rgba(59,216,154,0)}}
-  h1.hero-h{font-family:var(--display);font-weight:800;font-size:clamp(44px,6.4vw,76px);
-    line-height:.98;letter-spacing:-2.5px;margin-bottom:24px}
-  h1.hero-h .accent{color:var(--mint-bright)}
-  .hero-sub{font-size:clamp(16.5px,2vw,19px);color:var(--mint-soft);max-width:480px;margin-bottom:36px}
-  .hero-cta{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
-  .btn-primary{font-family:var(--display);font-weight:700;background:var(--mint-bright);
-    color:var(--ink);padding:16px 30px;border-radius:100px;font-size:15.5px;
-    border:none;cursor:pointer;transition:.2s}
-  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(59,216,154,.35)}
-  .btn-ghost{font-family:var(--display);font-weight:600;color:var(--cream);
-    padding:16px 26px;border-radius:100px;font-size:15.5px;border:1px solid var(--line-2);
-    transition:.2s;background:transparent;cursor:pointer}
-  .btn-ghost:hover{border-color:var(--mint-soft);background:rgba(159,225,203,.06)}
-  .hero-note{margin-top:18px;font-size:13px;color:rgba(159,225,203,.6)}
-
-  /* PHONE MOCK */
-  .phone-stage{position:relative;display:flex;justify-content:center}
-  .phone{width:290px;background:linear-gradient(160deg,#10302708,#0e2a2200);
-    border:1.5px solid var(--line-2);border-radius:42px;padding:14px;
-    box-shadow:0 40px 90px rgba(0,0,0,.5);background-color:var(--pine-2);position:relative}
-  .phone::before{content:"";position:absolute;top:18px;left:50%;transform:translateX(-50%);
-    width:90px;height:6px;border-radius:10px;background:rgba(159,225,203,.25)}
-  .screen{background:var(--ink);border-radius:30px;padding:30px 18px 20px;overflow:hidden}
-  .sc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
-  .sc-logo{font-family:var(--display);font-weight:800;font-size:13px;color:var(--mint-bright);letter-spacing:.5px}
-  .sc-hole{font-size:11px;color:var(--mint-soft);border:1px solid var(--line-2);padding:3px 9px;border-radius:100px}
-  .sc-label{font-size:11px;color:var(--mint-soft);margin-bottom:3px}
-  .sc-status{font-family:var(--display);font-weight:800;font-size:34px;letter-spacing:-1px;margin-bottom:16px}
-  .sc-status small{font-size:14px;color:var(--mint-soft);font-weight:500;letter-spacing:0}
-  .sc-game{background:var(--pine-2);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:9px}
-  .sc-game-h{display:flex;justify-content:space-between;font-size:11px;color:var(--mint-soft);margin-bottom:9px}
-  .sc-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:4px 0}
-  .sc-row .nm{color:var(--cream)}
-  .sc-row .val{font-family:var(--display);font-weight:700}
-  .pos{color:var(--mint-bright)} .neg{color:#F0997B}
-  .sc-btn{background:var(--mint-bright);color:var(--ink);text-align:center;
-    font-family:var(--display);font-weight:700;font-size:14px;padding:13px;border-radius:14px;margin-top:6px}
-  .float-card{position:absolute;background:var(--pine-2);border:1px solid var(--line-2);
-    border-radius:14px;padding:11px 14px;box-shadow:0 16px 40px rgba(0,0,0,.4);font-size:12px}
-  .fc-1{top:40px;right:-18px}
-  .fc-2{bottom:60px;left:-26px}
-  .fc-label{color:var(--mint-soft);font-size:10px;margin-bottom:2px}
-  .fc-val{font-family:var(--display);font-weight:700;font-size:15px}
-  @media(max-width:520px){.float-card{display:none}}
-
-  /* MARQUEE */
-  .marquee{border-top:1px solid var(--line);border-bottom:1px solid var(--line);
-    padding:20px 0;margin-top:70px;overflow:hidden;white-space:nowrap;position:relative;z-index:2}
-  .marquee-track{display:inline-flex;gap:50px;animation:scroll 26s linear infinite;font-family:var(--display);
-    font-weight:600;font-size:16px;color:var(--mint-soft)}
-  .marquee-track span{display:inline-flex;align-items:center;gap:50px}
-  .marquee-track .sep{color:var(--green)}
-  .feat-links{margin-top:12px;font-size:13.5px;color:var(--mint-soft)}
-  .feat-links a{color:var(--mint-bright);transition:.2s}
-  .feat-links a:hover{color:var(--cream)}
-  .marquee-track a{color:var(--cream);transition:.2s}
-  .marquee-track a:hover{color:var(--mint-bright)}
-  .marquee:hover .marquee-track,.marquee:focus-within .marquee-track{animation-play-state:paused}
-  @media(prefers-reduced-motion:reduce){.marquee-track{animation-play-state:paused}}
-  /* --- phone menu --- */
-  .nav-burger{display:none;width:44px;height:44px;align-items:center;justify-content:center;
-    flex-direction:column;gap:6px;background:none;border:none;cursor:pointer;padding:0}
-  .nav-burger span{width:22px;height:2px;border-radius:2px;background:var(--cream);
-    transition:transform .2s ease,opacity .2s ease}
-  /* Becomes a close X in place — the same control, not a second one. */
-  .nav-burger[aria-expanded="true"] span:first-child{transform:translateY(4px) rotate(45deg)}
-  .nav-burger[aria-expanded="true"] span:last-child{transform:translateY(-4px) rotate(-45deg)}
-  /* Below the header on purpose: the button has to stay visible and turn into
-     the close X in place, which it cannot do from under the sheet. */
-  .menu-sheet{position:fixed;inset:0;z-index:150;background:var(--pine);
-    background-image:radial-gradient(120% 90% at 82% -10%,#123C31 0%,var(--pine) 62%);
-    display:flex;flex-direction:column;justify-content:space-between;
-    padding:86px 22px 28px;opacity:0;transform:translateY(-8px);
-    transition:opacity .2s ease,transform .2s ease}
-  .menu-sheet.is-open{opacity:1;transform:none}
-  /* This is a <nav>, and the header rule `nav{position:fixed;...}` matches it —
-     which tore it out of the sheet's flow and pinned it to the viewport, full
-     bleed, pushing the download button to the top. Undo the header's styling
-     here rather than give up the element: it IS navigation and wants the tag. */
-  .menu-items{position:static;display:flex;flex-direction:column;
-    background:none;border:none;backdrop-filter:none;height:auto}
-  .menu-items a{display:flex;align-items:center;justify-content:space-between;
-    min-height:56px;font-size:19px;color:var(--cream);border-bottom:1px solid var(--line)}
-  /* No hover states — a pressed row tints and that is all. */
-  .menu-items a:active{background:rgba(159,225,203,.07)}
-  .menu-rule{height:1px;background:var(--line-2);margin:14px 0}
-  .menu-go{color:var(--mint-bright)!important;font-weight:600}
-  .menu-chev{font-size:22px;line-height:1}
-  .menu-foot{padding-top:20px}
-  .menu-dl{display:block;text-align:center;background:var(--mint-bright);color:var(--ink);
-    font-family:var(--display);font-weight:700;font-size:16px;padding:16px;border-radius:100px}
-  /* After the .nav-burger rule above on purpose: same specificity, so whichever
-     is written last wins, and `display:none` is written above. */
-  @media(max-width:820px){.nav-burger{display:flex}}
-  @media(prefers-reduced-motion:reduce){
-    .menu-sheet,.nav-burger span{transition:none}
-  }
-  @keyframes scroll{to{transform:translateX(-50%)}}
-
-  /* SECTIONS */
-  section{position:relative}
-  .sec-pad{padding:100px 0}
-  .eyebrow{font-family:var(--display);font-weight:600;font-size:13px;letter-spacing:2px;
-    text-transform:uppercase;color:var(--mint);margin-bottom:16px}
-  h2.sec-h{font-family:var(--display);font-weight:800;font-size:clamp(32px,4.4vw,52px);
-    letter-spacing:-1.5px;line-height:1.04;margin-bottom:20px;max-width:680px}
-  .sec-lead{font-size:18px;color:var(--mint-soft);max-width:560px;margin-bottom:54px}
-
-  /* FEATURES */
-  .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
-  @media(max-width:860px){.feat-grid{grid-template-columns:1fr}}
-  .feat{background:linear-gradient(165deg,rgba(15,110,86,.12),rgba(14,42,34,.4));
-    border:1px solid var(--line);border-radius:22px;padding:30px 28px;transition:.3s;position:relative;overflow:hidden}
-  .feat:hover{border-color:var(--line-2);transform:translateY(-4px)}
-  .feat-ic{width:48px;height:48px;border-radius:14px;background:rgba(59,216,154,.12);
-    border:1px solid var(--line-2);display:flex;align-items:center;justify-content:center;margin-bottom:20px}
-  .feat-ic svg{width:24px;height:24px;stroke:var(--mint-bright);fill:none;stroke-width:1.8}
-  .feat h3{font-family:var(--display);font-weight:700;font-size:21px;letter-spacing:-.4px;margin-bottom:10px}
-  .feat p{font-size:15px;color:var(--mint-soft);line-height:1.65}
-
-  /* HOW IT WORKS */
-  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:10px}
-  @media(max-width:860px){.steps{grid-template-columns:1fr}}
-  .step{position:relative;padding-top:30px}
-  .step-n{font-family:var(--display);font-weight:800;font-size:15px;color:var(--ink);
-    background:var(--mint-bright);width:34px;height:34px;border-radius:50%;
-    display:flex;align-items:center;justify-content:center;margin-bottom:18px}
-  .step h3{font-family:var(--display);font-weight:700;font-size:22px;margin-bottom:9px;letter-spacing:-.4px}
-  .step p{font-size:15px;color:var(--mint-soft)}
-
-  /* SETTLEMENT SHOWCASE */
-  .settle{background:linear-gradient(160deg,var(--pine-2),var(--pine));
-    border:1px solid var(--line-2);border-radius:30px;padding:54px;display:grid;
-    grid-template-columns:1fr 1fr;gap:50px;align-items:center}
-  @media(max-width:860px){.settle{grid-template-columns:1fr;padding:36px}}
-  .settle h2{font-family:var(--display);font-weight:800;font-size:clamp(28px,3.6vw,42px);
-    letter-spacing:-1px;line-height:1.06;margin-bottom:18px}
-  .settle p{color:var(--mint-soft);font-size:17px;margin-bottom:14px}
-  .receipt{background:var(--ink);border:1px solid var(--line);border-radius:20px;padding:26px;font-family:var(--body)}
-  .rec-h{display:flex;justify-content:space-between;align-items:center;
-    border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:16px}
-  .rec-h .t{font-family:var(--display);font-weight:700;font-size:16px}
-  .rec-h .sub{font-size:11px;color:var(--mint-soft)}
-  .rec-line{display:flex;justify-content:space-between;align-items:center;padding:10px 0;font-size:14px}
-  .rec-line .who{color:var(--cream)} .rec-line .who span{color:var(--mint-soft);font-size:12px;display:block}
-  .rec-amt{font-family:var(--display);font-weight:700;font-size:16px}
-  .rec-total{border-top:1px dashed var(--line-2);margin-top:8px;padding-top:14px;
-    display:flex;justify-content:space-between;align-items:center}
-  .rec-total .l{font-family:var(--display);font-weight:600;font-size:13px;color:var(--mint-soft)}
-  .rec-total .v{font-family:var(--display);font-weight:800;font-size:22px;color:var(--mint-bright)}
-
-  /* PRICING */
-  .price-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;max-width:760px;margin:0 auto}
-  @media(max-width:680px){.price-grid{grid-template-columns:1fr}}
-  .plan{background:linear-gradient(165deg,rgba(15,110,86,.1),rgba(14,42,34,.35));
-    border:1px solid var(--line);border-radius:24px;padding:34px 30px;position:relative}
-  .plan.pro{border:1.5px solid var(--mint-bright);background:linear-gradient(165deg,rgba(59,216,154,.1),rgba(14,42,34,.5))}
-  .plan-tag{position:absolute;top:-12px;right:26px;background:var(--mint-bright);color:var(--ink);
-    font-family:var(--display);font-weight:700;font-size:11px;padding:5px 13px;border-radius:100px;letter-spacing:.5px}
-  .plan-name{font-family:var(--display);font-weight:700;font-size:20px;margin-bottom:8px}
-  .plan-price{font-family:var(--display);font-weight:800;font-size:46px;letter-spacing:-1.5px;line-height:1}
-  .plan-price small{font-size:16px;font-weight:500;color:var(--mint-soft);letter-spacing:0}
-  .plan-note{font-size:13px;color:var(--mint-soft);margin:8px 0 22px}
-  .plan ul{list-style:none}
-  .plan li{font-size:14.5px;color:var(--cream);padding:8px 0;display:flex;gap:10px;align-items:flex-start}
-  .plan li svg{width:17px;height:17px;stroke:var(--mint-bright);fill:none;stroke-width:2.2;flex-shrink:0;margin-top:3px}
-  .plan li.muted{color:rgba(159,225,203,.55)} .plan li.muted svg{stroke:rgba(159,225,203,.4)}
-
-  /* CLUBS */
-  .clubs-wrap{background:linear-gradient(165deg,rgba(15,110,86,.14),rgba(11,31,26,.2));
-    border:1px solid var(--line-2);border-radius:32px;padding:60px 54px;position:relative;overflow:hidden}
-  @media(max-width:740px){.clubs-wrap{padding:40px 26px}}
-  .clubs-head{max-width:620px;margin-bottom:46px}
-  .club-tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:44px}
-  @media(max-width:820px){.club-tiers{grid-template-columns:1fr}}
-  .ctier{background:rgba(6,18,14,.45);border:1px solid var(--line);border-radius:20px;padding:28px 24px}
-  .ctier.feat-tier{border:1.5px solid var(--mint-bright);background:rgba(59,216,154,.08)}
-  .ctier-tag{display:inline-block;font-family:var(--display);font-weight:700;font-size:11px;letter-spacing:.5px;
-    color:var(--ink);background:var(--mint-bright);padding:4px 11px;border-radius:100px;margin-bottom:14px}
-  .ctier h3{font-family:var(--display);font-weight:700;font-size:20px;margin-bottom:6px}
-  .ctier .who{font-size:13px;color:var(--mint-soft);margin-bottom:16px;min-height:34px}
-  .ctier .price{font-family:var(--display);font-weight:800;font-size:30px;letter-spacing:-1px;line-height:1.1}
-  .ctier .price small{font-size:14px;font-weight:500;color:var(--mint-soft);letter-spacing:0}
-  .ctier .price-note{font-size:12px;color:rgba(159,225,203,.6);margin-top:6px}
-  .clubs-feats{display:grid;grid-template-columns:repeat(2,1fr);gap:14px 32px;margin-bottom:42px}
-  @media(max-width:740px){.clubs-feats{grid-template-columns:1fr}}
-  .cf{display:flex;gap:12px;align-items:flex-start}
-  .cf svg{width:20px;height:20px;stroke:var(--mint-bright);fill:none;stroke-width:1.8;flex-shrink:0;margin-top:2px}
-  .cf-t{font-family:var(--display);font-weight:600;font-size:15px;margin-bottom:2px}
-  .cf-d{font-size:13.5px;color:var(--mint-soft);line-height:1.55}
-  .integrate{background:rgba(6,18,14,.4);border:1px solid var(--line);border-radius:18px;
-    padding:24px 26px;display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
-  .integrate .ic{width:42px;height:42px;border-radius:12px;background:rgba(59,216,154,.12);
-    border:1px solid var(--line-2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-  .integrate .ic svg{width:22px;height:22px;stroke:var(--mint-bright);fill:none;stroke-width:1.8}
-  .integrate .body{flex:1;min-width:240px}
-  .integrate h4{font-family:var(--display);font-weight:700;font-size:16px;margin-bottom:6px}
-  .integrate p{font-size:14px;color:var(--mint-soft);line-height:1.6}
-  .clubs-cta{margin-top:40px;text-align:center}
-
-  /* WAITLIST */
-  .cta-band{text-align:center;background:linear-gradient(160deg,var(--green),var(--pine-2));
-    border-radius:32px;padding:70px 40px;position:relative;overflow:hidden}
-  .cta-band .glow{opacity:.4}
-  .cta-band h2{font-family:var(--display);font-weight:800;font-size:clamp(30px,4.6vw,50px);
-    letter-spacing:-1.5px;margin-bottom:16px;position:relative;z-index:2}
-  .cta-band p{color:var(--mint-soft);font-size:18px;margin-bottom:34px;position:relative;z-index:2}
-  .waitform{display:flex;gap:12px;max-width:480px;margin:0 auto;position:relative;z-index:2;flex-wrap:wrap;justify-content:center}
-  .waitform input{flex:1;min-width:220px;background:rgba(6,18,14,.6);border:1px solid var(--line-2);
-    border-radius:100px;padding:16px 22px;color:var(--cream);font-family:var(--body);font-size:15px;outline:none;transition:.2s}
-  .waitform input:focus{border-color:var(--mint-bright)}
-  .waitform input::placeholder{color:rgba(159,225,203,.5)}
-  .wait-msg{margin-top:18px;font-family:var(--display);font-weight:600;color:var(--mint-bright);
-    min-height:22px;position:relative;z-index:2}
-
-  /* FOOTER */
-  footer{border-top:1px solid var(--line);padding:50px 0 40px;margin-top:90px}
-  .foot-in{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:30px}
-  .foot-tag{font-size:14px;color:var(--mint-soft);max-width:280px;margin-top:14px}
-  .foot-cols{display:flex;gap:60px;flex-wrap:wrap}
-  .foot-col h4{font-family:var(--display);font-weight:600;font-size:13px;letter-spacing:1px;
-    text-transform:uppercase;color:var(--mint);margin-bottom:14px}
-  .foot-col a{display:block;font-size:14px;color:var(--mint-soft);padding:5px 0;transition:.2s}
-  .foot-col a:hover{color:var(--cream)}
-  .foot-bottom{margin-top:44px;padding-top:24px;border-top:1px solid var(--line);
-    font-size:12.5px;color:rgba(159,225,203,.5);line-height:1.7}
-
-  .reveal{opacity:0;transform:translateY(28px);transition:.7s cubic-bezier(.2,.7,.2,1)}
-  .reveal.in{opacity:1;transform:none}
+:root{--pine:#0B1F1A;--pine-2:#0E2A22;--green:#0F6E56;--mint:#1D9E75;--mint-bright:#3BD89A;--mint-soft:#9FE1CB;--cream:#F3F1EA;--paper:#FFFFFF;--ink:#06120E;--text:#33443C;--muted:#5C6B62;--card:#DCE5DD;--line:rgba(159,225,203,.14);--line-2:rgba(159,225,203,.28);--display:'Schibsted Grotesk',sans-serif;--body:'Spline Sans',sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{font-family:var(--body);background:var(--cream);color:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden;line-height:1.6}
+.wrap{max-width:1120px;margin:0 auto;padding:0 28px}
+a{color:var(--green);text-decoration:none}a:hover{color:var(--pine)}
+img{display:block;max-width:100%;height:auto}
+::selection{background:var(--mint-bright);color:var(--ink)}
+.tnum{font-variant-numeric:tabular-nums}
+/* NAV */
+nav.top{position:fixed;top:0;left:0;right:0;z-index:300;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);background:rgba(11,31,26,.8);border-bottom:1px solid var(--line)}
+.nav-in{display:flex;align-items:center;justify-content:space-between;gap:20px;height:68px;max-width:1120px;margin:0 auto;padding:0 28px}
+.logo{display:flex;align-items:center;gap:10px;color:#fff;font-family:var(--display);font-weight:700;font-size:19px;letter-spacing:-.3px}
+.logo:hover{color:#fff}
+.logo .mk{width:28px;height:28px;border-radius:8px;background:var(--mint-bright);color:var(--pine);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700}
+.nav-links{display:flex;gap:30px;align-items:center;font-size:14.5px}
+.nav-links a{color:var(--mint-soft)}.nav-links a:hover{color:#fff}
+.nav-cta{font-family:var(--display);font-weight:600;background:var(--mint-bright);color:var(--ink);padding:10px 20px;border-radius:100px;font-size:14px}
+.nav-cta:hover{color:var(--ink);background:#5BE3AC}
+.nav-burger{display:none;width:44px;height:44px;align-items:center;justify-content:center;flex-direction:column;gap:6px;background:none;border:none;cursor:pointer}
+.nav-burger span{width:22px;height:2px;border-radius:2px;background:var(--cream);transition:transform .2s ease}
+.nav-burger[aria-expanded="true"] span:first-child{transform:translateY(4px) rotate(45deg)}
+.nav-burger[aria-expanded="true"] span:last-child{transform:translateY(-4px) rotate(-45deg)}
+@media(max-width:820px){.nav-links,.nav-cta{display:none}.nav-burger{display:flex}}
+.menu-sheet{position:fixed;inset:0;z-index:150;background:var(--pine);display:flex;flex-direction:column;justify-content:space-between;padding:86px 22px 28px;opacity:0;transform:translateY(-8px);transition:opacity .2s ease,transform .2s ease}
+.menu-sheet.is-open{opacity:1;transform:none}
+.menu-items{display:flex;flex-direction:column}
+.menu-items a{display:flex;align-items:center;justify-content:space-between;min-height:56px;font-size:19px;color:var(--cream);border-bottom:1px solid var(--line)}
+.menu-items a:active{background:rgba(159,225,203,.07)}
+.menu-rule{height:1px;background:var(--line-2);margin:14px 0}
+.menu-go{color:var(--mint-bright)!important;font-weight:600}
+.menu-dl{display:block;text-align:center;background:var(--mint-bright);color:var(--ink);font-family:var(--display);font-weight:700;font-size:16px;padding:16px;border-radius:100px}
+@media(prefers-reduced-motion:reduce){.menu-sheet,.nav-burger span{transition:none}}
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--display);font-weight:700;font-size:15.5px;padding:15px 28px;border-radius:100px;border:1.5px solid transparent;cursor:pointer;white-space:nowrap}
+.btn-mint{background:var(--mint-bright);color:var(--ink)}.btn-mint:hover{background:#5BE3AC;color:var(--ink)}
+.btn-line{border-color:var(--line-2);color:var(--cream)}.btn-line:hover{border-color:var(--mint-soft);color:#fff}
+.btn-pine{background:var(--green);color:#fff}.btn-pine:hover{background:var(--pine);color:#fff}
+/* HERO */
+.hero{background:var(--pine);background-image:radial-gradient(110% 80% at 85% 0%,#14473A 0%,var(--pine) 60%);color:var(--cream);padding:136px 0 0;overflow:hidden}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:56px;align-items:end}
+@media(max-width:900px){.hero-grid{grid-template-columns:1fr;gap:44px}}
+.hero-copy{padding-bottom:88px}
+@media(max-width:900px){.hero-copy{padding-bottom:0}}
+.badge{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--mint-soft);border:1px solid var(--line-2);padding:7px 15px;border-radius:100px;margin-bottom:26px;font-weight:500}
+.badge i{width:7px;height:7px;border-radius:50%;background:var(--mint-bright)}
+h1{font-family:var(--display);font-weight:800;font-size:clamp(44px,6.6vw,80px);line-height:.97;letter-spacing:-2.6px;margin-bottom:24px;color:#fff;text-wrap:balance}
+h1 em{font-style:normal;color:var(--mint-bright)}
+.hero-sub{font-size:clamp(16.5px,2vw,19px);color:#D7E5DE;max-width:520px;margin-bottom:34px;text-wrap:pretty}
+.hero-cta{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.store-badge{display:inline-flex;align-items:center;gap:10px;height:54px;padding:0 20px 0 16px;background:#000;border:1.5px solid rgba(255,255,255,.35);border-radius:12px;color:#fff}
+.store-badge:hover{color:#fff;border-color:var(--mint-soft)}
+.store-badge svg{flex:none}
+.store-badge span{display:flex;flex-direction:column;line-height:1}
+.store-badge small{font-size:11px;font-weight:500;letter-spacing:.2px;margin-bottom:3px}
+.store-badge b{font-family:var(--display);font-size:20px;font-weight:600;letter-spacing:-.3px}
+.hero-note{margin-top:20px;font-size:13px;color:#8FB3A5;max-width:460px}
+.shots{position:relative;height:560px;display:flex;justify-content:center;overflow:hidden}
+@media(max-width:900px){.shots{height:480px}}
+.phone{width:280px;border-radius:40px;padding:9px;background:#152F27;border:1px solid var(--line-2);box-shadow:0 40px 90px rgba(0,0,0,.5);flex:none}
+.phone img{border-radius:32px;width:100%}
+.shots .phone.a{position:relative;z-index:2;align-self:flex-start}
+.shots .phone.b{position:absolute;width:240px;left:calc(50% + 60px);top:90px;opacity:.9;transform:rotate(4deg)}
+@media(max-width:560px){.shots .phone.b{display:none}}
+/* GAMES BAND */
+.games{position:relative;z-index:3;background:var(--pine-2);border-top:1px solid var(--line);color:var(--mint-soft)}
+.games .wrap{display:flex;flex-wrap:wrap;gap:8px 10px;padding-top:26px;padding-bottom:26px;align-items:center}
+.games a,.games span{font-family:var(--display);font-weight:600;font-size:14.5px;padding:7px 14px;border-radius:100px;border:1px solid var(--line-2);color:var(--cream)}
+.games a:hover{border-color:var(--mint-bright);color:var(--mint-bright)}
+.games span{color:var(--mint-soft);border-style:dashed}
+/* SECTIONS */
+section{position:relative}
+.sec{padding:110px 0}
+.eyebrow{font-family:var(--display);font-weight:700;font-size:11.5px;letter-spacing:1.6px;text-transform:uppercase;color:var(--green);margin-bottom:14px}
+h2{font-family:var(--display);font-weight:800;font-size:clamp(32px,4.4vw,52px);letter-spacing:-1.6px;line-height:1.04;color:var(--pine);margin-bottom:18px;max-width:720px;text-wrap:balance}
+.lead{font-size:18px;color:var(--muted);max-width:600px;text-wrap:pretty}
+/* FEATURE ROWS */
+.rows{display:flex;flex-direction:column;gap:28px;margin-top:60px}
+.row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:48px;align-items:center;background:var(--paper);border:1px solid var(--card);border-radius:28px;padding:48px 52px 0;overflow:hidden}
+.row:nth-child(even) .row-copy{order:2}
+@media(max-width:860px){.row{grid-template-columns:1fr;padding:34px 28px 0;gap:30px}.row:nth-child(even) .row-copy{order:0}}
+.row-copy{padding-bottom:48px}
+@media(max-width:860px){.row-copy{padding-bottom:0}}
+.row h3{font-family:var(--display);font-weight:700;font-size:clamp(24px,2.6vw,30px);letter-spacing:-.7px;line-height:1.12;color:var(--pine);margin-bottom:12px}
+.row p{font-size:16.5px;color:var(--text);max-width:440px}
+.row .links{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.row .links a{font-size:13.5px;font-weight:600;padding:7px 13px;border-radius:100px;background:#EAF0EA;color:var(--green)}
+.row .links a:hover{background:var(--green);color:#fff}
+.row-shot{display:flex;justify-content:center;align-self:end;height:440px;overflow:hidden}
+.row-shot .phone{width:300px;border-radius:40px 40px 0 0;padding:9px 9px 0;background:var(--pine);border:none;box-shadow:0 -10px 40px rgba(11,31,26,.12)}
+.row-shot .phone img{border-radius:32px 32px 0 0}
+.trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;margin-top:28px}
+@media(max-width:860px){.trio{grid-template-columns:1fr}}
+.trio div{background:var(--paper);border:1px solid var(--card);border-radius:22px;padding:28px 26px}
+.trio h3{font-family:var(--display);font-weight:700;font-size:19px;letter-spacing:-.3px;color:var(--pine);margin-bottom:8px}
+.trio p{font-size:15px;color:var(--muted)}
+/* STEPS */
+.how{background:var(--paper);border-top:1px solid var(--card);border-bottom:1px solid var(--card)}
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;margin-top:50px;border-top:1px solid var(--card)}
+@media(max-width:860px){.steps{grid-template-columns:1fr}}
+.step{padding:30px 30px 6px 0;border-right:1px solid var(--card)}
+.step+.step{padding-left:30px}
+.step:last-child{border-right:none}
+@media(max-width:860px){.step,.step+.step{padding:26px 0;border-right:none;border-bottom:1px solid var(--card)}}
+.step-n{font-family:var(--display);font-weight:800;font-size:56px;line-height:1;letter-spacing:-2px;color:var(--mint-bright);margin-bottom:18px}
+.step h3{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:-.4px;color:var(--pine);margin-bottom:8px}
+.step p{font-size:15.5px;color:var(--muted)}
+/* MAP */
+.mapsec{background:var(--pine);background-image:radial-gradient(90% 70% at 15% 0%,#14473A 0%,var(--pine) 60%);color:var(--cream)}
+.mapsec .eyebrow{color:var(--mint-bright)}.mapsec h2{color:#fff}.mapsec .lead{color:#D7E5DE}
+.map-head{display:flex;flex-wrap:wrap;gap:24px 48px;align-items:flex-end;justify-content:space-between}
+.map-box{position:relative;margin-top:44px}
+.map-box svg{display:block;width:100%;height:auto}
+.map-tip{position:absolute;pointer-events:none;background:var(--cream);color:var(--pine);border-radius:10px;padding:8px 12px;font-size:13px;line-height:1.35;box-shadow:0 8px 24px rgba(0,0,0,.35);transform:translate(-50%,calc(-100% - 12px));white-space:nowrap;opacity:0;transition:opacity .12s}
+.map-tip b{font-family:var(--display);display:block;font-size:14px}
+.map-note{margin-top:18px;font-size:12.5px;color:#8FB3A5}
+/* GUIDES TEASE */
+.gt-head{display:flex;flex-wrap:wrap;gap:20px 40px;align-items:flex-end;justify-content:space-between}
+.gt-pick{display:flex;flex-wrap:wrap;gap:8px}
+.gt-pick button{font-family:var(--display);font-weight:600;font-size:14.5px;padding:9px 16px;border-radius:100px;border:1.5px solid var(--card);background:var(--paper);color:var(--pine);cursor:pointer}
+.gt-pick button:hover{border-color:var(--green)}
+.gt-pick button[aria-pressed="true"]{background:var(--pine);border-color:var(--pine);color:#fff}
+.gt-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:36px}
+@media(max-width:860px){.gt-cards{grid-template-columns:1fr}}
+.gt-card{display:flex;flex-direction:column;background:var(--paper);border:1px solid var(--card);border-radius:22px;padding:26px 26px 22px;color:var(--text);transition:border-color .15s,transform .15s}
+.gt-card:hover{border-color:var(--green);transform:translateY(-2px);color:var(--text)}
+.gt-card .gt-n{font-family:var(--display);font-weight:800;font-size:30px;letter-spacing:-.9px;line-height:1;color:var(--pine);margin-bottom:12px}
+.gt-card p{font-size:16px;line-height:1.55;margin-bottom:22px;text-wrap:pretty}
+.gt-card .gt-go{margin-top:auto;font-family:var(--display);font-weight:700;font-size:14px;color:var(--green)}
+.gt-all{display:flex;flex-wrap:wrap;gap:14px 24px;align-items:center;margin-top:28px}
+.gt-all span{font-size:14.5px;color:var(--muted)}
+/* SETTLE */
+.settle{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:60px;align-items:center}
+@media(max-width:860px){.settle{grid-template-columns:1fr;gap:40px}}
+.settle p{font-size:17px;color:var(--text);margin-bottom:14px;max-width:480px}
+.settle-shot{display:flex;justify-content:center;background:var(--pine);background-image:radial-gradient(100% 80% at 50% 0%,#14473A 0%,var(--pine) 70%);border-radius:28px;padding:44px 20px 0;height:520px;overflow:hidden}
+.settle-shot .phone{width:300px;border-radius:40px 40px 0 0;padding:9px 9px 0;align-self:flex-start}
+.settle-shot .phone img{border-radius:32px 32px 0 0}
+/* CLUBS */
+.clubs{background:var(--pine);color:var(--cream);border-radius:32px;padding:64px 56px;position:relative;overflow:hidden;background-image:radial-gradient(90% 70% at 100% 0%,#14473A 0%,var(--pine) 65%)}
+@media(max-width:740px){.clubs{padding:40px 26px}}
+.clubs .eyebrow{color:var(--mint-bright)}
+.clubs h2{color:#fff}
+.clubs .lead{color:#D7E5DE;max-width:680px}
+.cfeats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line-2);border:1px solid var(--line-2);border-radius:20px;overflow:hidden;margin:46px 0 22px}
+@media(max-width:740px){.cfeats{grid-template-columns:1fr}}
+.cf{background:var(--pine-2);padding:24px 26px}
+.cf-t{font-family:var(--display);font-weight:700;font-size:16.5px;color:#fff;margin-bottom:5px}
+.cf-d{font-size:14.5px;color:var(--mint-soft);line-height:1.55}
+.integrate{border:1px solid var(--line-2);border-radius:20px;padding:24px 26px}
+.integrate h4{font-family:var(--display);font-weight:700;font-size:16.5px;color:#fff;margin-bottom:6px}
+.integrate p{font-size:14.5px;color:var(--mint-soft);line-height:1.6}
+.clubs-cta{margin-top:34px}
+/* CTA */
+.cta{background:var(--green);background-image:linear-gradient(165deg,#15866A,#0B4A38);border-radius:32px;padding:72px 40px;text-align:center;color:#fff}
+.cta h2{color:#fff;margin:0 auto 14px}
+.cta p{color:#CDE8DD;font-size:18px;max-width:560px;margin:0 auto 32px;text-wrap:pretty}
+.cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.cta .btn-white{background:#fff;color:#0B4A38}.cta .btn-white:hover{background:var(--cream);color:#0B4A38}
+/* FOOTER */
+footer{background:var(--pine);color:var(--mint-soft);margin-top:110px;padding:56px 0 40px}
+.foot-in{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:34px}
+.foot-tag{font-size:14px;max-width:290px;margin-top:14px}
+.foot-cols{display:flex;gap:60px;flex-wrap:wrap}
+.foot-col h4{font-family:var(--display);font-weight:700;font-size:11.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--mint-bright);margin-bottom:14px}
+.foot-col a{display:block;font-size:14px;color:var(--mint-soft);padding:5px 0}
+.foot-col a:hover{color:#fff}
+.foot-bottom{margin-top:44px;padding-top:24px;border-top:1px solid var(--line);font-size:12.5px;color:rgba(159,225,203,.6);line-height:1.7}
+.foot-bottom a{color:var(--mint-soft)}
 </style>
 <!-- seo:begin — generated by build-seo.py; edit the script, not this block -->
 <link rel="canonical" href="https://halved.golf/">
@@ -365,367 +246,247 @@
 <!-- seo:end -->
 </head>
 <body>
-
-<nav>
-  <div class="nav-in">
-    <div class="logo"><span class="dot"></span>Halved</div>
-    <div class="nav-links">
-      <a href="#features">Features</a>
-      <a href="#how">How it works</a>
-      <a href="#settle">Settle up</a>
-      <a href="#clubs">For clubs</a>
-      <a href="/games/">Game guides</a>
-    </div>
-    <a href="mailto:info@halved.golf?subject=Halved" class="nav-cta">Get in touch</a>
-    <!-- Replaces the mailto below 820. Nothing is lost: Get in touch is one of
-         the three hero buttons, it is in the footer, and it is in the sheet. -->
-    <button class="nav-burger" id="menu-btn" type="button"
-            aria-label="Menu" aria-expanded="false" aria-controls="menu-sheet">
-      <span></span><span></span>
-    </button>
-  </div>
-</nav>
-
-<!-- Full screen, not a dropdown: a panel would sit over the hero and fight it.
-     The four anchors together; Game guides below a rule because it is the one
-     item that navigates rather than scrolls. -->
-<div class="menu-sheet" id="menu-sheet" hidden>
-  <nav class="menu-items" aria-label="Menu">
-    <a href="#features">Features</a>
-    <a href="#how">How it works</a>
-    <a href="#settle">Settle up</a>
-    <a href="#clubs">For clubs</a>
-    <div class="menu-rule"></div>
-    <a href="/games/" class="menu-go">Game guides<span class="menu-chev">&#8250;</span></a>
-    <a href="mailto:info@halved.golf?subject=Halved">Get in touch</a>
-  </nav>
-  <div class="menu-foot">
-    <a href="https://apps.apple.com/app/id6768284628" class="menu-dl">Download on the App Store</a>
-  </div>
+<nav class="top">
+<div class="nav-in">
+<a href="/" class="logo"><span class="mk">H</span>Halved</a>
+<div class="nav-links">
+<a href="#features">Features</a>
+<a href="#how">How it works</a>
+<a href="#settle">Settle up</a>
+<a href="#clubs">For clubs</a>
+<a href="/games/">Game guides</a>
 </div>
-
-<header>
-  <div class="glow g1"></div>
-  <div class="glow g2"></div>
-  <div class="grid-bg"></div>
-  <div class="wrap">
-    <div class="hero">
-      <div>
-        <div class="badge"><span class="pulse"></span>Now on the App Store</div>
-        <h1 class="hero-h">Stop keeping score <span class="accent">in your head.</span></h1>
-        <p class="hero-sub">Halved is the smart scorecard for your group. It tracks every game on your round — Nassau, Skins, presses, the whole tournament — applies handicaps automatically, and keeps the running stakes straight. Just enter your scores. We do the rest.</p>
-        <div class="hero-cta">
-          <a href="https://apps.apple.com/app/id6768284628" class="js-ios-only" style="display:none"><button class="btn-primary">&#63743;&nbsp; Download on the App Store</button></a>
-          <a href="#how"><button class="btn-primary">See how it works</button></a>
-          <a href="mailto:info@halved.golf?subject=Halved"><button class="btn-ghost">Get in touch</button></a>
-        </div>
-        <p class="hero-note">A scoring companion for your group's games — not a bookmaker. Halved never holds, transfers, or processes money.</p>
-      </div>
-
-      <div class="phone-stage">
-        <div class="phone">
-          <div class="screen">
-            <div class="sc-top">
-              <span class="sc-logo">HALVED</span>
-              <span class="sc-hole tnum">Hole 12</span>
-            </div>
-            <div class="sc-label">Match status</div>
-            <div class="sc-status tnum">2&nbsp;UP <small>vs Mike</small></div>
-            <div class="sc-game">
-              <div class="sc-game-h"><span>Front Nassau</span><span class="tnum">$20</span></div>
-              <div class="sc-row"><span class="nm">You</span><span class="val pos tnum">+$20</span></div>
-              <div class="sc-row"><span class="nm">Mike</span><span class="val neg tnum">−$20</span></div>
-            </div>
-            <div class="sc-game">
-              <div class="sc-game-h"><span>Skins</span><span class="tnum">3 carried</span></div>
-              <div class="sc-row"><span class="nm">Pot on 13</span><span class="val tnum">$40</span></div>
-            </div>
-            <div class="sc-btn">Enter score</div>
-          </div>
-        </div>
-        <div class="float-card fc-1">
-          <div class="fc-label">Press?</div>
-          <div class="fc-val pos">Double it ↑</div>
-        </div>
-        <div class="float-card fc-2">
-          <div class="fc-label">Live · 4 players</div>
-          <div class="fc-val tnum">$220 in play</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="marquee">
-    <div class="marquee-track">
-      <span><a href="/games/nassau/">Nassau</a><i class="sep">/</i><a href="/games/skins/">Skins</a><i class="sep">/</i><a href="/games/wolf/">Wolf</a><i class="sep">/</i><a href="/games/survivor/">Survivor</a><i class="sep">/</i><a href="/games/banker/">Banker</a><i class="sep">/</i><a href="/games/las-vegas/">Las Vegas</a><i class="sep">/</i><a href="/games/triple-cup/">Triple Cup</a><i class="sep">/</i><a href="/games/sequoya-threes/">Sequoya 3s</a><i class="sep">/</i><a href="/games/rabbit/">Rabbit</a><i class="sep">/</i><a href="/games/points-5-3-1/">Points 5-3-1</a><i class="sep">/</i><a href="/games/dream-round/">Dream Round</a><i class="sep">/</i><a href="/games/40-balls/">40 Balls</a><i class="sep">/</i><a href="/games/triple-nassau/">Triple Nassau</a><i class="sep">/</i><a href="/games/spots/">Spots</a><i class="sep">/</i><a href="/games/honors/">Honors</a><i class="sep">/</i><a href="/games/mini-singles-bracket/">Mini Singles Bracket</a><i class="sep">/</i><a href="/games/irish-rumble/">Irish Rumble</a><i class="sep">/</i><a href="/games/pink-ball/">Pink Ball</a><i class="sep">/</i>Presses<i class="sep">/</i>Match play<i class="sep">/</i>Stableford<i class="sep">/</i>Best ball<i class="sep">/</i></span>
-      <span aria-hidden="true"><a href="/games/nassau/" tabindex="-1">Nassau</a><i class="sep">/</i><a href="/games/skins/" tabindex="-1">Skins</a><i class="sep">/</i><a href="/games/wolf/" tabindex="-1">Wolf</a><i class="sep">/</i><a href="/games/survivor/" tabindex="-1">Survivor</a><i class="sep">/</i><a href="/games/banker/" tabindex="-1">Banker</a><i class="sep">/</i><a href="/games/las-vegas/" tabindex="-1">Las Vegas</a><i class="sep">/</i><a href="/games/triple-cup/" tabindex="-1">Triple Cup</a><i class="sep">/</i><a href="/games/sequoya-threes/" tabindex="-1">Sequoya 3s</a><i class="sep">/</i><a href="/games/rabbit/" tabindex="-1">Rabbit</a><i class="sep">/</i><a href="/games/points-5-3-1/" tabindex="-1">Points 5-3-1</a><i class="sep">/</i><a href="/games/dream-round/" tabindex="-1">Dream Round</a><i class="sep">/</i><a href="/games/40-balls/" tabindex="-1">40 Balls</a><i class="sep">/</i><a href="/games/triple-nassau/" tabindex="-1">Triple Nassau</a><i class="sep">/</i><a href="/games/spots/" tabindex="-1">Spots</a><i class="sep">/</i><a href="/games/honors/" tabindex="-1">Honors</a><i class="sep">/</i><a href="/games/mini-singles-bracket/" tabindex="-1">Mini Singles Bracket</a><i class="sep">/</i><a href="/games/irish-rumble/" tabindex="-1">Irish Rumble</a><i class="sep">/</i><a href="/games/pink-ball/" tabindex="-1">Pink Ball</a><i class="sep">/</i>Presses<i class="sep">/</i>Match play<i class="sep">/</i>Stableford<i class="sep">/</i>Best ball<i class="sep">/</i></span>
-    </div>
-  </div>
+<a href="mailto:info@halved.golf?subject=Halved" class="nav-cta">Get in touch</a>
+<button class="nav-burger" id="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="menu-sheet"><span></span><span></span></button>
+</div>
+</nav>
+<div class="menu-sheet" id="menu-sheet" hidden>
+<nav class="menu-items" aria-label="Menu">
+<a href="#features">Features</a>
+<a href="#how">How it works</a>
+<a href="#settle">Settle up</a>
+<a href="#clubs">For clubs</a>
+<div class="menu-rule"></div>
+<a href="/games/" class="menu-go">Game guides<span>&#8250;</span></a>
+<a href="mailto:info@halved.golf?subject=Halved">Get in touch</a>
+</nav>
+<div><a href="https://apps.apple.com/app/id6768284628" class="menu-dl">Download on the App Store</a></div>
+</div>
+<header class="hero">
+<div class="wrap">
+<div class="hero-grid">
+<div class="hero-copy">
+<h1>You golf, <em>We track the games</em></h1>
+<p class="hero-sub">Halved is the smart scorecard for your group. It tracks every game on your round — Nassau, Skins, presses, the whole tournament — applies handicaps automatically, and keeps the running stakes straight. Just enter your scores. We do the rest.</p>
+<div class="hero-cta">
+<a href="https://apps.apple.com/app/id6768284628" class="store-badge" aria-label="Download on the App Store"><svg viewBox="0 0 17 20" width="24" height="28" fill="#fff" aria-hidden="true"><path d="M14.1 10.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9C3.6 4.8 2 5.8 1.1 7.4c-1.9 3.2-.5 8 1.3 10.6.9 1.3 1.9 2.7 3.3 2.7 1.3-.1 1.8-.9 3.4-.9s2 .9 3.4.8c1.4 0 2.3-1.3 3.2-2.6 1-1.5 1.4-2.9 1.4-3-.1 0-2.9-1.1-3-4.4zM11.5 3c.7-.9 1.2-2.1 1.1-3.3-1 0-2.3.7-3 1.6-.7.8-1.2 2-1.1 3.2 1.1.1 2.3-.6 3-1.5z"></path></svg><span><small>Download on the</small><b>App Store</b></span></a>
+<a href="mailto:info@halved.golf?subject=Halved" class="btn btn-line">Get in touch</a>
+</div>
+<p class="hero-note">A scoring companion for your group's games — not a bookmaker. Halved never holds, transfers, or processes money.</p>
+</div>
+<div class="shots">
+<div class="phone a"><img src="/games/img/triple-cup-leaderboard.png" alt="Tilden Cup tournament leaderboard: two groups, eight golfers, Red Team against Blue Team" width="640" height="1391"></div>
+<div class="phone b"><img src="/games/img/nassau-play.png" alt="Halved scoring a Nassau hole by hole" width="640" height="1391"></div>
+</div>
+</div>
+</div>
+<div class="games">
+<div class="wrap">
+<a href="/games/nassau/">Nassau</a><a href="/games/skins/">Skins</a><a href="/games/wolf/">Wolf</a><a href="/games/survivor/">Survivor</a><a href="/games/banker/">Banker</a><a href="/games/las-vegas/">Las Vegas</a><a href="/games/triple-cup/">Triple Cup</a><a href="/games/sequoya-threes/">Sequoya 3s</a><a href="/games/rabbit/">Rabbit</a><a href="/games/points-5-3-1/">Points 5-3-1</a><a href="/games/dream-round/">Dream Round</a><a href="/games/40-balls/">40 Balls</a><a href="/games/triple-nassau/">Triple Nassau</a><a href="/games/spots/">Spots</a><a href="/games/honors/">Honors</a><a href="/games/mini-singles-bracket/">Mini Singles Bracket</a><a href="/games/irish-rumble/">Irish Rumble</a><a href="/games/pink-ball/">Pink Ball</a><span>Presses</span><span>Match play</span><span>Stableford</span><span>Best ball</span>
+</div>
+</div>
 </header>
-
-<section id="features" class="sec-pad">
-  <div class="wrap">
-    <div class="reveal">
-      <div class="eyebrow">Built for how you actually play</div>
-      <h2 class="sec-h">One round. Every game. No spreadsheet.</h2>
-      <p class="sec-lead">Most apps make you pick one format and stick to it. Real golf isn't like that — you've got a Nassau, a Skins game, and three side bets all running at once. Halved tracks all of it.</p>
-    </div>
-    <div class="feat-grid">
-      <div class="feat reveal">
-        <div class="feat-ic"><svg viewBox="0 0 24 24"><path d="M3 12h7M3 6h12M3 18h9"/><circle cx="18" cy="12" r="2.5"/><circle cx="20" cy="6" r="2.5"/></svg></div>
-        <h3>Any format, all at once</h3>
-        <p>Run a Nassau, skins, Wolf, and presses on the same round. Halved keeps every game separate and scores them all from one set of inputs.</p>
-        <p class="feat-links"><a href="/games/skins/">How Skins works</a> · <a href="/games/nassau/">How Nassau works</a> · <a href="/games/wolf/">How Wolf works</a> · <a href="/games/banker/">How Banker works</a></p>
-      </div>
-      <div class="feat reveal">
-        <div class="feat-ic"><svg viewBox="0 0 24 24"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg></div>
-        <h3>Live the whole way</h3>
-        <p>See exactly where you stand on every tee box. Know when you're down a skin and need to press — while there's still holes left to play.</p>
-      </div>
-      <div class="feat reveal">
-        <div class="feat-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/><path d="M17 16l2 2 3-3"/></svg></div>
-        <h3>Just enter scores</h3>
-        <p>No more cluttered cards and mental math. Tap in your scores like normal and let Halved handle the handicaps, the carries, and the running totals.</p>
-      </div>
-      <div class="feat reveal">
-        <div class="feat-ic"><svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4"/><path d="M5 4h14v6a7 7 0 01-14 0V4z"/><path d="M5 6H3v2a3 3 0 003 3M19 6h2v2a3 3 0 01-3 3"/></svg></div>
-        <h3>Run a full tournament</h3>
-        <p>From a weekend foursome to a 60-player outing. Live leaderboards, multiple groups, every format — follow the whole field as it unfolds.</p>
-      </div>
-      <div class="feat reveal">
-        <div class="feat-ic"><svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-8"/><path d="M16 8h5v5"/></svg></div>
-        <h3>Stats that follow you</h3>
-        <p>Head-to-head records, win streaks, and how you really do against your buddies — round after round, season after season.</p>
-      </div>
-      <div class="feat reveal">
-        <div class="feat-ic"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6 4.5 2.3 7.1L12 16.5 5.7 21l2.3-7.1-6-4.5h7.6z"/></svg></div>
-        <h3>Settled, not argued</h3>
-        <p>The round ends with one clean summary of who owes whom. No disputes, no awkward Venmo math on the 19th hole.</p>
-      </div>
-    </div>
-  </div>
+<section id="features" class="sec">
+<div class="wrap">
+<div class="eyebrow">Built for how you actually play</div>
+<h2>One round. Every game. No spreadsheet.</h2>
+<p class="lead">Most apps make you pick one format and stick to it. Real golf isn't like that — you've got a Nassau, a Skins game, and three side bets all running at once. Halved tracks all of it.</p>
+<div class="rows">
+<div class="row">
+<div class="row-copy">
+<h3>Any format, all at once</h3>
+<p>Run a Nassau, skins, Wolf, and presses on the same round. Halved keeps every game separate and scores them all from one set of inputs.</p>
+<div class="links"><a href="/games/skins/">How Skins works</a><a href="/games/nassau/">How Nassau works</a><a href="/games/wolf/">How Wolf works</a><a href="/games/banker/">How Banker works</a></div>
+</div>
+<div class="row-shot"><div class="phone"><img src="/games/img/wolf-play.png" alt="Wolf hole in the Halved app" width="640" height="1391" loading="lazy"></div></div>
+</div>
+<div class="row">
+<div class="row-copy">
+<h3>Live the whole way</h3>
+<p>See exactly where you stand on every tee box. Know when you're down a skin and need to press — while there's still holes left to play.</p>
+</div>
+<div class="row-shot"><div class="phone"><img src="/games/img/nassau-leaderboard.png" alt="Live Nassau leaderboard" width="640" height="1391" loading="lazy"></div></div>
+</div>
+<div class="row">
+<div class="row-copy">
+<h3>Run a full tournament</h3>
+<p>From a weekend foursome to a 60-player outing. Live leaderboards, multiple groups, every format — follow the whole field as it unfolds.</p>
+</div>
+<div class="row-shot"><div class="phone"><img src="/games/img/triple-cup-leaderboard.png" alt="Triple Cup tournament leaderboard" loading="lazy"></div></div>
+</div>
+</div>
+<div class="trio">
+<div><h3>Just enter scores</h3><p>No more cluttered cards and mental math. Tap in your scores like normal and let Halved handle the handicaps, the carries, and the running totals.</p></div>
+<div><h3>Stats that follow you</h3><p>Head-to-head records, win streaks, and how you really do against your buddies — round after round, season after season.</p></div>
+<div><h3>Settled, not argued</h3><p>The round ends with one clean summary of who owes whom. No disputes, no awkward Venmo math on the 19th hole.</p></div>
+</div>
+</div>
 </section>
-
-<section id="how" class="sec-pad" style="padding-top:30px">
-  <div class="wrap">
-    <div class="reveal">
-      <div class="eyebrow">How it works</div>
-      <h2 class="sec-h">Three taps from first tee to settled up.</h2>
-    </div>
-    <div class="steps">
-      <div class="step reveal">
-        <div class="step-n">1</div>
-        <h3>Set the games</h3>
-        <p>Pick your formats and stakes, add your group with a code or link. Followers can watch without even making an account.</p>
-      </div>
-      <div class="step reveal">
-        <div class="step-n">2</div>
-        <h3>Play & enter scores</h3>
-        <p>Just put in your numbers as you go. Halved scores every game live, applies handicaps, and tracks the action hole by hole.</p>
-      </div>
-      <div class="step reveal">
-        <div class="step-n">3</div>
-        <h3>Settle up</h3>
-        <p>On the 18th, get one tidy breakdown of who owes whom across every game. Square up however you already do.</p>
-      </div>
-    </div>
-  </div>
+<section id="how" class="sec how">
+<div class="wrap">
+<div class="eyebrow">How it works</div>
+<h2>Three taps from first tee to settled up.</h2>
+<div class="steps">
+<div class="step"><div class="step-n">1</div><h3>Set the games</h3><p>Pick your formats and stakes, add your group with a code or link. Followers can watch without even making an account.</p></div>
+<div class="step"><div class="step-n">2</div><h3>Play &amp; enter scores</h3><p>Just put in your numbers as you go. Halved scores every game live, applies handicaps, and tracks the action hole by hole.</p></div>
+<div class="step"><div class="step-n">3</div><h3>Settle up</h3><p>On the 18th, get one tidy breakdown of who owes whom across every game. Square up however you already do.</p></div>
+</div>
+</div>
 </section>
-
-<section id="settle" class="sec-pad" style="padding-top:30px">
-  <div class="wrap reveal">
-    <div class="settle">
-      <div>
-        <div class="eyebrow">The best part</div>
-        <h2>The argument ends before it starts.</h2>
-        <p>Every game on the round, totaled and netted into one number per person. No "wait, did the press carry?" No paper card covered in scribbles.</p>
-        <p>Just a clean, shareable summary you can drop in the group chat the second you walk off the green.</p>
-      </div>
-      <div class="receipt">
-        <div class="rec-h">
-          <div><div class="t">Settlement</div><div class="sub">Pebble Dunes · 4 players · 3 games</div></div>
-          <div class="sub tnum">May 31</div>
-        </div>
-        <div class="rec-line"><div class="who">Mike pays You<span>Nassau + Skins</span></div><div class="rec-amt pos tnum">+$45</div></div>
-        <div class="rec-line"><div class="who">You pay Dave<span>Side presses</span></div><div class="rec-amt neg tnum">−$15</div></div>
-        <div class="rec-line"><div class="who">Jordan pays You<span>Skins carryover</span></div><div class="rec-amt pos tnum">+$20</div></div>
-        <div class="rec-total"><div class="l">Your net for the day</div><div class="v tnum">+$50</div></div>
-      </div>
-    </div>
-  </div>
+<section id="played" class="sec mapsec">
+<div class="wrap">
+<div class="map-head">
+<div>
+<div class="eyebrow">Where Halved is played</div>
+<h2>Courses played with Halved</h2>
+</div>
+</div>
+<div class="map-box" id="map-box"><svg id="rounds-map" viewBox="0 0 1120 680" role="img" aria-label="Map of US courses where rounds have been completed in Halved"></svg><div class="map-tip" id="map-tip"></div></div>
+</div>
 </section>
-
-<section id="clubs" class="sec-pad" style="padding-top:30px">
-  <div class="wrap reveal">
-    <div class="clubs-wrap">
-      <div class="glow g1" style="top:-220px;right:-120px;opacity:.35"></div>
-      <div class="clubs-head" style="position:relative;z-index:2">
-        <div class="eyebrow">Halved for clubs</div>
-        <h2 class="sec-h">Run your whole club's action — not just a foursome.</h2>
-        <p class="sec-lead" style="margin-bottom:0">Member-guest tournaments, season-long match-play ladders, club championships. Unlimited members, unlimited flights, every format your members actually play — with a live club-wide leaderboard following all of it. Halved sits alongside your existing tools, not on top of them.</p>
-      </div>
-
-      <div class="clubs-feats" style="position:relative;z-index:2">
-        <div class="cf">
-          <svg viewBox="0 0 24 24"><path d="M3 7h18M3 12h18M3 17h12"/></svg>
-          <div><div class="cf-t">No format is off-limits</div><div class="cf-d">Built because the presets in other apps were too rigid. Combine and customize games however your members play.</div></div>
-        </div>
-        <div class="cf">
-          <svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4"/><path d="M5 4h14v6a7 7 0 01-14 0V4z"/></svg>
-          <div><div class="cf-t">Unlimited flights & members</div><div class="cf-d">From a 16-player member-guest to a full-field club championship across multiple groups.</div></div>
-        </div>
-        <div class="cf">
-          <svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-8"/><path d="M16 8h5v5"/></svg>
-          <div><div class="cf-t">Live club-wide leaderboard</div><div class="cf-d">The whole field, every game, updating in real time — on phones and on the clubhouse TV.</div></div>
-        </div>
-        <div class="cf">
-          <svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg>
-          <div><div class="cf-t">An organizer console</div><div class="cf-d">Your pro or committee sets up events, manages rosters and settles the field — without a spreadsheet.</div></div>
-        </div>
-      </div>
-
-      <div class="integrate" style="position:relative;z-index:2">
-        <div class="ic"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1"/><path d="M14 11a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/></svg></div>
-        <div class="body">
-          <h4>Works alongside the tools your club already runs</h4>
-          <p>Halved is complementary, not a rip-and-replace. It's designed to fit alongside the systems you already use — your rosters, your sign-on, and your members' handicaps for accurate net scoring — so there's nothing to rip out. Halved is the member-facing scoring layer on top.</p>
-        </div>
-      </div>
-
-      <div class="clubs-cta" style="position:relative;z-index:2">
-        <a href="mailto:info@halved.golf?subject=Halved%20for%20clubs"><button class="btn-primary">Talk to us about your club</button></a>
-      </div>
-    </div>
-  </div>
+<section id="guides" class="sec" style="padding-bottom:40px">
+<div class="wrap">
+<div class="gt-head">
+<div>
+<div class="eyebrow">Game guides</div>
+<h2>What are you playing today?</h2>
+<p class="lead">Rules, scoring and the money for every game Halved runs. Pick your group.</p>
+</div>
+<div class="gt-pick" role="group" aria-label="Group size"><button type="button" data-g="two" aria-pressed="false">Two of you</button><button type="button" data-g="three" aria-pressed="false">A threesome</button><button type="button" data-g="four" aria-pressed="true">A foursome</button><button type="button" data-g="field" aria-pressed="false">The whole field</button></div>
+</div>
+<div class="gt-cards" id="gt-cards">
+<a class="gt-card" href="/games/wolf/"><div class="gt-n">Wolf</div><p>The wolf picks a partner after watching the tee shots, or goes it alone for double.</p><div class="gt-go">How to play Wolf &#8594;</div></a>
+<a class="gt-card" href="/games/las-vegas/"><div class="gt-n">Las Vegas</div><p>Your team&rsquo;s two scores become one number. A 4 and a 5 is 45, and every point is money.</p><div class="gt-go">How to play Las Vegas &#8594;</div></a>
+<a class="gt-card" href="/games/banker/"><div class="gt-n">Banker</div><p>One golfer holds the bank each hole, and everyone else bets against him.</p><div class="gt-go">How to play Banker &#8594;</div></a>
+</div>
+<div class="gt-all"><a href="/games/" class="btn btn-pine">See all the game guides</a><span>Nassau, Skins, Sixes, Pink Ball, Irish Rumble and more</span></div>
+</div>
 </section>
-
-<section class="sec-pad" style="padding-top:10px">
-  <div class="wrap reveal">
-    <div class="cta-band">
-      <div class="glow g1" style="top:-200px;right:-100px"></div>
-      <h2>Get your foursome on Halved.</h2>
-      <p>Now live on the Apple App Store. Have a question, or want to bring Halved to your club? We'd love to hear from you.</p>
-      <a href="https://apps.apple.com/app/id6768284628" class="js-ios-only" style="display:none;position:relative;z-index:2"><button class="btn-primary">&#63743;&nbsp; Download on the App Store</button></a>
-      <a href="mailto:info@halved.golf?subject=Halved" style="position:relative;z-index:2"><button class="btn-primary">Get in touch</button></a>
-    </div>
-  </div>
+<section id="settle" class="sec">
+<div class="wrap">
+<div class="settle">
+<div>
+<div class="eyebrow">The best part</div>
+<h2>The argument ends before it starts.</h2>
+<p>Every game on the round, totaled and netted into one number per person. No "wait, did the press carry?" No paper card covered in scribbles.</p>
+<p>Just a clean, shareable summary you can drop in the group chat the second you walk off the green.</p>
+</div>
+<div class="settle-shot"><div class="phone"><img src="/games/img/sequoya-settle-up.png" alt="Settle up screen: each golfer's net and the fewest payments" loading="lazy"></div></div>
+</div>
+</div>
 </section>
-
+<section id="clubs" style="padding-bottom:30px">
+<div class="wrap">
+<div class="clubs">
+<div class="eyebrow">Halved for clubs</div>
+<h2>Run your whole club's action — not just a foursome.</h2>
+<p class="lead">Member-guest tournaments, season-long match-play ladders, club championships. Unlimited members, unlimited flights, every format your members actually play — with a live club-wide leaderboard following all of it. Halved sits alongside your existing tools, not on top of them.</p>
+<div class="cfeats">
+<div class="cf"><div class="cf-t">No format is off-limits</div><div class="cf-d">Built because the presets in other apps were too rigid. Combine and customize games however your members play.</div></div>
+<div class="cf"><div class="cf-t">Unlimited flights &amp; members</div><div class="cf-d">From a 16-player member-guest to a full-field club championship across multiple groups.</div></div>
+<div class="cf"><div class="cf-t">Live club-wide leaderboard</div><div class="cf-d">The whole field, every game, updating in real time — on phones and on the clubhouse TV.</div></div>
+<div class="cf"><div class="cf-t">An organizer console</div><div class="cf-d">Your pro or committee sets up events, manages rosters and settles the field — without a spreadsheet.</div></div>
+</div>
+<div class="integrate">
+<h4>Works alongside the tools your club already runs</h4>
+<p>Halved is complementary, not a rip-and-replace. It's designed to fit alongside the systems you already use — your rosters, your sign-on, and your members' handicaps for accurate net scoring — so there's nothing to rip out. Halved is the member-facing scoring layer on top.</p>
+</div>
+<div class="clubs-cta"><a href="mailto:info@halved.golf?subject=Halved%20for%20clubs" class="btn btn-mint">Talk to us about your club</a></div>
+</div>
+</div>
+</section>
+<section class="sec" style="padding-top:30px;padding-bottom:0">
+<div class="wrap">
+<div class="cta">
+<h2>Get your group on Halved.</h2>
+<p>Now live on the Apple App Store. Have a question, or want to bring Halved to your club? We'd love to hear from you.</p>
+<div class="cta-row">
+<a href="https://apps.apple.com/app/id6768284628" class="btn btn-white js-ios-only" style="display:none">&#63743;&nbsp; Download on the App Store</a>
+<a href="mailto:info@halved.golf?subject=Halved" class="btn btn-white">Get in touch</a>
+</div>
+</div>
+</div>
+</section>
 <footer>
-  <div class="wrap">
-    <div class="foot-in">
-      <div>
-        <div class="logo"><span class="dot"></span>Halved</div>
-        <p class="foot-tag">The scoring companion that tracks every game on your round and keeps the stakes straight. You've halved the hole.</p>
-      </div>
-      <div class="foot-cols">
-        <div class="foot-col">
-          <h4>Product</h4>
-          <a href="#features">Features</a>
-          <a href="#how">How it works</a>
-          <a href="#settle">Settle up</a>
-          <a href="#clubs">For clubs</a>
-          <a href="/games/">Game guides</a>
-        </div>
-        <div class="foot-col">
-          <h4>Company</h4>
-          <a href="mailto:info@halved.golf?subject=Halved">Contact</a>
-          <a href="/support">Support</a>
-        </div>
-        <div class="foot-col">
-          <h4>Legal</h4>
-          <a href="/privacy">Privacy Policy</a>
-          <a href="/sms-consent">SMS Consent</a>
-        </div>
-      </div>
-    </div>
-    <div class="foot-bottom">
-      Sign-in is by mobile phone: you enter your number and we text you a one-time login code. Message &amp; data rates may apply; one-time codes only, no marketing. See our <a href="/sms-consent" style="color:var(--mint-soft)">SMS Consent</a> and <a href="/privacy" style="color:var(--mint-soft)">Privacy Policy</a>.
-      <br><br>
-      Halved is a scoring and bet-tracking companion. It records side games and calculates settlements between players; it does not hold, transfer, or process money and is not a gambling operator or money service. Play responsibly and only where permitted. © 2026 Halved. Operated by Paul Lipkin · <a href="mailto:info@halved.golf" style="color:var(--mint-soft)">info@halved.golf</a>. All rights reserved.
-    </div>
-  </div>
+<div class="wrap">
+<div class="foot-in">
+<div>
+<a href="/" class="logo"><span class="mk">H</span>Halved</a>
+<p class="foot-tag">The scoring companion that tracks every game on your round and keeps the stakes straight. You've halved the hole.</p>
+</div>
+<div class="foot-cols">
+<div class="foot-col"><h4>Product</h4><a href="#features">Features</a><a href="#how">How it works</a><a href="#settle">Settle up</a><a href="#clubs">For clubs</a><a href="/games/">Game guides</a></div>
+<div class="foot-col"><h4>Company</h4><a href="mailto:info@halved.golf?subject=Halved">Contact</a><a href="/support">Support</a></div>
+<div class="foot-col"><h4>Legal</h4><a href="/privacy">Privacy Policy</a><a href="/sms-consent">SMS Consent</a></div>
+</div>
+</div>
+<div class="foot-bottom">
+Sign-in is by mobile phone: you enter your number and we text you a one-time login code. Message &amp; data rates may apply; one-time codes only, no marketing. See our <a href="/sms-consent">SMS Consent</a> and <a href="/privacy">Privacy Policy</a>.
+<br><br>
+Halved is a scoring and bet-tracking companion. It records side games and calculates settlements between players; it does not hold, transfer, or process money and is not a gambling operator or money service. Play responsibly and only where permitted. © 2026 Halved. Operated by Paul Lipkin · <a href="mailto:info@halved.golf">info@halved.golf</a>. All rights reserved.
+</div>
+</div>
 </footer>
-
 <script>
-  // --- phone menu ---------------------------------------------------------
-  (function () {
-    var btn   = document.getElementById('menu-btn');
-    var sheet = document.getElementById('menu-sheet');
-    if (!btn || !sheet) return;
-    var items = sheet.querySelectorAll('a');
-    var scrollY = 0;
-
-    function open() {
-      // Lock the body WITHOUT losing the reading position. position:fixed is the
-      // only thing that reliably stops iOS Safari scrolling the page behind the
-      // sheet, and it forgets where you were, so the offset is carried by hand.
-      scrollY = window.scrollY;
-      document.body.style.position = 'fixed';
-      document.body.style.top      = -scrollY + 'px';
-      document.body.style.width    = '100%';
-      sheet.hidden = false;
-      // Next frame, or the transition has nothing to animate from.
-      requestAnimationFrame(function () { sheet.classList.add('is-open'); });
-      btn.setAttribute('aria-expanded', 'true');
-      if (items.length) items[0].focus();
-    }
-
-    function close(returnFocus) {
-      sheet.classList.remove('is-open');
-      btn.setAttribute('aria-expanded', 'false');
-      document.body.style.position = '';
-      document.body.style.top      = '';
-      document.body.style.width    = '';
-      window.scrollTo(0, scrollY);
-      var done = function () { sheet.hidden = true; };
-      // Honour reduced motion: no transition means no transitionend.
-      if (matchMedia('(prefers-reduced-motion: reduce)').matches) done();
-      else setTimeout(done, 200);
-      if (returnFocus) btn.focus();
-    }
-
-    function isOpen() { return btn.getAttribute('aria-expanded') === 'true'; }
-
-    btn.addEventListener('click', function () { isOpen() ? close(true) : open(); });
-
-    // An anchor closes the sheet and lets the browser do the scrolling. The
-    // body lock has to come off first or the jump lands nowhere.
-    items.forEach(function (a) {
-      a.addEventListener('click', function () { if (isOpen()) close(false); });
-    });
-
-    document.addEventListener('keydown', function (e) {
-      if (!isOpen()) return;
-      if (e.key === 'Escape') { close(true); return; }
-      if (e.key !== 'Tab' || !items.length) return;
-      // Trap: the sheet covers the page, so tabbing out of it would move focus
-      // to things nobody can see.
-      var first = items[0], last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-    });
-
-    // Rotate to a width where the real nav is back and the sheet is covering a
-    // page it no longer has any business hiding.
-    addEventListener('resize', function () {
-      if (isOpen() && innerWidth > 820) close(false);
-    });
-  })();
-
-  var io=new IntersectionObserver(function(es){es.forEach(function(en){if(en.isIntersecting){en.target.classList.add('in');io.unobserve(en.target);}});},{threshold:.12});
-  document.querySelectorAll('.reveal').forEach(function(el,i){el.style.transitionDelay=(i%3)*0.08+'s';io.observe(el);});
-
-  // Show the "Download on the App Store" buttons only on iOS (iPhone/iPad/iPod),
-  // where tapping installs the app directly.
-  (function(){
-    var ua = navigator.userAgent || '';
-    var isIOS = /iP(hone|ad|od)/.test(ua) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS
-    if (isIOS) {
-      document.querySelectorAll('.js-ios-only').forEach(function(el){ el.style.display = ''; });
-    }
-  })();
+(function(){
+var btn=document.getElementById('menu-btn'),sheet=document.getElementById('menu-sheet');
+if(btn&&sheet){
+var items=sheet.querySelectorAll('a'),y=0;
+function isOpen(){return btn.getAttribute('aria-expanded')==='true'}
+function open(){y=window.scrollY;document.body.style.position='fixed';document.body.style.top=-y+'px';document.body.style.width='100%';sheet.hidden=false;requestAnimationFrame(function(){sheet.classList.add('is-open')});btn.setAttribute('aria-expanded','true');if(items.length)items[0].focus()}
+function close(f){sheet.classList.remove('is-open');btn.setAttribute('aria-expanded','false');document.body.style.position='';document.body.style.top='';document.body.style.width='';window.scrollTo(0,y);var d=function(){sheet.hidden=true};if(matchMedia('(prefers-reduced-motion: reduce)').matches)d();else setTimeout(d,200);if(f)btn.focus()}
+btn.addEventListener('click',function(){isOpen()?close(true):open()});
+items.forEach(function(a){a.addEventListener('click',function(){if(isOpen())close(false)})});
+document.addEventListener('keydown',function(e){if(!isOpen())return;if(e.key==='Escape'){close(true);return}if(e.key!=='Tab'||!items.length)return;var f=items[0],l=items[items.length-1];if(e.shiftKey&&document.activeElement===f){e.preventDefault();l.focus()}else if(!e.shiftKey&&document.activeElement===l){e.preventDefault();f.focus()}});
+addEventListener('resize',function(){if(isOpen()&&innerWidth>820)close(false)});
+}
+/* Rounds map, US only. REAL DATA, generated 9 Oct 2026 by `manage.py courses_played --map` against production: completed rounds grouped by course name, seed_demo accounts excluded. Regenerate with that command; do not hand-edit. Non-US courses are filtered out. */
+var COURSES=[
+["Tilden Park GC",37.8878,-122.2436,"US",65],["Metropolitan Gl",37.7201,-122.1959,"US",9],["Bandon Dunes",43.1882,-124.3899,"US",3],["Chardonnay Gc",38.2154,-122.2373,"US",3],["Corica Park Gc \u2014 South",37.7396,-122.2329,"US",3],["Bandon Dunes \u2014 Bandon Trails",43.1882,-124.3899,"US",2],["Bandon Dunes \u2014 Pacific Dunes",43.1882,-124.3899,"US",2],["Poppy Hills Gc",36.5824,-121.9384,"US",2],["The Peninsula Golf and Country Club",37.5425,-122.3235,"US",2],["Bandon - Sheep Ranch",43.1882,-124.3899,"US",1],["Bandon Dunes \u2014 Old Macdonald",43.1882,-124.3899,"US",1],["Berkeley Country Club",37.9347,-122.3031,"US",1],["Canyon Lakes Gc & Brewery",37.7708,-121.9498,"US",1],["Century Country Club",41.0388,-73.7296,"US",1],["Corica Park Gc \u2014 North",37.7396,-122.2329,"US",1],["Del Monte Gc",36.5923,-121.8717,"US",1],["Greenhorn Creek Gc",38.0663,-120.5542,"US",1],["Harding Park (Tpc) Gc",37.7249,-122.4933,"US",1],["Pacific Grove Gl",36.6335,-121.9317,"US",1],["Paradise Valley Gc",38.2965,-122.0243,"US",1],["Presidio Gc",37.7904,-122.4616,"US",1],["Rancho Solano Gc",38.2915,-122.0732,"US",1],["Rossmoor Gc \u2014 Creekside",37.8638,-122.0682,"US",1],["Rossmoor Gc \u2014 Dollar Ranch",37.8638,-122.0682,"US",1]
+];
+(function(){
+var svg=document.getElementById('rounds-map');if(!svg||!window.d3||!window.topojson)return;
+var W=1120,H=680,s=d3.select(svg),tip=document.getElementById('map-tip'),box=document.getElementById('map-box');
+var proj=d3.geoAlbersUsa(),path=d3.geoPath(proj);
+var fmt=d3.format(',');
+fetch('https://cdn.jsdelivr.net/npm/us-atlas@3.0.1/states-10m.json').then(function(r){return r.json()}).then(function(topo){
+var land=topojson.feature(topo,topo.objects.states);
+proj.fitExtent([[4,4],[W-4,H-4]],land);
+s.append('g').selectAll('path').data(land.features).join('path').attr('d',path).attr('fill','#14382E').attr('stroke','rgba(159,225,203,.22)').attr('stroke-width',.8).attr('stroke-linejoin','round');
+var g=s.append('g');
+COURSES.filter(function(c){return c[3]==='US'}).forEach(function(c){var p=proj([c[2],c[1]]);if(!p)return;
+g.append('circle').attr('cx',p[0]).attr('cy',p[1]).attr('r',11).attr('fill','#3BD89A').attr('opacity',.16);
+var dot=g.append('circle').attr('cx',p[0]).attr('cy',p[1]).attr('r',4.5).attr('fill','#3BD89A').attr('stroke','#0B1F1A').attr('stroke-width',1.2).style('cursor','pointer');
+dot.on('mouseenter',function(){var b=svg.getBoundingClientRect(),k=b.width/W;tip.innerHTML='<b>'+c[0]+'</b>'+fmt(c[4])+' rounds';tip.style.left=(p[0]*k)+'px';tip.style.top=(p[1]*k)+'px';tip.style.opacity=1}).on('mouseleave',function(){tip.style.opacity=0});
+});
+}).catch(function(){});
+})();
+(function(){
+var G={
+two:[['Nassau','nassau','Three bets in one round: the front nine, the back nine and all 18. Then the presses start.'],['Rabbit','rabbit','Win a hole outright to catch the rabbit. Hold it at the 9th and the 18th to cash.'],['Skins','skins','Every hole is worth a skin. Tie it and the skin carries to the next one.']],
+three:[['Points 5-3-1','points-5-3-1','Nine points a hole: 5 for the best score, 3 for the next and 1 for the last.'],['Skins','skins','Every hole is worth a skin. Tie it and the skin carries to the next one.'],['Rabbit','rabbit','Win a hole outright to catch the rabbit. Hold it at the 9th and the 18th to cash.']],
+four:[['Wolf','wolf','The wolf picks a partner after watching the tee shots, or goes it alone for double.'],['Las Vegas','las-vegas','Your team\u2019s two scores become one number. A 4 and a 5 is 45, and every point is money.'],['Banker','banker','One golfer holds the bank each hole, and everyone else bets against him.']],
+field:[['Pink Ball','pink-ball','One ball per group, played in turn. Lose it and you\u2019re out.'],['Irish Rumble','irish-rumble','Your group\u2019s best nets count, and the number climbs through the round.'],['Hot Spot','hot-spot','One golfer anchors each hole, and his score counts whatever it is.']]};
+var box=document.getElementById('gt-cards'),btns=document.querySelectorAll('.gt-pick button');
+if(!box)return;
+btns.forEach(function(b){b.addEventListener('click',function(){
+btns.forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')});
+box.innerHTML=G[b.dataset.g].map(function(g){return '<a class="gt-card" href="/games/'+g[1]+'/"><div class="gt-n">'+g[0]+'</div><p>'+g[2]+'</p><div class="gt-go">How to play '+g[0]+' &#8594;</div></a>'}).join('');
+})});
+})();
+var ua=navigator.userAgent||'';
+if(/iP(hone|ad|od)/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)){document.querySelectorAll('.js-ios-only').forEach(function(el){el.style.display=''})}
+})();
 </script>
 </body>
 </html>
