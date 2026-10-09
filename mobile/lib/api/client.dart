@@ -1456,10 +1456,18 @@ class ApiClient {
     int roundId, {
     double? betUnit,
     bool?   netMaxDoubleBogey,
+    List<String>? activeGames,
   }) async {
     final body = <String, dynamic>{};
     if (betUnit != null)            body['bet_unit'] = betUnit;
     if (netMaxDoubleBogey != null)  body['net_max_double_bogey'] = netMaxDoubleBogey;
+    // Side games are per ROUND and often differ between rounds, so they have
+    // to be changeable after the round exists — round 1's were previously set
+    // once in the create wizard and then unreachable. `active_games` is
+    // already writable on RoundSerializer, so this needed no server change.
+    // An EMPTY list is a real value here (turn everything off), which is why
+    // it is a nullable parameter rather than a default of `const []`.
+    if (activeGames != null)        body['active_games'] = activeGames;
     final data = await _patch('/rounds/$roundId/', body);
     return Round.fromJson(data as Map<String, dynamic>);
   }

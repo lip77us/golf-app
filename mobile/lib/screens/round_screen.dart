@@ -233,7 +233,14 @@ class _RoundScreenState extends State<RoundScreen> {
     // card is hidden and the button it holds is unreachable. A round playing
     // only 40 Balls is exactly that case, and it is the third time this shape
     // has bitten (the casual receipt, the edit-window button).
-    final hasSetupGames  = hasIrishRumble || hasBetterBall || hasHotSpot ||
+    // A tournament round ALWAYS has the Side games button, so the card must
+    // open even when nothing is selected yet — which is the exact case it is
+    // needed for: a round created with the wrong games, or none. Without
+    // this the button lives inside a card its own emptiness hides, the
+    // failure the comment above describes.
+    final isTournamentRound = round.tournamentId != null;
+    final hasSetupGames  = isTournamentRound ||
+        hasIrishRumble || hasBetterBall || hasHotSpot ||
         showLowNet || hasPinkBall || hasFortyBalls ||
         showMatchPlaySetup || showStableford;
 
@@ -288,6 +295,8 @@ class _RoundScreenState extends State<RoundScreen> {
               hasIrishRumble: hasIrishRumble,
               hasBetterBall : hasBetterBall,
               hasHotSpot    : hasHotSpot,
+              isTournamentRound: isTournamentRound,
+              onGamesChanged: _reloadRound,
               showLowNet:     showLowNet,
               hasPinkBall:    hasPinkBall,
               hasFortyBalls:  hasFortyBalls,
@@ -680,6 +689,10 @@ class _GameSetupCard extends StatelessWidget {
   final bool           hasIrishRumble;
   final bool           hasBetterBall;
   final bool           hasHotSpot;
+  /// Side games are per ROUND, but only a tournament round picks them
+  /// here — a casual round's are chosen when it is created.
+  final bool           isTournamentRound;
+  final VoidCallback?  onGamesChanged;
   final bool           showLowNet;
   final bool           hasPinkBall;
   final bool           hasFortyBalls;
@@ -692,6 +705,8 @@ class _GameSetupCard extends StatelessWidget {
     required this.hasIrishRumble,
     required this.hasBetterBall,
     required this.hasHotSpot,
+    required this.isTournamentRound,
+    this.onGamesChanged,
     required this.showLowNet,
     required this.hasPinkBall,
     required this.hasFortyBalls,
@@ -731,6 +746,23 @@ class _GameSetupCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // **Which side games this round plays.** They belong to the
+            // ROUND and a tournament's rounds often play different ones;
+            // round 1's were set once inside the create wizard and then
+            // unreachable. First in the card because it decides what the
+            // rest of the card contains.
+            if (isTournamentRound) ...[
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final changed = await Navigator.of(context).pushNamed(
+                      '/round-side-games', arguments: roundId);
+                  if (changed == true) onGamesChanged?.call();
+                },
+                icon: const Icon(Icons.tune, size: 18),
+                label: const Text('Side games'),
+              ),
+              const SizedBox(height: 8),
+            ],
             if (hasIrishRumble)
               OutlinedButton.icon(
                 onPressed: () => Navigator.of(context)

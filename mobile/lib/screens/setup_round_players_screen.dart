@@ -14,7 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
-import '../game_catalog.dart';
+import '../widgets/side_games_picker.dart';
 import '../providers/auth_provider.dart';
 import '../utils/grouping.dart';
 import '../utils/add_halved_golfer.dart';
@@ -347,27 +347,21 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
         Text('Select Games', style: theme.textTheme.headlineSmall),
         const SizedBox(height: 4),
         Text(
-          'Choose which games will be played in this round. '
-          'You can add none and configure games individually from the round screen.',
+          'The side games for THIS round. Each round has its own — they are '
+          'often different — and you can change them later from the round '
+          'screen.',
           style: theme.textTheme.bodyMedium
               ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 20),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: tournamentRoundGames.map((meta) {
-            final selected = _selectedGames.contains(meta.id);
-            return FilterChip(
-              label: Text(meta.displayName),
-              selected: selected,
-              onSelected: (_) => setState(() {
-                selected
-                    ? _selectedGames.remove(meta.id)
-                    : _selectedGames.add(meta.id);
-              }),
-            );
-          }).toList(),
+        // The same picker the tournament wizard uses for round 1. It used to
+        // be bare chips here and rich cards there, so the two screens showed
+        // different games and said different things about them.
+        SideGamesPicker(
+          selected: _selectedGames,
+          onToggle: (id, on) => setState(() {
+            on ? _selectedGames.add(id) : _selectedGames.remove(id);
+          }),
         ),
         if (_selectedGames.isEmpty) ...[
           const SizedBox(height: 20),

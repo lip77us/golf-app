@@ -32,6 +32,7 @@ import '../utils/golfer_invite.dart';
 import '../widgets/course_search_field.dart';
 import '../widgets/payout_config_field.dart';
 import '../widgets/section_card.dart';
+import '../widgets/side_games_picker.dart';
 import '../widgets/tee_assignment.dart';
 import 'better_ball_setup_screen.dart';
 import 'irish_rumble_setup_screen.dart'; // also exports LowNetSetupScreen
@@ -1377,7 +1378,19 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
   Future<void> _createCasualOrStandardRound() async {
     final client  = context.read<AuthProvider>().client;
     final dateStr = DateFormat('yyyy-MM-dd').format(_date);
-    final games   = _activeGames.toList();
+    // **Dream Round is tournament-level ONLY.** Its config is a OneToOne on
+    // the tournament and its board is built by TournamentLeaderboardView, so
+    // a round that carries the slug has no block to draw — it came up as an
+    // empty lowercase `dream_round` tab, and `api/views.py` strips it back
+    // out on the way to the round board. Not writing it here is the same fix
+    // one level earlier. It still goes on the TOURNAMENT, just below.
+    //
+    // The server's repair stays: rounds created before this still carry it,
+    // and the tournament board reads the ROUNDS' lists as a fallback so a TD
+    // who said it in the wrong place does not lose the game.
+    final games   = _activeGames
+        .where((g) => g != GameIds.dreamRound)
+        .toList();
 
     // 1. Resolve or create tournament
     int? tournamentId;
@@ -4266,67 +4279,42 @@ class _StepSideGames extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme  = Theme.of(context);
-    final field  = _bracketField;
 
     return _pinnedStep(
       context,
-      title: 'Side games',
-      subtitle: 'The games you set for the whole field. Entry is taken at '
-          'signup, so each one is priced here.',
+      title: 'Round 1 side games',
+      subtitle: 'Each round has its own side games — they are often '
+          'different — and you can change round 1 later from the round '
+          'screen. The two at the bottom are set once for the whole '
+          'tournament.',
       children: [
-        // Irish Rumble and Pink Ball each own a setup screen that asks for
-        // their rules AND their money — and the payout table there needs the
-        // pool, so the entry has to live beside it. Asking again here just
-        // collected a number and threw it away.
-        _GameToggleCard(
-          on      : activeGames.contains(GameIds.irishRumble),
-          title   : 'Irish Rumble',
-          blurb   : "Every group's best nets are added up and ranked against "
-                    'the whole field. Re-drawn every round.',
-          moneyNote: 'Entry and payouts are set on the Irish Rumble screen, '
-                     'right after you create the tournament.',
-          onToggle: (v) => onToggle(GameIds.irishRumble, v),
+        // **The per-round side games, from the shared picker.** The same
+        // widget `setup_round_players_screen` uses for every later round,
+        // over the same catalog list — so round 1 and round 2 offer the same
+        // games and say the same things about them. They were seven hardcoded
+        // cards here and bare chips there, which is how a TD came to see Hot
+        // Spot in round 2 and not in round 1.
+        SideGamesPicker(
+          selected: activeGames,
+          onToggle: onToggle,
+          extras: {
+            if (_bracketField.fits)
+              GameIds.matchPlay: _miniExtras(context, _bracketField.groups),
+          },
+          disabledReasons: {
+            GameIds.matchPlay:
+                _bracketField.fits ? null : _bracketField.reason,
+          },
         ),
-        const SizedBox(height: 12),
-        _GameToggleCard(
-          on      : activeGames.contains(GameIds.betterBall),
-          title   : 'Better Ball',
-          blurb   : "The same board as Irish Rumble with the count held "
-                    'still — you pick how many of a group\'s four nets count, '
-                    'and it is that many on every hole.',
-          moneyNote: 'Entry, payouts and how many balls count are set on the '
-                     'Better Ball screen, right after you create the '
-                     'tournament.',
-          onToggle: (v) => onToggle(GameIds.betterBall, v),
-        ),
-        const SizedBox(height: 12),
-        _GameToggleCard(
-          on      : activeGames.contains(GameIds.fortyBalls),
-          title   : '40 Balls',
-          blurb   : 'The same group nets, but the group chooses. Each hole, '
-                    'AFTER the scores are in, it picks how many of its nets '
-                    'count — 0 to 4 — and must spend exactly 40 over the '
-                    'round. A threesome spends 30.',
-          moneyNote: 'Entry, payouts and how a score is measured are set on '
-                     'the 40 Balls screen, right after you create the '
-                     'tournament. The budget follows the group size — you set '
-                     'no balls.',
-          onToggle: (v) => onToggle(GameIds.fortyBalls, v),
-        ),
-        const SizedBox(height: 12),
-        _GameToggleCard(
-          on      : activeGames.contains(GameIds.pinkBall),
-          title   : 'Pink Ball',
-          blurb   : 'One ball per group, no replacements — the last group '
-                    'still holding it wins.',
-          moneyNote: 'Entry, payouts and what you call it are set on the '
-                     'Pink Ball screen — Red Ball, Devil Ball, whatever the '
-                     'group calls it.',
-          onToggle: (v) => onToggle(GameIds.pinkBall, v),
-        ),
-        const SizedBox(height: 12),
-
-        // ── Dream Round ────────────────────────────────────────────────────
+        const SizedBox(height: 24),
+        // ── Whole tournament, not per round ────────────────────────────────
+        // Dream Round's config is a OneToOne on the TOURNAMENT, and the day
+        // bet is the final round only. Neither is a per-round side game, and
+        // listing them among the others said they were — most of why this
+        // step read as tournament-scope while it wrote one round's games.
+        Text('For the whole tournament',
+            style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
         // **Hidden on a one-round event**, not disabled: with one round an
         // Dream Round IS the round, so there is nothing to explain and a struck
         // row would invite the TD to work out why.
@@ -4351,26 +4339,6 @@ class _StepSideGames extends StatelessWidget {
         ],
 
         // ── Mini Singles ────────────────────────────────────────────────
-        _GameToggleCard(
-          on      : activeGames.contains(GameIds.matchPlay),
-          title   : 'Mini Singles Bracket',
-          blurb   : numRounds > 1
-              ? 'A bracket in every group on day 1. The winners meet on day 2 '
-                'as one foursome for the title; everyone else plays a normal '
-                'stroke-play round.'
-              : 'A bracket in every group. Needs a second day for the '
-                'champions to meet, so on a one-round event it runs day 1 '
-                'only.',
-          moneyNote: "Day 1's entry and payouts are set per group on the "
-                     'bracket screen. The two things below are the '
-                     "tournament's to decide.",
-          disabledReason: field.fits ? null : field.reason,
-          onToggle: (v) => onToggle(GameIds.matchPlay, v),
-          extra   : activeGames.contains(GameIds.matchPlay) && field.fits
-              ? _miniExtras(context, field.groups)
-              : null,
-        ),
-
         // ── Day bet ─────────────────────────────────────────────────────
         // Multi-day only. On a one-round event it is absent, and the footnote
         // says so rather than showing a struck row for something that will

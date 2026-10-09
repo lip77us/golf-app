@@ -139,6 +139,23 @@ class GameMeta {
   /// Appears in the tournament-round picker.
   final bool tournament;
 
+  /// One line on the picker card saying what the game IS.
+  ///
+  /// **It lives here so one list can drive every picker.** The tournament
+  /// wizard used to hardcode seven cards with their own copy while round 2's
+  /// screen drew bare chips from the catalog — so the two drifted, in both
+  /// directions: the wizard never offered Stroke Play or Hot Spot, and the
+  /// chips never carried the blurb. A new game now appears in both, with the
+  /// same words, by being in the catalog.
+  final String? blurb;
+
+  /// Where this game's entry and payouts are actually set, when they are not
+  /// set on the picker. Irish Rumble, Better Ball and Hot Spot each own a
+  /// setup screen that asks for rules AND money, and the payout table there
+  /// needs the pool — so asking for a fee on the picker collected a number
+  /// and threw it away.
+  final String? moneyNote;
+
   /// Accumulates totals across multiple rounds; required as primary game
   /// when a tournament spans more than one day.
   final bool canBePrimary;
@@ -246,6 +263,8 @@ class GameMeta {
     required this.id,
     required this.displayName,
     this.casual               = false,
+    this.blurb,
+    this.moneyNote,
     this.tournament           = false,
     this.canBePrimary         = false,
     this.requiresMultiFoursome = false,
@@ -588,6 +607,8 @@ const List<GameMeta> kGameCatalog = [
   ),
   GameMeta(
     id           : GameIds.matchPlay,
+    blurb     : "A four-man knockout inside every group on day 1; the group winners play day 2 as one foursome.",
+    moneyNote : "Funded by a carve-out from the championship pot, set on the bracket screen.",
     displayName  : 'Mini Singles Bracket',
     // Single user-facing pick that auto-dispatches per foursome:
     //   4-player groups → single-elimination bracket (two semis on
@@ -648,6 +669,8 @@ const List<GameMeta> kGameCatalog = [
 
   GameMeta(
     id           : GameIds.strokePlay,
+    blurb     : "Every golfer ranked on net to par, against the whole field.",
+    moneyNote : "Entry and payouts are set on the Stroke Play screen.",
     displayName  : 'Stroke Play',
     casual       : true,
     tournament   : true,
@@ -707,6 +730,8 @@ const List<GameMeta> kGameCatalog = [
   ),
   GameMeta(
     id                   : GameIds.irishRumble,
+    blurb     : "Every group's best nets are added up and ranked against the whole field. Re-drawn every round.",
+    moneyNote : "Entry and payouts are set on the Irish Rumble screen, right after you create the tournament.",
     displayName          : 'Irish Rumble',
     tournament           : true,
     requiresMultiFoursome: true,
@@ -719,6 +744,8 @@ const List<GameMeta> kGameCatalog = [
   ),
   GameMeta(
     id                   : GameIds.betterBall,
+    blurb     : "The same board as Irish Rumble with the count held still — you pick how many of a group's four nets count, and it is that many on every hole.",
+    moneyNote : "Entry, payouts and how many balls count are set on the Better Ball screen, right after you create the tournament.",
     // The catalog name is the GAME, not what a given round calls it. The app
     // titles each round's game from its ball count (`Best 2 of 4`) and the TD
     // can rename it, but that is a property of the config — the picker is
@@ -737,6 +764,8 @@ const List<GameMeta> kGameCatalog = [
   ),
   GameMeta(
     id                   : GameIds.hotSpot,
+    blurb     : "One golfer anchors each hole and his score counts whatever it is; the team adds the best net of the other three. Each group sets its own anchor order on the first tee.",
+    moneyNote : "Entry, payouts and the rules are set on the Hot Spot screen, right after you create the tournament.",
     displayName          : 'Hot Spot',
     tournament           : true,
     requiresMultiFoursome: true,
@@ -753,6 +782,8 @@ const List<GameMeta> kGameCatalog = [
   ),
   GameMeta(
     id                   : GameIds.fortyBalls,
+    blurb     : "A group gets 40 balls for the round and spends 0 to 4 a hole, picked AFTER the scores are in. The best n nets count against n times par.",
+    moneyNote : "Entry and payouts are set on the 40 Balls screen, and it is re-run with its own pool every round.",
     displayName          : '40 Balls',
     tournament           : true,
     requiresMultiFoursome: true,
@@ -770,6 +801,8 @@ const List<GameMeta> kGameCatalog = [
   ),
   GameMeta(
     id                   : GameIds.pinkBall,
+    blurb     : "One ball per group, carried by each golfer in turn. The last group still holding it wins.",
+    moneyNote : "Entry and payouts are set on the Pink Ball screen, right after you create the tournament.",
     // Pink Ball is what the game is CALLED when you are picking it — the
     // recognisable name, and the one the TD's own name defaults to. What the
     // app never asks is the COLOUR: the name typed on the setup screen is
