@@ -25,9 +25,9 @@
   "modified": "2026-09-28"
  },
  "games/index.html": {
-  "hash": "640f468eb0b3e9b3",
+  "hash": "f78fc5341edf2e49",
   "published": "2026-09-13",
-  "modified": "2026-09-29"
+  "modified": "2026-10-09"
  },
  "games/irish-rumble/index.html": {
   "hash": "0e764847c704cd76",
@@ -78,6 +78,11 @@
   "hash": "f8dc189eb2352078",
   "published": "2026-09-27",
   "modified": "2026-09-28"
+ },
+ "games/stableford/index.html": {
+  "hash": "bbcbe57da1f6b776",
+  "published": "2026-10-09",
+  "modified": "2026-10-09"
  },
  "games/survivor/index.html": {
   "hash": "f905e6fb2fa34d15",
