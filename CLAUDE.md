@@ -3906,6 +3906,58 @@ that applied.
 
 ---
 
+## The day bet is a switch on the side games screen
+
+The day bet is not an `active_games` entry — it is `DayBetConfig`, a
+`OneToOne` on the round with its own endpoint — so it could not ride in
+`SideGamesPicker`'s `selected` set, and for a while that was reason enough to
+leave it off the list. **What that cost: the only way to turn one off was an
+action inside `day_bet_setup_screen`, under the Save button.** A TD who wanted
+no day bet went looking for a switch, found none, and reported that it could
+not be turned off. Same shipped-and-unreachable shape as the casual receipt no
+round could open and the setup-edit button gated on the rule it replaced.
+
+It is a card in `SideGamesPicker` now, **last**, on the final round only — and
+the SERVER decides that, via the setup GET's `eligible`, because it also wants
+a tournament and more than one round. An ineligible round draws no card rather
+than a switch that would 400. `dayBetOn == null` ⇒ no card, which also covers
+the moment before the fetch lands, so nothing flips itself.
+
+- **ON opens the setup screen.** A switch cannot invent a stake, and the bet
+  needs an entry fee and a prize table.
+- **OFF confirms, then deletes**, and names what goes: the money, not the
+  scores. Standings derive from the round's scores, so turning it back on
+  rebuilds them.
+- **That switch acts at once rather than on Save** — it is its own resource —
+  which is a seam inside one screen, so `dayBetNote` says so on the card.
+- The setup screen keeps its Turn off action. Both call `deleteDayBetSetup`,
+  so there is nothing to drift.
+- `_SideGameCard` takes title/blurb/moneyNote **as strings, not a `GameMeta`**,
+  because the day bet has no catalog entry; that is what keeps it from coming
+  to look different from the games above it.
+- A payout is `{place, amount}`, not a number. The first version of the note
+  read it as a number and would have thrown on any configured day bet.
+
+Tests: the `the day bet` group in `mobile/test/side_games_picker_test.dart`
+(5) — the card's presence is the thing worth pinning, since its absence is
+what the bug was.
+
+### `\$` in an API path is a 404 that looks like a missing endpoint
+
+`_delete('/rounds/\$roundId/day-bet/setup/')` compiles, analyses clean and
+passes every test, then asks the server for a round called literally
+`$roundId`. **The asymmetry is what makes it expensive:** the POST beside it
+had the correct string and worked, so the evidence pointed at the endpoint, at
+permissions and at the round — everywhere except the string. Reported as "I
+still can not Turn it off"; I diagnosed a stale round id first and was wrong.
+
+Introduced by inserting a method through a script that escaped `$` without
+needing to. `mobile/test/client_paths_test.dart` greps every `_get/_post/
+_patch/_delete` path literal for an escaped `$`, and for the opposite slip (an
+id written with no `$` at all, also a literal and also a 404). **Currency
+strings legitimately use `\$`** — `'\$${fee}'` is a dollar sign then an
+interpolation — which is why the test looks only inside path arguments.
+
 ## Website SEO pipeline — `website/build-seo.py`
 
 halved.golf is static HTML zipped to Cloudflare Pages (`website/build-zip.sh`).
