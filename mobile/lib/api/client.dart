@@ -157,8 +157,20 @@ class ApiClient {
       final looksLikeHtml = body.startsWith('<') ||
           body.toLowerCase().contains('<!doctype html');
       if (body.isEmpty || looksLikeHtml) {
-        message = 'Server error (HTTP ${res.statusCode}). '
-            'Check the server log for details.';
+        // **A 404 here is not a server fault and says so.** Every lookup
+        // in this API resolves inside the caller's own account, so a 404
+        // means the thing is gone or was never theirs — most often a
+        // screen still holding the id of something deleted or rebuilt
+        // elsewhere. "Check the server log" is advice a TD standing on a
+        // tee cannot take, and it reads as a crash when nothing crashed.
+        //
+        // Only in this branch: a 404 carrying a real JSON `detail` has
+        // already set `message` above, and that one is better than this.
+        message = res.statusCode == 404
+            ? 'That is no longer there — it may have been deleted or '
+                'rebuilt somewhere else. Go back and open it again.'
+            : 'Server error (HTTP ${res.statusCode}). '
+                'Check the server log for details.';
       } else if (body.length > 240) {
         message = '${body.substring(0, 240)}…';
       } else {
