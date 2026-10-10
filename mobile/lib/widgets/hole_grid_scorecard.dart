@@ -4,12 +4,14 @@ import '../theme/halved_brand.dart';
 import 'stroke_dots.dart';
 import '../utils/nine_totals.dart';
 
-/// Gold marks a ROLE rather than a result — Banker's, at present. It is
-/// deliberately not the win green: the man who banked a hole is as likely to
-/// have been beaten on it three times as to have collected.
-const _gold     = Color(0xFFB8860B);
-const _goldFill = Color(0xFFFBF0D6);
-const _goldLine = Color(0xFFE4D3A8);
+/// Gold marks a ROLE rather than a result — Banker's, and Hot Spot's anchor.
+/// It is deliberately not the win green: the man who banked a hole is as
+/// likely to have been beaten on it three times as to have collected, and Hot
+/// Spot's anchor is whose score the hole is BUILT from, which is a different
+/// fact from whether it was any good.
+const _gold     = Halved.role;
+const _goldFill = Halved.roleFill;
+const _goldLine = Halved.roleLine;
 
 /// A row UNDER the golfers, drawn inside the grid rather than beside it.
 ///
@@ -257,11 +259,19 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
       // Survivor + Zombie Option: this hole is where he won his way back in.
       // Every other game omits the flag, so it is inert there.
       final isBack = mine['resurrected'] == true;
-      // Banker: whoever banked this hole. Gold, and gold means the ROLE here
-      // and nothing else — not a win, which is why it cannot borrow the green.
-      // Every other game omits the key, so it is inert there.
-      final isBanker = entry['banker_id'] != null &&
-                       entry['banker_id'] == playerId;
+      // Whoever HELD the hole's role. Gold, and gold means the role here and
+      // nothing else — not a win, which is why it cannot borrow the green.
+      // Every game without one omits both keys, so it is inert there.
+      //
+      // `role_id` is the general name; `banker_id` is read beside it because
+      // Banker is where it started and its payload still says that. Hot Spot
+      // sends `role_id` for the anchor.
+      final roleId = entry['role_id'] ?? entry['banker_id'];
+      final isBanker = roleId != null && roleId == playerId;
+      // A capped score — Hot Spot's net double bogey. It is the LAST branch
+      // on purpose: it describes how a number was arrived at, which never
+      // outranks what the number did. Inert everywhere that omits it.
+      final isCapped = mine['capped'] == true;
       // Nassau: the whole winning TEAM's cells get tinted in their colour.
       final winnerTeam = entry['winner_team'] as int?;
       // A side carried on the SCORE wins over the per-player map: Sequoya 3s
@@ -292,8 +302,12 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
         cellBg     = _goldFill;
         cellFg     = _gold;
         cellBorder = Border.all(color: _goldLine, width: 1);
+      } else if (isCapped) {
+        cellBg     = Halved.cautionGround;
+        cellBorder = Border.all(color: Halved.caution, width: 1);
       }
-      final highlight = teamWin || isWinner || isOut || isBack || isBanker;
+      final highlight =
+          teamWin || isWinner || isOut || isBack || isBanker || isCapped;
 
       return Container(
         width: _cellW, height: _rowH,

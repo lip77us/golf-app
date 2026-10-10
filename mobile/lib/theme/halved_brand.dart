@@ -18,6 +18,17 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class Halved {
+  /// **A ROLE, not a result.** Banker's banked hole, Hot Spot's anchor —
+  /// whose hole it is, which is a different fact from whether it was any
+  /// good, so it must never borrow the win green.
+  ///
+  /// Here rather than private to one widget because the leaderboard cell and
+  /// the score-entry chip have to be the same gold: a reader who learns it on
+  /// one surface must not meet a second shade on the other.
+  static const Color role      = Color(0xFFB8860B);
+  static const Color roleFill  = Color(0xFFFBF0D6);
+  static const Color roleLine  = Color(0xFFE4D3A8);
+
   Halved._();
 
   // ── Core palette ──────────────────────────────────────────────────────────

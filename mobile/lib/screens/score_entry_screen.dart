@@ -3106,6 +3106,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                         rp.round?.primaryGame, games) == GameIds.banker
                     ? rp.bankerSummary
                     : null,
+                // Hot Spot's anchor for the hole on screen. Not gated on the
+                // primary game: Hot Spot rotates the anchor every hole and
+                // the group needs to know whose it is whether or not it is
+                // the round's headline game.
+                anchorId: games.contains(GameIds.hotSpot)
+                    ? (rp.hotSpotHole(widget.foursomeId, _selectedHole)
+                        ?['anchor_id'] as int?)
+                    : null,
                 holeData:        holeData,
                 holeNumber:      _selectedHole,
                 courseName:      rp.round?.course.name ?? '',
@@ -3409,6 +3417,11 @@ class _HoleScoreCard extends StatelessWidget {
   final Map<int, Map<int, int>> merged;
   final Map<int, int>           scores;
   final int                     hotSpotIdx;
+  /// Hot Spot's anchor for THIS hole — null when the game is not on, or on a
+  /// hole the finish rule gives no anchor (17 and 18 under "best 2").
+  /// `hotSpotIdx` above is unrelated: it is which row the entry cursor sits
+  /// on, and the collision of names is historical.
+  final int?                    anchorId;
   final int                     par;
   final NassauSummary?          nassau;
   /// Nassau summary used ONLY for team COLOURING (name tint + left bar) — it's
@@ -3473,6 +3486,7 @@ class _HoleScoreCard extends StatelessWidget {
   final void Function(Membership)?     onWithdrawTap;
 
   const _HoleScoreCard({
+    this.anchorId,
     required this.holeData,
     required this.holeNumber,
     this.courseName = '',
@@ -4156,6 +4170,8 @@ class _HoleScoreCard extends StatelessWidget {
                 isHot:               isHot,
                 par:                 par,
                 comboTee:            m.comboTeeOnHole(holeNumber),
+                isAnchor:            anchorId != null &&
+                                     anchorId == m.player.id,
                 strokesOnThisHole:   matchStrok,
                 teamLabel:           _teamLabelFor(m.player.id),
                 nameColor:           _nameColorFor(m, holeNumber),
@@ -4925,6 +4941,14 @@ class _PlayerRow extends StatelessWidget {
   /// his own row. Null for an ordinary tee and for a combo the course data
   /// cannot resolve, which draw the same thing: nothing.
   final String?       comboTee;
+  /// This golfer is Hot Spot's ANCHOR on this hole — his score counts
+  /// whatever it is, plus the best net of the others.
+  ///
+  /// **On the row, not only in a banner above the card.** The anchor IS the
+  /// game, and it changes every hole; a strip over the top of a card full of
+  /// names is not where anybody looks for which of four men it is. Reported
+  /// from the course on the 2nd tee: "I don't know who is in the hot spot".
+  final bool          isAnchor;
   final VoidCallback? onTap;
   final int           strokesOnThisHole;
   final String?       teamLabel;
@@ -4964,6 +4988,7 @@ class _PlayerRow extends StatelessWidget {
     required this.isHot,
     required this.par,
     this.comboTee,
+    this.isAnchor = false,
     this.onTap,
     this.strokesOnThisHole = 0,
     this.teamLabel,
@@ -5102,6 +5127,31 @@ class _PlayerRow extends StatelessWidget {
                 // nothing new competes for width on the row, and the other
                 // golfers' rows are untouched.
                 ComboTeeChip(tee: comboTee),
+                // **Gold, because it is a ROLE and not a result** — the same
+                // reading the shared scorecard gives Banker's cell. The
+                // anchor is whose score the hole is built from, which is a
+                // different fact from whether it was any good, so it must not
+                // borrow the win green.
+                if (isAnchor) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: Halved.roleFill,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Halved.roleLine),
+                    ),
+                    child: Text(
+                      'HOT SPOT',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: Halved.role,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
+                ],
                 if (withdrawn) ...[
                   const SizedBox(width: 6),
                   Container(

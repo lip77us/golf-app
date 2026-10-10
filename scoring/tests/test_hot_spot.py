@@ -456,3 +456,72 @@ class PositionsLockOneAtATimeTests(_Base):
         self.assertFalse(g['order_fully_locked'])
         # Unchanged for the shipped client, which hides Change at any score.
         self.assertTrue(g['order_locked'])
+
+
+class TheCardDrawsGrossWithDotsTests(_Base):
+    """The leaderboard card is the shared `HoleGridScorecard`, and that prints
+    GROSS with stroke dots — where this game's `scores` are the capped nets it
+    is scored on. Both ride in the payload; neither is derived twice.
+
+    It used to hand-roll its own grid into `PinnedHoleGrid` and never size the
+    cells, so eighteen hole numbers ran together into
+    `123456789101112131415161718` with the scores crushed against the left
+    edge. Moving to the shared widget is what fixes the geometry; these pin
+    the data it needs.
+    """
+
+    def _hole(self, hole=1):
+        g = next(x for x in hot_spot_summary(self.round)['groups']
+                 if x['foursome_id'] == self.fs.pk)
+        return next(h for h in g['holes'] if h['hole'] == hole)
+
+    def test_the_card_gets_the_stroke_index(self):
+        self._gross()
+        self._play(self.fs, 1, [4, 4, 4, 4])
+        self.assertIsNotNone(self._hole()['stroke_index'])
+
+    def test_gross_is_what_the_golfer_made(self):
+        self._gross()
+        set_anchor_order(self.fs, self._pids(self.fs))
+        self._play(self.fs, 1, [5, 4, 6, 7])
+        h = self._hole()
+        self.assertEqual(sorted(h['gross'].values()), [4, 5, 6, 7])
+
+    def test_strokes_are_sent_beside_it(self):
+        """Dots come from the ALLOCATION, so a gross round sends zeroes
+        rather than omitting the key — an absent key and a zero are the same
+        picture, and one of them is a missing-data bug."""
+        self._gross()
+        self._play(self.fs, 1, [4, 4, 4, 4])
+        h = self._hole()
+        self.assertEqual(set(h['strokes'].values()), {0})
+
+    def test_a_net_round_reports_the_strokes_that_came_off(self):
+        from core.models import HandicapMode
+        setup_hot_spot(self.round, handicap_mode=HandicapMode.NET,
+                       net_percent=100)
+        for m in self.fs.memberships.all():
+            m.playing_handicap = 18
+            m.save(update_fields=['playing_handicap'])
+        self._play(self.fs, 1, [5, 5, 5, 5])
+        h = self._hole()
+        self.assertEqual(set(h['gross'].values()), {5})
+        self.assertEqual(set(h['strokes'].values()), {1})
+
+    def test_the_cap_does_not_take_a_stroke_away(self):
+        """The dots show what was ALLOCATED. A capped net is clamped after
+        the allocation, so the dot count must not move with it — otherwise a
+        blow-up would silently lose a stroke on the card.
+        """
+        from core.models import HandicapMode
+        setup_hot_spot(self.round, handicap_mode=HandicapMode.NET,
+                       net_percent=100)
+        for m in self.fs.memberships.all():
+            m.playing_handicap = 18
+            m.save(update_fields=['playing_handicap'])
+        self._play(self.fs, 1, [10, 4, 4, 4])     # par 4, net 9 -> capped to 6
+        h = self._hole()
+        blown = max(h['gross'], key=lambda pid: h['gross'][pid])
+        self.assertEqual(h['gross'][blown], 10)
+        self.assertEqual(h['strokes'][blown], 1)
+        self.assertIn(blown, h['capped_ids'])

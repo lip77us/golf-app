@@ -11810,80 +11810,83 @@ class _HotSpotCard extends StatelessWidget {
     final order = (group['order'] as List? ?? []).cast<int>();
     final shorts = (group['order_short'] as List? ?? []).cast<String?>();
 
-    const cellW = 34.0;
-    const labelW = 64.0;
-    const rowH = 28.0;
-
-    // The hole in play is the first without a counted total; none means the
-    // card is read after the fact, so it opens on the last column.
-    var current = holes.indexWhere((h) => h['counted_total'] == null);
-    if (current < 0) current = holes.length - 1;
-
-    Widget head(String s) => Center(
-        child: Text(s,
-            style: theme.textTheme.labelSmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)));
-
-    final bands = <HoleGridBand>[
-      HoleGridBand(head('Hole'),
-          [for (final h in holes) head('${h['hole']}')], height: rowH),
-      HoleGridBand(head('Par'),
-          [for (final h in holes) head('${h['par']}')], height: rowH),
-      const HoleGridBand.rule(),
+    // **The shared card, not a hand-rolled grid.** This drew its own bands
+    // into `PinnedHoleGrid` and never sized the cells — that widget uses
+    // `cellWidth` for the scroll offset and the rule's width, and leaves the
+    // CALLER to size each box, which every other caller does and this one did
+    // not. The result on a phone was eighteen hole numbers run together into
+    // `123456789101112131415161718` with the scores crushed against the left
+    // edge. `HoleGridScorecard` owns the geometry, so it cannot be got wrong,
+    // and it brings the things the hand-rolled version had no room for:
+    // stroke dots, the stroke-index band, OUT / IN / TOT and the pinned
+    // label column.
+    final scHoles = <Map<String, dynamic>>[
+      for (final h in holes)
+        {
+          'hole': h['hole'],
+          'par': h['par'],
+          'stroke_index': h['stroke_index'],
+          // The anchor wears GOLD — a role, not a result. Its score counts
+          // whatever it was, which is a different fact from whether it was
+          // any good, so it must not borrow the win green.
+          'role_id': h['anchor_id'],
+          // GROSS with stroke dots, like every other board — `scores` on
+          // this payload is the capped NET the game is scored on, which is
+          // not what a scorecard prints.
+          'scores': [
+            for (final pid in order)
+              if ((h['gross'] as Map?)?['$pid'] != null)
+                {
+                  'player_id': pid,
+                  'gross': (h['gross'] as Map)['$pid'],
+                  'strokes': ((h['strokes'] as Map?)?['$pid'] as num?)
+                          ?.toInt() ??
+                      0,
+                  // Green on the OTHER ball the group banked. The anchor is
+                  // always one of the counted when there is one, so marking
+                  // it green too would hide the role behind the result.
+                  'counted': (h['counted_ids'] as List? ?? []).contains(pid) &&
+                      h['anchor_id'] != pid,
+                  'capped': (h['capped_ids'] as List? ?? []).contains(pid),
+                },
+          ],
+        },
+    ];
+    final participants = <Map<String, dynamic>>[
       for (var i = 0; i < order.length; i++)
-        HoleGridBand(
-          Padding(
-            padding: const EdgeInsets.only(left: 4),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(shorts.length > i ? (shorts[i] ?? '') : '',
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelSmall),
-            ),
-          ),
-          [for (final h in holes) _cell(theme, h, order[i])],
-          height: rowH,
-        ),
-      const HoleGridBand.rule(),
-      // The two counted scores against par for that hole — what the group
-      // actually banked, which is the number the board is built from.
-      HoleGridBand(
-        Padding(
-          padding: const EdgeInsets.only(left: 4),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(stableford ? 'Pts' : 'Hole',
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(fontWeight: FontWeight.bold)),
-          ),
-        ),
-        [
-          for (final h in holes)
-            Center(
-              child: Text(
-                _holeFigure(h),
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
-            ),
-        ],
-        height: rowH,
-      ),
+        {
+          'player_id': order[i],
+          'short_name': shorts.length > i ? (shorts[i] ?? '') : '',
+        },
     ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        PinnedHoleGrid(
-          bands: bands,
-          labelWidth: labelW,
-          cellWidth: cellW,
-          holeCount: holes.length,
-          currentIndex: current,
+        HoleGridScorecard(
+          holes: scHoles,
+          participants: participants,
+          holesInPlay: [for (final h in holes) h['hole'] as int],
+          legend: null,
+          // What the group actually banked on each hole, under the golfers
+          // and inside the same grid — a row that belongs to the card has to
+          // be built by the card, or it scrolls on its own and sits a column
+          // off the scores it describes.
+          footerRows: [
+            HoleGridFooterRow(
+              label: stableford ? 'Pts' : 'Hole',
+              text: (hole) {
+                final h = holes.firstWhere((x) => x['hole'] == hole,
+                    orElse: () => const {});
+                return h.isEmpty ? null : _holeFigure(h);
+              },
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         Wrap(spacing: 12, runSpacing: 4, children: [
-          _key(theme, Halved.deepPine, 'Anchor'),
+          _key(theme, Halved.roleFill, 'Hot spot',
+              border: Halved.roleLine),
           _key(theme, Halved.mint, 'Counted'),
           _key(theme, Halved.cautionGround, 'Capped',
               border: Halved.caution),
@@ -11902,39 +11905,6 @@ class _HotSpotCard extends StatelessWidget {
     }
     if (toPar == 0) return 'E';
     return toPar < 0 ? '$toPar' : '+$toPar';
-  }
-
-  Widget _cell(ThemeData theme, Map h, int pid) {
-    final scores = (h['scores'] as Map?) ?? const {};
-    final raw = scores['$pid'];
-    final isAnchor = h['anchor_id'] == pid;
-    final counted = (h['counted_ids'] as List? ?? []).contains(pid);
-    final capped = (h['capped_ids'] as List? ?? []).contains(pid);
-
-    Color? bg;
-    Color fg = theme.colorScheme.onSurface;
-    if (isAnchor && counted) {
-      bg = Halved.deepPine;
-      fg = Halved.cream;
-    } else if (counted) {
-      bg = Halved.mint.withOpacity(0.22);
-    }
-
-    return Container(
-      alignment: Alignment.center,
-      margin: const EdgeInsets.all(1),
-      decoration: BoxDecoration(
-        color: capped && bg == null ? Halved.cautionGround : bg,
-        borderRadius: BorderRadius.circular(4),
-        border: capped
-            ? Border.all(color: Halved.caution, width: 1.2)
-            : null,
-      ),
-      child: Text(raw == null ? '' : '$raw',
-          style: theme.textTheme.labelSmall?.copyWith(
-              color: fg,
-              fontWeight: counted ? FontWeight.bold : FontWeight.normal)),
-    );
   }
 
   Widget _key(ThemeData theme, Color c, String label, {Color? border}) => Row(

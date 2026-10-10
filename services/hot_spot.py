@@ -301,7 +301,7 @@ def _selector(round_obj, config, foursomes):
     return select, plans
 
 
-def _score_index(round_obj, config, capped_out=None):
+def _score_index(round_obj, config, capped_out=None, detail=None):
     """Capped, handicapped scores. ``force_cap`` because the cap is a RULE of
     Hot Spot, not the round's opt-in setting — see the module docstring.
 
@@ -310,7 +310,7 @@ def _score_index(round_obj, config, capped_out=None):
     double bogey, so it cannot be told apart after the fact."""
     return _build_ir_score_index(
         round_obj, config.handicap_mode, config.net_percent,
-        force_cap=True, capped_out=capped_out)
+        force_cap=True, capped_out=capped_out, detail=detail)
 
 
 # ── calculate / summary ─────────────────────────────────────────────────────
@@ -403,7 +403,11 @@ def hot_spot_summary(round_obj) -> dict:
     counts = player_counts(round_obj)
     rows = _standings(round_obj, config, foursomes)
     capped: dict = {}
-    score_index = _score_index(round_obj, config, capped_out=capped)
+    # The gross and the strokes the CARD draws — the shared scorecard prints
+    # gross with stroke dots, where this index holds capped nets.
+    detail: dict = {}
+    score_index = _score_index(round_obj, config, capped_out=capped,
+                               detail=detail)
     par_by_hole = _par_index_for_round(round_obj)
     plans = {fs.pk: hole_plan_for(round_obj, fs, config) for fs in foursomes}
 
@@ -415,6 +419,12 @@ def hot_spot_summary(round_obj) -> dict:
         order = anchor_order(fs)
         names = {m.player_id: (m.player.short_name or m.player.name)
                  for m in fs.memberships.select_related('player')}
+        # One index row for the card's stroke-index band, off the same tee the
+        # pars come from — as every scorecard in the app does.
+        first = next((m for m in fs.memberships.all() if m.tee_id), None)
+        sis = ({h['number']: h.get('stroke_index')
+                for h in (first.tee.holes or [])} if first else {})
+        fs_detail = detail.get(fs.pk, {})
         holes_out = []
         for hole_num in play_order(round_obj, fs):
             p = plan.get(hole_num)
@@ -442,6 +452,12 @@ def hot_spot_summary(round_obj) -> dict:
             par = par_by_hole.get(hole_num, 4)
             holes_out.append({
                 'hole': hole_num,
+                'stroke_index': sis.get(hole_num),
+                # What the card draws, beside the nets the GAME is scored on.
+                'gross': {pid: d['gross']
+                          for pid, d in fs_detail.get(hole_num, {}).items()},
+                'strokes': {pid: d['strokes']
+                            for pid, d in fs_detail.get(hole_num, {}).items()},
                 'par': par,
                 'anchor_id': p['anchor'],
                 'anchor_short': names.get(p['anchor']) if p['anchor'] else None,

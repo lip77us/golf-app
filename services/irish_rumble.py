@@ -358,7 +358,7 @@ def _ensure_borrowed_fourth(round_obj) -> int:
 # ---------------------------------------------------------------------------
 
 def _build_ir_score_index(round_obj, handicap_mode, net_percent, *,
-                          force_cap=False, capped_out=None):
+                          force_cap=False, capped_out=None, detail=None):
     """
     Build {foursome_id: {player_id: {hole_number: capped_score}}} for all
     real players in the round.
@@ -379,6 +379,13 @@ def _build_ir_score_index(round_obj, handicap_mode, net_percent, *,
     index — both read `par + 2` — so a card that wants to mark one cannot
     derive it afterwards. Hot Spot's does. Default None, so nothing else
     pays for it.
+
+    `detail`, likewise, records `{foursome_id: {hole: {player_id: {gross,
+    strokes}}}}` — what a SCORECARD draws, which is the gross the golfer made
+    and the strokes that came off it, not the net this index returns.
+    Collected here rather than re-derived because a second walk over the same
+    rows with the same allocator is the shape that eventually disagrees with
+    this one. Default None, so nothing else pays for it.
     """
     cap_enabled = force_cap or bool(round_obj.net_max_double_bogey)
     foursomes = list(
@@ -462,6 +469,14 @@ def _build_ir_score_index(round_obj, handicap_mode, net_percent, *,
                 max(0, membership.playing_handicap - low_hcp)
                 * net_percent / 100)
             adjusted = hs['gross_score'] - _strokes_on_hole(so, si)
+
+        if detail is not None:
+            # BEFORE the cap. The dots show the strokes ALLOCATED, and the cap
+            # clamps the resulting net without taking a stroke away.
+            detail.setdefault(fid, {}).setdefault(hole, {})[pid] = {
+                'gross': hs['gross_score'],
+                'strokes': hs['gross_score'] - adjusted,
+            }
 
         # ── Net-double-bogey cap (round-level toggle) ───────────────────────
         if cap_enabled:

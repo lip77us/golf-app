@@ -4058,6 +4058,70 @@ one steps over it). `test_the_first_score_locks_it` was renamed and the API
 test's copy assertion updated: the behaviour is the same for a full reversal,
 the message now names the position.
 
+## Hot Spot's card and its anchor — two things nobody could see
+
+Both reported from the course on the same round.
+
+### The leaderboard card was unreadable, and the cause is a contract
+
+`_HotSpotCard` hand-rolled its own bands into `PinnedHoleGrid` and **never
+sized the cells**. That widget uses `cellWidth` for the scroll offset and the
+rule's width only, and leaves the CALLER to put `width: cellWidth` on each
+box — which `wolf_screen` and the other eleven callers do. The result on a
+phone was eighteen hole numbers run together into
+`123456789101112131415161718` with the scores crushed against the left edge.
+
+It now draws through **`HoleGridScorecard`**, the card every other board uses,
+which owns the geometry so it cannot be got wrong and brings the stroke-index
+band, OUT / IN / TOT and the pinned label column the hand-rolled version had
+no room for. If another game ever needs raw bands, the rule is: `PinnedHoleGrid`
+sizes nothing.
+
+That needed two things the payload lacked:
+- `stroke_index` per hole.
+- **gross + strokes.** The card's `scores` are the capped NETS the game is
+  scored on, which is not what a scorecard prints. `_build_ir_score_index`
+  gained a `detail` out-param — the same shape as the `capped_out` it already
+  had — rather than a second walk over the same rows with the same allocator,
+  which is the shape that eventually disagrees. **Strokes are recorded BEFORE
+  the cap**: the dots show what was allocated, and a blow-up must not silently
+  lose one.
+
+**The anchor is gold, the other counted ball green.** The anchor is always one
+of the counted when there is one, so marking it green too would hide the role
+behind the result. The shared grid's gold key is now `role_id` (`banker_id`
+still read beside it, because Banker is where it started and its payload still
+says that), and it gained a `capped` per-score flag — last in the if-chain,
+because how a number was arrived at never outranks what it did, and inert
+everywhere that omits it.
+
+### "I don't know who is in the hot spot on hole 2"
+
+There IS a banner above the card and its data was correct. It is the wrong
+place: a strip over the top of a card full of names is not where anybody looks
+for which of four men it is, and **the anchor changes every hole**. It now
+also draws as a gold `HOT SPOT` chip on that golfer's ROW, in the slot the
+combo-tee chip uses — which is the row treatment the original handoff drew and
+this file previously recorded as deferred.
+
+`_HoleScoreCard.anchorId` is **not gated on the primary game**: Hot Spot
+rotates the anchor every hole and the group needs it whether or not Hot Spot
+is the round's headline. (Note `hotSpotIdx` on the same class is unrelated —
+it is which row the entry cursor sits on, and the collision of names is
+historical.)
+
+**`Halved.role` / `roleFill` / `roleLine`** now hold the gold. It was private
+to `hole_grid_scorecard.dart`, and the chip would have been a second copy of
+three hexes: a reader who learns the colour on the board must not meet a
+different shade in score entry.
+
+**Not built, and explicitly declined:** highlighting the two counted scores in
+score entry. Paul's reason is the right one — the counted pair is an outcome
+of the hole, not the thing the group is deciding on the tee.
+
+Tests: `TheCardDrawsGrossWithDotsTests` (`scoring/tests/test_hot_spot.py`, 5 —
+including that the cap does not take a stroke away).
+
 ## `thru` has one writer — `group_field.holes_thru`
 
 The 40 Balls board showed a group's budget (`34 of 40 · slack 6`) and nothing
