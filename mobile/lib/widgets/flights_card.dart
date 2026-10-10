@@ -55,7 +55,13 @@ class _FlightsCardState extends State<FlightsCard> {
   Object? _error;
 
   /// The count being previewed. 1 means one board.
-  int _n = 2;
+  ///
+  /// **Starts at the tournament's ACTUAL state — one board until a cut
+  /// is taken — not at 2.** It used to start at 2, so a TD who chose one
+  /// board at creation opened this card and found "2 flights" selected.
+  /// The data was right; a chip row reads as a STATE and this one was
+  /// showing a suggestion. Reported 9 Oct 2026.
+  int _n = 1;
   /// Golfers the TD has named as holding a guessed index.
   final Set<int> _unindexed = {};
 
@@ -90,7 +96,9 @@ class _FlightsCardState extends State<FlightsCard> {
         _error = null;
         if (first) {
           final cut = (d['flight_count'] as int?) ?? 0;
-          _n = cut >= 2 ? cut : 2;
+          // Uncut is one board. Seeding 2 made the card claim a split
+          // the tournament does not have.
+          _n = cut >= 2 ? cut : 1;
           _unindexed
             ..clear()
             ..addAll(((d['unindexed_at_cut'] as List?) ?? []).cast<int>());
