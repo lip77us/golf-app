@@ -711,7 +711,7 @@ class ApiClient {
   /// results (standings derive from the round's scores), so nothing
   /// played is lost.
   Future<void> deleteDayBetSetup(int roundId) async {
-    await _delete('/rounds/\$roundId/day-bet/setup/');
+    await _delete('/rounds/$roundId/day-bet/setup/');
   }
 
   Future<Map<String, dynamic>> getDayBet(int roundId) async =>
