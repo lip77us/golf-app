@@ -1697,6 +1697,15 @@ class _NewRoundWizardState extends State<NewRoundWizard> {
 
     final needsConfig =
         _activeGames.contains(GameIds.irishRumble) ||
+        // **Better Ball was missing, and _Step6GameSetup has a card for it.**
+        // It excludes Irish Rumble and 40 Balls, so a Better-Ball-only
+        // tournament matched nothing here, skipped the step entirely, and
+        // never saw the card that was built for it — while its own wizard
+        // copy promised "Entry, payouts and how many balls count are set on
+        // the Better Ball screen, right after you create the tournament".
+        // Reached only when paired with a game that did trigger, which is
+        // why it went unnoticed.
+        _activeGames.contains(GameIds.betterBall)  ||
         _activeGames.contains(GameIds.strokePlay)  ||
         _activeGames.contains(GameIds.pinkBall)    ||
         // Match Play needs per-foursome bracket setup (or Three-Person
