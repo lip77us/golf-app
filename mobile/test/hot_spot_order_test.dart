@@ -136,4 +136,45 @@ void main() {
       expect(find.textContaining('Drag the handles'), findsOneWidget);
     });
   });
+
+  group('full names', () {
+    // Short names are right everywhere else in score entry — they sit over a
+    // 40pt score box and the reader knows the group. This sheet is the one
+    // place a golfer is being asked to say which of four men he is, before
+    // anybody has hit a shot, and `P Lip` over `P Lee` is a coin toss.
+    //
+    // The risk a full name brings is the row, so that is what is measured:
+    // name, holes subtitle and a 44pt handle on one line of a phone.
+    testWidgets('a long one fits on a phone without overflowing',
+        (t) async {
+      t.view.physicalSize = const Size(375, 812);
+      t.view.devicePixelRatio = 1.0;
+      addTearDown(t.view.reset);
+
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: HotSpotOrderSheet(
+            foursomeId: 1,
+            roundId: 1,
+            golfers: const [
+              (id: 1, name: 'Christopher Hollinghurst'),
+              (id: 2, name: 'Bartholomew Fitzwilliam'),
+              (id: 3, name: 'Cal Reid'),
+              (id: 4, name: 'Dee Naylor'),
+            ],
+            playOrder: [for (var h = 1; h <= 18; h++) h],
+          ),
+        ),
+      ));
+      await t.pumpAndSettle();
+
+      expect(find.text('Christopher Hollinghurst'), findsOneWidget);
+      expect(find.text('Bartholomew Fitzwilliam'), findsOneWidget);
+      // The handle survives beside it — it is the only way to move a row.
+      expect(find.byIcon(Icons.drag_handle), findsNWidgets(4));
+      // And the holes label is still readable, not squeezed out.
+      expect(find.text('anchors 1, 5, 9, 13, 17'), findsOneWidget);
+      expect(t.takeException(), isNull);
+    });
+  });
 }

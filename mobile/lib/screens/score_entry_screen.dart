@@ -161,6 +161,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// Cleared whenever the hole changes.
   int? _editHotPid;
 
+  /// The Hot Spot order sheet is offered ONCE per visit to this screen.
+  /// Dismissing it leaves the amber banner and its Set order button, so this
+  /// never has to come back by itself — and must not, or the screen could not
+  /// be read.
+  bool _hotSpotOrderPrompted = false;
+
   /// startHole of every Sixes extras segment we've already auto-opened the
   /// team picker for.  Prevents an infinite modal loop when the user cancels.
   final Set<int> _autoOpenedExtraStart = {};
@@ -442,8 +448,57 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     if (futures.isNotEmpty) {
       Future.wait(futures).whenComplete(() {
         if (mounted) setState(() {});
+        _maybeOpenHotSpotOrder();
       });
+    } else {
+      _maybeOpenHotSpotOrder();
     }
+  }
+
+  /// Opened once, on the first tee, when the group has not chosen an order.
+  ///
+  /// **Card order is not a choice the group made.** The server falls back to
+  /// it so an unset order cannot make a round unscoreable, but that fallback
+  /// decides who anchors hole 1 — and a group that never opened the sheet
+  /// would find out what it had agreed to only by reading the banner. So the
+  /// sheet comes up by itself and the first act of the round is saying the
+  /// order out loud.
+  ///
+  /// `order_is_set` is the server's own signal for this, and its docstring
+  /// says so: card order is a fallback, not a setting.
+  ///
+  /// Once per visit, and dismissible. The amber banner stays behind it with
+  /// its own Set order button, so dismissing loses nothing — and a sheet that
+  /// came back every time the screen rebuilt would be a screen you cannot
+  /// read.
+  void _maybeOpenHotSpotOrder() {
+    if (!mounted || _hotSpotOrderPrompted) return;
+    final rp = context.read<RoundProvider>();
+    if (!_activeGames(rp.round).contains(GameIds.hotSpot) &&
+        !_configuredGames(rp.round).contains(GameIds.hotSpot)) {
+      return;
+    }
+    final group = rp.hotSpotGroup(widget.foursomeId);
+    // No summary yet: say nothing rather than prompting on a guess. The next
+    // load calls back in.
+    if (group == null) return;
+    // **These two ARE "on the first tee, order unchosen".** `order_locked` is
+    // the server's `has_any_real_score`, so nothing is scored; `order_is_set`
+    // says the group has not chosen. There is no third condition to add.
+    //
+    // My first version also required `_selectedHole == playOrder.first`,
+    // which is wrong twice: it is redundant (if any hole were scored the
+    // order would be locked, so there is nothing to be reviewing), and
+    // `_selectedHole` defaults to 1 while a shotgun group off the 7th has
+    // `playOrder.first == 7` — so the sheet would never have opened for
+    // exactly the rounds a Hot Spot gets played on.
+    if (group['order_locked'] == true || group['order_is_set'] == true) return;
+    _hotSpotOrderPrompted = true;
+    // After the frame: this runs inside a load's whenComplete, and showing a
+    // route during a build or a notification is what throws.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _openHotSpotOrder(context, rp);
+    });
   }
 
   // ── Handicap mode for stroke-dot display ────────────────────────────────────
@@ -2646,11 +2701,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // Real golfers only — the borrowed 4th can be the best net of the others
     // and never anchors, so it is not in the order.
     final stored = ((group?['order'] as List?) ?? const []).cast<int>();
+    // **Full names here, not short ones.** Everywhere else in score entry the
+    // short name is right — it sits over a 40pt score box and the reader
+    // knows the group. This sheet is the one place a golfer is being asked to
+    // say which of four men he is, before anybody has hit a shot, and `P Lip`
+    // over `P Lee` is a coin toss. The sheet is a full-width list with room
+    // for them.
     final byId = {
       for (final m in fs.memberships)
-        if (!m.player.isPhantom) m.player.id: m.player.shortName.isNotEmpty
-            ? m.player.shortName
-            : m.player.name,
+        if (!m.player.isPhantom) m.player.id: m.player.name,
     };
     final ordered = <({int id, String name})>[
       for (final pid in stored)
