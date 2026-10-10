@@ -667,6 +667,14 @@ class ApiClient {
   }
 
   // ---- Day bet ----------------------------------------------------------
+  // The final round's 18-hole side bet. Its defining rule is what it does
+  // NOT charge: the championship money winners play it and appear on the
+  // board, but cannot collect and get their entry back at settlement.
+  //
+  // The setup GET carries `eligible` / `reason`, the field size and the
+  // CHAMPIONSHIP's payouts, so the screen can explain the floor — day-bet
+  // 1st may not exceed the last paying championship place — without a
+  // second fetch.
 
   Future<Map<String, dynamic>> getDayBetSetup(int roundId) async =>
       Map<String, dynamic>.from(

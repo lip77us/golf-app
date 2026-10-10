@@ -2289,9 +2289,48 @@ class DayBetSetupView(APIView):
     def get(self, request, pk):
         round_obj = self._round(request, pk)
         cfg = getattr(round_obj, 'day_bet_config', None)
+        t = round_obj.tournament
+
+        # Everything the setup screen needs to explain itself, resolved here
+        # rather than on the phone: the floor it must clear is the
+        # CHAMPIONSHIP's last paying place, which the client would otherwise
+        # have to fetch and re-derive.
+        champ = None
+        if t is not None:
+            champ = (getattr(t, 'low_net_championship_config', None)
+                     or getattr(t, 'stableford_championship_config', None))
+
+        field = 0
+        if t is not None:
+            from tournament.models import FoursomeMembership
+            field = (FoursomeMembership.objects
+                     .filter(foursome__round__tournament=t,
+                             player__is_phantom=False)
+                     .values('player_id').distinct().count())
+
+        reason = None
+        if t is None:
+            reason = 'The day bet belongs to a tournament round.'
+        elif (t.total_rounds or 0) < 2:
+            reason = ('The day bet needs more than one round — it pays a '
+                      'great single round from somebody out of contention '
+                      'for the 36-hole win.')
+        elif round_obj.round_number != t.total_rounds:
+            reason = (f'The day bet is the final round only. This is round '
+                      f'{round_obj.round_number} of {t.total_rounds}.')
+
         return Response({
-            'entry_fee': float(cfg.entry_fee) if cfg else 0.00,
-            'payouts'  : cfg.payouts if cfg else [],
+            'entry_fee'          : float(cfg.entry_fee) if cfg else 0.00,
+            'payouts'            : cfg.payouts if cfg else [],
+            'configured'         : cfg is not None,
+            'eligible'           : reason is None,
+            'reason'             : reason,
+            'round_number'       : round_obj.round_number,
+            'total_rounds'       : t.total_rounds if t else 0,
+            'field_size'         : field,
+            # The last paying championship place. Day-bet 1st may not exceed
+            # it, or a golfer is better off DQ'ing the 36 holes.
+            'championship_payouts': (champ.payouts if champ else []),
         })
 
     def post(self, request, pk):

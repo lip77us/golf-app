@@ -1132,6 +1132,9 @@ class Round {
   /// net par + 2 for game scoring (Net and Strokes-Off only; Gross mode
   /// games ignore the cap).  Stored gross scores are unaffected.
   final bool netMaxDoubleBogey;
+  /// True when this is the last round of a multi-round tournament —
+  /// where the day bet lives, and only there.
+  final bool isFinalRound;
   final List<Foursome> foursomes;
   /// True when this round has been configured via CupRoundSetupScreen
   /// (i.e. a RyderCupRoundConfig exists on the backend).
@@ -1189,6 +1192,7 @@ class Round {
     this.netMaxDoubleBogey = true,
     required this.foursomes,
     this.isCupRound    = false,
+    this.isFinalRound  = false,
     this.isTeamPlayRound = false,
     this.teamPlayFormat,
     this.teamPlaySize,
@@ -1217,6 +1221,7 @@ class Round {
         netPercent:   j['net_percent']   as int?    ?? 100,
         netMaxDoubleBogey: j['net_max_double_bogey'] as bool? ?? true,
         isCupRound:   j['is_cup_round']  as bool?   ?? false,
+        isFinalRound: j['is_final_round'] as bool? ?? false,
         isTeamPlayRound: j['is_team_play_round'] as bool? ?? false,
         teamPlayFormat: (j['team_play'] as Map?)?['format'] as String?,
         teamPlaySize  : (j['team_play'] as Map?)?['team_size'] as int?,

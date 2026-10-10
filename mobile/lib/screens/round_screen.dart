@@ -239,6 +239,11 @@ class _RoundScreenState extends State<RoundScreen> {
     // this the button lives inside a card its own emptiness hides, the
     // failure the comment above describes.
     final isTournamentRound = round.tournamentId != null;
+    // The day bet is the FINAL round of a multi-round event and nowhere
+    // else. The server answers that (RoundSerializer.is_final_round)
+    // rather than the hub counting rounds, which would be a second copy
+    // of the rule and would need the tournament the hub does not load.
+    final isDayBetRound = round.isFinalRound;
     final hasSetupGames  = isTournamentRound ||
         hasIrishRumble || hasBetterBall || hasHotSpot ||
         showLowNet || hasPinkBall || hasFortyBalls ||
@@ -296,6 +301,7 @@ class _RoundScreenState extends State<RoundScreen> {
               hasBetterBall : hasBetterBall,
               hasHotSpot    : hasHotSpot,
               isTournamentRound: isTournamentRound,
+              isDayBetRound: isDayBetRound,
               onGamesChanged: _reloadRound,
               showLowNet:     showLowNet,
               hasPinkBall:    hasPinkBall,
@@ -692,6 +698,7 @@ class _GameSetupCard extends StatelessWidget {
   /// Side games are per ROUND, but only a tournament round picks them
   /// here — a casual round's are chosen when it is created.
   final bool           isTournamentRound;
+  final bool           isDayBetRound;
   final VoidCallback?  onGamesChanged;
   final bool           showLowNet;
   final bool           hasPinkBall;
@@ -706,6 +713,7 @@ class _GameSetupCard extends StatelessWidget {
     required this.hasBetterBall,
     required this.hasHotSpot,
     required this.isTournamentRound,
+    required this.isDayBetRound,
     this.onGamesChanged,
     required this.showLowNet,
     required this.hasPinkBall,
@@ -784,6 +792,18 @@ class _GameSetupCard extends StatelessWidget {
                 icon: const Icon(Icons.tune, size: 18),
                 label: const Text('Configure Hot Spot'),
               ),
+            // **The day bet is not in the side-games list**, because it is not
+            // a game you can put on any round — it belongs to the last one.
+            // Its own button, on that round only.
+            if (isDayBetRound) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context)
+                    .pushNamed('/day-bet-setup', arguments: roundId),
+                icon: const Icon(Icons.payments_outlined, size: 18),
+                label: const Text('Day bet'),
+              ),
+            ],
             if (showLowNet) ...[
               if (beforeLowNet) const SizedBox(height: 8),
               OutlinedButton.icon(

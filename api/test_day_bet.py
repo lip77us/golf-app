@@ -59,7 +59,17 @@ class DayBetEndpointTests(TestCase):
     def test_defaults_when_no_day_bet_is_configured(self):
         r = self.client.get(self._setup_url(self.r2))
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.json(), {'entry_fee': 0.00, 'payouts': []})
+        d = r.json()
+        self.assertEqual(d['entry_fee'], 0.00)
+        self.assertEqual(d['payouts'], [])
+        self.assertFalse(d['configured'])
+        # The screen is told whether it may configure here and why not, rather
+        # than deriving it — the day bet is the final round of a multi-round
+        # event only, and a client counting rounds would be a second copy of
+        # that rule.
+        self.assertIn('eligible', d)
+        self.assertIn('reason', d)
+        self.assertIn('championship_payouts', d)
 
     def test_configure_round_trips(self):
         r = self.client.post(self._setup_url(self.r2), {

@@ -708,6 +708,7 @@ class RoundSerializer(serializers.ModelSerializer):
     course         = CourseSerializer(read_only=True)
     foursomes      = FoursomeSerializer(many=True, read_only=True)
     is_cup_round   = serializers.SerializerMethodField()
+    is_final_round = serializers.SerializerMethodField()
     # True when this round belongs to a Team Play tournament. The card and the
     # board are different enough — one number a hole, or four with a count —
     # that the app dispatches on it rather than inferring from active_games.
@@ -744,6 +745,20 @@ class RoundSerializer(serializers.ModelSerializer):
     def get_is_cup_round(self, obj):
         """True when this round has a Ryder Cup config (was set up via CupRoundSetupScreen)."""
         return hasattr(obj, 'ryder_cup_config')
+
+    def get_is_final_round(self, obj) -> bool:
+        """True when this is the last round of a multi-round tournament.
+
+        The day bet lives here and only here, and the round hub has to know
+        BEFORE it draws a button — an entry point that leads to "not this
+        round" is worse than no entry point. The client is told rather than
+        deriving it, because deriving needs the tournament's total and the hub
+        only loads the round.
+        """
+        t = obj.tournament
+        if t is None or (t.total_rounds or 0) < 2:
+            return False
+        return obj.round_number == t.total_rounds
 
     def get_is_team_play_round(self, obj) -> bool:
         """True when the parent tournament is a Team Play event with its
@@ -846,7 +861,7 @@ class RoundSerializer(serializers.ModelSerializer):
             'handicap_mode', 'net_percent', 'net_max_double_bogey',
             'num_holes', 'starting_hole',
             'scramble_config', 'notes', 'foursomes',
-            'is_cup_round', 'is_team_play_round', 'team_play',
+            'is_cup_round', 'is_final_round', 'is_team_play_round', 'team_play',
             'ir_balls_config', 'can_manage',
             'is_casual', 'all_holes_scored', 'holes_remaining',
             # Public spectator URL token — used by mobile's "Share Watch
