@@ -20,7 +20,9 @@ from django.test import TestCase
 
 from core.models import HandicapMode
 from services.hot_spot import (HotSpotLocked, anchor_order, calculate_hot_spot,
-                               hole_plan_for, hot_spot_summary, set_anchor_order,
+                               hole_plan_for, hot_spot_summary,
+                               order_fully_locked, set_anchor_order,
+                               spent_positions,
                                setup_hot_spot)
 
 from ._helpers import make_foursome, make_round, make_tee, submit_hole
@@ -213,9 +215,8 @@ class TheOrderLocksTests(_Base):
         self.assertEqual(set_anchor_order(self.fs, list(reversed(pids))),
                          list(reversed(pids)))
 
-    def test_the_first_score_locks_it(self):
-        """It decides who anchored hole 1, so changing it after that hole is
-        scored rewrites what the hole meant."""
+    def test_the_first_score_locks_the_position_it_spent(self):
+        """Hole 1 fixes position 1 — and reversing the order moves it."""
         self._gross()
         pids = self._pids(self.fs)
         set_anchor_order(self.fs, pids)
@@ -314,3 +315,144 @@ class TheCardKnowsWhatWasCappedTests(_Base):
         hole = next(g for g in hot_spot_summary(self.round)['groups']
                     if g['foursome_id'] == self.fs.pk)['holes'][0]
         self.assertEqual(hole['capped_ids'], [])
+
+
+class PositionsLockOneAtATimeTests(_Base):
+    """Red Ball's rule, which Hot Spot did not have.
+
+    A scored hole fixes the ONE position that anchored it. The old rule
+    refused the whole order at the first score — not wrong about hole 1, but
+    wrong about holes 2, 3 and 4, which had decided nothing and could no
+    longer be arranged. A group that teed off and then noticed it had the
+    back three the wrong way round had no way to fix it.
+    """
+
+    def test_nothing_is_spent_before_a_score(self):
+        self._gross()
+        self.assertEqual(spent_positions(self.fs), set())
+        self.assertFalse(order_fully_locked(self.fs))
+
+    def test_one_hole_spends_one_position(self):
+        self._gross()
+        set_anchor_order(self.fs, self._pids(self.fs))
+        self._play(self.fs, 1, [4, 4, 4, 4])
+        self.assertEqual(spent_positions(self.fs), {0})
+
+    def test_the_unspent_positions_can_still_be_arranged(self):
+        """The whole point. Hole 1 is played; 2, 3 and 4 are not."""
+        self._gross()
+        pids = self._pids(self.fs)
+        set_anchor_order(self.fs, pids)
+        self._play(self.fs, 1, [4, 4, 4, 4])
+        # Keep position 1, reverse the rest.
+        wanted = [pids[0], pids[3], pids[2], pids[1]]
+        self.assertEqual(set_anchor_order(self.fs, wanted), wanted)
+
+    def test_moving_a_spent_position_is_refused_and_names_it(self):
+        self._gross()
+        pids = self._pids(self.fs)
+        set_anchor_order(self.fs, pids)
+        self._play(self.fs, 1, [4, 4, 4, 4])
+        self._play(self.fs, 2, [4, 4, 4, 4])
+        with self.assertRaises(HotSpotLocked) as caught:
+            set_anchor_order(self.fs, [pids[1], pids[0], pids[2], pids[3]])
+        # 1-based in the message, because the sheet numbers the rows 1..4.
+        self.assertIn('1', str(caught.exception))
+        self.assertIn('2', str(caught.exception))
+
+    def test_re_posting_the_same_order_is_not_a_change(self):
+        """A client that saves what it was given is not moving anything.
+
+        Refusing it would make the sheet's own Save button fail on a round
+        already under way, which is how a lock becomes a dead end.
+        """
+        self._gross()
+        pids = self._pids(self.fs)
+        set_anchor_order(self.fs, pids)
+        self._play(self.fs, 1, [4, 4, 4, 4])
+        self.assertEqual(set_anchor_order(self.fs, pids), pids)
+
+    def test_four_holes_spend_everything(self):
+        self._gross()
+        pids = self._pids(self.fs)
+        set_anchor_order(self.fs, pids)
+        for h in (1, 2, 3, 4):
+            self._play(self.fs, h, [4, 4, 4, 4])
+        self.assertEqual(spent_positions(self.fs), {0, 1, 2, 3})
+        self.assertTrue(order_fully_locked(self.fs))
+        with self.assertRaises(HotSpotLocked) as caught:
+            set_anchor_order(self.fs, list(reversed(pids)))
+        self.assertIn('nothing left to change', str(caught.exception))
+
+    def test_holes_entered_OUT_of_order_spend_the_right_position(self):
+        """Why this is a SET and not a leading count.
+
+        A group that posts the 3rd first has spent position 3 and nothing
+        else. A count of leading positions cannot say that: 0 would let the
+        3rd be moved, and 3 would freeze two positions that decided nothing.
+        """
+        self._gross()
+        pids = self._pids(self.fs)
+        set_anchor_order(self.fs, pids)
+        self._play(self.fs, 3, [4, 4, 4, 4])
+        self.assertEqual(spent_positions(self.fs), {2})
+        # 1, 2 and 4 are still free.
+        wanted = [pids[3], pids[1], pids[2], pids[0]]
+        self.assertEqual(set_anchor_order(self.fs, wanted), wanted)
+        # 3 is not.
+        with self.assertRaises(HotSpotLocked):
+            set_anchor_order(self.fs, [pids[0], pids[2], pids[1], pids[3]])
+
+    def test_a_shotgun_group_spends_by_PLAY_ORDER(self):
+        """Off the 7th, the group's first hole is the 7th.
+
+        Hole number and play-order position are the same integer only on a
+        round starting at the 1st — the rotation already follows play order,
+        so the lock has to as well, or a shotgun group would be told it had
+        spent a position it has not reached.
+        """
+        self.fs.starting_hole = 7
+        self.fs.save(update_fields=['starting_hole'])
+        self._gross()
+        pids = self._pids(self.fs)
+        set_anchor_order(self.fs, pids)
+        self._play(self.fs, 7, [4, 4, 4, 4])
+        self.assertEqual(spent_positions(self.fs), {0})
+        # Hole 1 is this group's TWELFTH, and nobody has played it.
+        wanted = [pids[0], pids[3], pids[2], pids[1]]
+        self.assertEqual(set_anchor_order(self.fs, wanted), wanted)
+
+    def test_an_unset_order_freezes_the_fallback_on_the_holes_it_decided(self):
+        """Card order became binding on the holes it was used for.
+
+        That is already what happened on those holes, and it is strictly more
+        than the old rule allowed — which was nothing at all.
+        """
+        self._gross()
+        pids_card = anchor_order(self.fs)
+        self._play(self.fs, 1, [4, 4, 4, 4])
+        self.assertEqual(spent_positions(self.fs), {0})
+        wanted = [pids_card[0], pids_card[2], pids_card[1], pids_card[3]]
+        self.assertEqual(set_anchor_order(self.fs, wanted), wanted)
+
+    def test_a_threesome_spends_its_three(self):
+        # The rotation is as long as the roster, so three holes is everything.
+        three = make_foursome(self.round, [('X', 0), ('Y', 0), ('Z', 0)],
+                              tee=self.tee, group_number=3)
+        self._gross()
+        pids = self._pids(three)
+        set_anchor_order(three, pids)
+        for h in (1, 2, 3):
+            self._play(three, h, [4, 4, 4])
+        self.assertTrue(order_fully_locked(three))
+
+    def test_the_summary_reports_the_locked_positions(self):
+        self._gross()
+        set_anchor_order(self.fs, self._pids(self.fs))
+        self._play(self.fs, 1, [4, 4, 4, 4])
+        g = next(x for x in hot_spot_summary(self.round)['groups']
+                 if x['foursome_id'] == self.fs.pk)
+        self.assertEqual(g['order_positions_locked'], [0])
+        self.assertFalse(g['order_fully_locked'])
+        # Unchanged for the shipped client, which hides Change at any score.
+        self.assertTrue(g['order_locked'])

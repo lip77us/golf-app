@@ -62,7 +62,7 @@ from services.irish_rumble import (_build_ir_score_index, _par_index_for_round,
 
 
 class HotSpotLocked(Exception):
-    """The anchor order cannot change once the group has posted a score."""
+    """A position in the anchor order has already anchored a scored hole."""
 
 
 # ── the anchor order ────────────────────────────────────────────────────────
@@ -96,6 +96,40 @@ def order_is_set(foursome) -> bool:
     return len(stored) == len(real_player_ids(foursome)) and bool(stored)
 
 
+def spent_positions(foursome) -> set:
+    """Order positions that have already anchored a SCORED hole.
+
+    **Positions, not a count of holes.** Position `p` anchors play-order
+    positions p, p + n, p + 2n … so one scored hole spends exactly one
+    position and the rest are still the group's to arrange. The old rule
+    refused the whole order at the first score, which froze three positions
+    that had decided nothing — a group that teed off and then noticed it had
+    the back three the wrong way round had no way to fix it.
+
+    Derived from the scored holes rather than counted forward, because holes
+    are not always entered in order: a group that posts the 3rd first has
+    spent position 2 and nothing else, which no leading count can describe.
+    (Red Ball's `lockedCount` is a leading count and has that gap; it does not
+    bite there because its rotation is read off the same list it locks.)
+    """
+    order = anchor_order(foursome)
+    n = len(order)
+    if n == 0:
+        return set()
+    scored = set(HoleScore.objects
+                 .filter(foursome=foursome, gross_score__isnull=False,
+                         player__is_phantom=False)
+                 .values_list('hole_number', flat=True))
+    return {i % n for i, h in enumerate(play_order(foursome.round, foursome))
+            if h in scored}
+
+
+def order_fully_locked(foursome) -> bool:
+    """Every position has anchored something — there is nothing left to move."""
+    n = len(anchor_order(foursome))
+    return n > 0 and len(spent_positions(foursome)) >= n
+
+
 def has_any_real_score(foursome) -> bool:
     return HoleScore.objects.filter(
         foursome=foursome, gross_score__isnull=False,
@@ -104,22 +138,49 @@ def has_any_real_score(foursome) -> bool:
 
 @transaction.atomic
 def set_anchor_order(foursome, player_ids) -> list:
-    """Set the group's anchor order. Refused once a real score is posted.
+    """Set the group's anchor order. Each POSITION locks as it is spent.
 
-    The lock is the first score, not the edit ceiling: the order decides who
-    anchored hole 1, so changing it after that hole is scored rewrites what
-    that hole meant. Same reasoning as Banker's window of zero.
+    The lock is per position, not per round: a scored hole fixes the one
+    position that anchored it and leaves the rest the group's to arrange.
+    Changing a spent position would rewrite what a played hole meant — which
+    is Banker's window-of-zero reasoning, applied to the position it actually
+    governs instead of to all four.
+
+    The previous rule refused the whole order at the first score. It was not
+    wrong about hole 1; it was wrong about holes 2, 3 and 4, which had decided
+    nothing and could no longer be arranged. Red Ball has locked positions
+    rather than the whole rotation since it shipped.
+
+    An unset order means the fallback (card order) is what those holes were
+    played under, so a spent position is frozen at the fallback's answer.
+    That is already what happened on the hole, and it is strictly more than
+    the old rule allowed.
     """
-    if has_any_real_score(foursome):
-        raise HotSpotLocked(
-            'The anchor order is set on the first tee and locks when the '
-            'first score goes in — it decides who anchored hole 1.')
     real = set(real_player_ids(foursome))
     ids = [int(p) for p in player_ids]
     if set(ids) != real or len(ids) != len(real):
         raise HotSpotLocked(
             'The anchor order must name every real golfer in the group '
             'exactly once.')
+
+    current = anchor_order(foursome)
+    spent = spent_positions(foursome)
+    if spent and len(spent) >= len(current):
+        raise HotSpotLocked(
+            'Every position in the anchor order has anchored a hole — there '
+            'is nothing left to change.')
+    # Idempotence matters here: a client that re-posts the order it was given
+    # is not asking to move anything, and refusing it would make the sheet's
+    # Save button fail on a round already under way.
+    moved = sorted(p for p in spent
+                   if p < len(ids) and ids[p] != current[p])
+    if moved:
+        raise HotSpotLocked(
+            'Position{} {} already anchored a scored hole and cannot '
+            'change.'.format(
+                '' if len(moved) == 1 else 's',
+                ', '.join(str(p + 1) for p in moved)))
+
     foursome.hot_spot_order = ids
     foursome.save(update_fields=['hot_spot_order'])
     return ids
@@ -399,7 +460,14 @@ def hot_spot_summary(round_obj) -> dict:
             'order': order,
             'order_short': [names.get(pid) for pid in order],
             'order_is_set': order_is_set(fs),
+            # **`order_locked` stays "any score"** so the shipped client keeps
+            # the behaviour it was built for: it hides Change at the first
+            # score, which is the old all-or-nothing rule and is safe.
             'order_locked': has_any_real_score(fs),
+            # The new pair. A client that understands positions offers Change
+            # until every one is spent, and draws a lock on the ones that are.
+            'order_positions_locked': sorted(spent_positions(fs)),
+            'order_fully_locked': order_fully_locked(fs),
             'holes': holes_out,
         })
 

@@ -3980,6 +3980,84 @@ id written with no `$` at all, also a literal and also a 404). **Currency
 strings legitimately use `\$`** — `'\$${fee}'` is a dollar sign then an
 interpolation — which is why the test looks only inside path arguments.
 
+## Hot Spot's anchor order — the sheet, and the per-POSITION lock
+
+Three findings from one round at the course, all in `hot_spot_order_sheet.dart`
+and its caller in `score_entry_screen.dart`.
+
+**The sheet could not be dragged, and the gesture was there all along.** It was
+built with `buildDefaultDragHandles: true`, which draws a handle on desktop
+and NOTHING on a phone — it wraps each row in a
+`ReorderableDelayedDragStartListener`, so the only gesture that moves a row is
+a long press, under copy that said "drag". The long press worked; that is the
+bug rather than its absence. **Every other reorder list in the app gives a
+visible handle** — `wolf_screen`, `wolf_setup_screen`, `pink_ball_screen`,
+`match_play_setup_screen`, `team_splitter_4`, `new_round_wizard`, six of six,
+and `pink_ball_screen`'s own comment already says why. This sheet took the
+default, which is why it is the one that broke. It now draws `drag_handle` in
+the trailing slot at a 44pt target. All eight call sites still use the
+deprecated `onReorder`; that is an app-wide sweep, not one file's business.
+
+**Full names here, short names everywhere else.** Short is right over a 40pt
+score box where the reader knows the group. This sheet asks a golfer which of
+four men he is before anybody has hit a shot, and `P Lip` over `P Lee` is a
+coin toss. The test measures a 24-character name on a 375pt screen beside the
+holes label and the handle, because overflow is the risk a full name brings.
+
+**It opens itself on the first tee.** Card order is not a choice the group
+made: the server falls back to it so an unset order cannot make a round
+unscoreable, but that fallback decides who anchors hole 1. `order_is_set` is
+the server's own signal and its docstring already said the client should
+prompt — it never did. Once per visit, dismissible, with the amber banner and
+its Set order button left behind. The gate is `!order_fully_locked &&
+!order_is_set` and **that is the whole of it**: `order_locked` is the server's
+`has_any_real_score`, so nothing is scored, and `order_is_set` says nobody has
+chosen. My first version also required `_selectedHole == playOrder.first`,
+which is wrong twice — redundant (a scored hole would have locked it, so there
+is nothing to review) and `_selectedHole` defaults to 1 while a shotgun group
+off the 7th has `playOrder.first == 7`, so it would never have opened for
+exactly the rounds a Hot Spot is played on.
+
+### Each position locks as it is spent (Red Ball's rule)
+
+`set_anchor_order` refused the WHOLE order at the first score. Not wrong about
+hole 1 — wrong about holes 2, 3 and 4, which had decided nothing and could no
+longer be arranged. A group that teed off and then noticed it had the back
+three the wrong way round had no way back. Red Ball has locked positions
+rather than the whole rotation since it shipped.
+
+- **`spent_positions(foursome)` is a SET, not a leading count.** Position `p`
+  anchors play-order positions p, p+n, p+2n…, so it is derived from the scored
+  holes: a group that posts the 3rd first has spent position 3 and nothing
+  else, which no leading count can describe (0 would let it move, 3 would
+  freeze two positions that decided nothing). Red Ball's `lockedCount` has
+  that gap and gets away with it. Counted along **play order**, so a shotgun
+  group off the 7th spends position 1 on the 7th.
+- **Re-posting the same order is not a change.** Without that, the sheet's own
+  Save button would fail on a round under way — a lock that becomes a dead
+  end.
+- **The client permutes the FREE slots only** (`_reorder`). A plain
+  `removeAt`/`insert` shifts everything between the indices, so a drag past a
+  locked row would move the golfer who anchored a played hole. The free slots
+  are treated as a list of their own, which is also what makes a
+  non-contiguous lock work. A locked row draws `lock_outline` where its handle
+  was and reads `anchored 1, 5, 9 — played`, past tense, on the row it applies
+  to.
+- **`order_locked` is unchanged on purpose** — still `has_any_real_score`, so
+  the shipped client keeps hiding Change at the first score, which is the old
+  all-or-nothing rule and is safe. The new pair is `order_positions_locked`
+  and `order_fully_locked`, and the new client gates Change on the latter.
+  Gating on `order_locked` would hide the way in at the first score, which is
+  the bug.
+
+Tests: `PositionsLockOneAtATimeTests` (`scoring/tests/test_hot_spot.py`, 10 —
+including out-of-order entry and the shotgun), three in `api/test_hot_spot.py`,
+and the `locked positions` group in `mobile/test/hot_spot_order_test.dart`
+(7 — the locked row never moves even dragged through, and a legal move across
+one steps over it). `test_the_first_score_locks_it` was renamed and the API
+test's copy assertion updated: the behaviour is the same for a full reversal,
+the message now names the position.
+
 ## `thru` has one writer — `group_field.holes_thru`
 
 The 40 Balls board showed a group's budget (`34 of 40 · slack 6`) and nothing

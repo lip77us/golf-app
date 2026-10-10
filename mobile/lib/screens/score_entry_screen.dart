@@ -2624,7 +2624,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final group = rp.hotSpotGroup(widget.foursomeId);
     if (group == null) return const SizedBox.shrink();
 
-    final locked = group['order_locked'] == true;
+    // **`order_fully_locked`, not `order_locked`.** The latter is "any score
+    // posted", which is the old all-or-nothing rule — gating Change on it
+    // would hide the way in at the first score and leave the three positions
+    // that had decided nothing frozen, which is the bug being fixed. Falls
+    // back to it for a server that does not send the new field yet.
+    final locked = group['order_fully_locked'] as bool? ??
+        (group['order_locked'] == true);
     final isSet = group['order_is_set'] == true;
     final hole = rp.hotSpotHole(widget.foursomeId, _selectedHole);
 
@@ -2700,6 +2706,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final group = rp.hotSpotGroup(widget.foursomeId);
     // Real golfers only — the borrowed 4th can be the best net of the others
     // and never anchors, so it is not in the order.
+    // **This list's order IS the server's**, and it has to stay that way:
+    // `lockedPositions` below is a set of INDEXES into it, so sorting these
+    // rows (alphabetically, by handicap, anything) would draw the locks on
+    // the wrong golfers and make the save refuse for a reason nobody could
+    // see. `group['order']` is `anchor_order()`, already resolved — it holds
+    // every real golfer even when the group has not chosen, so the append
+    // below is belt and braces rather than the usual case.
     final stored = ((group?['order'] as List?) ?? const []).cast<int>();
     // **Full names here, not short ones.** Everywhere else in score entry the
     // short name is right — it sits over a 40pt score box and the reader
@@ -2729,6 +2742,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         roundId: rid,
         golfers: ordered,
         playOrder: holes,
+        lockedPositions: {
+          for (final p in ((group?['order_positions_locked'] as List?) ??
+                  const []))
+            (p as num).toInt(),
+        },
       ),
     );
   }

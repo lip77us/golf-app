@@ -113,14 +113,45 @@ class OrderTests(_Base):
         self._setup()
         self.assertEqual(self._order(self.ids[:3]).status_code, 400)
 
-    def test_the_first_score_locks_it(self):
+    def test_moving_a_spent_position_is_refused_and_names_it(self):
+        """The copy changed with the rule, and says which row it means.
+
+        It used to say "the anchor order is set on the first tee" — true of
+        the old all-or-nothing lock and misleading now, because the rest of
+        the order is still the group's to arrange.
+        """
         self._setup()
         self._order()
         HoleScore.objects.create(foursome=self.fs, player=self.players[0],
                                  hole_number=1, gross_score=4)
         resp = self._order(list(reversed(self.ids)))
         self.assertEqual(resp.status_code, 400)
-        self.assertIn('first tee', resp.data['detail'])
+        self.assertIn('Position 1', resp.data['detail'])
+
+    def test_the_unspent_positions_are_still_the_groups_to_arrange(self):
+        """Red Ball's rule, over the wire. Hole 1 is played; 2, 3 and 4 aren't.
+
+        The old lock refused this with a 400 — not wrong about hole 1, wrong
+        about the three holes that had decided nothing.
+        """
+        self._setup()
+        self._order()
+        HoleScore.objects.create(foursome=self.fs, player=self.players[0],
+                                 hole_number=1, gross_score=4)
+        wanted = [self.ids[0], self.ids[3], self.ids[2], self.ids[1]]
+        resp = self._order(wanted)
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data['player_ids'], wanted)
+
+    def test_the_result_reports_which_positions_are_locked(self):
+        self._setup()
+        self._order()
+        HoleScore.objects.create(foursome=self.fs, player=self.players[0],
+                                 hole_number=1, gross_score=4)
+        g = next(x for x in self._result().data['groups']
+                 if x['foursome_id'] == self.fs.pk)
+        self.assertEqual(g['order_positions_locked'], [0])
+        self.assertFalse(g['order_fully_locked'])
 
 
 class ResultTests(_Base):

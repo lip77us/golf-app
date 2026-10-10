@@ -177,4 +177,102 @@ void main() {
       expect(t.takeException(), isNull);
     });
   });
+
+  group('locked positions', () {
+    // Red Ball's rule, which Hot Spot did not have: a scored hole fixes the
+    // ONE position that anchored it. The old rule refused the whole order at
+    // the first score — not wrong about hole 1, wrong about holes 2, 3 and 4,
+    // which had decided nothing and could no longer be arranged.
+    Future<void> pump(WidgetTester t, Set<int> locked) =>
+        t.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: HotSpotOrderSheet(
+              foursomeId: 1,
+              roundId: 1,
+              golfers: const [
+                (id: 1, name: 'Ann Able'),
+                (id: 2, name: 'Bea Brown'),
+                (id: 3, name: 'Cal Reid'),
+                (id: 4, name: 'Dee Naylor'),
+              ],
+              playOrder: [for (var h = 1; h <= 18; h++) h],
+              lockedPositions: locked,
+            ),
+          ),
+        ));
+
+    double y(WidgetTester t, String name) => t.getCenter(find.text(name)).dy;
+
+    testWidgets('a locked row shows a lock where its handle was', (t) async {
+      await pump(t, {0});
+      expect(find.byIcon(Icons.lock_outline), findsOneWidget);
+      expect(find.byIcon(Icons.drag_handle), findsNWidgets(3));
+    });
+
+    testWidgets('and says its holes are played, in the past tense',
+        (t) async {
+      await pump(t, {0});
+      expect(find.text('anchored 1, 5, 9, 13, 17 — played'), findsOneWidget);
+      // The free rows still read as future.
+      expect(find.text('anchors 2, 6, 10, 14, 18'), findsOneWidget);
+    });
+
+    testWidgets('the free rows can still be arranged', (t) async {
+      // The whole point of the change.
+      await pump(t, {0});
+      final rowH = y(t, 'Bea Brown') - y(t, 'Ann Able');
+      await t.drag(find.byIcon(Icons.drag_handle).first, Offset(0, rowH * 1.6));
+      await t.pumpAndSettle();
+      expect(y(t, 'Bea Brown'), greaterThan(y(t, 'Cal Reid')));
+    });
+
+    testWidgets('a locked row never moves, even dragged through', (t) async {
+      // A plain removeAt/insert would shift it. Ann anchored hole 1; if she
+      // moves, a played hole changes who anchored it.
+      await pump(t, {0});
+      final before = y(t, 'Ann Able');
+      final rowH = y(t, 'Bea Brown') - before;
+      // Drag the LAST free row up past the locked one.
+      await t.drag(
+          find.byIcon(Icons.drag_handle).last, Offset(0, -rowH * 3.5));
+      await t.pumpAndSettle();
+      expect(y(t, 'Ann Able'), closeTo(before, 1));
+      expect(find.text('anchored 1, 5, 9, 13, 17 — played'), findsOneWidget);
+    });
+
+    testWidgets('a NON-contiguous lock holds too', (t) async {
+      // Entering holes out of order produces one: posting the 3rd first
+      // spends position 3 and nothing else. A leading count cannot say that,
+      // which is why the sheet takes a set.
+      await pump(t, {2});
+      expect(find.byIcon(Icons.lock_outline), findsOneWidget);
+      final calBefore = y(t, 'Cal Reid');
+      final rowH = y(t, 'Bea Brown') - y(t, 'Ann Able');
+      await t.drag(find.byIcon(Icons.drag_handle).first, Offset(0, rowH * 2.6));
+      await t.pumpAndSettle();
+      expect(y(t, 'Cal Reid'), closeTo(calBefore, 1),
+          reason: 'position 3 is spent and stays where it is');
+    });
+
+    testWidgets('a legal move ACROSS a locked row skips over it', (t) async {
+      // Position 2 is spent. Moving 1 past it has to land on 3 and leave Bea
+      // exactly where she is — the free slots are permuted among themselves,
+      // so a lock in the middle is stepped over rather than blocking.
+      await pump(t, {1});
+      final beaBefore = y(t, 'Bea Brown');
+      final rowH = beaBefore - y(t, 'Ann Able');
+      await t.drag(find.byIcon(Icons.drag_handle).first, Offset(0, rowH * 2.6));
+      await t.pumpAndSettle();
+      expect(y(t, 'Bea Brown'), closeTo(beaBefore, 1),
+          reason: 'the locked row did not move');
+      expect(y(t, 'Ann Able'), greaterThan(beaBefore),
+          reason: 'Ann went past her into a free slot');
+    });
+
+    testWidgets('every position locked leaves nothing to drag', (t) async {
+      await pump(t, {0, 1, 2, 3});
+      expect(find.byIcon(Icons.drag_handle), findsNothing);
+      expect(find.byIcon(Icons.lock_outline), findsNWidgets(4));
+    });
+  });
 }
