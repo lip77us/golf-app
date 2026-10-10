@@ -51,6 +51,8 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
 
   // ── Step 1: Player selection ──────────────────────────────────────────────
   final Set<int> _selectedIds = {};
+  /// True once the field was carried over from a sibling round.
+  bool _seededFromField = false;
   String         _search      = '';
   final TextEditingController _searchCtrl  = TextEditingController();
   final FocusNode             _searchFocus = FocusNode();
@@ -164,10 +166,62 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
           ..sort((a, b) => a.name.compareTo(b.name));
         _loading = false;
       });
+
+      // **A tournament's later round starts with the field it already
+      // has.** Round 2 is the same event as round 1, so making the TD
+      // re-pick every golfer out of the whole roster asks him to rebuild
+      // something the tournament already knows — and on a 250-golfer
+      // account that is the long scroll, twice.
+      //
+      // Seeded, not forced: it is a checkbox list, so a golfer who did
+      // not play round 1 is a tap away and a withdrawal is a tap off.
+      await _seedFieldFromTournament();
     } catch (e) {
       if (mounted) setState(() { _loadError = friendlyError(e); _loading = false; });
     }
   }
+
+  /// Preselect the golfers already playing this tournament, from the most
+  /// recent SET-UP round that is not this one.
+  ///
+  /// Read from a sibling round rather than a tournament-level endpoint
+  /// because there is no tournament participant row — the field is derived
+  /// from `FoursomeMembership`, which is what a round carries.
+  ///
+  /// Silent on failure: a convenience must still leave a usable picker.
+  Future<void> _seedFieldFromTournament() async {
+    final tid = _round?.tournamentId;
+    if (tid == null || _selectedIds.isNotEmpty) return;
+    try {
+      final client = context.read<AuthProvider>().client;
+      final t = await client.getTournament(tid);
+      // Latest first, so a three-round event seeds from round 2 rather than
+      // round 1 — the nearer round is the better guess at who is still here.
+      final siblings = t.rounds.where((r) => r.id != widget.roundId).toList()
+        ..sort((a, b) => b.roundNumber.compareTo(a.roundNumber));
+      for (final sib in siblings) {
+        final full = await client.getRound(sib.id);
+        final ids = <int>{
+          for (final fs in full.foursomes)
+            for (final m in fs.memberships)
+              if (!m.player.isPhantom) m.player.id,
+        };
+        if (ids.isEmpty) continue;        // set up later, no groups yet
+        if (!mounted) return;
+        setState(() {
+          // Only golfers still on the roster — one deleted since round 1
+          // would be an id selected with no row to show it.
+          _selectedIds.addAll(
+              ids.where((id) => _allPlayers.any((p) => p.id == id)));
+          _seededFromField = _selectedIds.isNotEmpty;
+        });
+        return;
+      }
+    } catch (_) {
+      // Convenience only — leave the picker empty rather than fail setup.
+    }
+  }
+
 
   /// Inline-create a login-less golfer during round setup, then add them to the
   /// roster and auto-select them. Reuses PlayerFormScreen, which pops the saved
@@ -411,6 +465,15 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
             style: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(color: Colors.grey),
           ),
+            // A pre-ticked list needs to say why it is pre-ticked, or it
+            // reads as a list somebody else chose. Only shown when the
+            // seeding actually fired.
+            if (_seededFromField) ...[
+              const SizedBox(height: 4),
+              Text('Carried over from this tournament — add or remove anyone who is not playing this round.',
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: Colors.grey)),
+            ],
         ]),
       ),
 
