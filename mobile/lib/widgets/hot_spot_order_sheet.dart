@@ -101,16 +101,35 @@ class _HotSpotOrderSheetState extends State<HotSpotOrderSheet> {
             Text('Hot Spot order', style: theme.textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
-              'Drag into the order you will anchor. It locks when the first '
-              'score goes in.',
+              'Drag the handles into the order you will anchor. It locks when '
+              'the first score goes in.',
               style: theme.textTheme.bodySmall
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
             const SizedBox(height: 12),
             Flexible(
+              // **An EXPLICIT handle per row — the app's standard.**
+              // `buildDefaultDragHandles: true` draws a handle on desktop and
+              // nothing at all on a phone: it wraps each row in a
+              // `ReorderableDelayedDragStartListener`, so the row moves on a
+              // LONG PRESS with no affordance saying so, under copy that said
+              // "drag". Reported from the course as "it does not allow me to
+              // drag and drop" — the long press did work, which is exactly
+              // the problem: a gesture nothing on screen mentions.
+              //
+              // Every other reorder list in the app gives a visible handle —
+              // wolf_screen, wolf_setup_screen, pink_ball_screen,
+              // match_play_setup_screen, team_splitter_4, new_round_wizard,
+              // six of six. This sheet was the one that took the default.
+              //
+              // `NeverScrollableScrollPhysics` because four rows never need
+              // to scroll, and this sits in a draggable bottom sheet where a
+              // list that can also scroll vertically is one more thing for a
+              // drag to land in.
               child: ReorderableListView.builder(
                 shrinkWrap: true,
-                buildDefaultDragHandles: true,
+                physics: const NeverScrollableScrollPhysics(),
+                buildDefaultDragHandles: false,
                 itemCount: n,
                 onReorder: (from, to) => setState(() {
                   if (to > from) to -= 1;
@@ -136,6 +155,16 @@ class _HotSpotOrderSheetState extends State<HotSpotOrderSheet> {
                           : 'anchors ${holes.join(', ')}',
                       style: theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                    trailing: ReorderableDragStartListener(
+                      index: i,
+                      // 44 points, because it is the only way to move a row.
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 10),
+                        child: Icon(Icons.drag_handle,
+                            color: theme.colorScheme.onSurfaceVariant),
+                      ),
                     ),
                   );
                 },
