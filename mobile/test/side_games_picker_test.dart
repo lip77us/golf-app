@@ -5,6 +5,7 @@
 /// two lists drifted in BOTH directions — the wizard never offered Stroke
 /// Play or Hot Spot, and the chips never carried the blurb. These pin the one
 /// list, and the two games that are deliberately not on it.
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/game_catalog.dart';
 import 'package:golf_mobile/widgets/side_games_picker.dart';
@@ -56,6 +57,66 @@ void main() {
     test('a single-group round drops the ones that rank groups', () {
       final solo = perRoundSideGames(multiFoursome: false).map((g) => g.id);
       expect(solo, isNot(contains(GameIds.irishRumble)));
+    });
+  });
+
+  group('the day bet', () {
+    // It is not an `active_games` game, so it cannot ride in `selected` and
+    // for a while it was left out of this list entirely. The only way to turn
+    // one off was then an action inside its own setup screen, under the Save
+    // button — so a TD looking for a switch found none and reported that the
+    // day bet could not be turned off. Shipped-and-unreachable, which is the
+    // shape this codebase keeps hitting; these pin the switch's presence.
+    Future<void> pump(WidgetTester t, {bool? on, bool wire = true}) =>
+        t.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: SideGamesPicker(
+                selected: const {},
+                onToggle: (_, __) {},
+                dayBetOn: on,
+                onDayBetToggle: wire ? (_) {} : null,
+                dayBetNote: on == true ? '\$4 a golfer' : null,
+              ),
+            ),
+          ),
+        ));
+
+    testWidgets('draws a card when the round can have one', (t) async {
+      await pump(t, on: false);
+      expect(find.text('Day bet'), findsOneWidget);
+    });
+
+    testWidgets('no card at all when the round cannot', (t) async {
+      // Not the final round, or a one-round event. A struck row for something
+      // that can never apply here would be worse than its absence.
+      await pump(t, on: null);
+      expect(find.text('Day bet'), findsNothing);
+    });
+
+    testWidgets('no card when the caller wired no handler', (t) async {
+      // A switch that does nothing is worse than no switch.
+      await pump(t, on: true, wire: false);
+      expect(find.text('Day bet'), findsNothing);
+    });
+
+    testWidgets('the switch reflects whether it is set up', (t) async {
+      await pump(t, on: true);
+      final on = t.widgetList<Switch>(find.byType(Switch)).last;
+      expect(on.value, isTrue);
+
+      await pump(t, on: false);
+      final off = t.widgetList<Switch>(find.byType(Switch)).last;
+      expect(off.value, isFalse);
+    });
+
+    testWidgets('it is last, after every game', (t) async {
+      await pump(t, on: false);
+      final games = perRoundSideGames(multiFoursome: true);
+      final lastGameY = t.getTopLeft(find.text(games.last.displayName)).dy;
+      expect(t.getTopLeft(find.text('Day bet')).dy,
+          greaterThan(lastGameY),
+          reason: 'the day bet is the odd one — it goes at the end');
     });
   });
 }
