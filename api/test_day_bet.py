@@ -139,3 +139,88 @@ class DayBetEndpointTests(TestCase):
         r = self.client.get(reverse('api-day-bet', args=[self.r2.id]))
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json(), {'configured': False})
+
+
+class ThePotIsTheEligibleCountTests(DayBetEndpointTests):
+    """Eight golfers paying two places is a pot of SIX entries, not eight.
+
+    The money winners do not pay in. `day_bet_summary` has always computed
+    the pool that way once the round exists; the SETUP screen was multiplying
+    by the whole field, so a TD sizing the payouts was shown a pot a third
+    bigger than the one that would exist. Reported 10 Oct 2026.
+    """
+
+    def _field(self, n):
+        """n real golfers across the tournament's rounds."""
+        from core.models import Player, Tee
+        from tournament.models import Foursome, FoursomeMembership
+        tee = Tee.objects.filter(course=self.r1.course).first()
+        fs = Foursome.objects.create(round=self.r1, group_number=1)
+        for i in range(n):
+            p = Player.objects.create(account=self.acct, name=f'G{i}',
+                                      handicap_index=Decimal('0'))
+            FoursomeMembership.objects.create(foursome=fs, player=p, tee=tee,
+                                              course_handicap=0,
+                                              playing_handicap=0)
+
+    def test_the_paying_places_come_out_of_the_pot(self):
+        self._field(8)
+        LowNetChampionshipConfig.objects.update_or_create(
+            tournament=self.tourn,
+            defaults={'payouts': [{'place': 1, 'amount': 60},
+                                  {'place': 2, 'amount': 20}]})
+        d = self.client.get(self._setup_url(self.r2)).json()
+        self.assertEqual(d['field_size'], 8)
+        self.assertEqual(d['paying_places'], 2)
+        self.assertEqual(d['expected_eligible'], 6,
+                         'eight golfers, two in the money, six pay in')
+
+    def test_a_place_paying_nothing_does_not_come_out(self):
+        """A zero row is a place nobody collects, so that golfer still pays."""
+        self._field(8)
+        LowNetChampionshipConfig.objects.update_or_create(
+            tournament=self.tourn,
+            defaults={'payouts': [{'place': 1, 'amount': 60},
+                                  {'place': 2, 'amount': 0}]})
+        d = self.client.get(self._setup_url(self.r2)).json()
+        self.assertEqual(d['expected_eligible'], 7)
+
+    def test_no_championship_means_the_whole_field_pays(self):
+        self._field(8)
+        d = self.client.get(self._setup_url(self.r2)).json()
+        self.assertEqual(d['paying_places'], 0)
+        self.assertEqual(d['expected_eligible'], 8)
+
+
+class TurningItOffTests(DayBetEndpointTests):
+    """A TD who set one up and changed his mind had no way back.
+
+    An entry of 0 is a configured bet worth nothing — it still draws a board
+    and a tab. Deleting the config is the honest "we are not playing one".
+    """
+
+    def test_delete_removes_it(self):
+        self.client.post(self._setup_url(self.r2),
+                         {'entry_fee': '5.00',
+                          'payouts': [{'place': 1, 'amount': 20}]},
+                         format='json')
+        self.assertTrue(DayBetConfig.objects.filter(round=self.r2).exists())
+
+        r = self.client.delete(self._setup_url(self.r2))
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertFalse(r.json()['configured'])
+        self.assertFalse(DayBetConfig.objects.filter(round=self.r2).exists())
+
+    def test_delete_is_idempotent(self):
+        """Nothing to remove is not an error — the end state is what matters."""
+        r = self.client.delete(self._setup_url(self.r2))
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(r.json()['deleted'])
+
+    def test_the_setup_reports_it_gone(self):
+        self.client.post(self._setup_url(self.r2),
+                         {'entry_fee': '5.00', 'payouts': []}, format='json')
+        self.client.delete(self._setup_url(self.r2))
+        d = self.client.get(self._setup_url(self.r2)).json()
+        self.assertFalse(d['configured'])
+        self.assertEqual(d['entry_fee'], 0.00)

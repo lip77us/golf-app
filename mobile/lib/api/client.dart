@@ -692,6 +692,16 @@ class ApiClient {
     return Map<String, dynamic>.from(data as Map);
   }
 
+  /// Turn the day bet off — the event does not play one.
+  ///
+  /// An entry of 0 is a configured bet worth nothing, which still draws
+  /// a board and a tab. This removes the SETTING; the day bet stores no
+  /// results (standings derive from the round's scores), so nothing
+  /// played is lost.
+  Future<void> deleteDayBetSetup(int roundId) async {
+    await _delete('/rounds/\$roundId/day-bet/setup/');
+  }
+
   Future<Map<String, dynamic>> getDayBet(int roundId) async =>
       Map<String, dynamic>.from(await _get('/rounds/$roundId/day-bet/') as Map);
 

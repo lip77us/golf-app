@@ -41,8 +41,15 @@ class _DayBetSetupScreenState extends State<DayBetSetupScreen> {
   bool _loading = true;
   bool _saving = false;
   bool _eligible = false;
+  bool _configured = false;
   String? _reason;
   int _fieldSize = 0;
+  /// What the pot is actually built from: the field less the championship's
+  /// paying places and the Mini Singles finalists. Eight golfers paying two
+  /// places is six entries, not eight.
+  int _expectedEligible = 0;
+  int _payingPlaces = 0;
+  int _absentCount = 0;
   int _roundNumber = 0;
   int _totalRounds = 0;
   List<Map<String, dynamic>> _champPayouts = const [];
@@ -68,7 +75,7 @@ class _DayBetSetupScreenState extends State<DayBetSetupScreen> {
   /// until the championship closes — the money winners' entries come back out
   /// — so this is the pot assuming the current leaders hold.
   double get _pool =>
-      (double.tryParse(_entryCtrl.text.trim()) ?? 0.0) * _fieldSize;
+      (double.tryParse(_entryCtrl.text.trim()) ?? 0.0) * _expectedEligible;
 
 
   /// **There is deliberately no payouts-balance check.** Every other pot has
@@ -106,12 +113,17 @@ class _DayBetSetupScreenState extends State<DayBetSetupScreen> {
         _eligible = d['eligible'] == true;
         _reason = d['reason'] as String?;
         _fieldSize = (d['field_size'] as num?)?.toInt() ?? 0;
+        _expectedEligible =
+            (d['expected_eligible'] as num?)?.toInt() ?? _fieldSize;
+        _payingPlaces = (d['paying_places'] as num?)?.toInt() ?? 0;
+        _absentCount = (d['absent_count'] as num?)?.toInt() ?? 0;
         _roundNumber = (d['round_number'] as num?)?.toInt() ?? 0;
         _totalRounds = (d['total_rounds'] as num?)?.toInt() ?? 0;
         _champPayouts = ((d['championship_payouts'] as List?) ?? [])
             .map((e) => Map<String, dynamic>.from(e as Map))
             .toList();
-        if (d['configured'] == true) {
+        _configured = d['configured'] == true;
+        if (_configured) {
           final fee = (d['entry_fee'] as num?)?.toDouble() ?? 0.0;
           _entryCtrl.text =
               fee.toStringAsFixed(fee == fee.roundToDouble() ? 0 : 2);
@@ -192,7 +204,18 @@ class _DayBetSetupScreenState extends State<DayBetSetupScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Day bet')),
+      appBar: AppBar(
+        title: const Text('Day bet'),
+        actions: [
+          // Only when there IS one. An always-present Remove on a round with
+          // no day bet is a control for a state that does not exist.
+          if (_configured && !_saving)
+            TextButton(
+              onPressed: _remove,
+              child: const Text('Turn off'),
+            ),
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : (_error != null && !_saving)
@@ -266,10 +289,7 @@ class _DayBetSetupScreenState extends State<DayBetSetupScreen> {
                                 Padding(
                                   padding: const EdgeInsets.only(top: 6),
                                   child: Text(
-                                    'About \$${_pool.toStringAsFixed(0)} from '
-                                    '$_fieldSize golfers — an estimate, '
-                                    'because the money winners\' entries come '
-                                    'back out when the championship closes.',
+                                    _potLine(),
                                     style: theme.textTheme.bodySmall?.copyWith(
                                         color: theme
                                             .colorScheme.onSurfaceVariant),
@@ -345,6 +365,56 @@ class _DayBetSetupScreenState extends State<DayBetSetupScreen> {
                   ),
                 ]),
     );
+  }
+
+  /// The pot, and WHY it is not the field.
+  ///
+  /// "$24 — 6 of 8 golfers pay in" rather than a bare total: the two the
+  /// field loses are the point of the bet, and a TD sizing payouts off the
+  /// wrong multiplier is exactly what this line exists to stop.
+  String _potLine() {
+    final out = StringBuffer(
+        'About \$${_pool.toStringAsFixed(0)} — $_expectedEligible of '
+        '$_fieldSize golfers pay in');
+    final why = <String>[
+      if (_payingPlaces > 0)
+        '$_payingPlaces in the 36-hole money',
+      if (_absentCount > 0) '$_absentCount in the bracket final',
+    ];
+    if (why.isNotEmpty) out.write(' (${why.join(', ')} do not)');
+    out.write('. An estimate until the championship closes — if the money '
+        'changes hands, one entry comes back in and another goes out.');
+    return out.toString();
+  }
+
+  Future<void> _remove() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Turn off the day bet?'),
+        content: const Text(
+            'This round will not play one. Nothing scored is lost — the day '
+            'bet keeps no results of its own.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Keep it')),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Turn it off')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _saving = true);
+    try {
+      await context.read<AuthProvider>().client
+          .deleteDayBetSetup(widget.roundId);
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) setState(() { _error = e; _saving = false; });
+    }
   }
 
   Widget _rule(ThemeData theme, String text) => Padding(

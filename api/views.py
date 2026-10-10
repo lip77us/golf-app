@@ -2308,6 +2308,25 @@ class DayBetSetupView(APIView):
                              player__is_phantom=False)
                      .values('player_id').distinct().count())
 
+        # **The pool is the ELIGIBLE count, not the field.** The championship
+        # money winners do not pay in, and the Mini Singles day-2 finalists
+        # are not in the bet at all — so eight golfers paying for two places
+        # is a pot of six entries, not eight. `day_bet_summary` computes it
+        # that way once the round exists; this is the same arithmetic before
+        # anyone has teed off, when WHO is in the money is not knowable but
+        # HOW MANY places pay already is.
+        paying_places = sum(
+            1 for p in ((champ.payouts if champ else []) or [])
+            if (p.get('amount') or 0) > 0)
+        finalists = 0
+        if t is not None:
+            try:
+                from services.mini_singles import day2_finalist_ids
+                finalists = len(day2_finalist_ids(t))
+            except Exception:                            # noqa: BLE001
+                finalists = 0
+        expected_eligible = max(0, field - paying_places - finalists)
+
         reason = None
         if t is None:
             reason = 'The day bet belongs to a tournament round.'
@@ -2328,6 +2347,10 @@ class DayBetSetupView(APIView):
             'round_number'       : round_obj.round_number,
             'total_rounds'       : t.total_rounds if t else 0,
             'field_size'         : field,
+            'paying_places'      : paying_places,
+            'absent_count'       : finalists,
+            # What the pot will actually be built from.
+            'expected_eligible'  : expected_eligible,
             # The last paying championship place. Day-bet 1st may not exceed
             # it, or a golfer is better off DQ'ing the 36 holes.
             'championship_payouts': (champ.payouts if champ else []),
@@ -2366,6 +2389,23 @@ class DayBetSetupView(APIView):
         )
         return Response({'entry_fee': float(cfg.entry_fee),
                          'payouts'  : cfg.payouts})
+
+    def delete(self, request, pk):
+        """Turn the day bet off — the event simply does not play one.
+
+        A TD who set it up and changed his mind had no way back: the setup
+        screen could only save, and an entry of 0 is a configured bet worth
+        nothing rather than no bet at all, which still draws a board and a
+        tab. Deleting the config is the honest 'we are not playing this'.
+
+        Nothing is lost. The day bet stores no results — its standings are
+        derived from the round's scores every time they are asked for — so
+        this removes a SETTING, not a record of anything played.
+        """
+        from games.models import DayBetConfig
+        round_obj = self._round(request, pk)
+        deleted, _ = DayBetConfig.objects.filter(round=round_obj).delete()
+        return Response({'configured': False, 'deleted': bool(deleted)})
 
 
 class DayBetView(APIView):
