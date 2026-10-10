@@ -8119,6 +8119,11 @@ class FortyBallsGroup {
   final int capacity;
   /// Holes with no count yet.
   final int holesLeft;
+  /// Holes the group has PLAYED, counted along its own play order — which is
+  /// NOT `18 - holesLeft`: a hole can be fully scored and still have no count
+  /// committed, so the budget's "pending" and a golfer's "thru" are two
+  /// different questions. Null before the group starts.
+  final int? thru;
   final List<FortyBallsHole> holes;
   final List<int> holesInPlay;
   /// The group's golfers, in roster order — `{player_id, short_name, name}`.
@@ -8133,7 +8138,7 @@ class FortyBallsGroup {
     required this.factor, required this.rankingTotal, required this.dq,
     required this.rank, required this.tied, required this.payout,
     required this.perPersonPayout, required this.splitWays,
-    required this.capacity, required this.holesLeft,
+    required this.capacity, required this.holesLeft, this.thru,
     required this.holes, required this.holesInPlay,
     this.players = const [],
   });
@@ -8159,6 +8164,7 @@ class FortyBallsGroup {
         splitWays  : (j['split_ways'] as num?)?.toInt() ?? 1,
         capacity   : (j['capacity'] as num?)?.toInt() ?? 0,
         holesLeft  : (j['holes_left'] as num?)?.toInt() ?? 0,
+        thru       : (j['thru'] as num?)?.toInt(),
         holes      : ((j['holes'] as List?) ?? const [])
             .map((h) => FortyBallsHole.fromJson(
                 Map<String, dynamic>.from(h as Map)))

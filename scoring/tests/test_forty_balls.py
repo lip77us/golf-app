@@ -516,3 +516,91 @@ class FoursomeFactorTests(_Base):
         from fractions import Fraction
         self.assertEqual(THREESOME_FACTOR, Fraction(4, 3))
         self.assertEqual(THREESOME_FACTOR * 3, 4)
+
+
+class ThruTests(_Base):
+    """`thru` is holes PLAYED, which is not what the budget calls pending.
+
+    The board shows it beside the group's name so one row can be compared
+    against another — a group at −5 thru 9 and one at −5 thru 17 are not in
+    the same position. It has to answer a different question from
+    `holes_left`, and it has to answer it along the group's own play order.
+    """
+
+    def test_nothing_before_the_group_starts(self):
+        # None, not 0 — the slot stays empty rather than claiming a hole.
+        self.assertIsNone(group_card(self.fs)['thru'])
+
+    def test_it_counts_the_holes_played(self):
+        self.par_hole(1, 0, 0, 0, 0)
+        self.par_hole(2, 0, 0, 0, 0)
+        self.assertEqual(group_card(self.fs)['thru'], 2)
+
+    def test_a_scored_hole_with_no_count_is_still_played(self):
+        """The reason this is not `18 - holes_left`.
+
+        A hole is `pending` to the budget until its balls are committed, so a
+        fully scored hole with no count picked sits in both — but the group
+        has played it, and a reader asking how far round they are does not
+        care whether they have decided yet.
+        """
+        self.par_hole(1, 0, 0, 0, 0)
+        card = group_card(self.fs)
+        self.assertEqual(card['thru'], 1)
+        # The budget still has every hole to come, including this one.
+        self.assertEqual(card['holes_left'], 18)
+        self.assertNotEqual(card['thru'], 18 - card['holes_left'])
+
+    def test_a_forced_tail_does_not_advance_it(self):
+        """The counterpart: a committed hole with no scores is not played.
+
+        Once the budget forces the tail the app writes a count on every hole
+        to the finish. Those holes have no balls yet, and a group reading
+        "Thru 18" on the 12th tee is the bug the budget line already had.
+        """
+        for h in range(1, 11):
+            self.par_hole(h, 0, 0, 0, 0)
+            set_count(self.fs, h, 4)
+        card = group_card(self.fs)
+        self.assertEqual(card['thru'], 10)
+
+    def test_a_shotgun_group_counts_along_its_own_order(self):
+        """Off the 7th, two holes played is `2` — never `8`.
+
+        The `Max('hole_number')` shape read 8 after two holes and then hit 18
+        on the group's TWELFTH, where the client draws `F`. This is the one
+        place that number is computed, so the whole sweep's lesson holds here.
+        """
+        self.fs.starting_hole = 7
+        self.fs.save(update_fields=['starting_hole'])
+        self.par_hole(7, 0, 0, 0, 0)
+        self.par_hole(8, 0, 0, 0, 0)
+        self.assertEqual(group_card(self.fs)['thru'], 2)
+
+    def test_the_board_reports_it(self):
+        from services.forty_balls import forty_balls_summary
+        self.par_hole(1, 0, 0, 0, 0)
+        board = forty_balls_summary(self.round)
+        row = next(r for r in board['results']
+                   if r['foursome_id'] == self.fs.pk)
+        self.assertEqual(row['thru'], 1)
+
+    def test_the_board_asks_for_the_played_holes_once_for_every_group(self):
+        """The map is batched — `group_card` must not fetch its own.
+
+        `forty_balls_summary` calls `group_card` per group, so computing it
+        inside would be one extra round-wide query per group on a board that
+        already costs a summary per game. A single-group caller may still pay
+        for its own, which is why the argument is optional rather than
+        required.
+        """
+        from unittest.mock import patch
+
+        from services import forty_balls as fb
+        make_foursome(self.round, [('Eve', 0), ('Fay', 0), ('Gus', 0),
+                                   ('Hal', 0)], tee=self.tee, group_number=2)
+        self.par_hole(1, 0, 0, 0, 0)
+        with patch.object(fb, 'scored_holes_by_foursome',
+                          wraps=fb.scored_holes_by_foursome) as spy:
+            fb.forty_balls_summary(self.round)
+        self.assertEqual(spy.call_count, 1)

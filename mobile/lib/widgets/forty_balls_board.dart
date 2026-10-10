@@ -92,6 +92,7 @@ class _GroupRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final thru = _thru(group);
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
@@ -119,9 +120,32 @@ class _GroupRow extends StatelessWidget {
                           ?.copyWith(fontWeight: FontWeight.bold)),
                 ),
                 Expanded(
-                  child: Text('Group ${group.groupNumber}',
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.bold)),
+                  // **Thru sits beside the group's name**, not in the budget
+                  // line below it. `34 of 40 · slack 6` answers what the
+                  // group has left to spend; this answers how far round they
+                  // are, which is what a reader scanning the board compares
+                  // one row against another with — a group at −5 thru 9 and
+                  // one at −5 thru 17 are not in the same position.
+                  //
+                  // It is NOT `18 - holesLeft`: a hole can be fully scored
+                  // and still carry no committed count, so the budget's
+                  // "pending" and a golfer's "thru" are different questions.
+                  // The server answers this one, along the group's own play
+                  // order, so a shotgun round reads correctly.
+                  child: Row(children: [
+                    Flexible(
+                      child: Text('Group ${group.groupNumber}',
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.bold)),
+                    ),
+                    if (thru != null) ...[
+                      const SizedBox(width: 8),
+                      Text(thru,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant)),
+                    ],
+                  ]),
                 ),
                 if (group.dq) ...[
                   _Tag('OUT'),
@@ -173,6 +197,20 @@ class _GroupRow extends StatelessWidget {
         if (isOpen) _card(context),
       ]),
     );
+  }
+
+  /// `Thru 12`, `F` when every hole in play is in, and nothing at all before
+  /// the group starts — an empty slot rather than `Thru 0`.
+  ///
+  /// **`F` is measured against the holes IN PLAY, not against 18**, because
+  /// this board has the list and a nine-hole round would otherwise never
+  /// finish. The shared group board still compares against 18; that is
+  /// older and not this change's to fix.
+  static String? _thru(FortyBallsGroup g) {
+    final t = g.thru;
+    if (t == null || t == 0) return null;
+    final n = g.holesInPlay.length;
+    return (n > 0 && t >= n) ? 'F' : 'Thru $t';
   }
 
   /// The ranking figure — one decimal only when the 4/3 factor made it

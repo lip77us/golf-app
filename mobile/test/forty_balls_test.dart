@@ -217,10 +217,11 @@ void main() {
       int number = 1, int size = 4, int spent = 34, int total = -5,
       double? ranking = -5, bool dq = false, int? rank = 1,
       int slack = 6, int left = 6, int capacity = 12, String? factor,
+      int? thru = 2, List<int> holesInPlay = const [1, 2],
     }) => {
           'foursome_id': number, 'group_number': number, 'group_size': size,
           'budget': size * 10, 'spent': spent, 'left': left, 'slack': slack,
-          'capacity': capacity, 'holes_left': 3,
+          'capacity': capacity, 'holes_left': 3, 'thru': thru,
           'total': total, 'factor': factor, 'ranking_total': ranking,
           'dq': dq, 'rank': rank, 'tied': false,
           'payout': rank == 1 ? 150.0 : 0.0,
@@ -243,7 +244,7 @@ void main() {
              'gross': {'1': 4, '2': 4, '3': 5, '4': 5},
              'strokes': {'1': 0, '2': 0, '3': 0, '4': 0}},
           ],
-          'holes_in_play': [1, 2],
+          'holes_in_play': holesInPlay,
         };
 
     Future<void> pumpBoard(WidgetTester tester,
@@ -271,6 +272,65 @@ void main() {
       expect(find.text('34 of 40'), findsNWidgets(2));
       expect(find.text('slack 6'), findsOneWidget);
       expect(find.text('slack 0 · all count'), findsOneWidget);
+    });
+
+    testWidgets('thru sits beside the group name', (tester) async {
+      // Reported from the board: the budget line answers what a group has
+      // left to SPEND, and nothing on the row answered how far round they
+      // are — which is what a reader compares one row against another with.
+      await pumpBoard(tester, [
+        group(thru: 9, holesInPlay: const [
+          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+        ]),
+      ]);
+      expect(find.text('Thru 9'), findsOneWidget);
+      // Not F — there are nine to come.
+      expect(find.text('F'), findsNothing);
+    });
+
+    testWidgets('it is to the RIGHT of the name and LEFT of the total',
+        (tester) async {
+      // "Next to the team name" is a position, so it is measured. Between the
+      // name and the figures is the only slot where it reads as belonging to
+      // the group rather than to the money.
+      await pumpBoard(tester, [
+        group(thru: 9, total: -5, ranking: -5, holesInPlay: const [
+          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+        ]),
+      ]);
+      final name  = tester.getTopRight(find.text('Group 1')).dx;
+      final thru  = tester.getTopLeft(find.text('Thru 9')).dx;
+      final total = tester.getTopLeft(find.text('−5')).dx;
+      expect(thru, greaterThan(name));
+      expect(thru, lessThan(total));
+    });
+
+    testWidgets('it is NOT 18 minus holes_left', (tester) async {
+      // A hole can be fully scored and still carry no committed count, so
+      // the budget's `pending` and a golfer's `thru` are different
+      // questions. `holes_left` is 3 in this fixture; thru is 1.
+      await pumpBoard(tester, [group(thru: 1)]);
+      expect(find.text('Thru 1'), findsOneWidget);
+      expect(find.text('Thru 15'), findsNothing);
+    });
+
+    testWidgets('every hole in play reads F, not Thru 18', (tester) async {
+      // Measured against the holes IN PLAY, because this board has the list
+      // and a nine-hole round would otherwise never finish.
+      await pumpBoard(tester, [
+        group(thru: 9, holesInPlay: const [1, 2, 3, 4, 5, 6, 7, 8, 9]),
+      ]);
+      expect(find.text('F'), findsOneWidget);
+      expect(find.textContaining('Thru'), findsNothing);
+    });
+
+    testWidgets('a group that has not started shows nothing', (tester) async {
+      // An empty slot rather than `Thru 0`.
+      await pumpBoard(tester, [group(thru: null)]);
+      expect(find.textContaining('Thru'), findsNothing);
+      expect(find.text('F'), findsNothing);
+      // The row is still there.
+      expect(find.text('Group 1'), findsOneWidget);
     });
 
     testWidgets('a finished group drops the slack', (tester) async {

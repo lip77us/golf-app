@@ -3980,6 +3980,64 @@ id written with no `$` at all, also a literal and also a 404). **Currency
 strings legitimately use `\$`** — `'\$${fee}'` is a dollar sign then an
 interpolation — which is why the test looks only inside path arguments.
 
+## `thru` has one writer — `group_field.holes_thru`
+
+The 40 Balls board showed a group's budget (`34 of 40 · slack 6`) and nothing
+saying how far round it was. Those answer different questions, and the board
+needs both: a group at −5 **thru 9** and one at −5 **thru 17** are not in the
+same position, which is the comparison the board exists for. `thru` now sits
+beside the group's name, between it and the figures.
+
+**It is NOT `18 - holes_left`.** A hole can be fully scored and still be
+`pending` to the budget, because its balls have not been committed yet — and
+the converse bites too: once the budget forces the tail the app writes a count
+on every hole to the finish, so a committed hole with no scores is not played.
+`forty_balls.group_card` emits `thru` from the played holes, never from the
+budget.
+
+Checked against the live round (533) before claiming it: there the two
+coincide, because every scored hole already carries a count. The divergence
+is a TRANSIENT, and it lands on every hole — the group posts its scores and
+then picks, so for that window `18 - holes_left` under-reports by one, which
+is precisely when somebody is looking at the board. The forced tail is the
+case that is not transient.
+
+**The definition was extracted rather than copied.** `services/group_field.py`
+now exports `scored_holes_by_foursome(round)` (one query for the round) and
+`holes_thru(round, foursome, played)`, and `group_standings` uses them too.
+Every board that shows a thru figure has to answer it the same way; three
+copies of one traversal with one of them wrong is the standing `gross_to_par`
+lesson. The rules the helper carries:
+
+- **Counted along the group's OWN play order**, never `Max('hole_number')` —
+  the two are the same integer only off the 1st tee. The shotgun sweep's
+  "progress" shape.
+- **None, not 0**, before a group starts: the slot stays empty rather than
+  claiming a hole.
+- `group_card(foursome, scored_holes=None)` takes the batched map so the board
+  asks once for every group; a single-group caller may pay for its own, which
+  is why the argument is optional. Pinned by a spy test — an N+1 here is one
+  extra round-wide query per group.
+
+**`F` on the 40 Balls board is measured against the holes IN PLAY**, not
+against 18, because that board has the list and a nine-hole round would
+otherwise never finish. The shared group board still compares against 18;
+that is older and was not this change's to fix.
+
+**Extracting it broke the phantom branch**, which is worth recording because
+of how it was found. Hoisting the query took two locals (`order`, `played`)
+with it, and the `fs.has_phantom` block twenty lines below still used both —
+a `NameError` on every group with a borrowed ball, in Irish Rumble's standings
+and its money. Caught by READING the diff before the suite reached it; the
+suite then confirmed it at exactly 5 errors, all phantom. A hoist that deletes
+a variable's only assignment is invisible in the hunk that deletes it, so the
+thing to check after one is every later use, not just the call site you
+replaced.
+
+Tests: `ThruTests` (`scoring/tests/test_forty_balls.py`, 7) and the five in
+`mobile/test/forty_balls_test.dart`, one of which MEASURES the position —
+"next to the team name" is a position, so presence alone would not pin it.
+
 ## Website SEO pipeline — `website/build-seo.py`
 
 halved.golf is static HTML zipped to Cloudflare Pages (`website/build-zip.sh`).

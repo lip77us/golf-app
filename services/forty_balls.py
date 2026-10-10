@@ -75,6 +75,7 @@ from core.models import HandicapMode
 from games.models import FortyBallsConfig, FortyBallsHoleCount
 from scoring.handicap import effective_hcp_for, make_strokes_fn
 from scoring.models import HoleScore
+from services.group_field import holes_thru, scored_holes_by_foursome
 from services.hole_plan import play_order
 from tournament.models import Foursome
 
@@ -443,8 +444,14 @@ def _fill_forced(foursome) -> None:
 # The board
 # ---------------------------------------------------------------------------
 
-def group_card(foursome) -> dict:
-    """One group's whole card: per-hole counts, results and the running budget."""
+def group_card(foursome, scored_holes: dict | None = None) -> dict:
+    """One group's whole card: per-hole counts, results and the running budget.
+
+    `scored_holes` is the whole round's played-holes map
+    (`group_field.scored_holes_by_foursome`). The board passes it in so one
+    query serves every group; a single-group caller may leave it out and pay
+    for its own.
+    """
     round_obj = foursome.round
     config = _config(round_obj)
     k = group_size(foursome)
@@ -538,6 +545,17 @@ def group_card(foursome) -> dict:
         # which is the `all count` state.
         'slack'       : max(0, capacity - left),
         'holes_left'  : len(pending),
+        # **Holes PLAYED, which is not `18 - holes_left`.** A hole can be
+        # fully scored and still be `pending` here, because its balls have
+        # not been committed yet — two different questions, and the budget's
+        # answer is the wrong one to print beside a group's name.
+        #
+        # Shared with every other board (`group_field.holes_thru`) so a
+        # shotgun group reads the same thru figure wherever it appears.
+        'thru'        : holes_thru(
+            round_obj, foursome,
+            (scored_holes if scored_holes is not None
+             else scored_holes_by_foursome(round_obj)).get(foursome.pk, set())),
         'capacity'    : capacity,
         'dq'          : dq,
         'total'       : total,
@@ -566,7 +584,8 @@ def forty_balls_summary(round_obj) -> dict:
     if config is None:
         return {}
 
-    cards = [group_card(fs) for fs in
+    scored = scored_holes_by_foursome(round_obj)
+    cards = [group_card(fs, scored) for fs in
              Foursome.objects.filter(round=round_obj).order_by('group_number')]
     cards = [c for c in cards if c['group_size'] > 0]
 

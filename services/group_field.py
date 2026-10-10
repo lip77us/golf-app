@@ -63,6 +63,41 @@ def player_counts(round_obj) -> dict:
     }
 
 
+def scored_holes_by_foursome(round_obj) -> dict:
+    """Holes that carry at least one real golfer's gross, per foursome.
+
+    Batched deliberately — one query for the whole round, because the caller
+    ranks every group and a per-foursome version would be an N+1 on a board
+    that already costs a summary per game.
+    """
+    out: dict = {}
+    for row in (HoleScore.objects
+                .filter(foursome__round=round_obj, player__is_phantom=False)
+                .exclude(gross_score=None)
+                .values('foursome_id', 'hole_number').distinct()):
+        out.setdefault(row['foursome_id'], set()).add(row['hole_number'])
+    return out
+
+
+def holes_thru(round_obj, foursome, played) -> int | None:
+    """Holes PLAYED, counted along this group's OWN play order.
+
+    **Not the highest hole number scored** — which is the `Max('hole_number')`
+    this used to be. The two are the same integer only on a round starting at
+    the 1st, and off a shotgun from the 7th the old form read "Thru 8" after
+    two holes and then "F" on the group's TWELFTH, because the client treats
+    18 as finished. The shotgun sweep's "progress" shape.
+
+    It lives here rather than in each game because every board that shows a
+    thru figure has to answer it the same way; `gross_to_par` is the standing
+    lesson about what three copies of one traversal cost.
+
+    None, not 0, on a group that has not started — the slot stays empty
+    instead of claiming a hole.
+    """
+    return sum(1 for h in play_order(round_obj, foursome) if h in played) or None
+
+
 def group_standings(round_obj, *, balls_by_hole, score_index, par_by_hole,
                     entry_fee, payouts, net_percent, select_scores=None) -> list:
     """The overall board — one row per group, ranked, with the money on it.
@@ -92,19 +127,7 @@ def group_standings(round_obj, *, balls_by_hole, score_index, par_by_hole,
     foursomes = {fs.pk: fs for fs in Foursome.objects.filter(round=round_obj)}
     counts    = player_counts(round_obj)
 
-    # **Holes PLAYED, counted along each group's own play order** — not the
-    # highest hole number scored, which is the `Max('hole_number')` this used
-    # to be. The two are the same integer only on a round starting at the 1st,
-    # and off a shotgun from the 7th the old form read "Thru 8" after two
-    # holes and then "F" on the group's TWELFTH, because the client treats 18
-    # as finished. The shotgun sweep's "progress" shape, one file it missed.
-    scored_holes: dict = {}
-    for row in (HoleScore.objects
-                .filter(foursome__round=round_obj, player__is_phantom=False)
-                .exclude(gross_score=None)
-                .values('foursome_id', 'hole_number').distinct()):
-        scored_holes.setdefault(row['foursome_id'], set()).add(
-            row['hole_number'])
+    scored_holes = scored_holes_by_foursome(round_obj)
 
     # Running total, hole by hole — live from the first one.
     running: dict = {}
@@ -167,9 +190,8 @@ def group_standings(round_obj, *, balls_by_hole, score_index, par_by_hole,
         # its donor has posted too, so cap at the last contiguous hole where
         # the borrowed ball is also in — otherwise a group reads "thru 2"
         # while still waiting on hole 2.
-        order = play_order(round_obj, fs)
         played = scored_holes.get(fid, set())
-        current_hole = sum(1 for h in order if h in played) or None
+        current_hole = holes_thru(round_obj, fs, played)
         if fs.has_phantom and current_hole:
             fs_scores = score_index.get(fid, {})
             real_pids = {m.player_id for m in real_members}
@@ -178,7 +200,7 @@ def group_standings(round_obj, *, balls_by_hole, score_index, par_by_hole,
             # Walk the group's OWN order, not 1..N: a hole is not complete
             # until its donor has posted too.
             complete_thru = 0
-            for h in order:
+            for h in play_order(round_obj, fs):
                 if h in played and h in phantom_scores:
                     complete_thru += 1
                 else:
