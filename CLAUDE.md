@@ -3917,30 +3917,52 @@ no day bet went looking for a switch, found none, and reported that it could
 not be turned off. Same shipped-and-unreachable shape as the casual receipt no
 round could open and the setup-edit button gated on the rule it replaced.
 
-It is a card in `SideGamesPicker` now, **last**, on the final round only — and
-the SERVER decides that, via the setup GET's `eligible`, because it also wants
-a tournament and more than one round. An ineligible round draws no card rather
-than a switch that would 400. `dayBetOn == null` ⇒ no card, which also covers
-the moment before the fetch lands, so nothing flips itself.
+It is a card in `SideGamesPicker` now, **last**, and it is an ORDINARY side
+game. **The only thing that is special about it is where it appears**: the
+final round of a multi-round event and nowhere else. Paul set that boundary
+explicitly after a first pass made it special in two more ways — its switch
+wrote at once and turning it on pushed the setup screen, which made it a
+second kind of switch on one screen and needed a sentence on the card to
+explain itself.
 
-- **ON opens the setup screen.** A switch cannot invent a stake, and the bet
-  needs an entry fee and a prize table.
-- **OFF confirms, then deletes**, and names what goes: the money, not the
-  scores. Standings derive from the round's scores, so turning it back on
-  rebuilds them.
-- **That switch acts at once rather than on Save** — it is its own resource —
-  which is a seam inside one screen, so `dayBetNote` says so on the card.
-- The setup screen keeps its Turn off action. Both call `deleteDayBetSetup`,
-  so there is nothing to drift.
+So: the switch is **moved here and written on Save**, with the games beside
+it; `_dirty` covers it, so one Save covers the lot. Turning it ON posts
+`entry_fee: 0, payouts: []` — on and worth nothing, which is exactly what a
+game looks like between being switched on and being configured — and the fee
+and prizes are set from the round hub's **Configure Day bet** button, the same
+way Hot Spot's and Better Ball's are. Turning it OFF deletes the config.
+
+- **The SERVER decides whether the card appears**, via the setup GET's
+  `eligible`: it also wants a tournament and more than one round, so an
+  ineligible round draws no card rather than a switch that would 400.
+  `dayBetOn == null` ⇒ no card, which also covers the moment before the fetch
+  lands, so nothing flips itself.
+- **The hub's button is gated on `has_day_bet`**, not on `is_final_round`.
+  `is_final_round` says one COULD live here; `has_day_bet` (new on
+  `RoundSerializer`) says one does. Without it a day bet turned off left a
+  live Configure route into a bet nobody was playing. Turning one ON is the
+  switch's job; the button is only for its numbers, which is why it reads
+  `Configure Day bet` rather than naming the game alone.
+- **Off means GONE, and that is the one genuine exception** to this screen's
+  "turning a game off leaves its setup in place": the day bet has no `active`
+  flag — the config's existence IS its on switch — so its fee and prizes do
+  not survive. Nothing scored is touched (standings derive from the round),
+  and the footer says both halves.
+- **`_save` only writes on a CHANGE.** Re-posting an untouched day bet would
+  replace a TD's $4 and $20 with the blank defaults the moment he toggled it
+  off and back on in one visit.
 - `_SideGameCard` takes title/blurb/moneyNote **as strings, not a `GameMeta`**,
   because the day bet has no catalog entry; that is what keeps it from coming
   to look different from the games above it.
 - A payout is `{place, amount}`, not a number. The first version of the note
   read it as a number and would have thrown on any configured day bet.
+- The setup screen keeps its Turn off action. It and the switch both call
+  `deleteDayBetSetup`, so there is nothing to drift.
 
 Tests: the `the day bet` group in `mobile/test/side_games_picker_test.dart`
-(5) — the card's presence is the thing worth pinning, since its absence is
-what the bug was.
+(6) — the card's presence is the thing worth pinning, since its absence is
+what the bug was — and `TheHubButtonFollowsTheSwitchTests`
+(`api/test_day_bet.py`), including that an entry of $0 still counts as set up.
 
 ### `\$` in an API path is a 404 that looks like a missing endpoint
 

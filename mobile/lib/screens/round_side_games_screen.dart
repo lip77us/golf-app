@@ -42,9 +42,18 @@ class _RoundSideGamesScreenState extends State<RoundSideGamesScreen> {
   /// Null until the day bet's own config has been read, and null forever on a
   /// round that cannot have one — the picker draws no card in either case,
   /// so a slow fetch shows nothing rather than a switch that flips itself.
+  ///
+  /// **It behaves exactly like the switches above it**: moved here, saved on
+  /// Save, and nothing it does is special. The only thing that makes the day
+  /// bet different is that it appears on the final round of a multi-round
+  /// event and nowhere else. An earlier pass had its switch write at once and
+  /// open the setup screen on the way on, which made it a second kind of
+  /// switch on one screen and needed a sentence on the card to explain
+  /// itself. Its fee and prizes are set from the hub's Configure button, the
+  /// same way Hot Spot's and Better Ball's are.
   bool? _dayBetOn;
+  bool? _dayBetInitial;
   String? _dayBetNote;
-  bool _dayBetBusy = false;
 
   @override
   void initState() {
@@ -66,7 +75,10 @@ class _RoundSideGamesScreenState extends State<RoundSideGamesScreen> {
       // tournament and more than one round. Its own answer wins, so an
       // ineligible round draws no card instead of a switch that would 400.
       if (cfg['eligible'] != true) {
-        if (mounted) setState(() => _dayBetOn = null);
+        setState(() {
+          _dayBetOn = null;
+          _dayBetInitial = null;
+        });
         return;
       }
       final on = cfg['configured'] == true;
@@ -78,77 +90,46 @@ class _RoundSideGamesScreenState extends State<RoundSideGamesScreen> {
           : ((payouts.first as Map)['amount'] as num?)?.toDouble() ?? 0.0;
       setState(() {
         _dayBetOn = on;
-        _dayBetNote = on
-            ? '\$${fee.toStringAsFixed(0)} a golfer, '
-                '\$${first.toStringAsFixed(0)} to the winner. '
-                'This switch saves as soon as you change it.'
-            : null;
+        _dayBetInitial = on;
+        // On but worth nothing is a real state — it is what a game looks like
+        // between being switched on and being configured — so the note says
+        // where to put the numbers rather than showing a bet for $0.
+        _dayBetNote = !on
+            ? null
+            : fee > 0
+                ? '\$${fee.toStringAsFixed(0)} a golfer, '
+                    '\$${first.toStringAsFixed(0)} to the winner.'
+                : 'Set the entry fee and prizes with Configure Day bet on '
+                    'the round.';
       });
     } catch (_) {
       // A round that cannot have one, or a fetch that failed: either way no
       // card, rather than a switch whose position is a guess.
-      if (mounted) setState(() => _dayBetOn = null);
+      if (mounted) {
+        setState(() {
+          _dayBetOn = null;
+          _dayBetInitial = null;
+        });
+      }
     }
   }
 
-  /// ON needs an entry fee and a prize table, so it opens the setup screen
-  /// and re-reads whatever came back — a switch cannot invent a stake. OFF
-  /// deletes the config, which asks first, because the standings it was
-  /// paying are derived from the round's scores and nothing played is lost
-  /// but the money is.
-  Future<void> _toggleDayBet(bool on) async {
-    if (_dayBetBusy) return;
-    if (on) {
-      await Navigator.of(context)
-          .pushNamed('/day-bet-setup', arguments: widget.roundId);
-      if (mounted) await _loadDayBet();
-      return;
-    }
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Turn off the day bet?'),
-        content: const Text(
-            'The entry fee and prizes are removed and nobody is charged. '
-            'Nothing scored is lost — the standings come from the round, so '
-            'turning it back on rebuilds them.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(c, false),
-              child: const Text('Keep it')),
-          TextButton(
-              onPressed: () => Navigator.pop(c, true),
-              child: const Text('Turn off')),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-    setState(() => _dayBetBusy = true);
-    try {
-      await context
-          .read<AuthProvider>()
-          .client
-          .deleteDayBetSetup(widget.roundId);
-      if (!mounted) return;
-      setState(() {
-        _dayBetOn = false;
-        _dayBetNote = null;
-      });
-    } catch (e) {
-      if (mounted) setState(() => _error = e);
-    } finally {
-      if (mounted) setState(() => _dayBetBusy = false);
-    }
-  }
-
+  /// The day bet is in here with the games, so one Save covers the lot and a
+  /// TD never has two kinds of pending change on one screen.
   bool get _dirty =>
       _selected.length != _initial.length ||
-      !_selected.every(_initial.contains);
+      !_selected.every(_initial.contains) ||
+      _dayBetOn != _dayBetInitial;
 
   /// Turning a game OFF does not delete what it has scored — the config and
   /// its results stay, and turning it back on shows them again. Said out
   /// loud, because "remove" on a round that is being played is the reading
   /// a TD would otherwise reach for.
+  ///
+  /// The day bet is the one exception, and only because its existence IS its
+  /// on switch: there is no `active` flag to clear, so off means the config
+  /// goes and its fee and prizes go with it. Nothing scored is touched — the
+  /// standings derive from the round — and the footer says so.
   Future<void> _save() async {
     setState(() {
       _saving = true;
@@ -156,10 +137,32 @@ class _RoundSideGamesScreenState extends State<RoundSideGamesScreen> {
     });
     try {
       final rp = context.read<RoundProvider>();
-      await context.read<AuthProvider>().client.updateRound(
-            widget.roundId,
-            activeGames: _selected.toList(),
-          );
+      final client = context.read<AuthProvider>().client;
+      await client.updateRound(
+        widget.roundId,
+        activeGames: _selected.toList(),
+      );
+      // The day bet is its own config rather than an `active_games` entry, so
+      // it needs its own call — but it is made HERE, with the others, so the
+      // switch behaves like the switches beside it.
+      //
+      // Only on a change: a day bet already set up and left alone must not be
+      // re-posted, or a TD who toggled it off and back on in one visit would
+      // have his $4 and $20 replaced by the blank defaults.
+      if (_dayBetOn != _dayBetInitial) {
+        if (_dayBetOn == true) {
+          // On, worth nothing yet — exactly what a game looks like between
+          // being switched on and being configured. The numbers come from the
+          // hub's Configure Day bet button.
+          await client.postDayBetSetup(widget.roundId,
+              entryFee: 0, payouts: const []);
+        } else {
+          // Its existence IS its on switch, so off means gone. The fee and
+          // prizes do not survive it; nothing scored is touched, because the
+          // standings derive from the round.
+          await client.deleteDayBetSetup(widget.roundId);
+        }
+      }
       if (!mounted) return;
       await rp.loadRound(widget.roundId);
       if (!mounted) return;
@@ -205,13 +208,18 @@ class _RoundSideGamesScreenState extends State<RoundSideGamesScreen> {
                   on ? _selected.add(id) : _selected.remove(id);
                 }),
                 dayBetOn: _dayBetOn,
-                onDayBetToggle: _dayBetOn == null ? null : _toggleDayBet,
+                onDayBetToggle: _dayBetOn == null
+                    ? null
+                    : (on) => setState(() => _dayBetOn = on),
                 dayBetNote: _dayBetNote,
               ),
               const SizedBox(height: 16),
               Text(
                 'Turning a game off leaves its setup and anything it has '
-                'scored in place — turn it back on and they are still there.',
+                'scored in place — turn it back on and they are still there. '
+                'The day bet is the exception: its entry fee and prizes are '
+                'the config, so turning it off forgets them. Nothing scored '
+                'is lost either way.',
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),

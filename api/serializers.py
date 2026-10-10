@@ -709,6 +709,7 @@ class RoundSerializer(serializers.ModelSerializer):
     foursomes      = FoursomeSerializer(many=True, read_only=True)
     is_cup_round   = serializers.SerializerMethodField()
     is_final_round = serializers.SerializerMethodField()
+    has_day_bet    = serializers.SerializerMethodField()
     # True when this round belongs to a Team Play tournament. The card and the
     # board are different enough — one number a hole, or four with a count —
     # that the app dispatches on it rather than inferring from active_games.
@@ -745,6 +746,17 @@ class RoundSerializer(serializers.ModelSerializer):
     def get_is_cup_round(self, obj):
         """True when this round has a Ryder Cup config (was set up via CupRoundSetupScreen)."""
         return hasattr(obj, 'ryder_cup_config')
+
+    def get_has_day_bet(self, obj) -> bool:
+        """Whether this round's day bet is actually SET UP.
+
+        `is_final_round` says one could exist here; this says one does. The
+        hub needs both: it draws the configure button only for a day bet that
+        is on, so turning the switch off on the side games screen takes the
+        button away with it rather than leaving a live entry point to a bet
+        nobody is playing.
+        """
+        return getattr(obj, 'day_bet_config', None) is not None
 
     def get_is_final_round(self, obj) -> bool:
         """True when this is the last round of a multi-round tournament.
@@ -861,7 +873,8 @@ class RoundSerializer(serializers.ModelSerializer):
             'handicap_mode', 'net_percent', 'net_max_double_bogey',
             'num_holes', 'starting_hole',
             'scramble_config', 'notes', 'foursomes',
-            'is_cup_round', 'is_final_round', 'is_team_play_round', 'team_play',
+            'is_cup_round', 'is_final_round', 'has_day_bet',
+            'is_team_play_round', 'team_play',
             'ir_balls_config', 'can_manage',
             'is_casual', 'all_holes_scored', 'holes_remaining',
             # Public spectator URL token — used by mobile's "Share Watch

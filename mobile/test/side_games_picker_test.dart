@@ -67,6 +67,11 @@ void main() {
     // button — so a TD looking for a switch found none and reported that the
     // day bet could not be turned off. Shipped-and-unreachable, which is the
     // shape this codebase keeps hitting; these pin the switch's presence.
+    //
+    // It is an ORDINARY switch: moved here, saved on Save, fee and prizes set
+    // from the round's Configure button. The one difference is where it
+    // appears — the final round of a multi-round event and nowhere else —
+    // which is `dayBetOn == null` everywhere else.
     Future<void> pump(WidgetTester t, {bool? on, bool wire = true}) =>
         t.pumpWidget(MaterialApp(
           home: Scaffold(
@@ -76,7 +81,7 @@ void main() {
                 onToggle: (_, __) {},
                 dayBetOn: on,
                 onDayBetToggle: wire ? (_) {} : null,
-                dayBetNote: on == true ? '\$4 a golfer' : null,
+                dayBetNote: on == true ? '\$4 a golfer, \$20 to the winner.' : null,
               ),
             ),
           ),
@@ -108,6 +113,16 @@ void main() {
       await pump(t, on: false);
       final off = t.widgetList<Switch>(find.byType(Switch)).last;
       expect(off.value, isFalse);
+    });
+
+    testWidgets('it is drawn by the same card as the games', (t) async {
+      // Not markup of its own: `_SideGameCard` takes its copy as strings
+      // rather than a GameMeta precisely so the day bet — which has no
+      // catalog entry — cannot come to look different from the games it sits
+      // under.
+      await pump(t, on: true);
+      final games = perRoundSideGames(multiFoursome: true);
+      expect(find.byType(Switch), findsNWidgets(games.length + 1));
     });
 
     testWidgets('it is last, after every game', (t) async {

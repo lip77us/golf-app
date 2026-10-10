@@ -243,7 +243,13 @@ class _RoundScreenState extends State<RoundScreen> {
     // else. The server answers that (RoundSerializer.is_final_round)
     // rather than the hub counting rounds, which would be a second copy
     // of the rule and would need the tournament the hub does not load.
-    final isDayBetRound = round.isFinalRound;
+    // And it has to be SET UP. `is_final_round` says one could live here;
+    // `has_day_bet` says one does. The button is a route into an existing
+    // bet's fee and prizes, so a day bet turned off on the side games screen
+    // takes its button with it — a configure button for a bet nobody is
+    // playing is the kind of dead entry point that gets tapped and then
+    // asked about. Turning one ON is the switch's job, not this button's.
+    final showDayBetSetup = round.isFinalRound && round.hasDayBet;
     final hasSetupGames  = isTournamentRound ||
         hasIrishRumble || hasBetterBall || hasHotSpot ||
         showLowNet || hasPinkBall || hasFortyBalls ||
@@ -301,7 +307,7 @@ class _RoundScreenState extends State<RoundScreen> {
               hasBetterBall : hasBetterBall,
               hasHotSpot    : hasHotSpot,
               isTournamentRound: isTournamentRound,
-              isDayBetRound: isDayBetRound,
+              showDayBetSetup: showDayBetSetup,
               onGamesChanged: _reloadRound,
               showLowNet:     showLowNet,
               hasPinkBall:    hasPinkBall,
@@ -698,7 +704,7 @@ class _GameSetupCard extends StatelessWidget {
   /// Side games are per ROUND, but only a tournament round picks them
   /// here — a casual round's are chosen when it is created.
   final bool           isTournamentRound;
-  final bool           isDayBetRound;
+  final bool           showDayBetSetup;
   final VoidCallback?  onGamesChanged;
   final bool           showLowNet;
   final bool           hasPinkBall;
@@ -713,7 +719,7 @@ class _GameSetupCard extends StatelessWidget {
     required this.hasBetterBall,
     required this.hasHotSpot,
     required this.isTournamentRound,
-    required this.isDayBetRound,
+    required this.showDayBetSetup,
     this.onGamesChanged,
     required this.showLowNet,
     required this.hasPinkBall,
@@ -792,16 +798,19 @@ class _GameSetupCard extends StatelessWidget {
                 icon: const Icon(Icons.tune, size: 18),
                 label: const Text('Configure Hot Spot'),
               ),
-            // **The day bet is not in the side-games list**, because it is not
-            // a game you can put on any round — it belongs to the last one.
-            // Its own button, on that round only.
-            if (isDayBetRound) ...[
+            // The day bet's SWITCH is on the side games screen, with the
+            // other side games, because that is where a TD looks for one.
+            // This is the route to its fee and prizes, so it appears only
+            // when there is a day bet to configure — and reads like the
+            // other configure buttons rather than naming the game alone,
+            // which gave no clue what tapping it would do.
+            if (showDayBetSetup) ...[
               const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: () => Navigator.of(context)
                     .pushNamed('/day-bet-setup', arguments: roundId),
                 icon: const Icon(Icons.payments_outlined, size: 18),
-                label: const Text('Day bet'),
+                label: const Text('Configure Day bet'),
               ),
             ],
             if (showLowNet) ...[

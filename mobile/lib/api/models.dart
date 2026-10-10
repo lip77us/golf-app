@@ -1135,6 +1135,11 @@ class Round {
   /// True when this is the last round of a multi-round tournament —
   /// where the day bet lives, and only there.
   final bool isFinalRound;
+  /// True when the day bet is actually SET UP on this round. [isFinalRound]
+  /// says one could be; this says one is. The hub draws its configure button
+  /// off this, so turning the switch off on the side games screen takes the
+  /// button with it instead of leaving a route into a bet nobody is playing.
+  final bool hasDayBet;
   final List<Foursome> foursomes;
   /// True when this round has been configured via CupRoundSetupScreen
   /// (i.e. a RyderCupRoundConfig exists on the backend).
@@ -1193,6 +1198,7 @@ class Round {
     required this.foursomes,
     this.isCupRound    = false,
     this.isFinalRound  = false,
+    this.hasDayBet     = false,
     this.isTeamPlayRound = false,
     this.teamPlayFormat,
     this.teamPlaySize,
@@ -1222,6 +1228,7 @@ class Round {
         netMaxDoubleBogey: j['net_max_double_bogey'] as bool? ?? true,
         isCupRound:   j['is_cup_round']  as bool?   ?? false,
         isFinalRound: j['is_final_round'] as bool? ?? false,
+        hasDayBet:    j['has_day_bet'] as bool? ?? false,
         isTeamPlayRound: j['is_team_play_round'] as bool? ?? false,
         teamPlayFormat: (j['team_play'] as Map?)?['format'] as String?,
         teamPlaySize  : (j['team_play'] as Map?)?['team_size'] as int?,

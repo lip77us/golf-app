@@ -19,13 +19,17 @@
 /// per-round list would make it look like a per-round choice. It keeps its own
 /// block in the wizard.
 ///
-/// **The day bet IS here, on the final round.** It is not an `active_games`
-/// entry — it is its own config on the round — so it cannot live in
-/// [selected], and for a while that was reason enough to leave it out. But the
-/// question this screen answers is "which side games is this round playing",
-/// the day bet is one of them, and leaving it out meant the only way to turn
-/// one off was an action buried in its setup screen. A TD looking for a switch
-/// looks here. See [dayBetOn].
+/// **The day bet IS here, and it is an ordinary side game.** It is not an
+/// `active_games` entry — it is its own config on the round — so it cannot
+/// live in [selected], and for a while that was reason enough to leave it out.
+/// But the question this screen answers is "which side games is this round
+/// playing", the day bet is one of them, and leaving it out meant the only way
+/// to turn one off was an action buried in its setup screen.
+///
+/// The ONLY thing that makes it different is that it appears on the final
+/// round of a multi-round event and nowhere else. Its switch is moved and
+/// saved like every other one, and its fee and prizes come from the round's
+/// Configure button. See [dayBetOn].
 library;
 
 import 'package:flutter/material.dart';
@@ -66,15 +70,15 @@ class SideGamesPicker extends StatelessWidget {
   /// something that can never apply here would be worse than its absence.
   final bool? dayBetOn;
 
-  /// Turning it ON needs an entry fee and a prize table, so the caller opens
-  /// the day bet's setup screen; turning it OFF deletes the config. Either
-  /// way the caller acts at once — unlike the games above, whose switches are
-  /// collected and saved together — because the day bet is its own resource
-  /// with its own endpoint. [dayBetNote] is where the caller says so.
+  /// Moved, not saved — the caller collects it with the switches above and
+  /// writes it on Save, so there is only one kind of switch on the screen.
+  /// The day bet's fee and prizes are set from the round's own Configure
+  /// button, exactly as Hot Spot's and Better Ball's are; nothing about this
+  /// switch is a special case except where it appears.
   final void Function(bool on)? onDayBetToggle;
 
-  /// A line under the day bet's blurb — the fee and first prize once it is
-  /// set up, and when the switch takes effect.
+  /// A line under the day bet's blurb — the fee and first prize once they are
+  /// set, or where to set them while it is on and worth nothing.
   final String? dayBetNote;
 
   const SideGamesPicker({

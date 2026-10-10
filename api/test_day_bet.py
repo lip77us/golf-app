@@ -224,3 +224,55 @@ class TurningItOffTests(DayBetEndpointTests):
         d = self.client.get(self._setup_url(self.r2)).json()
         self.assertFalse(d['configured'])
         self.assertEqual(d['entry_fee'], 0.00)
+
+
+class TheHubButtonFollowsTheSwitchTests(DayBetEndpointTests):
+    """`has_day_bet` is what takes the hub's button away.
+
+    The hub drew a Configure Day bet button off `is_final_round` alone, so it
+    appeared on the last round whether or not a day bet existed — and a TD who
+    turned one off on the side games screen was left with a live route into a
+    bet nobody was playing. `is_final_round` says one COULD live here;
+    `has_day_bet` says one does, and the button needs both.
+    """
+
+    def _round_payload(self, round_obj):
+        r = self.client.get(reverse('api-round-detail', args=[round_obj.id]))
+        self.assertEqual(r.status_code, 200, r.content)
+        return r.json()
+
+    def test_false_before_anything_is_set_up(self):
+        d = self._round_payload(self.r2)
+        self.assertTrue(d['is_final_round'])
+        self.assertFalse(d['has_day_bet'])
+
+    def test_true_once_it_is(self):
+        self.client.post(self._setup_url(self.r2),
+                         {'entry_fee': '4.00',
+                          'payouts': [{'place': 1, 'amount': 20}]},
+                         format='json')
+        self.assertTrue(self._round_payload(self.r2)['has_day_bet'])
+
+    def test_false_again_once_it_is_turned_off(self):
+        self.client.post(self._setup_url(self.r2),
+                         {'entry_fee': '4.00',
+                          'payouts': [{'place': 1, 'amount': 20}]},
+                         format='json')
+        self.client.delete(self._setup_url(self.r2))
+        self.assertFalse(self._round_payload(self.r2)['has_day_bet'])
+
+    def test_an_entry_of_zero_still_counts_as_set_up(self):
+        """A bet worth nothing is still a bet — it draws a board and a tab.
+
+        Deleting the config is the only honest "we are not playing one", which
+        is why the flag asks whether the config exists rather than whether the
+        fee is above zero.
+        """
+        self.client.post(self._setup_url(self.r2),
+                         {'entry_fee': '0.00', 'payouts': []}, format='json')
+        self.assertTrue(self._round_payload(self.r2)['has_day_bet'])
+
+    def test_an_earlier_round_is_never_a_day_bet_round(self):
+        d = self._round_payload(self.r1)
+        self.assertFalse(d['is_final_round'])
+        self.assertFalse(d['has_day_bet'])
