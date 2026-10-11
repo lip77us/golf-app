@@ -1,10 +1,72 @@
-# App Store listing copy — Halved (v2.10.0)
+# App Store listing copy — Halved (v2.11.0)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
 Only list shipping, enabled games (Scramble is still hidden — `enabled:false`).
 
-## What's New (v2.10.1)
+## What's New (v2.11.0)
+
+**App Store submission. The last public release was v2.10.0 (2 Oct 2026) —
+v2.10.1 was TestFlight only, so its cup fixes are folded in below and reach
+the public for the first time here.**
+
+A new game, and a release about running the event rather than scoring it.
+
+HOT SPOT — one golfer anchors each hole and his score counts whatever it is;
+the team adds the best net of the other three. The anchor rotates, so over
+eighteen holes everybody carries the group four or five times. Each group sets
+its own order on the first tee, the screen tells you whose hole it is, and a
+position locks as soon as it has been played — so you can still fix the back
+three after you have teed off.
+
+RUNNING THE EVENT
+• Change the groups for any round nobody has teed off in. Round 2 opens with
+  the draw you already made, so moving the leaders into the last group is two
+  drags rather than building it again
+• A golfer stuck in traffic can swap with somebody in a later group — both
+  groups keep their size, so the first group tees off on time
+• Close a round when some groups will not be posting. It names them and says
+  how far each got, and the round can be reopened afterwards
+• Side games belong to the round, and every screen now says so. Round 1 and
+  round 2 are set up the same way, and either can be changed later
+
+CUP PLAY (first public release of these — they shipped to TestFlight for the
+8 October Ryder Cup)
+• The groups you build are the groups you get — a foursome, a threesome and a
+  twosome survive the save instead of being rebalanced
+• Drop a no-show from a group that has not teed off, even after the first
+  group is away. A borrowed score in a threesome no longer reads as that
+  group having started
+• A two-player cup group is worth the same four points as any other: it plays
+  a Nassau, with the Overall counting double
+• Alternate shot can take half the combined handicap, off by default
+• A tie on playing handicap in the singles draw is settled the same way every
+  time, rather than by the order you tapped
+• The cup leaderboard loads quickly on a full field
+
+THE FINAL-ROUND SIDE GAME
+• It can be switched on and off like any other side game, from either the
+  round or the setup wizard
+• A golfer who ties for the last paying place in the championship is not
+  treated as a clean winner — he plays the side game and pays in, and the
+  prize grows with him
+• The prize table is shared in the proportions you set, and what the board
+  pays now always equals what was collected
+
+ALSO IN THIS RELEASE
+• Shotgun starts: "Thru" counts the holes a group has played rather than the
+  highest hole number, so a group off the 7th no longer reads as finished
+  after two
+• A board that has nothing on it says whether the game has been set up, rather
+  than that there is no data
+• 40 Balls shows how far each group has got beside its name
+• Wolf, Nassau and Skins get the scorecard the rest of the app uses
+• A Better Ball tournament reaches its own setup screen
+• Choosing one flight no longer opens on two
+• Round 2 starts with the field the tournament already has, instead of asking
+  you to pick everybody again
+
+## What's New (v2.10.1 — TestFlight only, 8 Oct 2026)
 Cup play fixes, from a tournament director setting up a 46-golfer Ryder Cup.
 
 • The groups you build are the groups you get — a foursome, a threesome and a
