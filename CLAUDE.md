@@ -816,6 +816,59 @@ than a 5.1.1 requirement; it is the one item from the original draft notes that
 was never done, and it is recorded here because deleting those notes would
 otherwise have lost it.
 
+### Staging production for review — and `DEBUG` drift
+
+The two commands, in this order (11 Oct 2026):
+
+```bash
+railway variables --set "DEBUG=False"     # redeploys; wait for it
+railway ssh "/opt/venv/bin/python manage.py seed_demo --reset"
+```
+
+`--reset` because DemoClub already exists in prod — plain `seed_demo` errors.
+The venv prefix is required: a bare `python manage.py` in the Railway console
+has no Django. Wait for the redeploy before seeding, or the teardown and the
+rebuild can straddle two containers.
+
+**Production had drifted to `DEBUG=True`.** This file recorded it as False,
+and it was True — flipped at some point and left. Found while staging for the
+2.11.0 submission, not by anything failing.
+
+**It was NOT leaking login codes**, which is the first thing to check and the
+reason not to panic: `/auth/otp/request/` echoes `debug_code` only when the
+LOCAL backend returns a plaintext code, and prod runs `OTP_BACKEND=
+twilio_verify`, where Twilio owns the code and the server gets `None`. The
+view's `if settings.DEBUG and code:` needs BOTH. So this was information
+disclosure, not an authentication bypass.
+
+What it did expose: Django's technical 404 lists the whole URL
+configuration, and a 500 shows settings, SQL and the stack frame's locals.
+
+**The check is the size of a 404**, which needs no credentials and no shell:
+
+```bash
+curl -s https://web-production-b84d4a.up.railway.app/api/ | wc -c
+```
+
+**179 bytes is correct. ~60,000 means `DEBUG=True`.** Worth running before
+any submission — it is a one-line check for a setting that drifts silently
+and that nothing else complains about.
+
+**Verify the reviewer can actually sign in**, because it is the likeliest
+thing to fail a review and it costs two calls:
+
+```bash
+curl -s -X POST $API/auth/otp/request/ -H 'Content-Type: application/json' \
+     -d '{"phone":"3105550101"}'          # {"sent":true} and NO debug_code
+curl -s -X POST $API/auth/otp/verify/  -H 'Content-Type: application/json' \
+     -d '{"phone":"3105550101","code":"<REVIEW_BYPASS_CODE>"}'
+```
+
+A token back with `is_new_account: false` means the bypass resolved to the
+seeded account rather than self-creating one. `REVIEW_BYPASS_PHONE` must list
+the number and each must map to a seeded user.
+
+
 ### Demo account for App Store review — `seed_demo`
 `core/management/commands/seed_demo.py` builds a deterministic **DemoClub**
 tenant for reviewer login + screenshots, and doubles as an end-to-end
