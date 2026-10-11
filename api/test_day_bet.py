@@ -29,7 +29,7 @@ HOLES = [{'number': n, 'par': 4, 'stroke_index': n, 'yards': 400}
          for n in range(1, 19)]
 
 
-class DayBetEndpointTests(TestCase):
+class _DayBetBase(TestCase):
     def setUp(self):
         self.acct = Account.objects.create(name='Duddy Club')
         self.user = User.objects.create_user(username='td', account=self.acct)
@@ -53,6 +53,17 @@ class DayBetEndpointTests(TestCase):
 
     def _setup_url(self, round_obj):
         return reverse('api-day-bet-setup', args=[round_obj.id])
+
+
+class DayBetEndpointTests(_DayBetBase):
+    """The endpoint's own behaviour.
+
+    Split from `_DayBetBase` so a subclass can take the fixture without
+    inheriting these: a class that installs its own championship table or
+    day-bet config re-runs them against a fixture they were not written for,
+    and four of them started failing for reasons that had nothing to do with
+    the thing under test.
+    """
 
     # -- setup ------------------------------------------------------------
 
@@ -276,3 +287,193 @@ class TheHubButtonFollowsTheSwitchTests(DayBetEndpointTests):
         d = self._round_payload(self.r1)
         self.assertFalse(d['is_final_round'])
         self.assertFalse(d['has_day_bet'])
+
+
+class ATieIsNotACleanWinTests(_DayBetBase):
+    """Only a CLEAN win keeps you out of the day bet.
+
+    Paul's rule, and his arithmetic is the spec: with $50/$30 on offer, two
+    golfers tied for 2nd share 2nd AND 3rd, and 3rd pays nothing — so they
+    take $15 each instead of $30. Excluding them as money winners on top of
+    that punished them twice: half the prize, and locked out of a $24 bet the
+    man behind them could still win. Tying for 2nd was worse than losing to
+    the tie.
+
+    So a golfer is out only when every place his tie occupies pays. Two tied
+    for 1st occupy 1st and 2nd, both pay, both out. Two tied for 2nd spill
+    into a place paying nothing, so they are back in — and they pay the entry,
+    which takes an 8-man pot from $24 to $28.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from core.models import Player, Tee
+        from tournament.models import Foursome, FoursomeMembership
+        tee = Tee.objects.filter(course=self.r1.course).first()
+        # The same eight play BOTH rounds — the day bet reads the final
+        # round's cards, so a field that exists only in round 1 produces an
+        # empty board and a pot of nothing.
+        self.fs2 = None
+        self.golfers = []
+        groups = {}
+        for rnd in (self.r1, self.r2):
+            groups[rnd.id] = Foursome.objects.create(round=rnd,
+                                                     group_number=1)
+        self.fs2 = groups[self.r2.id]
+        for i in range(8):
+            p = Player.objects.create(account=self.acct, name=f'G{i}',
+                                      handicap_index=Decimal('0'))
+            for rnd in (self.r1, self.r2):
+                FoursomeMembership.objects.create(
+                    foursome=groups[rnd.id], player=p, tee=tee,
+                    course_handicap=0, playing_handicap=0)
+            self.golfers.append(p)
+        LowNetChampionshipConfig.objects.update_or_create(
+            tournament=self.tourn,
+            defaults={'payouts': [{'place': 1, 'amount': 50},
+                                  {'place': 2, 'amount': 30}],
+                      'entry_fee': 10})
+    def _day_bet(self, payouts=None):
+        """Configured per test, not in setUp — this class inherits the
+        endpoint tests, and one of them asserts an UNCONFIGURED round."""
+        self.client.post(
+            self._setup_url(self.r2),
+            {'entry_fee': '4.00',
+             'payouts': payouts or [{'place': 1, 'amount': 24}]},
+            format='json')
+
+    def _standings(self, ranks):
+        """Patch the championship standings to the shape under test.
+
+        `ranks` is one (rank, payout) per golfer, in order. Patched rather
+        than played out because the subject is the EXCLUSION rule, and a real
+        36-hole tie would be a fixture that says nothing about it.
+        """
+        rows = [{'player_id': g.id, 'rank': rank, 'payout': payout}
+                for g, (rank, payout) in zip(self.golfers, ranks)]
+        return rows
+
+    def _in_money(self, ranks):
+        from unittest.mock import patch
+        from services import day_bet
+        with patch('services.low_net_championship.'
+                   'low_net_championship_standings',
+                   return_value=self._standings(ranks)):
+            return day_bet._championship_money_ids(self.tourn)
+
+    def test_clean_first_and_second_are_out(self):
+        out = self._in_money([(1, 50), (2, 30)] + [(i, 0) for i in range(3, 9)])
+        self.assertEqual(set(out), {self.golfers[0].id, self.golfers[1].id})
+        self.assertEqual(out[self.golfers[0].id], '1st')
+        self.assertEqual(out[self.golfers[1].id], '2nd')
+
+    def test_two_tied_for_FIRST_are_still_out(self):
+        """They occupy 1st and 2nd. Both places pay, so nothing is diluted
+        into a place paying nothing — that is a clean win between them."""
+        out = self._in_money([(1, 40), (1, 40)] + [(i, 0) for i in range(3, 9)])
+        self.assertEqual(set(out), {self.golfers[0].id, self.golfers[1].id})
+        self.assertEqual(out[self.golfers[0].id], 'T1st')
+
+    def test_two_tied_for_SECOND_come_back_in(self):
+        """They occupy 2nd and 3rd; 3rd pays nothing. $15 each, so they play
+        the day bet like anybody else."""
+        out = self._in_money([(1, 50), (2, 15), (2, 15)]
+                             + [(i, 0) for i in range(4, 9)])
+        self.assertEqual(set(out), {self.golfers[0].id})
+
+    def test_the_pot_grows_by_the_two_who_came_back(self):
+        """Paul's arithmetic, which is the whole point: 8 golfers, only 1st
+        out, 7 paying $4 = $28 — up from $24 when 1st and 2nd were both out.
+        """
+        from unittest.mock import patch
+        from services.day_bet import day_bet_summary
+
+        clean = [(1, 50), (2, 30)] + [(i, 0) for i in range(3, 9)]
+        tied  = [(1, 50), (2, 15), (2, 15)] + [(i, 0) for i in range(4, 9)]
+        self._day_bet()
+        from scoring.models import HoleScore
+        # Scored in the FINAL round, which is the one the day bet reads.
+        for g in self.golfers:
+            HoleScore.objects.create(foursome=self.fs2, player=g,
+                                     hole_number=1, gross_score=4)
+        with patch('services.low_net_championship.'
+                   'low_net_championship_standings',
+                   return_value=self._standings(clean)):
+            self.assertEqual(day_bet_summary(self.r2)['pool'], 24.0)
+        with patch('services.low_net_championship.'
+                   'low_net_championship_standings',
+                   return_value=self._standings(tied)):
+            self.assertEqual(day_bet_summary(self.r2)['pool'], 28.0)
+
+    def test_a_three_way_tie_for_second_also_comes_back(self):
+        """Three sharing 2nd, 3rd and 4th — two of those pay nothing."""
+        out = self._in_money([(1, 50), (2, 10), (2, 10), (2, 10)]
+                             + [(i, 0) for i in range(5, 9)])
+        self.assertEqual(set(out), {self.golfers[0].id})
+
+    def test_a_three_way_tie_for_first_comes_back_too(self):
+        """Not an oversight: with two paying places they occupy 1st, 2nd and
+        3rd, and 3rd pays nothing, so they are diluted exactly like a tie for
+        last. Nobody won cleanly.
+        """
+        out = self._in_money([(1, 26.67), (1, 26.67), (1, 26.66)]
+                             + [(i, 0) for i in range(4, 9)])
+        self.assertEqual(out, {})
+
+
+class ThePotIsSharedInTheConfiguredProportionsTests(_DayBetBase):
+    """The table is a SHAPE; the pot is the money.
+
+    The eligible count is not knowable when the TD sets the table — a tie for
+    the last paying championship place puts two golfers back in and adds
+    their entries — so $24 configured can become a $28 pot with $4 belonging
+    to nobody. Paul: "we have to proportionally allocate the additional money
+    if there is more than 1 place paid."
+    """
+
+    def test_one_place_takes_the_whole_pot(self):
+        from services.day_bet import scale_to_pool
+        self.assertEqual(scale_to_pool({1: 24.0}, 28.0), {1: 28.0})
+
+    def test_two_places_split_the_surplus_in_proportion(self):
+        from services.day_bet import scale_to_pool
+        # 18/6 is 75/25, so a $28 pot pays 21/7 — not 22/6, which would give
+        # the whole surplus to the winner.
+        self.assertEqual(scale_to_pool({1: 18.0, 2: 6.0}, 28.0),
+                         {1: 21.0, 2: 7.0})
+
+    def test_it_shrinks_as_well_as_grows(self):
+        """A short field is the same arithmetic. A table promising more than
+        the pot holds would have the TD paying the difference."""
+        from services.day_bet import scale_to_pool
+        self.assertEqual(scale_to_pool({1: 18.0, 2: 6.0}, 12.0),
+                         {1: 9.0, 2: 3.0})
+
+    def test_the_payouts_always_sum_to_the_pot(self):
+        """To the cent, including the thirds that do not divide. A pot short
+        a penny is a penny somebody makes up at the desk.
+        """
+        from services.day_bet import scale_to_pool
+        for pool in (28.0, 29.0, 31.0, 100.0, 7.0):
+            for table in ({1: 10.0, 2: 6.0, 3: 3.0}, {1: 1.0, 2: 1.0, 3: 1.0}):
+                got = scale_to_pool(table, pool)
+                self.assertAlmostEqual(sum(got.values()), pool, places=2,
+                                       msg=f'{table} over {pool} -> {got}')
+
+    def test_the_remainder_goes_to_first(self):
+        from services.day_bet import scale_to_pool
+        got = scale_to_pool({1: 1.0, 2: 1.0, 3: 1.0}, 10.0)
+        self.assertEqual(sum(got.values()), 10.0)
+        self.assertGreaterEqual(got[1], got[2])
+
+    def test_an_empty_table_is_left_alone(self):
+        """No places configured is "we are not paying anybody", not "give
+        somebody the pot"."""
+        from services.day_bet import scale_to_pool
+        self.assertEqual(scale_to_pool({}, 28.0), {})
+
+    def test_an_empty_pot_leaves_the_table_as_written(self):
+        """Nobody eligible yet — showing the configured figures is more
+        honest than showing zeroes, and the board is flagged provisional."""
+        from services.day_bet import scale_to_pool
+        self.assertEqual(scale_to_pool({1: 24.0}, 0.0), {1: 24.0})

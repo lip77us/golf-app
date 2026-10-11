@@ -64,27 +64,60 @@ def places_for_field(eligible_count: int) -> int:
 
 def _championship_money_ids(tournament) -> dict:
     """
-    ``{player_id: place_label}`` for everyone currently in the 36-hole money.
+    ``{player_id: place_label}`` for everyone who won the 36-hole money
+    CLEANLY — and only them.
 
     Reads the tournament's OWN handicap setting rather than naming a scoring
     type: a net event disqualifies the net money winners, a gross event the
     gross ones. The championship calculator already scores in the configured
-    mode, so following its paying places is the whole rule.
+    mode, so following its paying places is the start of the rule.
+
+    **A tie that spills into a place paying nothing is not a clean win, and
+    those golfers come back into the day bet.** Ties split the money for the
+    places they occupy, so with $50/$30 on offer a pair tied for 2nd take 2nd
+    AND 3rd — and 3rd pays nothing, so they get $15 each instead of $30.
+    Excluding them as money winners on top of that punished them twice: half
+    the prize, and locked out of a $24 bet the man who finished behind them
+    could still win. Tying for 2nd was worse than losing to the tie.
+
+    A golfer is out only when EVERY place his tie group occupies pays:
+
+    * alone in 1st, or alone in 2nd — one paying place, out;
+    * two tied for 1st — they occupy 1st and 2nd, both pay, out;
+    * two tied for 2nd — they occupy 2nd and 3rd, 3rd pays nothing, so they
+      are IN, and they pay the entry like everybody else.
+
+    The pot follows for free: ``pool`` is the entry fee times the eligible
+    count, so two golfers coming back in take an 8-man $24 pot to $28.
     """
     method = (tournament.scoring_method or 'stroke')
     if method == 'stableford':
         from services.stableford_championship import (
             stableford_championship_standings as standings_fn)
+        cfg = getattr(tournament, 'stableford_championship_config', None)
     else:
         from services.low_net_championship import (
             low_net_championship_standings as standings_fn)
+        cfg = getattr(tournament, 'low_net_championship_config', None)
+
+    places = payouts_by_place(cfg.payouts) if cfg else {}
+
+    # Tied golfers share a rank, so the rank IS the group key and the group
+    # occupies `rank .. rank + size - 1`.
+    by_rank: dict = {}
+    for row in standings_fn(tournament):
+        by_rank.setdefault(row['rank'], []).append(row)
 
     out = {}
-    for row in standings_fn(tournament):
-        if row.get('payout'):
-            place = row['rank']
-            suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(place, 'th')
-            out[row['player_id']] = f'{place}{suffix}'
+    for rank, group in by_rank.items():
+        occupied = range(rank, rank + len(group))
+        if not all((places.get(p) or 0) > 0 for p in occupied):
+            continue                       # diluted — back in the day bet
+        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(rank, 'th')
+        label = f'{"T" if len(group) > 1 else ""}{rank}{suffix}'
+        for row in group:
+            if row.get('payout'):
+                out[row['player_id']] = label
     return out
 
 
@@ -100,6 +133,36 @@ def _tournament_closed(tournament) -> bool:
 # ---------------------------------------------------------------------------
 # Standings
 # ---------------------------------------------------------------------------
+
+def scale_to_pool(table: dict, pool: float) -> dict:
+    """The configured places, scaled to the money actually in the pot.
+
+    The day bet's table is a SHAPE, not a set of amounts. The pot is the
+    entry fee times however many golfers turned out to be eligible, and that
+    count is not knowable when the TD sets the table — a tie for the last
+    paying championship place puts two golfers back in and adds their
+    entries. So $24 configured against a $28 pot leaves $4 belonging to
+    nobody.
+
+    One place takes the lot ($28 to the winner). More than one splits the
+    surplus in the configured PROPORTIONS — $18/$6 against a $28 pot pays
+    $21/$7, not $22/$6 — because the proportions are the only thing the TD
+    actually chose; the absolute figures were a guess at the turnout.
+
+    Rounds to the cent and gives any remainder to the FIRST place, so the
+    payouts always sum to the pot exactly. A pot that is short a cent
+    somewhere is a pot somebody has to make up at the desk.
+    """
+    total = sum(table.values())
+    if total <= 0 or pool <= 0:
+        return dict(table)
+    order = sorted(table)
+    scaled = {p: round(table[p] / total * pool, 2) for p in order}
+    drift = round(pool - sum(scaled.values()), 2)
+    if drift and order:
+        scaled[order[0]] = round(scaled[order[0]] + drift, 2)
+    return scaled
+
 
 def day_bet_standings(round_obj) -> list:
     """
@@ -146,8 +209,14 @@ def day_bet_standings(round_obj) -> list:
     # Prize ranks over the ELIGIBLE only: an italic row above them is the
     # normal case and must not swallow a place.
     config   = getattr(round_obj, 'day_bet_config', None)
-    places   = payouts_by_place(config.payouts) if config else {}
     eligible = [(pid, data) for pid, data, _r in ranked if pid not in in_money]
+    # **Scaled to the pot that actually exists.** The eligible count is not
+    # knowable when the table is set — a tie for the last paying
+    # championship place puts golfers back in and adds their entries — so
+    # the table is a shape and the pot is the money. See `scale_to_pool`.
+    pool     = round(float(config.entry_fee) * len(eligible), 2) if config else 0
+    places   = (scale_to_pool(payouts_by_place(config.payouts), pool)
+                if config else {})
 
     prize_rank = {}
     r = 1

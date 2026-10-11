@@ -4209,6 +4209,71 @@ Tests: `api/test_regroup.py` (20) — including 18 posted scores surviving an
 attempted redraw, the donor refusal that forces the swap, and the cross-account
 404.
 
+## The day bet: a tie is not a clean win, and the table is a shape
+
+Two rules Paul settled on 10 Oct 2026, from one question — "what happens if
+I have a tie for 2nd?"
+
+### Excluded only if you won CLEANLY
+
+`_championship_money_ids` excluded anyone with a championship payout. Combined
+with the money model — ties split the money for the PLACES THEY OCCUPY — that
+punished a tie twice. With $50/$30 on offer, two golfers tied for 2nd take 2nd
+AND 3rd, 3rd pays nothing, so they get **$15 each instead of $30** — and were
+then locked out of a $24 day bet the man who finished BEHIND them could still
+win. **Tying for 2nd was worse than losing to the tie.**
+
+A golfer is out only when **every place his tie group occupies pays**:
+
+| finish | day bet |
+|---|---|
+| alone in 1st, alone in 2nd | out, pays nothing |
+| two tied for 1st — they take 1st and 2nd, both pay | out, pays nothing |
+| two tied for 2nd — they take 2nd and 3rd, 3rd pays $0 | **in**, and they pay the entry |
+
+Tied rows share a rank, so the rank is the group key and the group occupies
+`rank .. rank + size - 1`. A three-way tie for 1st against a two-place table
+spills into 3rd and therefore comes back in too — not an oversight: nobody
+won cleanly.
+
+**The pot follows for free**, because `pool = entry_fee × len(eligible)`: an
+eight-man $24 pot becomes **$28**. That figure is Paul's own and it is what
+confirmed the reading of the rule — it only comes out if exactly one golfer
+is excluded.
+
+### `scale_to_pool` — the configured places, fitted to the money collected
+
+The table is a SHAPE, not a set of amounts: the eligible count is not
+knowable when the TD sets it, precisely because a tie can put golfers back
+in. One place takes the lot; **more than one splits in the configured
+PROPORTIONS** — $18/$6 against a $28 pot pays $21/$7, not $22/$6, because the
+proportions are the only thing the TD actually chose. Rounds to the cent with
+the remainder to FIRST, so the payouts sum to the pot exactly.
+
+**This fixed something bigger than the tie.** The existing fixture is a $20
+entry with six eligible — a **$120 pot** — against a table of $100 + $60 =
+**$160**, and the board paid both places in full: $40 more than was ever
+collected, with the TD making up the difference. The same test file asserted
+`pool == 120.0` two tests below, so the contradiction was written down.
+`test_the_board_never_pays_out_more_than_the_pot` is the invariant now; the
+pool and the payouts used to be computed from different things and never
+compared.
+
+**Open:** `check_day_bet_floor` blocks a CONFIGURED day-bet 1st above the
+championship's last paying place (so nobody is better off DQ'ing the 36
+holes), but the figure actually collected is now the SCALED one, which can
+land either side of it depending on turnout. Worth deciding whether the guard
+should check the scaled figure.
+
+**Test-file shape:** `api/test_day_bet.py`'s fixture and its endpoint tests
+were one class, so a subclass installing its own championship table re-ran
+four of them against a fixture they were not written for and they failed for
+reasons unrelated to the subject. Split into `_DayBetBase` (fixture) and
+`DayBetEndpointTests` (tests); new classes take the base.
+
+Tests: `ATieIsNotACleanWinTests` (6) and
+`ThePotIsSharedInTheConfiguredProportionsTests` (7) in `api/test_day_bet.py`.
+
 ## `thru` has one writer — `group_field.holes_thru`
 
 The 40 Balls board showed a group's budget (`34 of 40 · slack 6`) and nothing

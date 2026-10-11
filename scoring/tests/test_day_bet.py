@@ -124,7 +124,26 @@ class DayBetBoardTests(DayBetFixture, TestCase):
         # Prize goes to the first two ELIGIBLE golfers, not the first two rows.
         self.assertTrue(all(r['eligible'] for r in paid))
         self.assertEqual(paid[0]['player_name'], 'Brown')
-        self.assertEqual(paid[0]['payout'], 100.0)
+        # **$75, not the $100 on the table.** The entry is $20 and six
+        # golfers are eligible, so the pot is $120 — which the test below
+        # asserts — while the table adds up to $160. This used to pay both
+        # places in full out of a pot $40 short of them, and the TD made up
+        # the difference. The table is a shape; `scale_to_pool` fits it to
+        # the money that exists, 100/160 and 60/160 of $120.
+        self.assertEqual(paid[0]['payout'], 75.0)
+        self.assertEqual(paid[1]['payout'], 45.0)
+
+    def test_the_board_never_pays_out_more_than_the_pot(self):
+        """The invariant the figures above are an instance of.
+
+        A board that promises more than it holds is a TD paying the
+        difference, and nothing said so — the pool and the payouts were
+        computed from different things and never compared.
+        """
+        self._play_both_rounds()
+        s = day_bet_summary(self.r2)
+        paid = sum(r['payout'] or 0 for r in s['results'])
+        self.assertAlmostEqual(paid, s['pool'], places=2)
 
     def test_the_pool_counts_only_the_golfers_who_can_win_it(self):
         self._play_both_rounds()
