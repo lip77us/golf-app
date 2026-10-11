@@ -135,9 +135,9 @@ the calendar any more.
       route, and not one of them asked whether the round was over. Guarded once
       after the chain (`mobile/test/completed_round_routing_test.dart`). See
       CLAUDE.md, "A finished round never opens a setup screen".
-- [ ] **Apply for production access** — a human-reviewed questionnaire about
-      how the test went. Expect it to feel like the first submission, not like
-      a routine update. Draft answers and the evidence are below.
+- [x] **Apply for production access** — SUBMITTED 11 Oct 2026. The answers
+      are recorded below; keep them, because a rejection asks you to say more
+      rather than to start again, and the numbers are the hard part.
 - [ ] Confirm a REAL watch token opens the leaderboard (only a bogus token has
       been tested; it correctly fell through to the normal boot).
 - [ ] The two push defects + two QA findings — `docs/android-qa-findings.md`
@@ -165,6 +165,58 @@ record is not that the test ran but what came out of it.
 **Do not paraphrase this into something generic when filling the form.** The
 specifics are the whole reason it is persuasive; a vague answer to these
 questions is the common rejection.
+
+### The application as submitted — 11 Oct 2026
+
+**Every field was capped at 300 characters.** That is the thing to know
+before drafting anything: the useful answer is not a shortened essay but a
+different object, and the first drafts written long all had to be thrown
+away. Google asks four questions and wants evidence, not prose.
+
+**Where the button is.** Not on the closed-test track page, not on the
+Closed testing overview, and Production is locked until access is granted —
+so the only route is the **Dashboard**, which carries an "Apply for
+production access" card once both requirements are met. The requirement
+lines (12 testers / 14 days) disappear from the testing pages once they are
+satisfied, which makes the console look as though the feature moved.
+
+**The Testers tab shows who you INVITED, not who opted in** (17 names, as
+it has read all along). Play never discloses which ones accepted. The only
+confirmation available is indirect and sufficient: *the Apply button does
+not appear until Google agrees the count and the fortnight are met.*
+
+The answers, verbatim:
+
+> **Engagement.** Heavy and real: 30 rounds, 4 tournaments, 1,643 hole
+> scores, a 48-player event scored live. Not all features — 9 of 31 formats,
+> which is how a golf group behaves. Otherwise exactly as intended: one
+> golfer scores for the group. Production differs in breadth, not depth.
+
+> **Feedback.** From the course, not a form — they reported while playing. A
+> match read as decided with four holes still to play; handicap ties broke by
+> click order; an order sheet had no way to drag; a side bet could be switched
+> on but not off.
+
+> **Changes made.** 53 of 128 code changes came from tester reports. The
+> biggest: a match decided four holes early turned out to be the same mistake
+> in six separate places — all six fixed together, with new tests. The rest
+> were fixes to ordering, handicap ties and settings that couldn't be turned
+> off.
+
+> **Readiness.** I set the bar before the test: run a full-size event on it.
+> It then scored a 48-player tournament across 12 groups live — 536 hole
+> scores, leaderboard and settlement used throughout, nobody fell back to
+> paper. That was the test I'd have failed it on.
+
+**Two claims were deliberately NOT made**, and should not be added if Google
+comes back asking for more:
+
+- *that the late reports had gone cosmetic.* They had not — `A tie is not a
+  clean win` and `The day bet's board balances to the cent` are both
+  money-correctness fixes from 10 Oct, the day before submission.
+- *that 9 of 31 formats was a shortfall.* It is stated plainly and then
+  explained, because a reviewer who sees "testers used all features" reads a
+  form that was filled in rather than answered.
 
 ### The production candidate — 2.11.0+48
 
