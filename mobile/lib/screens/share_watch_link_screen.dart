@@ -180,9 +180,10 @@ class _ShareWatchLinkScreenState extends State<ShareWatchLinkScreen> {
                         style: theme.textTheme.titleSmall),
                     const SizedBox(height: 6),
                     Text(
-                      'Pick someone and the $_noun shows up in their own '
-                      'list, marked Observing — they get a notification if '
-                      'they are on Halved, and a text if they are not.',
+                      'Pick someone on Halved and the $_noun appears in '
+                      'their own list, marked Observing, with a notification '
+                      '— no link to open. Somebody who is not on Halved yet '
+                      'gets a text instead.',
                       style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                           height: 1.45),
@@ -193,7 +194,7 @@ class _ShareWatchLinkScreenState extends State<ShareWatchLinkScreen> {
                           roundId: widget.roundId,
                           tournamentId: widget.tournamentId),
                       icon: const Icon(Icons.visibility_outlined),
-                      label: const Text('Choose a watcher'),
+                      label: const Text('Invite a Halved Golfer'),
                     ),
                   ],
                 ),
