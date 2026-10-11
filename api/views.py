@@ -4069,6 +4069,121 @@ class SupportRoundLookupView(APIView):
         })
 
 
+def _watch_link_bits(round_obj=None, tournament=None):
+    """``(watch_url, course_name, game_label)`` for a round or a tournament.
+
+    **The URL is built from `PUBLIC_BASE_URL`, not from the API host.** Only
+    `link.halved.golf` carries the iOS Associated Domains entitlement, so a
+    link built off the Railway host opens Safari and never the app — which is
+    exactly what the leaderboard's "Copy round link" does. That is harmless
+    there (it is pasted into another round, and only the token is read) and
+    would be the whole bug for a link meant to be texted.
+
+    Watch tokens live on Round, so a tournament links its in-progress round,
+    or its first.
+    """
+    from django.conf import settings
+    from services.game_names import public_game_name
+
+    watch_round = round_obj
+    if watch_round is None and tournament is not None:
+        watch_round = (tournament.rounds.filter(status='in_progress').first()
+                       or tournament.rounds.first())
+
+    watch_url = None
+    if watch_round is not None and watch_round.watch_token:
+        watch_url = (f'{settings.PUBLIC_BASE_URL}'
+                     f'/watch/{watch_round.watch_token}/')
+
+    course_name = ''
+    game_label = ''
+    if watch_round is not None:
+        course_name = (watch_round.course.name
+                       if watch_round.course_id else '') or ''
+        slug = watch_round.primary_game or ''
+        if not slug:
+            games = watch_round.active_games or []
+            slug = games[0] if games else ''
+        if slug:
+            # public_game_name, not GameType.label: the label is an internal
+            # disambiguator and one of them ("Low Net (Round)") reached a real
+            # share message.
+            game_label = public_game_name(slug)
+    return watch_url, course_name, game_label
+
+
+def watch_share_text(round_obj=None, tournament=None, *, who=''):
+    """The sentence that goes in the text, with the link on its own line.
+
+    Written HERE, not on the phone, for the same reason the settlement
+    receipt is: the message and anything else that quotes it must not be able
+    to disagree. The link goes last and alone so every messaging client
+    previews it.
+    """
+    url, course, game = _watch_link_bits(round_obj, tournament)
+    if not url:
+        return None
+    name = tournament.name if tournament is not None else ''
+    lead = f'{who} is playing' if who else "We're playing"
+    if name:
+        what = name
+    elif game and course:
+        what = f'{game} at {course}'
+    elif course:
+        what = course
+    elif game:
+        what = game
+    else:
+        what = 'a round'
+    return f'{lead} {what}. Follow the live scores:\n{url}'
+
+
+class WatchLinkView(APIView):
+    """
+    GET /api/rounds/{id}/watch-link/
+    GET /api/tournaments/{id}/watch-link/
+
+    The link and the sentence to text, for sharing the round with a GROUP
+    rather than inviting one person at a time.
+
+    `inviteWatcher` exists and is the right tool for one named spectator: it
+    records the Watcher row up front and texts that person. This is the other
+    shape — hand the link to the share sheet, pick an existing group thread,
+    and send it to a mix of Halved and non-Halved people at once. Nobody is
+    recorded here, and nobody needs to be: `WatchTokenResolveView` files a
+    Halved recipient as a watcher the moment they open it, and anyone else
+    reads the web page, which is possession-gated and consults no Watcher row
+    at all.
+
+    Readable by anyone who can read the round. Possession of the link is the
+    permission, so this only hands back what the holder could already copy.
+    """
+    def get(self, request, pk):
+        is_tournament = request.path.rstrip('/').split('/')[-2] == 'tournaments' \
+            or '/tournaments/' in request.path
+        if is_tournament:
+            t = tournament_for_reader(request.user, pk)
+            url, course, game = _watch_link_bits(tournament=t)
+            text = watch_share_text(tournament=t)
+            label = t.name
+        else:
+            rnd = round_for_reader(request.user, pk)
+            url, course, game = _watch_link_bits(round_obj=rnd)
+            text = watch_share_text(round_obj=rnd)
+            label = course or (rnd.tournament.name if rnd.tournament else '')
+        if not url:
+            return Response(
+                {'detail': 'This round has no watch link yet.'},
+                status=status.HTTP_404_NOT_FOUND)
+        return Response({
+            'watch_url': url,
+            'share_text': text,
+            'course_name': course,
+            'game_label': game,
+            'label': label,
+        })
+
+
 class WatchTokenResolveView(APIView):
     """
     GET /api/watch/<token>/resolve/

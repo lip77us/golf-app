@@ -1536,6 +1536,25 @@ class ApiClient {
     return Leaderboard.fromJson(data as Map<String, dynamic>);
   }
 
+  /// The watch link and the sentence to text, for sharing with a GROUP.
+  ///
+  /// The URL comes from the SERVER because only `link.halved.golf` carries
+  /// the iOS Associated Domains entitlement — a URL built from
+  /// `Config.baseUrl` points at the API host, opens Safari and never the
+  /// app. (That is what `_copyRoundLink` does, harmlessly, because it is
+  /// pasted into another round and only the token is read.)
+  Future<Map<String, dynamic>> getWatchLink({
+    int? roundId,
+    int? tournamentId,
+  }) async {
+    assert((roundId == null) != (tournamentId == null));
+    final path = roundId != null
+        ? '/rounds/$roundId/watch-link/'
+        : '/tournaments/$tournamentId/watch-link/';
+    final data = await _get(path);
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   Future<void> reopenRound(int roundId) async {
     await _post('/rounds/$roundId/reopen/', {});
   }

@@ -19,6 +19,7 @@ import '../widgets/hole_grid_scorecard.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
+import '../utils/watch_share.dart';
 import '../utils/watcher_invite.dart';
 import '../utils/route_observer.dart';
 import '../utils/golf_colors.dart';
@@ -289,6 +290,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
           case 'invite':
             inviteWatcher(context, roundId: widget.roundId);
             break;
+          case 'share_link':
+            shareWatchLink(context, roundId: widget.roundId);
+            break;
           case 'copy_link':
             if (watchToken != null) _copyRoundLink(context, watchToken);
             break;
@@ -356,6 +360,22 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
             contentPadding: EdgeInsets.zero,
           ),
         ),
+        // **Share the link with a GROUP**, as against "Invite a watcher",
+        // which records one named person and texts them. This hands the link
+        // to the share sheet, where iOS puts existing group threads across
+        // the top — so a mix of Halved and non-Halved people get it in one
+        // send. Nobody is recorded: the link files a Halved recipient when
+        // they open it, and everyone else reads the possession-gated page.
+        if (watchToken != null)
+          const PopupMenuItem(
+            value: 'share_link',
+            child: ListTile(
+              leading: Icon(Icons.ios_share),
+              title: Text('Send the watch link'),
+              subtitle: Text('Text it to a group — anyone can follow along'),
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
         // Last on purpose: this is the utility that links two rounds into one
         // side game, not a second way to invite someone to watch.
         if (watchToken != null)

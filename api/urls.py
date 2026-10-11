@@ -98,6 +98,10 @@ urlpatterns = [
 
     # Resolve a universal watch link (halved.golf/watch/<token>/) → round to open.
     path('watch/<str:token>/resolve/', views.WatchTokenResolveView.as_view(), name='api-watch-resolve'),
+    # The link + the sentence to text, for sharing with a GROUP rather than
+    # inviting one person. Two paths, one view — it reads which from the URL.
+    path('rounds/<int:pk>/watch-link/',      views.WatchLinkView.as_view(), name='api-round-watch-link'),
+    path('tournaments/<int:pk>/watch-link/', views.WatchLinkView.as_view(), name='api-tournament-watch-link'),
 
     # ---- Foursomes ----
     path('foursomes/<int:pk>/',              views.FoursomeDetailView.as_view(),      name='api-foursome-detail'),
