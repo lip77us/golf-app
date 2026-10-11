@@ -35,7 +35,7 @@ Public API
 """
 from core.models import RoundStatus
 from services.low_net_round import _build_ln_player_totals
-from services.payout import payouts_by_place, split_tied_places
+from services.payout import payouts_by_place, split_to_cents
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +225,27 @@ def day_bet_standings(round_obj) -> list:
         if i > 0 and ntp > (eligible[i - 1][1]['total'] - eligible[i - 1][1]['par_played']):
             r = i + 1
         prize_rank[pid] = r
-    per_rank = split_tied_places(places, list(prize_rank.values()))
+    # **Exact cents, not `round(total / n, 2)`.** `split_tied_places` returns
+    # one figure PER RANK, so three golfers sharing $100 are each handed
+    # $33.33 and the board pays $99.99 — and $200 three ways pays $200.01,
+    # inventing a penny. `split_to_cents` is the module's own answer to that
+    # (written for Team Play, whose docstring says in as many words that the
+    # rest of the module loses or invents money) and it needs a figure PER
+    # GOLFER, which is why the pooling is done here rather than through
+    # `split_tied_places`.
+    #
+    # The odd cent goes to the first golfer in BOARD order within the tied
+    # group — arbitrary, but stated and deterministic, which is the whole
+    # requirement.
+    groups: dict = {}
+    for pid, _d in eligible:
+        groups.setdefault(prize_rank[pid], []).append(pid)
+    payout_by_pid: dict = {}
+    for rank, pids in groups.items():
+        n = len(pids)
+        pooled = sum(places.get(rank + j, 0.0) for j in range(n))
+        for pid, amount in zip(pids, split_to_cents(pooled, n)):
+            payout_by_pid[pid] = amount
 
     out = []
     for pid, data, display_rank in ranked:
@@ -242,7 +262,7 @@ def day_bet_standings(round_obj) -> list:
             # "1st", "2nd", "3rd" — so the reader can see why he drops out.
             'ineligible_reason': (None if ineligible_place is None
                                   else f'In the 36-hole money — {ineligible_place}'),
-            'payout'           : (per_rank.get(prize_rank.get(pid)) or None
+            'payout'           : (payout_by_pid.get(pid) or None
                                   if ineligible_place is None else None),
         })
     return out

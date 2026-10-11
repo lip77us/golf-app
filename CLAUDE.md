@@ -4259,11 +4259,39 @@ collected, with the TD making up the difference. The same test file asserted
 pool and the payouts used to be computed from different things and never
 compared.
 
-**Open:** `check_day_bet_floor` blocks a CONFIGURED day-bet 1st above the
-championship's last paying place (so nobody is better off DQ'ing the 36
-holes), but the figure actually collected is now the SCALED one, which can
-land either side of it depending on turnout. Worth deciding whether the guard
-should check the scaled figure.
+**Decided, not open:** `check_day_bet_floor` still checks the CONFIGURED
+first prize against the championship's last paying place, even though the
+figure actually collected is now the scaled one and can land either side of
+it. Paul, 10 Oct 2026: *"we live with the anomaly... It will be small dollar
+differences at that point and I am not worried about someone gaming it."*
+Do not "fix" this later — the guard exists so nobody is better off DQ'ing
+the 36 holes, and a scaled overshoot big enough to be worth gaming needs a
+field far larger than this bet is played in.
+
+### The odd cent — `split_tied_places` loses and invents money
+
+Paul's actual priority: *"I am more concerned that the numbers add up."*
+`split_tied_places` returns one figure **per RANK**, so three golfers sharing
+$100 are each handed $33.33 and the board pays **$99.99**; $200 three ways
+pays **$200.01**, a penny from nowhere.
+
+**`split_to_cents` already solved this** — written for Team Play, and its own
+docstring says that *"`round(total / n, 2)` — what the rest of this module
+does — silently loses or invents money."* Diagnosed once, fixed in one game,
+never swept. The day bet now pools per tied group and assigns **per GOLFER**
+through it, so the board balances exactly; the odd cent lands on the first
+golfer in BOARD order, arbitrary but stated and deterministic.
+
+**NOT swept to the other nine callers** (flights, low_net_round, forty_balls,
+red_ball, mini_singles, team_play_scoring, group_field,
+tournament_settlement). A per-rank return structurally cannot carry an odd
+cent, so a general fix means changing the shape at every call site — a
+project, not a tidy-up. Flagged under Flights already.
+
+**Writing a test for this:** three golfers all paying the same entry and all
+tying divides EXACTLY every time — each gets his own entry back. The odd cent
+needs a pot that does not divide by the size of the tie, so the fixture is
+four golfers with three tied. Two of my fixtures were wrong this way first.
 
 **Test-file shape:** `api/test_day_bet.py`'s fixture and its endpoint tests
 were one class, so a subclass installing its own championship table re-ran

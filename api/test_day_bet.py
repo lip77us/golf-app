@@ -477,3 +477,95 @@ class ThePotIsSharedInTheConfiguredProportionsTests(_DayBetBase):
         honest than showing zeroes, and the board is flagged provisional."""
         from services.day_bet import scale_to_pool
         self.assertEqual(scale_to_pool({1: 24.0}, 0.0), {1: 24.0})
+
+
+class TheNumbersAddUpTests(_DayBetBase):
+    """What the board pays equals what the pot holds. To the cent.
+
+    Paul, 10 Oct 2026: "I am more concerned that the numbers add up." Two
+    separate ways they did not.
+
+    `scale_to_pool` fixed the first — a table of $160 paying out of a $120
+    pot. This covers the second, which only bites on a TIE: `split_tied_places`
+    returns one figure per RANK, so three golfers sharing $100 are each handed
+    $33.33 and the board pays $99.99, while $200 three ways pays $200.01 and
+    invents a penny. `split_to_cents` is the module's own answer and needs a
+    figure per GOLFER.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from core.models import Player, Tee
+        from tournament.models import Foursome, FoursomeMembership
+        tee = Tee.objects.filter(course=self.r1.course).first()
+        self.fs2 = Foursome.objects.create(round=self.r2, group_number=1)
+        # FOUR golfers, because three paying the same entry and all tying
+        # divides exactly every time — each gets his own entry back. The odd
+        # cent needs a pot that does not divide by the size of the tie.
+        self.golfers = []
+        for i in range(4):
+            p = Player.objects.create(account=self.acct, name=f'G{i}',
+                                      handicap_index=Decimal('0'))
+            FoursomeMembership.objects.create(foursome=self.fs2, player=p,
+                                              tee=tee, course_handicap=0,
+                                              playing_handicap=0)
+            self.golfers.append(p)
+
+    def _board(self, entry, payouts, scores):
+        """Three golfers, all eligible, scoring `scores` on hole 1."""
+        from scoring.models import HoleScore
+        from services.day_bet import day_bet_summary
+        self.client.post(self._setup_url(self.r2),
+                         {'entry_fee': str(entry), 'payouts': payouts},
+                         format='json')
+        for g, sc in zip(self.golfers, scores):
+            HoleScore.objects.create(foursome=self.fs2, player=g,
+                                     hole_number=1, gross_score=sc)
+        return day_bet_summary(self.r2)
+
+    def test_a_three_way_tie_pays_the_pot_exactly(self):
+        """Four golfers at $25 is a $100 pot; three tie for it. $100 three
+        ways is $33.333, and three roundings pay $99.99 — a penny left in a
+        pot nobody is holding."""
+        s = self._board(25, [{'place': 1, 'amount': 100}], [4, 4, 4, 9])
+        paid = sum(r['payout'] or 0 for r in s['results'])
+        self.assertEqual(s['pool'], 100.0)
+        self.assertEqual(round(paid, 2), 100.0)
+
+    def test_it_does_not_invent_a_penny_either(self):
+        """The other direction: $200 three ways rounds UP to $66.67 each and
+        pays $200.01 — a penny the TD has to find."""
+        s = self._board(50, [{'place': 1, 'amount': 200}], [4, 4, 4, 9])
+        paid = sum(r['payout'] or 0 for r in s['results'])
+        self.assertEqual(s['pool'], 200.0)
+        self.assertEqual(round(paid, 2), 200.0)
+
+    def test_the_odd_cent_lands_on_one_golfer_not_spread(self):
+        """Stated and deterministic beats evenly wrong: somebody is handed
+        the extra cent rather than three golfers each being a third of one
+        out."""
+        s = self._board(25, [{'place': 1, 'amount': 100}], [4, 4, 4, 9])
+        paid = sorted(r['payout'] for r in s['results'] if r['payout'])
+        self.assertEqual(len(paid), 3)
+        self.assertEqual(len(set(paid)), 2)       # two the same, one a cent up
+        self.assertEqual(round(max(paid) - min(paid), 2), 0.01)
+
+    def test_no_tie_is_still_exact(self):
+        s = self._board(10, [{'place': 1, 'amount': 20},
+                             {'place': 2, 'amount': 10}], [3, 4, 5, 6])
+        paid = sum(r['payout'] or 0 for r in s['results'])
+        self.assertEqual(round(paid, 2), s['pool'])
+
+    def test_every_shape_balances(self):
+        """The invariant itself, over the awkward divisions."""
+        from services.day_bet import scale_to_pool, split_to_cents
+        for pool in (28.0, 100.0, 200.0, 7.0, 33.0):
+            for table in ({1: 24.0}, {1: 18.0, 2: 6.0}, {1: 10.0, 2: 6.0,
+                                                         3: 3.0}):
+                places = scale_to_pool(table, pool)
+                self.assertAlmostEqual(sum(places.values()), pool, places=2)
+                for n in (1, 2, 3, 4):
+                    pooled = sum(places.get(1 + j, 0.0) for j in range(n))
+                    self.assertAlmostEqual(
+                        sum(split_to_cents(pooled, n)), pooled, places=2,
+                        msg=f'{table} over {pool}, {n}-way tie')
