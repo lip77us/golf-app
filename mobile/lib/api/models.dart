@@ -540,6 +540,15 @@ class RoundSummary {
   /// Mixed-cup per-game plan — foursome-equivalent units to build for each game,
   /// e.g. {'nassau': 3, 'singles_18': 1}.  Drives the group-builder worklist.
   final Map<String, int> cupGroupCounts;
+  /// Whether this round's groups can still be redrawn — i.e. nobody has
+  /// posted a score. NOT the same as `status == 'pending'`, which is what the
+  /// Set up button used to gate on: setting a round up flips it to
+  /// in_progress, so that test shut the door the instant the draw was saved,
+  /// hours before anybody teed off.
+  ///
+  /// Defaults TRUE on a pending round so an older server, which sends
+  /// neither, still offers the first setup.
+  final bool canRegroup;
 
   const RoundSummary({
     required this.id,
@@ -552,6 +561,7 @@ class RoundSummary {
     required this.betUnit,
     this.gamePointValues = const {},
     this.cupGroupCounts = const {},
+    this.canRegroup = false,
   });
 
   factory RoundSummary.fromJson(Map<String, dynamic> j) => RoundSummary(
@@ -567,6 +577,11 @@ class RoundSummary {
             .map((k, v) => MapEntry(k, (v as num).toDouble())),
         cupGroupCounts : (j['cup_group_counts'] as Map<String, dynamic>? ?? {})
             .map((k, v) => MapEntry(k, (v as num).toInt())),
+        // An older server sends neither field. Falling back to the pending
+        // test keeps exactly the shipped behaviour there rather than hiding
+        // the first setup.
+        canRegroup     : j['can_regroup'] as bool? ??
+            (j['status'] as String? ?? '') == 'pending',
       );
 
   String get statusLabel {

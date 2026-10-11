@@ -29,6 +29,24 @@ from scoring.handicap import par_adjusted_playing_handicap
 from tournament.models import Foursome, FoursomeMembership
 
 
+class RoundRegroupLocked(Exception):
+    """The round's groups cannot be redrawn — a real score has been posted."""
+
+
+def round_has_real_scores(round_obj) -> bool:
+    """Whether any REAL golfer has posted a gross score in this round.
+
+    Phantom scores do not count: `setup_round` creates them itself, so a
+    redraw of an unplayed round would otherwise refuse on its own output.
+    """
+    from scoring.models import HoleScore
+    return HoleScore.objects.filter(
+        foursome__round=round_obj,
+        player__is_phantom=False,
+        gross_score__isnull=False,
+    ).exists()
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -162,8 +180,12 @@ def setup_round(
 
     Notes
     -----
-    * Any existing Foursomes/Memberships for this Round are deleted first
-      so the function is safely re-callable if you need to redo the draw.
+    * Any existing Foursomes/Memberships for this Round are deleted first,
+      so the draw can be redone — but ONLY while no real golfer has posted a
+      score. `HoleScore.foursome` is CASCADE, so that delete takes every
+      score in the round with it; the docstring used to say "safely
+      re-callable" full stop, which was true of a pending round and silent
+      data loss on any other. `RoundRegroupLocked` is raised instead.
     * Phantom hole scores are NOT created here — call
       create_phantom_hole_scores(foursome) separately after this returns.
     """
@@ -219,7 +241,18 @@ def setup_round(
 
         groups = _group_players(player_objs, max_size=4)
 
-    # Wipe any previous setup for this round so re-running is safe
+    # **The guard that makes the wipe below safe.** `HoleScore.foursome` is
+    # CASCADE: deleting the foursomes deletes every score hanging off them,
+    # silently and in the same transaction. A redraw is a legitimate thing to
+    # want between rounds — leaders out last, or just mixing the groups up —
+    # and it is legitimate right up until somebody tees off. After that the
+    # scores belong to the groups that made them.
+    if round_has_real_scores(round_obj):
+        raise RoundRegroupLocked(
+            'The groups cannot be redrawn once a score has been posted — '
+            'the scores belong to the groups that made them.')
+
+    # Wipe any previous setup for this round (safe: nothing is scored).
     Foursome.objects.filter(round=round_obj).delete()
     phantom = None
     created = []

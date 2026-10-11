@@ -710,6 +710,7 @@ class RoundSerializer(serializers.ModelSerializer):
     is_cup_round   = serializers.SerializerMethodField()
     is_final_round = serializers.SerializerMethodField()
     has_day_bet    = serializers.SerializerMethodField()
+    can_regroup    = serializers.SerializerMethodField()
     # True when this round belongs to a Team Play tournament. The card and the
     # board are different enough — one number a hole, or four with a count —
     # that the app dispatches on it rather than inferring from active_games.
@@ -746,6 +747,23 @@ class RoundSerializer(serializers.ModelSerializer):
     def get_is_cup_round(self, obj):
         """True when this round has a Ryder Cup config (was set up via CupRoundSetupScreen)."""
         return hasattr(obj, 'ryder_cup_config')
+
+    def get_can_regroup(self, obj) -> bool:
+        """Whether this round's groups can still be redrawn.
+
+        The answer is "nobody has teed off yet", not "the round is pending" —
+        setting a round up flips it to in_progress, so the pending test (which
+        is what gated the only entry point) shut the door the instant the draw
+        was saved, hours before anybody played. Re-pairing between rounds is
+        the normal thing a TD wants: leaders out last, or just mixing the
+        groups up.
+
+        The client is told rather than deriving it, because the rule is
+        `HoleScore.foursome` being CASCADE and that is not a fact a phone can
+        see.
+        """
+        from services.round_setup import round_has_real_scores
+        return not round_has_real_scores(obj)
 
     def get_has_day_bet(self, obj) -> bool:
         """Whether this round's day bet is actually SET UP.
@@ -874,6 +892,7 @@ class RoundSerializer(serializers.ModelSerializer):
             'num_holes', 'starting_hole',
             'scramble_config', 'notes', 'foursomes',
             'is_cup_round', 'is_final_round', 'has_day_bet',
+            'can_regroup',
             'is_team_play_round', 'team_play',
             'ir_balls_config', 'can_manage',
             'is_casual', 'all_holes_scored', 'holes_remaining',
@@ -888,13 +907,26 @@ class RoundListSerializer(serializers.ModelSerializer):
     """Lightweight round serializer — no foursomes (used inside TournamentSerializer)."""
     course_name = serializers.CharField(source='course.name', read_only=True)
     course_id   = serializers.IntegerField(source='course.id',   read_only=True)
+    can_regroup = serializers.SerializerMethodField()
+
+    def get_can_regroup(self, obj) -> bool:
+        """Whether this round's groups can still be redrawn — see
+        `RoundSerializer.get_can_regroup`. It is on the LIGHTWEIGHT serializer
+        too because the tournament card is where a TD redraws from, and that
+        card is built from this.
+
+        One query per round on a list that is already one query per round for
+        its course; a tournament has a handful of rounds, not a field of them.
+        """
+        from services.round_setup import round_has_real_scores
+        return not round_has_real_scores(obj)
 
     class Meta:
         model  = Round
         fields = [
             'id', 'round_number', 'date', 'course_id', 'course_name',
             'status', 'active_games', 'game_point_values', 'bet_unit',
-            'cup_group_counts',
+            'cup_group_counts', 'can_regroup',
         ]
         read_only_fields = ['id']
 

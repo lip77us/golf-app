@@ -20,6 +20,7 @@ import '../utils/grouping.dart';
 import '../utils/add_halved_golfer.dart';
 import '../utils/golfer_invite.dart';
 import '../widgets/error_view.dart';
+import '../widgets/inline_message.dart';
 import '../widgets/golf_text_field.dart';
 import '../widgets/group_size_editor.dart';
 import '../widgets/halved_mark.dart';
@@ -53,6 +54,9 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
   final Set<int> _selectedIds = {};
   /// True once the field was carried over from a sibling round.
   bool _seededFromField = false;
+  /// This round already had a draw and we loaded it — so this is an edit of
+  /// an existing pairing, not a first setup, and the screen says so.
+  bool _seededFromOwnDraw = false;
   String         _search      = '';
   final TextEditingController _searchCtrl  = TextEditingController();
   final FocusNode             _searchFocus = FocusNode();
@@ -175,9 +179,60 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
       //
       // Seeded, not forced: it is a checkbox list, so a golfer who did
       // not play round 1 is a tap away and a withdrawal is a tap off.
-      await _seedFieldFromTournament();
+      // A REDRAW starts from the draw it is redrawing. Seeding the field
+      // from a sibling and leaving the groups blank would make "Edit Groups"
+      // mean "build it again from scratch", when what a TD wants is to move
+      // two golfers and leave the rest alone.
+      if (!await _seedFromOwnDraw()) {
+        await _seedFieldFromTournament();
+      }
     } catch (e) {
       if (mounted) setState(() { _loadError = friendlyError(e); _loading = false; });
+    }
+  }
+
+  /// Seed from THIS round's own current draw, when it has one.
+  ///
+  /// Returns true when it did, so the sibling-round seeder below is skipped —
+  /// this round's own groups are a better answer than another round's field,
+  /// and running both would append the sibling's extra golfers to a draw the
+  /// TD is trying to adjust.
+  ///
+  /// The draw is sent as an ordered list sliced by group sizes, so both have
+  /// to come back: the members in group order, and the sizes. Reading the
+  /// sizes off the groups rather than recomputing them is what preserves a
+  /// deliberate 3/4/4 split.
+  Future<bool> _seedFromOwnDraw() async {
+    try {
+      final full = await context.read<AuthProvider>().client
+          .getRound(widget.roundId);
+      final groups = [...full.foursomes]
+        ..sort((a, b) => a.groupNumber.compareTo(b.groupNumber));
+      final order = <int>[];
+      final sizes = <int>[];
+      for (final fs in groups) {
+        // The borrowed 4th is not a golfer and never goes in the draw; the
+        // server pads again from whatever the new groups turn out to be.
+        final real = [
+          for (final m in fs.memberships)
+            if (!m.player.isPhantom) m.player.id,
+        ];
+        if (real.isEmpty) continue;
+        order.addAll(real);
+        sizes.add(real.length);
+      }
+      if (order.isEmpty) return false;
+      if (!mounted) return false;
+      setState(() {
+        final known = order.where((id) => _allPlayers.any((p) => p.id == id));
+        _selectedIds.addAll(known);
+        _orderedIds = known.toList();
+        _groupSizesOverride = sizes;
+        _seededFromOwnDraw = true;
+      });
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -465,6 +520,18 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
             style: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(color: Colors.grey),
           ),
+            // A redraw says what it is loading and what it costs, because
+            // the screen is otherwise identical to a first setup and the
+            // saved draw is rebuilt from scratch underneath.
+            if (_seededFromOwnDraw) ...[
+              const SizedBox(height: 8),
+              InlineMessage(
+                kind: InlineMessageKind.info,
+                text: 'Editing this round\'s current groups. Change them '
+                    'while you like — the draw locks as soon as the first '
+                    'score is posted.',
+              ),
+            ],
             // A pre-ticked list needs to say why it is pre-ticked, or it
             // reads as a list somebody else chose. Only shown when the
             // seeding actually fired.

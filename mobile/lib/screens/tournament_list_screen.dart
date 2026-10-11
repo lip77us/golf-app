@@ -772,8 +772,21 @@ class _TournamentCard extends StatelessWidget {
             // ── Non-cup tournaments ──────────────────────────────────────────
             if (tournament.rounds.isNotEmpty) ...[
               const Divider(height: 20),
-              ...tournament.rounds.map((r) => r.status == 'pending' && isStaff
-                  ? _PendingRoundTile(round: r, onSetup: () => onSetupRound(r.id))
+              // **`canRegroup`, not `status == 'pending'`.** Setting a round
+              // up flips it to in_progress, so the pending test took the Set
+              // up button away the instant the draw was saved — hours before
+              // anybody teed off, and with no other route back to the draw.
+              // Re-pairing between rounds is the ordinary thing a TD wants:
+              // leaders out last, or just mixing the groups so the same four
+              // men are not together all week. The server answers it, because
+              // the real rule is that `HoleScore.foursome` is CASCADE and a
+              // redraw after a score would delete the round.
+              ...tournament.rounds.map((r) => r.canRegroup && isStaff
+                  ? _PendingRoundTile(
+                      round: r,
+                      isRedraw: r.status != 'pending',
+                      onSetup: () => onSetupRound(r.id),
+                      onOpen: () => onRoundTap(r.id))
                   : _RoundTile(round: r, onTap: () => onRoundTap(r.id))),
               // Tee times are not a cup thing — an individual tournament sends
               // groups off in an order too. The screen was always generic (it
@@ -1026,21 +1039,45 @@ class _PendingRoundTile extends StatelessWidget {
   final RoundSummary round;
   final VoidCallback onSetup;
 
-  const _PendingRoundTile({required this.round, required this.onSetup});
+  /// The round is already drawn and unplayed, so this is a REDRAW rather
+  /// than a first setup. The button says which, and the tile keeps a way
+  /// into the round — a drawn round has somewhere to go, and losing that
+  /// would be a worse trade than the button is worth.
+  final bool isRedraw;
+  final VoidCallback? onOpen;
+
+  const _PendingRoundTile({
+    required this.round,
+    required this.onSetup,
+    this.isRedraw = false,
+    this.onOpen,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return ListTile(
       contentPadding: EdgeInsets.zero,
+      // A drawn round keeps its way in; only a round with no draw yet has
+      // nowhere to go.
+      onTap: isRedraw ? onOpen : null,
       leading: CircleAvatar(
-        backgroundColor: theme.colorScheme.surfaceContainerHighest,
+        backgroundColor: isRedraw
+            ? Colors.green
+            : theme.colorScheme.surfaceContainerHighest,
         child: Text('R${round.roundNumber}',
             style: TextStyle(
-                color: theme.colorScheme.onSurfaceVariant, fontSize: 13)),
+                color: isRedraw
+                    ? Colors.white
+                    : theme.colorScheme.onSurfaceVariant,
+                fontSize: 13)),
       ),
       title: Text(round.courseName),
-      subtitle: Text(round.date),
+      subtitle: Text(isRedraw
+          // Says WHY it can still be changed, so the window is legible
+          // before it closes rather than discovered after.
+          ? '${round.date} · groups can still change'
+          : round.date),
       trailing: FilledButton.tonal(
         onPressed: onSetup,
         style: FilledButton.styleFrom(
@@ -1048,7 +1085,8 @@ class _PendingRoundTile extends StatelessWidget {
           visualDensity      : VisualDensity.compact,
           tapTargetSize      : MaterialTapTargetSize.shrinkWrap,
         ),
-        child: const Text('Set Up', style: TextStyle(fontSize: 12)),
+        child: Text(isRedraw ? 'Edit Groups' : 'Set Up',
+            style: const TextStyle(fontSize: 12)),
       ),
     );
   }

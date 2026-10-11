@@ -4819,13 +4819,21 @@ class RoundSetupView(APIView):
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
 
-        from services.round_setup import setup_round, create_phantom_hole_scores
-        foursomes = setup_round(
-            round_obj,
-            players            = d['players'],
-            handicap_allowance = d['handicap_allowance'],
-            randomise          = d['randomise'],
-        )
+        from services.round_setup import (RoundRegroupLocked,
+                                          create_phantom_hole_scores,
+                                          setup_round)
+        try:
+            foursomes = setup_round(
+                round_obj,
+                players            = d['players'],
+                handicap_allowance = d['handicap_allowance'],
+                randomise          = d['randomise'],
+            )
+        except RoundRegroupLocked as exc:
+            # 400 rather than letting it 500: a TD redrawing a round that has
+            # started is making an ordinary mistake, not hitting a bug.
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         # Pre-populate phantom player scores and initialise rotation config.
         from scoring.phantom import get_algorithm, DEFAULT_ALGORITHM_ID
