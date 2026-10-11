@@ -5,6 +5,8 @@
 /// two lists drifted in BOTH directions — the wizard never offered Stroke
 /// Play or Hot Spot, and the chips never carried the blurb. These pin the one
 /// list, and the two games that are deliberately not on it.
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/game_catalog.dart';
@@ -132,6 +134,58 @@ void main() {
       expect(t.getTopLeft(find.text('Day bet')).dy,
           greaterThan(lastGameY),
           reason: 'the day bet is the odd one — it goes at the end');
+    });
+  });
+
+  group('every caller offers the day bet', () {
+    // The day bet was wired into the standalone side-games screen and NOT
+    // into the setup wizard, which draws the same picker — so a TD going
+    // through Edit Groups, which is how he reaches round 2, never saw it.
+    // Reported exactly that way.
+    //
+    // `dayBetOn == null` means "no card", and that is also what a caller
+    // that simply forgot looks like. There is no runtime difference between
+    // declining to offer it and not knowing you could, which is why this is
+    // checked at the source.
+    //
+    // The tournament wizard is the one exception and says so below.
+    const exempt = {
+      // Draws its own `_GameFeeCard` with the fee and the payout table
+      // inline, which is right where the round does not exist yet — the
+      // picker's card would be a second day bet control on one screen.
+      'new_round_wizard.dart',
+    };
+
+    test('a caller either passes dayBetOn or is a named exception', () {
+      final offenders = <String>[];
+      for (final f in Directory('lib').listSync(recursive: true)) {
+        if (f is! File || !f.path.endsWith('.dart')) continue;
+        final src = f.readAsStringSync();
+        final i = src.indexOf('SideGamesPicker(');
+        if (i < 0) continue;
+        final name = f.uri.pathSegments.last;
+        if (name == 'side_games_picker.dart') continue;   // the widget itself
+        if (exempt.contains(name)) continue;
+        // The argument list of that call — far enough to cover it.
+        final call = src.substring(i, (i + 900).clamp(0, src.length));
+        if (!call.contains('dayBetOn')) offenders.add(f.path);
+      }
+      expect(offenders, isEmpty,
+          reason: 'These draw the side games and never offer the day bet, so '
+              'it is invisible on the final round from that screen:\n'
+              '  ${offenders.join('\n  ')}\n'
+              'Pass dayBetOn/onDayBetToggle, or add the file to `exempt` '
+              'with the reason.');
+    });
+
+    test('the exemption list names files that exist', () {
+      // An exemption for a file that has been renamed is an exemption for
+      // nothing, and it would hide the next miss.
+      for (final name in exempt) {
+        final found = Directory('lib').listSync(recursive: true).any(
+            (f) => f is File && f.uri.pathSegments.last == name);
+        expect(found, isTrue, reason: '$name is exempt but does not exist');
+      }
     });
   });
 }

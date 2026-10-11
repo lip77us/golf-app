@@ -3959,10 +3959,24 @@ way Hot Spot's and Better Ball's are. Turning it OFF deletes the config.
 - The setup screen keeps its Turn off action. It and the switch both call
   `deleteDayBetSetup`, so there is nothing to drift.
 
+**Every caller of the picker has to pass it, and a source test enforces
+that.** The day bet went into `round_side_games_screen` and NOT into
+`setup_round_players_screen`, which draws the same picker — so a TD going
+through Edit Groups, which is how he reaches round 2, never saw it. Reported
+exactly that way. `dayBetOn == null` means "no card", and that is also what a
+caller who simply forgot looks like: there is no runtime difference between
+declining to offer it and not knowing you could, which is why it is checked
+at the source. `new_round_wizard` is the one exemption and carries its reason
+(its own `_GameFeeCard` holds the fee and payout table inline, right for a
+wizard where the round does not exist yet; the picker's card would be a
+second control on one screen). A second test asserts the exempt file still
+exists, because an exemption for a renamed file is an exemption for nothing.
+
 Tests: the `the day bet` group in `mobile/test/side_games_picker_test.dart`
 (6) — the card's presence is the thing worth pinning, since its absence is
-what the bug was — and `TheHubButtonFollowsTheSwitchTests`
-(`api/test_day_bet.py`), including that an entry of $0 still counts as set up.
+what the bug was — plus `every caller offers the day bet` (2), and
+`TheHubButtonFollowsTheSwitchTests` (`api/test_day_bet.py`), including that
+an entry of $0 still counts as set up.
 
 ### `\$` in an API path is a 404 that looks like a missing endpoint
 

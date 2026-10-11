@@ -57,6 +57,17 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
   /// This round already had a draw and we loaded it — so this is an edit of
   /// an existing pairing, not a first setup, and the screen says so.
   bool _seededFromOwnDraw = false;
+
+  /// The final round's day bet. Null when this round cannot have one, which
+  /// is what draws no card at all.
+  ///
+  /// **It belongs on THIS screen too.** The day bet is a side game and this
+  /// is a side-games step; wiring it only into the standalone side-games
+  /// screen meant a TD going through Edit Groups — which is how he reaches
+  /// round 2 — never saw it. Reported exactly that way.
+  bool? _dayBetOn;
+  bool? _dayBetInitial;
+  String? _dayBetNote;
   String         _search      = '';
   final TextEditingController _searchCtrl  = TextEditingController();
   final FocusNode             _searchFocus = FocusNode();
@@ -186,8 +197,45 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
       if (!await _seedFromOwnDraw()) {
         await _seedFieldFromTournament();
       }
+      await _loadDayBet();
     } catch (e) {
       if (mounted) setState(() { _loadError = friendlyError(e); _loading = false; });
+    }
+  }
+
+  /// The day bet's own config, for the side-games step.
+  ///
+  /// The SERVER decides whether this round can have one (`eligible`): it
+  /// wants a tournament, more than one round, and the last of them. An
+  /// ineligible round draws no card rather than a switch that would 400.
+  Future<void> _loadDayBet() async {
+    try {
+      final cfg = await context.read<AuthProvider>().client
+          .getDayBetSetup(widget.roundId);
+      if (!mounted) return;
+      if (cfg['eligible'] != true) {
+        setState(() { _dayBetOn = null; _dayBetInitial = null; });
+        return;
+      }
+      final on = cfg['configured'] == true;
+      final fee = (cfg['entry_fee'] as num?)?.toDouble() ?? 0;
+      final payouts = (cfg['payouts'] as List?) ?? const [];
+      final first = payouts.isEmpty
+          ? 0.0
+          : ((payouts.first as Map)['amount'] as num?)?.toDouble() ?? 0.0;
+      setState(() {
+        _dayBetOn = on;
+        _dayBetInitial = on;
+        _dayBetNote = !on
+            ? null
+            : fee > 0
+                ? '\$${fee.toStringAsFixed(0)} a golfer, '
+                    '\$${first.toStringAsFixed(0)} to the winner.'
+                : 'Set the entry fee and prizes with Configure Day bet on '
+                    'the round.';
+      });
+    } catch (_) {
+      if (mounted) setState(() { _dayBetOn = null; _dayBetInitial = null; });
     }
   }
 
@@ -385,6 +433,21 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
         activeGames   : _selectedGames.toList(),
       );
 
+      // After the draw: the day bet is its own config on the ROUND, so a
+      // rebuild of the foursomes does not touch it — but if the draw fails
+      // there is no round state to attach it to, so nothing is written.
+      // Only on a CHANGE, or a TD who left it alone would have his $4 and
+      // $20 replaced by the blank defaults.
+      if (_dayBetOn != _dayBetInitial) {
+        final client2 = context.read<AuthProvider>().client;
+        if (_dayBetOn == true) {
+          await client2.postDayBetSetup(widget.roundId,
+              entryFee: 0, payouts: const []);
+        } else {
+          await client2.deleteDayBetSetup(widget.roundId);
+        }
+      }
+
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (e) {
@@ -471,6 +534,10 @@ class _SetupRoundPlayersScreenState extends State<SetupRoundPlayersScreen> {
           onToggle: (id, on) => setState(() {
             on ? _selectedGames.add(id) : _selectedGames.remove(id);
           }),
+          dayBetOn: _dayBetOn,
+          onDayBetToggle:
+              _dayBetOn == null ? null : (v) => setState(() => _dayBetOn = v),
+          dayBetNote: _dayBetNote,
         ),
         if (_selectedGames.isEmpty) ...[
           const SizedBox(height: 20),
