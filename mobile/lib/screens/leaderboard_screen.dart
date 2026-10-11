@@ -19,7 +19,6 @@ import '../widgets/hole_grid_scorecard.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
-import '../utils/watch_share.dart';
 import '../utils/watcher_invite.dart';
 import '../utils/route_observer.dart';
 import '../utils/golf_colors.dart';
@@ -27,6 +26,7 @@ import '../theme/halved_brand.dart';
 import '../widgets/stroke_play_strip.dart';
 import '../widgets/borrowed_fourth.dart';
 import 'share_scorecard_screen.dart';
+import 'share_watch_link_screen.dart';
 import 'round_receipt_screen.dart';
 import 'match_play_screen.dart' show MatchPlayDetailView;
 import 'tournament_leaderboard_screen.dart' show ChampionshipTabView;
@@ -291,7 +291,15 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
             inviteWatcher(context, roundId: widget.roundId);
             break;
           case 'share_link':
-            shareWatchLink(context, roundId: widget.roundId);
+            // A SCREEN, exactly like 'scorecard' above — not a share fired
+            // from the menu. Sharing straight from `onSelected` opened
+            // nothing at all: iOS wants a non-zero source rect and a popup
+            // menu dismissing itself is not one. Paul pointed at Share
+            // scorecard; this is the same shape, and it gets a preview of
+            // the message out of it.
+            Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => ShareWatchLinkScreen(roundId: widget.roundId),
+            ));
             break;
           case 'copy_link':
             if (watchToken != null) _copyRoundLink(context, watchToken);
