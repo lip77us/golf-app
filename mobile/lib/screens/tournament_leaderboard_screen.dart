@@ -11,7 +11,6 @@ import 'package:provider/provider.dart';
 import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../utils/golf_colors.dart';
-import '../utils/watcher_invite.dart';
 import '../utils/route_observer.dart';
 import '../widgets/error_view.dart';
 import '../widgets/inline_message.dart';
@@ -21,6 +20,7 @@ import '../widgets/flight_header.dart';
 import '../widgets/dream_round_board.dart';
 import '../widgets/road_trip_board.dart';
 import 'dream_round_setup_screen.dart';
+import 'share_watch_link_screen.dart';
 import 'tournament_settlement_screen.dart';
 import 'tournament_low_net_setup_screen.dart';
 import 'tournament_stableford_setup_screen.dart';
@@ -199,11 +199,18 @@ class _TournamentLeaderboardScreenState
       appBar: AppBar(
         title: Text(widget.tournamentName),
         actions: [
+          // One way in, same as the round board: the share screen offers
+          // BOTH acts — send the link to a group, or name somebody who
+          // should follow it. A tournament link is the case that started
+          // this; it is also the one that was broken, because the resolve
+          // filed a round watcher and the board wanted a tournament one.
           IconButton(
-            tooltip: 'Invite a watcher',
-            icon: const Icon(Icons.visibility_outlined),
-            onPressed: () =>
-                inviteWatcher(context, tournamentId: widget.tournamentId),
+            tooltip: 'Share this tournament',
+            icon: const Icon(Icons.ios_share),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => ShareWatchLinkScreen(
+                  tournamentId: widget.tournamentId),
+            )),
           ),
           IconButton(
             tooltip: 'Settle up',

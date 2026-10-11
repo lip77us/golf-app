@@ -19,7 +19,6 @@ import '../widgets/hole_grid_scorecard.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../providers/settings_provider.dart';
-import '../utils/watcher_invite.dart';
 import '../utils/route_observer.dart';
 import '../utils/golf_colors.dart';
 import '../theme/halved_brand.dart';
@@ -287,9 +286,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
                 content: Text('Open your group to share its scorecard.')));
             }
             break;
-          case 'invite':
-            inviteWatcher(context, roundId: widget.roundId);
-            break;
+
           case 'share_link':
             // A SCREEN, exactly like 'scorecard' above — not a share fired
             // from the menu. Sharing straight from `onSelected` opened
@@ -327,14 +324,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
               contentPadding: EdgeInsets.zero,
             ),
           ),
-        const PopupMenuItem(
-          value: 'invite',
-          child: ListTile(
-            leading: Icon(Icons.visibility_outlined),
-            title: Text('Invite a watcher'),
-            contentPadding: EdgeInsets.zero,
-          ),
-        ),
         const PopupMenuItem(
           value: 'refresh',
           child: ListTile(
@@ -379,8 +368,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
             value: 'share_link',
             child: ListTile(
               leading: Icon(Icons.ios_share),
-              title: Text('Send the watch link'),
-              subtitle: Text('Text it to a group — anyone can follow along'),
+              title: Text('Share this round'),
+              subtitle: Text('Send the link, or add a follower'),
               contentPadding: EdgeInsets.zero,
             ),
           ),

@@ -19,10 +19,17 @@
 /// the people who are NOT on Halved get — which the sender cannot otherwise
 /// know.
 ///
-/// Nobody is recorded as a watcher by sending this. A Halved recipient is
-/// filed by `WatchTokenResolveView` when they open the link; anyone else
-/// reads the possession-gated web page. `inviteWatcher` is still the tool for
-/// inviting one named spectator.
+/// **Both ways in live here.** Sending the link records nobody — a Halved
+/// recipient is filed by `WatchTokenResolveView` when they open it, and
+/// anyone else reads the possession-gated web page. Inviting a watcher is a
+/// different act: it creates the `Watcher` row NOW, so that person gets a
+/// push and the round appears in their own Observing list (`SharedRoundsView`
+/// reads exactly that row) whether or not they ever open a text.
+///
+/// They used to be two items in the overflow menu, and both read as "text
+/// somebody a link" — the thing that separates them was invisible until you
+/// had used both. One entry point, and the difference is a sentence on the
+/// screen instead of a guess between two labels.
 library;
 
 import 'package:flutter/material.dart';
@@ -31,6 +38,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../providers/auth_provider.dart';
+import '../utils/watcher_invite.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
 
@@ -44,6 +52,12 @@ class ShareWatchLinkScreen extends StatefulWidget {
 }
 
 class _ShareWatchLinkScreenState extends State<ShareWatchLinkScreen> {
+  /// What to call the thing being shared. The screen serves a round and a
+  /// tournament from the same code, and "the round shows up in their own
+  /// list" is wrong when it is a tournament — the one place the two
+  /// genuinely differ in what a reader is told.
+  String get _noun => widget.tournamentId != null ? 'tournament' : 'round';
+
   bool _loading = true;
   bool _sharing = false;
   String? _error;
@@ -99,7 +113,7 @@ class _ShareWatchLinkScreenState extends State<ShareWatchLinkScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: const GolfAppBar(title: 'Send the watch link'),
+      appBar: GolfAppBar(title: 'Share this $_noun'),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -126,7 +140,9 @@ class _ShareWatchLinkScreenState extends State<ShareWatchLinkScreen> {
                     Text(
                       'Anyone can open it. Someone with Halved lands on the '
                       'live leaderboard; everyone else gets the web page, no '
-                      'app needed — so one message covers the whole group.',
+                      'app needed — so one message covers the whole group.'
+                      '${widget.tournamentId != null ? " The link follows the "
+                          "round being played." : ""}',
                       style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                           height: 1.45),
@@ -154,6 +170,30 @@ class _ShareWatchLinkScreenState extends State<ShareWatchLinkScreen> {
                             },
                       icon: const Icon(Icons.copy_all_outlined),
                       label: const Text('Copy the message'),
+                    ),
+                    const Divider(height: 40),
+                    // The other act, and it says what makes it different
+                    // rather than relying on a label. Naming somebody puts
+                    // the round in THEIR app — they do not have to open a
+                    // text, or even get one.
+                    Text('Or add a follower',
+                        style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Pick someone and the $_noun shows up in their own '
+                      'list, marked Observing — they get a notification if '
+                      'they are on Halved, and a text if they are not.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          height: 1.45),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () => inviteWatcher(context,
+                          roundId: widget.roundId,
+                          tournamentId: widget.tournamentId),
+                      icon: const Icon(Icons.visibility_outlined),
+                      label: const Text('Choose a watcher'),
                     ),
                   ],
                 ),

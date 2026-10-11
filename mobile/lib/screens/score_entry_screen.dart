@@ -75,7 +75,7 @@ import '../widgets/stroke_dots.dart';
 import '../widgets/pinned_hole_grid.dart';
 import '../widgets/combo_tee_chip.dart';
 import '../utils/nine_totals.dart';
-import '../utils/watcher_invite.dart';
+import 'share_watch_link_screen.dart';
 
 // `_effectiveHandicap` was here — the round-total allocation, which had
 // exactly one reader in the end: the `gets N` chip. It went with it on
@@ -2541,9 +2541,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 case 'refresh':
                   if (rp.round != null) _refresh();
                   break;
-                case 'invite':
+                case 'share_link':
                   if (rp.round != null) {
-                    inviteWatcher(context, roundId: rp.round!.id);
+                    Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) =>
+                          ShareWatchLinkScreen(roundId: rp.round!.id),
+                    ));
                   }
                   break;
                 case 'finish':
@@ -2605,12 +2608,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               // going to be on all day.
               if (rp.round != null)
                 const PopupMenuItem(
-                  value: 'invite',
+                  value: 'share_link',
                   child: ListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.visibility_outlined),
-                    title: Text('Invite a watcher'),
+                    leading: Icon(Icons.ios_share),
+                    title: Text('Share this round'),
                   ),
                 ),
               if (!isComplete && sc != null)

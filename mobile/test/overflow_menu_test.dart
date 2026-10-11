@@ -1,12 +1,19 @@
 /// test/overflow_menu_test.dart
 /// ---------------------------
-/// **The watcher invite is reachable from both overflow menus, and no menu
-/// item anywhere in the app is inert.**
+/// **Sharing a round is reachable from both overflow menus, and no menu item
+/// anywhere in the app is inert.**
 ///
-/// "Invite a watcher" was only on the leaderboard's overflow, which is a
-/// detour from score entry — the one screen a scorer is on all day. Adding it
-/// there made it one action with two doors, and this is what stops the two
+/// This started as "Invite a watcher", which was only on the leaderboard's
+/// overflow — a detour from score entry, the one screen a scorer is on all
+/// day. It became one action with two doors, and this is what stops the two
 /// drifting apart or either one silently doing nothing.
+///
+/// The ACT has since changed and the guard is the same. Inviting one named
+/// watcher and texting the link to a group were two menu items that both
+/// read as "send somebody a link", so they were folded into one screen that
+/// offers both and explains the difference. The menus now carry
+/// `share_link`; the invite lives on that screen, in ONE place, which is why
+/// nothing below looks for it in a menu any more.
 ///
 /// Source-level, like `standing_row_coverage_test`, and for the same reason:
 /// what is asserted is that a screen HAS an entry point. Nothing in the repo
@@ -57,25 +64,44 @@ List<File> _filesWithMenus() => Directory('lib')
 void main() {
   String read(String f) => File('lib/screens/$f').readAsStringSync();
 
-  /// The two screens that offer the watcher invite. Both, always — the whole
-  /// point is that it is not one place.
+  /// The two screens that offer sharing. Both, always — the whole point is
+  /// that it is not one place.
   const watcherScreens = [
     'score_entry_screen.dart',
     'leaderboard_screen.dart',
   ];
 
-  group('invite a watcher', () {
+  group('share this round', () {
     test('is offered on both the score-entry and leaderboard overflows', () {
       for (final f in watcherScreens) {
         final src = read(f);
         final values = _itemValue.allMatches(src).map((m) => m[1]!).toList();
-        expect(values, contains('invite'),
-            reason: '$f has no menu item offering the watcher invite');
-        expect(_handled(src), contains('invite'),
+        expect(values, contains('share_link'),
+            reason: '$f has no menu item offering sharing');
+        expect(_handled(src), contains('share_link'),
             reason: '$f offers the item but nothing handles it');
-        expect(src, contains('inviteWatcher('),
-            reason: '$f handles the item but never opens the invite flow');
+        expect(src, contains('ShareWatchLinkScreen('),
+            reason: '$f handles the item but never opens the share screen');
       }
+    });
+
+    test('the invite is reached through that screen and nowhere else', () {
+      // The two were separate menu items reading as the same thing. Folding
+      // them means the invite has exactly one caller outside its own file —
+      // a second one is the drift this group has always existed to catch.
+      final callers = Directory('lib')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))
+          .where((f) => !f.path.endsWith('watcher_invite.dart'))
+          .where((f) => f.readAsStringSync().contains('inviteWatcher('))
+          .map((f) => f.uri.pathSegments.last)
+          .toList()
+        ..sort();
+      expect(callers, ['share_watch_link_screen.dart'],
+          reason: 'the watcher invite is offered from somewhere other than '
+              'the share screen — it was folded in so there is one door and '
+              'one explanation of how it differs from sending the link');
     });
 
     test('the item is in the ONE overflow menu, not a second one', () {
@@ -95,13 +121,15 @@ void main() {
       // A golfer who learned it on the board must not have to recognise it
       // again on score entry. Same words, same glyph.
       for (final f in watcherScreens) {
-        expect(read(f), contains("Text('Invite a watcher')"),
-            reason: '$f words the invite differently');
-        expect(read(f), contains('Icons.visibility_outlined'),
-            reason: '$f draws the invite with a different glyph');
+        expect(read(f), contains("Text('Share this round')"),
+            reason: '$f words sharing differently');
+        expect(read(f), contains('Icons.ios_share'),
+            reason: '$f draws sharing with a different glyph');
       }
     });
   });
+
+  _shareScreenNounCheck();
 
   group('no menu item is inert', () {
     test('every popup value in the app has a handler', () {
@@ -141,6 +169,52 @@ void main() {
       expect(items - valued, lessThanOrEqualTo(1),
           reason: 'a PopupMenuItem is declared in a way the value scan does '
               'not recognise — it would be exempt from the check above');
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The share screen serves a round AND a tournament from one widget.
+// ---------------------------------------------------------------------------
+//
+// Paul: "It should work the same from all the spots. score entry menu,
+// tournaments and rounds." Functionally it does — all three push the same
+// screen — but the same screen told a tournament it was a round.
+
+void _shareScreenNounCheck() {
+  group('the share screen says what it is sharing', () {
+    final src =
+        File('lib/screens/share_watch_link_screen.dart').readAsStringSync();
+
+    test('it derives the noun rather than hard-coding "round"', () {
+      expect(src, contains('String get _noun'),
+          reason: 'the screen serves a tournament too');
+      expect(src, contains("widget.tournamentId != null ? 'tournament'"),
+          reason: 'the noun has to follow which id was passed');
+    });
+
+    test('no user-facing string hard-codes "round"', () {
+      // Comments may say round all they like; the strings a reader sees
+      // must not, or a tournament is announced as a round.
+      final body = src
+          .split('\n')
+          .where((l) => !l.trimLeft().startsWith('//'))
+          .where((l) => !l.trimLeft().startsWith('///'))
+          // `_noun`'s own definition is where the word legitimately lives —
+          // flagging it would flag the fix.
+          .where((l) => !l.contains('get _noun'))
+          .join('\n');
+      final offenders = RegExp(r"'[^']*\bround\b[^']*'")
+          .allMatches(body)
+          .map((m) => m[0]!)
+          .where((q) => !q.contains(r'$_noun'))
+          // The tournament-only sentence legitimately says "the round being
+          // played" — that IS a round, and naming it is the point.
+          .where((q) => !q.contains('round being played'))
+          .toList();
+      expect(offenders, isEmpty,
+          reason: 'these would call a tournament a round:\n'
+              '${offenders.join('\n')}');
     });
   });
 }
