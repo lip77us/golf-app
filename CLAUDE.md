@@ -4328,6 +4328,47 @@ Tests: `mobile/test/not_set_up_test.dart` — the message leads with
 `gameDisplayName(gameKey)`, so a slug falling through would read
 "forty_balls is not set up yet".
 
+## The TD can close a round the field has not finished
+
+Reported from PRODUCTION, 11 Oct 2026: *TPSGC 2026 Ryder Cup* would not move
+to Completed. It was working as designed, and the design was wrong.
+
+`RoundCompleteView` flips a MULTI-FOURSOME round only when every group has
+its expected holes in. Round 420 had twelve groups and four short — group 7
+on **0** holes, 8 on 12, 9 on **0**, 10 on 5 — so the POST returned **200
+with the round unchanged**, the tournament stayed in Active (the list reads
+`rounds.every(status == 'complete')`), and the only feedback was a
+four-second snackbar saying the round would close "once every other group
+also completes". Closed by hand over SSH.
+
+**The guard is about a SCORER, not the TD.** Its own comment says it stops
+the first foursome to finish locking its siblings out of scoring — a real
+hazard, and entirely a hazard about a group scorer. The code already knew
+the TD is a different person: the cup branch refuses a non-TD outright. He
+is the one who knows two groups went home, and he had no way to say so.
+
+- `POST /rounds/{id}/complete/` takes **`force`**, honoured only when
+  `round.account_id == request.user.account_id`. A scorer passing it gets
+  the ordinary wait.
+- The response gained **`groups_outstanding`** — `{group_number, name,
+  holes_scored, holes_expected}` per unfinished group — and
+  **`can_force_complete`**. The client NEVER derives the second: offering a
+  button the server will ignore is how you arrive back at the original bug.
+- The dialog NAMES the groups and counts their holes. "Some groups have not
+  finished" is not something a TD can act on; "Group 7 — 0 of 18" is. That
+  was missing more than the force was.
+- It says what closing costs (matches score on what is entered, a group with
+  no scores counts for nothing) and that `RoundReopenView` exists.
+
+**`all_foursomes_done` had no reader.** The server had been sending it since
+the multi-group rule was written, precisely so the client could show this
+state, and nothing consumed it — `_completeRound` re-derived the same thing
+from `lb.status` instead. Worth a look whenever a response field exists for
+a UI that does not draw it.
+
+Tests: `api/test_force_complete.py` (8), including that a cross-account
+scorer passing `force` still cannot close the round.
+
 ## `thru` has one writer — `group_field.holes_thru`
 
 The 40 Balls board showed a group's budget (`34 of 40 · slack 6`) and nothing

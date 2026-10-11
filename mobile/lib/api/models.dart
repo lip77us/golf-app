@@ -4904,6 +4904,17 @@ class Leaderboard {
   /// (support / shared) read-only view. Null on older backends.
   final int? accountId;
   final String? accountName;
+  /// Groups that have NOT finished, as `{group_number, name, holes_scored,
+  /// holes_expected}`. Empty when the round is ready to close.
+  ///
+  /// The TD needs the NAMES: "some groups have not finished" is not
+  /// something he can act on, and before this the only feedback a blocked
+  /// Complete Round gave was a four-second snackbar.
+  final List<Map<String, dynamic>> groupsOutstanding;
+  /// Whether THIS caller may close the round anyway. The server decides —
+  /// the client must not offer a button that would be ignored, and a scorer
+  /// forcing it is the exact hazard the wait exists to prevent.
+  final bool canForceComplete;
 
   const Leaderboard({
     required this.roundId,
@@ -4920,6 +4931,8 @@ class Leaderboard {
     this.isIndividualPlayTournament = false,
     this.accountId,
     this.accountName,
+    this.groupsOutstanding = const [],
+    this.canForceComplete = false,
   });
 
   factory Leaderboard.fromJson(Map<String, dynamic> j) {
@@ -4949,6 +4962,10 @@ class Leaderboard {
           j['tournament_individual_play'] as bool? ?? false,
       accountId:   j['account_id']   as int?,
       accountName: j['account_name'] as String?,
+      groupsOutstanding: ((j['groups_outstanding'] as List?) ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList(),
+      canForceComplete: j['can_force_complete'] as bool? ?? false,
     );
   }
 }

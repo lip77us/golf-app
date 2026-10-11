@@ -1525,8 +1525,14 @@ class ApiClient {
     return Round.fromJson(data as Map<String, dynamic>);
   }
 
-  Future<Leaderboard> completeRound(int roundId) async {
-    final data = await _post('/rounds/$roundId/complete/', {});
+  /// [force] closes a multi-group round the field has not finished.
+  ///
+  /// TD only, and the server decides that — a scorer passing it gets the
+  /// ordinary wait, which is the hazard the wait exists for. Read
+  /// `canForceComplete` off the response before offering it.
+  Future<Leaderboard> completeRound(int roundId, {bool force = false}) async {
+    final data = await _post('/rounds/$roundId/complete/',
+        force ? {'force': true} : {});
     return Leaderboard.fromJson(data as Map<String, dynamic>);
   }
 

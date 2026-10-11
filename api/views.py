@@ -5558,7 +5558,25 @@ class RoundCompleteView(APIView):
         # for every group so the first to finish can't lock the others out.
         single_foursome = round_obj.foursomes.count() == 1
 
-        if (all_done or single_foursome) and round_obj.status != 'complete':
+        # **The TD can close a round the field has not finished.**
+        #
+        # The guard above exists to stop ONE GROUP's "Complete Round" locking
+        # its eleven siblings out of scoring — a real hazard, and entirely a
+        # hazard about a SCORER. The TD is a different person with different
+        # powers: the cup branch above already refuses a non-TD outright. He
+        # is the one who knows that groups 7 and 9 went home, and before this
+        # he had no way to say so — the round silently stayed open, the
+        # tournament stayed in Active, and the only feedback was a four-second
+        # snackbar. (TPSGC 2026 Ryder Cup, 11 Oct 2026: twelve groups, four
+        # short, closed by hand over SSH.)
+        #
+        # Own-account only, and only when asked for explicitly. A scorer
+        # passing `force` gets the ordinary wait.
+        is_td = round_obj.account_id == request.user.account_id
+        forced = bool(request.data.get('force')) and is_td
+
+        if (all_done or single_foursome or forced) and \
+                round_obj.status != 'complete':
             round_obj.status = 'complete'
             round_obj.save(update_fields=['status'])
             # Notify followers the multi-group round is final (once; best-effort).
@@ -5589,7 +5607,40 @@ class RoundCompleteView(APIView):
             # mobile client so it can show a friendly banner instead of
             # the Final Results banner.
             'all_foursomes_done': all_done,
+            # Which groups are holding it open, so the client can NAME them
+            # when it offers the TD the force. "Some groups have not
+            # finished" is not something a TD can act on; "Groups 7, 9 and
+            # 10" is.
+            'groups_outstanding': self._groups_outstanding(round_obj),
+            # Whether this caller may force it — the client must not offer a
+            # button that will be ignored.
+            'can_force_complete': is_td and not all_done and not single_foursome,
         })
+
+    @staticmethod
+    def _groups_outstanding(round_obj) -> list:
+        """`[{group_number, name, holes_scored, holes_expected}]` for the
+        groups that have not finished. Empty when the round is ready."""
+        from scoring.models import HoleScore
+        out = []
+        for fs in round_obj.foursomes.all():
+            expected = RoundCompleteView._expected_holes(fs)
+            if not expected:
+                continue
+            scored = set(
+                HoleScore.objects
+                .filter(foursome=fs, player__is_phantom=False,
+                        gross_score__isnull=False)
+                .values_list('hole_number', flat=True))
+            missing = expected - scored
+            if missing:
+                out.append({
+                    'group_number' : fs.group_number,
+                    'name'         : fs.display_name,
+                    'holes_scored' : len(expected & scored),
+                    'holes_expected': len(expected),
+                })
+        return sorted(out, key=lambda g: g['group_number'])
 
     @staticmethod
     def _all_foursomes_done(round_obj) -> bool:

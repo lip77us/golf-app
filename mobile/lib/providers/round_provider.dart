@@ -1410,12 +1410,12 @@ class RoundProvider extends ChangeNotifier {
 
   // ── Complete round ─────────────────────────────────────────────────────────
 
-  Future<Leaderboard?> completeRound(int roundId) async {
+  Future<Leaderboard?> completeRound(int roundId, {bool force = false}) async {
     _submitting = true;
     _clearError();
     notifyListeners();
     try {
-      final lb = await _client.completeRound(roundId);
+      final lb = await _client.completeRound(roundId, force: force);
       _leaderboard = lb;
       // Signed — swap the board for the one personal state (what you won and
       // who to see) and let iOS dismiss it a few minutes later.
