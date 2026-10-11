@@ -1591,11 +1591,19 @@ class ApiClient {
   /// one foursome to another.  Both sides' TC games reconfigure
   /// automatically (4↔3 phantom add/strip, 3↔2 Nassau swap).  Same
   /// pre-play-only constraint as removeFoursomePlayer.
+  /// [swapWithPlayerId] trades the two golfers instead of moving one.
+  ///
+  /// **Usually the one you want for a late arrival.** A group playing short
+  /// takes its phantom's scores from a full group teeing off AHEAD of it, so
+  /// the first group cannot go short — and the first group is where the
+  /// golfer stuck in traffic is. A plain move out of it is refused by the
+  /// donor-pool validator; a swap changes nobody's size, so it is not.
   Future<Map<String, dynamic>> moveRoundPlayer(
     int roundId, {
     required int playerId,
     required int fromFoursomeId,
     required int toFoursomeId,
+    int? swapWithPlayerId,
   }) async {
     final data = await _post(
       '/rounds/$roundId/move-player/',
@@ -1603,6 +1611,8 @@ class ApiClient {
         'player_id'       : playerId,
         'from_foursome_id': fromFoursomeId,
         'to_foursome_id'  : toFoursomeId,
+        if (swapWithPlayerId != null)
+          'swap_with_player_id': swapWithPlayerId,
       },
     );
     return data as Map<String, dynamic>;

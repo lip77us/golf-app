@@ -6210,7 +6210,14 @@ class RoundMovePlayerView(APIView):
     }
 
     Tournament-director "rebalance at the tee box" tool — move a
-    player from one foursome to another before scoring begins.  Both
+    player from one foursome to another before scoring begins.
+
+    The case it is for: a golfer is stuck in traffic and the other three
+    are ready, so he goes to a later tee time and they play on. That is why
+    BOTH sides must be unplayed — not a technicality, but the line between
+    this and a withdrawal. Once a group has teed off, a golfer leaving it is
+    `withdrew_after_hole`, which already exists and settles the money; moving
+    him would instead rewrite a group that has scored holes as four.  Both
     foursomes' TC games (if any) reconfigure to match the new
     rosters: A shrinks (4→3 phantom add, 3→2 Nassau swap), B grows
     (3→4 phantom strip, 2→3 phantom add).  The player keeps their
@@ -6227,6 +6234,75 @@ class RoundMovePlayerView(APIView):
 
     On success: 200 with the refreshed group sizes.
     """
+    def _swap(self, request, round_obj, from_fs, to_fs, from_membership,
+              swap_with_id):
+        """Trade two golfers between two groups, atomically.
+
+        Neither group changes size, so none of the move's size or donor
+        guards can fire — the only thing that still has to hold is that
+        neither group has started, for the same reason as a move: a group
+        that has scored holes as a given four must not be rewritten.
+
+        Cup teams are deliberately NOT reconfigured here. A swap across cup
+        sides would change what each match is, which is a pairing decision
+        rather than a late arrival, so it is refused instead of guessed at.
+        """
+        from django.db import transaction
+        from scoring.models import HoleScore
+        from tournament.models import FoursomeMembership
+
+        other = (to_fs.memberships
+                 .select_related('player', 'tee')
+                 .filter(player_id=swap_with_id, player__is_phantom=False)
+                 .first())
+        if other is None:
+            return Response(
+                {'detail': f'Player {swap_with_id} is not in group '
+                           f'{to_fs.group_number} (or is a phantom).'},
+                status=status.HTTP_404_NOT_FOUND)
+
+        if HoleScore.objects.filter(
+            foursome__in=[from_fs, to_fs],
+            gross_score__isnull=False,
+            player__is_phantom=False,
+        ).exists():
+            return Response(
+                {'detail': 'Cannot swap golfers after scoring has begun in '
+                           'either group. Once a group has teed off, a '
+                           'golfer leaving it is a withdrawal.'},
+                status=status.HTTP_409_CONFLICT)
+
+        if (getattr(from_fs, 'triple_cup_game', None) is not None
+                or getattr(to_fs, 'triple_cup_game', None) is not None):
+            return Response(
+                {'detail': 'Cup groups cannot be swapped here — it would '
+                           'change what each match is. Redraw the round '
+                           'instead.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        # Each keeps his OWN tee and handicaps: a swap moves the golfer, not
+        # the tee box, and his playing handicap is per-tee.
+        a = {'player_id': from_membership.player_id, 'tee': from_membership.tee,
+             'ch': from_membership.course_handicap,
+             'ph': from_membership.playing_handicap}
+        b = {'player_id': other.player_id, 'tee': other.tee,
+             'ch': other.course_handicap, 'ph': other.playing_handicap}
+        with transaction.atomic():
+            from_membership.delete()
+            other.delete()
+            FoursomeMembership.objects.create(
+                foursome=to_fs, player_id=a['player_id'], tee=a['tee'],
+                course_handicap=a['ch'], playing_handicap=a['ph'])
+            FoursomeMembership.objects.create(
+                foursome=from_fs, player_id=b['player_id'], tee=b['tee'],
+                course_handicap=b['ch'], playing_handicap=b['ph'])
+
+        return Response({
+            'swapped': [a['player_id'], b['player_id']],
+            'from_foursome_id': from_fs.id,
+            'to_foursome_id': to_fs.id,
+        })
+
     def post(self, request, pk):
         from django.db import transaction
         from scoring.models import HoleScore
@@ -6239,6 +6315,7 @@ class RoundMovePlayerView(APIView):
         player_id        = request.data.get('player_id')
         from_foursome_id = request.data.get('from_foursome_id')
         to_foursome_id   = request.data.get('to_foursome_id')
+        swap_with_id     = request.data.get('swap_with_player_id')
         if not all(
             isinstance(v, int)
             for v in (player_id, from_foursome_id, to_foursome_id)
@@ -6254,7 +6331,12 @@ class RoundMovePlayerView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        round_obj = get_object_or_404(Round, pk=pk)
+        # **Account-scoped**, like every other round-level TD view. This one
+        # used a bare `get_object_or_404(Round, pk=pk)`, so any authenticated
+        # user could rearrange any account's groups. It had no caller, which
+        # is almost certainly why nobody noticed; wiring it up is what makes
+        # that matter.
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
         from_fs = get_object_or_404(
             Foursome.objects
                 .filter(round=round_obj)
@@ -6281,6 +6363,21 @@ class RoundMovePlayerView(APIView):
                            f'{from_fs.group_number} (or is a phantom).'},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        # ── Swap ────────────────────────────────────────────────────────
+        # **The move's own donor rule is why this exists.** A group playing
+        # short takes its phantom's scores from a full group teeing off
+        # ahead of it, so the FIRST group cannot go short — and the first
+        # group is exactly where the golfer stuck in traffic usually is.
+        # Moving him out is refused by `validate_donor_foursomes`, correctly.
+        #
+        # A swap changes nobody's size, so the donor pool is untouched and
+        # the first group tees off on time with four. It is the right
+        # primitive for a late arrival: he trades places with somebody in a
+        # later group.
+        if swap_with_id is not None:
+            return self._swap(request, round_obj, from_fs, to_fs,
+                              from_membership, swap_with_id)
 
         # Both sides must be pre-play.  Either side having scores
         # already would corrupt match results; refuse rather than try

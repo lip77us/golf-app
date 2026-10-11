@@ -4122,6 +4122,79 @@ of the hole, not the thing the group is deciding on the tee.
 Tests: `TheCardDrawsGrossWithDotsTests` (`scoring/tests/test_hot_spot.py`, 5 —
 including that the cap does not take a stroke away).
 
+## Redrawing groups, and the swap a late arrival actually needs
+
+### The redraw window asked the wrong question
+
+A TD re-pairs for round 2 — leaders out last, or mixing the groups so the
+same four men are not together all week. He could, exactly once: the Set Up
+button rendered only while a round was `pending`, and **setting a round up
+flips it to `in_progress`**, so the door shut the instant the draw was saved,
+hours before anybody played, with no other route back to the pairings.
+
+The gate is now `can_regroup` — has anybody teed off — answered by the server,
+because the real rule is that `HoleScore.foursome` is **CASCADE** and that is
+not a fact a phone can see. A drawn, unplayed round shows **Edit Groups** and
+says in its subtitle that the groups can still change, so the window is
+legible before it closes rather than discovered after.
+
+**`setup_round` now refuses once a real score exists**, which it did not at
+all. It opens by deleting every foursome in the round and CASCADE takes every
+score with it, silently, in the same transaction; its docstring said the
+function was "safely re-callable if you need to redo the draw", true of a
+pending round and silent data loss on any other. Phantom scores do not count —
+setup writes them itself, so a round would otherwise refuse to redraw on its
+own output.
+
+**Edit Groups starts from the draw it is editing.** The draw is sent as an
+ordered list sliced by group sizes, so both come back: members in group order
+and the sizes, read off the groups rather than recomputed, which is what
+preserves a deliberate 3/4/4. The sibling-round field seeder is skipped when
+this fires, or it would append another round's extra golfers to a draw being
+adjusted.
+
+### The late arrival needs a SWAP, not a move
+
+`POST /rounds/{id}/move-player/` and its sheet were both fully written and the
+sheet had **no caller** — a menu item was all that was missing, so the feature
+had never run. Wiring it up surfaced the thing that makes it a swap:
+
+> *Foursome 1 is short-rostered (3 real players) but no full 4-player group
+> tees off before it.*
+
+A group playing short takes its phantom's scores from a full group teeing off
+AHEAD of it, so **the first group cannot go short** — and the first group is
+exactly where the golfer stuck in traffic is. `validate_donor_foursomes`
+refuses the plain move, correctly, and nothing about the move endpoint can
+help him. A swap changes nobody's size, so the donor pool is untouched and the
+first group tees off on time with four.
+
+So the endpoint takes an optional `swap_with_player_id`. Notes:
+
+- **Neither group may have started**, same as a move and for the same reason:
+  a group that has scored holes as a given four must not be rewritten. Past
+  that point a golfer leaving is `withdrew_after_hole`, which settles the
+  money.
+- **Each golfer keeps his OWN tee and handicaps.** A swap moves the golfer,
+  not the tee box, and playing handicap is per-tee — carrying the other man's
+  would re-net every hole he plays.
+- **Cup groups are refused**, not reconfigured: swapping across cup sides
+  changes what each match IS, which is a pairing decision rather than a late
+  arrival.
+- Mobile: the destination list **leads with the tee time** (the reason for the
+  move) and a full group is **no longer greyed out** — it cannot take a fifth
+  but it can trade, and disabling it hid the only option that works. Step 3
+  offers the swap first, with "Just move him" below.
+
+**The endpoint had no account scoping** — a bare `get_object_or_404(Round,
+pk=pk)` where all 18 other round-level TD views use `account_get_or_404`, so
+any authenticated user could rearrange any account's groups. Having no caller
+is almost certainly why nobody noticed; wiring it up is what made it matter.
+
+Tests: `api/test_regroup.py` (20) — including 18 posted scores surviving an
+attempted redraw, the donor refusal that forces the swap, and the cross-account
+404.
+
 ## `thru` has one writer — `group_field.holes_thru`
 
 The 40 Balls board showed a group's budget (`34 of 40 · slack 6`) and nothing

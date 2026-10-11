@@ -1497,9 +1497,11 @@ class _FoursomeCard extends StatelessWidget {
                         style: theme.textTheme.titleMedium),
                     const SizedBox(height: 4),
                     Text(
-                      'Pick the player to move.  You\'ll choose the '
-                      'destination group next.  Both groups\' Triple '
-                      'Cup games (if any) will adjust automatically.',
+                      'Pick the golfer to move — a late arrival goes to a '
+                      'later tee time and the other three play on. You\'ll '
+                      'choose the group next. Only possible while NEITHER '
+                      'group has started: once a group tees off, somebody '
+                      'leaving it is a withdrawal.',
                       style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant),
                     ),
@@ -1561,16 +1563,29 @@ class _FoursomeCard extends StatelessWidget {
               ...targets.map((f) {
                 final size = f.realPlayers.length;
                 final full = size >= 4;
+                // **The tee time leads**, because it is usually the reason
+                // for the move: a golfer stuck in traffic goes to a later
+                // group and the other three play on. A list that says only
+                // how full each group is makes the TD work out which one is
+                // later from the group numbers.
+                final time = (f.teeTime ?? '').trim();
                 return ListTile(
                   leading: const Icon(Icons.groups_outlined),
                   title: Text(f.label),
-                  subtitle: Text(
+                  subtitle: Text([
+                    if (time.isNotEmpty) time,
                     full
-                        ? '$size players · full'
+                        // Says what tapping it will do, now that a full
+                        // group is tappable: it can trade a golfer, not
+                        // take one.
+                        ? '$size players · full, swap only'
                         : '$size player${size == 1 ? "" : "s"}',
-                  ),
-                  enabled: !full,
-                  onTap: full ? null : () => Navigator.of(ctx).pop(f),
+                  ].join(' · ')),
+                  // **Not disabled when full.** A full group cannot take a
+                  // fifth golfer, but it can SWAP one — and swapping is the
+                  // common case, so greying it out hid the only option that
+                  // works for a late arrival.
+                  onTap: () => Navigator.of(ctx).pop(f),
                 );
               }),
               const SizedBox(height: 8),
@@ -1582,51 +1597,97 @@ class _FoursomeCard extends StatelessWidget {
 
     if (targetFs == null || !context.mounted) return;
 
-    final confirmed = await showDialog<bool>(
+    // Step 3: move, or SWAP with somebody from the target group.
+    //
+    // **The swap is first, and on a late arrival it is the only one that
+    // works.** A group playing short takes its phantom's scores from a full
+    // group teeing off AHEAD of it, so the first group cannot go short — and
+    // the first group is where the golfer stuck in traffic is. The server
+    // refuses the plain move with a donor-pool error that reads as a fault
+    // rather than as "trade him with somebody". A swap changes nobody's
+    // size, so the first group tees off on time with four.
+    final swapWith = await showModalBottomSheet<Membership>(
       context: context,
-      builder: (dctx) => AlertDialog(
-        title: Text('Move ${picked.player.name}?'),
-        content: Text(
-          '${picked.player.name} will move from ${foursome.label} to '
-          '${targetFs.label}. ${foursome.label} will play with '
-          '${foursome.realPlayers.length - 1} players; ${targetFs.label} '
-          'with ${targetFs.realPlayers.length + 1}. Any Triple Cup '
-          'games on either group adjust automatically.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dctx).pop(false),
-            child: const Text('Cancel'),
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Swap with somebody in ${targetFs.label}?',
+                          style: theme.textTheme.titleMedium),
+                      const SizedBox(height: 4),
+                      Text(
+                        'A swap keeps both groups the same size, so '
+                        '${foursome.label} still tees off with '
+                        '${foursome.realPlayers.length}. Moving '
+                        '${picked.player.name} on his own leaves them a '
+                        'golfer short, which the first group off cannot be.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                ...targetFs.realPlayers.map((m) => ListTile(
+                      leading: const Icon(Icons.swap_horiz),
+                      title: Text(m.player.name),
+                      subtitle: Text('swap with ${picked.player.name}'),
+                      onTap: () => Navigator.of(ctx).pop(m),
+                    )),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.east),
+                  title: Text('Just move ${picked.player.name}'),
+                  subtitle: Text(
+                      '${foursome.label} plays with '
+                      '${foursome.realPlayers.length - 1}'),
+                  // Popping null is "no swap", which the move path below
+                  // already means — so this needs no separate signal.
+                  onTap: () => Navigator.of(ctx).pop(),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
           ),
-          FilledButton(
-            onPressed: () => Navigator.of(dctx).pop(true),
-            child: const Text('Move'),
-          ),
-        ],
-      ),
+        );
+      },
     );
-    if (confirmed != true || !context.mounted) return;
+    if (!context.mounted) return;
 
     final client = context.read<AuthProvider>().client;
     try {
       await client.moveRoundPlayer(
         roundId,
-        playerId       : picked.player.id,
-        fromFoursomeId : foursome.id,
-        toFoursomeId   : targetFs.id,
+        playerId         : picked.player.id,
+        fromFoursomeId   : foursome.id,
+        toFoursomeId     : targetFs.id,
+        swapWithPlayerId : swapWith?.player.id,
       );
       onGamesChanged();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-              '${picked.player.name} moved to ${targetFs.label}.'),
+          content: Text(swapWith == null
+              ? '${picked.player.name} moved to ${targetFs.label}.'
+              : '${picked.player.name} and ${swapWith.player.name} '
+                  'swapped groups.'),
         ));
       }
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         duration: const Duration(seconds: 6),
-        content: Text('Could not move: ${e.toString()}'),
+        // The server's own sentence: it names which rule stopped it, and on
+        // a refused move that sentence is what tells the TD to swap instead.
+        content: Text(friendlyError(e)),
         backgroundColor: Theme.of(context).colorScheme.error,
       ));
     }
@@ -2054,6 +2115,9 @@ class _FoursomeCard extends StatelessWidget {
                     case 'set_start':
                       _setStartingHole(context, foursome);
                       break;
+                    case 'move_player':
+                      _showMovePlayerSheet(context);
+                      break;
                   }
                 },
                 itemBuilder: (_) => [
@@ -2081,6 +2145,26 @@ class _FoursomeCard extends StatelessWidget {
                           isTeamPlayRound ? 'Rename team' : 'Rename group')),
                     ]),
                   ),
+                  // **The golfer stuck in traffic.** He goes to a later tee
+                  // time and the other three play on. Needs somewhere to send
+                  // him, so it is hidden on a one-group round.
+                  //
+                  // Both groups have to be unplayed, which is the line
+                  // between this and a withdrawal rather than a technicality:
+                  // once a group has teed off, a golfer leaving it is
+                  // `withdrew_after_hole` — that settles the money and keeps
+                  // the holes they played as four.
+                  if (canManage && allFoursomes.length > 1)
+                    PopupMenuItem(
+                      value: 'move_player',
+                      child: Row(children: [
+                        Icon(Icons.swap_horiz, size: 18,
+                            color: theme.colorScheme.onSurfaceVariant),
+                        const SizedBox(width: 12),
+                        const Flexible(
+                            child: Text('Move a golfer to another group')),
+                      ]),
+                    ),
                   // Shotgun start — per-group starting hole. Only meaningful
                   // with more than one group (casual single-foursome rounds set
                   // the start on the round's Advanced tab instead).

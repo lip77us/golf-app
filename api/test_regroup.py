@@ -184,3 +184,174 @@ class TheEndpointSaysSoTests(_Base):
                                  player=fs.memberships.first().player,
                                  hole_number=1, gross_score=4)
         self.assertFalse(self.client.get(url).json()['can_regroup'])
+
+
+class MovingOneGolferTests(_Base):
+    """The golfer stuck in traffic: he takes a later tee time, the other
+    three play on.
+
+    `POST /rounds/{id}/move-player/` and its sheet were both fully written
+    and the sheet had NO CALLER — a menu item was all that was missing, so
+    the whole thing had never run. These cover the endpoint, including the
+    account scoping it was missing.
+    """
+
+    def _move_url(self):
+        return reverse('api-round-move-player', args=[self.round.id])
+
+    def _body(self, idx, frm, to):
+        return {'player_id': self.players[idx].id,
+                'from_foursome_id': frm.id, 'to_foursome_id': to.id}
+
+    def _fs(self, n):
+        return Foursome.objects.get(round=self.round, group_number=n)
+
+    def setUp(self):
+        super().setUp()
+        # A full group going off first and a later one with room — which is
+        # the shape the move exists for. Two FULL groups cannot take anybody,
+        # and a fixture that forgot that was my first version of these.
+        self._draw([[0, 1, 2, 3], [4, 5, 6]])
+
+    def test_moving_out_of_the_FIRST_group_is_refused(self):
+        """And this is why a swap exists.
+
+        A group playing short takes its phantom's scores from a full group
+        teeing off AHEAD of it, so the first group cannot go short — and the
+        first group is exactly where the golfer stuck in traffic is. The
+        donor validator refuses it, correctly, and nothing about the move
+        endpoint can help him.
+        """
+        r = self.client.post(self._move_url(),
+                             self._body(0, self._fs(1), self._fs(2)),
+                             format='json')
+        self.assertEqual(r.status_code, 400, r.content)
+        self.assertIn('donor', r.data['detail'])
+        self.assertEqual(self._group_of(0), 1)
+
+    def test_moving_out_of_a_LATER_group_is_fine(self):
+        # Group 2 is the short one and group 1 tees off ahead of it, so the
+        # donor pool holds.
+        self._draw([[0, 1, 2, 3], [4, 5, 6], [7]])
+        r = self.client.post(self._move_url(),
+                             self._body(4, self._fs(2), self._fs(3)),
+                             format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(self._group_of(4), 3)
+
+    def test_it_is_refused_once_either_group_has_teed_off(self):
+        """The line between this and a withdrawal, not a technicality: a
+        group that has scored holes as four must not be rewritten as three."""
+        HoleScore.objects.create(foursome=self._fs(1),
+                                 player=self.players[1],
+                                 hole_number=1, gross_score=4)
+        r = self.client.post(self._move_url(),
+                             self._body(0, self._fs(1), self._fs(2)),
+                             format='json')
+        self.assertEqual(r.status_code, 409, r.content)
+        self.assertEqual(self._group_of(0), 1)
+
+    def test_the_destination_group_having_started_also_refuses(self):
+        HoleScore.objects.create(foursome=self._fs(2),
+                                 player=self.players[4],
+                                 hole_number=1, gross_score=4)
+        r = self.client.post(self._move_url(),
+                             self._body(0, self._fs(1), self._fs(2)),
+                             format='json')
+        self.assertEqual(r.status_code, 409, r.content)
+
+    # ── Swap ────────────────────────────────────────────────────────────
+
+    def _swap_body(self, idx, frm, to, other_idx):
+        return {'player_id': self.players[idx].id,
+                'from_foursome_id': frm.id, 'to_foursome_id': to.id,
+                'swap_with_player_id': self.players[other_idx].id}
+
+    def test_a_late_golfer_swaps_into_a_later_group(self):
+        """The actual fix for the traffic case: he trades places with
+        somebody in a later group, both groups keep their size, the first
+        group tees off on time with four."""
+        r = self.client.post(self._move_url(),
+                             self._swap_body(0, self._fs(1), self._fs(2), 4),
+                             format='json')
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(self._group_of(0), 2)
+        self.assertEqual(self._group_of(4), 1)
+
+    def test_a_swap_changes_nobody_size(self):
+        before = [len([m for m in self._fs(n).memberships.all()
+                       if not m.player.is_phantom]) for n in (1, 2)]
+        self.client.post(self._move_url(),
+                         self._swap_body(0, self._fs(1), self._fs(2), 4),
+                         format='json')
+        after = [len([m for m in self._fs(n).memberships.all()
+                      if not m.player.is_phantom]) for n in (1, 2)]
+        self.assertEqual(before, after)
+
+    def test_a_swap_is_refused_once_either_group_has_teed_off(self):
+        HoleScore.objects.create(foursome=self._fs(1),
+                                 player=self.players[1],
+                                 hole_number=1, gross_score=4)
+        r = self.client.post(self._move_url(),
+                             self._swap_body(0, self._fs(1), self._fs(2), 4),
+                             format='json')
+        self.assertEqual(r.status_code, 409, r.content)
+        self.assertEqual(self._group_of(0), 1)
+
+    def test_swapping_with_somebody_not_in_that_group_is_a_404(self):
+        r = self.client.post(self._move_url(),
+                             self._swap_body(0, self._fs(1), self._fs(2), 1),
+                             format='json')
+        self.assertEqual(r.status_code, 404, r.content)
+
+    def test_a_swap_keeps_each_golfer_on_his_own_tee(self):
+        """A swap moves the golfer, not the tee box — and his playing
+        handicap is per-tee, so carrying the other man's would re-net every
+        hole he plays."""
+        m = self._fs(1).memberships.get(player=self.players[0])
+        m.playing_handicap = 7
+        m.save(update_fields=['playing_handicap'])
+        self.client.post(self._move_url(),
+                         self._swap_body(0, self._fs(1), self._fs(2), 4),
+                         format='json')
+        moved = self._fs(2).memberships.get(player=self.players[0])
+        self.assertEqual(moved.playing_handicap, 7)
+        self.assertEqual(moved.tee_id, self.tee.id)
+
+    def test_a_full_group_cannot_take_a_fifth(self):
+        """Moving INTO the full first group, so the donor rule is satisfied
+        (group 2 going short has a full group ahead of it) and the only
+        guard that can fire is the to-side one."""
+        self._draw([[0, 1, 2, 3], [4, 5, 6, 7]])
+        r = self.client.post(self._move_url(),
+                             self._body(4, self._fs(2), self._fs(1)),
+                             format='json')
+        self.assertEqual(r.status_code, 400, r.content)
+        self.assertIn('4 players', r.data['detail'])
+
+    def test_a_group_cannot_be_cut_below_two(self):
+        """Isolated on purpose: with two pairs the only guard that can fire
+        is the from-side one, so the assertion cannot pass for the wrong
+        reason."""
+        self._draw([[0, 1], [2, 3]])
+        r = self.client.post(self._move_url(),
+                             self._body(0, self._fs(1), self._fs(2)),
+                             format='json')
+        self.assertEqual(r.status_code, 400, r.content)
+        self.assertEqual(self._group_of(0), 1)
+
+    def test_another_account_cannot_rearrange_this_round(self):
+        """It used a bare `get_object_or_404(Round, pk=pk)` where every other
+        round-level TD view is account-scoped. No caller is almost certainly
+        why nobody noticed; wiring it up is what makes it matter.
+        """
+        other = Account.objects.create(name='Someone Else')
+        intruder = User.objects.create_user(username='nosy', account=other)
+        intruder.is_account_admin = True
+        intruder.save(update_fields=['is_account_admin'])
+        c = APIClient()
+        c.force_authenticate(intruder)
+        r = c.post(self._move_url(),
+                   self._body(0, self._fs(1), self._fs(2)), format='json')
+        self.assertEqual(r.status_code, 404, r.content)
+        self.assertEqual(self._group_of(0), 1)
