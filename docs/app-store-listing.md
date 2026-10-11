@@ -2,7 +2,13 @@
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
-Only list shipping, enabled games (Scramble is still hidden — `enabled:false`).
+Only list shipping, enabled games. Two traps there: **Scramble is
+`enabled:false` as a casual game but DOES ship as a team-play format**, so the
+"Scramble and Shamble team events" line is right; and **Quota Nassau has a
+service, a screen and a play screen but no `GameMeta`**, so it is not
+offerable and must not be listed. Check `game_catalog.dart` rather than the
+services directory — this list had been missing 40 Balls and Better Ball since
+they were release headlines.
 
 ## What's New (v2.11.0)
 
@@ -169,7 +175,10 @@ lead on.)
 (Skins/Nassau are already in the subtitle, so they're omitted here — Apple
 indexes the subtitle words anyway; keywords spend the budget on new terms.)
 
-## Promotional text (170 max, editable without review) — 2.10.0, 158 chars
+## Promotional text (170 max, editable without review) — 2.11.0, 159 chars
+New: Hot Spot — every hole has an anchor whose score counts good or bad, and it rotates, so everyone carries the group. Plus redraw your groups between rounds.
+
+## Promotional text — previous (v2.10.0, 158 chars)
 New: 40 Balls — 40 for the round, spent hole by hole after the scores are in. Spend big early and the closing stretch is thin. Plus Dream Round and Road Trip.
 
 ## Promotional text — previous (v2.9.1, 164 chars)
@@ -190,6 +199,12 @@ games, enter scores hole by hole, and Halved does the rest — live results,
 handicaps, a shareable spectator web page, and an easy settle-up at the end.
 
 GAMES YOU CAN PLAY
+• Hot Spot — one golfer anchors each hole and his score counts whatever it is;
+  the team adds the best net of the other three, and the anchor rotates
+• 40 Balls — a group gets 40 balls for the round and spends 0 to 4 a hole,
+  picked after the scores are in
+• Better Ball — you pick how many of the group's nets count, and it is that
+  many on every hole
 • Banker — one golfer takes the hole on against the other three, each in its
   own match, with doubles called at a ball in the air
 • Sequoya 3s — six three-hole matches, partners rotating every third hole
@@ -200,6 +215,12 @@ GAMES YOU CAN PLAY
 • Wolf
 • Rabbit
 • Survivor — three players, last one standing takes the hole
+• Fourball — 2v2 match play, the better ball of each pair counting
+• Honors — win a hole outright and you hold the honor, scoring every hole
+  until somebody takes it off you
+• Triple Nassau — three golfers, every pair playing its own match
+• Nassau Nine — one match over the holes you actually play, with presses: the
+  Nassau for a nine-hole or back-nine round
 • Points 5-3-1
 • Stableford, with a custom points table
 • Spots — a side game for one-putts, sandies, barkies and more
@@ -228,7 +249,10 @@ in other groups.
 TOURNAMENTS
 Running something bigger? Halved supports multiple foursomes, several games at
 once, and multi-round events — with live leaderboards, team cup play, and
-formats like Irish Rumble, Pink Ball, and Singles. Team events run small teams
+formats like Irish Rumble, Pink Ball, and Singles. Dream Round takes the best
+score on every hole number across the whole event and makes one card of them;
+Road Trip plays several courses over several days with the best rounds
+counting, scored to par so a hard course is not a penalty. Team events run small teams
 or two-golfer pairs against the whole field on one board, each format with the
 allowance it is actually played off.
 
