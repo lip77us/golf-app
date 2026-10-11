@@ -122,19 +122,66 @@ subtitle disappeared.
 - Shipping new builds into the closed track does NOT reset it (2.9.2+43 went
   out mid-clock). Only opting out does.
 
+### THE CLOCK IS SATISFIED — 11 Oct 2026
+
+Fifteen elapsed days against the required fourteen. Nothing below depends on
+the calendar any more.
+
 ### Still to do, in order of what blocks the calendar
 
 - [x] **12 testers opted in** — done 26 Sep 2026. See the clock above.
-- [ ] **Apply for production access on/after 11 Oct 2026** — a
-      separate human-reviewed questionnaire about how the test went. Expect it
-      to feel like the first submission, not like a routine update.
-- [ ] The two push defects + two QA findings -> `android-qa-findings.md`.
+- [x] **Sixes routing defect** — FIXED. It was one case of a general fault:
+      fourteen branches of the round hub's one button could choose a `*-setup`
+      route, and not one of them asked whether the round was over. Guarded once
+      after the chain (`mobile/test/completed_round_routing_test.dart`). See
+      CLAUDE.md, "A finished round never opens a setup screen".
+- [ ] **Apply for production access** — a human-reviewed questionnaire about
+      how the test went. Expect it to feel like the first submission, not like
+      a routine update. Draft answers and the evidence are below.
 - [ ] Confirm a REAL watch token opens the leaderboard (only a bogus token has
       been tested; it correctly fell through to the normal boot).
-- [ ] **Sixes routing defect** found while capturing screenshots: `Continue
-      Match` opens the Segment 2 partner draw when it should go straight to
-      score entry. Same shape as the fixed `rp.sixesIsStarted()` bug — routing
-      off client state instead of asking the server.
+- [ ] The two push defects + two QA findings — `docs/android-qa-findings.md`
+      (the file exists; an earlier note implied it still had to be written).
+
+### The evidence the production application rests on
+
+Google's questionnaire asks what the closed test CHANGED, so the useful
+record is not that the test ran but what came out of it.
+
+- **The event.** `TPSGC 2026 Ryder Cup`, Tilden Park GC, 8 Oct 2026 —
+  **48 players across 12 groups, 536 hole scores** entered live
+  (tournament 58 / round 420 in production). Bigger than the 40 planned.
+- **53 of the 128 commits between 19 Sep and 11 Oct are traceable to a
+  tester report**, by their own commit messages. Two came from this
+  tournament's own setup: `b19693f` (a tie on playing handicap was being
+  broken by the order the names were clicked — found in the real draw, group
+  6) and `a28ef28` (a cup round could not set its own group sizes, found
+  building a 46-golfer field).
+- The sharpest defect the period found was the **shotgun sweep** — a cup
+  match reported as decided with four holes still to play, because six
+  separate places read a hole NUMBER where they meant position in play
+  order. One report, six fixes, two new test files.
+
+**Do not paraphrase this into something generic when filling the form.** The
+specifics are the whole reason it is persuasive; a vague answer to these
+questions is the common rejection.
+
+### The production candidate — 2.11.0+48
+
+Built 11 Oct 2026, `flutter build appbundle --release`, 76 MB, signed with
+the upload key (the `key.properties` warning was confirmed ABSENT — its
+presence is the failure that shows up as a Play rejection rather than a build
+error).
+
+**Roughly 77 MB of that bundle is `BUNDLE-METADATA/…/debugsymbols/`**, which
+Play strips and never serves; each device downloads one ABI. The AAB's size
+is not the install size and is not worth optimising.
+
+**It goes to the CLOSED track first, not straight to production.** There were
+128 commits between the build the testers had been running and this one, so
+promoting it unseen would put a build into production that no Android phone
+had ever opened. The production-access review takes days, which is the window
+to test it in — the sequence costs nothing and removes the whole risk.
 
 ### Update cadence, once in production
 
