@@ -4096,10 +4096,32 @@ class WatchTokenResolveView(APIView):
                 _, part_phones = _round_participant_keys(rnd)
                 if norm not in part_phones:
                     prof = getattr(request.user, 'player_profile', None)
+                    defaults = {'name': (prof.name if prof else 'Watcher'),
+                                'invited_by': prof}
+                    # **A TOURNAMENT link has to grant a TOURNAMENT watcher.**
+                    #
+                    # This recorded a ROUND watcher whatever the link was,
+                    # then told the app `is_tournament: true` and handed it
+                    # the tournament id — and the app opens the tournament
+                    # leaderboard, whose gate asks
+                    # `Watcher.objects.filter(tournament_id=...)`. A round row
+                    # never matched it, so every tournament watch link opened
+                    # to "No such tournament." The web page was fine, because
+                    # that is possession-gated and never consults Watcher at
+                    # all; only a phone with the app installed took this path.
+                    #
+                    # `Watcher` sets exactly one of round/tournament, so this
+                    # is a separate row rather than both columns. The round
+                    # row is still written for a tournament link as well: it
+                    # is what surfaces the individual round under Observing,
+                    # and the two answer different questions.
                     Watcher.objects.get_or_create(
                         round=rnd, tournament=None, phone=norm,
-                        defaults={'name': (prof.name if prof else 'Watcher'),
-                                  'invited_by': prof})
+                        defaults=defaults)
+                    if rnd.tournament_id:
+                        Watcher.objects.get_or_create(
+                            round=None, tournament=rnd.tournament,
+                            phone=norm, defaults=defaults)
         t = rnd.tournament
         return Response({
             'round_id':        rnd.id,

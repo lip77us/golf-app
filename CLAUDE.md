@@ -816,6 +816,40 @@ than a 5.1.1 requirement; it is the one item from the original draft notes that
 was never done, and it is recorded here because deleting those notes would
 otherwise have lost it.
 
+### A tournament watch link opened to "No such tournament"
+
+Reported from production, 11 Oct 2026: a TD sent his wife a link to a
+tournament he had started. The web page was fine; opening it on a phone with
+Halved installed refused her.
+
+**Why it hid.** iOS gives a universal link to the APP, so only a phone with
+Halved takes the failing path — the browser page is possession-gated on the
+token and never consults `Watcher` at all. Testing the link anywhere without
+the app shows nothing wrong.
+
+**The chain.** `deep_links.dart` calls `/watch/<token>/resolve/`;
+`WatchTokenResolveView` records a watcher and replies `is_tournament: true`
+with the tournament id; the app opens the TOURNAMENT leaderboard, gated by
+`tournament_for_reader` → `Watcher.objects.filter(tournament_id=...)`. The
+resolve wrote `round=rnd, tournament=None` **whatever the link was**, so the
+gate never matched. Every tournament watch link ever sent was broken; casual
+links were fine, because there the app opens the round board and the round row
+does satisfy it.
+
+`Watcher` sets exactly one of round/tournament (two unique constraints, one
+per target), so the fix is a SECOND row rather than both columns. Both are
+written for a tournament link: the round row is what surfaces the individual
+round under Observing, and the two answer different questions.
+
+**The error string was the diagnosis.** "No such tournament." appears only in
+`accounts/scoring_access.py` — it is an API refusal, not anything the watch
+page can render. That is what said the link had opened the app rather than the
+browser. Worth asking for the exact words before theorising about the page.
+
+Tests: `api/test_watch_link_tournament.py` (6) — the end-to-end admission,
+both rows, idempotence on a second tap, a player not being filed as a
+spectator of his own round, and a casual link inventing no tournament row.
+
 ### Staging production for review — and `DEBUG` drift
 
 The two commands, in this order (11 Oct 2026):
