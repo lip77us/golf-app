@@ -670,7 +670,15 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
               }
               final game = lb.games[gameKey];
               if (game == null) {
-                return const Center(child: Text('No data yet.'));
+                // **"No data yet" described the wrong thing.** A tab exists
+                // for every game in `active_games`, but the server only
+                // sends a block once the game is CONFIGURED — an unset
+                // config makes the summary empty and `if summary:` drops it.
+                // So a round with 128 scores in it reported having no data,
+                // when what it had was no setup. Reported from a 40 Balls
+                // round, and it was never that game's problem: every game
+                // switched on and left unconfigured said the same thing.
+                return _NotSetUpYet(gameKey: gameKey);
               }
               return RefreshIndicator(
                 onRefresh: () => rp.loadLeaderboard(widget.roundId),
@@ -2593,6 +2601,47 @@ class _IRLeaderboardScorecard extends StatelessWidget {
 
 typedef GroupCardBuilder = Widget Function(
     {required Map<String, dynamic> group});
+
+/// A game that is on for this round but has never been set up.
+///
+/// Says which game and where to go, because the tab itself cannot take you —
+/// the setup screens are reached from the round, and each game's route is
+/// the round screen's business, not the board's.
+class _NotSetUpYet extends StatelessWidget {
+  final String gameKey;
+  const _NotSetUpYet({required this.gameKey});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final name = gameDisplayName(gameKey);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.tune,
+                size: 32, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(height: 12),
+            Text('$name is not set up yet',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleSmall),
+            const SizedBox(height: 6),
+            Text(
+              'It is on for this round, but its stake and prizes have not '
+              'been set — so there is nothing to score it against. Set it up '
+              'from the round, under Game Setup.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _ByGroupView extends StatelessWidget {
   final Map<String, dynamic> data;

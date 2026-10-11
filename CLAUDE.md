@@ -4302,6 +4302,32 @@ reasons unrelated to the subject. Split into `_DayBetBase` (fixture) and
 Tests: `ATieIsNotACleanWinTests` (6) and
 `ThePotIsSharedInTheConfiguredProportionsTests` (7) in `api/test_day_bet.py`.
 
+## "No data yet" was describing the wrong thing
+
+Reported from a 40 Balls round with **128 scores in it**: the board said *No
+data yet*. The scores were fine; the game had never been SET UP.
+
+The chain: a tab exists for every game in `active_games`, but the server only
+sends a `games[...]` block once the game is configured —
+`forty_balls_summary` returns `{}` with no `FortyBallsConfig` and
+`if summary:` drops it. The client then found no block and fell through to a
+generic `Center(child: Text('No data yet.'))`.
+
+**It was never that game's problem.** Every game switched on and left
+unconfigured said the same thing, on a round full of scores. The fix is at
+the generic branch, not in 40 Balls: `_NotSetUpYet` names the game and says
+its stake and prizes have not been set, and points at the round's Game Setup
+— which is where the setup screens are reached from, and which a tab cannot
+take you to.
+
+`game == null` for an ACTIVE game means "not configured", not "no scores":
+a configured game with nothing scored still emits a block and draws its own
+empty board. That is what makes the new message safe to state flatly.
+
+Tests: `mobile/test/not_set_up_test.dart` — the message leads with
+`gameDisplayName(gameKey)`, so a slug falling through would read
+"forty_balls is not set up yet".
+
 ## `thru` has one writer — `group_field.holes_thru`
 
 The 40 Balls board showed a group's budget (`34 of 40 · slack 6`) and nothing
