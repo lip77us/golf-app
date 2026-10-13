@@ -739,3 +739,128 @@ class SixesAllocationDefaultTests(TestCase):
         want = {h for h in range(1, 19)
                 if (self.tee.hole(h)['stroke_index'] or 99) <= 6}
         self.assertEqual(got, want)
+
+
+class MatchTwoIsTheGroupsToPickTests(TestCase):
+    """The narrowing that lets the group set match 2's teams on the 6th green.
+
+    `handoff-solo-games` reverses the automatic match-2 draw: when match 1 is
+    decided the team picker opens and the group drags or spins. That collides
+    with `_teams_locked`, which shuts at the 3-hole edit ceiling — match 1 ends
+    on the 6th, so everything from then on was refused.
+
+    It worked before only because the draw was THEATRE: segments 2 and 3 were
+    assigned at setup and the reel was told to land on the one already stored,
+    so nothing was ever written. A real choice has to swap segments 2 and 3,
+    which is a team change after six scored holes.
+
+    What the lock protects is a PLAYED hole being re-scored under different
+    teams. Swapping two segments nobody has reached cannot do that.
+    """
+
+    def setUp(self):
+        self.tee = make_tee()
+        self.round = make_round(self.tee.course)
+        self.fs = make_foursome(
+            self.round,
+            [('Ann', 0), ('Ben', 0), ('Cal', 0), ('Dee', 0)],
+            tee=self.tee,
+        )
+        p = {m.player.name: m.player_id
+             for m in self.fs.memberships.select_related('player')}
+        self.A, self.B, self.C, self.D = p['Ann'], p['Ben'], p['Cal'], p['Dee']
+        setup_sixes(self.fs, self._plan(seg2=(self.A, self.C, self.B, self.D)),
+                    handicap_mode='gross')
+
+    def _plan(self, *, seg1=None, seg2=None, seg3=None):
+        """Three segments, each with its own pairing."""
+        seg1 = seg1 or (self.A, self.B, self.C, self.D)
+        seg2 = seg2 or (self.A, self.C, self.B, self.D)
+        seg3 = seg3 or (self.A, self.D, self.B, self.C)
+        out = []
+        for (a, b, c, d), (lo, hi) in zip((seg1, seg2, seg3),
+                                          ((1, 6), (7, 12), (13, 18))):
+            out.append({'team_select_method': 'long_drive',
+                        'team1_player_ids': [a, b],
+                        'team2_player_ids': [c, d],
+                        'start_hole': lo, 'end_hole': hi})
+        return out
+
+    def _play_match_one(self):
+        for h in range(1, 7):
+            submit_hole(self.fs, h, [(self.A, 4), (self.B, 5),
+                                     (self.C, 5), (self.D, 6)])
+
+    def _teams_of(self, segment_number):
+        seg = self.fs.sixes_segments.get(segment_number=segment_number)
+        return {t.team_number: {p.id for p in t.players.all()}
+                for t in seg.teams.all()}
+
+    def test_the_group_can_swap_matches_2_and_3_after_match_1(self):
+        """The whole point: six holes played, and the two pairings nobody has
+        reached trade places."""
+        self._play_match_one()
+        setup_sixes(self.fs,
+                    self._plan(seg2=(self.A, self.D, self.B, self.C),
+                               seg3=(self.A, self.C, self.B, self.D)),
+                    handicap_mode='gross')
+        self.assertEqual(self._teams_of(2)[1], {self.A, self.D})
+        self.assertEqual(self._teams_of(3)[1], {self.A, self.C})
+
+    def test_match_1_is_untouched_by_that_swap(self):
+        self._play_match_one()
+        before = self._teams_of(1)
+        setup_sixes(self.fs,
+                    self._plan(seg2=(self.A, self.D, self.B, self.C),
+                               seg3=(self.A, self.C, self.B, self.D)),
+                    handicap_mode='gross')
+        self.assertEqual(self._teams_of(1), before)
+
+    def test_changing_a_PLAYED_match_is_still_refused(self):
+        """The rule the lock exists for, unchanged."""
+        self._play_match_one()
+        with self.assertRaises(SixesLocked):
+            setup_sixes(self.fs,
+                        self._plan(seg1=(self.A, self.C, self.B, self.D)),
+                        handicap_mode='gross')
+
+    def test_a_part_played_match_counts_as_played(self):
+        """One hole of match 2 is enough — the lock is about a scored hole,
+        not a finished match.
+
+        **This state should not be reachable.** Paul: "you can't get to
+        segment 2 before picking teams, either by dragging or spinning" — the
+        picker opens when match 1 is decided and the group cannot score hole 7
+        until it is answered. That gate is the client's job; this is the
+        backstop for when it is wrong, which is the only time a rule about
+        played holes gets tested in anger.
+        """
+        self._play_match_one()
+        submit_hole(self.fs, 7, [(self.A, 4), (self.B, 5),
+                                 (self.C, 5), (self.D, 6)])
+        with self.assertRaises(SixesLocked):
+            setup_sixes(self.fs,
+                        self._plan(seg2=(self.A, self.D, self.B, self.C)),
+                        handicap_mode='gross')
+
+    def test_match_3_can_still_be_set_while_match_2_is_under_way(self):
+        """Match 2 started, match 3 untouched — so match 3 is still open.
+        This is what makes 'match 4+ is the group's choice' reachable."""
+        self._play_match_one()
+        submit_hole(self.fs, 7, [(self.A, 4), (self.B, 5),
+                                 (self.C, 5), (self.D, 6)])
+        setup_sixes(self.fs,
+                    self._plan(seg3=(self.B, self.C, self.A, self.D)),
+                    handicap_mode='gross')
+        self.assertEqual(self._teams_of(3)[1], {self.B, self.C})
+
+    def test_segment_BOUNDS_are_frozen_for_everybody(self):
+        """Even on an unplayed segment. Re-slicing which holes belong to which
+        match can move a played hole into another one — the same harm by
+        another route."""
+        self._play_match_one()
+        plan = self._plan()
+        plan[1]['end_hole'] = 13
+        plan[2]['start_hole'] = 14
+        with self.assertRaises(SixesLocked):
+            setup_sixes(self.fs, plan, handicap_mode='gross')

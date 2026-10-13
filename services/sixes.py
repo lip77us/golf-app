@@ -140,6 +140,57 @@ def _teams_locked(foursome) -> bool:
     return not edits_open(foursome)
 
 
+def _scored_holes(foursome) -> set:
+    """Holes in this foursome with a real golfer's gross score."""
+    from scoring.models import HoleScore
+    return set(HoleScore.objects
+               .filter(foursome=foursome, player__is_phantom=False,
+                       gross_score__isnull=False)
+               .values_list('hole_number', flat=True))
+
+
+def _change_touches_played(existing, team_data, scored: set) -> bool:
+    """Whether this setup would alter a match the group has already played.
+
+    **The narrowing that lets the group pick match 2's teams.** Match 1 ends
+    on the 6th, long past the 3-hole edit ceiling, so `_teams_locked` refuses
+    everything from then on — which was right while match 2's pairing was
+    decided at setup and the draw reel was pure theatre (`winnerIndex` always
+    pointed at the pairing the server had already stored). The moment the
+    group genuinely chooses, segments 2 and 3 have to swap, and that is a team
+    change after six scored holes.
+
+    What the lock protects is a PLAYED hole being re-scored under different
+    teams. Swapping two segments nobody has reached cannot do that. So past
+    the ceiling:
+
+    * a segment with any scored hole must keep its teams exactly;
+    * NO segment may change its bounds, played or not — re-slicing which holes
+      belong to which match can move a played hole into another segment, which
+      is the same harm by another route;
+    * a segment with no scored holes may have its teams changed freely.
+
+    Bounds are compared for every segment and teams only for played ones,
+    which is why this is not simply `_teams_or_bounds_differ` with a filter.
+    """
+    if len(existing) != len(team_data):
+        return True
+    for seg, td in zip(existing, team_data):
+        if (seg.start_hole, seg.end_hole) != (td['start_hole'], td['end_hole']):
+            return True
+        played = any(h in scored for h in range(seg.start_hole,
+                                                seg.end_hole + 1))
+        if not played:
+            continue
+        by_number = {t.team_number: t for t in seg.teams.all()}
+        for number, key in ((1, 'team1_player_ids'), (2, 'team2_player_ids')):
+            team = by_number.get(number)
+            current = {p.id for p in team.players.all()} if team else set()
+            if current != set(td.get(key) or []):
+                return True
+    return False
+
+
 def _teams_or_bounds_differ(existing, team_data) -> bool:
     """Would this setup change WHO plays whom, or over which holes?
 
@@ -232,10 +283,14 @@ def setup_sixes(
         # what every played hole MEANT. Inside the ceiling that is a setup
         # mistake being corrected and the played holes are rescored under the
         # new teams; past it, it is a different match.
-        if _teams_locked(foursome):
+        # Past the ceiling, only a change that touches NO played hole gets
+        # through — which is what lets the group set match 2's teams on the
+        # 6th green while match 1 stays exactly as it was scored.
+        if _teams_locked(foursome) and _change_touches_played(
+                existing, team_data, _scored_holes(foursome)):
             from services.edit_window import closed_reason
             raise SixesLocked(closed_reason(
-                'Teams and segments',
+                'Teams and segments you have played',
                 'the holes already played were scored against them'))
 
         # A voided segment is a WITHDRAWAL's record, and the rebuild below
