@@ -9,6 +9,7 @@ import '../utils/match_handicap.dart';
 import '../utils/play_order.dart';
 import '../utils/sixes_handicap.dart';
 import 'net_score_button.dart' show scoreCellWithDots;
+import 'solo_board.dart';
 import 'score_mark.dart';
 
 // ---------------------------------------------------------------------------
@@ -250,6 +251,13 @@ class _ScorecardGridState extends State<ScorecardGrid> {
   (String mode, int netPercent) _handicapParams(RoundProvider rp) {
     final games = rp.round?.activeGames ?? const [];
     final primary = resolvePrimary(rp.round?.primaryGame, games);
+    // Solo first — always Net, at an allowance that may be above 100%. Same
+    // branch as score entry's, for the same reason: the landscape card must
+    // not draw a different stroke plan from the one being played.
+    if (soloVariantOf(games) != null && rp.soloSummary != null) {
+      return ('net',
+          (rp.soloSummary!['net_percent'] as num?)?.toInt() ?? 100);
+    }
     if ((primary == 'low_net_round' || primary == 'low_net') &&
         rp.lowNetConfig != null) {
       final mode = rp.lowNetConfig!['handicap_mode'] as String? ?? 'net';

@@ -1160,6 +1160,12 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               (value: '4',      label: '4',             icon: null),
               (value: 'groups', label: 'Across groups', icon: null),
             ],
+            // The handoff's widths: the digits pinned narrow, the two words
+            // sharing what is left, with "Across groups" at 1.6x so it stays
+            // on ONE line. Five equal segments wrapped it onto two.
+            segmentWidth: (v) =>
+                (v == '2' || v == '3' || v == '4') ? 46.0 : null,
+            segmentFlex: (v) => v == 'groups' ? 16 : 10,
             onChanged: (v) => setState(() {
               _sizeFilter = v;
               // Deselect the primary if it no longer fits the new size

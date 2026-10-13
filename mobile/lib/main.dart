@@ -874,7 +874,10 @@ class _GolfAppState extends State<GolfApp> {
         final a = settings.arguments as Map<String, dynamic>;
         return page((_) => SoloSetupScreen(
             roundId: a['id'] as int,
-            variant: (a['variant'] as String?) ?? 'stroke'));
+            // Absent when the hub re-opens it — the screen reads the stored
+            // variant rather than defaulting, which would change the game.
+            variant: (a['variant'] as String?) ?? 'stroke',
+            returnToHub: a['returnToHub'] == true));
       case '/setup-round-players':
         final roundId = settings.arguments as int;
         return page((_) => SetupRoundPlayersScreen(roundId: roundId));

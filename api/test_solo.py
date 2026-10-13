@@ -55,6 +55,15 @@ class SetupTests(_Base):
         self.assertEqual(d['variant'], 'stroke')
         self.assertEqual(d['net_percent'], 100)
 
+    def test_it_names_the_FOURSOME_so_start_round_can_open_it(self):
+        """Score entry is addressed by foursome. Without this the screen
+        reached for the round id, which is a different number — and on a
+        server with more rounds than this one it points at somebody else's
+        group."""
+        d = self.client.get(self._setup_url()).data
+        self.assertEqual(d['foursome_id'],
+                         self.round.foursomes.first().id)
+
     def test_it_names_the_golfer_for_the_setup_screen(self):
         """So the screen can write "12 strokes" without a second request."""
         d = self.client.get(self._setup_url()).data
@@ -104,6 +113,90 @@ class SetupTests(_Base):
         for field in ('entry_fee', 'payouts', 'bet_unit'):
             self.assertFalse(hasattr(cfg, field),
                              msg=f'a solo game has no {field}')
+
+
+class AutoPressTests(_Base):
+    """Nassau only, and off unless asked for."""
+
+    def test_it_defaults_off_and_round_trips_on(self):
+        self.assertFalse(self.client.get(self._setup_url()).data['auto_press'])
+        self.client.post(self._setup_url(),
+                         {'variant': 'nassau', 'net_percent': 100,
+                          'auto_press': True}, format='json')
+        self.assertTrue(self.client.get(self._setup_url()).data['auto_press'])
+        self.assertTrue(SoloGame.objects.get().auto_press)
+
+    def test_the_board_reports_it(self):
+        r = self.client.post(self._setup_url(),
+                             {'variant': 'nassau', 'net_percent': 100,
+                              'auto_press': True}, format='json')
+        self.assertTrue(r.data['nassau']['auto_press'])
+        self.assertEqual(r.data['nassau']['front']['presses'], [])
+
+    def test_a_press_is_still_not_money(self):
+        """It opens another match against par, not another bet."""
+        r = self.client.post(self._setup_url(),
+                             {'variant': 'nassau', 'net_percent': 100,
+                              'auto_press': True}, format='json')
+        self.assertTrue(r.data['for_fun'])
+        for key in ('press_unit', 'bet_unit', 'money'):
+            self.assertNotIn(key, r.data)
+
+    def test_a_second_setup_answers_with_the_NEW_settings(self):
+        """`update_or_create` leaves the Round holding the config it cached
+        the first time, so without clearing it this POST would echo back the
+        settings the golfer just replaced."""
+        self.client.post(self._setup_url(),
+                         {'variant': 'nassau', 'net_percent': 100},
+                         format='json')
+        r = self.client.post(self._setup_url(),
+                             {'variant': 'nassau', 'net_percent': 80,
+                              'auto_press': True}, format='json')
+        self.assertEqual(r.data['net_percent'], 80)
+        self.assertTrue(r.data['nassau']['auto_press'])
+
+
+class LeaderboardTests(_Base):
+    """One tab, with the card in it.
+
+    The slug and the block are different names — `solo_nassau` in
+    `active_games`, `solo` in the games dict — and `_leaderboard_active_games`
+    appends every games key to the round's own list, so leaving the slug in
+    gave a solo round TWO tabs: one with the board and one with nothing to
+    draw, which the client renders as raw JSON.
+    """
+
+    def _lb(self):
+        return self.client.get(
+            reverse('api-leaderboard', args=[self.round.id])).data
+
+    def test_the_block_is_there_and_the_slug_is_not_a_tab(self):
+        self.round.active_games = ['solo_nassau']
+        self.round.save()
+        self.client.post(self._setup_url(),
+                         {'variant': 'nassau', 'net_percent': 100},
+                         format='json')
+        d = self._lb()
+        self.assertIn('solo', d['games'])
+        self.assertEqual(d['games']['solo']['label'], 'Nassau')
+        self.assertIn('solo', d['active_games'])
+        self.assertNotIn('solo_nassau', d['active_games'])
+
+    def test_a_solo_round_gets_no_one_row_stroke_play_table(self):
+        """The generic "scores" tab ranks the field by net to par and pays
+        it. A field of one is a single row with a $0 payout, which reads as a
+        fault — and the solo board already carries the card."""
+        self.round.active_games = ['solo_match']
+        self.round.save()
+        self.client.post(self._setup_url(),
+                         {'variant': 'match', 'net_percent': 100},
+                         format='json')
+        self.assertNotIn('low_net_round', self._lb()['games'])
+
+    def test_an_unconfigured_solo_round_has_no_block_at_all(self):
+        self.round.active_games = ['solo_stroke']
+        self.round.save()
+        self.assertNotIn('solo', self._lb()['games'])
 
 
 class ResultTests(_Base):

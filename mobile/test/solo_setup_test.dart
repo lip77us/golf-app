@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/game_catalog.dart';
 import 'package:golf_mobile/screens/solo_setup_screen.dart';
+import 'package:golf_mobile/widgets/solo_board.dart';
 import 'package:golf_mobile/utils/create_casual_round.dart';
 
 void main() {
@@ -19,10 +20,14 @@ void main() {
       expect(soloVariantOf([GameIds.soloMatch]), 'match');
     });
 
-    test('anything else falls back to stroke', () {
-      // The commonest game, and the default on the create screen.
-      expect(soloVariantOf([]), 'stroke');
-      expect(soloVariantOf(['skins']), 'stroke');
+    test('a round that is not solo at all is null, not stroke', () {
+      // It moved out of the setup screen (where the variant was always one
+      // of three, because the screen only opens on a solo round) into
+      // `widgets/solo_board.dart`, where score entry asks it of EVERY round
+      // to decide whether to draw the solo card. A default of 'stroke' there
+      // would put a vs-par board on every skins game in the app.
+      expect(soloVariantOf([]), isNull);
+      expect(soloVariantOf(['skins']), isNull);
     });
   });
 
@@ -84,6 +89,22 @@ void main() {
       for (final pct in [50, 100, 130]) {
         expect(await line(t, 12, pct), startsWith('Always Net.'));
       }
+    });
+  });
+
+  group('what each variant is called', () {
+    // One map behind three labels — the setup title, the hub's Edit button
+    // and the leaderboard tab, which the SERVER names from
+    // `SoloGame.get_variant_display`. They have to agree with it.
+    test('the names match the multi-player games', () {
+      expect(soloGameName('stroke'), 'Stroke Play');
+      expect(soloGameName('nassau'), 'Nassau');
+      expect(soloGameName('match'), 'Match Play');
+    });
+
+    test('an unknown variant does not render an empty button', () {
+      expect(soloGameName(null), 'Solo');
+      expect(soloGameName('whatever'), 'Solo');
     });
   });
 }

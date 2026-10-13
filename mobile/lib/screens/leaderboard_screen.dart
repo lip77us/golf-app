@@ -8,6 +8,7 @@ import '../game_catalog.dart';
 import '../game_colors.dart';
 import '../utils/match_notation.dart';
 import '../utils/nassau_team_style.dart';
+import '../widgets/solo_board.dart';
 import '../widgets/forty_balls_board.dart';
 import '../widgets/banker_board.dart';
 import '../widgets/golf_app_bar.dart';
@@ -975,6 +976,11 @@ class _GameView extends StatelessWidget {
         // The same board — see _IrishRumbleView. No cup branch: a cup round
         // scores head-to-head, and Better Ball is a field competition.
         return _IrishRumbleView(data: data, betterBall: true);
+      case 'solo':
+        // One golfer against par: no standings to rank, so the board is the
+        // play screen's own three read-outs. Without this case the tab fell
+        // through to `_RawJsonView` and printed the payload.
+        return SoloBoard(data: data);
       case 'hot_spot':
         // Its own view rather than _IrishRumbleView's: the board is the same
         // shape, but the CARD is the game — anchor order down the rows, with

@@ -225,11 +225,27 @@ class HalvedSegmented<T> extends StatelessWidget {
   final T selected;
   final ValueChanged<T> onChanged;
 
+  /// A fixed width for one segment, in pixels. Null (the default for every
+  /// segment) shares the row equally, which is what every caller but one
+  /// wants.
+  ///
+  /// The exception is a bar mixing words with numbers: "Who's playing?" runs
+  /// `Solo · 2 · 3 · 4 · Across groups`, and five equal segments leave
+  /// "Across groups" wrapping onto two lines while the digits sit in 68px of
+  /// space each. The numbers are pinned narrow and the words get the room.
+  final double? Function(T value)? segmentWidth;
+
+  /// Relative width of the segments that are NOT fixed. Default 10 for all,
+  /// so leaving it out divides the remainder equally.
+  final int Function(T value)? segmentFlex;
+
   const HalvedSegmented({
     super.key,
     required this.segments,
     required this.selected,
     required this.onChanged,
+    this.segmentWidth,
+    this.segmentFlex,
   });
 
   @override
@@ -243,10 +259,18 @@ class HalvedSegmented<T> extends StatelessWidget {
       child: Row(
         children: [
           for (final s in segments)
-            Expanded(
-              child: _seg(s.value == selected, s.label, s.icon,
-                  () => onChanged(s.value)),
-            ),
+            if (segmentWidth?.call(s.value) case final w?)
+              SizedBox(
+                width: w,
+                child: _seg(s.value == selected, s.label, s.icon,
+                    () => onChanged(s.value)),
+              )
+            else
+              Expanded(
+                flex: segmentFlex?.call(s.value) ?? 10,
+                child: _seg(s.value == selected, s.label, s.icon,
+                    () => onChanged(s.value)),
+              ),
         ],
       ),
     );

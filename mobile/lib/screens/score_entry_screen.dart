@@ -74,6 +74,7 @@ import '../widgets/team_splitter_4.dart';
 import '../widgets/stroke_dots.dart';
 import '../widgets/pinned_hole_grid.dart';
 import '../widgets/combo_tee_chip.dart';
+import '../widgets/solo_board.dart';
 import '../utils/nine_totals.dart';
 import 'share_watch_link_screen.dart';
 
@@ -349,6 +350,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         rp.skinsSummary != null) {
       futures.add(rp.loadSkins(widget.foursomeId));
     }
+    // Solo is round-level too — one golfer, one group, one payload. Loaded
+    // whenever any of the three variants is on, because they are one engine
+    // and the summary names which reading it carries.
+    if (soloVariantOf(games) != null) {
+      final rid = rp.round?.id;
+      if (rid != null) futures.add(rp.loadSolo(rid));
+    }
     // Hot Spot is round-level — the anchor plan for every group rides in one
     // payload, and the banner needs it on first paint: a golfer standing on
     // the tee is asking whose hole it is.
@@ -517,6 +525,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // (skins / stableford / stroke play) only drive it when they ARE the
     // primary; otherwise they compute their own net server-side.
     final primary = resolvePrimary(rp.round?.primaryGame, games);
+    // **Solo first**, because it is always Net at its own allowance and that
+    // allowance may be ABOVE 100% — the only game in the app where it can.
+    // Falling through to the round default (net 100%) drew a stroke a 90%
+    // solo round does not give, and withheld one at 110%.
+    if (soloVariantOf(games) != null && rp.soloSummary != null) {
+      return ('net',
+          (rp.soloSummary!['net_percent'] as num?)?.toInt() ?? 100);
+    }
     if ((primary == 'low_net_round' || primary == 'low_net') &&
         rp.lowNetConfig != null) {
       final mode = rp.lowNetConfig!['handicap_mode'] as String? ?? 'net';
@@ -1884,6 +1900,21 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
 
   // ── App bar title ────────────────────────────────────────────────────────────
 
+  /// `Nassau — Net 95%` on a solo round.
+  ///
+  /// The allowance is in the title because it is the ONLY setting a solo
+  /// round has, and the one thing a golfer who gave himself 110% should be
+  /// reminded of while he is beating par.
+  String? _soloTitle(List<String> games, RoundProvider rp) {
+    final variant = soloVariantOf(games);
+    if (variant == null) return null;
+    final name = gameDisplayName(games.firstWhere(
+        (g) => g.startsWith('solo_'),
+        orElse: () => GameIds.soloStroke));
+    final pct = (rp.soloSummary?['net_percent'] as num?)?.toInt();
+    return pct == null ? name : '$name — Net $pct%';
+  }
+
   String _appBarTitle(List<String> games, NassauSummary? nas, SkinsSummary? sk) {
     final parts = <String>[];
     for (final g in games) {
@@ -2475,7 +2506,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               : () => Navigator.of(context).maybePop(),
         ),
         title: Text(
-          _appBarTitle(games, nas, skins),
+          _soloTitle(games, rp) ?? _appBarTitle(games, nas, skins),
           // **Demoted to 14 bold when the ribbon is there.** A golfer
           // knows which game he is playing; he does not know where he
           // stands. Still a title — just no longer the loudest thing.
@@ -2884,6 +2915,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                games.contains('singles_18') ||
                games.contains('singles_nassau')))
             _CupSinglesStatusBar(data: mpData),
+          // Solo's one reading, above the pager — the match, or the net
+          // total. `handoff-solo-games`.
+          if (soloVariantOf(games) != null &&
+              rp.soloSummary?['configured'] == true)
+            SoloStatusBar(solo: rp.soloSummary!),
           // (Irish Rumble balls-counted banner + borrowed-4th row moved to the
           // TOP of the entry body — see _buildBody — to match the Pink Ball
           // screen; they no longer live in this footer.)
@@ -3170,6 +3206,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                     summary: rp.tripleCupSummary!, hole: _selectedHole),
               // Active hole score card
               _HoleScoreCard(
+                solo: soloVariantOf(games) != null,
                 bankerSummary: resolvePrimary(
                         rp.round?.primaryGame, games) == GameIds.banker
                     ? rp.bankerSummary
@@ -3308,6 +3345,20 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                   );
                 })(),
               ),
+
+              // **Solo: what the hole did, then the card.** The handoff's
+              // order, and the reason for it is that the sentence is about
+              // the hole just entered while the card is about the round — a
+              // golfer reads down from the hole he is standing on.
+              if (soloVariantOf(games) != null &&
+                  rp.soloSummary?['configured'] == true) ...[
+                const SizedBox(height: 6),
+                SoloHoleLine(
+                  hole: rp.soloHole(_selectedHole),
+                  variant: soloVariantOf(games)!,
+                ),
+                SoloScorecard(solo: rp.soloSummary!),
+              ],
 
               // Stableford running-points band — only when Stableford is the
               // primary (as a side game it shows on the leaderboard, not here).
@@ -3553,7 +3604,15 @@ class _HoleScoreCard extends StatelessWidget {
   /// the viewer can't manage the foursome (not TD / not the scorer).
   final void Function(Membership)?     onWithdrawTap;
 
+  /// A solo round — one golfer, and the opponent is par.
+  ///
+  /// Only the name's colour depends on it: blue against par's red, which is
+  /// the pairing the Won row on the card below reads by. See
+  /// `widgets/solo_board.dart` for why red is a side here and not a loss.
+  final bool solo;
+
   const _HoleScoreCard({
+    this.solo = false,
     this.anchorId,
     required this.holeData,
     required this.holeNumber,
@@ -3648,6 +3707,9 @@ class _HoleScoreCard extends StatelessWidget {
   static final _kMatchPlayP2Color = GameColors.team2; // orange
 
   Color? _nameColorFor(Membership m, int hole) {
+    // Solo first, and it can be: a solo round has one golfer and none of the
+    // games below it.
+    if (solo) return soloGolfer;
     // Match Play single-elim: per-match green/blue based on player1
     // vs player2 slot in the match covering [hole].
     final mp = matchPlayData;

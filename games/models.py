@@ -4206,6 +4206,14 @@ class SoloGame(models.Model):
                      validators=[MinValueValidator(50),
                                  MaxValueValidator(130)],
                      help_text='Handicap allowance, 50–130%. May exceed 100%.')
+    # Nassau only, and an extra MATCH rather than an extra bet — there is no
+    # stake to double. Stored for every variant so switching between them
+    # does not lose the switch. Off by default, as `press_mode` is in a real
+    # Nassau: a press is something a group opts into.
+    auto_press   = models.BooleanField(
+                     default=False,
+                     help_text='Nassau: a press fires at 2, 4, 6 and 8 down '
+                               'to par, running to the end of that nine.')
     created_at   = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

@@ -2537,16 +2537,19 @@ class ApiClient {
     return Map<String, dynamic>.from(d as Map);
   }
 
-  /// Two fields, and that is the whole game. No handicap mode (always net)
-  /// and no stake (always for fun) — see `SoloGame`.
+  /// Three fields, and that is the whole game. No handicap mode (always net)
+  /// and no stake (always for fun) — see `SoloGame`. `autoPress` is read by
+  /// the Nassau alone; the other two variants store it and ignore it.
   Future<Map<String, dynamic>> postSoloSetup(
     int roundId, {
     required String variant,
     required int netPercent,
+    bool autoPress = false,
   }) async {
     final d = await _post('/rounds/$roundId/solo/setup/', {
       'variant': variant,
       'net_percent': netPercent,
+      'auto_press': autoPress,
     });
     return Map<String, dynamic>.from(d as Map);
   }

@@ -981,6 +981,35 @@ class RoundProvider extends ChangeNotifier {
     }
   }
 
+  // ── Solo ────────────────────────────────────────────────────────────────
+  // Round-level, like Hot Spot: a solo round has one golfer and one group, so
+  // there is nothing to key by foursome. Held as the raw map — the three
+  // variants are one payload with one of three readings on it, and a model
+  // class per reading would be three classes for one engine.
+
+  Map<String, dynamic>? _solo;
+  Map<String, dynamic>? get soloSummary => _solo;
+
+  /// The row for one hole of the solo card, keyed by hole NUMBER.
+  Map<String, dynamic>? soloHole(int hole) {
+    for (final h in (_solo?['holes'] as List? ?? const [])) {
+      if ((h as Map)['hole'] == hole) return Map<String, dynamic>.from(h);
+    }
+    return null;
+  }
+
+  /// Non-fatal on network errors, so the entry screen keeps working offline.
+  Future<void> loadSolo(int roundId) async {
+    try {
+      _solo = await _client.getSoloResult(roundId);
+      notifyListeners();
+    } on NetworkException {
+      // Offline — keep whatever we had.
+    } catch (e) {
+      debugPrint('loadSolo error: $e');
+    }
+  }
+
   /// Replace the cached Survivor summary directly (e.g. after a setup POST
   /// returns a fresh one) so the screen repaints without a round-trip.
   void setSurvivorSummary(SurvivorSummary summary) {

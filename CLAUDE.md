@@ -4557,3 +4557,92 @@ and fails if anything is stale or wrong (for CI).
   50–165, redirecting links, orphan pages.
 - No `aggregateRating` in the app schema on purpose — never fabricate ratings;
   Google's app rich result needs real review data.
+
+## Solo games — one golfer, and the opponent is par
+
+`handoff-solo-games`. Three variants off one engine (`services/solo.py`,
+`games.SoloGame`): **Stroke Play** (net total against par), **Nassau** (front,
+back and all 18, each a match against par) and **Match Play** (one 18-hole
+match, closing score when it is decided early). A hole against par is
+**net under = won, net = halved, net over = lost**.
+
+**Always Net, and always for fun.** There is no `handicap_mode` — a solo game
+against par in gross is stroke play with extra words, and the allowance is the
+whole point of playing par. `net_percent` is the only setting and it runs
+**50–130%**: above 100 is deliberate and unique in the app, because a golfer
+who wants par beatable gives himself more and nobody is paying. No stake, no
+entry fee, no payout table, nothing in `round_settlement`.
+
+**Par is not a player.** No phantom, no second card, no membership — every
+hole is compared with `hole.par`. A phantom would need a handicap, a tee and a
+place in every grouping rule in the app, to represent a number the scorecard
+already prints.
+
+- **`sizes: {1}`** is what keeps the three off every other picker: the casual
+  screen filters on the size segment, so they appear under **Solo** (first in
+  *Who's playing?*) and nowhere else. Their display names deliberately match
+  the multi-player games — a golfer on his own is still playing Stroke Play —
+  and no size filter matches both, so the two can never be shown together.
+- **One `solo` block for all three** on the leaderboard
+  (`games['solo']`, labelled with the game's own name), and the three slugs are
+  stripped from the leaderboard's `active_games` the way `dream_round` is:
+  leaving one in gave a solo Nassau round TWO tabs, the board and an empty
+  `solo_nassau` that `_RawJsonView` printed as the payload. A solo round also
+  gets **no generic Stroke Play tab** — a field of one is a single row with a
+  $0 payout, which reads as a fault.
+
+### Auto press (Nassau only) — Paul, 13 Oct 2026
+`SoloGame.auto_press` (`games/0094`), **off by default** as `press_mode` is in
+a real Nassau. A press here is an extra **MATCH, not an extra bet**: there is
+no stake to double, so what it buys is a way back into a nine already lost.
+Fires when the golfer goes **2, 4, 6 or 8 DOWN**, each level once, starting the
+NEXT hole and running to the end of that nine — the same levels and the same
+next-hole start as `services/nassau.AUTO_TOP_THRESHOLDS`, so nobody has to
+learn a second rule. **Par never presses**: a two-sided Nassau fires on ±2
+because either side may be the one losing and either may call it, so a golfer 2
+UP presses nothing and the levels are one-directional. Presses belong to the
+two NINES, never the overall bet. Nothing is stored — a press is derived on
+every read, so correcting a 6 to a 4 un-fires one.
+
+### No dedicated play screen — it plays through score entry
+One golfer with no per-hole decision is exactly what `score_entry_screen`
+already does, and a dedicated screen would have been ~600 lines of duplicated
+entry machinery (pending scores, the offline overlay, withdrawal, the combo-tee
+chip) for three read-outs. Those three read-outs are
+`widgets/solo_board.dart`: `SoloStatusBar` (in the bottom bar above the pager,
+beside `_CupSinglesStatusBar`), `SoloHoleLine` (under the hole card) and
+`SoloScorecard`. `SoloBoard` in the same file is the leaderboard tab — a solo
+round has no standings, so the board is those same three pieces.
+- The app bar reads **`Nassau — Net 95%`** (`_soloTitle`): the allowance is the
+  only setting the game has, and the one thing a golfer who gave himself 110%
+  should be reminded of while he is beating par.
+- **Red is a SIDE here, not a loss** — a deliberate deviation from
+  `docs/color-standard.md`. Par is the opponent, the handoff names its colour,
+  and the Won row's two chips are both the letter **P** (Paul / Par) told apart
+  by colour alone. Quota Nassau already draws its sides blue and red.
+- `HoleGridFooterRow` gained **`fill`** for that row: a tint drawn as a chip
+  inside the grid's own box, so a caller can mark a hole without being handed a
+  widget builder it could get the geometry wrong with.
+- `HoleGridScorecard` gained `parColor` / `playerColor`, null on every other
+  card — the other 18 read par as a baseline, and colouring it would say
+  something untrue about it.
+
+### Four defects found building it
+- **`setup_solo` left the caller's Round holding a stale `solo_game`.**
+  Creating one populates that reverse cache, so a SECOND setup made
+  `solo_summary(round_obj)` — which the setup POST calls on that very instance
+  — answer with the settings the golfer had just replaced.
+- **Start Round passed the ROUND id to `/score-entry`, which wants a
+  FOURSOME id.** The setup payload now carries `foursome_id`, as the
+  stableford screen reads it off the loaded round.
+- **The hub had no way back in**, so an allowance typed on the 1st tee was the
+  allowance for the round. Solo is round-level, so it joins
+  `_roundLevelEditTargets`; `configured_games` reports `solo_<variant>` so the
+  button says Edit rather than Set up.
+- **The hub's route passes no variant**, so the screen reads the STORED one.
+  Defaulting there would re-open a Nassau round titled Stroke Play and save
+  that — changing the game under a round being played.
+
+Tests: `scoring/tests/test_solo.py` (33), `api/test_solo.py` (18),
+`mobile/test/solo_board_test.dart` (15), `mobile/test/solo_setup_test.dart`
+(12).

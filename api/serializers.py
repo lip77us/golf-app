@@ -684,6 +684,13 @@ class FoursomeSerializer(serializers.ModelSerializer):
             games.append('stableford')
         except ObjectDoesNotExist:
             pass
+        # Solo reports its own VARIANT's slug, because that is what the hub
+        # and the entry screen hold — `solo_nassau`, not `solo`. One row, one
+        # of three names.
+        try:
+            games.append(f'solo_{rnd.solo_game.variant}')
+        except ObjectDoesNotExist:
+            pass
         return games
 
     # Custom group name + the resolved label ("<name>" or "Group N").
@@ -1670,6 +1677,9 @@ class SoloSetupSerializer(serializers.Serializer):
                       choices=['stroke', 'nassau', 'match'], default='stroke')
     net_percent = serializers.IntegerField(min_value=50, max_value=130,
                                            default=100)
+    # Nassau only; the other two variants store it and ignore it. A press
+    # here opens another MATCH against par, not another bet.
+    auto_press  = serializers.BooleanField(default=False)
 
 
 class HotSpotSetupSerializer(serializers.Serializer):

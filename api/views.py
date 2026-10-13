@@ -569,6 +569,11 @@ def _scorecard_share_url(foursome) -> str:
     return f'{base}/watch/{token}/scorecard/?g={foursome.group_number}'
 
 
+#: The three solo variants. One engine, one config and one leaderboard block
+#: (`games['solo']`), so the slugs themselves never become tabs.
+_SOLO_GAMES = frozenset({'solo_stroke', 'solo_nassau', 'solo_match'})
+
+
 def _build_leaderboard(round_obj: Round) -> dict:
     """Call each active game's summary and return a dict keyed by game type."""
     active_games = round_obj.active_games or []
@@ -649,6 +654,7 @@ def _build_leaderboard(round_obj: Round) -> dict:
             **low_net_round_summary(round_obj),
         }
     elif not ({'triple_cup', 'scramble'} & set(active_games)) \
+            and not _SOLO_GAMES & set(active_games) \
             and not _is_team_play_round(round_obj):
         # Every individual-ball round (casual OR tournament) gets a Low Net
         # "scores" tab — it's the only place to see each player's actual score,
@@ -1243,7 +1249,12 @@ def _leaderboard_active_games(round_obj, games_dict: dict) -> list:
     #
     # The tournament board still reads the ROUNDS' lists to decide the event
     # plays it, which is a different question asked one level up.
-    active = [g for g in (round_obj.active_games or []) if g != 'dream_round']
+    # **The three solo slugs are not tabs either**, for the same reason: the
+    # board is ONE `solo` block for all three variants, so leaving the slug in
+    # gave a solo Nassau round two tabs — `solo`, with the card, and
+    # `solo_nassau`, with nothing in the games dict to draw.
+    active = [g for g in (round_obj.active_games or [])
+              if g != 'dream_round' and g not in _SOLO_GAMES]
     for key in games_dict:
         # 'settlement' is a derived cross-game summary, not a real game. Keep it
         # OUT of active_games so older clients (which tab off active_games and
@@ -9207,12 +9218,18 @@ class SoloSetupView(APIView):
             'configured' : cfg is not None,
             'variant'    : cfg.variant if cfg else 'stroke',
             'net_percent': cfg.net_percent if cfg else 100,
+            'auto_press' : cfg.auto_press if cfg else False,
             # The setup screen names the golfer and his course handicap, and
             # derives the stroke count from them — sent here so it needs no
             # second request to write its one sentence.
             'player_name'     : m.player.name if m else '',
             'course_handicap' : m.course_handicap if m else None,
             'tee_name'        : (m.tee.tee_name if m and m.tee_id else ''),
+            # Score entry is addressed by FOURSOME, and a solo round has
+            # exactly one — sent here so Start Round does not have to load the
+            # whole round to find it, and cannot reach for the round id
+            # instead (which is a different number and a different foursome).
+            'foursome_id'     : fs.id if fs else None,
         })
 
     def post(self, request, pk):
@@ -9222,7 +9239,8 @@ class SoloSetupView(APIView):
         d = ser.validated_data
         from services.solo import setup_solo, solo_summary
         setup_solo(round_obj, variant=d['variant'],
-                   net_percent=d['net_percent'])
+                   net_percent=d['net_percent'],
+                   auto_press=d['auto_press'])
         return Response(solo_summary(round_obj),
                         status=status.HTTP_201_CREATED)
 

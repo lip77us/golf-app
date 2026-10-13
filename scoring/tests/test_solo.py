@@ -140,7 +140,8 @@ class NassauTests(_Base):
 
     def test_three_matches_against_par(self):
         d = self.s()['nassau']
-        self.assertEqual(sorted(d), ['back', 'front', 'overall'])
+        for key in ('front', 'back', 'overall'):
+            self.assertIn(key, d)
         self.assertEqual(d['front']['holes'], 9)
         self.assertEqual(d['overall']['holes'], 18)
 
@@ -160,6 +161,133 @@ class NassauTests(_Base):
         d = self.s()['nassau']
         self.assertEqual(d['front']['up'], 0)
         self.assertLess(d['back']['up'], 0)
+
+
+class AutoPressTests(_Base):
+    """Paul: "put autopress as an option on Nassau."
+
+    A press here is an extra MATCH, not an extra bet — there is no stake to
+    double, so what it buys is a way back into a nine you have already lost.
+    Fires at 2, 4, 6 and 8 down, each once, starting the NEXT hole and
+    running to the end of that nine: the same rule as a real Nassau
+    (`services/nassau.AUTO_TOP_THRESHOLDS`) so nobody has to learn a second
+    one.
+
+    With CH 12 on this card (par 4, stroke index 1..18) holes 1-12 get a
+    stroke, so a 6 loses a hole on the front, a 5 halves it and a 4 wins it.
+    """
+    variant = SoloGame.Variant.NASSAU
+
+    def setUp(self):
+        super().setUp()
+        setup_solo(self.round, variant=self.variant, net_percent=100,
+                   auto_press=True)
+
+    def presses(self, nine='front'):
+        return self.s()['nassau'][nine]['presses']
+
+    def test_it_is_off_unless_it_is_asked_for(self):
+        """Default off, as `press_mode` is in a real Nassau: a press is
+        something a group opts into, and solo's whole design is one slider."""
+        setup_solo(self.round, variant=self.variant, net_percent=100)
+        self.play(1, 6)
+        self.play(2, 6)
+        self.assertEqual(self.presses(), [])
+        self.assertFalse(self.s()['nassau']['auto_press'])
+
+    def test_a_press_fires_at_two_down_and_starts_on_the_next_hole(self):
+        self.play(1, 6)
+        self.assertEqual(self.presses(), [])        # one down presses nothing
+        self.play(2, 6)
+        p, = self.presses()
+        self.assertEqual(p['trigger_hole'], 2)
+        self.assertEqual(p['start'], 3)
+        self.assertEqual(p['end'], 9)
+        self.assertEqual(p['holes'], 7)
+
+    def test_the_press_is_its_own_match(self):
+        """The nine keeps its margin; the press counts only its own holes."""
+        self.play(1, 6)
+        self.play(2, 6)
+        self.play(3, 4)
+        self.play(4, 4)
+        d = self.s()['nassau']['front']
+        self.assertEqual(d['up'], 0)                # two lost, two won
+        self.assertEqual(d['presses'][0]['up'], 2)  # both wins are the press's
+
+    def test_each_level_fires_once(self):
+        """Two down, back to one, two down again — still one press. Going on
+        to four down opens a second."""
+        self.play(1, 6)
+        self.play(2, 6)
+        self.play(3, 4)                             # back to one down
+        self.play(4, 6)                             # two down again
+        self.assertEqual(len(self.presses()), 1)
+        self.play(5, 6)
+        self.play(6, 6)                             # four down
+        self.assertEqual(len(self.presses()), 2)
+        self.assertEqual(self.presses()[1]['start'], 7)
+
+    def test_par_never_presses(self):
+        """The one departure from the real game. A two-sided Nassau fires on
+        plus or minus 2 because either side may be the one losing and either
+        may call it; par has no agency, so a golfer two UP presses nothing."""
+        self.play(1, 4)
+        self.play(2, 4)
+        self.assertEqual(self.s()['nassau']['front']['up'], 2)
+        self.assertEqual(self.presses(), [])
+
+    def test_the_last_hole_of_a_nine_presses_nothing(self):
+        """Nothing left to press over, so no press — not an empty one."""
+        self.play(8, 6)
+        self.play(9, 6)
+        self.assertEqual(self.presses(), [])
+
+    def test_the_overall_bet_has_no_presses(self):
+        """Presses belong to the two nines, as in the real game."""
+        self.play(1, 6)
+        self.play(2, 6)
+        self.assertEqual(self.s()['nassau']['overall']['presses'], [])
+
+    def test_the_back_nine_presses_on_its_own(self):
+        """And its press cannot reach past the 18th. Holes 13-18 get no
+        stroke at CH 12, so a 5 is what loses one there."""
+        self.play(10, 6)
+        self.play(11, 6)
+        self.assertEqual(self.presses('front'), [])
+        p, = self.presses('back')
+        self.assertEqual(p['start'], 12)
+        self.assertEqual(p['end'], 18)
+        self.play(13, 5)                            # no stroke → net 5 → lost
+        self.assertEqual(self.presses('back')[0]['up'], -1)
+
+    def test_a_press_closes_out_like_any_match(self):
+        self.play(1, 6)
+        self.play(2, 6)
+        for h in range(3, 9):                       # six up with one to play
+            self.play(h, 4)
+        self.assertIsNotNone(self.presses()[0]['decided'])
+        self.assertIn('&', self.presses()[0]['decided'])
+
+    def test_a_corrected_score_un_fires_a_press(self):
+        """Nothing is stored: a press is derived from the holes on every read,
+        so a 6 entered by mistake on the 2nd does not leave a press behind."""
+        self.play(1, 6)
+        self.play(2, 6)
+        self.assertEqual(len(self.presses()), 1)
+        self.play(2, 4)                             # it was a 4
+        self.assertEqual(self.presses(), [])
+
+    def test_the_switch_survives_a_change_of_variant(self):
+        """Stored for every variant and read only by the Nassau, so a golfer
+        who tries Match Play and comes back finds his switch where it was."""
+        setup_solo(self.round, variant=SoloGame.Variant.MATCH,
+                   net_percent=100, auto_press=True)
+        self.round.refresh_from_db()
+        self.assertNotIn('nassau', self.s())
+        setup_solo(self.round, variant=self.variant, net_percent=100,
+                   auto_press=True)
+        self.assertTrue(self.s()['nassau']['auto_press'])
 
 
 class MatchPlayTests(_Base):

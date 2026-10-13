@@ -30,6 +30,16 @@ class HoleGridFooterRow {
   /// The colour of that cell's text. Null takes the ordinary one.
   final Color? Function(int hole)? colour;
 
+  /// A tint behind the cell, drawn as a small chip inside the grid's own box.
+  ///
+  /// Solo's Won row needs it: a blue P on a hole the golfer took and a red P
+  /// on one par took, told apart by colour alone, which at 11px flat text is
+  /// not enough to read. Returning null for a hole leaves the ordinary flat
+  /// cell, so a row can chip some holes and not others. The grid still owns
+  /// the box — a caller handed a widget builder here would be able to get the
+  /// geometry wrong, which is the whole reason this class exists.
+  final Color? Function(int hole)? fill;
+
   /// The OUT / IN / TOT slot. Null leaves it blank — a row with no nine total
   /// says so with a gap rather than a made-up number.
   final String? Function(List<int> holes)? summary;
@@ -38,6 +48,7 @@ class HoleGridFooterRow {
     required this.label,
     required this.text,
     this.colour,
+    this.fill,
     this.summary,
   });
 }
@@ -77,6 +88,16 @@ class HoleGridScorecard extends StatefulWidget {
   /// Rows under the golfers, inside the same grid — see [HoleGridFooterRow].
   final List<HoleGridFooterRow> footerRows;
 
+  /// Tint for the Par row and for the golfers' rows.
+  ///
+  /// Solo is the only card where par is an OPPONENT rather than a reference,
+  /// so it is the only one that colours them: red par against a blue golfer,
+  /// which is also how the Won row's two "P" chips are told apart. Null
+  /// everywhere else, which is every other board — they read par as a
+  /// baseline and colouring it would say something untrue about it.
+  final Color? parColor;
+  final Color? playerColor;
+
   const HoleGridScorecard({
     super.key,
     required this.holes,
@@ -85,6 +106,8 @@ class HoleGridScorecard extends StatefulWidget {
     this.legend = 'green = skin winner',
     this.holesInPlay = const [],
     this.footerRows = const [],
+    this.parColor,
+    this.playerColor,
   });
 
   @override
@@ -153,6 +176,31 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
   void dispose() {
     _ctrl.dispose();
     super.dispose();
+  }
+
+  /// One footer cell — flat text, or the chip when the row tints that hole.
+  ///
+  /// 10px at weight 800 on a 4px-radius tint, which is the Solo card's Won
+  /// row: two "P"s, one for Paul and one for Par, separated by colour only.
+  Widget _footerCell(ThemeData theme, HoleGridFooterRow r, int h) {
+    final text = r.text(h) ?? '';
+    final fg   = r.colour?.call(h);
+    final bg   = r.fill?.call(h);
+    if (text.isEmpty || bg == null) {
+      return Text(text,
+          style: theme.textTheme.labelSmall
+              ?.copyWith(fontWeight: FontWeight.bold, color: fg));
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(text,
+          style: TextStyle(
+              fontSize: 10, fontWeight: FontWeight.w800, color: fg)),
+    );
   }
 
   @override
@@ -434,8 +482,8 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
               softWrap: false,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(fontWeight: FontWeight.w600),
+              style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w600, color: widget.playerColor),
             ),
           ),
         );
@@ -521,7 +569,10 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
             theme.colorScheme.surfaceContainerLow,
             textLabel('Par',
                 theme.textTheme.bodySmall?.copyWith(
-                    fontStyle: FontStyle.italic)),
+                    fontStyle: FontStyle.italic,
+                    color: widget.parColor,
+                    fontWeight:
+                        widget.parColor == null ? null : FontWeight.w700)),
             withTotals(parCell,
                 summary: (holes) => summaryCell('${parSum(holes)}')),
           );
@@ -586,10 +637,7 @@ class _HoleGridScorecardState extends State<HoleGridScorecard> {
                 (h) => SizedBox(
                   width: _cellW, height: _rowH,
                   child: Center(
-                    child: Text(r.text(h) ?? '',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: r.colour?.call(h))),
+                    child: _footerCell(theme, r, h),
                   ),
                 ),
                 summary: r.summary == null

@@ -16,11 +16,11 @@ library;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/section_card.dart';
+import '../widgets/solo_board.dart';
 
 /// Copy for "How it works", one paragraph per variant — the handoff's words.
 const _howItWorks = {
@@ -34,19 +34,6 @@ const _howItWorks = {
       'early; you can still finish the round.',
 };
 
-const _title = {
-  'stroke': 'Stroke Play',
-  'nassau': 'Nassau',
-  'match': 'Match Play',
-};
-
-/// Which variant a round's active games imply.
-String soloVariantOf(List<String> activeGames) {
-  if (activeGames.contains(GameIds.soloNassau)) return 'nassau';
-  if (activeGames.contains(GameIds.soloMatch)) return 'match';
-  return 'stroke';
-}
-
 class SoloSetupScreen extends StatefulWidget {
   final int roundId;
 
@@ -55,10 +42,16 @@ class SoloSetupScreen extends StatefulWidget {
   /// screen is titled after it — so it is passed rather than re-derived.
   final String variant;
 
+  /// Opened from the round hub to change the allowance mid-round rather than
+  /// from the create flow: Save and go back, instead of Start Round and into
+  /// score entry.
+  final bool returnToHub;
+
   const SoloSetupScreen({
     super.key,
     required this.roundId,
     required this.variant,
+    this.returnToHub = false,
   });
 
   @override
@@ -71,9 +64,25 @@ class _SoloSetupScreenState extends State<SoloSetupScreen> {
   String? _error;
 
   int _pct = 100;
+  bool _autoPress = false;
+
+  /// The variant actually in force.
+  ///
+  /// Seeded from the chip the golfer picked on the create screen, then
+  /// REPLACED by whatever the round has stored once it is configured. The hub
+  /// re-opens this screen to change the allowance and does not pass a variant
+  /// — without this, a Nassau round would re-open titled Stroke Play and the
+  /// save would change the game.
+  late String _variant = widget.variant;
   String _name = '';
   int? _ch;
   String _tee = '';
+
+  /// Score entry is addressed by FOURSOME, and a solo round has exactly one.
+  /// The setup payload names it so Start Round does not have to load the
+  /// round to find it — and so it cannot pass the ROUND id, which is a
+  /// different number pointing at somebody else's group.
+  int? _foursomeId;
 
   @override
   void initState() {
@@ -90,9 +99,14 @@ class _SoloSetupScreenState extends State<SoloSetupScreen> {
       if (!mounted) return;
       setState(() {
         _pct = (d['net_percent'] as num?)?.toInt() ?? 100;
+        _autoPress = d['auto_press'] == true;
+        if (d['configured'] == true && d['variant'] is String) {
+          _variant = d['variant'] as String;
+        }
         _name = (d['player_name'] as String?) ?? '';
         _ch = (d['course_handicap'] as num?)?.toInt();
         _tee = (d['tee_name'] as String?) ?? '';
+        _foursomeId = (d['foursome_id'] as num?)?.toInt();
         _loading = false;
       });
     } catch (e) {
@@ -100,23 +114,31 @@ class _SoloSetupScreenState extends State<SoloSetupScreen> {
     }
   }
 
-  /// Strokes at the current allowance — the number the sentence quotes.
-  ///
-  /// Rounded the same way the server allocates (`effective_hcp_for`), so the
-  /// screen cannot promise 13 and the card give 12.
-  int get _strokes => _ch == null ? 0 : ((_ch! * _pct) / 100).round();
-
   Future<void> _start() async {
     setState(() { _saving = true; _error = null; });
     try {
       await context.read<AuthProvider>().client.postSoloSetup(
             widget.roundId,
-            variant: widget.variant,
+            variant: _variant,
             netPercent: _pct,
+            autoPress: _autoPress,
           );
       if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed('/score-entry',
-          arguments: widget.roundId);
+      if (widget.returnToHub) {
+        Navigator.of(context).pop(true);
+        return;
+      }
+      // Straight to scoring, as every other setup screen does — there is no
+      // reconfigure step to come back for.
+      final fsId = _foursomeId;
+      if (fsId == null) {
+        // An older server that does not send it. Popping leaves the hub,
+        // which has its own way in; guessing a foursome id would not.
+        Navigator.of(context).pop(true);
+        return;
+      }
+      Navigator.of(context)
+          .pushReplacementNamed('/score-entry', arguments: fsId);
     } catch (e) {
       if (mounted) setState(() { _error = friendlyError(e); _saving = false; });
     }
@@ -125,7 +147,7 @@ class _SoloSetupScreenState extends State<SoloSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final name = _title[widget.variant] ?? 'Solo';
+    final name = soloGameName(_variant);
     return Scaffold(
       appBar: GolfAppBar(title: '$name — Setup'),
       body: _loading
@@ -199,9 +221,40 @@ class _SoloSetupScreenState extends State<SoloSetupScreen> {
                 ),
                 const SizedBox(height: 12),
 
+                // Nassau only. Nothing else in a solo round has a second
+                // setting, and nothing else can: a press is the one thing in
+                // this game that the golfer can want more of.
+                if (_variant == 'nassau') ...[
+                  SectionCard(
+                    title: 'Presses',
+                    child: SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _autoPress,
+                      onChanged: (v) => setState(() => _autoPress = v),
+                      title: const Text('Auto press at 2 down'),
+                      subtitle: Text(
+                        'A press opens on the next hole whenever you go 2, 4, '
+                        '6 or 8 down to par, and runs to the end of that '
+                        'nine. A way back into a nine you have lost — there '
+                        'is no stake to double, so it is another match, not '
+                        'another bet.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            height: 1.45),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
                 SectionCard(
                   title: 'How it works',
-                  child: Text(_howItWorks[widget.variant] ?? '',
+                  child: Text(
+                      (_howItWorks[_variant] ?? '') +
+                          (_variant == 'nassau' && _autoPress
+                              ? ' Go 2 down in a nine and a press opens on '
+                                  'the next hole.'
+                              : ''),
                       style: theme.textTheme.bodySmall
                           ?.copyWith(height: 1.45)),
                 ),
@@ -226,7 +279,9 @@ class _SoloSetupScreenState extends State<SoloSetupScreen> {
                         ? const SizedBox(
                             width: 20, height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Start Round'),
+                        : Text(widget.returnToHub
+                            ? 'Save'
+                            : 'Start Round'),
                   ),
                 ),
               ],

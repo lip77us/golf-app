@@ -21,8 +21,10 @@ hole is compared with `hole.par` directly. A phantom would need a handicap, a
 tee and a place in every grouping rule in the app, to represent a number the
 scorecard already prints.
 
-**No money.** There is no stake, no press and no settlement row, so none of
+**No money.** There is no stake and no settlement row, so none of
 `services/wager`, `services/payout` or `services/settlement` is involved.
+The Nassau may carry auto presses, which here are extra MATCHES rather than
+extra bets — a way back into a nine you have lost, costing nothing.
 That is why this file is short: strip the money out of a match-play engine
 and what is left is a comparison.
 """
@@ -141,18 +143,66 @@ def _match_over(rows):
     return up, decided, played
 
 
-def _nassau(holes):
+#: An auto press fires at each of these, once per nine, and the levels are
+#: NEGATIVE because they are read from the golfer's side — see `_presses`.
+_AUTO_PRESS_LEVELS = (-2, -4, -6, -8)
+
+
+def _presses(rows):
+    """Auto presses for ONE nine, from the golfer's side.
+
+    One fires when the golfer goes 2, 4, 6 or 8 DOWN to par — each level once
+    — and runs from the NEXT hole to the end of that nine, scored as its own
+    little match. Same levels and the same next-hole start as a real Nassau
+    (`services/nassau.AUTO_TOP_THRESHOLDS`), so a golfer who presses in his
+    Saturday game does not have to learn a second rule here.
+
+    **Par never presses**, which is the one place this departs from the real
+    game. A two-sided Nassau fires on ±2 because either side may be the one
+    losing and either may call it; par has no agency, so a golfer 2 UP
+    presses nothing and the levels are one-directional.
+
+    Presses belong to the two NINES only, never to the overall bet — again as
+    in the real game. Nothing is stored: a press is derived from the holes on
+    every read, so correcting a score on the 3rd un-fires a press that the
+    corrected score no longer earns.
+    """
+    out, fired, up = [], set(), 0
+    for i, h in enumerate(rows):
+        if h['result'] is None:
+            continue
+        up += 1 if h['result'] == 'won' else (-1 if h['result'] == 'lost' else 0)
+        remaining = rows[i + 1:]
+        # Nothing to press on the last hole of the nine.
+        if not remaining or up not in _AUTO_PRESS_LEVELS or up in fired:
+            continue
+        fired.add(up)
+        p_up, p_decided, p_thru = _match_over(remaining)
+        out.append({
+            'index': len(out) + 1,
+            'trigger_hole': h['hole'],
+            'start': remaining[0]['hole'],
+            'end': remaining[-1]['hole'],
+            'holes': len(remaining),
+            'up': p_up, 'decided': p_decided, 'thru': p_thru,
+        })
+    return out
+
+
+def _nassau(holes, auto_press: bool = False):
     """Front, back and overall, each a match against par.
 
     Split by POSITION in play order, not by hole number — a shotgun round's
     first nine is the first nine holes the golfer plays.
     """
     front, back = holes[:9], holes[9:18]
-    out = {}
+    out = {'auto_press': bool(auto_press)}
     for key, rows in (('front', front), ('back', back), ('overall', holes)):
         up, decided, played = _match_over(rows)
         out[key] = {'up': up, 'decided': decided, 'thru': played,
-                    'holes': len(rows)}
+                    'holes': len(rows),
+                    'presses': _presses(rows) if (
+                        auto_press and key != 'overall') else []}
     return out
 
 
@@ -185,7 +235,8 @@ def solo_summary(round_obj) -> dict:
         'for_fun': True,
     }
     if cfg.variant == SoloGame.Variant.NASSAU:
-        out['nassau'] = _nassau(holes)
+        out['auto_press'] = cfg.auto_press
+        out['nassau'] = _nassau(holes, auto_press=cfg.auto_press)
     elif cfg.variant == SoloGame.Variant.MATCH:
         up, decided, played = _match_over(holes)
         out['match'] = {'up': up, 'decided': decided, 'thru': played,
@@ -193,10 +244,23 @@ def solo_summary(round_obj) -> dict:
     return out
 
 
-def setup_solo(round_obj, *, variant: str, net_percent: int = 100):
-    """Create or update the round's solo game."""
+def setup_solo(round_obj, *, variant: str, net_percent: int = 100,
+               auto_press: bool = False):
+    """Create or update the round's solo game.
+
+    `auto_press` is stored whatever the variant, and read only by the Nassau
+    — a golfer who switches from Nassau to Match Play and back should find
+    his press switch where he left it.
+    """
     cfg, _ = SoloGame.objects.update_or_create(
         round=round_obj,
-        defaults={'variant': variant, 'net_percent': int(net_percent)},
+        defaults={'variant': variant, 'net_percent': int(net_percent),
+                  'auto_press': bool(auto_press)},
     )
+    # Drop the Round's cached `solo_game`. Creating one populates that cache,
+    # so on a SECOND setup the caller is left holding the old config — and
+    # the setup POST calls `solo_summary(round_obj)` on this very instance
+    # immediately afterwards, which would answer with the settings the golfer
+    # just replaced.
+    round_obj._state.fields_cache.pop('solo_game', None)
     return cfg

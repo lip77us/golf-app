@@ -6,6 +6,7 @@ import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import 'tee_times_screen.dart';
+import '../widgets/solo_board.dart';
 import '../widgets/cup_tally.dart';
 import '../widgets/error_view.dart';
 import '../widgets/game_chip.dart';
@@ -1080,6 +1081,18 @@ List<(String, String)> _roundLevelEditTargets(
   }
   if (roundActiveGames.contains('stableford')) {
     out.add(('/stableford-setup', label('stableford', 'Stableford')));
+  }
+  // Solo is round-level too, and it needed saying: without this the hub had
+  // no way back into the one setting a solo round has, so an allowance typed
+  // on the 1st tee was the allowance for the round.
+  //
+  // The variant is NOT passed in the args — the screen reads the stored one,
+  // because a route that defaulted it would open a Nassau round titled Stroke
+  // Play and SAVE that, silently changing the game.
+  final soloVariant = soloVariantOf(roundActiveGames);
+  if (soloVariant != null) {
+    final key = 'solo_$soloVariant';
+    out.add(('/solo-setup', label(key, soloGameName(soloVariant))));
   }
   return out;
 }
