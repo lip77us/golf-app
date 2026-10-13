@@ -82,6 +82,7 @@ from scoring.models import HoleScore
 from scoring.phantom import PhantomScoreProvider, get_algorithm, DEFAULT_ALGORITHM_ID
 
 from .serializers import (
+    SoloSetupSerializer,
     PlayerSerializer, PlayerCreateSerializer, TeeSerializer,
     TournamentSerializer, RoundSerializer, FoursomeSerializer,
     ScoreSubmitSerializer, RoundSetupSerializer,
@@ -753,6 +754,16 @@ def _build_leaderboard(round_obj: Round) -> dict:
             'label': 'Hot Spot',
             **hot_spot_summary(round_obj),
         }
+
+    # **Solo is one block for all three variants.** They are one engine and one
+    # config; the variant decides which reading rides along, and the label is
+    # the game's own name so the tab reads "Nassau", not "Solo".
+    if any(g in active_games for g in
+           ('solo_stroke', 'solo_nassau', 'solo_match')):
+        from services.solo import solo_summary
+        summary = solo_summary(round_obj)
+        if summary.get('configured'):
+            games['solo'] = {'label': summary['label'], **summary}
 
     if 'scramble' in active_games:
         from services.scramble import scramble_summary
@@ -9177,6 +9188,52 @@ class HotSpotSetupView(APIView):
             payouts       = d['payouts'],
         )
         return Response(self._config_dict(config), status=status.HTTP_200_OK)
+
+
+class SoloSetupView(APIView):
+    """
+    GET  /api/rounds/{id}/solo/setup/ — current config, or the defaults.
+    POST /api/rounds/{id}/solo/setup/ — create or update it.
+
+    Own-account: a solo round has one golfer and he is the organiser.
+    """
+    def get(self, request, pk):
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
+        cfg = getattr(round_obj, 'solo_game', None)
+        from services.solo import _solo_membership
+        fs = round_obj.foursomes.first()
+        m = _solo_membership(fs) if fs else None
+        return Response({
+            'configured' : cfg is not None,
+            'variant'    : cfg.variant if cfg else 'stroke',
+            'net_percent': cfg.net_percent if cfg else 100,
+            # The setup screen names the golfer and his course handicap, and
+            # derives the stroke count from them — sent here so it needs no
+            # second request to write its one sentence.
+            'player_name'     : m.player.name if m else '',
+            'course_handicap' : m.course_handicap if m else None,
+            'tee_name'        : (m.tee.tee_name if m and m.tee_id else ''),
+        })
+
+    def post(self, request, pk):
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
+        ser = SoloSetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+        from services.solo import setup_solo, solo_summary
+        setup_solo(round_obj, variant=d['variant'],
+                   net_percent=d['net_percent'])
+        return Response(solo_summary(round_obj),
+                        status=status.HTTP_201_CREATED)
+
+
+class SoloResultView(APIView):
+    """GET /api/rounds/{id}/solo/ — the board: holes, and the one reading
+    that matches the variant."""
+    def get(self, request, pk):
+        round_obj = round_for_reader(request.user, pk)
+        from services.solo import solo_summary
+        return Response(solo_summary(round_obj))
 
 
 class HotSpotResultView(APIView):

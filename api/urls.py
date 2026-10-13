@@ -215,6 +215,8 @@ urlpatterns = [
     path('rounds/<int:pk>/better-ball/', views.BetterBallResultView.as_view(), name='api-better-ball-result'),
     path('rounds/<int:pk>/irish-rumble/setup/', views.IrishRumbleSetupView.as_view(), name='api-irish-rumble-setup'),
     path('rounds/<int:pk>/irish-rumble/', views.IrishRumbleResultView.as_view(), name='api-irish-rumble-result'),
+    path('rounds/<int:pk>/solo/setup/', views.SoloSetupView.as_view(),  name='api-solo-setup'),
+    path('rounds/<int:pk>/solo/',       views.SoloResultView.as_view(), name='api-solo-result'),
     path('rounds/<int:pk>/hot-spot/setup/', views.HotSpotSetupView.as_view(), name='api-hot-spot-setup'),
     path('rounds/<int:pk>/hot-spot/', views.HotSpotResultView.as_view(), name='api-hot-spot-result'),
     # Per-FOURSOME: the anchor order is the group's, set on its own first tee.

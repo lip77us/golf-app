@@ -1655,6 +1655,23 @@ class IrishRumbleSetupSerializer(serializers.Serializer):
         return attrs
 
 
+class SoloSetupSerializer(serializers.Serializer):
+    """POST /api/rounds/{id}/solo/setup/
+
+    Two fields, and that is the whole game. There is no handicap_mode: a solo
+    round against par is ALWAYS net, because gross against par is stroke play
+    with extra words and the allowance is what makes par a fair opponent.
+    There is no entry fee or payout table either — solo games are for fun.
+
+    `net_percent` may exceed 100, which no other game in the app allows. A
+    golfer who wants par beatable gives himself more, and nobody is paying.
+    """
+    variant     = serializers.ChoiceField(
+                      choices=['stroke', 'nassau', 'match'], default='stroke')
+    net_percent = serializers.IntegerField(min_value=25, max_value=150,
+                                           default=100)
+
+
 class HotSpotSetupSerializer(serializers.Serializer):
     """POST /api/rounds/{id}/hot-spot/setup/
 

@@ -118,8 +118,15 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   /// True if [m] is offered for the current group-size filter. "Across groups"
   /// shows only multi-foursome games; a numeric size shows single-foursome
   /// games that support that player count.
+  /// Solo is the one-golfer round, where the opponent is par.
+  bool get _isSolo => _sizeFilter == 'solo';
+
   bool _fitsSizeFilter(GameMeta m) {
     if (_sizeFilter == 'groups') return m.acrossGroups;
+    // `sizes: {1}` is only ever matched here, which is what keeps the three
+    // solo games off every other picker — and keeps the multi-player Stroke
+    // Play and Nassau, which share their names, out of this one.
+    if (_isSolo) return !m.acrossGroups && m.supportsSize(1);
     return !m.acrossGroups && m.supportsSize(int.parse(_sizeFilter));
   }
 
@@ -791,10 +798,25 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       );
       return;
     }
-    if (_playerTees.length < 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select at least 2 players.')),
-      );
+    // **Solo is one golfer, so the floor is one.** Everywhere else two is
+    // right — a game needs somebody to play against — and a solo round's
+    // opponent is par, which needs no seat. The server already allows a
+    // one-player foursome (`setup_round`'s explicit-group path takes sizes
+    // 1 to 4); this gate was the only thing in the way.
+    final floor = _isSolo ? 1 : 2;
+    if (_playerTees.length < floor) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(_isSolo
+            ? 'Pick the golfer who is playing.'
+            : 'Please select at least 2 players.'),
+      ));
+      return;
+    }
+    if (_isSolo && _playerTees.length > 1) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('A solo round is one golfer. Pick a group size above '
+            'to play with somebody.'),
+      ));
       return;
     }
     // Group capacity check — the server caps each group at 4 players.
@@ -952,7 +974,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                 expand: false,
                 // Players chosen → move to the dedicated tee step, filling in
                 // sex-based suggestions for review.
-                onPressed: _playerTees.length >= 2
+                onPressed: _playerTees.length >= (_isSolo ? 1 : 2)
                     ? () => setState(() {
                           _applyTeeSuggestions();
                           _step = 2;
@@ -1129,6 +1151,10 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           HalvedSegmented<String>(
             selected: _sizeFilter,
             segments: const [
+              // Solo first, and it flexes: it is a word among numbers, and
+              // the golfer choosing it is choosing a different KIND of round
+              // rather than a size.
+              (value: 'solo',   label: 'Solo',          icon: null),
               (value: '2',      label: '2',             icon: null),
               (value: '3',      label: '3',             icon: null),
               (value: '4',      label: '4',             icon: null),
@@ -1165,6 +1191,16 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               ],
             ),
           ),
+          // The one line a solo golfer needs: who he is playing. Sits under
+          // the chips because it explains all three of them at once.
+          if (_isSolo) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Solo games are played against par.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          ],
           if (_isPartial) ...[
             const SizedBox(height: 6),
             Text(
@@ -1177,7 +1213,13 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           // Side games — overlays when the primary allows them, plus capture
           // add-ons (Spots) that ride structure-owning primaries too.
           // sideGamesFor() encodes that, so just gate on the eligible list.
-          if (_primaryGame != null && _eligibleSideGames.isNotEmpty) ...[
+          //
+          // **Hidden entirely for Solo.** Every side game is a wager between
+          // golfers, and a solo round has one golfer and no stake. The
+          // eligible list would come back empty anyway; saying so here means
+          // the section never flickers in while a primary is being chosen.
+          if (!_isSolo &&
+              _primaryGame != null && _eligibleSideGames.isNotEmpty) ...[
             const SizedBox(height: 24),
             Text('Side games',
                 style: Halved.body(weight: FontWeight.w700, color: Halved.deepPine)

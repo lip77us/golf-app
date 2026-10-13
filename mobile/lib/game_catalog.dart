@@ -89,6 +89,14 @@ class GameIds {
   /// fixed in advance. One golfer anchors each hole and his score counts
   /// whatever it is; the team adds the best net of the other three.
   static const String hotSpot       = 'hot_spot';
+  // Solo — one golfer, and the opponent is par. Three variants, three chips,
+  // one engine and one config behind them (`services/solo.py`). They are
+  // separate ids rather than one `solo` with a setting because the handoff
+  // puts the choice on the create-round chips, where the golfer picks the
+  // GAME, not a mode inside a setup screen he has not reached yet.
+  static const String soloStroke   = 'solo_stroke';
+  static const String soloNassau   = 'solo_nassau';
+  static const String soloMatch    = 'solo_match';
   // Cup singles formats — two 1v1 matches per foursome.
   // singlesNassau: each match has F9/B9/Overall (pv × 6/foursome).
   // singles18:     each match is 18-hole overall only  (pv × 2/foursome).
@@ -828,6 +836,49 @@ const List<GameMeta> kGameCatalog = [
     // a slug with a builder and no flag is a card the phone never asks for.
     hasLiveActivity      : true,
   ),
+  // ── Solo ────────────────────────────────────────────────────────────────
+  //
+  // `sizes: {1}` is what keeps these off every other picker: the casual
+  // screen filters on the size segment, so they appear under Solo and
+  // nowhere else. Their display names deliberately match the multi-player
+  // games — a golfer on his own is still playing Stroke Play — and the two
+  // can never be shown together because no size filter matches both.
+  //
+  // No `moneyNote`: solo games are always for fun, and a money line would be
+  // the first thing to argue with.
+  GameMeta(
+    id          : GameIds.soloStroke,
+    displayName : 'Stroke Play',
+    casual      : true,
+    blurb       : 'Count every shot. Your score is your net total against par '
+                  'for the round.',
+    minPlayers  : 1,
+    maxPlayers  : 1,
+    sizes       : {1},
+  ),
+  GameMeta(
+    id          : GameIds.soloNassau,
+    displayName : 'Nassau',
+    casual      : true,
+    blurb       : 'A simple Nassau against par: the front nine, the back nine '
+                  'and all 18 are three matches. Beat par to win a hole, make '
+                  'par to halve it, go over to lose it.',
+    minPlayers  : 1,
+    maxPlayers  : 1,
+    sizes       : {1},
+  ),
+  GameMeta(
+    id          : GameIds.soloMatch,
+    displayName : 'Match Play',
+    casual      : true,
+    blurb       : 'An 18-hole match against par. Beat par to win the hole, '
+                  'make par to halve it, make bogey or worse to lose it. The '
+                  'match can be decided early; you can still finish the round.',
+    minPlayers  : 1,
+    maxPlayers  : 1,
+    sizes       : {1},
+  ),
+
 ];
 
 // ── Lookup helpers ────────────────────────────────────────────────────────────
