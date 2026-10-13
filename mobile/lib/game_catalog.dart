@@ -1061,6 +1061,28 @@ String? primaryGameOf(Iterable<String> active) {
   return list.firstWhere((g) => !sideOnly(g), orElse: () => list.first);
 }
 
+/// Side games for a "Who's playing?" filter value — `solo`, `2`, `3`, `4` or
+/// `groups`.
+///
+/// **It exists because `int.parse('solo')` throws**, and the throw landed
+/// inside a `setState`: the assignment above it had already happened, so the
+/// widget was never marked dirty and the tap did nothing at all. Every game
+/// chip on the solo filter was dead, reported from the picker. One function
+/// now owns the whole vocabulary of that control, so there is one place that
+/// has to know `solo` is not a number.
+///
+/// Solo offers NOTHING: one golfer against par has no side bet to carry, and
+/// the picker hides the section for him — this agrees with that rather than
+/// leaving two answers.
+List<GameMeta> sideGamesForFilter(String? primaryId, String sizeFilter,
+    {String? handicapMode}) {
+  if (primaryId == null || sizeFilter == 'solo') return const [];
+  final multiGroup = sizeFilter == 'groups';
+  final size = multiGroup ? 4 : (int.tryParse(sizeFilter) ?? 4);
+  return sideGamesFor(primaryId,
+      size: size, multiGroup: multiGroup, handicapMode: handicapMode);
+}
+
 /// The side games selectable alongside [primaryId] for a [size]-player round.
 ///
 /// Overlay accumulators (Skins/Stableford/Low Net) are offered only when the

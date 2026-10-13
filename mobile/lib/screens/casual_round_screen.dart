@@ -308,12 +308,8 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   }
 
   /// Side games eligible alongside the current primary + size filter.
-  List<GameMeta> get _eligibleSideGames {
-    final p = _primaryGame;
-    if (p == null) return const [];
-    final size = _sizeFilter == 'groups' ? 4 : int.parse(_sizeFilter);
-    return sideGamesFor(p, size: size, multiGroup: _sizeFilter == 'groups');
-  }
+  List<GameMeta> get _eligibleSideGames =>
+      sideGamesForFilter(_primaryGame, _sizeFilter);
 
   /// Pick (or re-pick) the PRIMARY game and prune any side games that are no
   /// longer valid for it.

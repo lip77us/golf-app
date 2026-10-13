@@ -107,4 +107,33 @@ void main() {
       expect(soloGameName('whatever'), 'Solo');
     });
   });
+
+  group('the size filter is a word as well as a number', () {
+    // `int.parse('solo')` throws, and the throw landed inside a `setState`:
+    // the assignment above it had already happened, so the widget was never
+    // marked dirty and the tap did nothing. EVERY game chip was dead on the
+    // solo filter, which is what it was reported as — not an exception, just
+    // a picker that would not pick.
+    test('solo does not throw, and offers nothing', () {
+      expect(sideGamesForFilter(GameIds.soloNassau, 'solo'), isEmpty);
+      expect(sideGamesForFilter(GameIds.skins, 'solo'), isEmpty);
+    });
+
+    test('no primary offers nothing, whatever the filter', () {
+      expect(sideGamesForFilter(null, '4'), isEmpty);
+      expect(sideGamesForFilter(null, 'solo'), isEmpty);
+    });
+
+    test('the numbers and groups are unchanged', () {
+      // The shipped behaviour is the point: this function was extracted, not
+      // written, so a four-ball must offer exactly what it offered before.
+      expect(sideGamesForFilter(GameIds.skins, '4').map((m) => m.id).toSet(),
+          sideGamesFor(GameIds.skins, size: 4).map((m) => m.id).toSet());
+      expect(
+          sideGamesForFilter(GameIds.skins, 'groups').map((m) => m.id).toSet(),
+          sideGamesFor(GameIds.skins, size: 4, multiGroup: true)
+              .map((m) => m.id)
+              .toSet());
+    });
+  });
 }
