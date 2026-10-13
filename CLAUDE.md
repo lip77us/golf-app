@@ -4758,3 +4758,63 @@ including the early close-out and the withdrawal that used to wedge it),
 `MatchTwoIsTheGroupsToPickTests`, which is older and covers the SETUP path's
 narrowing — re-posting all three segments, which is what Edit Configuration
 still does.
+
+## Multi-Group Skins — who shares a scorecard
+
+A group in a casual Multi-Group Skins round is a `Foursome`, which is a
+scorecard, which is **one person keeping the score**; the pool federates
+across them, which is the game. So the sizes are genuinely arbitrary.
+
+**Every selected golfer was seated solo, with no control to say otherwise.**
+`71cf970` (13 Jul 2026) replaced the per-golfer `G1 / G2` dropdown with
+automatic solo groups, on the feedback that the dropdown was easy to miss.
+Paul, 12 Oct 2026: that change was made for one specific round and he missed
+that it changed the design. His round that day was a 15-foursome shotgun whose
+pool was **one full foursome playing together, two individuals and a twosome —
+4, 1, 1, 2**. Neither "everyone solo" nor "fill groups of four" describes it.
+
+### A step, not a block
+`Groups` sits between Players and Tees and is shown **only for Multi-Group
+Skins** (`_hasGroupsStep`; the tee step becomes 3). It is a step because the
+thing being fixed is that the control could not be FOUND — a block under a
+roster list that scrolls is the same trap one layer down. Each group draws a
+header and its golfers, every golfer has a **Move** button, and the move sheet
+lists the other groups BY WHO IS ON THEM: the old dropdown offered `G1 / G2`,
+which says nothing about the only thing a golfer deciding this cares about.
+
+Solo stays the default on selection (most of a pool is spread across the
+field); the work is saying which few play together. Group NUMBERS can have
+gaps — moving the last golfer off card 2 leaves 1 and 3 — so the label comes
+from POSITION and the list never reads "Group 1, Group 3".
+
+### A login-less golfer can play, if somebody can score him
+The picker greyed out every non-Halved golfer for this game. The engine never
+required that — `services.multi_skins.valid_participant_ids` admits host-round
+members "(login-less OK)" — and it cannot describe the ordinary case: a guest
+in a foursome that has a scorer.
+
+Paul named two cases and they differ: **when skins is the only game being
+played** (this screen) a guest may join *"only when sharing a card with
+somebody on halved"*, because nobody else can enter his score; when skins is
+**attached to groups that already exist** (a linked round, a tournament
+foursome) the group already has a scorer and the question does not arise.
+
+So the grey-out is gone and the rule moved to the Groups step, where it is
+fixable: `utils/skins_cards.cardsProblem` names the golfer and blocks Next.
+**Two guests together are still stranded** — sharing a card with somebody who
+also cannot score it changes nothing.
+
+`cardsProblem` is also the gate at Create, replacing a second copy of the
+group-size check that lived there — and whose comment still described "a user
+could overstuff a group by manually reassigning", guarding a control that had
+not existed for three months.
+
+Tests: `mobile/test/skins_cards_test.dart` (11 — the sizes, the gap, and both
+halves of the scoring rule), `mobile/test/scorecard_groups_test.dart` (9 — the
+positional labels, the full group, and that the move sheet NAMES who is on
+each one) and `api/test_multi_skins_groups.py` (3 — the server takes 4/1/1/2,
+pads nobody into the short groups, and the pool scores across four different
+cards).
+
+**Not done:** changing the groups of a round that already exists. This is the
+create flow only; the hub has no equivalent for a casual round.

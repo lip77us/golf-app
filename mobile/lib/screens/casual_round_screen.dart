@@ -6,6 +6,8 @@ import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../theme/halved_brand.dart';
 import '../utils/create_casual_round.dart';
+import '../utils/skins_cards.dart';
+import '../widgets/scorecard_groups.dart';
 import '../utils/roster_sections.dart';
 import '../widgets/error_view.dart';
 import '../widgets/favorite_flag.dart';
@@ -170,17 +172,6 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       if (counts[g]! < 4) return g;
     }
     return sortedGroups.last + 1;
-  }
-
-  /// The lowest unused group number — Multi-Group Skins gives every player
-  /// their own group of one, so no two players share a group.
-  int _nextSoloGroup() {
-    final used = _playerGroups.values.toSet();
-    var g = 1;
-    while (used.contains(g)) {
-      g++;
-    }
-    return g;
   }
 
   @override
@@ -645,16 +636,15 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     // The logged-in player is always locked in as a participant.
     final authPlayer = context.read<AuthProvider>().player;
     final isLockedIn = authPlayer != null && player.id == authPlayer.id;
-    // Multi-Group Skins is Halved-only — a login-less golfer can't join
-    // (they'd have no way to be matched / to score). Grey them out; the invite
-    // button stays so they can be brought on.
-    final blockedNonHalved =
-        _multiGroup && !player.isOnApp && !isLockedIn;
-
+    // **A login-less golfer CAN join a skins pool.** He was greyed out here
+    // on a Halved-only, each-golfer-self-scores model — which the engine
+    // never required (`valid_participant_ids` admits host-round members
+    // "login-less OK") and which cannot describe the ordinary case: a guest
+    // playing in a foursome that has a scorer. The real rule is that
+    // somebody on his card has to be able to enter his score, and that is a
+    // question about the GROUPS, so it is asked and answered on that step.
     final scheme = Theme.of(context).colorScheme;
-    // Blocked golfers can't be ADDED, but one selected before the round
-    // switched to skins can still be taken off.
-    final locked = isLockedIn || (blockedNonHalved && !isSelected);
+    final locked = isLockedIn;
 
     void toggle() {
       _onPlayerToggle(player.id, !isSelected);
@@ -682,9 +672,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         Flexible(
           child: Text(
             player.name,
-            style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: blockedNonHalved ? scheme.onSurfaceVariant : null),
+            style: const TextStyle(fontWeight: FontWeight.w600),
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -720,9 +708,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           ),
         ],
       ]),
-      subtitle: Text(blockedNonHalved
-          ? 'Not on Halved — invite to add'
-          : 'Index ${player.handicapIndex}'),
+      subtitle: Text('Index ${player.handicapIndex}'),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         // Adding a golfer to the ROUND and adding him to your SHORTLIST are
         // different things, so the flag keeps its own 44pt target and its own
@@ -759,8 +745,13 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         // Multi-Group Skins seats every player in their OWN group of one
         // (Halved-only pool — each self-scores), so there's no group picker.
         // Other multi-group play spills over into groups of up to 4.
-        _playerGroups[playerId] =
-            _multiGroup ? _nextSoloGroup() : _nextAvailableGroup();
+        // A skins golfer lands on his OWN card — most of a pool is spread
+        // across the field — and the Groups step is where the few who play
+        // together are put on one. Other multi-group play spills over into
+        // groups of four.
+        _playerGroups[playerId] = _multiGroup
+            ? nextFreeCard(_playerGroups.values)
+            : _nextAvailableGroup();
       } else {
         _playerTees.remove(playerId);
         _playerGroups.remove(playerId);
@@ -815,25 +806,14 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       ));
       return;
     }
-    // Group capacity check — the server caps each group at 4 players.
-    // Auto-spillover handles this for new additions, but a user could
-    // overstuff a group by manually reassigning, so catch it before the
-    // round-setup POST and surface a friendly message.
+    // The same rule the Groups step enforces, asked again at the gate: the
+    // step blocks Next, but a golfer can be deselected on the way back
+    // through, and this is the last place before the round-setup POST.
     if (_multiGroup) {
-      final counts = <int, int>{};
-      for (final g in _playerGroups.values) {
-        counts[g] = (counts[g] ?? 0) + 1;
-      }
-      final overstuffed = counts.entries
-          .where((e) => e.value > 4)
-          .map((e) => 'group ${e.key} has ${e.value}')
-          .toList();
-      if (overstuffed.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-            'Each group can have at most 4 players — ${overstuffed.join(", ")}.',
-          ),
-        ));
+      final problem = _groupsProblem;
+      if (problem != null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(problem)));
         return;
       }
     }
@@ -905,13 +885,24 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     }
   }
 
+  /// Multi-Group Skins gets a step of its own between Players and Tees.
+  ///
+  /// It is a step rather than a block on the players step because the thing
+  /// it fixes is that the control could not be FOUND: the per-golfer `G1/G2`
+  /// dropdown it replaces was dropped in July precisely for being easy to
+  /// miss, and a block under a roster list that scrolls is the same trap one
+  /// layer down. Everything else keeps the three steps it has always had.
+  bool get _hasGroupsStep => _multiGroup;
+  int get _groupsStep => _hasGroupsStep ? 2 : -1;
+  int get _teeStep => _hasGroupsStep ? 3 : 2;
+
   @override
   Widget build(BuildContext context) {
     final title = _step == 0
         ? 'New Round'
         : _step == 1
             ? 'Players'
-            : 'Tees';
+            : (_step == _groupsStep ? 'Groups' : 'Tees');
     return Scaffold(
       backgroundColor: Halved.surface,
       appBar: AppBar(
@@ -972,10 +963,25 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                 // sex-based suggestions for review.
                 onPressed: _playerTees.length >= (_isSolo ? 1 : 2)
                     ? () => setState(() {
-                          _applyTeeSuggestions();
+                          if (!_hasGroupsStep) _applyTeeSuggestions();
                           _step = 2;
                         })
                     : null,
+              )
+            else if (_step == _groupsStep)
+              HalvedCtaButton(
+                label: 'Next',
+                icon: Icons.arrow_forward,
+                trailingIcon: true,
+                expand: false,
+                // Never a silently greyed button: the reason sits on the step
+                // above it, naming the golfer who cannot be scored.
+                onPressed: _groupsProblem != null
+                    ? null
+                    : () => setState(() {
+                          _applyTeeSuggestions();
+                          _step = _teeStep;
+                        }),
               )
             else
               HalvedCtaButton(
@@ -1301,8 +1307,14 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             const SizedBox(height: 80),
           ], // ── end step 2
 
+          // ── Groups (Multi-Group Skins only): who shares a scorecard ──
+          if (_step == _groupsStep) ...[
+            ..._buildGroupsStep(),
+            const SizedBox(height: 80),
+          ],
+
           // ── Step 3: set tees (grouped by sex, with per-group bulk picker) ──
-          if (_step == 2) ...[
+          if (_step == _teeStep) ...[
             ..._buildTeeStep(),
             const SizedBox(height: 80),
           ], // ── end step 3
@@ -1310,6 +1322,54 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       ),
       ),
     );
+  }
+
+  /// Why the groups cannot be saved yet, or null. See `utils/skins_cards.dart`.
+  String? get _groupsProblem {
+    final byId = {for (final p in _players) p.id: p};
+    return cardsProblem(
+      {
+        for (final e in _playerGroups.entries)
+          if (_playerTees.containsKey(e.key)) e.key: e.value,
+      },
+      isOnApp: (id) => byId[id]?.isOnApp ?? false,
+      nameOf: (id) => byId[id]?.name ?? 'That golfer',
+    );
+  }
+
+  /// Who shares a scorecard — Multi-Group Skins only.
+  ///
+  /// The list is `widgets/scorecard_groups.dart`: it is the one part of this
+  /// screen with rules in it, and the second case Paul named — skins attached
+  /// to groups that already exist — will want the same control.
+  List<Widget> _buildGroupsStep() {
+    final theme = Theme.of(context);
+    final problem = _groupsProblem;
+    return [
+      Text('Who shares a scorecard?', style: theme.textTheme.titleLarge),
+      const SizedBox(height: 4),
+      Text(
+        'Golfers in the same group play on one card, so one of them keeps the '
+        'score. Everyone else scores their own. The skins pool runs across '
+        'all of them either way.',
+        style: theme.textTheme.bodyMedium
+            ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+      ),
+      const SizedBox(height: 16),
+      ScorecardGroups(
+        players: _players.where((p) => _playerTees.containsKey(p.id)).toList(),
+        groups: _playerGroups,
+        onChanged: (next) => setState(() {
+          _playerGroups
+            ..clear()
+            ..addAll(next);
+        }),
+      ),
+      if (problem != null) ...[
+        const SizedBox(height: 4),
+        InlineMessage(kind: InlineMessageKind.error, text: problem),
+      ],
+    ];
   }
 
   /// The dedicated tee step: selected golfers grouped by sex, each group with a
