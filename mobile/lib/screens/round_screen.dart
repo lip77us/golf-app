@@ -293,6 +293,26 @@ class _RoundScreenState extends State<RoundScreen> {
                       ),
                     ),
                   ),
+                // Who shares a scorecard, and the latecomer. The create flow
+                // was the only place a casual round's field could be set, so
+                // a pool drawn wrong could only be fixed by starting again —
+                // and a golfer turning up on the first tee could not be taken
+                // at all unless he was already on Halved (the pool roster
+                // above seats an on-app golfer; it cannot seat a guest).
+                if (!isComplete)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).pushNamed(
+                          '/round-groups', arguments: widget.roundId,
+                        ).then((_) => _reloadRound()),
+                        icon: const Icon(Icons.groups_outlined, size: 18),
+                        label: const Text('Groups & golfers'),
+                      ),
+                    ),
+                  ),
               ]),
             ),
           ],
@@ -1082,6 +1102,9 @@ List<(String, String)> _roundLevelEditTargets(
   if (roundActiveGames.contains('stableford')) {
     out.add(('/stableford-setup', label('stableford', 'Stableford')));
   }
+  // **Not Multi-Group Skins.** It has its own card at the top of the hub,
+  // and this list only renders on a single-foursome round — a pool never is
+  // one, so an entry here would have been a button nobody could reach.
   // Solo is round-level too, and it needed saying: without this the hub had
   // no way back into the one setting a solo round has, so an allowance typed
   // on the 1st tee was the allowance for the round.

@@ -1502,6 +1502,26 @@ class ApiClient {
     return Round.fromJson(data as Map<String, dynamic>);
   }
 
+  /// POST /api/rounds/{id}/add-player/
+  ///
+  /// A golfer who turns up after the round was drawn. His OWN new group is
+  /// always safe — it touches nothing that exists — which is why this works
+  /// mid-round where a regroup does not. Omit [groupNumber] for that; pass
+  /// one to put him on a card that has not teed off.
+  Future<Round> addPlayerToRound(
+    int roundId, {
+    required int playerId,
+    int? teeId,
+    int? groupNumber,
+  }) async {
+    final data = await _post('/rounds/$roundId/add-player/', {
+      'player_id': playerId,
+      if (teeId != null) 'tee_id': teeId,
+      if (groupNumber != null) 'group_number': groupNumber,
+    });
+    return Round.fromJson(data as Map<String, dynamic>);
+  }
+
   Future<Round> setupRound(
     int roundId, {
     /// Each entry: {"player_id": int, "tee_id": int}.  Add an optional

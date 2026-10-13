@@ -6410,6 +6410,121 @@ class FoursomeSwapPositionView(APIView):
         })
 
 
+class RoundAddPlayerView(APIView):
+    """
+    POST /api/rounds/{id}/add-player/
+    body: { "player_id": int, "tee_id": int?, "group_number": int? }
+
+    A golfer who turns up after the round was drawn — the latecomer, and the
+    reason the hub needs this at all: the create flow is the only place a
+    casual round's field could be set, so a Multi-Group Skins pool could not
+    take somebody on the first tee.
+
+    **His OWN new group is always safe**, which is what makes this work
+    mid-round where a regroup cannot: it touches nothing that already exists.
+    `services.multi_skins.reconcile_pool_seating` has seated cross-round
+    participants that way for a while; this is the same move, asked for
+    directly and with a tee the TD picks.
+
+    Joining an EXISTING group is refused once that group has scored a hole.
+    Not a technicality: his tee can lower the group's minimum par, which
+    re-derives every other member's par-adjusted playing handicap, and those
+    are the numbers their played holes were scored against.
+
+    Refused when: the golfer is already in the round, the target group is
+    full (a group is a foursome), the round is complete, or the course has
+    no tee to seat him on.
+    """
+    def post(self, request, pk):
+        from django.db import transaction
+        from django.db.models import Max
+        from scoring.handicap import par_adjusted_playing_handicap
+        from scoring.models import HoleScore
+        from tournament.models import Foursome, FoursomeMembership, RoundStatus
+
+        round_obj = account_get_or_404(Round, request.user.account, pk=pk)
+        if round_obj.status == RoundStatus.COMPLETE:
+            return Response({'detail': 'This round is finished.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        player_id = request.data.get('player_id')
+        if not isinstance(player_id, int):
+            return Response({'detail': 'player_id (int) is required.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        player = account_get_or_404(Player, request.user.account, pk=player_id)
+
+        if FoursomeMembership.objects.filter(
+                foursome__round=round_obj, player_id=player_id).exists():
+            return Response(
+                {'detail': f'{player.name} is already in this round.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        tee_id = request.data.get('tee_id')
+        if tee_id:
+            tee = account_get_or_404(Tee, request.user.account, pk=tee_id)
+        else:
+            from services.multi_skins import _default_tee_for
+            tee = _default_tee_for(round_obj.course, player)
+        if tee is None:
+            return Response(
+                {'detail': 'This course has no tee to put him on.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        group_number = request.data.get('group_number')
+        with transaction.atomic():
+            foursome = None
+            if isinstance(group_number, int):
+                foursome = (round_obj.foursomes
+                            .prefetch_related('memberships__player')
+                            .filter(group_number=group_number).first())
+            if foursome is not None:
+                reals = [m for m in foursome.memberships.all()
+                         if not m.player.is_phantom]
+                if len(reals) >= 4:
+                    return Response(
+                        {'detail': f'Group {group_number} is full — a group '
+                                   'is a foursome.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+                if HoleScore.objects.filter(
+                        foursome=foursome, gross_score__isnull=False,
+                        player__is_phantom=False).exists():
+                    return Response(
+                        {'detail': f'Group {group_number} has already teed '
+                                   f'off, so {player.name} cannot join their '
+                                   'card. Put him on one of his own.'},
+                        status=status.HTTP_409_CONFLICT)
+            else:
+                nxt = (round_obj.foursomes.aggregate(
+                    m=Max('group_number'))['m'] or 0) + 1
+                foursome = Foursome.objects.create(
+                    round=round_obj, group_number=nxt)
+
+            # The WHS mixed-par adjustment is relative to the lowest par in
+            # the GROUP, so it is read after he is seated — on a group of one
+            # that is simply his own tee.
+            pars = [m.tee.par for m in foursome.memberships.select_related('tee')
+                    if m.tee_id] + [tee.par]
+            course_hcp = player.course_handicap(tee)
+            FoursomeMembership.objects.create(
+                foursome=foursome, player=player, tee=tee,
+                course_handicap=course_hcp,
+                playing_handicap=par_adjusted_playing_handicap(
+                    course_hcp, tee.par, min(pars), 1.0),
+            )
+
+            # A skins pool is a roster, not the round's field — somebody can
+            # play without anteing. He is added because the ONE way into this
+            # endpoint is a TD adding him to a pool round, and a golfer seated
+            # in it who is not in the pool would be scoring for nothing.
+            game = getattr(round_obj, 'multi_skins_game', None)
+            if game is not None:
+                game.participants.add(player)
+
+        round_obj.refresh_from_db()
+        return Response(RoundSerializer(round_obj).data,
+                        status=status.HTTP_201_CREATED)
+
+
 class RoundMovePlayerView(APIView):
     """
     POST /api/rounds/{id}/move-player/

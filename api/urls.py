@@ -82,6 +82,8 @@ urlpatterns = [
     path('rounds/<int:pk>/side-games/',  views.RoundAddSideGameView.as_view(), name='api-round-add-side-game'),
     path('rounds/<int:pk>/complete/',    views.RoundCompleteView.as_view(), name='api-round-complete'),
     path('rounds/<int:pk>/reopen/',      views.RoundReopenView.as_view(),   name='api-round-reopen'),
+    path('rounds/<int:pk>/add-player/', views.RoundAddPlayerView.as_view(),
+         name='api-round-add-player'),
     path('rounds/<int:pk>/move-player/', views.RoundMovePlayerView.as_view(),
          name='api-round-move-player'),
     path('rounds/<int:pk>/leaderboard/', views.LeaderboardView.as_view(),   name='api-leaderboard'),

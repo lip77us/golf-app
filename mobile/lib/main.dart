@@ -54,6 +54,7 @@ import 'screens/survivor_setup_screen.dart';
 import 'screens/survivor_screen.dart';
 import 'screens/triple_cup_setup_screen.dart';
 import 'screens/triple_cup_screen.dart';
+import 'screens/round_groups_screen.dart';
 import 'screens/multi_skins_setup_screen.dart';
 import 'screens/multi_skins_screen.dart';
 import 'screens/nassau_setup_screen.dart';
@@ -767,6 +768,9 @@ class _GolfAppState extends State<GolfApp> {
         return page((_) => RoundLandscapeScorecard(
               foursomeId: foursomeId,
               child: TripleCupScreen(foursomeId: foursomeId)));
+      case '/round-groups':
+        return page((_) =>
+            RoundGroupsScreen(roundId: _routeId(settings.arguments)));
       case '/multi-skins-setup':
         return page((_) => MultiSkinsSetupScreen(
               roundId: _routeId(settings.arguments),

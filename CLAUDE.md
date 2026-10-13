@@ -4816,5 +4816,39 @@ each one) and `api/test_multi_skins_groups.py` (3 — the server takes 4/1/1/2,
 pads nobody into the short groups, and the pool scores across four different
 cards).
 
-**Not done:** changing the groups of a round that already exists. This is the
-create flow only; the hub has no equivalent for a casual round.
+### From the hub, once the round exists
+`Groups & golfers` on the hub's Multi-Group Skins card (`/round-groups` →
+`RoundGroupsScreen`). **The two halves have different rules and the screen
+says so**, because they are different operations:
+
+* **Re-grouping rewrites the draw**, so it goes through `setup_round` and the
+  server refuses it once anybody in the round has teed off — that function
+  deletes and rebuilds the foursomes and `HoleScore.foursome` is CASCADE. The
+  screen reads `hasAnyScore` and draws the groups read-only with the reason,
+  rather than offering a Save the server would reject.
+* **Adding a golfer on a card of his own touches nothing that exists**, so it
+  works whenever the round is live. `POST /api/rounds/{id}/add-player/`
+  (`RoundAddPlayerView`) seats him, computes his par-adjusted playing
+  handicap, and adds him to the pool if the round has one — a golfer seated in
+  a skins round who is not in the pool would be scoring for nothing. Joining
+  an EXISTING group is refused once that group has scored a hole: his tee can
+  lower the group's minimum par, which re-derives every other member's playing
+  handicap, and those are the numbers their played holes were scored against.
+
+The pool's own card already carried `Edit configuration`, whose roster can add
+an **on-app** golfer mid-round (`reconcile_pool_seating` seats him solo —
+which is the same move this endpoint makes, and where the confidence that it
+is safe comes from). What it cannot do is seat a GUEST, because
+`valid_participant_ids` filters a golfer who is neither a host-round member
+nor on Halved — so he can never be seated, and so never becomes a member. That
+chicken-and-egg is what the endpoint breaks.
+
+**`_roundLevelEditTargets` is NOT where this went**, and the first attempt put
+it there: that list renders inside a foursome card behind
+`allFoursomes.length == 1`, and a pool is never one foursome. It would have
+been a button nobody could reach — the failure this file records twice
+already. `mobile/test/round_groups_reachable_test.dart` pins the wiring
+instead of the widget tree.
+
+Tests: `api/test_multi_skins_groups.py::AddPlayerTests` (10) and
+`mobile/test/round_groups_reachable_test.dart` (6).
