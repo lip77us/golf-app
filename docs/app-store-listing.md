@@ -1,4 +1,4 @@
-# App Store listing copy — Halved (v2.11.0)
+# App Store listing copy — Halved (v2.11.2)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
@@ -9,6 +9,49 @@ service, a screen and a play screen but no `GameMeta`**, so it is not
 offerable and must not be listed. Check `game_catalog.dart` rather than the
 services directory — this list had been missing 40 Balls and Better Ball since
 they were release headlines.
+
+## What's New (v2.11.2)
+
+**App Store submission. The last public release was v2.10.0 (2 Oct 2026) —
+v2.11.0 was rejected before review completed and v2.11.1 was TestFlight only,
+so everything in the v2.11.0 note below reaches the public for the first time
+here, alongside the new games.**
+
+Golf on your own, and two games that now ask the group instead of deciding
+for it.
+
+PLAYING ALONE — three games where the opponent is par. Stroke Play is your
+net total against it. Nassau plays the front nine, the back nine and all 18 as
+three matches against it. Match Play is one eighteen-hole match, with the
+closing score shown when it is settled early. One slider sets how many strokes
+you take — below or above your full handicap, because nobody is paying — and
+the card marks every hole you won against par and every hole it won against
+you. Turn presses on and a new match opens whenever either side goes two down:
+par presses back, so a practice round plays like a full match against a
+scratch player.
+
+SIX'S — the group picks the second match. The teams used to be drawn when the
+game was set up and the slot machine only uncovered them. Now, when the first
+match is decided, the two remaining pairings are on screen: spin for one, or
+set them yourself. The third match is whatever is left, so everybody partners
+everybody exactly once.
+
+MULTI-GROUP SKINS — say who shares a scorecard. A pool spread over a dozen
+foursomes is mostly golfers playing on their own card, but the few who are
+out together want one between them so somebody keeps the score. You set that
+when the round is created and change it from the round's own page afterwards,
+and a golfer who turns up on the first tee can be added to a card of his own
+without disturbing anybody who has teed off. A guest with no account can play
+in the pool as long as somebody on his card is keeping score.
+
+ALSO IN THIS RELEASE
+• The app opens straight away even when the network is slow to answer, rather
+  than waiting on it before drawing anything
+• Starting a round on your own is two steps — there is nobody to pick
+• A scorecard's names stay put when you scroll it sideways, on every board in
+  the app, and each opens on the hole you are playing
+• Every card shows the nine totals you would write on paper
+• Three handicap strokes on a hole are drawn as three, not two
 
 ## What's New (v2.11.0)
 
@@ -175,7 +218,10 @@ lead on.)
 (Skins/Nassau are already in the subtitle, so they're omitted here — Apple
 indexes the subtitle words anyway; keywords spend the budget on new terms.)
 
-## Promotional text (170 max, editable without review) — 2.11.0, 159 chars
+## Promotional text (170 max, editable without review) — 2.11.2, 161 chars
+New: play on your own against par — stroke play, a Nassau or a match, with presses par fights back in. Plus Six's teams the group picks and skins groups you set.
+
+## Promotional text — previous (2.11.0, 159 chars; never public)
 New: Hot Spot — every hole has an anchor whose score counts good or bad, and it rotates, so everyone carries the group. Plus redraw your groups between rounds.
 
 ## Promotional text — previous (v2.10.0, 158 chars)
@@ -226,7 +272,8 @@ GAMES YOU CAN PLAY
 • Spots — a side game for one-putts, sandies, barkies and more
 • Match Play
 • Stroke Play
-• Multi-Group Skins across foursomes
+• Multi-Group Skins across foursomes, in whatever groups you are playing in
+• On your own against par — stroke play, a Nassau or an 18-hole match
 • One-round team cup
 • Scramble and Shamble team events
 • Two-golfer teams — best ball, alternate shot, Scotch, Chapman
