@@ -764,7 +764,15 @@ candidates for trademark / App Store / domain conflicts:
   keywords, promo text, description, what's-new), **newest version at the top**
   — the What's New and the promotional text are per-submission, so they are
   what you open that file for, and burying them under the description means
-  they get missed. The two URL fields are served from the website:
+  they get missed.
+  **The file now opens with a "Submitting <version>" table** naming which
+  fields move and which do not, with that version's promo text and What's New
+  directly under it. The rule had been half-kept: What's New was at the top
+  and the promotional text was 180 lines down under every historical one, so
+  Paul opened the file for a submission and could not find either the promo
+  text or the description (13 Oct 2026). Keep the table current with the
+  version being submitted — a stale one is worse than none, because it is
+  read as the answer. The two URL fields are served from the website:
   **https://halved.golf/support** and **https://halved.golf/privacy**.
 - The logo upgrade (delivery 2) is DONE. Re-run `dart run flutter_launcher_icons`
   after changing any source art — it regenerates iOS plus the Android adaptive

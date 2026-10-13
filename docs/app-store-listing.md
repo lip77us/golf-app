@@ -10,6 +10,28 @@ offerable and must not be listed. Check `game_catalog.dart` rather than the
 services directory — this list had been missing 40 Balls and Better Ball since
 they were release headlines.
 
+## Submitting 2.11.2 — everything that changes
+
+Three fields move for this submission, and the other six do not. They are not
+all in one place in App Store Connect either, so this says which is which
+rather than leaving you to diff the file.
+
+| Field | 2.11.2 |
+| --- | --- |
+| What's New | NEW — below |
+| Promotional text | NEW — below (editable later without review) |
+| Description | CHANGED — see **Description** further down |
+| Name · Subtitle · Keywords · Privacy URL · Support URL · Category | unchanged since 2.11.0 |
+
+**The description changed by more than this release's games.** `be43d72` put
+back the headline games it had been missing since 2.9.1 — Hot Spot, 40 Balls,
+Better Ball, Fourball, Honors, Triple Nassau, Nassau Nine, Dream Round and
+Road Trip — and that correction ships with this submission too. 3,864 of 4,000
+characters.
+
+## Promotional text (170 max, editable without review) — 2.11.2, 161 chars
+New: play on your own against par — stroke play, a Nassau or a match, with presses par fights back in. Plus Six's teams the group picks and skins groups you set.
+
 ## What's New (v2.11.2)
 
 **App Store submission. The last public release was v2.10.0 (2 Oct 2026) —
@@ -217,9 +239,6 @@ anybody searches. It earns its place in the description instead.)
 lead on.)
 (Skins/Nassau are already in the subtitle, so they're omitted here — Apple
 indexes the subtitle words anyway; keywords spend the budget on new terms.)
-
-## Promotional text (170 max, editable without review) — 2.11.2, 161 chars
-New: play on your own against par — stroke play, a Nassau or a match, with presses par fights back in. Plus Six's teams the group picks and skins groups you set.
 
 ## Promotional text — previous (2.11.0, 159 chars; never public)
 New: Hot Spot — every hole has an anchor whose score counts good or bad, and it rotates, so everyone carries the group. Plus redraw your groups between rounds.
