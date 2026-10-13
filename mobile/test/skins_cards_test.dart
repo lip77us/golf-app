@@ -84,4 +84,38 @@ void main() {
       expect(msg, contains('5 golfers'));
     });
   });
+
+  group('who can ante in', () {
+    test('a Halved member, always', () {
+      expect(canJoinPool(isOnApp: true, cardMatesOnApp: const []), isTrue);
+    });
+
+    test('a guest sharing a card with one', () {
+      expect(canJoinPool(isOnApp: false, cardMatesOnApp: const [true]),
+          isTrue);
+    });
+
+    test('but not a guest on his own', () {
+      // Nobody can enter his score — the pool would be anteing for a golfer
+      // whose card nobody keeps.
+      expect(canJoinPool(isOnApp: false, cardMatesOnApp: const []), isFalse);
+    });
+
+    test('nor one sharing with other guests', () {
+      expect(canJoinPool(isOnApp: false, cardMatesOnApp: const [false, false]),
+          isFalse);
+    });
+
+    test('it agrees with the whole-draw rule', () {
+      // Two statements of one rule, asked at different moments. If they ever
+      // disagree, a draw the Groups step accepted would have a golfer the
+      // pool roster refuses — or worse, the other way round.
+      final groups = {1: 1, 5: 1, 6: 2};      // 1 is on Halved, 5 and 6 are not
+      bool onApp(int id) => id <= 4;
+      expect(cardsProblem(groups, isOnApp: onApp, nameOf: (i) => 'G$i'),
+          contains('G6'));
+      expect(canJoinPool(isOnApp: false, cardMatesOnApp: const [true]), isTrue);
+      expect(canJoinPool(isOnApp: false, cardMatesOnApp: const []), isFalse);
+    });
+  });
 }

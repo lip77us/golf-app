@@ -4871,6 +4871,35 @@ been a button nobody could reach — the failure this file records twice
 already. `mobile/test/round_groups_reachable_test.dart` pins the wiring
 instead of the widget tree.
 
+#### The POOL ROSTER refused a seated guest too
+Reported from testing, 13 Oct 2026: a guest in the TD's own foursome — his
+score kept on that card like everyone else's — was **missing from the skins
+leaderboard while appearing on the round's Stroke Play tab**, and linking a
+Sixes round reported an overlap of two golfers when three were in it.
+
+`multi_skins_setup_screen` carried the same Halved-only assumption the
+picker's grey-out did: a login-less round member's checkbox was DISABLED
+("Not on Halved — invite them to include them"), so he could never ante in.
+Everything downstream then behaved correctly on a roster he was not in.
+
+**The engine was never the problem.** `valid_participant_ids` admits
+host-round members "(login-less OK)", and both `pool_overlap` and
+`_resolve_participant_memberships` match on **exact player id before phone** —
+the latter's docstring naming this very case, *"a login-less roster golfer
+parked in the host round who actually PLAYS in a linked Sixes round"*. Within
+one account the same `Player` row is in both rounds, so no phone match is
+needed; the Halved requirement is about CROSS-ACCOUNT federation.
+
+The rule now is the same one the Groups step enforces, stated per golfer
+(`utils/skins_cards.canJoinPool`): a guest may join when somebody ELSE on his
+scorecard is on Halved. His row says which — `scored on Group 1's card` — or,
+when nobody can, `Needs somebody on Halved on his card`, which is a thing to
+fix rather than a fact about him.
+
+**Two statements of one rule, and they must agree.** `cardsProblem` answers
+for a whole draw and `canJoinPool` for one row, because they are asked at
+different moments; a test pins them against each other.
+
 #### The strict rule stays, and so do the multiple Moves
 Both confirmed by Paul (13 Oct 2026) after testing, and both worth recording
 because the arguments against them are the obvious ones:

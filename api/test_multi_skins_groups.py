@@ -292,3 +292,101 @@ class RoundPayloadKnowsWhoIsOnHalvedTests(TestCase):
         self.member.phone = '510-555-0001'
         self.member.save(update_fields=['phone'])
         self.assertTrue(self._flags()['On Halved'])
+
+
+class AGuestCanBeInThePoolTests(TestCase):
+    """A login-less golfer seated in the host round.
+
+    Reported after testing: a guest in the TD's own foursome — his score kept
+    on that card like everyone else's — was missing from the skins leaderboard
+    while appearing on the round's Stroke Play tab, and a linked Sixes round
+    reported an overlap of two golfers instead of three.
+
+    The engine was never the problem. `valid_participant_ids` admits
+    host-round members "(login-less OK)", and both `pool_overlap` and
+    `_resolve_participant_memberships` match on exact player id BEFORE phone —
+    the latter's docstring naming this very case, "a login-less roster golfer
+    parked in the host round who actually PLAYS in a linked Sixes round". It
+    was the roster SCREEN that refused him.
+    """
+
+    def setUp(self):
+        self.acct = Account.objects.create(name="Paul's Golf")
+        self.user = User.objects.create_user(username='paul', account=self.acct,
+                                             phone='+15105550001')
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        self.course = Course.objects.create(account=self.acct, name='Tilden')
+        self.tee = Tee.objects.create(course=self.course, tee_name='White',
+                                      slope=113, course_rating=Decimal('72.0'),
+                                      par=72, holes=HOLES)
+        self.member = Player.objects.create(
+            account=self.acct, name='Paul', handicap_index=Decimal('10'),
+            phone='(510) 555-0001')
+        self.guest = Player.objects.create(
+            account=self.acct, name='Gil', handicap_index=Decimal('10'),
+            phone='(650) 834-2237')
+        self.round = self._round(1, [self.member.id, self.guest.id])
+
+    def _round(self, number, pids, groups=None):
+        rnd = Round.objects.create(
+            account=self.acct, course=self.course, round_number=number,
+            status='in_progress', active_games=['multi_skins'],
+            bet_unit=Decimal('5.00'))
+        self.client.post(
+            reverse('api-round-setup', args=[rnd.id]),
+            {'players': [
+                {'player_id': pid, 'tee_id': self.tee.id,
+                 'group_number': (groups or [1] * len(pids))[i]}
+                for i, pid in enumerate(pids)
+            ]}, format='json')
+        return rnd
+
+    def test_the_engine_keeps_him(self):
+        from services.multi_skins import valid_participant_ids
+        kept = valid_participant_ids(self.round,
+                                     [self.member.id, self.guest.id])
+        self.assertIn(self.guest.id, kept)
+
+    def test_he_shows_on_the_pool_board(self):
+        from services.multi_skins import setup_multi_skins, multi_skins_summary
+        setup_multi_skins(self.round,
+                          participant_ids=[self.member.id, self.guest.id],
+                          handicap_mode='gross')
+        names = {p['name'] for p in multi_skins_summary(self.round)['players']}
+        self.assertIn('Gil', names)
+
+    def test_a_linked_round_counts_him_in_the_overlap(self):
+        """He is the same Player row in both rounds, so the exact-id match
+        finds him — no phone, no Halved account."""
+        from services.multi_skins import setup_multi_skins, pool_overlap
+        setup_multi_skins(self.round,
+                          participant_ids=[self.member.id, self.guest.id],
+                          handicap_mode='gross')
+        sixes = self._round(2, [self.member.id, self.guest.id])
+        found = pool_overlap(self.round.multi_skins_game, sixes)
+        self.assertCountEqual(found, [self.member.id, self.guest.id])
+
+    def test_and_his_scores_from_that_round_feed_the_pool(self):
+        from scoring.models import HoleScore
+        from services.multi_skins import (setup_multi_skins,
+                                          calculate_multi_skins,
+                                          multi_skins_summary)
+        from games.models import MultiSkinsLinkedRound
+        setup_multi_skins(self.round,
+                          participant_ids=[self.member.id, self.guest.id],
+                          handicap_mode='gross')
+        sixes = self._round(2, [self.member.id, self.guest.id])
+        MultiSkinsLinkedRound.objects.create(
+            game=self.round.multi_skins_game, round=sixes)
+        fs = sixes.foursomes.first()
+        HoleScore.objects.create(foursome=fs, player_id=self.guest.id,
+                                 hole_number=1, gross_score=3,
+                                 handicap_strokes=0)
+        HoleScore.objects.create(foursome=fs, player_id=self.member.id,
+                                 hole_number=1, gross_score=5,
+                                 handicap_strokes=0)
+        calculate_multi_skins(self.round)
+        d = multi_skins_summary(self.round)
+        hole1 = next(h for h in d['holes'] if h['hole'] == 1)
+        self.assertEqual(hole1['winner_id'], self.guest.id)

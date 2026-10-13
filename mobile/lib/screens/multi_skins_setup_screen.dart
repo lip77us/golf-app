@@ -15,6 +15,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import '../utils/skins_cards.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/handicap_mode_selector.dart';
@@ -114,11 +115,20 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
         }
       } catch (_) { /* roster fetch is best-effort */ }
 
-      // Pre-populate roster from an existing game, or default to all ELIGIBLE
-      // (on-app) round players. Login-less members are never auto-checked.
+      // Pre-populate roster from an existing game, or default to all
+      // ELIGIBLE round players.
+      //
+      // **A login-less golfer is eligible when somebody on his card is on
+      // Halved.** This screen used to refuse him outright, which is how a
+      // guest seated in the TD's own foursome — his score being kept on that
+      // card like everyone else's — was left out of the pool and off its
+      // leaderboard while appearing on the round's Stroke Play tab. The
+      // engine never required it: `valid_participant_ids` admits host-round
+      // members "(login-less OK)".
       final existingIds = _summary!.players.map((p) => p.playerId).toSet();
+      final mates = _cardMates;
       for (final m in _allMemberships) {
-        final eligible = _onAppIds.contains(m.player.id);
+        final eligible = _canJoin(m.player.id, mates);
         _participants[m.player.id] = eligible &&
             (existingIds.isEmpty ? true : existingIds.contains(m.player.id));
       }
@@ -146,6 +156,45 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
       if (mounted) setState(() { _error = e; _loading = false; });
     }
   }
+
+  /// player id → the OTHER golfers on his scorecard.
+  ///
+  /// A login-less golfer can be in the pool, but only if one of them is on
+  /// Halved to enter his score — the rule `utils/skins_cards.canJoinPool`
+  /// states, and the reason this screen needs the seating and not just the
+  /// roster.
+  Map<int, List<int>> get _cardMates {
+    final rp = context.read<RoundProvider>();
+    final out = <int, List<int>>{};
+    for (final fs in rp.round?.foursomes ?? const <Foursome>[]) {
+      final ids = [
+        for (final m in fs.memberships)
+          if (!m.player.isPhantom) m.player.id,
+      ];
+      for (final id in ids) {
+        out[id] = [for (final o in ids) if (o != id) o];
+      }
+    }
+    return out;
+  }
+
+  /// His group number, for the line that says who keeps his score.
+  Map<int, int> get _groupOf {
+    final rp = context.read<RoundProvider>();
+    final out = <int, int>{};
+    for (final fs in rp.round?.foursomes ?? const <Foursome>[]) {
+      for (final m in fs.memberships) {
+        if (!m.player.isPhantom) out[m.player.id] = fs.groupNumber;
+      }
+    }
+    return out;
+  }
+
+  bool _canJoin(int playerId, Map<int, List<int>> mates) => canJoinPool(
+        isOnApp: _onAppIds.contains(playerId),
+        cardMatesOnApp:
+            (mates[playerId] ?? const []).map(_onAppIds.contains),
+      );
 
   List<Membership> get _allMemberships {
     final rp = context.read<RoundProvider>();
@@ -297,27 +346,37 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
               const Divider(height: 32),
 
               // ── Roster (flat list) ───────────────────────────────────────
-              // Multi-Group Skins seats every player in their own group of one
-              // (Halved-only self-scoring pool), so per-foursome group headers
-              // would just be one header per player — noise. List participants
-              // flat instead.
+              // Flat, not grouped by card. The groups ARE arbitrary now
+              // (4, 1, 1, 2 on a spread-out field), but this screen asks who
+              // is anteing in, which is a question about golfers; who shares
+              // a card is the Groups screen's. A guest's row names his card
+              // because for him the two questions meet.
               Text('Participants',
                   style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 4),
               for (final m in _allMemberships)
                 Builder(builder: (_) {
+                  final mates = _cardMates;
                   final onApp = _onAppIds.contains(m.player.id);
+                  final canJoin = _canJoin(m.player.id, mates);
+                  final group = _groupOf[m.player.id];
                   return CheckboxListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                     title: Text(m.player.name),
-                    // Roster is Halved-only: a login-less golfer can't be
-                    // matched across rounds, so they can't join the pool.
+                    // A guest says WHO keeps his score, because that is the
+                    // whole question about him — and when nobody does, it
+                    // says that instead of "not on Halved", which sounds like
+                    // a fact about him rather than something fixable.
                     subtitle: Text(onApp
                         ? 'Index ${m.player.handicapIndex}'
-                        : 'Not on Halved — invite them to include them'),
-                    value: onApp && (_participants[m.player.id] ?? false),
-                    onChanged: onApp
+                        : canJoin
+                            ? 'Index ${m.player.handicapIndex} · scored on '
+                                'Group ${group ?? '?'}\'s card'
+                            : 'Needs somebody on Halved on his card — see '
+                                'Groups'),
+                    value: canJoin && (_participants[m.player.id] ?? false),
+                    onChanged: canJoin
                         ? (v) => setState(() {
                               _participants[m.player.id] = v ?? false;
                             })

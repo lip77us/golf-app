@@ -44,6 +44,27 @@ int nextFreeCard(Iterable<int> used) {
   return g;
 }
 
+/// Can this golfer ante into the pool?
+///
+/// On Halved: always. Login-less: only when somebody ELSE on his scorecard
+/// is — that golfer is the one who will enter his score, and without him
+/// nobody can.
+///
+/// The per-golfer form of the rule `cardsProblem` states for a whole draw,
+/// because the pool's roster screen asks it one row at a time. Both exist
+/// because they are asked at different moments; neither should be the only
+/// one, and they must agree.
+///
+/// Paul confirmed the strictness after testing (13 Oct 2026): an account
+/// owner could in principle keep every card in his own round, but *"because
+/// the golfers are spread throughout the course"* he is out playing and a
+/// card two fairways away is not one he can keep.
+bool canJoinPool({
+  required bool isOnApp,
+  required Iterable<bool> cardMatesOnApp,
+}) =>
+    isOnApp || cardMatesOnApp.any((on) => on);
+
 /// Why this draw cannot be created yet, or null when it can.
 ///
 /// Two rules, and the second is Paul's (13 Oct 2026), for the case where
