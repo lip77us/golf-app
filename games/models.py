@@ -4164,3 +4164,49 @@ class RoadTripIndexAdjustment(models.Model):
     def __str__(self):
         return (f'{self.player_id} → {self.handicap_index} '
                 f'from round {self.from_round_number}')
+
+
+class SoloGame(models.Model):
+    """A round played by ONE golfer, against par.
+
+    Three variants, chosen on the create-round screen rather than here,
+    because `handoff-solo-games` puts them on the primary-game chips: stroke
+    play (net total against par), a Nassau (front, back and all 18, each a
+    match against par) and an 18-hole match.
+
+    **Par is not a player.** No phantom is created and nothing is stored for
+    the opponent — every hole is compared with `hole.par` directly. A phantom
+    would have to be given a card, which would then need a handicap, a tee and
+    a place in every grouping rule in the app, all to represent a number that
+    is already on the scorecard.
+
+    **Always Net, and always for fun.** There is no handicap_mode: a solo game
+    against par in gross is just stroke play with extra words, and the whole
+    point of the allowance is to make par a fair opponent. `net_percent` is
+    the only setting and it may go ABOVE 100 — a golfer who wants par to be
+    beatable gives himself more, which no other game in the app allows and is
+    harmless when nobody is paying.
+
+    There is no entry fee, no payout table and no settlement row. Solo rounds
+    are excluded from `round_settlement` by having nothing to contribute.
+    """
+    class Variant(models.TextChoices):
+        STROKE = 'stroke', 'Stroke Play'
+        NASSAU = 'nassau', 'Nassau'
+        MATCH  = 'match',  'Match Play'
+
+    round        = models.OneToOneField(
+                     'tournament.Round', on_delete=models.CASCADE,
+                     related_name='solo_game')
+    variant      = models.CharField(max_length=10, choices=Variant.choices,
+                                    default=Variant.STROKE)
+    # Slider on the setup screen. Above 100 is deliberate — see the docstring.
+    net_percent  = models.PositiveSmallIntegerField(
+                     default=100,
+                     validators=[MinValueValidator(25),
+                                 MaxValueValidator(150)],
+                     help_text='Handicap allowance. May exceed 100%.')
+    created_at   = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'Solo {self.get_variant_display()} — round {self.round_id}'
