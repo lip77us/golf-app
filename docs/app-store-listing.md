@@ -20,7 +20,7 @@ rather than leaving you to diff the file.
 | --- | --- |
 | What's New | NEW — below |
 | Promotional text | NEW — below (editable later without review) |
-| Description | CHANGED — see **Description** further down |
+| Description | CHANGED — **Description** below, one living section (line ~261) |
 | Name · Subtitle · Keywords · Privacy URL · Support URL · Category | unchanged since 2.11.0 |
 
 **The description changed by more than this release's games.** `be43d72` put
@@ -258,7 +258,20 @@ rotating.
 New: Survivor — worst score is knocked out, and the last two standing duel for
 the hole. Plus fully developed tournaments for singles, pairs, foursomes and teams.
 
-## Description (4000 max)
+## Description (4000 max) — CURRENT, as submitted for 2.11.2 (3,864 chars)
+
+**One living section, not one per version.** Unlike What's New and the
+promotional text there is no history kept here: this is the description, and
+editing it is how it changes. If you are looking for "the 2.11.2 description",
+it is this.
+
+Changed since 2.11.0, in two separate lots:
+* this release — Multi-Group Skins now reads "in whatever groups you are
+  playing in", and the solo games got a line;
+* `be43d72`, after the 2.11.0 copy was written — the headline games it had
+  been missing since 2.9.1 went back in (Hot Spot, 40 Balls, Better Ball,
+  Fourball, Honors, Triple Nassau, Nassau Nine, Dream Round, Road Trip).
+
 Halved keeps score for the games golfers really play. Set up a round, pick your
 games, enter scores hole by hole, and Halved does the rest — live results,
 handicaps, a shareable spectator web page, and an easy settle-up at the end.
