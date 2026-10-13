@@ -4646,3 +4646,100 @@ round has no standings, so the board is those same three pieces.
 Tests: `scoring/tests/test_solo.py` (33), `api/test_solo.py` (18),
 `mobile/test/solo_board_test.dart` (15), `mobile/test/solo_setup_test.dart`
 (12).
+
+## Sixes — match 2 is the group's pick, not a reveal
+
+`handoff-solo-games` §3, which **reverses** `handoff-sixes-draw`: match 2 was
+an automatic, write-once draw. Nothing is drawn automatically now.
+
+**What the reel actually was.** All three pairings were decided and stored at
+SETUP, so the slot machine on the 6th green uncovered a pairing the server had
+already written — `winnerIndex` always pointed at it, and nothing about the
+teams could change when it ran. The group chooses now: spin for it, or tap
+`Pick the teams instead` and set them by hand.
+
+**Two options, not a free drag.** Four golfers pair off three ways; match 1 is
+one of them, so two are left — and choosing one FORCES the other, which is the
+guarantee that everybody partners everybody exactly once. A free drag could
+repeat match 1's pairing and leave match 3 underivable, so the picker offers
+the two legal pairings and the last match is derived. (The handoff says
+"drags the teams"; with two options a drag would be a worse control than a
+tap, and the design's own screen lists them as candidates A and B.)
+
+- **Setup sends match 1 only.** `setup_sixes` creates a segment with NO TEAM
+  ROWS when the ids are missing — not team rows with no players, which is the
+  extra match's long-standing shape and what keeps
+  `SixesConfiguredGamesTests`' invariant true. `_score_segment` already
+  answered `pending` for a segment with fewer than two teams, and
+  `configured_games` stays honest because match 1 has its teams: a second
+  golfer opening the round still goes to score entry, not the picker.
+- **`services.sixes.set_segment_teams`** is a separate writer from
+  `setup_sixes`, and the reasons are the two things that function does that
+  are wrong here: it DELETES every segment and rebuilds (taking a spawned
+  extra's teams with it), and it refuses outright while any segment is
+  `is_void` — so a group with a withdrawal could never pick match 2 at all.
+  It sets the chosen match, forces the remaining one, and recalculates.
+- **`remaining_pairings` ships on the summary**, because which two are legal
+  is the format's rule and a client deriving it would be a second copy. It is
+  emitted whenever there ARE two, not only while a match is waiting for them:
+  the group may still swap before teeing off, and a list that emptied the
+  moment the teams were stored would leave the picker with nothing to re-open
+  on.
+- **`POST /api/foursomes/{id}/sixes/segment-teams/`**; `extra-teams` is
+  untouched, since an extra is a free drag of all four and not part of the
+  rotation.
+
+### The lock is per MATCH, and "any scored hole" would have killed it
+Refused once a real golfer has posted a score on one of **that match's**
+holes — but **setting teams for the first time is always free**, whatever has
+been scored. That case is normal rather than exotic: when match 1 closes out
+early the group plays on, `calculate_sixes` hands those holes to match 2, and
+match 2 routinely has scored holes before anybody is asked to pick its
+partners. A lock reading "any scored hole" would have refused the very first
+pick and left the picker permanently dead — the shipped-and-unreachable shape
+this repo keeps hitting. What it protects is a hole scored AS part of a match
+being re-scored under different teams, which needs teams to have existed.
+
+It does **not** borrow `edit_window.closed_reason`: that names the round-wide
+3-hole ceiling, and quoting a number that has nothing to do with the refusal
+is worse than writing one sentence.
+
+### Mobile
+- `shouldRevealSixesSegmentTwoDraw` is gone, and **the per-device "already
+  shown" `SharedPreferences` flag with it** — it was a convenience standing in
+  for the rule, and it is the wrong shape for a decision: a reinstall or a
+  second phone lost it, and a draw that has not happened yet has to be
+  openable on any phone in the group. `sixesMatchNeedingTeams` /
+  `shouldOpenSixesTeamPicker` replace it.
+- `SixesSegmentDrawScreen` gained `allowManualPick` and now pops
+  **`(int index, bool byHand)`** rather than `bool`: the caller records how the
+  pair was formed (`random` against `loser_choice`) instead of guessing from
+  the index, since a group that spins and then picks the same pairing by hand
+  would otherwise be indistinguishable from one that accepted the reel.
+- **The pre-spin note is deleted.** It read "Result is drawn before it
+  animates", true of a reveal and now false — a line explaining that the
+  answer already exists would be describing a different screen.
+- The entry-card gate was extra-only (`_unconfiguredExtraForHole`) and now
+  covers standard matches too, so scores cannot be posted into a match with no
+  sides. Only the EXTRA auto-opens from that gate; a standard match has its
+  own moment (the match before it being decided), and popping a second picker
+  because the scorer scrolled onto its first hole would ask twice.
+- **Edit Configuration re-posts the teams it already has.** `setup_sixes`
+  rebuilds from what it is sent, so an edit posting empty teams for matches 2
+  and 3 would silently un-pick match 2 — a TD opening the screen to change the
+  stake. They are dropped only when match 1 has been RE-DRAWN, because the
+  rotation hangs off it.
+
+**Not built:** an in-round "change the teams we just set" button. The draw
+screen's own `Change teams` covers the moment the group is actually in (they
+have spun and not yet confirmed), and the server permits a change until the
+match tees off — so the capability is there and only the second surface is
+missing.
+
+Tests: `MatchTwoPickerTests` (`scoring/tests/test_sixes.py`, 15 —
+including the early close-out and the withdrawal that used to wedge it),
+`api/test_sixes_segment_teams.py` (6) and the rewritten
+`mobile/test/sixes_draw_reveal_test.dart` (9). Not to be confused with
+`MatchTwoIsTheGroupsToPickTests`, which is older and covers the SETUP path's
+narrowing — re-posting all three segments, which is what Edit Configuration
+still does.

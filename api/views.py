@@ -7067,6 +7067,46 @@ class SixesSetupView(APIView):
         return Response({'segments_created': len(segments)}, status=status.HTTP_201_CREATED)
 
 
+class SixesSegmentTeamsView(APIView):
+    """
+    POST /api/foursomes/{id}/sixes/segment-teams/
+    Body: { "segment_number": 2,
+            "team1_player_ids": [pk, pk], "team2_player_ids": [pk, pk],
+            "team_select_method": "random" | "loser_choice" }
+
+    The group picking match 2's partners when match 1 is decided
+    (`handoff-solo-games` §3). Thin on purpose: the rule — which pairings are
+    legal, which segment is locked, and that the LAST match is forced to the
+    remainder — lives in `services.sixes.set_segment_teams`, so every caller
+    is covered and the view and the service cannot disagree about when a
+    change is allowed.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.sixes import (SixesLocked, set_segment_teams,
+                                    sixes_summary)
+        try:
+            number = int(request.data.get('segment_number'))
+        except (TypeError, ValueError):
+            return Response({'error': 'segment_number is required.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        method = request.data.get('team_select_method') or 'loser_choice'
+        if method not in ('long_drive', 'random', 'remainder', 'loser_choice'):
+            method = 'loser_choice'
+        try:
+            set_segment_teams(
+                foursome,
+                segment_number=number,
+                team1_player_ids=request.data.get('team1_player_ids') or [],
+                team2_player_ids=request.data.get('team2_player_ids') or [],
+                team_select_method=method,
+            )
+        except SixesLocked as e:
+            return Response({'error': str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return Response(sixes_summary(foursome))
+
+
 class SixesExtraTeamsView(APIView):
     """
     POST /api/foursomes/{id}/sixes/extra-teams/

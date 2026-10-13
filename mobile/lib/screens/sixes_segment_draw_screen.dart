@@ -52,6 +52,18 @@ class SixesSegmentDrawScreen extends StatefulWidget {
   /// the reel lands.  Keeps the outcome a surprise.
   final bool hideCandidatesUntilDrawn;
 
+  /// Offer the group the choice outright — "Pick the teams instead".
+  ///
+  /// Match 2 is theirs to decide (`handoff-solo-games` §3): nothing is drawn
+  /// automatically any more, so the spin is one of two ways to answer the
+  /// same question rather than a reveal of an answer already stored. The
+  /// candidates become tappable and the screen pops the pairing the group
+  /// went with.
+  ///
+  /// False for a draw that is only ever a reveal — match 1 and the extra,
+  /// which both have a free drag behind them on the screen that opened this.
+  final bool allowManualPick;
+
   const SixesSegmentDrawScreen({
     super.key,
     required this.courseName,
@@ -65,6 +77,7 @@ class SixesSegmentDrawScreen extends StatefulWidget {
     required this.landedFootnote,
     this.contextLine,
     this.hideCandidatesUntilDrawn = false,
+    this.allowManualPick = false,
   });
 
   @override
@@ -98,6 +111,10 @@ class _SixesSegmentDrawScreenState extends State<SixesSegmentDrawScreen>
 
   bool _spinning = false;
   bool _landed = false;
+  /// Picking by hand rather than spinning — the candidates become tappable.
+  bool _picking = false;
+  /// The candidate the group chose by hand, if they did.
+  int? _chosen;
   bool _blur = false;
   Animation<double>? _offset;
 
@@ -194,7 +211,7 @@ class _SixesSegmentDrawScreenState extends State<SixesSegmentDrawScreen>
             ],
             // Candidate rows: always shown when revealing upfront; when hidden,
             // they only appear once the reel has landed (the reveal).
-            if (!widget.hideCandidatesUntilDrawn || _landed)
+            if (!widget.hideCandidatesUntilDrawn || _landed || _picking)
               for (var slot = 0; slot < _n; slot++) ...[
                 _candidate(_atSlot(slot), _tags[slot], slot == _displayWinner),
                 if (slot < _n - 1) const SizedBox(height: 7),
@@ -210,9 +227,10 @@ class _SixesSegmentDrawScreenState extends State<SixesSegmentDrawScreen>
   }
 
   Widget _candidate(SixesDrawPair p, String tag, bool isWinner) {
-    final won = _landed && isWinner;
-    final dim = _landed && !isWinner;
-    return AnimatedOpacity(
+    final picked = _chosen != null && _chosen == _display[_slotOf(p)];
+    final won = picked || (_chosen == null && _landed && isWinner);
+    final dim = _chosen != null ? !picked : (_landed && !isWinner);
+    final row = AnimatedOpacity(
       duration: const Duration(milliseconds: 450),
       opacity: dim ? 0.32 : 1,
       child: Container(
@@ -246,6 +264,21 @@ class _SixesSegmentDrawScreenState extends State<SixesSegmentDrawScreen>
         ]),
       ),
     );
+    if (!_picking) return row;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => setState(() => _chosen = _display[_slotOf(p)]),
+      child: row,
+    );
+  }
+
+  /// Which display slot a candidate is drawn in — the rows are shuffled, so a
+  /// tap has to resolve back through the display order rather than assume it.
+  int _slotOf(SixesDrawPair p) {
+    for (var slot = 0; slot < _n; slot++) {
+      if (identical(_atSlot(slot), p)) return slot;
+    }
+    return 0;
   }
 
   Widget _machine() => AnimatedBuilder(
@@ -376,28 +409,69 @@ class _SixesSegmentDrawScreenState extends State<SixesSegmentDrawScreen>
               style: const TextStyle(color: _pine, fontWeight: FontWeight.w700)),
         ]));
     }
+    if (_picking) {
+      return Text(
+          _chosen == null ? 'Tap the pairing you want.' : 'Tap to change.',
+          style: const TextStyle(
+              fontSize: 12.5, color: _muted, fontWeight: FontWeight.w600));
+    }
     return Text(_spinning ? 'Spinning…' : 'Tap Spin to draw.',
         style: const TextStyle(fontSize: 12.5, color: _muted, fontWeight: FontWeight.w600));
   }
 
-  Widget _footer() => Column(children: [
-        SizedBox(
-          width: double.infinity, height: 50,
-          child: FilledButton(
-            onPressed: _landed
-                ? () => Navigator.of(context).pop(true)
-                : (_spinning ? null : _spin),
-            style: FilledButton.styleFrom(
-                backgroundColor: _pine,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999))),
-            child: Text(_landed ? widget.ctaLabel : 'Spin the reel',
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-          ),
+  /// What the screen is going with — the spin's result, or the group's pick.
+  ///
+  /// The second field says WHICH, so the caller can record how the pair was
+  /// formed (`random` against `loser_choice`) rather than guess it from the
+  /// index: a group that spins and then picks the same pairing by hand would
+  /// be indistinguishable from one that simply accepted the reel.
+  (int, bool)? get _result => _chosen != null
+      ? (_chosen!, true)
+      : (_landed ? (widget.winnerIndex, false) : null);
+
+  Widget _footer() {
+    final done = _result != null;
+    return Column(children: [
+      SizedBox(
+        width: double.infinity, height: 50,
+        child: FilledButton(
+          onPressed: done
+              ? () => Navigator.of(context).pop(_result)
+              : (_spinning ? null : _spin),
+          style: FilledButton.styleFrom(
+              backgroundColor: _pine,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999))),
+          child: Text(done ? widget.ctaLabel : 'Spin the reel',
+              style: const TextStyle(
+                  fontWeight: FontWeight.w700, fontSize: 15)),
         ),
+      ),
+      // The other way to answer the same question. It says "Change teams"
+      // once something has been settled, because by then it is an undo
+      // rather than an alternative.
+      if (widget.allowManualPick && !_spinning)
+        TextButton(
+          onPressed: () => setState(() {
+            _picking = true;
+            if (_landed && _chosen == null) _chosen = widget.winnerIndex;
+          }),
+          style: TextButton.styleFrom(foregroundColor: _pine),
+          child: Text(
+              done ? 'Change teams' : 'Pick the teams instead',
+              style: const TextStyle(
+                  fontWeight: FontWeight.w600, fontSize: 12.5)),
+        ),
+      // **No pre-spin note.** It read "Result is drawn before it animates",
+      // which was true of a reveal and is now false: match 2 is the group's
+      // to decide, and a line explaining that the answer already exists
+      // would be describing a different screen.
+      if (_landed) ...[
         const SizedBox(height: 8),
-        Text(_landed ? widget.landedFootnote
-                     : 'Result is drawn before it animates',
+        Text(widget.landedFootnote,
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 10.5, color: _muted, height: 1.4)),
-      ]);
+      ],
+    ]);
+  }
 }

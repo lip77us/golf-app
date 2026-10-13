@@ -864,3 +864,277 @@ class MatchTwoIsTheGroupsToPickTests(TestCase):
         plan[2]['start_hole'] = 14
         with self.assertRaises(SixesLocked):
             setup_sixes(self.fs, plan, handicap_mode='gross')
+
+
+class MatchTwoPickerTests(TestCase):
+    """`handoff-solo-games` §3 — nothing is drawn automatically.
+
+    Match 2's teams used to be decided at SETUP and stored, so the slot
+    machine was pure theatre: `winnerIndex` always pointed at the pairing the
+    server had already written. The group picks now, when match 1 is decided,
+    and match 3 is forced to whatever is left.
+
+    Ann/Ben v. Cal/Dee is match 1, so the two pairings left are Ann+Cal and
+    Ann+Dee — and choosing one of those fixes the other.
+    """
+
+    def setUp(self):
+        self.tee = make_tee()
+        self.round = make_round(self.tee.course)
+        self.fs = make_foursome(
+            self.round,
+            [('Ann', 0), ('Ben', 0), ('Cal', 0), ('Dee', 0)],
+            tee=self.tee,
+        )
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        # Match 1 only. Matches 2 and 3 arrive with no teams at all.
+        base = {'team_select_method': 'long_drive'}
+        setup_sixes(self.fs, [
+            {**base, 'start_hole': 1, 'end_hole': 6,
+             'team1_player_ids': [self.pid['Ann'], self.pid['Ben']],
+             'team2_player_ids': [self.pid['Cal'], self.pid['Dee']]},
+            {**base, 'start_hole': 7, 'end_hole': 12},
+            {**base, 'start_hole': 13, 'end_hole': 18},
+        ], handicap_mode='gross')
+
+    def _seg(self, number):
+        return self.fs.sixes_segments.get(segment_number=number,
+                                          is_extra=False)
+
+    def _split(self, number):
+        from services.sixes import _split_of
+        return _split_of(self._seg(number))
+
+    def _play_match_one(self, *, close_out_early=False):
+        """Six holes of match 1, decided on the LAST of them by default.
+
+        Ann/Ben taking all six would close the match out on the 4th, which
+        moves match 2's first hole to the 5th and makes two of its holes
+        scored before anybody picks its teams. That is a real case and has
+        its own test; it is not the one most of these want.
+        """
+        wins = range(1, 5) if close_out_early else range(5, 7)
+        for h in range(1, 7):
+            lose = 5 if h in wins else 4
+            submit_hole(self.fs, h, [
+                (self.pid['Ann'], 4), (self.pid['Ben'], 4),
+                (self.pid['Cal'], lose), (self.pid['Dee'], lose),
+            ])
+
+    # ── the shape setup leaves behind ──────────────────────────────────────
+
+    def test_matches_two_and_three_start_with_no_teams(self):
+        self.assertIsNotNone(self._split(1))
+        self.assertIsNone(self._split(2))
+        self.assertIsNone(self._split(3))
+
+    def test_a_teamless_segment_has_no_team_rows_at_all(self):
+        """Not team rows with no players — the extra match's shape, which is
+        what keeps `SixesConfiguredGamesTests`' invariant true."""
+        self.assertEqual(self._seg(2).teams.count(), 0)
+
+    def test_the_round_still_reports_sixes_as_configured(self):
+        """Match 1 has its teams and the round is scoreable, so the hub must
+        send a second golfer to score entry rather than the team picker."""
+        from api.serializers import FoursomeSerializer
+        self.assertIn('sixes', FoursomeSerializer(self.fs).data['configured_games'])
+
+    def test_a_teamless_match_stays_pending_and_scores_nothing(self):
+        self._play_match_one()
+        calculate_sixes(self.fs)
+        self.assertEqual(self._seg(2).status, 'pending')
+        self.assertEqual(self._seg(2).hole_results.count(), 0)
+
+    # ── the two options ────────────────────────────────────────────────────
+
+    def test_two_pairings_are_left_and_neither_repeats_match_one(self):
+        from services.sixes import remaining_pairings
+        opts = remaining_pairings(self.fs)
+        self.assertEqual(len(opts), 2)
+        for o in opts:
+            self.assertEqual(
+                {frozenset(o['team1_player_ids']),
+                 frozenset(o['team2_player_ids'])},
+                {frozenset(o['team1_player_ids']),
+                 frozenset(o['team2_player_ids'])})
+            self.assertNotEqual(
+                {frozenset(o['team1_player_ids']),
+                 frozenset(o['team2_player_ids'])},
+                {frozenset({self.pid['Ann'], self.pid['Ben']}),
+                 frozenset({self.pid['Cal'], self.pid['Dee']})})
+
+    def test_the_anchor_stays_on_team_one_in_both_options(self):
+        """So the two read as "who Ann partners next" rather than as four
+        unrelated names."""
+        from services.sixes import remaining_pairings
+        for o in remaining_pairings(self.fs):
+            self.assertIn(self.pid['Ann'], o['team1_player_ids'])
+
+    def test_the_summary_names_them_while_a_match_needs_teams(self):
+        out = sixes_summary(self.fs)['remaining_pairings']
+        self.assertEqual(len(out), 2)
+        self.assertTrue(all(o['team1_names'] for o in out))
+
+    def test_and_keeps_offering_them_after_the_pick(self):
+        """The group may still swap before teeing off — `set_segment_teams`
+        allows exactly that — so a list that emptied the moment the teams were
+        stored would leave the picker with nothing to re-open on."""
+        from services.sixes import set_segment_teams, remaining_pairings
+        opts = remaining_pairings(self.fs)
+        set_segment_teams(self.fs, segment_number=2,
+                          team1_player_ids=opts[0]['team1_player_ids'],
+                          team2_player_ids=opts[0]['team2_player_ids'])
+        self.assertEqual(len(sixes_summary(self.fs)['remaining_pairings']), 2)
+
+    # ── the pick, and the forced remainder ─────────────────────────────────
+
+    def test_picking_match_two_forces_match_three(self):
+        from services.sixes import set_segment_teams, remaining_pairings
+        self._play_match_one()
+        opts = remaining_pairings(self.fs)
+        set_segment_teams(self.fs, segment_number=2,
+                          team1_player_ids=opts[0]['team1_player_ids'],
+                          team2_player_ids=opts[0]['team2_player_ids'])
+        two, three = self._split(2), self._split(3)
+        self.assertIsNotNone(three)
+        self.assertNotEqual({two[0], two[1]}, {three[0], three[1]})
+        # Every golfer has partnered every other exactly once — three
+        # matches, two sides each, so six pairs and no repeats. That rotation
+        # IS the format, and it is what makes match 3 derivable at all.
+        partners = {}
+        for split in (self._split(1), two, three):
+            for side in split:
+                a, b = sorted(side)
+                partners[(a, b)] = partners.get((a, b), 0) + 1
+        self.assertEqual(sorted(partners.values()), [1, 1, 1, 1, 1, 1])
+
+    def test_the_forced_match_is_marked_as_the_remainder(self):
+        from services.sixes import set_segment_teams, remaining_pairings
+        opts = remaining_pairings(self.fs)
+        set_segment_teams(self.fs, segment_number=2,
+                          team1_player_ids=opts[1]['team1_player_ids'],
+                          team2_player_ids=opts[1]['team2_player_ids'],
+                          team_select_method='random')
+        self.assertEqual(
+            {t.team_select_method for t in self._seg(2).teams.all()}, {'random'})
+        self.assertEqual(
+            {t.team_select_method for t in self._seg(3).teams.all()},
+            {'remainder'})
+
+    def test_it_scores_the_holes_already_on_file(self):
+        """A group that posted the 7th before setting its teams must not be
+        left looking at a blank card until the next save."""
+        from services.sixes import set_segment_teams, remaining_pairings
+        self._play_match_one()
+        opts = remaining_pairings(self.fs)
+        pick = opts[0]
+        submit_hole(self.fs, 7, [
+            (pick['team1_player_ids'][0], 4), (pick['team1_player_ids'][1], 4),
+            (pick['team2_player_ids'][0], 5), (pick['team2_player_ids'][1], 5),
+        ])
+        set_segment_teams(self.fs, segment_number=2,
+                          team1_player_ids=pick['team1_player_ids'],
+                          team2_player_ids=pick['team2_player_ids'])
+        self.assertEqual([r.hole_number for r in self._seg(2).hole_results.all()],
+                         [7])
+
+    def test_an_early_close_out_does_not_kill_the_picker(self):
+        """Match 1 closed out on the 4th and the group played on, so holes 5
+        and 6 now belong to match 2 and are already scored. The FIRST pick is
+        still free — those holes were not scored under any teams, and a lock
+        reading "any scored hole" would have refused it and left the picker
+        permanently dead."""
+        from services.sixes import set_segment_teams, remaining_pairings
+        self._play_match_one(close_out_early=True)
+        calculate_sixes(self.fs)
+        self.assertLess(self._seg(2).start_hole, 7)   # repositioned
+        opts = remaining_pairings(self.fs)
+        set_segment_teams(self.fs, segment_number=2,
+                          team1_player_ids=opts[0]['team1_player_ids'],
+                          team2_player_ids=opts[0]['team2_player_ids'])
+        self.assertIsNotNone(self._split(2))
+        self.assertIsNotNone(self._split(3))
+
+    # ── re-openable until it tees off, locked after ────────────────────────
+
+    def test_it_can_be_changed_until_the_match_tees_off(self):
+        from services.sixes import set_segment_teams, remaining_pairings
+        self._play_match_one()
+        opts = remaining_pairings(self.fs)
+        set_segment_teams(self.fs, segment_number=2,
+                          team1_player_ids=opts[0]['team1_player_ids'],
+                          team2_player_ids=opts[0]['team2_player_ids'])
+        first = self._split(2)
+        # Re-open and take the other one — match 1 is six scored holes old,
+        # long past the round-wide ceiling, and that is deliberate.
+        set_segment_teams(self.fs, segment_number=2,
+                          team1_player_ids=opts[1]['team1_player_ids'],
+                          team2_player_ids=opts[1]['team2_player_ids'])
+        self.assertNotEqual({first[0], first[1]}, set(self._split(2)))
+
+    def test_a_played_match_refuses_a_change(self):
+        from services.sixes import (SixesLocked, set_segment_teams,
+                                    remaining_pairings)
+        self._play_match_one()
+        opts = remaining_pairings(self.fs)
+        set_segment_teams(self.fs, segment_number=2,
+                          team1_player_ids=opts[0]['team1_player_ids'],
+                          team2_player_ids=opts[0]['team2_player_ids'])
+        submit_hole(self.fs, 7, [
+            (self.pid['Ann'], 4), (self.pid['Ben'], 4),
+            (self.pid['Cal'], 5), (self.pid['Dee'], 5),
+        ])
+        with self.assertRaises(SixesLocked):
+            set_segment_teams(self.fs, segment_number=2,
+                              team1_player_ids=opts[1]['team1_player_ids'],
+                              team2_player_ids=opts[1]['team2_player_ids'])
+
+    def test_re_saving_the_same_teams_is_not_a_change(self):
+        """A second golfer confirming the same pick must not be refused."""
+        from services.sixes import set_segment_teams, remaining_pairings
+        self._play_match_one()
+        opts = remaining_pairings(self.fs)
+        pick = opts[0]
+        set_segment_teams(self.fs, segment_number=2,
+                          team1_player_ids=pick['team1_player_ids'],
+                          team2_player_ids=pick['team2_player_ids'])
+        submit_hole(self.fs, 7, [
+            (self.pid['Ann'], 4), (self.pid['Ben'], 4),
+            (self.pid['Cal'], 5), (self.pid['Dee'], 5),
+        ])
+        set_segment_teams(self.fs, segment_number=2,
+                          team1_player_ids=pick['team1_player_ids'],
+                          team2_player_ids=pick['team2_player_ids'])
+        self.assertEqual(self._seg(2).teams.count(), 2)
+
+    def test_a_withdrawal_does_not_wedge_the_pick(self):
+        """`setup_sixes` refuses outright while any segment is void — which is
+        why this is a separate writer. A group with an injury must still be
+        able to set match 2."""
+        from services.sixes import set_segment_teams, remaining_pairings
+        self._play_match_one()
+        m = self.fs.memberships.get(player_id=self.pid['Dee'])
+        m.withdrew_after_hole = 6
+        m.save(update_fields=['withdrew_after_hole'])
+        apply_withdrawal_to_sixes(self.fs, self.pid['Dee'], 6, 'void')
+        opts = remaining_pairings(self.fs)
+        set_segment_teams(self.fs, segment_number=2,
+                          team1_player_ids=opts[0]['team1_player_ids'],
+                          team2_player_ids=opts[0]['team2_player_ids'])
+        self.assertIsNotNone(self._split(2))
+
+    def test_a_side_of_one_is_refused(self):
+        from services.sixes import SixesLocked, set_segment_teams
+        with self.assertRaises(SixesLocked):
+            set_segment_teams(self.fs, segment_number=2,
+                              team1_player_ids=[self.pid['Ann']],
+                              team2_player_ids=[self.pid['Ben'],
+                                                self.pid['Cal']])
+
+    def test_a_golfer_on_both_sides_is_refused(self):
+        from services.sixes import SixesLocked, set_segment_teams
+        with self.assertRaises(SixesLocked):
+            set_segment_teams(self.fs, segment_number=2,
+                              team1_player_ids=[self.pid['Ann'], self.pid['Ben']],
+                              team2_player_ids=[self.pid['Ann'], self.pid['Cal']])

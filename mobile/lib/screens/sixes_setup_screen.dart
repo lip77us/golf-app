@@ -182,11 +182,25 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
     _netPercent         = s.netPercent;
     _scoringFormat      = s.scoringFormat;
     _handicapAllocation = s.handicapAllocation;
-    if (s.segments.isNotEmpty) {
-      final seg = s.segments.first;
+    final standard = s.segments.where((x) => !x.isExtra).toList();
+    if (standard.isNotEmpty) {
+      final seg = standard.first;
       _savedTeamOrder = [...seg.team1.playerIds, ...seg.team2.playerIds];
+      _savedLaterTeams = [
+        for (final x in standard.skip(1))
+          (x.team1.playerIds.toList(), x.team2.playerIds.toList()),
+      ];
     }
   }
+
+  /// Matches 2 and 3 as saved — empty lists while the group has not picked
+  /// them yet.
+  ///
+  /// **They have to go back up unchanged.** `setup_sixes` rebuilds from what
+  /// it is sent, so an edit that posted empty teams for them would wipe a
+  /// pick the group had already made on the 6th green — a TD opening this to
+  /// change the stake would silently un-pick match 2.
+  List<(List<int>, List<int>)> _savedLaterTeams = const [];
 
   /// Player-id ordering from the saved match's first segment (team1 then
   /// team2), used to restore the team layout in edit mode.  Empty otherwise.
@@ -250,7 +264,10 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
     final winner = Random().nextInt(candidates.length);
     final courseName = context.read<RoundProvider>().round?.course.name ?? 'Sixes';
 
-    final done = await Navigator.of(context).push<bool>(MaterialPageRoute(
+    // The screen pops the pairing it is going with — the one it drew, or the
+    // one the group picked by hand where that is offered. Reading the index
+    // back rather than reusing `winner` is what keeps those two the same.
+    final picked = await Navigator.of(context).push<(int, bool)>(MaterialPageRoute(
       fullscreenDialog: true,
       builder: (_) => SixesSegmentDrawScreen(
         courseName: courseName,
@@ -265,18 +282,39 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
         hideCandidatesUntilDrawn: true,
       ),
     ));
-    if (done != true || !mounted) return;
+    if (picked == null || !mounted) return;
 
     // Reorder: anchor stays at position 0, the drawn partner moves to
     // position 1, and the remaining two become Team B.  candidate index i
     // pairs the anchor with others[i] (row i+2).
     final anchor = p[0];
     final others = [p[1], p[2], p[3]];
-    final partner = others.removeAt(winner);
+    final partner = others.removeAt(picked.$1);
     setState(() {
       _orderedPlayers = [anchor, partner, ...others];
       _teamGen++;   // force TeamSplitter4 to adopt the new order
     });
+  }
+
+  /// A later match's saved teams, to send back untouched — or nothing, which
+  /// leaves it for the group to pick.
+  ///
+  /// Dropped when match 1 has been RE-DRAWN here, because the rotation hangs
+  /// off it: keeping a pairing chosen against the old match 1 could repeat
+  /// it, and then nobody partners everybody.
+  Map<String, dynamic> _keptTeams(int i) {
+    if (i >= _savedLaterTeams.length) return const {};
+    // Match 1's team 1, as drawn now against as saved. A side of two is the
+    // whole pairing — if this one is unchanged the other is too.
+    final drawnSide = {for (final m in _orderedPlayers.take(2)) m.player.id};
+    final savedSide = _savedTeamOrder.take(2).toSet();
+    if (!(drawnSide.length == savedSide.length &&
+        drawnSide.containsAll(savedSide))) {
+      return const {};
+    }
+    final (t1, t2) = _savedLaterTeams[i];
+    if (t1.length != 2 || t2.length != 2) return const {};
+    return {'team1_player_ids': t1, 'team2_player_ids': t2};
   }
 
   Future<void> _startMatch(BuildContext ctx) async {
@@ -293,21 +331,17 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
     //
     // Match 1 (user-chosen):  P1+P2  vs  P3+P4
     //
-    // There are exactly two other 2v2 pairings that give P1 a new partner:
-    //   Option A:  P1+P3  vs  P2+P4
-    //   Option B:  P1+P4  vs  P2+P3
+    // **Matches 2 and 3 go up with NO teams** (`handoff-solo-games` §3).
+    // There are exactly two other 2v2 pairings that give P1 a new partner,
+    // and this screen used to pick one of them at random and store it — so
+    // the slot machine on the 6th green was theatre, revealing a pairing the
+    // server had already written. The group chooses now, when match 1 is
+    // decided; match 3 is then forced to whatever is left, which is the
+    // guarantee that P1 partners every other golfer exactly once.
     //
-    // Pick one randomly for Match 2; the other becomes Match 3.
-    // This guarantees P1 plays alongside every other player exactly once.
-    final bool p1WithP3InMatch2 = Random().nextBool();
-
-    // Match 2 teams
-    final int p1Partner2 = p1WithP3InMatch2 ? 2 : 3; // index of P3 or P4
-    final int p2Partner2 = p1WithP3InMatch2 ? 3 : 2; // the other one
-
-    // Match 3 teams (the remaining pairing)
-    final int p1Partner3 = p2Partner2; // whoever P1 didn't partner in Match 2
-    final int p2Partner3 = p1Partner2;
+    // The segments themselves are still created here, with their bounds: a
+    // teamless segment is `pending` and scores nothing, which is what makes
+    // the picker's gate honest.
 
     // All three standard segments are submitted up front as the round's
     // play-order thirds (shotgun-aware — a start on hole 8 gives 8-13/14-1/2-7).
@@ -326,15 +360,13 @@ class _SixesSetupScreenState extends State<SixesSetupScreen> {
         'start_hole': thirds[1].first,
         'end_hole': thirds[1].last,
         'team_select_method': 'random',
-        'team1_player_ids': [p[0].player.id, p[p1Partner2].player.id],
-        'team2_player_ids': [p[1].player.id, p[p2Partner2].player.id],
+        ..._keptTeams(0),
       },
       {
         'start_hole': thirds[2].first,
         'end_hole': thirds[2].last,
         'team_select_method': 'remainder',
-        'team1_player_ids': [p[0].player.id, p[p1Partner3].player.id],
-        'team2_player_ids': [p[1].player.id, p[p2Partner3].player.id],
+        ..._keptTeams(1),
       },
     ];
 

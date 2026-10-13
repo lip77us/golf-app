@@ -1,38 +1,50 @@
 import '../api/models.dart';
 
-/// Should the Segment-2 draw reveal be shown right now?
+/// Which Sixes match still needs its teams, and when to ask.
 ///
-/// The draw is a **reveal**, not a decision: all three pairings are assigned
-/// when the game is set up, and the slot machine only uncovers the one that
-/// was always going to be next. Nothing about the teams changes when it runs.
+/// **Match 2 is the group's pick, not a reveal** (`handoff-solo-games` §3).
+/// It used to be decided at SETUP and stored, so the slot machine was pure
+/// theatre: the reel's `winnerIndex` always pointed at the pairing the server
+/// had already written, and the screen's job was to uncover it. Nothing about
+/// the teams could change when it ran.
 ///
-/// That makes the timing the whole point. It is worth seeing at the moment
-/// Segment 1 settles and Segment 2 has not begun. Shown any later it
-/// interrupts play to announce a pairing the group is already playing — and
-/// dismissing it jumps the card back to Segment 2's first hole, which is how
-/// a group standing on the 13th got sent back to the 7th.
+/// Now nothing is drawn automatically. Matches 2 and 3 arrive with no teams
+/// at all, the group spins or picks when match 1 is decided, and match 3 is
+/// forced to the pairing left over — so each golfer partners each other
+/// golfer exactly once, which is the format.
 ///
-/// The screen also remembers, per round and per device, that it has shown the
-/// draw. That flag is a convenience and not the rule: it is device-local, so
-/// a reinstall or a second phone loses it, and it cannot stand in for the one
-/// thing that actually decides this — whether the group has played on.
-bool shouldRevealSixesSegmentTwoDraw(SixesSummary? summary) {
-  if (summary == null) return false;
+/// The per-device "already shown" flag is gone with it. It was a convenience
+/// standing in for the rule, and it is the wrong shape for a decision: a
+/// reinstall or a second phone lost it, and a draw that has not happened yet
+/// has to be openable on any phone in the group.
 
+/// The 1-based number of the first standard match with no teams, or null when
+/// every match has them.
+int? sixesMatchNeedingTeams(SixesSummary? summary) {
+  if (summary == null) return null;
   final segs = summary.segments.where((s) => !s.isExtra).toList();
-  if (segs.length < 3) return false;
-  final seg1 = segs[0], seg2 = segs[1], seg3 = segs[2];
+  for (var i = 0; i < segs.length; i++) {
+    if (!segs[i].team1.hasPlayers || !segs[i].team2.hasPlayers) return i + 1;
+  }
+  return null;
+}
 
-  // Segment 1 has to be settled — including an early close-out on 4 or 5.
-  final seg1Done = seg1.status == 'complete' || seg1.status == 'halved';
-  if (!seg1Done) return false;
-
-  // Both remaining pairings must be assigned, or there is nothing to reveal.
-  if (!seg2.team1.hasPlayers || !seg3.team1.hasPlayers) return false;
-
-  // And the group must not have played on. A single scored hole in either
-  // later segment means this moment has passed.
-  if (seg2.holes.isNotEmpty || seg3.holes.isNotEmpty) return false;
-
-  return true;
+/// Should the picker open on its own right now?
+///
+/// At the moment the match BEFORE it is decided — which is when the group is
+/// standing on a tee asking whose side they are on — and not later: popping a
+/// picker over a match already being played interrupts it to ask a question
+/// the group has answered with their feet. Once that moment passes the banner
+/// and its Set teams button are the way in.
+bool shouldOpenSixesTeamPicker(SixesSummary? summary) {
+  final needs = sixesMatchNeedingTeams(summary);
+  if (needs == null || needs < 2) return false;
+  final segs = summary!.segments.where((s) => !s.isExtra).toList();
+  final prev = segs[needs - 2];
+  final settled = prev.status == 'complete' || prev.status == 'halved';
+  if (!settled) return false;
+  // A hole scored in the match that needs teams means the group has played
+  // on. It is still pickable — that is what the banner is for — but it no
+  // longer earns a screen of its own.
+  return segs[needs - 1].holes.isEmpty;
 }

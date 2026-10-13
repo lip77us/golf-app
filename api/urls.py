@@ -133,6 +133,7 @@ urlpatterns = [
     path('foursomes/<int:pk>/sixes/',              views.SixesResultView.as_view(),     name='api-sixes-result'),
     path('foursomes/<int:pk>/sixes/setup/',        views.SixesSetupView.as_view(),      name='api-sixes-setup'),
     path('foursomes/<int:pk>/sixes/extra-teams/',  views.SixesExtraTeamsView.as_view(), name='api-sixes-extra-teams'),
+    path('foursomes/<int:pk>/sixes/segment-teams/', views.SixesSegmentTeamsView.as_view(), name='api-sixes-segment-teams'),
 
     # ---- Points 5-3-1 ----
     path('foursomes/<int:pk>/points_531/',       views.Points531ResultView.as_view(), name='api-points-531-result'),

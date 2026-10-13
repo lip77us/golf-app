@@ -665,6 +665,39 @@ class RoundProvider extends ChangeNotifier {
   /// deleting standard segments or hole results.
   ///
   /// Returns true on success.  On failure [error] is set and false returned.
+  /// The group's pick for one Sixes match (match 2 when match 1 is decided).
+  /// The forced last match comes back in the same summary.
+  Future<bool> setSixesSegmentTeams(
+    int foursomeId, {
+    required int segmentNumber,
+    required List<int> team1Ids,
+    required List<int> team2Ids,
+    String teamSelectMethod = 'loser_choice',
+  }) async {
+    _submitting = true;
+    _clearError();
+    notifyListeners();
+    try {
+      _sixesSummary = await _client.postSixesSegmentTeams(
+        foursomeId,
+        segmentNumber: segmentNumber,
+        team1Ids: team1Ids,
+        team2Ids: team2Ids,
+        teamSelectMethod: teamSelectMethod,
+      );
+      return true;
+    } on NetworkException {
+      _error = 'No connection — cannot set the teams while offline.';
+      return false;
+    } catch (e) {
+      _error = friendlyError(e);
+      return false;
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> setExtraTeams(
     int foursomeId,
     List<int> team1Ids,

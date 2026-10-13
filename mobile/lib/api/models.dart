@@ -1666,6 +1666,41 @@ class SixesSegment {
   }
 }
 
+/// One of the two pairings still on offer for the match the group is picking.
+///
+/// Named by the SERVER (`services.sixes.remaining_pairings`): which two are
+/// legal is the format's rule — each golfer partners each other golfer exactly
+/// once — and deriving it here would be a second copy of it.
+class SixesPairingOption {
+  final List<int> team1PlayerIds;
+  final List<int> team2PlayerIds;
+  final List<String> team1Names;
+  final List<String> team2Names;
+
+  const SixesPairingOption({
+    required this.team1PlayerIds,
+    required this.team2PlayerIds,
+    required this.team1Names,
+    required this.team2Names,
+  });
+
+  factory SixesPairingOption.fromJson(Map<String, dynamic> j) =>
+      SixesPairingOption(
+        team1PlayerIds: ((j['team1_player_ids'] as List?) ?? const [])
+            .map((e) => (e as num).toInt())
+            .toList(),
+        team2PlayerIds: ((j['team2_player_ids'] as List?) ?? const [])
+            .map((e) => (e as num).toInt())
+            .toList(),
+        team1Names: ((j['team1_names'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toList(),
+        team2Names: ((j['team2_names'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toList(),
+      );
+}
+
 class SixesSummary {
   final List<SixesSegment> segments;
   final int team1Wins;
@@ -1710,6 +1745,10 @@ class SixesSummary {
   /// which is why the ribbon can say `so far` and mean it.
   final Map<int, double> moneyByPlayer;
 
+  /// The two pairings the group may still choose from — empty once every
+  /// match has its teams.
+  final List<SixesPairingOption> remainingPairings;
+
   const SixesSummary({
     required this.segments,
     required this.team1Wins,
@@ -1723,6 +1762,7 @@ class SixesSummary {
     this.holes       = const [],
     this.players     = const [],
     this.holesInPlay = const [],
+    this.remainingPairings = const [],
   });
 
   bool get isNet        => handicapMode == 'net';
@@ -1760,6 +1800,10 @@ class SixesSummary {
             (e['player_id'] as num).toInt():
                 ((e['amount'] as num?) ?? 0).toDouble(),
       },
+      remainingPairings: (j['remaining_pairings'] as List? ?? const [])
+          .map((e) =>
+              SixesPairingOption.fromJson((e as Map).cast<String, dynamic>()))
+          .toList(),
     );
   }
 }

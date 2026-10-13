@@ -1848,6 +1848,31 @@ class ApiClient {
     });
   }
 
+  /// POST /api/foursomes/{id}/sixes/segment-teams/
+  ///
+  /// The group's own pick for one match — match 2, when match 1 is decided.
+  /// The LAST match is forced to the pairing left over and is set by the
+  /// server, not sent from here: two places deriving it is how they come to
+  /// disagree.
+  Future<SixesSummary> postSixesSegmentTeams(
+    int foursomeId, {
+    required int segmentNumber,
+    required List<int> team1Ids,
+    required List<int> team2Ids,
+    String teamSelectMethod = 'loser_choice',
+  }) async {
+    final data = await _post(
+      '/foursomes/$foursomeId/sixes/segment-teams/',
+      {
+        'segment_number': segmentNumber,
+        'team1_player_ids': team1Ids,
+        'team2_player_ids': team2Ids,
+        'team_select_method': teamSelectMethod,
+      },
+    );
+    return SixesSummary.fromJson(data as Map<String, dynamic>);
+  }
+
   /// POST /api/foursomes/{id}/sixes/extra-teams/
   ///
   /// Sets teams on the existing is_extra=True segment without disturbing any

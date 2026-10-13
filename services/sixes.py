@@ -331,21 +331,33 @@ def setup_sixes(
             handicap_allocation = handicap_allocation,
         )
 
-        # Team 1
-        t1 = SixesTeam.objects.create(
-            segment            = seg,
-            team_number        = 1,
-            team_select_method = td['team_select_method'],
-        )
-        t1.players.set(td['team1_player_ids'])
+        # **A segment may arrive with NO teams**, which is how matches 2 and
+        # 3 now start: the group picks match 2's partners when match 1 is
+        # decided (`handoff-solo-games` §3), so there is nothing to store for
+        # them at setup.
+        #
+        # No teams means no TEAM ROWS, not team rows with no players — the
+        # same shape the extra match has always used, which is what keeps
+        # `SixesConfiguredGamesTests`' invariant true: a team row always
+        # carries players. `_score_segment` already answers 'pending' for a
+        # segment with fewer than two teams, and `configured_games` stays
+        # honest because segment 1 has its teams and the round is scoreable.
+        t1_ids = td.get('team1_player_ids') or []
+        t2_ids = td.get('team2_player_ids') or []
+        if t1_ids and t2_ids:
+            t1 = SixesTeam.objects.create(
+                segment            = seg,
+                team_number        = 1,
+                team_select_method = td['team_select_method'],
+            )
+            t1.players.set(t1_ids)
 
-        # Team 2
-        t2 = SixesTeam.objects.create(
-            segment            = seg,
-            team_number        = 2,
-            team_select_method = td['team_select_method'],
-        )
-        t2.players.set(td['team2_player_ids'])
+            t2 = SixesTeam.objects.create(
+                segment            = seg,
+                team_number        = 2,
+                team_select_method = td['team_select_method'],
+            )
+            t2.players.set(t2_ids)
 
         segments.append(seg)
 
@@ -359,6 +371,197 @@ def setup_sixes(
         calculate_sixes(foursome)
 
     return segments
+
+
+# ---------------------------------------------------------------------------
+# One segment's teams — the group's own pick
+# ---------------------------------------------------------------------------
+
+def segment_holes(foursome, seg) -> list:
+    """The holes of one segment, along the GROUP's play order.
+
+    Not `range(start, end + 1)`: a shotgun third can wrap the turn (holes
+    14..18,1), where the last hole has the smallest number — the shotgun
+    sweep's third shape. Falls back to the arithmetic range only when the
+    bounds are not in the order at all.
+    """
+    from services.hole_plan import play_order as _play_order
+    order = _play_order(foursome.round, foursome) or list(range(1, 19))
+    try:
+        sp, ep = order.index(seg.start_hole), order.index(seg.end_hole)
+    except ValueError:
+        return list(range(seg.start_hole, seg.end_hole + 1))
+    if ep < sp:
+        return list(range(seg.start_hole, seg.end_hole + 1))
+    return order[sp:ep + 1]
+
+
+def _splits(pids: list) -> list:
+    """The three ways four golfers pair off, each as a pair of frozensets."""
+    a, b, c, d = pids
+    return [
+        (frozenset({a, b}), frozenset({c, d})),
+        (frozenset({a, c}), frozenset({b, d})),
+        (frozenset({a, d}), frozenset({b, c})),
+    ]
+
+
+def _split_of(seg) -> tuple | None:
+    """A segment's pairing as a pair of frozensets, or None when teamless."""
+    by_number = {t.team_number: t for t in seg.teams.all()}
+    t1, t2 = by_number.get(1), by_number.get(2)
+    if t1 is None or t2 is None:
+        return None
+    s1 = frozenset(t1.players.values_list('id', flat=True))
+    s2 = frozenset(t2.players.values_list('id', flat=True))
+    if not s1 or not s2:
+        return None
+    return (s1, s2)
+
+
+def remaining_pairings(foursome) -> list:
+    """The pairings still available after match 1, newest-partner first.
+
+    Four golfers pair off three ways. Match 1 is one of them, so **two are
+    left** — which is the whole shape of the match-2 pick: the group chooses
+    one and match 3 is then forced, so everybody partners everybody exactly
+    once. That rotation IS the format; a free drag could repeat match 1's
+    pairing and leave match 3 underivable.
+
+    Each entry is `{'team1_player_ids': [...], 'team2_player_ids': [...]}`,
+    with match 1's team-1 anchor kept on team 1 so the two options read as
+    "who the anchor partners next" rather than as four unrelated names.
+    """
+    segs = list(SixesSegment.objects.filter(foursome=foursome, is_extra=False)
+                .order_by('segment_number').prefetch_related('teams__players'))
+    if not segs:
+        return []
+    pids = [m.player_id for m in foursome.memberships.select_related('player')
+            if not m.player.is_phantom]
+    if len(pids) != 4:
+        return []
+    first = _split_of(segs[0])
+    if first is None:
+        return []
+    anchor = next(iter(first[0]))
+    out = []
+    for s1, s2 in _splits(pids):
+        if {s1, s2} == {first[0], first[1]}:
+            continue            # match 1's own pairing is not on offer
+        side1, side2 = (s1, s2) if anchor in s1 else (s2, s1)
+        out.append({
+            'team1_player_ids': sorted(side1),
+            'team2_player_ids': sorted(side2),
+        })
+    return out
+
+
+@transaction.atomic
+def set_segment_teams(foursome, *, segment_number: int,
+                      team1_player_ids: list, team2_player_ids: list,
+                      team_select_method: str = 'loser_choice') -> list:
+    """Set ONE segment's teams, and force the last match to the remainder.
+
+    This is the group picking match 2's partners on the 6th green. It is a
+    separate writer from `setup_sixes` on purpose, and the reasons are the two
+    things that function does which are wrong here: it DELETES every segment
+    and rebuilds (taking a spawned extra's teams with it), and it refuses
+    outright while any segment is `is_void` — so a group with a withdrawal
+    could never pick match 2 at all.
+
+    Locked per SEGMENT, not per round: refused once a real golfer has posted a
+    gross score on one of **that segment's** holes. The round-wide 3-hole
+    ceiling is long past by the 6th green, and what the ceiling protects is a
+    played hole being re-scored under different teams — which is exactly the
+    narrowing `_change_touches_played` already describes.
+
+    **The last match is forced, not chosen.** With match 1 fixed, choosing
+    match 2 leaves exactly one pairing, so it is derived here rather than sent
+    by the client: two clients deriving it is how they come to disagree.
+    """
+    segs = list(SixesSegment.objects.filter(foursome=foursome, is_extra=False)
+                .order_by('segment_number').prefetch_related('teams__players'))
+    target = next((s for s in segs if s.segment_number == segment_number), None)
+    if target is None:
+        raise SixesLocked(f'There is no match {segment_number} in this round.')
+
+    t1_ids = [int(i) for i in (team1_player_ids or [])]
+    t2_ids = [int(i) for i in (team2_player_ids or [])]
+    if len(t1_ids) != 2 or len(t2_ids) != 2 or set(t1_ids) & set(t2_ids):
+        raise SixesLocked('Each side needs two different golfers.')
+
+    scored = _scored_holes(foursome)
+    chosen = (frozenset(t1_ids), frozenset(t2_ids))
+
+    def _locked(seg, new_split) -> bool:
+        """Played UNDER teams, and this change would alter what it meant.
+
+        **Setting teams for the first time is always free**, whatever has
+        been scored — and that case is normal rather than exotic: when match
+        1 closes out early the group plays on, and `calculate_sixes` hands
+        those holes to match 2, so match 2 routinely has scored holes before
+        anybody is asked to pick its partners. A lock that read "any scored
+        hole" would refuse the very first pick and leave the picker dead.
+
+        What it protects is a hole scored AS part of a match being re-scored
+        under different teams, which needs teams to have existed.
+        """
+        current = _split_of(seg)
+        if current is None:
+            return False
+        if {current[0], current[1]} == set(new_split):
+            return False            # not a change; a second golfer confirming
+        return bool(set(segment_holes(foursome, seg)) & scored)
+
+    if _locked(target, chosen):
+        # NOT `edit_window.closed_reason`: that names the round-wide 3-hole
+        # ceiling, and this is a different rule with a different threshold —
+        # borrowing its copy would quote a number that has nothing to do with
+        # the refusal.
+        raise SixesLocked(
+            f'Match {segment_number} has already been played, so its teams '
+            'cannot change — the holes were scored against them.')
+
+    # The remainder, for the match the group does NOT choose. Only ever the
+    # OTHER unplayed standard segment — with three matches that is match 3
+    # when match 2 is picked, and nothing at all if the round is set up some
+    # other way.
+    forced = None
+    options = remaining_pairings(foursome)
+    others = [s for s in segs
+              if s.segment_number != segment_number and s.segment_number != 1]
+    if len(options) == 2 and len(others) == 1:
+        remainder = next(
+            (o for o in options
+             if {frozenset(o['team1_player_ids']),
+                 frozenset(o['team2_player_ids'])} != set(chosen)),
+            None)
+        if remainder is not None:
+            forced = (others[0], remainder)
+            if _locked(forced[0],
+                       (frozenset(remainder['team1_player_ids']),
+                        frozenset(remainder['team2_player_ids']))):
+                raise SixesLocked(
+                    f'Match {forced[0].segment_number} has already been '
+                    'played, and these teams would change what it was. '
+                    'Leave match ' f'{segment_number} as it is.')
+
+    writes = [(target, {'team1_player_ids': t1_ids,
+                        'team2_player_ids': t2_ids}, team_select_method)]
+    if forced is not None:
+        writes.append((forced[0], forced[1], 'remainder'))
+
+    for seg, split, method in writes:
+        seg.teams.all().delete()
+        for number, key in ((1, 'team1_player_ids'), (2, 'team2_player_ids')):
+            team = SixesTeam.objects.create(
+                segment=seg, team_number=number, team_select_method=method)
+            team.players.set(split[key])
+
+    # Score the holes already on file for these matches — without this the
+    # group sets its teams and the card stays blank until the next save.
+    calculate_sixes(foursome)
+    return [w[0] for w in writes]
 
 
 # ---------------------------------------------------------------------------
@@ -1431,9 +1634,31 @@ def sixes_summary(foursome) -> dict:
             ],
         })
 
+    # The two pairings still on offer, for the match-2 picker. Named by the
+    # SERVER because which two are legal is the format's rule — each golfer
+    # partners each other golfer exactly once — and a client deriving it would
+    # be a second copy of that rule. Empty once every match has its teams, so
+    # the picker has nothing to open on.
+    #
+    # Emitted whenever there ARE two — not only while a match is waiting for
+    # them. A group that has just set match 2 and not teed off may still
+    # change it (`set_segment_teams` allows exactly that), and a list that
+    # emptied the moment the teams were stored would leave the picker with
+    # nothing to re-open on.
+    pairings_out = []
+    _name = {m.player_id: (m.player.short_name or m.player.name)
+             for m in real_members}
+    for opt in remaining_pairings(foursome):
+        pairings_out.append({
+            **opt,
+            'team1_names': [_name.get(i, '') for i in opt['team1_player_ids']],
+            'team2_names': [_name.get(i, '') for i in opt['team2_player_ids']],
+        })
+
     return {
         'segments': seg_out,
         'players' : players_out,
+        'remaining_pairings': pairings_out,
         'holes'   : holes_grid,
         'holes_in_play' : holes_in_play,
         'overall' : {

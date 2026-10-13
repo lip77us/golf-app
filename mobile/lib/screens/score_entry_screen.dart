@@ -55,7 +55,6 @@ import '../sync/sync_service.dart';
 import '../utils/match_handicap.dart';
 import '../utils/nassau_team_style.dart';
 import '../utils/sixes_handicap.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'sixes_segment_draw_screen.dart';
 import '../utils/sixes_draw.dart';
 import '../utils/round_complete.dart';
@@ -623,10 +622,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
 
   /// Returns the extras segment covering [hole] that still has no teams
   /// assigned, or null if teams are set / not an extras hole.
-  SixesSegment? _unconfiguredExtraForHole(int hole, SixesSummary? summary) {
+  /// The segment covering [hole] whose teams are not set — extra OR standard.
+  ///
+  /// It was extra-only, because a standard match's teams were all decided at
+  /// setup. Match 2 is the group's pick now, so the same gate has to cover it
+  /// — otherwise a group could post scores into a match with no sides, which
+  /// is the one thing this prompt exists to stop.
+  SixesSegment? _segmentNeedingTeams(int hole, SixesSummary? summary) {
     if (summary == null) return null;
     for (final s in summary.segments.reversed) {
-      if (!s.isExtra) continue;
       if (hole < s.startHole || hole > s.endHole) continue;
       if (s.team1.hasPlayers && s.team2.hasPlayers) return null;
       return s;
@@ -1945,7 +1949,6 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   // Fires ONCE, when Segment 1 completes (which may be an early close-out on
   // hole 4/5).  The pairing is already assigned at setup; the sheet just reveals
   // it.  Guarded per instance + persisted per round so it never re-fires.
-  bool _sixesDrawHandled = false;
 
   // Compact pairing label — first names only, so the Segment-1 status row can't
   // overflow with long full names.
@@ -2366,71 +2369,115 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     );
   }
 
-  Future<void> _maybeShowSixesDraw(RoundProvider rp, List<String> games) async {
-    if (_sixesDrawHandled) return;
+  /// Open the team picker for the match that still needs one.
+  ///
+  /// Once per match per screen instance — backing out is an answer, and a
+  /// picker that re-popped on every rebuild would be a trap. The way back in
+  /// is the banner on the entry card, which stands until the teams are set.
+  final Set<int> _sixesPickerOpened = {};
+
+  Future<void> _maybeOpenSixesTeamPicker(
+      RoundProvider rp, List<String> games) async {
     if (!games.contains('sixes')) return;
+    if (!shouldOpenSixesTeamPicker(rp.sixesSummary)) return;
+    final number = sixesMatchNeedingTeams(rp.sixesSummary);
+    if (number == null || _sixesPickerOpened.contains(number)) return;
+    _sixesPickerOpened.add(number);
+    await _openSixesTeamPicker(rp, number);
+  }
+
+  /// The group picks match 2's partners — spin for it, or set them by hand.
+  ///
+  /// The two options come from the SERVER (`remaining_pairings`): which two
+  /// are legal is the format's rule, and the last match is forced to the one
+  /// left over, which the server also does. This screen chooses between two
+  /// pairings and nothing else.
+  Future<void> _openSixesTeamPicker(RoundProvider rp, int number) async {
     final s = rp.sixesSummary;
-    final roundId = rp.round?.id;
-    if (s == null || roundId == null) return;
-    // Segment 1 settled, both pairings assigned, and the group has NOT played
-    // on — see shouldRevealSixesSegmentTwoDraw for why the last clause is the
-    // one that matters.
-    if (!shouldRevealSixesSegmentTwoDraw(s)) return;
-    final segs = s.segments.where((x) => !x.isExtra).toList();
-    final seg1 = segs[0], seg2 = segs[1], seg3 = segs[2];
+    final options = s?.remainingPairings ?? const <SixesPairingOption>[];
+    final segs = (s?.segments ?? const <SixesSegment>[])
+        .where((x) => !x.isExtra)
+        .toList();
+    if (options.length < 2 || segs.length < number || number < 2) return;
+    final prev = segs[number - 2];
+    final seg  = segs[number - 1];
 
-    _sixesDrawHandled = true;   // guard re-entry for this build session
-    final prefs = await SharedPreferences.getInstance();
-    final key = 'sixes_draw_shown_${roundId}_${widget.foursomeId}';
-    if (prefs.getBool(key) ?? false) return;      // already revealed on this device
-    await prefs.setBool(key, true);
-    if (!mounted) return;
-
-    final seg1Line = Container(
+    final prevLine = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
           color: Colors.white, borderRadius: BorderRadius.circular(8),
           border: Border.all(color: const Color(0xFFD3DED6))),
       child: Row(children: [
-        const Text('SEG 1', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
-            color: Color(0xFF5C6B62), letterSpacing: 0.3)),
+        Text('MATCH ${number - 1}',
+            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
+                color: Color(0xFF5C6B62), letterSpacing: 0.3)),
         const SizedBox(width: 8),
         // First names + ellipsis so a long pairing can't overflow the row.
         Expanded(child: RichText(overflow: TextOverflow.ellipsis, text: TextSpan(
           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
           children: [
-            TextSpan(text: _firstNames(seg1.team1.players),
+            TextSpan(text: _firstNames(prev.team1.players),
                 style: const TextStyle(color: Color(0xFF1976D2))),
             const TextSpan(text: ' v. ',
                 style: TextStyle(color: Color(0xFF5C6B62), fontSize: 11)),
-            TextSpan(text: _firstNames(seg1.team2.players),
+            TextSpan(text: _firstNames(prev.team2.players),
                 style: const TextStyle(color: Color(0xFFEF6C00))),
           ]))),
         const SizedBox(width: 8),
-        Text(seg1.statusDisplay, style: const TextStyle(
+        Text(prev.statusDisplay, style: const TextStyle(
             fontWeight: FontWeight.w700, fontSize: 12, color: Color(0xFF0F6E56))),
       ]),
     );
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) =>
-      SixesSegmentDrawScreen(
-        courseName: rp.round?.course.name ?? 'Sixes',
-        eyebrow: 'Segment 1 complete · holes ${seg1.startHole}–${seg1.endHole}',
-        title: 'Who plays together next?',
-        lede: 'Two pairings are left. Spin to pick partners for Segment 2.',
-        contextLine: seg1Line,
-        machineTitle: 'SEGMENT 2 DRAW',
-        candidates: [
-          SixesDrawPair(blue: seg2.team1.players, orange: seg2.team2.players),
-          SixesDrawPair(blue: seg3.team1.players, orange: seg3.team2.players),
-        ],
-        winnerIndex: 0,
-        ctaLabel: 'Start hole ${seg2.startHole}',
-        landedFootnote:
-            'Drawn ${TimeOfDay.now().format(context)} · Segment 3 is the last pairing',
-        hideCandidatesUntilDrawn: true,
-      )));
-    // On return, jump to Segment 2's first hole so the group starts there.
-    if (mounted) setState(() => _selectedHole = seg2.startHole);
+
+    // The reel reveals a pairing chosen HERE, before it animates — it is
+    // still never the randomness. What changed is that the answer is no
+    // longer already stored on the server.
+    final spun = Random().nextInt(options.length);
+    final picked = await Navigator.of(context).push<(int, bool)>(
+      MaterialPageRoute(fullscreenDialog: true, builder: (_) =>
+        SixesSegmentDrawScreen(
+          courseName: rp.round?.course.name ?? 'Sixes',
+          eyebrow: 'Match ${number - 1} complete · '
+              'holes ${prev.startHole}–${prev.endHole}',
+          title: 'Who plays together next?',
+          lede: 'Two pairings are left. Spin for match $number, or set the '
+              'teams yourself.',
+          contextLine: prevLine,
+          machineTitle: 'MATCH $number DRAW',
+          candidates: [
+            for (final o in options)
+              SixesDrawPair(blue: o.team1Names, orange: o.team2Names),
+          ],
+          winnerIndex: spun,
+          ctaLabel: 'Start hole ${seg.startHole}',
+          landedFootnote: 'Match ${number + 1} is the last pairing',
+          // The options are LISTED with the lede, not kept back: the group is
+          // choosing between them, and a choice you cannot see is not one.
+          hideCandidatesUntilDrawn: false,
+          allowManualPick: true,
+        )));
+    if (picked == null || !mounted) return;
+
+    final chosen = options[picked.$1];
+    final ok = await rp.setSixesSegmentTeams(
+      widget.foursomeId,
+      segmentNumber: number,
+      team1Ids: chosen.team1PlayerIds,
+      team2Ids: chosen.team2PlayerIds,
+      teamSelectMethod: picked.$2 ? 'loser_choice' : 'random',
+    );
+    if (!mounted) return;
+    if (!ok) {
+      // The pick is not lost — the banner on the card opens this again.
+      _sixesPickerOpened.remove(number);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(rp.error ?? 'Failed to set the teams.'),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
+      return;
+    }
+    // Start the group on the match they have just drawn.
+    setState(() => _selectedHole = seg.startHole);
   }
 
   Widget build(BuildContext context) {
@@ -2440,7 +2487,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final isComplete = rp.round?.status == 'complete';
     final games      = _activeGames(rp.round);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _maybeShowSixesDraw(rp, games);
+      if (mounted) _maybeOpenSixesTeamPicker(rp, games);
     });
     // Gate summaries on the active game list so stale summaries from a prior
     // game in the same session never bleed into unrelated games.
@@ -3148,9 +3195,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // Sixes extra-match team gating: auto-open the picker the first time the
     // user navigates into an extras hole that has no teams assigned yet.
     final needsTeamsSeg = games.contains('sixes')
-        ? _unconfiguredExtraForHole(_selectedHole, rp.sixesSummary)
+        ? _segmentNeedingTeams(_selectedHole, rp.sixesSummary)
         : null;
+    // Only the EXTRA opens itself from here. A standard match has its own
+    // moment — when the match before it is decided — and popping a second
+    // picker because the scorer scrolled onto its first hole would ask the
+    // same question twice.
     if (needsTeamsSeg != null &&
+        needsTeamsSeg.isExtra &&
         !_autoOpenedExtraStart.contains(needsTeamsSeg.startHole)) {
       _autoOpenedExtraStart.add(needsTeamsSeg.startHole);
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -3259,9 +3311,23 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 allowJunk:       allowJunk,
                 junkForPlayer:   (pid) => _currentJunk(pid, _selectedHole, skins),
                 blockedExtraSeg: needsTeamsSeg,
+                // Two pickers, because they ask different questions: an
+                // extra match is a free drag of all four golfers, while a
+                // standard match is a choice between the two pairings the
+                // rotation has left.
                 onOpenExtraTeamsPicker: needsTeamsSeg == null
                     ? null
-                    : () => _showExtraTeamPicker(needsTeamsSeg, players),
+                    : () {
+                        if (needsTeamsSeg.isExtra) {
+                          _showExtraTeamPicker(needsTeamsSeg, players);
+                          return;
+                        }
+                        final n = sixesMatchNeedingTeams(rp.sixesSummary);
+                        if (n != null) {
+                          _sixesPickerOpened.add(n);
+                          _openSixesTeamPicker(rp, n);
+                        }
+                      },
                 onScoreSelected: (m, score) {
                   final hole = _selectedHole;
                   final wasAllScored = _allScored(
@@ -8404,7 +8470,7 @@ class _ExtraTeamPickerSheetState extends State<_ExtraTeamPickerSheet> {
     final courseName =
         context.read<RoundProvider>().round?.course.name ?? 'Sixes';
 
-    final done = await Navigator.of(context, rootNavigator: true).push<bool>(
+    final picked = await Navigator.of(context, rootNavigator: true).push<(int, bool)>(
       MaterialPageRoute(
         fullscreenDialog: true,
         builder: (_) => SixesSegmentDrawScreen(
@@ -8421,10 +8487,10 @@ class _ExtraTeamPickerSheetState extends State<_ExtraTeamPickerSheet> {
         ),
       ),
     );
-    if (done != true || !mounted) return;
+    if (picked == null || !mounted) return;
     final anchor = p[0];
     final others = [p[1], p[2], p[3]];
-    final partner = others.removeAt(winner);
+    final partner = others.removeAt(picked.$1);
     setState(() {
       _ordered = [anchor, partner, ...others];
       _teamGen++;

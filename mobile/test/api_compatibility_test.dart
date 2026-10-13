@@ -142,6 +142,7 @@ final Map<String, Object Function(Map<String, dynamic>)> _models = {
   'SequoyaTransfer': (j) => SequoyaTransfer.fromJson(j),
   'SharedRoundSummary': (j) => SharedRoundSummary.fromJson(j),
   'SixesHoleResult': (j) => SixesHoleResult.fromJson(j),
+  'SixesPairingOption': (j) => SixesPairingOption.fromJson(j),
   'SixesSegment': (j) => SixesSegment.fromJson(j),
   'SixesSummary': (j) => SixesSummary.fromJson(j),
   'SixesTeamInfo': (j) => SixesTeamInfo.fromJson(j),
