@@ -233,11 +233,12 @@ class _SoloSetupScreenState extends State<SoloSetupScreen> {
                       onChanged: (v) => setState(() => _autoPress = v),
                       title: const Text('Auto press at 2 down'),
                       subtitle: Text(
-                        'A press opens on the next hole whenever you go 2, 4, '
-                        '6 or 8 down to par, and runs to the end of that '
-                        'nine. A way back into a nine you have lost — there '
-                        'is no stake to double, so it is another match, not '
-                        'another bet.',
+                        'A press opens on the next hole whenever either side '
+                        'goes 2, 4, 6 or 8 down, and runs to the end of that '
+                        'nine. Par presses back, so the round plays like a '
+                        'full match against a scratch player — and with no '
+                        'stake to double, a press is another match rather '
+                        'than another bet.',
                         style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                             height: 1.45),
@@ -253,7 +254,8 @@ class _SoloSetupScreenState extends State<SoloSetupScreen> {
                       (_howItWorks[_variant] ?? '') +
                           (_variant == 'nassau' && _autoPress
                               ? ' Go 2 down in a nine and a press opens on '
-                                  'the next hole.'
+                                  'the next hole — and par presses back when '
+                                  'it is the one 2 down.'
                               : ''),
                       style: theme.textTheme.bodySmall
                           ?.copyWith(height: 1.45)),

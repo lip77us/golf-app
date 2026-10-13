@@ -143,24 +143,33 @@ def _match_over(rows):
     return up, decided, played
 
 
-#: An auto press fires at each of these, once per nine, and the levels are
-#: NEGATIVE because they are read from the golfer's side — see `_presses`.
-_AUTO_PRESS_LEVELS = (-2, -4, -6, -8)
+#: Signed, and read from the GOLFER's side: −2 is him two down and pressing,
+#: +2 is par two down and pressing back. The same set `services/nassau`
+#: fires on, which is the point — see `_presses`.
+_AUTO_PRESS_LEVELS = (-2, -4, -6, -8, 2, 4, 6, 8)
 
 
 def _presses(rows):
     """Auto presses for ONE nine, from the golfer's side.
 
-    One fires when the golfer goes 2, 4, 6 or 8 DOWN to par — each level once
-    — and runs from the NEXT hole to the end of that nine, scored as its own
-    little match. Same levels and the same next-hole start as a real Nassau
+    One fires when either side goes 2, 4, 6 or 8 down — each level once — and
+    runs from the NEXT hole to the end of that nine, scored as its own little
+    match. Same levels and the same next-hole start as a real Nassau
     (`services/nassau.AUTO_TOP_THRESHOLDS`), so a golfer who presses in his
     Saturday game does not have to learn a second rule here.
 
-    **Par never presses**, which is the one place this departs from the real
-    game. A two-sided Nassau fires on ±2 because either side may be the one
-    losing and either may call it; par has no agency, so a golfer 2 UP
-    presses nothing and the levels are one-directional.
+    **Par presses back.** The first version fired one way only, on the
+    argument that par has no agency — which is true of par as a NUMBER and
+    false of what this game is for. Paul (Oct 2026): the point is to simulate
+    a full match against a scratch player who shoots par, and a scratch
+    player two down presses. One-directional presses make that opponent a
+    man who never fights back, which is the one thing a practice match should
+    not teach.
+
+    `pressed_by` says whose it is. The margin is read from the golfer's side
+    either way — `up` is his — so the owner is not needed to score it; it is
+    needed to say what happened, and "Par pressed" is the half of this that
+    makes the simulation feel like a match.
 
     Presses belong to the two NINES only, never to the overall bet — again as
     in the real game. Nothing is stored: a press is derived from the holes on
@@ -180,6 +189,9 @@ def _presses(rows):
         p_up, p_decided, p_thru = _match_over(remaining)
         out.append({
             'index': len(out) + 1,
+            # The side that was DOWN when it fired, which is the side that
+            # pressed — a negative margin is the golfer's.
+            'pressed_by': 'you' if up < 0 else 'par',
             'trigger_hole': h['hole'],
             'start': remaining[0]['hole'],
             'end': remaining[-1]['hole'],

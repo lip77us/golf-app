@@ -217,7 +217,8 @@ class AutoPressTests(_Base):
 
     def test_each_level_fires_once(self):
         """Two down, back to one, two down again — still one press. Going on
-        to four down opens a second."""
+        to four down opens a second. (The levels are signed, so par's +2 is a
+        different firing from his −2.)"""
         self.play(1, 6)
         self.play(2, 6)
         self.play(3, 4)                             # back to one down
@@ -228,14 +229,35 @@ class AutoPressTests(_Base):
         self.assertEqual(len(self.presses()), 2)
         self.assertEqual(self.presses()[1]['start'], 7)
 
-    def test_par_never_presses(self):
-        """The one departure from the real game. A two-sided Nassau fires on
-        plus or minus 2 because either side may be the one losing and either
-        may call it; par has no agency, so a golfer two UP presses nothing."""
+    def test_par_presses_back(self):
+        """Paul, Oct 2026: the point is to simulate a full match against a
+        scratch player who shoots par, and a scratch player two down presses.
+        One-directional presses make that opponent a man who never fights
+        back."""
+        self.play(1, 4)                             # stroke → net 3 → won
+        self.play(2, 4)                             # two up
+        p, = self.presses()
+        self.assertEqual(p['pressed_by'], 'par')
+        self.assertEqual(p['start'], 3)
+
+    def test_a_press_knows_whose_it_is(self):
+        """The margin is read from the golfer's side either way, so the owner
+        is not needed to SCORE it — it is needed to say what happened."""
+        self.play(1, 6)
+        self.play(2, 6)                             # two down
+        self.assertEqual(self.presses()[0]['pressed_by'], 'you')
+
+    def test_both_sides_can_press_in_one_nine(self):
+        """Two up then two down is two presses, and each level fires once per
+        SIDE rather than once per nine."""
         self.play(1, 4)
-        self.play(2, 4)
-        self.assertEqual(self.s()['nassau']['front']['up'], 2)
-        self.assertEqual(self.presses(), [])
+        self.play(2, 4)                             # +2 → par presses
+        self.play(3, 6)
+        self.play(4, 6)
+        self.play(5, 6)
+        self.play(6, 6)                             # -2 → he presses
+        owners = [p['pressed_by'] for p in self.presses()]
+        self.assertEqual(owners, ['par', 'you'])
 
     def test_the_last_hole_of_a_nine_presses_nothing(self):
         """Nothing left to press over, so no press — not an empty one."""

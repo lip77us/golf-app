@@ -4595,14 +4595,22 @@ already prints.
 `SoloGame.auto_press` (`games/0094`), **off by default** as `press_mode` is in
 a real Nassau. A press here is an extra **MATCH, not an extra bet**: there is
 no stake to double, so what it buys is a way back into a nine already lost.
-Fires when the golfer goes **2, 4, 6 or 8 DOWN**, each level once, starting the
-NEXT hole and running to the end of that nine — the same levels and the same
-next-hole start as `services/nassau.AUTO_TOP_THRESHOLDS`, so nobody has to
-learn a second rule. **Par never presses**: a two-sided Nassau fires on ±2
-because either side may be the one losing and either may call it, so a golfer 2
-UP presses nothing and the levels are one-directional. Presses belong to the
-two NINES, never the overall bet. Nothing is stored — a press is derived on
-every read, so correcting a 6 to a 4 un-fires one.
+Fires when **either side** goes 2, 4, 6 or 8 down, each level once, starting
+the NEXT hole and running to the end of that nine — the same levels
+(`services/nassau.AUTO_TOP_THRESHOLDS`) and the same next-hole start, so
+nobody has to learn a second rule. Presses belong to the two NINES, never the
+overall bet. Nothing is stored — a press is derived on every read, so
+correcting a 6 to a 4 un-fires one.
+
+**Par presses back**, and the first version got this wrong. It fired one way
+only, on the argument that par has no agency — true of par as a NUMBER and
+false of what the game is for. Paul: *"so that a user could simulate a full
+match against a player shooting par with a 0 index. (Par shooter is
+pressing)"*. A scratch player two down presses; one-directional presses make
+that opponent a man who never fights back, which is the one thing a practice
+match should not teach. Each press carries `pressed_by` — the margin is read
+from the golfer's side whoever opened it, so the owner is not needed to SCORE
+a press, only to say what happened, and the chip reads `F9 Par press 1`.
 
 ### No dedicated play screen — it plays through score entry
 One golfer with no per-hole decision is exactly what `score_entry_screen`

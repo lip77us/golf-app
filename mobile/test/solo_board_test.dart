@@ -160,7 +160,8 @@ void main() {
             'front': {
               'up': -2, 'decided': null, 'thru': 2, 'holes': 9,
               'presses': [
-                {'index': 1, 'trigger_hole': 2, 'start': 3, 'end': 9,
+                {'index': 1, 'pressed_by': 'you', 'trigger_hole': 2,
+                 'start': 3, 'end': 9,
                  'holes': 7, 'up': 1, 'decided': null, 'thru': 1},
               ],
             },
@@ -172,6 +173,32 @@ void main() {
       expect(find.text('F9 Press 1'), findsOneWidget);
       expect(find.text('1 UP'), findsOneWidget);   // the press, from his side
       expect(find.text('2 DN'), findsNWidgets(2)); // the nine, and the overall
+    });
+
+    testWidgets('par\'s press says so', (t) async {
+      // The figure beside it is the margin from the GOLFER's side whoever
+      // opened it, so without the owner a press par called would read
+      // exactly like one he called.
+      await _pump(
+          t,
+          SoloStatusBar(
+              solo: _solo('nassau', reading: {
+            'auto_press': true,
+            'front': {
+              'up': 2, 'decided': null, 'thru': 2, 'holes': 9,
+              'presses': [
+                {'index': 1, 'pressed_by': 'par', 'trigger_hole': 2,
+                 'start': 3, 'end': 9,
+                 'holes': 7, 'up': 0, 'decided': null, 'thru': 0},
+              ],
+            },
+            'back': {'up': 0, 'decided': null, 'thru': 0, 'holes': 9,
+                     'presses': []},
+            'overall': {'up': 2, 'decided': null, 'thru': 2, 'holes': 18,
+                        'presses': []},
+          })));
+      expect(find.text('F9 Par press 1'), findsOneWidget);
+      expect(find.text('F9 Press 1'), findsNothing);
     });
   });
 

@@ -187,9 +187,14 @@ class SoloStatusBar extends StatelessWidget {
             ((n[nine] as Map?)?['presses'] as List?) ?? const [];
         for (final p in presses) {
           final up = ((p as Map)['up'] as num?)?.toInt() ?? 0;
+          // Whose press it is, in the label — the figure beside it is the
+          // margin from the GOLFER's side whoever opened it, so without the
+          // owner a press par called reads exactly like one he called.
+          final byPar = p['pressed_by'] == 'par';
           chips.add(_chip(
               theme,
-              '${nine == 'front' ? 'F9' : 'B9'} Press ${p['index']}',
+              '${nine == 'front' ? 'F9' : 'B9'} '
+                  '${byPar ? 'Par press' : 'Press'} ${p['index']}',
               p['decided'] as String? ?? soloUpLabel(up),
               _upColour(theme, up)));
         }
