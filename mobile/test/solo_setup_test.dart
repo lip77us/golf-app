@@ -1,3 +1,4 @@
+import 'dart:io';
 // The solo setup screen: the sentence under the slider, and the way in.
 //
 // `handoff-solo-games` writes that sentence for a 12 handicap — "12 strokes,
@@ -134,6 +135,37 @@ void main() {
           sideGamesFor(GameIds.skins, size: 4, multiGroup: true)
               .map((m) => m.id)
               .toSet());
+    });
+  });
+
+  group('the wizard skips the player step', () {
+    // Not a widget test: what breaks is the wiring between Next, Back and the
+    // step indices, and all three live in one file. The RULE is what is
+    // pinned — a solo round skips the step only when the logged-in golfer is
+    // actually the one selected.
+    final src = File('lib/screens/casual_round_screen.dart').readAsStringSync();
+
+    test('Next jumps straight to the tees', () {
+      expect(src, contains('if (_skipPlayerStep) {'));
+      expect(src, contains('_step = _teeStep;'));
+    });
+
+    test('Back undoes the jump rather than landing on the skipped step', () {
+      expect(src, contains('(_skipPlayerStep && _step == _teeStep)'));
+    });
+
+    test('it needs the logged-in golfer to BE the selection', () {
+      // A login with no Player row selects nobody, and skipping would walk
+      // into Create with an empty field.
+      expect(src, contains('_playerTees.length == 1 &&'));
+      expect(src, contains('_playerTees.containsKey('));
+    });
+
+    test('switching to solo prunes the field to one', () {
+      // Four golfers picked a moment earlier would otherwise reach Create as
+      // "a solo round is one golfer" with no screen left to fix it on.
+      expect(src, contains("if (v == 'solo' && _playerTees.length > 1)"));
+      expect(src, contains('_playerTees.removeWhere('));
     });
   });
 }

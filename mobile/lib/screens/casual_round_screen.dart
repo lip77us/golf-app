@@ -892,6 +892,21 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   /// dropdown it replaces was dropped in July precisely for being easy to
   /// miss, and a block under a roster list that scrolls is the same trap one
   /// layer down. Everything else keeps the three steps it has always had.
+  /// Solo skips the player step entirely.
+  ///
+  /// It was already a no-op there: the logged-in golfer is auto-selected and
+  /// LOCKED on that screen, and `_createRound` refuses a second golfer — so
+  /// the only correct action was to press Next. Paul (Oct 2026) confirmed a
+  /// solo round is always your own, which is what the lock has always said.
+  ///
+  /// Gated on him actually being in the roster. When he is not — a login with
+  /// no `Player` row — nobody is auto-selected, and skipping would walk into
+  /// Create with an empty field.
+  bool get _skipPlayerStep =>
+      _isSolo && _playerTees.length == 1 &&
+      context.read<AuthProvider>().player != null &&
+      _playerTees.containsKey(context.read<AuthProvider>().player!.id);
+
   bool get _hasGroupsStep => _multiGroup;
   int get _groupsStep => _hasGroupsStep ? 2 : -1;
   int get _teeStep => _hasGroupsStep ? 3 : 2;
@@ -932,7 +947,15 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           children: [
             if (_step > 0)
               OutlinedButton(
-                onPressed: _creating ? null : () => setState(() => _step -= 1),
+                onPressed: _creating
+                    ? null
+                    : () => setState(() {
+                          // Back has to undo the jump, or a solo round lands
+                          // on the step Next skipped.
+                          _step = (_skipPlayerStep && _step == _teeStep)
+                              ? 0
+                              : _step - 1;
+                        }),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Halved.pine,
                   side: const BorderSide(color: Halved.pine, width: 1.5),
@@ -951,7 +974,16 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
                 icon: Icons.arrow_forward,
                 trailingIcon: true,
                 expand: false,
-                onPressed: canNext ? () => setState(() => _step = 1) : null,
+                onPressed: canNext
+                    ? () => setState(() {
+                          if (_skipPlayerStep) {
+                            _applyTeeSuggestions();
+                            _step = _teeStep;
+                          } else {
+                            _step = 1;
+                          }
+                        })
+                    : null,
               )
             else if (_step == 1)
               HalvedCtaButton(
@@ -1170,6 +1202,18 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             segmentFlex: (v) => v == 'groups' ? 16 : 10,
             onChanged: (v) => setState(() {
               _sizeFilter = v;
+              // **Switching TO solo prunes the field to you.** The player step
+              // is skipped from here on, so four golfers picked a moment ago
+              // would otherwise reach Create as "a solo round is one golfer"
+              // with no screen left to fix it on.
+              if (v == 'solo' && _playerTees.length > 1) {
+                final me = context.read<AuthProvider>().player?.id;
+                final keep = (me != null && _playerTees.containsKey(me))
+                    ? me
+                    : _playerTees.keys.first;
+                _playerTees.removeWhere((id, _) => id != keep);
+                _playerGroups.removeWhere((id, _) => id != keep);
+              }
               // Deselect the primary if it no longer fits the new size
               // (e.g. an 18-Hole Match when switching off "2", or a
               // single-foursome game when switching to "Across groups").

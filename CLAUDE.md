@@ -4591,6 +4591,27 @@ already prints.
   gets **no generic Stroke Play tab** — a field of one is a single row with a
   $0 payout, which reads as a fault.
 
+### The create flow skips the player step
+A solo round goes **New Round → Tees → Create**. That step was already a
+no-op: the logged-in golfer is auto-selected and LOCKED on it, and
+`_createRound` refuses a second golfer, so the only correct action was to
+press Next. Paul (Oct 2026) confirmed a solo round is always your own, which
+is what the lock had always said.
+
+Tees stays, because the tee decides the course handicap and the step exists so
+the sex-based suggestion is confirmed rather than defaulted silently.
+
+Two things the skip needs, both of which are about not stranding somebody on a
+screen that is no longer there:
+* **`_skipPlayerStep` requires the logged-in golfer to BE the selection.** A
+  login with no `Player` row selects nobody, and skipping would walk into
+  Create with an empty field.
+* **Switching the size filter TO solo prunes the field to one.** Four golfers
+  picked a moment earlier would otherwise reach Create as "a solo round is one
+  golfer", with no screen left to fix it on.
+
+Back undoes the jump rather than landing on the step Next skipped.
+
 ### Auto press (Nassau only) — Paul, 13 Oct 2026
 `SoloGame.auto_press` (`games/0094`), **off by default** as `press_mode` is in
 a real Nassau. A press here is an extra **MATCH, not an extra bet**: there is
