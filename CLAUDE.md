@@ -4900,6 +4900,32 @@ fix rather than a fact about him.
 for a whole draw and `canJoinPool` for one row, because they are asked at
 different moments; a test pins them against each other.
 
+#### ...and so did the API boundary, which is where it actually bit
+The screen fix above let the TD tick the guest; **the save then came back
+400**: *"Everyone in a Multi-Group Skins pool must be on Halved."*
+
+`not_on_app_ids` is a blanket Halved-only check run at the boundary of
+`MultiSkinsSetupView`, and it knew nothing about the round. So it
+**contradicted `valid_participant_ids`** — one filtered silently and kept
+host-round members, the other refused the whole roster — and the boundary
+won, which is why a guest in the TD's own foursome could not be in the pool
+at all.
+
+It now takes `round_obj` and exempts a golfer **already seated in this
+round**: he is found by his MEMBERSHIP, not by a phone match, and
+`_resolve_participant_memberships` matches on exact player id before it ever
+looks at a phone. A golfer from OUTSIDE the round still has to be on Halved,
+because he is scored in his own round and phone identity is the only key a
+cross-account pool has.
+
+`api/test_skins_pool.py::test_setup_rejects_non_halved_member` **had pinned
+the bug**: it seated the golfer in the host round and asserted the refusal.
+It now asserts the opposite, with a sibling that keeps the outsider refused.
+
+The lesson worth carrying: two functions answering "may this golfer be in the
+pool" disagreed for months, and the one with the stricter answer was the one
+nobody had read. Both are now reachable from one docstring.
+
 #### The strict rule stays, and so do the multiple Moves
 Both confirmed by Paul (13 Oct 2026) after testing, and both worth recording
 because the arguments against them are the obvious ones:

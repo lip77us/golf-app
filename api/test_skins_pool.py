@@ -104,9 +104,19 @@ class SkinsPoolTests(TestCase):
 
     # ── Halved-only roster ──────────────────────────────────────────────────
 
-    def test_setup_rejects_non_halved_member(self):
-        """A login-less golfer (no User carries their phone) can't join a pool
-        — the setup endpoint rejects the roster."""
+    def test_setup_accepts_a_login_less_golfer_SEATED_in_this_round(self):
+        """He is found by his MEMBERSHIP, not by a phone match.
+
+        This test used to assert the opposite, and the opposite was wrong: it
+        seats the golfer in the host round and then expected the roster to be
+        refused. `valid_participant_ids` has always admitted host-round
+        members "(login-less OK)" and
+        `_resolve_participant_memberships` matches on exact player id before
+        it looks at a phone — only the API boundary disagreed, and it won.
+
+        Reported from the course: a guest playing in the TD's own foursome
+        could not be in the pool at all.
+        """
         login_less = Player.objects.create(
             account=self.acct_a, name='Guest', handicap_index=10)  # no phone/user
         fs = Foursome.objects.create(
@@ -119,8 +129,24 @@ class SkinsPoolTests(TestCase):
              'participant_ids': [self.o.id, login_less.id]},
             format='json',
         )
+        self.assertEqual(resp.status_code, 201, resp.content)
+        names = {p['name'] for p in resp.json()['players']}
+        self.assertIn('Guest', names)
+
+    def test_setup_still_rejects_one_who_is_NOT_in_this_round(self):
+        """Nothing changed for him: he would be scored in his OWN round, and
+        a golfer with no Halved account cannot be found there — a pool spans
+        accounts and phone identity is the only key it has."""
+        outsider = Player.objects.create(
+            account=self.acct_a, name='Outsider', handicap_index=10)
+        resp = self.a.post(
+            reverse('api-multi-skins-setup', args=[self.round_h.id]),
+            {'handicap_mode': 'gross', 'bet_unit': '10.00',
+             'participant_ids': [self.o.id, outsider.id]},
+            format='json',
+        )
         self.assertEqual(resp.status_code, 400, resp.content)
-        self.assertIn(login_less.id, resp.json()['not_on_app_ids'])
+        self.assertIn(outsider.id, resp.json()['not_on_app_ids'])
 
     # ── Resolve ─────────────────────────────────────────────────────────────
 

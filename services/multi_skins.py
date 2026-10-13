@@ -342,14 +342,33 @@ def _round_player_ids(round_obj) -> list[int]:
     )
 
 
-def not_on_app_ids(participant_ids: list[int]) -> list[int]:
-    """Participant ids that are NOT Halved members — no `User` carries their
-    phone.  A cross-round pool matches players across rounds/accounts by phone
-    identity, so a login-less golfer can't reliably participate; the pool roster
-    is Halved-only (docs/multi-skins-cross-round.md).  Used to reject a bad
-    roster at the API boundary."""
+def not_on_app_ids(participant_ids: list[int], round_obj=None) -> list[int]:
+    """Participant ids that cannot be in this pool.
+
+    A cross-round pool matches players across rounds and accounts by PHONE
+    identity, so a golfer with no `User` behind his number cannot be found in
+    somebody else's round — which is why the roster is otherwise
+    Halved-members-only (docs/multi-skins-cross-round.md).
+
+    **A golfer already seated in the host round is exempt**, and `round_obj`
+    is what lets this know. He is in THIS round, on a card somebody is
+    keeping, and his scores are read from his own membership — no phone match
+    is needed to find him, and `_resolve_participant_memberships` matches on
+    exact player id before it ever looks at a phone.
+
+    Without that exemption this contradicted `valid_participant_ids`, which
+    has always admitted host-round members "(login-less OK)": one filtered
+    silently and kept the guest, the other refused the whole roster at the
+    boundary. The boundary won, so a guest playing in the TD's own foursome
+    could not be in the pool at all.
+
+    The further rule — that a guest needs somebody ON HIS CARD who can enter
+    his score — is the client's (`utils/skins_cards.canJoinPool`), because it
+    is about the seating and is fixable on the screen that owns it.
+    """
     from accounts.models import User
 
+    seated = set(_round_player_ids(round_obj)) if round_obj is not None else set()
     players = {p.id: p for p in Player.objects.filter(id__in=participant_ids)
                                               .select_related('user')}
     phones  = {pid: _identity_phone(players[pid]) for pid in players}
@@ -360,6 +379,8 @@ def not_on_app_ids(participant_ids: list[int]) -> list[int]:
     )
     bad: list[int] = []
     for pid in participant_ids:
+        if pid in seated:
+            continue
         ph = phones.get(pid)
         if not ph or ph not in on_app:
             bad.append(pid)

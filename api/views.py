@@ -8419,15 +8419,17 @@ class MultiSkinsSetupView(APIView):
             setup_multi_skins, calculate_multi_skins, multi_skins_summary,
             not_on_app_ids,
         )
-        # Roster is Halved-members-only: a cross-round pool matches players by
-        # phone identity, so a login-less golfer can't participate. Reject them
-        # at the boundary (docs/multi-skins-cross-round.md).
-        bad = not_on_app_ids(d['participant_ids'])
+        # A golfer from OUTSIDE this round is found in his own round by
+        # phone, so he has to be on Halved. One seated in THIS round is found
+        # by his membership and needs no match — see `not_on_app_ids`, which
+        # is passed the round for exactly that reason.
+        bad = not_on_app_ids(d['participant_ids'], round_obj)
         if bad:
             return Response(
-                {'detail': 'Everyone in a Multi-Group Skins pool must be on '
-                           'Halved (a login-less golfer can\'t be matched '
-                           'across rounds). Invite them, then add them.',
+                {'detail': 'A golfer who is not playing in this round has to '
+                           'be on Halved to join the pool — that is how his '
+                           'scores are found in his own round. Invite them, '
+                           'or add them to a group in this round.',
                  'not_on_app_ids': bad},
                 status=status.HTTP_400_BAD_REQUEST)
         setup_multi_skins(
