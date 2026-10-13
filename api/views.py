@@ -3597,8 +3597,11 @@ class RoundCreateView(APIView):
             notes             = d['notes'],
             created_by        = created_by,
         )
-        return Response(RoundSerializer(round_obj).data,
-                        status=status.HTTP_201_CREATED)
+        return Response(
+            RoundSerializer(
+                round_obj, context=round_payload_context(round_obj, request),
+            ).data,
+            status=status.HTTP_201_CREATED)
 
 
 class RoundDetailView(APIView):
@@ -3615,7 +3618,10 @@ class RoundDetailView(APIView):
         # leaderboard). PATCH/DELETE below stay TD-only.
         round_obj = round_for_reader(request.user, pk, base=self._ROUND_QS)
         return Response(
-            RoundSerializer(round_obj, context={'request': request}).data,
+            RoundSerializer(
+                round_obj,
+                context=round_payload_context(round_obj, request),
+            ).data,
         )
 
     def patch(self, request, pk):
@@ -3685,7 +3691,9 @@ class RoundAddSideGameView(APIView):
             round_obj.active_games = games
             round_obj.save(update_fields=['active_games'])
         return Response(
-            RoundSerializer(round_obj, context={'request': request}).data,
+            RoundSerializer(
+                round_obj, context=round_payload_context(round_obj, request),
+            ).data,
         )
 
 
@@ -4580,6 +4588,27 @@ def _on_app_context(players, user=None):
     return ctx
 
 
+def round_payload_context(round_obj, request=None):
+    """Context a ROUND payload's nested `PlayerSerializer`s need.
+
+    `is_on_app` is a context-fed field: without `on_app_phones` it answers
+    False for every golfer, and only the roster endpoint was filling it. So a
+    round payload said nobody was on Halved — which is how the hub's Groups
+    screen came to tell a TD that six golfers who ARE on Halved were not, and
+    refuse to save his draw over it.
+
+    One query for the whole round rather than one per golfer, which is the
+    same bargain `_on_app_context` already makes for a 128-name roster.
+    """
+    players = [m.player
+               for fs in round_obj.foursomes.all()
+               for m in fs.memberships.all()]
+    ctx = _on_app_context(players, getattr(request, 'user', None))
+    if request is not None:
+        ctx['request'] = request
+    return ctx
+
+
 def propagate_canonical_index(canonical):
     """Push a registered golfer's OWN profile index out to the login-less
     copies of them that friends added in other accounts (matched by normalized
@@ -5042,7 +5071,11 @@ class RoundSetupView(APIView):
             )
             .get(pk=pk)
         )
-        return Response(RoundSerializer(round_obj).data, status=status.HTTP_201_CREATED)
+        return Response(
+            RoundSerializer(
+                round_obj, context=round_payload_context(round_obj, request),
+            ).data,
+            status=status.HTTP_201_CREATED)
 
 
 # ---------------------------------------------------------------------------
@@ -6521,8 +6554,11 @@ class RoundAddPlayerView(APIView):
                 game.participants.add(player)
 
         round_obj.refresh_from_db()
-        return Response(RoundSerializer(round_obj).data,
-                        status=status.HTTP_201_CREATED)
+        return Response(
+            RoundSerializer(
+                round_obj, context=round_payload_context(round_obj, request),
+            ).data,
+            status=status.HTTP_201_CREATED)
 
 
 class RoundMovePlayerView(APIView):

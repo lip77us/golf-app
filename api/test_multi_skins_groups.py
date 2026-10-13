@@ -231,3 +231,64 @@ class AddPlayerTests(TestCase):
                                            'tee_id': self.tee.id},
                              format='json')
         self.assertEqual(r.status_code, 400)
+
+
+class RoundPayloadKnowsWhoIsOnHalvedTests(TestCase):
+    """`is_on_app` is a context-fed field, and only the roster endpoint was
+    filling it — so a ROUND payload said nobody was on Halved.
+
+    Reported from the hub's Groups screen, which told a TD that six golfers
+    who are on Halved were not, and refused to save his draw over it.
+    """
+
+    def setUp(self):
+        self.acct = Account.objects.create(name="Paul's Golf")
+        self.user = User.objects.create_user(username='paul', account=self.acct,
+                                             phone='+15105550001')
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        course = Course.objects.create(account=self.acct, name='Tilden')
+        self.tee = Tee.objects.create(course=course, tee_name='White',
+                                      slope=113, course_rating=Decimal('72.0'),
+                                      par=72, holes=HOLES)
+        self.round = Round.objects.create(
+            account=self.acct, course=course, round_number=1,
+            status='pending', active_games=['multi_skins'],
+            bet_unit=Decimal('5.00'))
+        # One golfer carries a phone a registered user has; one does not.
+        self.member = Player.objects.create(
+            account=self.acct, name='On Halved', handicap_index=Decimal('10'),
+            phone='(510) 555-0001')
+        self.guest = Player.objects.create(
+            account=self.acct, name='Guest', handicap_index=Decimal('10'),
+            phone='(510) 555-9999')
+        self.client.post(
+            reverse('api-round-setup', args=[self.round.id]),
+            {'players': [
+                {'player_id': self.member.id, 'tee_id': self.tee.id,
+                 'group_number': 1},
+                {'player_id': self.guest.id, 'tee_id': self.tee.id,
+                 'group_number': 2},
+            ]}, format='json')
+
+    def _flags(self):
+        d = self.client.get(reverse('api-round-detail',
+                                    args=[self.round.id])).data
+        out = {}
+        for fs in d['foursomes']:
+            for m in fs['memberships']:
+                out[m['player']['name']] = m['player']['is_on_app']
+        return out
+
+    def test_the_round_payload_flags_the_member(self):
+        self.assertTrue(self._flags()['On Halved'])
+
+    def test_and_does_not_flag_the_guest(self):
+        self.assertFalse(self._flags()['Guest'])
+
+    def test_a_formatted_phone_still_matches(self):
+        """The match is on the NORMALIZED number — the golfer's row carries
+        whatever was typed."""
+        self.member.phone = '510-555-0001'
+        self.member.save(update_fields=['phone'])
+        self.assertTrue(self._flags()['On Halved'])

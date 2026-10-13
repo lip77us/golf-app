@@ -4871,5 +4871,45 @@ been a button nobody could reach — the failure this file records twice
 already. `mobile/test/round_groups_reachable_test.dart` pins the wiring
 instead of the widget tree.
 
-Tests: `api/test_multi_skins_groups.py::AddPlayerTests` (10) and
+#### The strict rule stays, and so do the multiple Moves
+Both confirmed by Paul (13 Oct 2026) after testing, and both worth recording
+because the arguments against them are the obvious ones:
+
+* **The on-Halved requirement is NOT relaxed for a round the TD could score
+  himself.** It is true that an account owner can enter scores for every group
+  in his own round — but *"because the golfers are spread throughout the
+  course, I want to keep the in a foursome with an app strict"*. He is out
+  playing; a card two fairways away is not one he can keep.
+* **Assembling a foursome one Move at a time is fine** — *"I don't mind
+  multiple moves for a foursome"* — so the multi-select "these play together"
+  alternative is deliberately not built.
+
+And the sentence that bounds the whole feature: *"If most are in a foursome,
+then it is a tournament, not a skins game."* A pool is spread out BY
+DEFINITION. A design that optimises for everybody playing together is
+optimising for a different product.
+
+#### `is_on_app` was False for every golfer in a round
+Reported from the Groups screen on the hub: it told a TD that **seven golfers
+were not on Halved when six of them were**, and refused to save his draw over
+it.
+
+`PlayerSerializer.is_on_app` is a **context-fed field** — it reads
+`context['on_app_phones']`, and only `PlayerListView` filled it. Everywhere
+else it answers False, which its own docstring described as the default "for
+single-player uses (login/me)". A ROUND payload nests `PlayerSerializer` under
+every membership, so it inherited that default and quietly claimed nobody in
+the round had an account.
+
+`round_payload_context(round_obj, request)` builds it once for the whole
+round, at every call site that hands a round back for the client to draw. On
+the hub's own fetch that costs ONE query and no more: `_ROUND_QS` already
+prefetches `foursomes__memberships__player`.
+
+The casual create screen was never wrong — it reads its golfers from
+`getPlayers()`, which is the endpoint that fills the context. Which is also
+why this took a new consumer to find.
+
+Tests: `api/test_multi_skins_groups.py` (16 — `AddPlayerTests` and
+`RoundPayloadKnowsWhoIsOnHalvedTests`) and
 `mobile/test/round_groups_reachable_test.dart` (6).
