@@ -230,12 +230,39 @@ final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
 /// pushReplacement clobbering it. Watched deep-links wait for this.
 bool gDeepLinkReady = false;
 
+/// Nothing before `runApp` may hang the app.
+///
+/// **Apple rejected 2.11.0 (48) for "a white screen" on an iPad Air.** That is
+/// the exact shape of a `main()` that awaits work before its first frame: no
+/// widget is drawn until every await returns, so one call that never returns
+/// is a frozen white screen with no error, no crash report and nothing on
+/// screen to explain it. `try/catch` does not help — it catches a throw, and a
+/// hang is not a throw.
+///
+/// So every startup await is timeboxed, and the app draws either way. A failed
+/// or slow step degrades to the state it would have had anyway: no cached
+/// session is a login screen, no settings are the defaults.
+///
+/// Three seconds because this runs before anything is visible: long enough for
+/// a slow cold start on an old device, short enough that a hang reads as a
+/// slow launch rather than a broken app.
+Future<void> _boot(String what, Future<void> Function() step) async {
+  try {
+    await step().timeout(const Duration(seconds: 3));
+  } catch (e) {
+    // Deliberately swallowed. Every caller is optional for the first frame,
+    // and there is nowhere to report to yet — the alternative is the white
+    // screen this exists to prevent.
+    debugPrint('startup: $what skipped — $e');
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Load the real build version from the bundle so Config.appVersion matches
   // pubspec (drives the About dialog + the force-upgrade compatibility check).
-  await Config.init();
+  await _boot('config', Config.init);
 
   // sqflite's method channel only works on iOS/Android.
   // On macOS / Windows / Linux we need the FFI implementation instead.
@@ -246,24 +273,29 @@ void main() async {
 
   // Open the local SQLite database before anything else runs.
   final localDb = LocalDatabase();
-  await localDb.init();
+  await _boot('local database', localDb.init);
 
   final auth = AuthProvider();
-  await auth.restoreSession();
+  await _boot('session', auth.restoreSession);
 
   final settings = SettingsProvider();
-  await settings.load();
+  await _boot('settings', settings.load);
+
+  // **Draw first.** Everything below is optional for the first frame, and
+  // Firebase in particular is the likeliest thing to sit there: this app has
+  // never successfully registered an iOS FCM token in production, so its
+  // behaviour on a fresh review device is exactly the unknown that must not
+  // be able to hold the UI hostage.
+  runApp(GolfApp(auth: auth, localDb: localDb, settings: settings));
 
   // Push notifications (FCM). Guarded — a build without the native Firebase
   // setup simply has no push; the app runs normally.
-  await PushService.initFirebase();
+  await _boot('firebase', PushService.initFirebase);
   PushService.attach(auth, navigatorKey);
 
   // Universal links (halved.golf/watch/<token>/ → open the round's leaderboard).
   // Guarded — no-op on platforms/builds without the association set up.
   unawaited(DeepLinkService(auth).start());
-
-  runApp(GolfApp(auth: auth, localDb: localDb, settings: settings));
 }
 
 /// Setup-screen route args may be a plain int (the foursome/round id) or a Map
