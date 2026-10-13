@@ -64,6 +64,20 @@ class CasualRoundLaunch {
   Object fsArg() => {'id': firstFs.id, 'returnToHub': true};
   Object roundArg() => {'id': round.id, 'returnToHub': true};
   switch (primary) {
+    // Solo — one golfer, and the opponent is par. Round-level, and the
+    // variant rides along because the screen is titled after the chip the
+    // golfer tapped, not after a slug it would have to re-derive.
+    case GameIds.soloStroke:
+    case GameIds.soloNassau:
+    case GameIds.soloMatch:
+      return ('/solo-setup', {
+        'id': round.id,
+        'variant': primary == GameIds.soloNassau
+            ? 'nassau'
+            : primary == GameIds.soloMatch
+                ? 'match'
+                : 'stroke',
+      });
     case GameIds.sixes:
       return ('/sixes-setup', fsArg());
     case GameIds.points531:

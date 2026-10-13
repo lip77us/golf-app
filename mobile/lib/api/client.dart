@@ -2531,6 +2531,31 @@ class ApiClient {
     return data as Map<String, dynamic>;
   }
 
+  /// The solo round's config, plus the golfer the setup screen names.
+  Future<Map<String, dynamic>> getSoloSetup(int roundId) async {
+    final d = await _get('/rounds/$roundId/solo/setup/');
+    return Map<String, dynamic>.from(d as Map);
+  }
+
+  /// Two fields, and that is the whole game. No handicap mode (always net)
+  /// and no stake (always for fun) — see `SoloGame`.
+  Future<Map<String, dynamic>> postSoloSetup(
+    int roundId, {
+    required String variant,
+    required int netPercent,
+  }) async {
+    final d = await _post('/rounds/$roundId/solo/setup/', {
+      'variant': variant,
+      'net_percent': netPercent,
+    });
+    return Map<String, dynamic>.from(d as Map);
+  }
+
+  Future<Map<String, dynamic>> getSoloResult(int roundId) async {
+    final d = await _get('/rounds/$roundId/solo/');
+    return Map<String, dynamic>.from(d as Map);
+  }
+
   Future<Map<String, dynamic>> postHotSpotSetup(
     int roundId, {
     required String                     scoring,

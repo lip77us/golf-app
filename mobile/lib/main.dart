@@ -74,6 +74,7 @@ import 'screens/irish_rumble_setup_screen.dart';
 import 'screens/pink_ball_setup_screen.dart';
 import 'screens/pink_ball_screen.dart';
 import 'screens/tournament_low_net_setup_screen.dart';
+import 'screens/solo_setup_screen.dart';
 import 'screens/setup_round_players_screen.dart';
 import 'screens/tournament_leaderboard_screen.dart';
 import 'screens/team_play_leaderboard_screen.dart';
@@ -869,6 +870,11 @@ class _GolfAppState extends State<GolfApp> {
         final tournamentId = settings.arguments as int;
         return page((_) =>
             TournamentLowNetSetupScreen(tournamentId: tournamentId));
+      case '/solo-setup':
+        final a = settings.arguments as Map<String, dynamic>;
+        return page((_) => SoloSetupScreen(
+            roundId: a['id'] as int,
+            variant: (a['variant'] as String?) ?? 'stroke'));
       case '/setup-round-players':
         final roundId = settings.arguments as int;
         return page((_) => SetupRoundPlayersScreen(roundId: roundId));
