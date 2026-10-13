@@ -1159,7 +1159,14 @@ class RoundSetupSerializer(serializers.Serializer):
     # the rest of the pipeline (setup_round + _group_players) handles
     # arbitrary sizes already.  Keep a generous upper bound to catch
     # obvious typos / abuse without surprising real tournaments.
-    players            = PlayerTeeSelectionSerializer(many=True, min_length=2, max_length=200)
+    # **One is a real round.** A solo game is played against par, so its
+    # draw is one golfer in one group — and a casual round never pads with a
+    # phantom, so nothing downstream needs a second card. The floor was 2
+    # because until solo shipped there was no such round; it refused the
+    # create with `non_field_errors: Ensure this field has at least 2
+    # elements`, on a screen titled Tees, which names neither the field nor
+    # the rule.
+    players            = PlayerTeeSelectionSerializer(many=True, min_length=1, max_length=200)
     handicap_allowance = serializers.FloatField(default=1.0, min_value=0.0, max_value=1.0)
     randomise          = serializers.BooleanField(default=True)
     auto_setup_games   = serializers.BooleanField(default=False)

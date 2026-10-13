@@ -115,6 +115,54 @@ class SetupTests(_Base):
                              msg=f'a solo game has no {field}')
 
 
+class OneGolferIsARoundTests(_Base):
+    """The draw a solo round needs: one golfer, one group, no phantom.
+
+    `RoundSetupSerializer.players` had `min_length=2`, so creating a solo
+    round died on the Tees step with `non_field_errors: Ensure this field has
+    at least 2 elements` — a message naming neither the field nor the rule,
+    on a screen about tee boxes. Reported from the picker the day solo
+    shipped.
+    """
+
+    def test_a_round_can_be_set_up_for_one(self):
+        rnd = Round.objects.create(
+            account=self.acct, course=self.round.course, round_number=2,
+            status='pending', active_games=['solo_stroke'])
+        p = Player.objects.get(name='Paul')
+        r = self.client.post(
+            reverse('api-round-setup', args=[rnd.id]),
+            {'players': [{'player_id': p.id, 'tee_id': self.tee.id}]},
+            format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        fs = rnd.foursomes.get()
+        self.assertEqual(fs.memberships.count(), 1)
+
+    def test_nobody_is_invented_to_fill_the_group(self):
+        """A casual round never pads, and par is not a player — a phantom
+        here would be a second card for a number the scorecard prints."""
+        rnd = Round.objects.create(
+            account=self.acct, course=self.round.course, round_number=3,
+            status='pending', active_games=['solo_nassau'])
+        p = Player.objects.get(name='Paul')
+        self.client.post(
+            reverse('api-round-setup', args=[rnd.id]),
+            {'players': [{'player_id': p.id, 'tee_id': self.tee.id}]},
+            format='json')
+        fs = rnd.foursomes.get()
+        self.assertFalse(fs.has_phantom)
+        self.assertFalse(
+            fs.memberships.filter(player__is_phantom=True).exists())
+
+    def test_an_empty_draw_is_still_refused(self):
+        rnd = Round.objects.create(
+            account=self.acct, course=self.round.course, round_number=4,
+            status='pending', active_games=['solo_stroke'])
+        r = self.client.post(reverse('api-round-setup', args=[rnd.id]),
+                             {'players': []}, format='json')
+        self.assertEqual(r.status_code, 400)
+
+
 class AutoPressTests(_Base):
     """Nassau only, and off unless asked for."""
 
