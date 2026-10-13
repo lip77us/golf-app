@@ -12,9 +12,9 @@
 /// **Red is a SIDE here, not a loss.** `docs/color-standard.md` reserves
 /// green/red for meaning and gives teams blue/orange, and this is a
 /// deliberate deviation from it: par is the OPPONENT in a solo round, the
-/// handoff names its colour, and the Won row's two chips are both the letter
-/// P — Paul and Par — told apart by colour alone. Quota Nassau already draws
-/// its two sides blue and red, so the pairing is not new to the app.
+/// handoff names its colour, and the Won row sets a golfer's initial against
+/// par's P. Quota Nassau already draws its two sides blue and red, so the
+/// pairing is not new to the app.
 library;
 
 import 'package:flutter/material.dart';
@@ -27,6 +27,24 @@ const Color soloGolfer = Color(0xFF1976D2);
 
 /// Par. See the note above about why this is red.
 const Color soloPar = Color(0xFFD32F2F);
+
+/// The golfer's mark on the Won row — the first letter of his own name.
+///
+/// **It is not always P.** The handoff's mock shows `P` against `P` and
+/// explains it as "Paul / Par", which reads as a rule about the letter and is
+/// really a fact about that golfer: Paul's initial happens to be par's. Dave
+/// gets a `D`, which is the whole point — a man reading his own card should
+/// find himself on it, and two identical letters told apart by colour alone
+/// is the hardest version of this row, not the intended one.
+///
+/// A golfer called Paul still gets `P` on both sides, and the colours carry
+/// it, exactly as the mock draws.
+String soloGolferMark(String? name) {
+  final n = (name ?? '').trim();
+  // "You" is what the setup screen calls an unnamed golfer, so Y is the
+  // letter that agrees with it.
+  return n.isEmpty ? 'Y' : n.characters.first.toUpperCase();
+}
 
 /// Which solo variant a round's active games imply, or null for a round that
 /// is not solo at all.
@@ -222,8 +240,10 @@ class SoloStatusBar extends StatelessWidget {
 
 /// The standard card, in solo's colours, with the Won row under it.
 ///
-/// Both chips are the letter P — Paul and Par — so the row is read by colour
-/// alone, which is why they are chips on a tint rather than flat text.
+/// The golfer's chip carries his OWN initial and par's carries a P, so most
+/// rows read without reference to the colours at all — they are chips on a
+/// tint because the two can collide (a golfer called Paul) and because the
+/// colour is the thing that says which side a letter is on.
 /// Stroke Play has no Won row: there are no holes to win in it.
 class SoloScorecard extends StatelessWidget {
   final Map<String, dynamic> solo;
@@ -257,6 +277,7 @@ class SoloScorecard extends StatelessWidget {
       for (final h in rows) h['hole'] as int: h['result'] as String?
     };
     final variant = solo['variant'] as String? ?? 'stroke';
+    final mark = soloGolferMark(solo['player_name'] as String?);
 
     return HoleGridScorecard(
       holes: grid,
@@ -280,8 +301,8 @@ class SoloScorecard extends StatelessWidget {
               HoleGridFooterRow(
                 label: 'Won',
                 text: (h) => switch (resultOf[h]) {
-                  'won' => 'P',
-                  'lost' => 'P',
+                  'won' => mark,
+                  'lost' => 'P',          // Par, which really is a P
                   // A halved hole is blank. "AS" would be a third mark for
                   // the thing that happened on most holes.
                   _ => null,

@@ -4617,9 +4617,16 @@ round has no standings, so the board is those same three pieces.
   only setting the game has, and the one thing a golfer who gave himself 110%
   should be reminded of while he is beating par.
 - **Red is a SIDE here, not a loss** — a deliberate deviation from
-  `docs/color-standard.md`. Par is the opponent, the handoff names its colour,
-  and the Won row's two chips are both the letter **P** (Paul / Par) told apart
-  by colour alone. Quota Nassau already draws its sides blue and red.
+  `docs/color-standard.md`. Par is the opponent and the handoff names its
+  colour. Quota Nassau already draws its sides blue and red.
+- **The Won row's blue chip is the GOLFER'S OWN INITIAL**, against par's `P`.
+  The handoff draws `P` against `P` and explains it as "Paul / Par", which
+  reads as a rule about the letter and is really a fact about that golfer —
+  Paul's initial happens to be par's. Dave gets a `D`. Paul (Oct 2026) on
+  seeing it: *"the blue P … should be the first letter of the person's name."*
+  `soloGolferMark` is the one place that decides it; an unnamed golfer gets
+  `Y`, which agrees with the setup screen calling him You. A golfer who IS a
+  P still collides, and the colours carry it, exactly as the mock draws.
 - `HoleGridFooterRow` gained **`fill`** for that row: a tint drawn as a chip
   inside the grid's own box, so a caller can mark a hole without being handed a
   widget builder it could get the geometry wrong with.

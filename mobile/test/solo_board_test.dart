@@ -175,6 +175,26 @@ void main() {
     });
   });
 
+  group('the golfer\'s mark', () {
+    // The handoff draws `P` against `P` and explains it as "Paul / Par" —
+    // which reads as a rule about the letter and is really a fact about that
+    // golfer. Dave gets a D.
+    test('it is the first letter of his own name', () {
+      expect(soloGolferMark('Dave Moran'), 'D');
+      expect(soloGolferMark('ben'), 'B');
+    });
+
+    test('a golfer called Paul still collides with par, and that is fine', () {
+      expect(soloGolferMark('Paul'), 'P');
+    });
+
+    test('an unnamed golfer is You', () {
+      // Which is what the setup screen calls him.
+      expect(soloGolferMark(null), 'Y');
+      expect(soloGolferMark('  '), 'Y');
+    });
+  });
+
   group('the Won row', () {
     testWidgets('a match game marks who took each hole', (t) async {
       await _pump(
@@ -187,10 +207,27 @@ void main() {
             for (var n = 4; n <= 18; n++) _hole(n),
           ])));
       expect(find.text('Won'), findsOneWidget);
-      // Two P chips — one the golfer's, one par's. A halved hole is blank,
-      // because "AS" would be a third mark for the thing that happens on
+      // The golfer's own initial where he won, par's P where it did — and
+      // this fixture's golfer is Paul, the collision the handoff draws, so
+      // both chips read P and only the colours separate them. A halved hole
+      // is blank: "AS" would be a third mark for the thing that happens on
       // most holes.
       expect(find.text('P'), findsNWidgets(2));
+    });
+
+    testWidgets('a golfer who is not a P gets his own letter', (t) async {
+      await _pump(
+          t,
+          SoloScorecard(
+              solo: {
+                ..._solo('nassau', holes: [
+                  _hole(1, gross: 3, result: 'won'),
+                  _hole(2, gross: 6, result: 'lost'),
+                ]),
+                'player_name': 'Dave',
+              }));
+      expect(find.text('D'), findsOneWidget);
+      expect(find.text('P'), findsOneWidget);
     });
 
     testWidgets('stroke play has no Won row', (t) async {
@@ -204,14 +241,19 @@ void main() {
       expect(find.text('P'), findsNothing);
     });
 
-    testWidgets('the two chips are told apart by colour alone', (t) async {
+    testWidgets('the two chips carry the two sides\' colours', (t) async {
       await _pump(
           t,
           SoloScorecard(
-              solo: _solo('nassau', holes: [
-            _hole(1, gross: 3, result: 'won'),
-            _hole(2, gross: 6, result: 'lost'),
-          ])));
+              solo: {
+                ..._solo('nassau', holes: [
+                  _hole(1, gross: 3, result: 'won'),
+                  _hole(2, gross: 6, result: 'lost'),
+                ]),
+                'player_name': 'Paul',
+              }));
+      // Paul's initial IS par's, so this pair is the hardest case — and the
+      // colours are what carry it.
       final colours = t
           .widgetList<Text>(find.text('P'))
           .map((w) => w.style?.color)
