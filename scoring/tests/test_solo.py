@@ -91,7 +91,7 @@ class TheAllowanceTests(_Base):
     def test_ABOVE_100_gives_more(self):
         """No other game in the app allows it. Harmless when nobody is
         paying, and the point of a solo allowance is to make par beatable."""
-        self.assertEqual(sum(strokes_by_hole(self.fs, 150).values()), 18)
+        self.assertEqual(sum(strokes_by_hole(self.fs, 130).values()), 16)
 
     def test_the_extra_strokes_land_where_a_bigger_handicap_would(self):
         """125% of 12 is 15 — ONE stroke on each of the fifteen hardest
@@ -104,11 +104,21 @@ class TheAllowanceTests(_Base):
         self.assertEqual(alloc[15], 1)
         self.assertEqual(alloc[16], 0)
 
-    def test_the_slider_ceiling_is_a_stroke_a_hole(self):
-        """150% of 12 is 18 — one on every hole, and the most the model
-        allows. A second stroke would need an allowance past the validator."""
-        alloc = strokes_by_hole(self.fs, 150)
-        self.assertEqual(set(alloc.values()), {1})
+    def test_the_slider_ceiling_still_fits_inside_one_round(self):
+        """130% of 12 is 16 — still one stroke a hole at most. A 12 handicap
+        cannot reach a second stroke anywhere on the slider; a 15 can."""
+        self.assertEqual(set(strokes_by_hole(self.fs, 130).values()), {0, 1})
+
+    def test_a_big_handicap_CAN_reach_a_second_stroke(self):
+        """Which is why the setup screen's sentence has a branch for it: 30
+        at 130% is 39 — one on every hole and a second on 21."""
+        m = self.fs.memberships.first()
+        m.playing_handicap = 30
+        m.course_handicap = 30
+        m.save(update_fields=['playing_handicap', 'course_handicap'])
+        alloc = strokes_by_hole(self.fs, 130)
+        self.assertEqual(sum(alloc.values()), 39)
+        self.assertEqual(alloc[1], 3)
 
 
 class StrokePlayTests(_Base):

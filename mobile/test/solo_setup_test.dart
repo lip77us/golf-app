@@ -59,18 +59,20 @@ void main() {
     });
 
     testWidgets('exactly 18 is one on every hole', (t) async {
-      final s = await line(t, 12, 150);
+      // An 18 handicap at 100% — a 12 cannot reach 18 anywhere on the
+      // slider now that it stops at 130%.
+      final s = await line(t, 18, 100);
       expect(s, contains('18 strokes'));
       expect(s, contains('every hole'));
       expect(s, isNot(contains('index of 18')));
     });
 
     testWidgets('past 18 names the second strokes', (t) async {
-      // 30 off 150% is 45: one everywhere and a second on 27.
-      final s = await line(t, 30, 150);
-      expect(s, contains('45 strokes'));
-      expect(s, contains('second on the 27 hardest'));
-      expect(s, isNot(contains('index of 45')));
+      // 30 off 130% is 39: one everywhere and a second on 21.
+      final s = await line(t, 30, 130);
+      expect(s, contains('39 strokes'));
+      expect(s, contains('second on the 21 hardest'));
+      expect(s, isNot(contains('index of 39')));
     });
 
     testWidgets('no strokes at all says so', (t) async {
@@ -79,7 +81,7 @@ void main() {
     });
 
     testWidgets('it always says Net, because there is no choice', (t) async {
-      for (final pct in [25, 100, 150]) {
+      for (final pct in [50, 100, 130]) {
         expect(await line(t, 12, pct), startsWith('Always Net.'));
       }
     });

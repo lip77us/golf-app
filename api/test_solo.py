@@ -81,7 +81,7 @@ class SetupTests(_Base):
         self.assertEqual(SoloGame.objects.get().net_percent, 130)
 
     def test_an_absurd_allowance_is_refused(self):
-        for pct in (0, 10, 200):
+        for pct in (0, 10, 40, 140, 200):
             r = self.client.post(self._setup_url(),
                                  {'variant': 'stroke', 'net_percent': pct},
                                  format='json')

@@ -4203,9 +4203,9 @@ class SoloGame(models.Model):
     # Slider on the setup screen. Above 100 is deliberate — see the docstring.
     net_percent  = models.PositiveSmallIntegerField(
                      default=100,
-                     validators=[MinValueValidator(25),
-                                 MaxValueValidator(150)],
-                     help_text='Handicap allowance. May exceed 100%.')
+                     validators=[MinValueValidator(50),
+                                 MaxValueValidator(130)],
+                     help_text='Handicap allowance, 50–130%. May exceed 100%.')
     created_at   = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

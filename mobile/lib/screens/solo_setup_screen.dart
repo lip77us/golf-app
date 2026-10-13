@@ -178,9 +178,11 @@ class _SoloSetupScreenState extends State<SoloSetupScreen> {
                     children: [
                       Slider(
                         value: _pct.toDouble(),
-                        min: 25,
-                        max: 150,
-                        divisions: 25,          // 5% steps
+                        // 50–130%, Paul's range. Not in the handoff, which
+                        // only says "below or above 100%".
+                        min: 50,
+                        max: 130,
+                        divisions: 16,          // 5% steps
                         label: '$_pct%',
                         onChanged: (v) =>
                             setState(() => _pct = (v / 5).round() * 5),

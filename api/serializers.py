@@ -1668,7 +1668,7 @@ class SoloSetupSerializer(serializers.Serializer):
     """
     variant     = serializers.ChoiceField(
                       choices=['stroke', 'nassau', 'match'], default='stroke')
-    net_percent = serializers.IntegerField(min_value=25, max_value=150,
+    net_percent = serializers.IntegerField(min_value=50, max_value=130,
                                            default=100)
 
 
