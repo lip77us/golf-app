@@ -17,8 +17,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;600;700;800&family=Spline+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/d3@7.9.0/dist/d3.min.js" integrity="sha384-CjloA8y00+1SDAUkjs099PVfnY2KmDC2BZnws9kh8D/lX1s46w6EPhpXdqMfjK6i" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js" integrity="sha384-Ukv1p/xTma6P4/2bY5KzWBw+ydSpXmhCMtyciIQVDJ1RmOxtCYNMF1uXT9T63H67" crossorigin="anonymous"></script>
 <style>
 :root{--pine:#0B1F1A;--pine-2:#0E2A22;--green:#0F6E56;--mint:#1D9E75;--mint-bright:#3BD89A;--mint-soft:#9FE1CB;--cream:#F3F1EA;--paper:#FFFFFF;--ink:#06120E;--text:#33443C;--muted:#5C6B62;--card:#DCE5DD;--line:rgba(159,225,203,.14);--line-2:rgba(159,225,203,.28);--display:'Schibsted Grotesk',sans-serif;--body:'Spline Sans',sans-serif}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -128,14 +126,6 @@ h2{font-family:var(--display);font-weight:800;font-size:clamp(32px,4.4vw,52px);l
 .step h3{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:-.4px;color:var(--pine);margin-bottom:8px}
 .step p{font-size:15.5px;color:var(--muted)}
 /* MAP */
-.mapsec{background:var(--pine);background-image:radial-gradient(90% 70% at 15% 0%,#14473A 0%,var(--pine) 60%);color:var(--cream)}
-.mapsec .eyebrow{color:var(--mint-bright)}.mapsec h2{color:#fff}.mapsec .lead{color:#D7E5DE}
-.map-head{display:flex;flex-wrap:wrap;gap:24px 48px;align-items:flex-end;justify-content:space-between}
-.map-box{position:relative;margin-top:44px}
-.map-box svg{display:block;width:100%;height:auto}
-.map-tip{position:absolute;pointer-events:none;background:var(--cream);color:var(--pine);border-radius:10px;padding:8px 12px;font-size:13px;line-height:1.35;box-shadow:0 8px 24px rgba(0,0,0,.35);transform:translate(-50%,calc(-100% - 12px));white-space:nowrap;opacity:0;transition:opacity .12s}
-.map-tip b{font-family:var(--display);display:block;font-size:14px}
-.map-note{margin-top:18px;font-size:12.5px;color:#8FB3A5}
 /* GUIDES TEASE */
 .gt-head{display:flex;flex-wrap:wrap;gap:20px 40px;align-items:flex-end;justify-content:space-between}
 .gt-pick{display:flex;flex-wrap:wrap;gap:8px}
@@ -343,17 +333,6 @@ footer{background:var(--pine);color:var(--mint-soft);margin-top:110px;padding:56
 </div>
 </div>
 </section>
-<section id="played" class="sec mapsec">
-<div class="wrap">
-<div class="map-head">
-<div>
-<div class="eyebrow">Where Halved is played</div>
-<h2>Courses played with Halved</h2>
-</div>
-</div>
-<div class="map-box" id="map-box"><svg id="rounds-map" viewBox="0 0 1120 680" role="img" aria-label="Map of US courses where rounds have been completed in Halved"></svg><div class="map-tip" id="map-tip"></div></div>
-</div>
-</section>
 <section id="guides" class="sec" style="padding-bottom:40px">
 <div class="wrap">
 <div class="gt-head">
@@ -450,27 +429,6 @@ items.forEach(function(a){a.addEventListener('click',function(){if(isOpen())clos
 document.addEventListener('keydown',function(e){if(!isOpen())return;if(e.key==='Escape'){close(true);return}if(e.key!=='Tab'||!items.length)return;var f=items[0],l=items[items.length-1];if(e.shiftKey&&document.activeElement===f){e.preventDefault();l.focus()}else if(!e.shiftKey&&document.activeElement===l){e.preventDefault();f.focus()}});
 addEventListener('resize',function(){if(isOpen()&&innerWidth>820)close(false)});
 }
-/* Rounds map, US only. REAL DATA, generated 9 Oct 2026 by `manage.py courses_played --map` against production: completed rounds grouped by course name, seed_demo accounts excluded. Regenerate with that command; do not hand-edit. Non-US courses are filtered out. */
-var COURSES=[
-["Tilden Park GC",37.8878,-122.2436,"US",65],["Metropolitan Gl",37.7201,-122.1959,"US",9],["Bandon Dunes",43.1882,-124.3899,"US",3],["Chardonnay Gc",38.2154,-122.2373,"US",3],["Corica Park Gc \u2014 South",37.7396,-122.2329,"US",3],["Bandon Dunes \u2014 Bandon Trails",43.1882,-124.3899,"US",2],["Bandon Dunes \u2014 Pacific Dunes",43.1882,-124.3899,"US",2],["Poppy Hills Gc",36.5824,-121.9384,"US",2],["The Peninsula Golf and Country Club",37.5425,-122.3235,"US",2],["Bandon - Sheep Ranch",43.1882,-124.3899,"US",1],["Bandon Dunes \u2014 Old Macdonald",43.1882,-124.3899,"US",1],["Berkeley Country Club",37.9347,-122.3031,"US",1],["Canyon Lakes Gc & Brewery",37.7708,-121.9498,"US",1],["Century Country Club",41.0388,-73.7296,"US",1],["Corica Park Gc \u2014 North",37.7396,-122.2329,"US",1],["Del Monte Gc",36.5923,-121.8717,"US",1],["Greenhorn Creek Gc",38.0663,-120.5542,"US",1],["Harding Park (Tpc) Gc",37.7249,-122.4933,"US",1],["Pacific Grove Gl",36.6335,-121.9317,"US",1],["Paradise Valley Gc",38.2965,-122.0243,"US",1],["Presidio Gc",37.7904,-122.4616,"US",1],["Rancho Solano Gc",38.2915,-122.0732,"US",1],["Rossmoor Gc \u2014 Creekside",37.8638,-122.0682,"US",1],["Rossmoor Gc \u2014 Dollar Ranch",37.8638,-122.0682,"US",1]
-];
-(function(){
-var svg=document.getElementById('rounds-map');if(!svg||!window.d3||!window.topojson)return;
-var W=1120,H=680,s=d3.select(svg),tip=document.getElementById('map-tip'),box=document.getElementById('map-box');
-var proj=d3.geoAlbersUsa(),path=d3.geoPath(proj);
-var fmt=d3.format(',');
-fetch('https://cdn.jsdelivr.net/npm/us-atlas@3.0.1/states-10m.json').then(function(r){return r.json()}).then(function(topo){
-var land=topojson.feature(topo,topo.objects.states);
-proj.fitExtent([[4,4],[W-4,H-4]],land);
-s.append('g').selectAll('path').data(land.features).join('path').attr('d',path).attr('fill','#14382E').attr('stroke','rgba(159,225,203,.22)').attr('stroke-width',.8).attr('stroke-linejoin','round');
-var g=s.append('g');
-COURSES.filter(function(c){return c[3]==='US'}).forEach(function(c){var p=proj([c[2],c[1]]);if(!p)return;
-g.append('circle').attr('cx',p[0]).attr('cy',p[1]).attr('r',11).attr('fill','#3BD89A').attr('opacity',.16);
-var dot=g.append('circle').attr('cx',p[0]).attr('cy',p[1]).attr('r',4.5).attr('fill','#3BD89A').attr('stroke','#0B1F1A').attr('stroke-width',1.2).style('cursor','pointer');
-dot.on('mouseenter',function(){var b=svg.getBoundingClientRect(),k=b.width/W;tip.innerHTML='<b>'+c[0]+'</b>'+fmt(c[4])+' rounds';tip.style.left=(p[0]*k)+'px';tip.style.top=(p[1]*k)+'px';tip.style.opacity=1}).on('mouseleave',function(){tip.style.opacity=0});
-});
-}).catch(function(){});
-})();
 (function(){
 var G={
 two:[['Nassau','nassau','Three bets in one round: the front nine, the back nine and all 18. Then the presses start.'],['Rabbit','rabbit','Win a hole outright to catch the rabbit. Hold it at the 9th and the 18th to cash.'],['Skins','skins','Every hole is worth a skin. Tie it and the skin carries to the next one.']],
