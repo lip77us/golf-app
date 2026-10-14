@@ -30,9 +30,9 @@
   "modified": "2026-10-09"
  },
  "games/index.html": {
-  "hash": "d50f903bb42418cf",
+  "hash": "d3b8a80cf5c81d06",
   "published": "2026-09-13",
-  "modified": "2026-10-09"
+  "modified": "2026-10-13"
  },
  "games/irish-rumble/index.html": {
   "hash": "0e764847c704cd76",
@@ -119,8 +119,13 @@
   "published": "2026-09-13",
   "modified": "2026-10-09"
  },
+ "glossary/index.html": {
+  "hash": "a461128bf35d99c6",
+  "published": "2026-10-13",
+  "modified": "2026-10-13"
+ },
  "index.html": {
-  "hash": "9729e8ee6953ab7f",
+  "hash": "6cc37db9fb3bd41d",
   "published": "2026-06-08",
   "modified": "2026-10-13"
  },
