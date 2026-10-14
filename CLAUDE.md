@@ -1111,6 +1111,34 @@ with a per-type breakdown — v1 is a generic signed count. Broadening which
 primaries allow side games (Nassau/Sixes/Vegas own their structure → can't host
 Spots yet) is the separate Phase-2 item.
 
+#### v2 is a CHECKLIST, not a taxonomy — and it covers junk too
+Paul, 14 Oct 2026: *"The app tracks the user's definition of spots. It is my
+intention to include a checklist for junk and spots so users have an agreement
+in advance."*
+
+That is a different feature from the one `docs/spots.md` defers, and the
+difference decides the design:
+
+* **The app is not meant to own the vocabulary.** A fixed list of named types
+  (Sandy / Barkie / Greenie) would make Halved the authority on which spots
+  exist. The group is. What a checklist does is record what THIS group agreed
+  to play for, which is why v1's generic signed count was never a placeholder
+  for a taxonomy — it is already the right storage for somebody else's list.
+* **The point is the AGREEMENT, not the breakdown.** The argument on the 18th
+  is never "how many spots did he have", it is "we weren't playing pollies".
+  Settling it after the fact is what a checklist agreed on the first tee
+  prevents, and that is a different success condition from a per-type column
+  on the leaderboard.
+* **It spans junk as well.** Junk is a bare integer on `SkinsPlayerHoleResult`
+  and spots a signed one on `SpotsPlayerHoleResult` — two capture controls, no
+  shared notion of what is being counted. A checklist is the first thing that
+  would belong to both, and nothing today is shared between them.
+
+**The glossary depends on this.** `/glossary/` says Halved "counts them rather
+than naming them", which is true of v1 and stops being true the day a
+checklist ships. Revisit that sentence with the feature, not after somebody
+notices.
+
 #### Spots capture wired into every casual entry screen
 The `SpotsDots` ⊖N⊕ control (via `SpotsCaptureMixin` in `widgets/spots_capture.dart`)
 now renders in ALL casual score-entry surfaces, not just the universal
