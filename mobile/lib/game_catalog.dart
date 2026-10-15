@@ -744,7 +744,8 @@ const List<GameMeta> kGameCatalog = [
     tournament           : true,
     requiresMultiFoursome: true,
     minPlayers           : 2,
-    excludes             : {GameIds.betterBall, GameIds.fortyBalls},
+    excludes             : {GameIds.betterBall, GameIds.fortyBalls,
+                            GameIds.hotSpot},
     // The group-vs-field card: the team's net to par, your place, and the
     // leader with the gap. The header's yardage becomes the ball count, which
     // is the one number that changes what the group does on the tee.
@@ -764,7 +765,8 @@ const List<GameMeta> kGameCatalog = [
     minPlayers           : 2,
     // One round runs one of them. Enforced on the server in both services
     // too — this is the half that stops the TD reaching a form he cannot save.
-    excludes             : {GameIds.irishRumble, GameIds.fortyBalls},
+    excludes             : {GameIds.irishRumble, GameIds.fortyBalls,
+                            GameIds.hotSpot},
     // The same card as Irish Rumble's, with the count in the title instead of
     // the header — it cannot change mid-round, so a corner repeating it would
     // be the same three words eighteen times.
@@ -803,7 +805,8 @@ const List<GameMeta> kGameCatalog = [
     // three directions rather than relied on from one: the wizard removes what
     // the game being turned ON excludes, so a one-way edge would let the pair
     // through from the other side.
-    excludes             : {GameIds.irishRumble, GameIds.betterBall},
+    excludes             : {GameIds.irishRumble, GameIds.betterBall,
+                            GameIds.hotSpot},
     // **No live activity yet.** The Irish Rumble card's header carries the
     // ball count, which is the one number that changes what the group does on
     // the tee — and in 40 Balls that number does not exist until the hole is

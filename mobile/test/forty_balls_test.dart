@@ -416,19 +416,36 @@ void main() {
   group('the game is reachable', () {
     // Two wiring mistakes would ship a game nobody can start, and this repo has
     // made the second one twice before.
-    test('the exclusion is stated in ALL THREE directions', () {
-      // The wizard removes what the game being turned ON excludes, so a
-      // one-way edge lets the pair through from the other side.
-      for (final pair in [
-        [GameIds.fortyBalls, GameIds.irishRumble],
-        [GameIds.fortyBalls, GameIds.betterBall],
-        [GameIds.irishRumble, GameIds.fortyBalls],
-        [GameIds.betterBall, GameIds.fortyBalls],
-        [GameIds.irishRumble, GameIds.betterBall],
-        [GameIds.betterBall, GameIds.irishRumble],
-      ]) {
-        expect(gameMeta(pair[0])?.excludes, contains(pair[1]),
-            reason: '${pair[0]} must exclude ${pair[1]}');
+    test('every pair in the family excludes the other, BOTH ways', () {
+      // The wizard removes what the game being turned ON excludes
+      // (`new_round_wizard.dart`, `gameMeta(g)?.excludes`), reading the set
+      // DIRECTLY and one-way — so a missing reverse edge lets the pair
+      // through from the other side. `gamesCompatible()` is symmetric and
+      // would not have shown it.
+      //
+      // **The pairs are DERIVED from the family rather than listed.** This
+      // test was written with three games and six ordered pairs spelled out;
+      // Hot Seat arrived later with its own three edges and no reverse ones,
+      // so the wizard let Hot Seat + Irish Rumble both stay on — the exact
+      // failure the test existed to prevent, invisible because the list did
+      // not grow with the family. A fifth game now joins the loop or fails
+      // here.
+      const family = [
+        GameIds.irishRumble,
+        GameIds.betterBall,
+        GameIds.hotSpot,
+        GameIds.fortyBalls,
+      ];
+      for (final a in family) {
+        expect(gameMeta(a), isNotNull, reason: '$a is not in the catalog');
+        for (final b in family) {
+          if (a == b) continue;
+          expect(gameMeta(a)!.excludes, contains(b),
+              reason: '$a must exclude $b — they rank the same groups into '
+                      'the same pool, and the wizard reads this one way');
+          expect(gamesCompatible(a, b), isFalse,
+              reason: '$a and $b must not be activatable together');
+        }
       }
     });
 
