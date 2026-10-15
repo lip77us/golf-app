@@ -7684,13 +7684,24 @@ class SpotsSetupView(APIView):
         ser.is_valid(raise_exception=True)
         from services.spots import setup_spots, spots_summary
         d = ser.validated_data
-        setup_spots(
-            foursome,
-            bet_unit       = d.get('bet_unit'),
-            payout_style   = d.get('payout_style', 'per_point'),
-            per_point_mode = d.get('per_point_mode', 'all'),
-            loss_cap       = d.get('loss_cap'),
-        )
+        try:
+            setup_spots(
+                foursome,
+                bet_unit       = d.get('bet_unit'),
+                payout_style   = d.get('payout_style', 'per_point'),
+                per_point_mode = d.get('per_point_mode', 'all'),
+                loss_cap       = d.get('loss_cap'),
+                # `types` ABSENT means the defaults; an empty list is refused
+                # by the service, so the two cases must stay distinguishable
+                # here — `d.get('types')` would turn [] into None.
+                types          = (d['types'] if 'types' in d else None),
+                greenie_carry  = d.get('greenie_carry', True),
+                birdie_basis   = d.get('birdie_basis', 'gross'),
+                net_percent    = d.get('net_percent', 100),
+            )
+        except ValueError as exc:
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
         return Response(spots_summary(foursome), status=status.HTTP_201_CREATED)
 
 
@@ -7705,8 +7716,16 @@ class SpotsResultView(APIView):
 class SpotsTallyView(APIView):
     """
     POST /api/foursomes/{id}/spots/tally/
-    Body: {"hole_number": 1..18, "entries": [{"player_id": N, "count": N}, ...]}
-    Upserts per-player spot counts for a hole (count=0 deletes the row).
+    Body: {"hole_number": 1..18,
+           "entries": [{"player_id": N, "types": ["sandy", "chippy"]}, ...]}
+
+    Sets which types each named golfer ticked on one hole. The list is the
+    whole truth for that golfer on that hole, so an empty one clears him;
+    golfers not named are untouched.
+
+    **The shape changed on 15 Oct 2026** — it was `{"player_id": N,
+    "count": N}`. Nothing was lost: zero Spots games existed anywhere, so
+    there was no data and no client posting counts in anger.
     """
     def post(self, request, pk):
         foursome = foursome_for_scorer(request.user, pk)
@@ -7723,6 +7742,42 @@ class SpotsTallyView(APIView):
             hole_number=ser.validated_data['hole_number'],
             entries=ser.validated_data['entries'],
         )
+        return Response(spots_summary(foursome))
+
+
+class SpotsGreenieView(APIView):
+    """
+    POST   /api/foursomes/{id}/spots/greenie/
+      Body: {"hole_number": 1..18, "player_id": N | null}
+      `null` is **Nobody**, which is what rolls the carry to the next par 3.
+
+    DELETE /api/foursomes/{id}/spots/greenie/
+      Body: {"hole_number": 1..18} — back to UNDECIDED, which is not the
+      same as Nobody: an undecided hole adds nothing to the next one.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from api.serializers import SpotsGreenieSerializer
+        ser = SpotsGreenieSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        from services.spots import pick_greenie, spots_summary
+        try:
+            pick_greenie(foursome,
+                         hole_number=ser.validated_data['hole_number'],
+                         player_id=ser.validated_data.get('player_id'))
+        except ValueError as exc:
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return Response(spots_summary(foursome))
+
+    def delete(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        hole = request.data.get('hole_number')
+        if not isinstance(hole, int) or not 1 <= hole <= 18:
+            return Response({'detail': 'hole_number must be 1-18.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        from services.spots import clear_greenie, spots_summary
+        clear_greenie(foursome, hole_number=hole)
         return Response(spots_summary(foursome))
 
 

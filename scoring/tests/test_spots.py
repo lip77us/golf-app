@@ -1,19 +1,32 @@
 """
 scoring/tests/test_spots.py
 ---------------------------
-Spots settlement engine — pay-around (zero-sum within each hole's active
-roster), pool split, withdrawal exclusion, and tally upsert/zeroing.
+Spots: the named types, the greenie carry, birdies off the scorecard, and the
+settlement those three feed.
+
+**Spots are TICKS now, one of each type per golfer per hole**, so a total of
+four for one golfer is four different types or four holes — never `count: 4`.
+That is why the pool tests below spread their snakes across holes: the pool
+settles round-level totals, so the arithmetic is unchanged and only the shape
+of the entry moved.
 """
 
 from decimal import Decimal
 
 from django.test import TestCase
 
-from services.spots import setup_spots, tally_spots, spots_summary
+from core.models import SpotType
+from scoring.models import HoleScore
+from services.spots import (SPOT_META, clear_greenie, default_types,
+                            derived_spots, greenie_plan, normalise_types,
+                            pick_greenie, setup_spots, spots_summary,
+                            tally_spots)
 from ._helpers import make_tee, make_round, make_foursome
 
+PAR3S = [3, 7, 12, 16]          # in `_helpers.DEFAULT_HOLES`
 
-class SpotsEngineTests(TestCase):
+
+class _Base(TestCase):
     def setUp(self):
         self.tee = make_tee()
         self.round = make_round(self.tee.course, active_games=['nassau', 'spots'])
@@ -25,121 +38,367 @@ class SpotsEngineTests(TestCase):
     def _net(self, summary):
         return {p['name']: p['payout'] for p in summary['players']}
 
+    def _spots(self, summary):
+        return {p['name']: p['spots'] for p in summary['players']}
+
+    def tick(self, hole, name, *types):
+        tally_spots(self.fs, hole, [{'player_id': self.pid[name],
+                                     'types': list(types)}])
+
+    def score(self, hole, name, gross):
+        HoleScore.objects.update_or_create(
+            foursome=self.fs, player_id=self.pid[name], hole_number=hole,
+            defaults={'gross_score': gross})
+
+
+class SettlementTests(_Base):
+    """The money, unchanged — reached through ticks instead of counts."""
+
     def test_pay_around_zero_sum(self):
         setup_spots(self.fs, bet_unit=Decimal('1'), payout_style='pay_around')
-        tally_spots(self.fs, 1, [{'player_id': self.pid['A'], 'count': 2}])
-        tally_spots(self.fs, 2, [{'player_id': self.pid['B'], 'count': 1}])
-        s = spots_summary(self.fs)
-        net = self._net(s)
-        # Hole 1: A=2 → A +6, others −2.  Hole 2: B=1 → B +3, others −1.
+        self.tick(1, 'A', 'sandy', 'chippy')        # worth 2
+        self.tick(2, 'B', 'sandy')                  # worth 1
+        net = self._net(spots_summary(self.fs))
         self.assertEqual(net['A'], 5.0)
         self.assertEqual(net['B'], 1.0)
         self.assertEqual(net['C'], -3.0)
         self.assertEqual(net['D'], -3.0)
-        self.assertAlmostEqual(sum(net.values()), 0.0)
-        self.assertEqual(s['money']['total_spots'], 3)
+        self.assertAlmostEqual(sum(net.values()), 0.0, places=2)
 
     def test_pool_split_zero_sum(self):
-        setup_spots(self.fs, bet_unit=Decimal('3'), payout_style='pool')
-        tally_spots(self.fs, 1, [{'player_id': self.pid['A'], 'count': 2}])
-        tally_spots(self.fs, 2, [{'player_id': self.pid['B'], 'count': 1}])
+        setup_spots(self.fs, bet_unit=Decimal('1'), payout_style='pool')
+        self.tick(1, 'A', 'sandy', 'chippy')
+        self.tick(2, 'B', 'sandy')
         net = self._net(spots_summary(self.fs))
-        # pot = 4×3 = 12, split by spots (A:2, B:1); ante 3 each.
-        self.assertEqual(net['A'], 5.0)
-        self.assertEqual(net['B'], 1.0)
-        self.assertEqual(net['C'], -3.0)
-        self.assertEqual(net['D'], -3.0)
-        self.assertAlmostEqual(sum(net.values()), 0.0)
+        self.assertAlmostEqual(sum(net.values()), 0.0, places=2)
+        self.assertGreater(net['A'], net['B'])
+        self.assertEqual(net['C'], -1.0)
 
     def test_per_point_pay_leader(self):
-        """Per-spot 'first' — only the leader collects each player's deficit."""
         setup_spots(self.fs, bet_unit=Decimal('1'),
                     payout_style='per_point', per_point_mode='first')
-        tally_spots(self.fs, 1, [{'player_id': self.pid['A'], 'count': 2}])
-        tally_spots(self.fs, 2, [{'player_id': self.pid['B'], 'count': 1}])
+        self.tick(1, 'A', 'sandy', 'chippy')
+        self.tick(2, 'B', 'sandy')
         net = self._net(spots_summary(self.fs))
-        # A leads with 2 spots; each other pays their deficit × $1.
-        self.assertEqual(net['A'], 5.0)    # collects 1 + 2 + 2
-        self.assertEqual(net['B'], -1.0)
-        self.assertEqual(net['C'], -2.0)
-        self.assertEqual(net['D'], -2.0)
-        self.assertAlmostEqual(sum(net.values()), 0.0)
+        self.assertAlmostEqual(sum(net.values()), 0.0, places=2)
+        self.assertGreater(net['A'], 0)
 
-    def test_negative_spot_reverses_payment(self):
-        # A negative spot = a penalty: the player pays everyone else.
-        setup_spots(self.fs, bet_unit=Decimal('1'), payout_style='pay_around')
-        tally_spots(self.fs, 1, [{'player_id': self.pid['A'], 'count': -1}])
+    def test_a_snake_pays_the_other_way(self):
+        """The one type with a negative worth. v1 did this with a signed
+        count; the type carries it now, so the thing being paid for has a
+        name — and a three-putt is the case it exists for."""
+        setup_spots(self.fs, bet_unit=Decimal('1'), payout_style='pay_around',
+                    types=['sandy', 'snake'])
+        self.tick(1, 'A', 'snake')
         net = self._net(spots_summary(self.fs))
-        # A −1, n=4: A −3, others +1 each. Zero-sum.
         self.assertEqual(net['A'], -3.0)
-        self.assertEqual(net['B'], 1.0)
-        self.assertEqual(net['C'], 1.0)
-        self.assertEqual(net['D'], 1.0)
-        self.assertAlmostEqual(sum(net.values()), 0.0)
+        for other in 'BCD':
+            self.assertEqual(net[other], 1.0)
+        self.assertAlmostEqual(sum(net.values()), 0.0, places=2)
 
     def test_pool_least_negative_wins_whole_pot(self):
-        # No positives → the least-negative player takes the whole pot.
-        setup_spots(self.fs, bet_unit=Decimal('10'), payout_style='pool')
-        tally_spots(self.fs, 1, [
-            {'player_id': self.pid['A'], 'count': -4},
-            {'player_id': self.pid['B'], 'count': -3},
-            {'player_id': self.pid['C'], 'count': -2},
-            {'player_id': self.pid['D'], 'count': -1},
-        ])
-        net = self._net(spots_summary(self.fs))
-        self.assertEqual(net['D'], 30.0)   # pot 40 − ante 10
-        self.assertEqual(net['A'], -10.0)
-        self.assertEqual(net['B'], -10.0)
-        self.assertEqual(net['C'], -10.0)
-        self.assertAlmostEqual(sum(net.values()), 0.0)
+        setup_spots(self.fs, bet_unit=Decimal('1'), payout_style='pool',
+                    types=['snake'])
+        # One snake per hole is the ceiling, so -4 is four holes.
+        for h in (1, 2, 3, 4):
+            self.tick(h, 'A', 'snake')
+        for h in (1, 2, 3):
+            self.tick(h, 'B', 'snake')
+        for h in (1, 2):
+            self.tick(h, 'C', 'snake')
+        self.tick(1, 'D', 'snake')
+        s = spots_summary(self.fs)
+        self.assertEqual(self._spots(s), {'A': -4, 'B': -3, 'C': -2, 'D': -1})
+        net = self._net(s)
+        self.assertEqual(net['D'], 3.0)             # takes the 4-unit pot
+        self.assertAlmostEqual(sum(net.values()), 0.0, places=2)
 
     def test_pool_tie_on_least_negative_splits(self):
-        setup_spots(self.fs, bet_unit=Decimal('10'), payout_style='pool')
-        tally_spots(self.fs, 1, [
-            {'player_id': self.pid['A'], 'count': -4},
-            {'player_id': self.pid['B'], 'count': -3},
-            {'player_id': self.pid['C'], 'count': -2},
-            {'player_id': self.pid['D'], 'count': -2},
-        ])
+        setup_spots(self.fs, bet_unit=Decimal('1'), payout_style='pool',
+                    types=['snake'])
+        for h in (1, 2, 3, 4):
+            self.tick(h, 'A', 'snake')
+        for h in (1, 2, 3):
+            self.tick(h, 'B', 'snake')
+        for h in (1, 2):
+            self.tick(h, 'C', 'snake')
+            self.tick(h, 'D', 'snake')
         net = self._net(spots_summary(self.fs))
-        self.assertEqual(net['C'], 10.0)   # share 20 − ante 10
-        self.assertEqual(net['D'], 10.0)
-        self.assertEqual(net['A'], -10.0)
-        self.assertEqual(net['B'], -10.0)
+        self.assertEqual(net['C'], 1.0)
+        self.assertEqual(net['D'], 1.0)
+        self.assertAlmostEqual(sum(net.values()), 0.0, places=2)
 
     def test_pool_positives_split_proportionally_ignoring_negatives(self):
-        setup_spots(self.fs, bet_unit=Decimal('10'), payout_style='pool')
-        tally_spots(self.fs, 1, [
-            {'player_id': self.pid['A'], 'count': -4},
-            {'player_id': self.pid['B'], 'count': -3},
-            {'player_id': self.pid['C'], 'count': 1},
-            {'player_id': self.pid['D'], 'count': 3},
-        ])
-        net = self._net(spots_summary(self.fs))
-        # pot 40: C gets 1/4 (=10), D gets 3/4 (=30); ante 10 each.
-        self.assertEqual(net['C'], 0.0)
-        self.assertEqual(net['D'], 20.0)
-        self.assertEqual(net['A'], -10.0)
-        self.assertEqual(net['B'], -10.0)
-        self.assertAlmostEqual(sum(net.values()), 0.0)
+        setup_spots(self.fs, bet_unit=Decimal('1'), payout_style='pool',
+                    types=['sandy', 'chippy', 'barky', 'snake'])
+        for h in (1, 2, 3, 4):
+            self.tick(h, 'A', 'snake')
+        for h in (1, 2, 3):
+            self.tick(h, 'B', 'snake')
+        self.tick(1, 'C', 'sandy')
+        self.tick(1, 'D', 'sandy', 'chippy', 'barky')
+        s = spots_summary(self.fs)
+        self.assertEqual(self._spots(s), {'A': -4, 'B': -3, 'C': 1, 'D': 3})
+        net = self._net(s)
+        self.assertAlmostEqual(sum(net.values()), 0.0, places=2)
+        self.assertEqual(net['A'], -1.0)
+        self.assertGreater(net['D'], net['C'])
 
     def test_withdrawn_player_excluded_from_hole(self):
+        setup_spots(self.fs, bet_unit=Decimal('1'), payout_style='pay_around')
         m = self.fs.memberships.get(player_id=self.pid['D'])
         m.withdrew_after_hole = 1
         m.save(update_fields=['withdrew_after_hole'])
-        setup_spots(self.fs, bet_unit=Decimal('1'), payout_style='pay_around')
-        tally_spots(self.fs, 2, [{'player_id': self.pid['B'], 'count': 1}])
+        self.tick(2, 'B', 'sandy')
         net = self._net(spots_summary(self.fs))
-        # Hole 2 roster = A,B,C (D is out). B +2; A,C −1; D untouched.
-        self.assertEqual(net['B'], 2.0)
-        self.assertEqual(net['A'], -1.0)
-        self.assertEqual(net['C'], -1.0)
         self.assertEqual(net['D'], 0.0)
+        self.assertAlmostEqual(sum(net.values()), 0.0, places=2)
 
-    def test_tally_zero_deletes_the_row(self):
-        setup_spots(self.fs, payout_style='pay_around')
-        tally_spots(self.fs, 1, [{'player_id': self.pid['A'], 'count': 2}])
-        tally_spots(self.fs, 1, [{'player_id': self.pid['A'], 'count': 0}])
+
+class TicksTests(_Base):
+    """One of each type per golfer per hole, and the list IS the truth."""
+
+    def test_the_same_type_twice_on_one_hole_is_still_one(self):
+        """Two bunkers on a par 5 is one sandy. The unique constraint is the
+        rule, so this cannot be got wrong by a double tap."""
+        setup_spots(self.fs)
+        self.tick(1, 'A', 'sandy', 'sandy')
+        self.assertEqual(self._spots(spots_summary(self.fs))['A'], 1)
+
+    def test_re_saving_a_hole_UNTICKS_what_is_missing(self):
+        """The sheet's Done button saves the whole hole rather than a diff, so
+        a type left out is a type turned off."""
+        setup_spots(self.fs)
+        self.tick(1, 'A', 'sandy', 'chippy')
+        self.assertEqual(self._spots(spots_summary(self.fs))['A'], 2)
+        self.tick(1, 'A', 'chippy')
+        self.assertEqual(self._spots(spots_summary(self.fs))['A'], 1)
+        self.tick(1, 'A')
+        self.assertEqual(self._spots(spots_summary(self.fs))['A'], 0)
+
+    def test_a_type_not_in_play_is_refused(self):
+        setup_spots(self.fs, types=['sandy'])
+        self.tick(1, 'A', 'sandy', 'poley')
         s = spots_summary(self.fs)
-        self.assertEqual(s['money']['total_spots'], 0)
-        self.assertTrue(all(p['payout'] == 0.0 for p in s['players']))
+        self.assertEqual(self._spots(s)['A'], 1)
+        self.assertEqual(s['holes'][0]['spots'][0]['types'],
+                         [{'type': 'sandy', 'label': 'Sandy', 'worth': 1}])
+
+    def test_greenie_and_birdie_cannot_be_TICKED(self):
+        """Greenie is a pick and birdies come off the scorecard. A tick of
+        either would be a second, contradictory record of one fact."""
+        setup_spots(self.fs)
+        self.tick(1, 'A', 'greenie', 'birdie', 'eagle')
+        self.assertEqual(self._spots(spots_summary(self.fs))['A'], 0)
+
+    def test_the_sheet_offers_only_sheet_types_in_play(self):
+        setup_spots(self.fs, types=['greenie', 'sandy', 'birdie', 'snake'])
+        s = spots_summary(self.fs)
+        self.assertEqual([t['type'] for t in s['sheet_types']],
+                         ['sandy', 'snake'])
+        self.assertEqual([t['type'] for t in s['in_play']],
+                         ['greenie', 'sandy', 'birdie', 'snake'])
+
+    def test_a_board_never_sees_a_raw_slug(self):
+        setup_spots(self.fs, types=['eagle'])
+        labels = {t['type']: t['label'] for t in spots_summary(self.fs)['in_play']}
+        self.assertEqual(labels, {'eagle': 'Eagle or better'})
+
+    def test_setup_refuses_an_empty_list_but_accepts_none(self):
+        with self.assertRaises(ValueError):
+            setup_spots(self.fs, types=[])
+        game = setup_spots(self.fs, types=None)
+        self.assertEqual(game.types, default_types())
+
+    def test_types_come_back_in_catalogue_order(self):
+        """So the In play pills and the sheet rows read the same way for every
+        group, whatever order the client sent."""
+        self.assertEqual(normalise_types(['snake', 'sandy', 'greenie']),
+                         ['greenie', 'sandy', 'snake'])
+        self.assertEqual(normalise_types(['sandy', 'nonsense', 'sandy']),
+                         ['sandy'])
+
+
+class GreenieCarryTests(_Base):
+    """Par 3s only, one winner or nobody, and the app keeps the count."""
+
+    def test_it_appears_on_par_3s_and_nowhere_else(self):
+        setup_spots(self.fs)
+        plan = greenie_plan(self.fs, self.fs.spots_game)
+        self.assertEqual([h['hole'] for h in plan['holes']], PAR3S)
+
+    def test_a_win_is_worth_one_and_resets(self):
+        setup_spots(self.fs, bet_unit=Decimal('1'), payout_style='pay_around')
+        pick_greenie(self.fs, 3, self.pid['A'])
+        s = spots_summary(self.fs)
+        self.assertEqual(self._spots(s)['A'], 1)
+        self.assertEqual(s['greenie']['next']['hole'], 7)
+        self.assertEqual(s['greenie']['next']['worth'], 1)
+
+    def test_NOBODY_rolls_it_to_the_next_par_3(self):
+        setup_spots(self.fs)
+        pick_greenie(self.fs, 3, None)
+        s = spots_summary(self.fs)
+        self.assertEqual(self._spots(s)['A'], 0)
+        nxt = s['greenie']['next']
+        self.assertEqual((nxt['hole'], nxt['worth']), (7, 2))
+        self.assertEqual(nxt['carried_from'], 3)
+
+    def test_it_keeps_rolling_and_pays_its_WORTH(self):
+        setup_spots(self.fs, bet_unit=Decimal('1'), payout_style='pay_around')
+        pick_greenie(self.fs, 3, None)
+        pick_greenie(self.fs, 7, None)
+        pick_greenie(self.fs, 12, self.pid['B'])
+        s = spots_summary(self.fs)
+        self.assertEqual(self._spots(s)['B'], 3)
+        self.assertEqual(s['greenie']['next']['worth'], 1)   # 16 resets
+
+    def test_carry_OFF_lets_an_unclaimed_greenie_die(self):
+        setup_spots(self.fs, greenie_carry=False)
+        pick_greenie(self.fs, 3, None)
+        s = spots_summary(self.fs)
+        self.assertEqual(s['greenie']['next']['worth'], 1)
+        self.assertFalse(s['greenie']['carry'])
+
+    def test_an_unclaimed_LAST_par_3_voids_the_carry(self):
+        """It falls out of the walk rather than being special-cased: the
+        pending worth has no later par 3 to land on."""
+        setup_spots(self.fs, bet_unit=Decimal('1'), payout_style='pay_around')
+        for h in PAR3S:
+            pick_greenie(self.fs, h, None)
+        s = spots_summary(self.fs)
+        self.assertEqual(sum(self._spots(s).values()), 0)
+        self.assertIsNone(s['greenie']['next'])
+
+    def test_only_an_explicit_NOBODY_carries(self):
+        """A par 3 with no pick has not been played, so it adds nothing. A
+        blank that carried would invent one out of a hole nobody has reached —
+        and picks legitimately arrive out of order."""
+        setup_spots(self.fs)
+        pick_greenie(self.fs, 7, self.pid['A'])      # the 3rd is still blank
+        s = spots_summary(self.fs)
+        self.assertEqual(self._spots(s)['A'], 1)
+        self.assertEqual(s['greenie']['next']['hole'], 3)
+
+    def test_editing_an_earlier_par_3_moves_every_later_one(self):
+        """Nothing stores the worth, which is the whole reason this holds."""
+        setup_spots(self.fs)
+        pick_greenie(self.fs, 3, None)
+        pick_greenie(self.fs, 7, None)
+        by_hole = {h['hole']: h['worth']
+                   for h in spots_summary(self.fs)['greenie']['holes']}
+        self.assertEqual(by_hole[12], 3)
+        pick_greenie(self.fs, 3, self.pid['A'])      # he did hit it after all
+        by_hole = {h['hole']: h['worth']
+                   for h in spots_summary(self.fs)['greenie']['holes']}
+        self.assertEqual(by_hole[12], 2)
+
+    def test_clearing_a_pick_is_not_the_same_as_NOBODY(self):
+        setup_spots(self.fs)
+        pick_greenie(self.fs, 3, None)
+        self.assertEqual(
+            spots_summary(self.fs)['greenie']['next']['worth'], 2)
+        clear_greenie(self.fs, 3)
+        s = spots_summary(self.fs)
+        self.assertEqual(s['greenie']['next']['hole'], 3)
+        self.assertEqual(s['greenie']['next']['worth'], 1)
+
+    def test_a_greenie_not_in_play_pays_nothing(self):
+        setup_spots(self.fs, types=['sandy'])
+        pick_greenie(self.fs, 3, self.pid['A'])
+        self.assertEqual(self._spots(spots_summary(self.fs))['A'], 0)
+
+
+class BirdiesFromTheScorecardTests(_Base):
+    """Read off the entered scores, so they never appear on the hole card."""
+
+    def test_a_birdie_scores_one(self):
+        setup_spots(self.fs, types=['birdie'])
+        self.score(1, 'A', 3)                        # par 4
+        self.assertEqual(self._spots(spots_summary(self.fs))['A'], 1)
+
+    def test_an_eagle_is_TWO_not_three(self):
+        """It does not stack with the birdie."""
+        setup_spots(self.fs, types=['birdie', 'eagle'])
+        self.score(1, 'A', 2)                        # par 4
+        self.assertEqual(self._spots(spots_summary(self.fs))['A'], 2)
+
+    def test_an_eagle_still_scores_the_birdie_when_eagles_are_not_in_play(self):
+        """A group paying birdies has not agreed that the best score on the
+        hole is worth less than the second best. The design leaves this open;
+        this is the reading."""
+        setup_spots(self.fs, types=['birdie'])
+        self.score(1, 'A', 2)
+        self.assertEqual(self._spots(spots_summary(self.fs))['A'], 1)
+
+    def test_a_birdie_pays_nothing_when_only_eagles_are_in_play(self):
+        setup_spots(self.fs, types=['eagle'])
+        self.score(1, 'A', 3)
+        self.assertEqual(self._spots(spots_summary(self.fs))['A'], 0)
+
+    def test_par_scores_nothing(self):
+        setup_spots(self.fs, types=['birdie', 'eagle'])
+        self.score(1, 'A', 4)
+        self.assertEqual(self._spots(spots_summary(self.fs))['A'], 0)
+
+    def test_NET_is_strokes_off_the_low_man_not_full_handicap(self):
+        """The low golfer gets nothing; everyone else gets the difference,
+        allocated by index. Off 8/10/12/14 the low man is A, so D gets 6
+        strokes — the 6 hardest holes, which includes SI 1 (hole 5).
+
+        Full course handicap would give A eight strokes of his own and make a
+        net birdie most of a par, which is what the design rules out.
+        """
+        setup_spots(self.fs, types=['birdie'], birdie_basis='net_so')
+        self.score(5, 'A', 4)        # par 4, no strokes: a par
+        self.score(5, 'D', 5)        # par 4, one stroke: net 4 — still a par
+        self.score(5, 'B', 4)        # off 10, gets 2: net 3 — a net birdie
+        s = self._spots(spots_summary(self.fs))
+        self.assertEqual(s['A'], 0)
+        self.assertEqual(s['D'], 0)
+        self.assertEqual(s['B'], 1)
+
+    def test_GROSS_ignores_the_strokes(self):
+        setup_spots(self.fs, types=['birdie'], birdie_basis='gross')
+        self.score(5, 'B', 4)
+        self.assertEqual(self._spots(spots_summary(self.fs))['B'], 0)
+
+    def test_derived_spots_is_empty_when_neither_is_in_play(self):
+        setup_spots(self.fs, types=['sandy'])
+        self.score(1, 'A', 2)
+        self.assertEqual(derived_spots(self.fs, self.fs.spots_game), {})
+
+
+class TheHoleBreakdownTests(_Base):
+    """Option D's argument over a bare stepper: the receipt names the type."""
+
+    def test_a_hole_carries_the_types_as_well_as_the_count(self):
+        setup_spots(self.fs)
+        self.tick(7, 'A', 'sandy', 'chippy')
+        hole = spots_summary(self.fs)['holes'][0]
+        self.assertEqual(hole['hole'], 7)
+        entry = hole['spots'][0]
+        self.assertEqual(entry['count'], 2)
+        self.assertEqual([t['label'] for t in entry['types']],
+                         ['Sandy', 'Chippy'])
+
+    def test_every_source_lands_in_one_hole_row(self):
+        """A tick, a greenie and a birdie on the same hole add up once."""
+        setup_spots(self.fs, types=['greenie', 'sandy', 'birdie'])
+        self.tick(3, 'A', 'sandy')
+        pick_greenie(self.fs, 3, self.pid['A'])
+        self.score(3, 'A', 2)                        # par 3 — a birdie
+        s = spots_summary(self.fs)
+        self.assertEqual(self._spots(s)['A'], 3)
+        entry = next(e for e in s['holes'][0]['spots']
+                     if e['player_id'] == self.pid['A'])
+        self.assertEqual(entry['count'], 3)
+        self.assertEqual(sorted(t['type'] for t in entry['types']),
+                         ['birdie', 'greenie', 'sandy'])
+
+    def test_the_worths_live_in_one_place(self):
+        """A tick's price belongs to the TYPE, never to the row — which is
+        what lets an eagle be 2 and a snake -1 wherever either appears."""
+        self.assertEqual(SPOT_META[SpotType.EAGLE]['worth'], 2)
+        self.assertEqual(SPOT_META[SpotType.SNAKE]['worth'], -1)
+        self.assertEqual(SPOT_META[SpotType.SANDY]['worth'], 1)

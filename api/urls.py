@@ -160,6 +160,7 @@ urlpatterns = [
     path('foursomes/<int:pk>/spots/',        views.SpotsResultView.as_view(), name='api-spots-result'),
     path('foursomes/<int:pk>/spots/setup/',  views.SpotsSetupView.as_view(),  name='api-spots-setup'),
     path('foursomes/<int:pk>/spots/tally/',  views.SpotsTallyView.as_view(),  name='api-spots-tally'),
+    path('foursomes/<int:pk>/spots/greenie/', views.SpotsGreenieView.as_view(), name='api-spots-greenie'),
 
     # ---- Wolf ----
     path('foursomes/<int:pk>/wolf/',          views.WolfResultView.as_view(),   name='api-wolf-result'),

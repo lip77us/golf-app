@@ -254,6 +254,41 @@ class HandicapMode(models.TextChoices):
     STROKES_OFF  = 'strokes_off',  'Strokes Off Low'
 
 
+class SpotType(models.TextChoices):
+    """The named spots a group can agree to play for.
+
+    **A fixed vocabulary with a catch-all, not a taxonomy the user grows.**
+    The group ticks which of these are in play at setup, which is the
+    agreement that stops the 18th-green argument about whether pollies
+    counted; `OTHER` carries whatever they play that is not on the list.
+
+    Three kinds, and the difference decides where each is captured:
+
+    * **GREENIE** is the one the app can PLACE. It knows the pars, so it
+      knows the par 3s, and a greenie is one winner or nobody — a pick, not a
+      tally. That is also what makes the carry possible.
+    * **BIRDIE** and **EAGLE** are READ FROM THE SCORES and never appear on
+      the hole card at all.
+    * everything else is a tick on the spots sheet.
+
+    **One of each per golfer per hole** — two bunkers on a par 5 is one
+    sandy — so every one of them is on or off, never a count.
+
+    All of them pay the same stake. `EAGLE` pays 2 and a carried greenie pays
+    what it is worth; those are counts, not prices. `SNAKE` is the only one
+    that pays the other way: see `services.spots.SPOT_META`.
+    """
+    GREENIE = 'greenie', 'Greenie'
+    SANDY   = 'sandy',   'Sandy'
+    POLEY   = 'poley',   'Poley'
+    BIRDIE  = 'birdie',  'Birdie'
+    EAGLE   = 'eagle',   'Eagle or better'
+    CHIPPY  = 'chippy',  'Chippy'
+    BARKY   = 'barky',   'Barky'
+    SNAKE   = 'snake',   'Snake'
+    OTHER   = 'other',   'Other'
+
+
 # ---------------------------------------------------------------------------
 # CORE MODELS
 # ---------------------------------------------------------------------------

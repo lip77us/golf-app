@@ -1,7 +1,8 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 
-from core.models import MatchStatus, TeamSelectMethod, HandicapMode, Player, GameType
+from core.models import (MatchStatus, TeamSelectMethod, HandicapMode, Player,
+                         GameType, SpotType)
 from tournament.models import Round, Foursome, TournamentTeam
 
 
@@ -516,6 +517,38 @@ class SpotsGame(models.Model):
                               "null = uncapped.")
     created_at   = models.DateTimeField(auto_now_add=True)
 
+    # ── which spots this group is playing ──────────────────────────────────
+    #: Ticked at setup and shown on the leaderboard, because the agreement is
+    #: the point: the 18th-green argument is never "how many sandies" but "we
+    #: weren't playing pollies". `SpotType` values; see `services.spots`.
+    types          = models.JSONField(
+                    default=list,
+                    help_text="SpotType slugs in play. At least one.",
+                )
+    #: Nobody on a par 3 rolls the greenie to the next one. **The app keeps
+    #: the count** — a card with "worth 3" written on it is what this
+    #: replaces — and an unclaimed LAST par 3 voids the lot.
+    greenie_carry  = models.BooleanField(
+                    default=True,
+                    help_text="An unclaimed greenie rolls to the next par 3.",
+                )
+    #: Birdies and eagles are read off the scores, so they need to know
+    #: against what. `net_so` is strokes off the LOW golfer in the group, not
+    #: full course handicap, which would make a net birdie too easy.
+    birdie_basis   = models.CharField(
+                    max_length=8,
+                    choices=[('gross', 'Gross'), ('net_so', 'Net (SO)')],
+                    default='gross',
+                )
+    #: The allowance the strokes-off figure is taken at. **Spots owns its own
+    #: handicap** rather than inheriting the primary game's — the rule the
+    #: parallel-games work settled for every side game. 100 needs no slider,
+    #: which is why the setup screen shows only the Gross/Net control.
+    net_percent    = models.SmallIntegerField(
+                    default=100,
+                    help_text="Allowance for the strokes-off birdie basis.",
+                )
+
     def __str__(self):
         return f"Spots — Group {self.foursome.group_number}"
 
@@ -536,19 +569,60 @@ class SpotsPlayerHoleResult(models.Model):
     hole_number = models.PositiveSmallIntegerField(
                     validators=[MinValueValidator(1), MaxValueValidator(18)]
                 )
-    count       = models.SmallIntegerField(
-                    default=0,
-                    help_text="Spots earned by this player on this hole "
-                              "(negative = a reverse spot / penalty).",
+    #: **A tick of ONE named type, not a count.** One of each per golfer per
+    #: hole is the rule — two bunkers on a par 5 is one sandy — so the row's
+    #: existence IS the fact and the unique constraint below enforces it.
+    #: What a tick is WORTH belongs to the type (`services.spots.SPOT_META`),
+    #: never to the row: an eagle is 2 and a snake is −1 wherever they appear.
+    #:
+    #: This replaced a signed `count`, which could record "three spots of some
+    #: unnamed kind" and a negative for a penalty. Nothing had ever used it —
+    #: zero Spots games in production — and the types carry both jobs better:
+    #: the named type says WHAT, and `SNAKE` is the penalty.
+    spot_type   = models.CharField(max_length=12, choices=SpotType.choices)
+
+    class Meta:
+        unique_together = ('game', 'player', 'hole_number', 'spot_type')
+        ordering        = ['hole_number', 'player_id', 'spot_type']
+
+    def __str__(self):
+        return (f"{self.get_spot_type_display()} — {self.player.name} "
+                f"hole {self.hole_number} ({self.game})")
+
+
+class SpotsGreenieResult(models.Model):
+    """Who took the greenie on one par 3 — or nobody.
+
+    **A pick, not a tally**, which is what separates greenie from every other
+    type: closest to the pin has exactly one winner, and `player=None` means
+    the green was missed by all of them.
+
+    What a greenie is WORTH is deliberately NOT stored. It is derived by
+    walking the par 3s in the group's play order at read time, so correcting
+    an earlier hole moves every later one — the same reason Survivor's legs
+    are derived rather than written down. Storing it would let the card and
+    the money disagree after an edit.
+    """
+    game        = models.ForeignKey(
+                    SpotsGame, on_delete=models.CASCADE,
+                    related_name='greenies',
+                )
+    hole_number = models.PositiveSmallIntegerField(
+                    validators=[MinValueValidator(1), MaxValueValidator(18)]
+                )
+    player      = models.ForeignKey(
+                    Player, on_delete=models.CASCADE, null=True, blank=True,
+                    related_name='spots_greenies',
+                    help_text="Null = nobody hit the green.",
                 )
 
     class Meta:
-        unique_together = ('game', 'player', 'hole_number')
-        ordering        = ['hole_number', 'player_id']
+        unique_together = ('game', 'hole_number')
+        ordering        = ['hole_number']
 
     def __str__(self):
-        return (f"Spots ×{self.count} — {self.player.name} "
-                f"hole {self.hole_number} ({self.game})")
+        who = self.player.name if self.player_id else 'nobody'
+        return f"Greenie hole {self.hole_number} — {who} ({self.game})"
 
 
 # ---------------------------------------------------------------------------

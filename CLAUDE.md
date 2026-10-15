@@ -5260,3 +5260,102 @@ anyway.
 Tests: `api/test_one_pool_games.py` (11 — all twelve directions of the six
 pairs, every setup endpoint both ways, the turned-off config row, and the
 vestigial names).
+
+## Spots v2 — named types, the greenie carry, birdies off the card (BACKEND done)
+
+Built from `~/Downloads/handoff-spots/`. Setup lists which spots are in play,
+greenie can carry, and the hole asks WHICH spot was made (the handoff's option
+D). **This supersedes the "Spots v2 is a checklist, not a taxonomy" note
+above**, and the way it does is worth keeping: it is a checklist over a FIXED
+vocabulary with an `OTHER` catch-all, not a taxonomy the user grows. The
+checklist IS the agreement Paul wanted — the 18th-green argument is never "how
+many sandies" but "we weren't playing pollies" — and `OTHER` is what keeps the
+app from owning the whole vocabulary.
+
+**Nothing was in use.** Zero Spots games and zero rows in local AND production
+(15 Oct 2026), which is why `count` could be dropped outright rather than
+migrated, and why the tally's request shape could change.
+
+### The three kinds of type, which is the whole design
+
+`core.SpotType` + `services.spots.SPOT_META`. Where a type is captured follows
+from what it is:
+
+| | types | why |
+|---|---|---|
+| **pick** | greenie | the app has the pars, so it knows the par 3s, and closest-to-the-pin is one winner or nobody. That is also what makes the carry possible |
+| **derived** | birdie, eagle | read off the entered scores, so they never appear on the hole card at all |
+| **sheet** | sandy, poley, chippy, barky, snake, other | a tick in the hole's bottom sheet |
+
+**One of each per golfer per hole** — two bunkers on a par 5 is one sandy — so
+`SpotsPlayerHoleResult` is a TICK of one named type and the unique constraint
+`(game, player, hole, spot_type)` IS the rule. A tick's price belongs to the
+TYPE (`SPOT_META`), never to the row, which is what lets an eagle be 2 and a
+snake −1 wherever either appears.
+
+**`SNAKE` is Paul's call (15 Oct 2026), and it is not in the handoff.** v1
+allowed a NEGATIVE count — the achiever pays everyone — and the eight designed
+types are all achievements, so a three-putt (which our own glossary defines)
+had nowhere to go: you would have had to tick `OTHER` for everyone except the
+man who three-putted. One named type that settles the other way keeps the tick
+shape and keeps the pool's all-negative branch meaningful instead of
+unreachable.
+
+### Nothing derivable is stored
+
+`greenie_plan()` walks the par 3s **in play order** and derives each one's
+worth; `derived_spots()` reads birdies off `HoleScore`. So correcting an
+earlier hole moves every later one — the same reason Survivor's legs are
+derived rather than written down, and a stored worth is how the card and the
+money come to disagree after an edit. Three rules in the walk:
+
+- **Only an explicit Nobody carries.** A par 3 with no pick has not been
+  played, so it adds nothing. Picks legitimately arrive out of order, and a
+  blank that carried would invent one out of a hole nobody has reached. This
+  is why `pick_greenie(player_id=None)` and `clear_greenie()` are DIFFERENT
+  operations: Nobody is an answer, undecided is not.
+- A win resets the next par 3 to 1.
+- **An unclaimed LAST par 3 voids the carry**, and it falls out of the walk
+  rather than being special-cased: the pending worth has no later par 3 to
+  land on.
+
+**An eagle is 2, not 3** — it does not stack with the birdie. And when eagles
+are NOT in play but birdies are, an eagle still scores the birdie: a group
+paying birdies has not agreed that the best score on the hole is worth less
+than the second best. The design leaves that case open; that is the reading,
+and a test says so.
+
+**Net birdies are strokes off the LOW golfer**, not full course handicap,
+which would make a net birdie most of a par. Spots carries its own
+`net_percent` (default 100, no slider) rather than reading the primary game's,
+because **every side game owns its handicap** — the rule the parallel-games
+work settled. The handoff's phrase "the group's handicap allowance" would have
+re-introduced inheritance.
+
+### The shape that changed
+
+`POST …/spots/tally/` takes `{player_id, types: [...]}` where it took
+`{player_id, count}`, and **the list is the whole truth for that golfer on
+that hole** — what is absent is unticked, which makes the sheet's Done button
+a plain save rather than a diff. An empty list clears him; golfers not named
+are untouched. New route `POST/DELETE …/spots/greenie/`.
+
+**So the backend must not reach production ahead of the app build.** The
+shipped client posts `count` and would get a 400 on every tap of the old
+stepper. A legacy alias was considered and declined: `count: 2` can only map
+to one `OTHER` tick, so it would pay the wrong money quietly where a 400 fails
+loudly. The real protection is that Spots has never been played.
+
+`_in_play_block()` is the one place a slug becomes a name, so no board can
+print a raw `eagle`. It also **orders every list by the catalogue**, which a
+test caught: the per-hole list comes off a query ordered by slug while the In
+play pills come off the game's own list, so one hole read "Chippy, Sandy" over
+a sheet reading "Sandy, Chippy".
+
+Tests: `scoring/tests/test_spots.py` (37) and `api/test_spots.py` (27).
+
+**Still to build: the whole mobile half** — the setup checklist card, option
+D's Spots button and tick sheet, the greenie card on par 3s, and the
+leaderboard's In play card with the carry state. Also outstanding: the
+glossary sentence at `/glossary/` saying Halved "counts them rather than
+naming them", which this makes false.

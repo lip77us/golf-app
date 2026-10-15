@@ -1957,7 +1957,8 @@ _SIMPLE_GAME_SPECS = {
         # built as an add-on with its own settlement rather than as a game
         # with a running net.
         'money'   : 'payout',
-        'blurb'   : 'Per-hole achievements the group tallies by hand.',
+        'blurb'   : 'The spots this group agreed to play for — ticked on '
+                    'the hole, or read off the card.',
     },
 }
 

@@ -16,7 +16,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import serializers
 
-from core.models import Player, Tee
+from core.models import Player, SpotType, Tee
 from tournament.models import (
     Tournament, Round, Foursome, FoursomeMembership, Message,
 )
@@ -2022,7 +2022,14 @@ class SkinsJunkSerializer(serializers.Serializer):
 
 
 class SpotsSetupSerializer(serializers.Serializer):
-    """Configure the Spots add-on for a foursome."""
+    """Configure the Spots add-on for a foursome.
+
+    `types` is which spots the group is playing — the agreement the feature
+    exists for. OMITTED means "leave it to the defaults", which is what a
+    game switched on in the picker and never configured gets; an EMPTY list is
+    a different thing and the service refuses it, because a Spots game with
+    nothing in play can only pay nobody.
+    """
     bet_unit     = serializers.DecimalField(
                     max_digits=6, decimal_places=2, required=False, min_value=0)
     # 'pay_around' still accepted (legacy) → mapped to per_point/'all' in setup.
@@ -2034,18 +2041,51 @@ class SpotsSetupSerializer(serializers.Serializer):
     loss_cap       = serializers.DecimalField(
                     max_digits=8, decimal_places=2, required=False,
                     allow_null=True, min_value=0)
+    types          = serializers.ListField(
+                    child=serializers.ChoiceField(choices=SpotType.choices),
+                    required=False,
+                    help_text="Which spots are in play. Omit for the defaults.")
+    greenie_carry  = serializers.BooleanField(default=True)
+    birdie_basis   = serializers.ChoiceField(
+                    choices=['gross', 'net_so'], default='gross')
+    net_percent    = serializers.IntegerField(
+                    min_value=50, max_value=130, default=100,
+                    help_text="Allowance the strokes-off birdie basis is "
+                              "taken at. No slider shows it: 100 is the "
+                              "default and Spots owns its own handicap.")
 
 
 class SpotsTallyEntrySerializer(serializers.Serializer):
-    """One player's spot count for a single hole (negative = reverse spot)."""
+    """Which types one golfer ticked on a single hole.
+
+    **The list is the whole truth for that golfer on that hole** — what is
+    absent is unticked, which is what makes the sheet's Done button a plain
+    save rather than a diff. An empty list clears the hole.
+
+    `allow_empty` matters: clearing is the commonest correction there is.
+    """
     player_id = serializers.IntegerField()
-    count     = serializers.IntegerField(min_value=-20, max_value=20)
+    types     = serializers.ListField(
+                    child=serializers.ChoiceField(choices=SpotType.choices),
+                    allow_empty=True)
 
 
 class SpotsTallySerializer(serializers.Serializer):
-    """Upsert per-player spot counts for one hole (count=0 deletes the row)."""
+    """Set the ticks for one hole. Golfers not named are left untouched."""
     hole_number = serializers.IntegerField(min_value=1, max_value=18)
     entries     = SpotsTallyEntrySerializer(many=True, min_length=1)
+
+
+class SpotsGreenieSerializer(serializers.Serializer):
+    """Who took the greenie on a par 3 — or that nobody did.
+
+    `player_id: null` is **Nobody**, a real answer rather than a missing one:
+    it is what rolls the carry. Clearing the hole back to undecided is the
+    DELETE on the same route, and the two are different states.
+    """
+    hole_number = serializers.IntegerField(min_value=1, max_value=18)
+    player_id   = serializers.IntegerField(required=False, allow_null=True,
+                                           default=None)
 
 
 class WolfSetupSerializer(serializers.Serializer):
