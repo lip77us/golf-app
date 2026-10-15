@@ -16,6 +16,7 @@ import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/golf_primary_button.dart';
 import '../widgets/stake_field.dart';
+import '../widgets/spots_capture.dart' show spotTypeBlurb;
 
 class SpotsSetupScreen extends StatefulWidget {
   final int foursomeId;
@@ -37,6 +38,17 @@ class _SpotsSetupScreenState extends State<SpotsSetupScreen> {
   String _perPointMode = 'all';         // 'average' | 'all' | 'first'
   bool _advancedOpen = false;
   bool _capEnabled   = false;
+
+  /// Which spots the group is playing. **Null until the first load**, which
+  /// is how "omitted" survives to the POST: an empty set would be sent as
+  /// an empty list, which the server refuses on purpose.
+  Set<String>? _types;
+  bool   _greenieCarry = true;
+  String _birdieBasis  = 'gross';     // 'gross' | 'net_so'
+
+  /// Every type the server knows, with its label, so the checklist cannot
+  /// print a slug and cannot drift from the enum. Filled on load.
+  List<SpotTypeInfo> _catalogue = const [];
   final _capCtrl = TextEditingController();
 
   bool    _loading  = true;
@@ -71,8 +83,16 @@ class _SpotsSetupScreenState extends State<SpotsSetupScreen> {
         return;
       }
       setState(() {
+        // The catalogue is whatever the server offers. On a configured game
+        // `in_play` is the group's own picks, so the full list comes from the
+        // defaults a fresh game reports — which is why an unconfigured
+        // summary still carries them.
+        _catalogue = _mergeCatalogue(summary);
         if (configured) {
           _editing      = true;
+          _types        = {for (final t in summary.inPlay) t.type};
+          _greenieCarry = summary.greenie.carry;
+          _birdieBasis  = summary.birdieBasis;
           _payoutStyle  = summary.payoutStyle;
           _perPointMode = summary.perPointMode;
           if (summary.lossCap != null) {
@@ -84,6 +104,8 @@ class _SpotsSetupScreenState extends State<SpotsSetupScreen> {
           _betCtrl.text =
               b % 1 == 0 ? b.toStringAsFixed(0) : b.toStringAsFixed(2);
           _stakeOk = true;
+        } else {
+          _types = {for (final t in summary.inPlay) t.type};
         }
         _loading = false;
       });
@@ -107,8 +129,13 @@ class _SpotsSetupScreenState extends State<SpotsSetupScreen> {
     return n >= 2 && n <= 4;
   }
 
+  /// At least one spot has to be in play, so Save is dead until there is one.
+  /// The server refuses an empty list as well; this is the half that keeps
+  /// the TD out of a form he cannot save.
+  bool get _anyTypePicked => (_types ?? const <String>{}).isNotEmpty;
+
   Future<void> _start() async {
-    if (!_rosterValid) return;
+    if (!_rosterValid || !_anyTypePicked) return;
     setState(() { _starting = true; _error = null; });
     try {
       final rp     = context.read<RoundProvider>();
@@ -119,6 +146,9 @@ class _SpotsSetupScreenState extends State<SpotsSetupScreen> {
         betUnit:      bet,
         payoutStyle:  _payoutStyle,
         perPointMode: _perPointMode,
+        types:        _types?.toList(),
+        greenieCarry: _greenieCarry,
+        birdieBasis:  _birdieBasis,
         lossCap: (_payoutStyle == 'per_point' && _capEnabled)
             ? (double.tryParse(_capCtrl.text.trim()) ?? 0.0)
             : null,
@@ -160,8 +190,8 @@ class _SpotsSetupScreenState extends State<SpotsSetupScreen> {
                             ? 'Save Configuration'
                             : 'Start Spots',
                         loading: _starting,
-                        onPressed:
-                            (_rosterValid && _stakeOk) ? _start : null,
+                        onPressed: (_rosterValid && _stakeOk &&
+                                    _anyTypePicked) ? _start : null,
                       ),
                     ),
                   ),
@@ -285,6 +315,8 @@ class _SpotsSetupScreenState extends State<SpotsSetupScreen> {
             onChanged: (v) => setState(() => _stakeOk = v),
           ),
           const SizedBox(height: 16),
+          _whichSpotsCard(theme),
+          const SizedBox(height: 16),
           Card(
             elevation: 0,
             shape: RoundedRectangleBorder(
@@ -318,4 +350,130 @@ class _SpotsSetupScreenState extends State<SpotsSetupScreen> {
       ),
     );
   }
+
+  /// Every type the server knows about, label included.
+  ///
+  /// Built from the summary rather than typed here, so the checklist cannot
+  /// print a slug and cannot drift from `SpotType`. A configured game's
+  /// `in_play` holds only the group's own picks, so the unticked rows come
+  /// from `sheet_types` and the two derived ones are added back by name —
+  /// the server sends those in `in_play` only when they are on.
+  List<SpotTypeInfo> _mergeCatalogue(SpotsSummary s) {
+    const order = ['greenie', 'sandy', 'poley', 'birdie', 'eagle',
+                   'chippy', 'barky', 'snake', 'other'];
+    const labels = {
+      'greenie': 'Greenie', 'sandy': 'Sandy', 'poley': 'Poley',
+      'birdie': 'Birdie', 'eagle': 'Eagle or better', 'chippy': 'Chippy',
+      'barky': 'Barky', 'snake': 'Snake', 'other': 'Other',
+    };
+    const worths = {'eagle': 2, 'snake': -1};
+    final known = {
+      for (final t in [...s.inPlay, ...s.sheetTypes]) t.type: t,
+    };
+    return [
+      for (final slug in order)
+        known[slug] ??
+            SpotTypeInfo(type: slug, label: labels[slug] ?? slug,
+                         worth: worths[slug] ?? 1),
+    ];
+  }
+
+  /// "Which spots are we playing" — the agreement the feature exists for,
+  /// which is why it is a card of its own under the stake rather than a line
+  /// in the How-it-works blurb.
+  Widget _whichSpotsCard(ThemeData theme) {
+    final picked = _types ?? const <String>{};
+    // The Gross / Net sub-row belongs to whichever of the two derived types
+    // is on, and disappears when neither is — it is one setting for both.
+    final birdieOn = picked.contains('birdie');
+    final eagleOn  = picked.contains('eagle');
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: theme.colorScheme.outline),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Which spots are we playing',
+              style: theme.textTheme.labelLarge
+                  ?.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 2),
+          Text('Listed on the leaderboard so the group knows what counts.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          const SizedBox(height: 4),
+          for (final t in _catalogue) ...[
+            CheckboxListTile(
+              value: picked.contains(t.type),
+              onChanged: (on) => setState(() {
+                final next = {...picked};
+                on == true ? next.add(t.type) : next.remove(t.type);
+                _types = next;
+              }),
+              title: Text(t.label),
+              subtitle: Text(spotTypeBlurb(t.type),
+                  style: theme.textTheme.bodySmall),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+            ),
+            // Greenie's own setting, and the only one any type has.
+            if (t.type == 'greenie' && picked.contains('greenie'))
+              Padding(
+                padding: const EdgeInsets.only(left: 32, bottom: 6),
+                child: SwitchListTile(
+                  value: _greenieCarry,
+                  onChanged: (v) => setState(() => _greenieCarry = v),
+                  title: const Text('Carry over'),
+                  subtitle: const Text('If nobody hits the green, the greenie '
+                      'rolls to the next par 3.'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                ),
+              ),
+            // One setting for both, under whichever is ticked — and under
+            // Eagle when Birdie is off, which is the design's own rule.
+            if ((t.type == 'birdie' && birdieOn) ||
+                (t.type == 'eagle' && eagleOn && !birdieOn))
+              Padding(
+                padding: const EdgeInsets.only(left: 32, bottom: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Birdies and eagles count',
+                        style: theme.textTheme.labelMedium),
+                    const SizedBox(height: 4),
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(value: 'gross', label: Text('Gross')),
+                        ButtonSegment(value: 'net_so', label: Text('Net (SO)')),
+                      ],
+                      selected: {_birdieBasis},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (v) =>
+                          setState(() => _birdieBasis = v.first),
+                    ),
+                    const SizedBox(height: 4),
+                    Text('Net is strokes off the lowest handicap in the '
+                        'group, at the group\'s allowance.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+          ],
+          if (picked.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 4),
+              child: Text('Pick at least one spot to play for.',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.error)),
+            ),
+        ]),
+      ),
+    );
+  }
+
 }

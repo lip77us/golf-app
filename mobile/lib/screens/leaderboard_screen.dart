@@ -3014,6 +3014,10 @@ class _SpotsGroupCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text('Status: ${status.replaceAll('_', ' ')}',
               style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          // **What counts, and what the next greenie is worth.** The design
+          // puts the list here on purpose: the hole card stays as lean as it
+          // was, and the agreement lives where everybody can read it.
+          _SpotsInPlay(summary: summary),
           const Divider(height: 16),
           ...players.map((p) {
             final spots  = p['spots'] ?? 0;
@@ -3045,6 +3049,90 @@ class _SpotsGroupCard extends StatelessWidget {
         ]),
       ),
     );
+  }
+}
+
+/// The In play card: the types the group agreed, as pills, plus the greenie
+/// carry state in a sentence.
+///
+/// **Labels come from the server**, never built here — a pill reading `eagle`
+/// because the client missed a slug is the failure `_in_play_block` exists to
+/// prevent, the same reason every board reads `GameType`'s label.
+class _SpotsInPlay extends StatelessWidget {
+  final Map<String, dynamic> summary;
+  const _SpotsInPlay({required this.summary});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme  = Theme.of(context);
+    final inPlay = (summary['in_play'] as List? ?? [])
+        .cast<Map<String, dynamic>>();
+    if (inPlay.isEmpty) return const SizedBox.shrink();
+    final greenie = summary['greenie'] as Map<String, dynamic>? ?? {};
+    final next    = greenie['next'] as Map<String, dynamic>?;
+    final carry   = greenie['carry'] == true;
+    final hasGreenie = inPlay.any((t) => t['type'] == 'greenie');
+
+    // Said as a sentence rather than a chip, because it is two facts a
+    // golfer reads together: whether it rolls, and what the next one is worth.
+    String? carryLine;
+    if (hasGreenie) {
+      final lead = carry ? 'Greenies carry.' : 'Greenies do not carry.';
+      carryLine = next == null
+          // Every par 3 answered. With a carry still pending that is the void
+          // rule landing, so it says so rather than leaving a dangling worth.
+          ? '$lead No par 3s left.'
+          : '$lead Next par 3 is the ${_ord(next['hole'] as int? ?? 0)}, '
+            'worth ${next['worth'] ?? 1}.';
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 8),
+      Text('IN PLAY',
+          style: theme.textTheme.labelSmall?.copyWith(
+              fontSize: 10, letterSpacing: 0.5, fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurfaceVariant)),
+      const SizedBox(height: 5),
+      Wrap(spacing: 5, runSpacing: 5, children: [
+        for (final t in inPlay)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: .08),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                  color: theme.colorScheme.primary.withValues(alpha: .35)),
+            ),
+            child: Text(
+              // A worth other than 1 is part of the name here: a golfer
+              // reading the list needs to know an eagle is two and a snake
+              // costs him one.
+              (t['worth'] as num? ?? 1) == 1
+                  ? '${t['label']}'
+                  : '${t['label']} · ${(t['worth'] as num) > 0 ? '+' : ''}'
+                    '${t['worth']}',
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: theme.colorScheme.primary),
+            ),
+          ),
+      ]),
+      if (carryLine != null) ...[
+        const SizedBox(height: 6),
+        Text(carryLine,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+      ],
+    ]);
+  }
+
+  static String _ord(int n) {
+    if (n % 100 >= 11 && n % 100 <= 13) return '${n}th';
+    switch (n % 10) {
+      case 1:  return '${n}st';
+      case 2:  return '${n}nd';
+      case 3:  return '${n}rd';
+      default: return '${n}th';
+    }
   }
 }
 

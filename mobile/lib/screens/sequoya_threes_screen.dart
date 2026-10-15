@@ -658,13 +658,16 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
               onEditTap: (m) => setState(() => _editingPlayerId =
                   _editingPlayerId == m.player.id ? null : m.player.id),
               spotsActive:   spotsActive(rp),
-              spotsCountFor: (pid) =>
-                  spotsCount(pid, _selectedHole, rp.spotsSummary),
-              onSpotsAdd: (pid) =>
-                  adjustSpots(widget.foursomeId, pid, _selectedHole, 1),
-              onSpotsRemove: (pid) =>
-                  adjustSpots(widget.foursomeId, pid, _selectedHole, -1),
+              spotsTypesFor: (pid) =>
+                  spotsTypesFor(pid, _selectedHole, rp.spotsSummary),
+              onSpotsTap: (pid) =>
+                  openSpotsSheet(widget.foursomeId, pid, _selectedHole),
+              spotsSheetOpen: spotsSheetOpenFor,
             ),
+            // Spots' greenie pick, on par 3s only — empty on
+            // every other hole. The server decides which
+            // holes are par 3s; it is walking the carry.
+            ...greenieCards(rp, widget.foursomeId, _selectedHole),
           const SizedBox(height: 6),
           // The Sixes card. Above the match list on purpose: it answers what
           // was SHOT, which is the question the group asks while the hole is
@@ -1049,17 +1052,17 @@ class _HoleScoreCard extends StatelessWidget {
   final void Function(Membership, int) onScoreSelected;
   final void Function(Membership) onEditTap;
   final bool                 spotsActive;
-  final int Function(int)    spotsCountFor;
-  final void Function(int)   onSpotsAdd;
-  final void Function(int)   onSpotsRemove;
+  final List<SpotTypeInfo> Function(int) spotsTypesFor;
+  final void Function(int) onSpotsTap;
+  final bool Function(int) spotsSheetOpen;
 
   const _HoleScoreCard({
     required this.players, required this.sideOf, required this.holeData,
     required this.scores, required this.par, required this.summary,
     required this.hotSpotId, required this.editingPlayerId,
     required this.onScoreSelected, required this.onEditTap,
-    required this.spotsActive, required this.spotsCountFor,
-    required this.onSpotsAdd, required this.onSpotsRemove,
+    required this.spotsActive, required this.spotsTypesFor,
+    required this.onSpotsTap, required this.spotsSheetOpen,
   });
 
   String get _mode       => summary?.handicapMode ?? 'net';
@@ -1157,9 +1160,9 @@ class _HoleScoreCard extends StatelessWidget {
       colour:   colour,
       onTap: (gross != null && !isHot) ? () => onEditTap(m) : null,
       spotsActive:   spotsActive,
-      spotsCount:    spotsActive ? spotsCountFor(pid) : 0,
-      onSpotsAdd:    spotsActive ? () => onSpotsAdd(pid) : null,
-      onSpotsRemove: spotsActive ? () => onSpotsRemove(pid) : null,
+      spotsTypes:    spotsActive ? spotsTypesFor(pid) : const [],
+      onSpotsTap:    spotsActive ? () => onSpotsTap(pid) : null,
+                spotsSheetOpen: spotsActive && spotsSheetOpen(pid),
       comboTee: m.comboTeeOnHole(holeData?.holeNumber ?? 0),
     );
     if (!isHot && !editing) return [row];
@@ -1200,9 +1203,9 @@ class _ScoreRow extends StatelessWidget {
   final Color      colour;
   final VoidCallback? onTap;
   final bool          spotsActive;
-  final int           spotsCount;
-  final VoidCallback? onSpotsAdd;
-  final VoidCallback? onSpotsRemove;
+  final List<SpotTypeInfo> spotsTypes;
+  final VoidCallback?      onSpotsTap;
+  final bool               spotsSheetOpen;
   /// This golfer's tee for the hole being entered — combo sets only.
   final String?       comboTee;
 
@@ -1210,8 +1213,8 @@ class _ScoreRow extends StatelessWidget {
     required this.member, required this.gross, required this.strokes,
     required this.showHcap, required this.hcap, required this.isHot,
     required this.colour, this.onTap,
-    this.spotsActive = false, this.spotsCount = 0,
-    this.onSpotsAdd, this.onSpotsRemove, this.comboTee,
+    this.spotsActive = false, this.spotsTypes = const [],
+    this.onSpotsTap, this.spotsSheetOpen = false, this.comboTee,
   });
 
   @override
@@ -1256,10 +1259,10 @@ class _ScoreRow extends StatelessWidget {
               if (spotsActive)
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
-                  child: SpotsDots(
-                    count:    spotsCount,
-                    onAdd:    onSpotsAdd ?? () {},
-                    onRemove: onSpotsRemove ?? () {},
+                  child: SpotsButton(
+                    types:   spotsTypes,
+                    onTap:   onSpotsTap ?? () {},
+                    focused: spotsSheetOpen,
                   ),
                 ),
             ]),

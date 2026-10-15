@@ -621,12 +621,11 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen>
                 quotaMap:        quotaMap,
                 summary:         summary,
                 spotsActive:     spotsActive(rp),
-                spotsCountFor:   (pid) =>
-                    spotsCount(pid, _selectedHole, rp.spotsSummary),
-                onSpotsAdd:      (pid) =>
-                    adjustSpots(widget.foursomeId, pid, _selectedHole, 1),
-                onSpotsRemove:   (pid) =>
-                    adjustSpots(widget.foursomeId, pid, _selectedHole, -1),
+                spotsTypesFor:   (pid) =>
+                    spotsTypesFor(pid, _selectedHole, rp.spotsSummary),
+                onSpotsTap: (pid) =>
+                    openSpotsSheet(widget.foursomeId, pid, _selectedHole),
+                spotsSheetOpen: spotsSheetOpenFor,
                 onScoreSelected: (m, score) {
                   final hole = _selectedHole;
                   final wasAllScored = _allScored(players, scores);
@@ -661,6 +660,10 @@ class _QuotaNassauScreenState extends State<QuotaNassauScreen>
                 },
                 onReTapPlayer:   (m) => _tapScoredPlayer(m.player.id),
               ),
+              // Spots' greenie pick, on par 3s only — empty on every
+              // other hole. The server decides which holes are par 3s;
+              // it is the one walking the carry.
+              ...greenieCards(rp, widget.foursomeId, _selectedHole),
               const SizedBox(height: 12),
 
               if (players.isNotEmpty)
@@ -830,9 +833,9 @@ class _QNHoleScoreCard extends StatelessWidget {
   final void Function(Membership)      onReTapPlayer;
   // Spots add-on (captured in this dedicated entry screen).
   final bool                   spotsActive;
-  final int  Function(int pid) spotsCountFor;
-  final void Function(int pid) onSpotsAdd;
-  final void Function(int pid) onSpotsRemove;
+  final List<SpotTypeInfo> Function(int pid) spotsTypesFor;
+  final void Function(int pid) onSpotsTap;
+  final bool Function(int pid) spotsSheetOpen;
 
   const _QNHoleScoreCard({
     required this.holeData,
@@ -846,9 +849,9 @@ class _QNHoleScoreCard extends StatelessWidget {
     required this.onScoreSelected,
     required this.onReTapPlayer,
     this.spotsActive   = false,
-    required this.spotsCountFor,
-    required this.onSpotsAdd,
-    required this.onSpotsRemove,
+    required this.spotsTypesFor,
+    required this.onSpotsTap,
+    required this.spotsSheetOpen,
     this.holesInPlay = const [],
   });
 
@@ -915,10 +918,9 @@ class _QNHoleScoreCard extends StatelessWidget {
                     ? () => onReTapPlayer(m)
                     : null,
                 spotsActive:   spotsActive,
-                spotsCount:    spotsActive ? spotsCountFor(m.player.id) : 0,
-                onSpotsAdd:    spotsActive ? () => onSpotsAdd(m.player.id) : null,
-                onSpotsRemove:
-                    spotsActive ? () => onSpotsRemove(m.player.id) : null,
+                spotsTypes:    spotsActive ? spotsTypesFor(m.player.id) : const [],
+                onSpotsTap:    spotsActive ? () => onSpotsTap(m.player.id) : null,
+                spotsSheetOpen: spotsActive && spotsSheetOpen(m.player.id),
               ),
               if (isHot && !m.player.isPhantom)
                 InlineScorePicker(
@@ -956,9 +958,9 @@ class _QNPlayerRow extends StatelessWidget {
   final Color         t1Color;
   final Color         t2Color;
   final bool          spotsActive;
-  final int           spotsCount;
-  final VoidCallback? onSpotsAdd;
-  final VoidCallback? onSpotsRemove;
+  final List<SpotTypeInfo> spotsTypes;
+  final VoidCallback?      onSpotsTap;
+  final bool               spotsSheetOpen;
 
   const _QNPlayerRow({
     required this.member,
@@ -970,9 +972,9 @@ class _QNPlayerRow extends StatelessWidget {
     this.teamLabel,
     this.onTap,
     this.spotsActive = false,
-    this.spotsCount = 0,
-    this.onSpotsAdd,
-    this.onSpotsRemove,
+    this.spotsTypes = const [],
+    this.onSpotsTap,
+    this.spotsSheetOpen = false,
     Color? t1Color,
     Color? t2Color,
   })  : t1Color = t1Color ?? const Color(0xFF1976D2),
@@ -1054,10 +1056,10 @@ class _QNPlayerRow extends StatelessWidget {
               if (spotsActive)
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
-                  child: SpotsDots(
-                    count: spotsCount,
-                    onAdd: onSpotsAdd ?? () {},
-                    onRemove: onSpotsRemove ?? () {},
+                  child: SpotsButton(
+                    types:   spotsTypes,
+                    onTap:   onSpotsTap ?? () {},
+                    focused: spotsSheetOpen,
                   ),
                 ),
             ],

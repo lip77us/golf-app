@@ -3144,22 +3144,115 @@ class SpotsPlayerTotal {
 }
 
 /// One player's spot count on a hole.
+/// One named spot, with the name the SERVER gave it.
+///
+/// The label is never built on the phone: a board that printed `eagle`
+/// because a client missed a slug is the failure this avoids, which is the
+/// same reason every game's name comes from `GameType`. The one-line
+/// DESCRIPTIONS are the client's, in `spotTypeBlurb` — they are copy.
+class SpotTypeInfo {
+  final String type;
+  final String label;
+  final int    worth;
+
+  const SpotTypeInfo({required this.type, required this.label,
+                      this.worth = 1});
+
+  factory SpotTypeInfo.fromJson(Map<String, dynamic> j) => SpotTypeInfo(
+        type:  j['type']  as String? ?? '',
+        label: j['label'] as String? ?? '',
+        worth: (j['worth'] as num?)?.toInt() ?? 1,
+      );
+}
+
 class SpotsEntry {
   final int    playerId;
   final String shortName;
   final int    count;
+  /// What made up the count, in catalogue order — so the row can read
+  /// "2 Sandy, Chippy" rather than "3 spots", which is option D's whole
+  /// argument over a bare stepper.
+  final List<SpotTypeInfo> types;
 
   const SpotsEntry({
     required this.playerId,
     required this.shortName,
     required this.count,
+    this.types = const [],
   });
 
   factory SpotsEntry.fromJson(Map<String, dynamic> j) => SpotsEntry(
         playerId:  j['player_id']  as int,
         shortName: j['short_name'] as String? ?? '',
         count:     j['count']      as int? ?? 0,
+        types: (j['types'] as List? ?? [])
+            .map((t) => SpotTypeInfo.fromJson(t as Map<String, dynamic>))
+            .toList(),
       );
+}
+
+/// One par 3's greenie: who took it, what it is worth, and where a carry
+/// came from. **`worth` is derived server-side** by walking the par 3s in
+/// play order, so an edit to an earlier one moves this.
+class SpotsGreenieHole {
+  final int     hole;
+  final int     worth;
+  final int?    carriedFrom;
+  final int?    winnerId;
+  final String? winnerShort;
+  /// False means nobody has answered yet — which is NOT the same as Nobody
+  /// having been picked. Only an answered Nobody carries.
+  final bool    decided;
+
+  const SpotsGreenieHole({
+    required this.hole,
+    required this.worth,
+    this.carriedFrom,
+    this.winnerId,
+    this.winnerShort,
+    this.decided = false,
+  });
+
+  factory SpotsGreenieHole.fromJson(Map<String, dynamic> j) =>
+      SpotsGreenieHole(
+        hole:        j['hole']  as int? ?? 0,
+        worth:       j['worth'] as int? ?? 1,
+        carriedFrom: j['carried_from'] as int?,
+        winnerId:    j['winner_id']    as int?,
+        winnerShort: j['winner_short'] as String?,
+        decided:     j['decided'] as bool? ?? false,
+      );
+}
+
+class SpotsGreenieState {
+  final bool                   carry;
+  final List<SpotsGreenieHole> holes;
+  /// The next par 3 with no answer — null once they are all in.
+  final SpotsGreenieHole?      next;
+
+  const SpotsGreenieState({
+    this.carry = true,
+    this.holes = const [],
+    this.next,
+  });
+
+  factory SpotsGreenieState.fromJson(Map<String, dynamic> j) =>
+      SpotsGreenieState(
+        carry: j['carry'] as bool? ?? true,
+        holes: (j['holes'] as List? ?? [])
+            .map((h) => SpotsGreenieHole.fromJson(h as Map<String, dynamic>))
+            .toList(),
+        next: j['next'] == null
+            ? null
+            : SpotsGreenieHole.fromJson(j['next'] as Map<String, dynamic>),
+      );
+
+  SpotsGreenieHole? forHole(int hole) {
+    for (final h in holes) {
+      if (h.hole == hole) return h;
+    }
+    return null;
+  }
 }
 
 class SpotsHole {
@@ -3185,6 +3278,13 @@ class SpotsSummary {
   final List<SpotsHole>        holes;
   final double betUnit;
   final int    totalSpots;
+  /// Every type the group agreed to play, for the leaderboard's In play card.
+  final List<SpotTypeInfo> inPlay;
+  /// The subset the hole's tick sheet offers — the greenie has its own pick
+  /// and birdies come off the card, so neither belongs in a tick list.
+  final List<SpotTypeInfo> sheetTypes;
+  final SpotsGreenieState  greenie;
+  final String             birdieBasis;   // 'gross' | 'net_so'
 
   const SpotsSummary({
     required this.status,
@@ -3195,6 +3295,10 @@ class SpotsSummary {
     required this.holes,
     required this.betUnit,
     required this.totalSpots,
+    this.inPlay     = const [],
+    this.sheetTypes = const [],
+    this.greenie    = const SpotsGreenieState(),
+    this.birdieBasis = 'gross',
   });
 
   /// Count for a given player on a given hole (0 if none).
@@ -3207,6 +3311,37 @@ class SpotsSummary {
     }
     return 0;
   }
+
+  /// The types a golfer has on a hole. **Only the SHEET ones**, because this
+  /// feeds the tick sheet and the button's label: a greenie or a birdie
+  /// showing there would read as something the scorer had entered and could
+  /// untick.
+  List<SpotTypeInfo> sheetTypesFor(int playerId, int hole) {
+    final allowed = {for (final t in sheetTypes) t.type};
+    for (final h in holes) {
+      if (h.hole != hole) continue;
+      for (final e in h.spots) {
+        if (e.playerId == playerId) {
+          return [for (final t in e.types) if (allowed.contains(t.type)) t];
+        }
+      }
+    }
+    return const [];
+  }
+
+  /// Everything a golfer has on a hole, sheet or not — what the hole's
+  /// status strip reports, where a greenie and a birdie DO belong.
+  List<SpotTypeInfo> allTypesFor(int playerId, int hole) {
+    for (final h in holes) {
+      if (h.hole != hole) continue;
+      for (final e in h.spots) {
+        if (e.playerId == playerId) return e.types;
+      }
+    }
+    return const [];
+  }
+
+  bool get greenieInPlay => inPlay.any((t) => t.type == 'greenie');
 
   factory SpotsSummary.fromJson(Map<String, dynamic> j) {
     final money = j['money'] as Map<String, dynamic>? ?? {};
@@ -3223,6 +3358,15 @@ class SpotsSummary {
           .toList(),
       betUnit:    (money['bet_unit']    as num?)?.toDouble() ?? 1.0,
       totalSpots: (money['total_spots'] as num?)?.toInt()    ?? 0,
+      inPlay: (j['in_play'] as List? ?? [])
+          .map((t) => SpotTypeInfo.fromJson(t as Map<String, dynamic>))
+          .toList(),
+      sheetTypes: (j['sheet_types'] as List? ?? [])
+          .map((t) => SpotTypeInfo.fromJson(t as Map<String, dynamic>))
+          .toList(),
+      greenie: SpotsGreenieState.fromJson(
+          (j['greenie'] as Map<String, dynamic>?) ?? const {}),
+      birdieBasis: j['birdie_basis'] as String? ?? 'gross',
     );
   }
 }

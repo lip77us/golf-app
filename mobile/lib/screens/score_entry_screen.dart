@@ -3372,15 +3372,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 onEditTap: (m) => setState(() => _editHotPid = m.player.id),
                 onJunkAdd:    (pid) => _adjustJunk(pid, _selectedHole, 1),
                 onJunkRemove: (pid) => _adjustJunk(pid, _selectedHole, -1),
-                // Spots add-on: an inline ⊖ N spots ⊕ under each player name
-                // (the capturesInScoreEntry carve-out). Shown once configured.
+                // Spots add-on (the capturesInScoreEntry carve-out): a + Spots
+                // button per golfer, opening a tick sheet of the
+                // types in play. Shown once Spots is on.
                 spotsActive: spotsActive(rp),
-                spotsCountFor: (pid) =>
-                    spotsCount(pid, _selectedHole, rp.spotsSummary),
-                onSpotsAdd:    (pid) =>
-                    adjustSpots(widget.foursomeId, pid, _selectedHole, 1),
-                onSpotsRemove: (pid) =>
-                    adjustSpots(widget.foursomeId, pid, _selectedHole, -1),
+                spotsTypesFor: (pid) =>
+                    spotsTypesFor(pid, _selectedHole, rp.spotsSummary),
+                onSpotsTap: (pid) =>
+                    openSpotsSheet(widget.foursomeId, pid, _selectedHole),
+                spotsSheetOpen: spotsSheetOpenFor,
                 // Long-press a player to record / undo a mid-round withdrawal.
                 // Disabled once the round is final.
                 onWithdrawTap: isComplete
@@ -3396,6 +3396,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 phantomInit: rp.phantomInitFor(widget.foursomeId),
                 // Borrowed-4th (leveled threesome) rendered INSIDE the card as
                 // a 4th player row, when this foursome carries a phantom.
+                // The greenie pick, on par 3s only. The SERVER decides
+                // which holes those are — it has the pars and it is the one
+                // walking the carry, so a client deriving par 3s would be a
+                // second answer to the same question.
+                cardFooter: spotsFooter(rp, widget.foursomeId, _selectedHole),
                 bottomRow: (() {
                   if (!games.contains('irish_rumble')) return null;
                   final fs = rp.round?.foursomes
@@ -3587,7 +3592,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
 // ===========================================================================
 
 // Const-default callbacks for the optional Spots controls.
-int  _zeroSpots(int _) => 0;
+List<SpotTypeInfo> _zeroSpots(int _) => const [];
+bool _zeroSpotsClosed(int _) => false;
 void _noopPid(int _) {}
 
 class _HoleScoreCard extends StatelessWidget {
@@ -3662,9 +3668,9 @@ class _HoleScoreCard extends StatelessWidget {
   /// Spots capture add-on: an inline ⊖ N spots ⊕ control under each player
   /// name (like junk, but always shows the minus — spots can go negative).
   final bool                    spotsActive;
-  final int  Function(int pid)  spotsCountFor;
-  final void Function(int pid)  onSpotsAdd;
-  final void Function(int pid)  onSpotsRemove;
+  final List<SpotTypeInfo> Function(int pid) spotsTypesFor;
+  final void Function(int pid) onSpotsTap;
+  final bool Function(int pid) spotsSheetOpen;
 
   /// Long-press a player row to manage a mid-round withdrawal.  Null when
   /// the viewer can't manage the foursome (not TD / not the scorer).
@@ -3713,18 +3719,22 @@ class _HoleScoreCard extends StatelessWidget {
     required this.onJunkAdd,
     required this.onJunkRemove,
     this.spotsActive   = false,
-    this.spotsCountFor = _zeroSpots,
-    this.onSpotsAdd    = _noopPid,
-    this.onSpotsRemove = _noopPid,
+    this.spotsTypesFor = _zeroSpots,
+    this.onSpotsTap    = _noopPid,
+    this.spotsSheetOpen = _zeroSpotsClosed,
     this.onWithdrawTap,
     this.phantomMembership,
     this.phantomInit,
     this.bottomRow,
+    this.cardFooter,
   });
 
   /// Optional widget rendered as the last row INSIDE the card (e.g. the Irish
   /// Rumble borrowed-4th row).
   final Widget? bottomRow;
+  /// Drawn at the foot of the card, below every player. Spots' greenie pick
+  /// on a par 3; null on every other hole.
+  final Widget? cardFooter;
 
   int? get _lowPlayingHandicap {
     if (handicapMode != 'strokes_off' || players.isEmpty) return null;
@@ -4387,9 +4397,9 @@ class _HoleScoreCard extends StatelessWidget {
                 onJunkAdd:    allowJunk ? () => onJunkAdd(m.player.id)    : null,
                 onJunkRemove: allowJunk ? () => onJunkRemove(m.player.id) : null,
                 spotsActive:  spotsActive,
-                spotsCount:   spotsActive ? spotsCountFor(m.player.id) : 0,
-                onSpotsAdd:   spotsActive ? () => onSpotsAdd(m.player.id)    : null,
-                onSpotsRemove:spotsActive ? () => onSpotsRemove(m.player.id) : null,
+                spotsTypes:   spotsActive ? spotsTypesFor(m.player.id) : const [],
+                onSpotsTap:   spotsActive ? () => onSpotsTap(m.player.id) : null,
+                spotsSheetOpen: spotsActive && spotsSheetOpen(m.player.id),
               ),
             );
             if (!isHot) return [rowWidget];
@@ -4501,6 +4511,10 @@ class _HoleScoreCard extends StatelessWidget {
           // Optional extra row inside the card (e.g. the Irish Rumble
           // borrowed-4th), so it reads as a 4th player, not a footer.
           if (bottomRow != null) bottomRow!,
+          // A real FOOTER, below the last player: Spots' greenie pick on a
+          // par 3. `bottomRow` could not carry it — that slot exists to read
+          // as another player's row, and a greenie belongs to the HOLE.
+          if (cardFooter != null) cardFooter!,
         ],
       ),
     );
@@ -5155,9 +5169,9 @@ class _PlayerRow extends StatelessWidget {
   final VoidCallback? onJunkAdd;
   final VoidCallback? onJunkRemove;
   final bool          spotsActive;
-  final int           spotsCount;
-  final VoidCallback? onSpotsAdd;
-  final VoidCallback? onSpotsRemove;
+  final List<SpotTypeInfo> spotsTypes;
+  final VoidCallback?      onSpotsTap;
+  final bool               spotsSheetOpen;
 
   /// True for the dimmed partner in a Triple Cup foursomes (alt-shot)
   /// hole — only the active player tees off this hole, so their
@@ -5194,9 +5208,9 @@ class _PlayerRow extends StatelessWidget {
     this.onJunkAdd,
     this.onJunkRemove,
     this.spotsActive = false,
-    this.spotsCount = 0,
-    this.onSpotsAdd,
-    this.onSpotsRemove,
+    this.spotsTypes = const [],
+    this.onSpotsTap,
+    this.spotsSheetOpen = false,
     this.dimmed = false,
     this.deemphasized = false,
     this.withdrawn = false,
@@ -5379,10 +5393,10 @@ class _PlayerRow extends StatelessWidget {
               // allowed). Mutually exclusive with junk, so they never stack.
               if (spotsActive) ...[
                 const SizedBox(height: 2),
-                SpotsDots(
-                  count:    spotsCount,
-                  onAdd:    onSpotsAdd ?? () {},
-                  onRemove: onSpotsRemove ?? () {},
+                SpotsButton(
+                  types:   spotsTypes,
+                  onTap:   onSpotsTap ?? () {},
+                  focused: spotsSheetOpen,
                 ),
               ],
             ],

@@ -113,12 +113,22 @@ class ApiClient {
     }
   }
 
-  Future<void> _delete(String path) async {
+  /// DELETE, optionally with a body, returning the decoded response.
+  ///
+  /// It returned `void` and took no body until Spots needed to clear a
+  /// greenie pick — an endpoint that deletes one hole's answer and hands back
+  /// the recomputed summary, because the carry on every LATER par 3 moves
+  /// with it. Both additions are backward compatible: the sixteen existing
+  /// callers pass no body and ignore the return.
+  Future<dynamic> _delete(String path, {Map<String, dynamic>? body}) async {
     final uri = Uri.parse('${Config.baseUrl}$path');
     try {
-      final res =
-          await http.delete(uri, headers: _headers).timeout(_timeout);
-      _handle(res);
+      final res = await http
+          .delete(uri,
+              headers: _headers,
+              body: body == null ? null : jsonEncode(body))
+          .timeout(_timeout);
+      return _handle(res);
     } on ApiException {
       rethrow;
     } on TimeoutException {
@@ -2111,33 +2121,76 @@ class ApiClient {
   }
 
   /// POST /api/foursomes/{id}/spots/setup/
+  /// `types` OMITTED (null) means "leave it to the defaults", which is what a
+  /// game switched on in the picker and never configured gets. An EMPTY list
+  /// is a different thing and the server refuses it, so do not collapse the
+  /// two by passing `types ?? []`.
   Future<SpotsSummary> postSpotsSetup(
     int foursomeId, {
     double? betUnit,
     String  payoutStyle  = 'per_point',
     String  perPointMode = 'all',
     double? lossCap,
+    List<String>? types,
+    bool    greenieCarry = true,
+    String  birdieBasis  = 'gross',
+    int     netPercent   = 100,
   }) async {
     final data = await _post('/foursomes/$foursomeId/spots/setup/', {
       if (betUnit != null) 'bet_unit': betUnit.toStringAsFixed(2),
       'payout_style'  : payoutStyle,
       'per_point_mode': perPointMode,
       if (lossCap != null) 'loss_cap': lossCap,
+      if (types != null) 'types': types,
+      'greenie_carry' : greenieCarry,
+      'birdie_basis'  : birdieBasis,
+      'net_percent'   : netPercent,
     });
     return SpotsSummary.fromJson(data as Map<String, dynamic>);
   }
 
   /// POST /api/foursomes/{id}/spots/tally/ — upsert per-player counts for a hole
   /// ([entries] = list of {player_id, count}; count=0 deletes).
+  /// Set which types each named golfer ticked on one hole.
+  ///
+  /// Each entry is `{'player_id': int, 'types': [slug, ...]}` and the list is
+  /// the WHOLE truth for that golfer on that hole — what is left out is
+  /// unticked, which is what makes the sheet's Done button a plain save
+  /// rather than a diff. An empty list clears him.
   Future<SpotsSummary> postSpotsTally(
     int foursomeId, {
-    required int                    holeNumber,
-    required List<Map<String, int>> entries,
+    required int                        holeNumber,
+    required List<Map<String, dynamic>> entries,
   }) async {
     final data = await _post('/foursomes/$foursomeId/spots/tally/', {
       'hole_number': holeNumber,
       'entries'    : entries,
     });
+    return SpotsSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Who took the greenie on a par 3 — `playerId: null` is **Nobody**, which
+  /// is what rolls the carry to the next par 3.
+  Future<SpotsSummary> postSpotsGreenie(
+    int foursomeId, {
+    required int holeNumber,
+    required int? playerId,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/spots/greenie/', {
+      'hole_number': holeNumber,
+      'player_id'  : playerId,
+    });
+    return SpotsSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Un-answer a par 3 — back to undecided, which is NOT the same as Nobody:
+  /// an undecided hole adds nothing to the next one.
+  Future<SpotsSummary> deleteSpotsGreenie(
+    int foursomeId, {
+    required int holeNumber,
+  }) async {
+    final data = await _delete('/foursomes/$foursomeId/spots/greenie/',
+        body: {'hole_number': holeNumber});
     return SpotsSummary.fromJson(data as Map<String, dynamic>);
   }
 

@@ -622,12 +622,11 @@ class _Points531ScreenState extends State<Points531Screen>
                 par:         par,
                 summary:     rp.points531Summary,
                 spotsActive:   spotsActive(rp),
-                spotsCountFor: (pid) =>
-                    spotsCount(pid, _selectedHole, rp.spotsSummary),
-                onSpotsAdd:    (pid) =>
-                    adjustSpots(widget.foursomeId, pid, _selectedHole, 1),
-                onSpotsRemove: (pid) =>
-                    adjustSpots(widget.foursomeId, pid, _selectedHole, -1),
+                spotsTypesFor: (pid) =>
+                    spotsTypesFor(pid, _selectedHole, rp.spotsSummary),
+                onSpotsTap: (pid) =>
+                    openSpotsSheet(widget.foursomeId, pid, _selectedHole),
+                spotsSheetOpen: spotsSheetOpenFor,
                 onScoreSelected: (m, score) {
                   if (_editHotPid != null) {
                     // Inline edit of an existing score: drop the one-shot
@@ -641,6 +640,10 @@ class _Points531ScreenState extends State<Points531Screen>
                 },
                 onEditTap: (m) => setState(() => _editHotPid = m.player.id),
               ),
+              // Spots' greenie pick, on par 3s only — empty on every
+              // other hole. The server decides which holes are par 3s;
+              // it is the one walking the carry.
+              ...greenieCards(rp, widget.foursomeId, _selectedHole),
               const SizedBox(height: 12),
 
               // ── The card, and the points under it ──
@@ -705,9 +708,9 @@ class _P531HoleScoreCard extends StatelessWidget {
   final void Function(Membership)      onEditTap;
   // Spots add-on (captured in this dedicated entry screen).
   final bool                   spotsActive;
-  final int  Function(int pid) spotsCountFor;
-  final void Function(int pid) onSpotsAdd;
-  final void Function(int pid) onSpotsRemove;
+  final List<SpotTypeInfo> Function(int pid) spotsTypesFor;
+  final void Function(int pid) onSpotsTap;
+  final bool Function(int pid) spotsSheetOpen;
 
   const _P531HoleScoreCard({
     required this.holeData,
@@ -722,9 +725,9 @@ class _P531HoleScoreCard extends StatelessWidget {
     required this.onScoreSelected,
     required this.onEditTap,
     this.spotsActive   = false,
-    required this.spotsCountFor,
-    required this.onSpotsAdd,
-    required this.onSpotsRemove,
+    required this.spotsTypesFor,
+    required this.onSpotsTap,
+    required this.spotsSheetOpen,
     this.holesInPlay = const [],
   });
 
@@ -892,10 +895,9 @@ class _P531HoleScoreCard extends StatelessWidget {
                 holePoints:      pointsForThisHole,
                 cumulativePoints: cumulativePoints,
                 spotsActive:   spotsActive,
-                spotsCount:    spotsActive ? spotsCountFor(m.player.id) : 0,
-                onSpotsAdd:    spotsActive ? () => onSpotsAdd(m.player.id) : null,
-                onSpotsRemove:
-                    spotsActive ? () => onSpotsRemove(m.player.id) : null,
+                spotsTypes:    spotsActive ? spotsTypesFor(m.player.id) : const [],
+                onSpotsTap:    spotsActive ? () => onSpotsTap(m.player.id) : null,
+                spotsSheetOpen: spotsActive && spotsSheetOpen(m.player.id),
               );
             if (isHot) {
               // Active player + picker share ONE bounding box (no teams in
@@ -969,9 +971,9 @@ class _P531PlayerRow extends StatelessWidget {
   final double       cumulativePoints;
 
   final bool          spotsActive;
-  final int           spotsCount;
-  final VoidCallback? onSpotsAdd;
-  final VoidCallback? onSpotsRemove;
+  final List<SpotTypeInfo> spotsTypes;
+  final VoidCallback?      onSpotsTap;
+  final bool               spotsSheetOpen;
 
   const _P531PlayerRow({
     required this.position,
@@ -984,9 +986,9 @@ class _P531PlayerRow extends StatelessWidget {
     required this.holePoints,
     required this.cumulativePoints,
     this.spotsActive = false,
-    this.spotsCount = 0,
-    this.onSpotsAdd,
-    this.onSpotsRemove,
+    this.spotsTypes = const [],
+    this.onSpotsTap,
+    this.spotsSheetOpen = false,
   });
 
   static String _fmtPoints(double v) =>
@@ -1043,10 +1045,10 @@ class _P531PlayerRow extends StatelessWidget {
               if (spotsActive)
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
-                  child: SpotsDots(
-                    count: spotsCount,
-                    onAdd: onSpotsAdd ?? () {},
-                    onRemove: onSpotsRemove ?? () {},
+                  child: SpotsButton(
+                    types:   spotsTypes,
+                    onTap:   onSpotsTap ?? () {},
+                    focused: spotsSheetOpen,
                   ),
                 ),
             ],

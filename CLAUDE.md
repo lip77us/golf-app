@@ -5359,3 +5359,66 @@ D's Spots button and tick sheet, the greenie card on par 3s, and the
 leaderboard's In play card with the carry state. Also outstanding: the
 glossary sentence at `/glossary/` saying Halved "counts them rather than
 naming them", which this makes false.
+
+### Spots v2 — the mobile half
+
+Option **D** of the five the design compared: one line per golfer — name, a
+`+ Spots` button, score box — and the button opens a tick sheet of the types in
+play. The old `⊖ N spots ⊕` stepper is gone.
+
+**All eight score screens carry both halves**, which is the thing this repo
+keeps getting wrong: the combo-tee chip, Spots' own capture control and the
+scorecard grids were each shipped on the universal screen first, and *the games
+with their OWN play screen are the ones that get missed*. So score entry, Wolf,
+Points 5-3-1, Sequoya 3s, Quota Nassau, Rabbit, Survivor and Nassau all get the
+sheet AND the par-3 footer, and a source test asserts each of the eight still
+does — plus that none of them still threads a spots COUNT, which would compile
+(an int is an int) and silently post nothing the server accepts.
+
+- **`SpotsButton`** reads `+ Spots` empty and `2 Sandy, Chippy` filled. The
+  badge is laid out first and never shrinks, so a long type list eats into the
+  names and not into the number — a row that loses its count says nothing. The
+  count is a sum of WORTHS, so a sandy and a snake reads `0`.
+- **The button shows only SHEET types.** A golfer's birdie is real and counts,
+  but it is not something he can untick, so it must not appear on a control
+  that unticks things. `sheetTypesFor` / `allTypesFor` are that split.
+- **`spotsFooter()` is the one thing at the foot of the hole card**, and it
+  carries two: the greenie pick on a par 3, and a `SPOTS · THIS HOLE` line.
+  That line is **the only place a DERIVED spot is visible on the hole** —
+  without it a birdie adds money with nothing on the card saying so, and the
+  greenie's worth is only legible beside it (`Greenie 2 + Birdie = 3`).
+- **Nobody is a chip in the row**, not an absence of one, because it is what
+  rolls the carry; tapping the current answer again clears the hole back to
+  undecided, which is a different state.
+- `openSpotsSheet` **resolves the golfer's name itself** rather than taking
+  it: eight screens call it and each had its own route to a short name, so an
+  argument would have been eight chances to pass the wrong one. The sheet uses
+  the FULL name, the same reasoning as Hot Seat's order sheet.
+- The sheet posts **only the golfer who was edited**. The endpoint leaves
+  golfers it was not given alone, so posting the whole foursome would make one
+  scorer's save overwrite another's on the same hole.
+- Setup gets the **Which spots are we playing** card under Stake, with
+  greenie's Carry over switch and the one Gross / Net (SO) control — which
+  sits under Birdie, or under Eagle when Birdie is off, as the design
+  specifies. Save is dead until one type is ticked, which is the half that
+  keeps the TD out of a form the server refuses.
+- The leaderboard's **In play** card lists the pills with a non-1 worth spelled
+  out (`Eagle or better · +2`, `Snake · -1`) and says the carry state in a
+  sentence, because it is two facts read together: whether it rolls, and what
+  the next par 3 is worth.
+
+`_delete` in the client gained an optional body and a return value, for
+clearing a greenie — an endpoint that deletes one hole's answer and hands back
+a recomputed summary, since the carry on every LATER par 3 moves with it. Both
+additions are backward compatible; the sixteen existing callers pass no body
+and ignore the return.
+
+**The glossary sentence is corrected.** `/glossary/` said Halved "counts them
+rather than naming them", which this makes false; it now says the group ticks
+what it is playing before the round, with anything else going in as Other.
+
+Tests: `mobile/test/spots_types_test.dart` (13). Flutter 965 green.
+
+**Not built:** the design's open question about very long names on the Spots
+button (four golfers fit; the ellipsis handles the rest, untested against a
+real 24-character name).

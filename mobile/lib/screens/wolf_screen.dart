@@ -837,13 +837,16 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
                 onEditTap: (m) => setState(() => _editingPlayerId =
                     _editingPlayerId == m.player.id ? null : m.player.id),
                 spotsActive:   spotsActive(rp),
-                spotsCountFor: (pid) =>
-                    spotsCount(pid, _selectedHole, rp.spotsSummary),
-                onSpotsAdd:    (pid) =>
-                    adjustSpots(widget.foursomeId, pid, _selectedHole, 1),
-                onSpotsRemove: (pid) =>
-                    adjustSpots(widget.foursomeId, pid, _selectedHole, -1),
+                spotsTypesFor: (pid) =>
+                    spotsTypesFor(pid, _selectedHole, rp.spotsSummary),
+                onSpotsTap: (pid) =>
+                    openSpotsSheet(widget.foursomeId, pid, _selectedHole),
+                spotsSheetOpen: spotsSheetOpenFor,
               ),
+              // Spots' greenie pick, on par 3s only — empty on
+              // every other hole. The server decides which
+              // holes are par 3s; it is walking the carry.
+              ...greenieCards(rp, widget.foursomeId, _selectedHole),
               if (holeInfo != null && holeInfo.isScored) ...[
                 const SizedBox(height: 12),
                 _WolfOutcomeLine(hole: holeInfo),
@@ -1317,7 +1320,8 @@ class _WolfOutcomeLine extends StatelessWidget {
 // Score-entry card (modeled on points_531_screen's hole card)
 // ===========================================================================
 
-int  _wolfZeroSpots(int _) => 0;
+List<SpotTypeInfo> _wolfZeroSpots(int _) => const [];
+bool _wolfZeroSpotsClosed(int _) => false;
 void _wolfNoopPid(int _) {}
 
 /// Handicap strokes for [m] on one hole — **the screen's one stroke source**.
@@ -1365,9 +1369,9 @@ class _HoleScoreCard extends StatelessWidget {
   final void Function(Membership) onEditTap;
   // Spots add-on (capture in this dedicated entry screen).
   final bool                   spotsActive;
-  final int  Function(int pid) spotsCountFor;
-  final void Function(int pid) onSpotsAdd;
-  final void Function(int pid) onSpotsRemove;
+  final List<SpotTypeInfo> Function(int pid) spotsTypesFor;
+  final void Function(int pid) onSpotsTap;
+  final bool Function(int pid) spotsSheetOpen;
 
   const _HoleScoreCard({
     required this.holeData,
@@ -1385,9 +1389,9 @@ class _HoleScoreCard extends StatelessWidget {
     required this.onScoreSelected,
     required this.onEditTap,
     this.spotsActive   = false,
-    this.spotsCountFor = _wolfZeroSpots,
-    this.onSpotsAdd    = _wolfNoopPid,
-    this.onSpotsRemove = _wolfNoopPid,
+    this.spotsTypesFor = _wolfZeroSpots,
+    this.onSpotsTap    = _wolfNoopPid,
+    this.spotsSheetOpen = _wolfZeroSpotsClosed,
   });
 
   String get _mode       => summary?.handicapMode ?? 'net';
@@ -1506,9 +1510,9 @@ class _HoleScoreCard extends StatelessWidget {
                 isEditing: isEditing,
                 onTap:     editable ? () => onEditTap(m) : null,
                 spotsActive:  spotsActive,
-                spotsCount:   spotsActive ? spotsCountFor(m.player.id) : 0,
-                onSpotsAdd:   spotsActive ? () => onSpotsAdd(m.player.id) : null,
-                onSpotsRemove:spotsActive ? () => onSpotsRemove(m.player.id) : null,
+                spotsTypes:   spotsActive ? spotsTypesFor(m.player.id) : const [],
+                onSpotsTap:   spotsActive ? () => onSpotsTap(m.player.id) : null,
+                spotsSheetOpen: spotsActive && spotsSheetOpen(m.player.id),
               );
             if (isHot || isEditing) {
               // Active player + score entry share ONE team-coloured bounding
@@ -1568,9 +1572,9 @@ class _PlayerRow extends StatelessWidget {
   final bool       isEditing;  // its inline picker is currently open
   final VoidCallback? onTap;
   final bool          spotsActive;
-  final int           spotsCount;
-  final VoidCallback? onSpotsAdd;
-  final VoidCallback? onSpotsRemove;
+  final List<SpotTypeInfo> spotsTypes;
+  final VoidCallback?      onSpotsTap;
+  final bool               spotsSheetOpen;
 
   const _PlayerRow({
     required this.member,
@@ -1583,9 +1587,9 @@ class _PlayerRow extends StatelessWidget {
     this.isEditing = false,
     this.onTap,
     this.spotsActive = false,
-    this.spotsCount = 0,
-    this.onSpotsAdd,
-    this.onSpotsRemove,
+    this.spotsTypes = const [],
+    this.onSpotsTap,
+    this.spotsSheetOpen = false,
   });
 
   @override
@@ -1658,10 +1662,10 @@ class _PlayerRow extends StatelessWidget {
               if (spotsActive)
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
-                  child: SpotsDots(
-                    count:    spotsCount,
-                    onAdd:    onSpotsAdd ?? () {},
-                    onRemove: onSpotsRemove ?? () {},
+                  child: SpotsButton(
+                    types:   spotsTypes,
+                    onTap:   onSpotsTap ?? () {},
+                    focused: spotsSheetOpen,
                   ),
                 ),
             ],
