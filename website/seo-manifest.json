@@ -24,15 +24,15 @@
   "published": "2026-09-27",
   "modified": "2026-09-28"
  },
- "games/hot-spot/index.html": {
-  "hash": "20bfface79bee921",
-  "published": "2026-10-09",
-  "modified": "2026-10-09"
+ "games/hot-seat/index.html": {
+  "hash": "53fc18521f14ddd4",
+  "published": "2026-10-15",
+  "modified": "2026-10-15"
  },
  "games/index.html": {
-  "hash": "d3b8a80cf5c81d06",
+  "hash": "e2c71be5886d3c01",
   "published": "2026-09-13",
-  "modified": "2026-10-13"
+  "modified": "2026-10-15"
  },
  "games/irish-rumble/index.html": {
   "hash": "0e764847c704cd76",
@@ -125,9 +125,9 @@
   "modified": "2026-10-14"
  },
  "index.html": {
-  "hash": "1be174e3d2e7786e",
+  "hash": "b3b65cea2e9f85af",
   "published": "2026-06-08",
-  "modified": "2026-10-13"
+  "modified": "2026-10-15"
  },
  "privacy.html": {
   "hash": "d573549a28886b1e",

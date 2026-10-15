@@ -5004,3 +5004,65 @@ why this took a new consumer to find.
 Tests: `api/test_multi_skins_groups.py` (16 — `AddPlayerTests` and
 `RoundPayloadKnowsWhoIsOnHalvedTests`) and
 `mobile/test/round_groups_reachable_test.dart` (6).
+
+## Hot Spot is now Hot Seat — the name moved, the id did not
+
+`~/Downloads/handoff-hot-seat/RENAME.md` (15 Oct 2026). The game is unchanged:
+one anchor per hole whose score always counts, plus the best net of the other
+three. The two sections above that still say **Hot Spot** describe this game.
+
+**`GameType.HOT_SPOT`'s VALUE is still `hot_spot`**, and the two halves of
+that pull opposite ways, which is why there is a test pinning both
+(`test_the_key_is_the_old_slug_and_the_label_is_the_new_name`):
+
+- Renaming the value to match the label would orphan every round already
+  holding it — `Round.active_games`, a cup config's `game_type`, and the
+  **leaderboard key the client tabs off**. The rename doc asks for exactly
+  this ("keep it as the stored ID … only the display name has to change").
+- Leaving the label would leave the app calling it by a name the website, the
+  guide and the organiser no longer use.
+
+So the slug is history and the label is the name. Routes
+(`/rounds/<pk>/hot-spot/`), class names (`HotSpotConfig`), file names
+(`services/hot_spot.py`, `hot_spot_order_sheet.dart`) and the comments that
+describe the game all keep the old spelling — the same call the Ryder Cup
+scrub made, with a note at each entry point (`core/models.py`, the service
+docstring, the catalog entry) so the next reader does not have to infer that
+two names mean one game. **Seven golfer-facing strings moved**: the catalog
+`displayName` and its money note, the setup app bar, `Configure Hot Seat` on
+the hub, the order prompt in score entry, the order sheet's title, and the
+leaderboard's not-set-up line — plus the server's leaderboard `label`.
+
+`tournament/0079_hot_seat_label` is labels and `help_text` only; **its SQL is
+empty** and no row changes.
+
+**Two RENAME items were already no-ops.** The app never links to
+`halved.golf/games/<slug>`, so there are no deep links or share URLs to teach
+both spellings; and the anchor banner's button has always read `Change`, not
+the doc's `Change Hot Spot order`.
+
+**Not renamed: the lock screen.** Section 4 of the handoff is marked a
+proposal and the card was never built — `hasLiveActivity: false` in the
+catalog, and no Swift or builder references it at all. There is no `HOT SEAT`
+header to change.
+
+### The web half, and why the handoff's page was not used
+
+`web/hot-seat.html` is offered as publish-ready. Diffed against the live page
+with the name normalised, the **content is identical** and the only other
+difference is its links: `/games/` and the three related-game links come back
+as `https://halved.golf/games` — absolute, and **without the trailing slash**.
+Under this site's URL model that is the redirecting form, so adopting the file
+would have silently traded five audit-clean internal links for five 301s on
+the one page the rename is about. The design-system export is what does this
+(the handoff says so of `design-reference/`, just not of this file).
+
+So `games/hot-spot/` was **renamed** and its strings changed in place.
+
+`web/hot-spot-redirect.html` is deliberately unused. It is the handoff's own
+stopgap for "if a server redirect can't go out the same day", and `_redirects`
+already carries the reason it would be actively harmful: a static file at the
+old path **shadows** the redirect rule and keeps the old name serving as
+duplicate content. That is the Eclectic lesson, and this rename is the same
+shape — hand-written 301s above the generated block, pointing at the final
+slashed form, with the old directory deleted rather than left behind.

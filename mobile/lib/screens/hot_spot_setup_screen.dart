@@ -198,7 +198,7 @@ class _HotSpotSetupScreenState extends State<HotSpotSetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Hot Spot')),
+      appBar: AppBar(title: const Text('Hot Seat')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : (_error != null && !_saving && !_configured)

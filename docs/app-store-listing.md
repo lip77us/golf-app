@@ -265,7 +265,12 @@ promotional text there is no history kept here: this is the description, and
 editing it is how it changes. If you are looking for "the 2.11.2 description",
 it is this.
 
-Changed since 2.11.0, in two separate lots:
+Changed since 2.11.0, in three separate lots:
+* **Hot Spot is now Hot Seat** (15 Oct 2026) — the game is unchanged, and
+  the new name is the same eight characters, so the count below still holds.
+  The bullet is the only place the description names it. The What's New and
+  promotional texts ABOVE keep the old name: they are a record of what was
+  actually submitted, not living copy;
 * this release — Multi-Group Skins now reads "in whatever groups you are
   playing in", and the solo games got a line;
 * `be43d72`, after the 2.11.0 copy was written — the headline games it had
@@ -277,7 +282,7 @@ games, enter scores hole by hole, and Halved does the rest — live results,
 handicaps, a shareable spectator web page, and an easy settle-up at the end.
 
 GAMES YOU CAN PLAY
-• Hot Spot — one golfer anchors each hole and his score counts whatever it is;
+• Hot Seat — one golfer anchors each hole and his score counts whatever it is;
   the team adds the best net of the other three, and the anchor rotates
 • 40 Balls — a group gets 40 balls for the round and spends 0 to 4 a hole,
   picked after the scores are in

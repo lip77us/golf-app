@@ -817,7 +817,7 @@ class _GameSetupCard extends StatelessWidget {
                 onPressed: () => Navigator.of(context)
                     .pushNamed('/hot-spot-setup', arguments: roundId),
                 icon: const Icon(Icons.tune, size: 18),
-                label: const Text('Configure Hot Spot'),
+                label: const Text('Configure Hot Seat'),
               ),
             // The day bet's SWITCH is on the side games screen, with the
             // other side games, because that is where a TD looks for one.

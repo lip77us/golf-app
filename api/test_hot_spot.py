@@ -184,7 +184,29 @@ class ResultTests(_Base):
         resp = self.client.get(reverse('api-leaderboard', args=[self.round.id]))
         self.assertEqual(resp.status_code, 200, resp.data)
         self.assertIn('hot_spot', resp.data['games'])
-        self.assertEqual(resp.data['games']['hot_spot']['label'], 'Hot Spot')
+        self.assertEqual(resp.data['games']['hot_spot']['label'], 'Hot Seat')
+
+    def test_the_key_is_the_old_slug_and_the_label_is_the_new_name(self):
+        """The 15 Oct 2026 rename moved the NAME and not the id.
+
+        Both halves matter and they pull opposite ways.  Renaming the value to
+        match the label would orphan every round that already holds
+        ``hot_spot`` -- in ``Round.active_games``, in a cup config's
+        ``game_type``, in the leaderboard key the client tabs off.  Leaving the
+        label would leave the app calling it by a name the website, the guide
+        and the organiser no longer use.  So this pins the split rather than
+        either name on its own.
+        """
+        from core.models import GameType
+        self.assertEqual(GameType.HOT_SPOT.value, 'hot_spot')
+        self.assertEqual(GameType.HOT_SPOT.label, 'Hot Seat')
+
+        self._setup()
+        self._order()
+        resp = self.client.get(reverse('api-leaderboard', args=[self.round.id]))
+        self.assertIn('hot_spot', resp.data['games'])
+        self.assertNotIn('hot_seat', resp.data['games'])
+        self.assertEqual(self.round.active_games, ['hot_spot'])
 
     def test_configured_games_reports_it_from_the_config(self):
         """It is the FOURSOME serializer that carries this, which is what the

@@ -138,7 +138,7 @@ class _HotSpotOrderSheetState extends State<HotSpotOrderSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Hot Spot order', style: theme.textTheme.titleMedium),
+            Text('Hot Seat order', style: theme.textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
               'Drag the handles into the order you will anchor. It locks when '

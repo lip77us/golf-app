@@ -11692,7 +11692,7 @@ class _HotSpotViewState extends State<_HotSpotView> {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
-          child: Text('Hot Spot has not been set up for this round yet.',
+          child: Text('Hot Seat has not been set up for this round yet.',
               textAlign: TextAlign.center),
         ),
       );

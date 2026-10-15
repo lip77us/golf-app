@@ -2795,7 +2795,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           const Icon(Icons.swap_vert, size: 16, color: Halved.caution),
           const SizedBox(width: 8),
           Expanded(
-            child: Text('Set your Hot Spot order before the first score.',
+            child: Text('Set your Hot Seat order before the first score.',
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: Halved.caution)),
           ),

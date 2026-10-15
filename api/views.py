@@ -757,7 +757,7 @@ def _build_leaderboard(round_obj: Round) -> dict:
     if 'hot_spot' in active_games:
         from services.hot_spot import hot_spot_summary
         games['hot_spot'] = {
-            'label': 'Hot Spot',
+            'label': 'Hot Seat',
             **hot_spot_summary(round_obj),
         }
 

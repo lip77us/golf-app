@@ -376,7 +376,7 @@ class Foursome(models.Model):
     hot_spot_order      = models.JSONField(
                             default=list,
                             help_text=(
-                                "Hot Spot anchor order: real player PKs, the "
+                                "Hot Seat anchor order: real player PKs, the "
                                 "anchor for a hole derived from play-order "
                                 "position. Empty until the group sets it on "
                                 "the first tee; locked by the first score."

@@ -33,7 +33,12 @@ class GameType(models.TextChoices):
     # so a bad hole from the anchor cannot be hidden.  The anchor rotates on an
     # order each group sets on the first tee, which is why it is not a Rumble
     # variant: the count is not a setting, the identity of the counted ball is.
-    HOT_SPOT        = 'hot_spot',        'Hot Spot'
+    # **Renamed Hot Seat on 15 Oct 2026; the stored value stays
+    # ``hot_spot``.**  Renaming the value would orphan every round that
+    # has one, so the slug is history and the label is the name.  Code,
+    # routes and comments below still read hot_spot/Hot Spot for the same
+    # reason — only strings a golfer reads changed.
+    HOT_SPOT        = 'hot_spot',        'Hot Seat'
     NASSAU          = 'nassau',          'Nassau'
     # Nassau over the holes actually played, as ONE match (no F9/B9 split) with
     # presses — the Nassau to reach for on a 9-hole / partial round.

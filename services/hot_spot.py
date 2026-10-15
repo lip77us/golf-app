@@ -1,7 +1,9 @@
 """
 services/hot_spot.py
 --------------------
-Hot Spot calculator.
+Hot Seat calculator.  **Renamed from Hot Spot on 15 Oct 2026; the stored
+game id is still ``hot_spot``**, so this module, its routes and the names
+below keep the old spelling and only golfer-facing strings changed.
 
 Rules
 ~~~~~
@@ -202,7 +204,7 @@ def setup_hot_spot(round_obj, *, scoring='to_par', handicap_mode=None,
     mode = handicap_mode or HandicapMode.NET
     if mode not in (HandicapMode.NET, HandicapMode.GROSS):
         raise ValueError(
-            'Hot Spot is net or gross: strokes off the low golfer needs one '
+            'Hot Seat is net or gross: strokes off the low golfer needs one '
             'low golfer, and a field of groups does not have one.')
 
     defaults = {

@@ -773,8 +773,11 @@ const List<GameMeta> kGameCatalog = [
   GameMeta(
     id                   : GameIds.hotSpot,
     blurb     : "One golfer anchors each hole and his score counts whatever it is; the team adds the best net of the other three. Each group sets its own anchor order on the first tee.",
-    moneyNote : "Entry, payouts and the rules are set on the Hot Spot screen, right after you create the tournament.",
-    displayName          : 'Hot Spot',
+    moneyNote : "Entry, payouts and the rules are set on the Hot Seat screen, right after you create the tournament.",
+    // **Renamed from Hot Spot on 15 Oct 2026.** `GameIds.hotSpot` is still
+    // `hot_spot` — the server stores that and rounds already played hold
+    // it, so the slug is history and this line is the name.
+    displayName          : 'Hot Seat',
     tournament           : true,
     requiresMultiFoursome: true,
     minPlayers           : 2,
