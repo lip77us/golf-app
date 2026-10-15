@@ -285,6 +285,7 @@ class SpotType(models.TextChoices):
     EAGLE   = 'eagle',   'Eagle or better'
     CHIPPY  = 'chippy',  'Chippy'
     BARKY   = 'barky',   'Barky'
+    HOGAN   = 'hogan',   'Hogan'
     SNAKE   = 'snake',   'Snake'
     OTHER   = 'other',   'Other'
 

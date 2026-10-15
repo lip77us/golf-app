@@ -210,6 +210,34 @@ class TicksTests(_Base):
         game = setup_spots(self.fs, types=None)
         self.assertEqual(game.types, default_types())
 
+    def test_hogan_is_offered_but_OFF_by_default(self):
+        """Paul, 15 Oct 2026. Fairway, green, two putts — nothing the app can
+        detect, so it is a sheet tick, and a group has to ask for it."""
+        self.assertNotIn('hogan', default_types())
+        setup_spots(self.fs, types=['hogan'])
+        s = spots_summary(self.fs)
+        self.assertEqual([t['type'] for t in s['sheet_types']], ['hogan'])
+        self.tick(4, 'A', 'hogan')
+        self.assertEqual(self._spots(spots_summary(self.fs))['A'], 1)
+
+    def test_the_catalogue_names_every_type_the_enum_has(self):
+        """The summary carries the WHOLE list on every read, which is what
+        lets the setup checklist be built without the client keeping its own
+        copy of the names. A type in the enum and not here would be a type
+        nobody could ever tick."""
+        from core.models import SpotType
+        setup_spots(self.fs)
+        cat = spots_summary(self.fs)['catalogue']
+        self.assertEqual([t['type'] for t in cat],
+                         [str(t) for t in SpotType])
+        for row in cat:
+            self.assertTrue(row['label'])
+            self.assertIn(row['entry'], ('sheet', 'pick', 'derived'))
+            self.assertIn('default', row)
+        # And the defaults it reports ARE the defaults a fresh game gets.
+        self.assertEqual([t['type'] for t in cat if t['default']],
+                         default_types())
+
     def test_types_come_back_in_catalogue_order(self):
         """So the In play pills and the sheet rows read the same way for every
         group, whatever order the client sent."""

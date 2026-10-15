@@ -5419,6 +5419,39 @@ what it is playing before the round, with anything else going in as Other.
 
 Tests: `mobile/test/spots_types_test.dart` (13). Flutter 965 green.
 
+#### Hogan, and the second place names were living
+
+Paul added **Hogan** on 15 Oct 2026 — fairway, green, two putts, with a par 5
+adding a second fairway — **off by default**, like Poley, Barky, Snake and
+Other. Nothing the app can detect, so it is a sheet tick.
+
+Adding it is what exposed a real flaw in the mobile half above. The setup
+checklist has to draw a row for every type including the unticked ones, but a
+configured game's `in_play` holds only the group's own picks — so the first
+version merged `in_play` with `sheet_types` and **filled the gaps from a label
+map typed into the screen**. That made the client a second place every type is
+named, against the rule this file keeps restating: one place holds a name, and
+the server holds it.
+
+The cost was concrete rather than theoretical. Hogan would have needed adding
+in two places, and forgetting the client half shows a golfer `hogan` in a
+checkbox. So `catalogue_block()` now ships the WHOLE list on every read — slug,
+label, worth, how it is captured, whether it starts ticked — and
+`_mergeCatalogue` is one line returning it. A test asserts the catalogue
+matches the enum exactly, and another greps the setup screen for any type name
+typed into it.
+
+**The grep test was passing vacuously first.** It read
+`src.contains("'\$label'")`, and in Dart `\$` is an escaped dollar, so it
+looked for the literal text `'$label'` and would have agreed with any
+violation. Same shape as the Sixes anchor test that passed against its own
+bug. It is unescaped now, and I checked it fails when a name is typed back in
+before trusting it.
+
+`games/0096` is choices only — no row changes, and "off by default" is
+`SPOT_META`'s flag rather than anything in the database, so a game already
+configured keeps exactly the types it was given.
+
 **Not built:** the design's open question about very long names on the Spots
 button (four golfers fit; the ellipsis handles the rest, untested against a
 real 24-character name).

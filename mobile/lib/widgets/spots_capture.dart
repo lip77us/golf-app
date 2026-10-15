@@ -42,6 +42,8 @@ String spotTypeBlurb(String type) {
       return 'Holed from off the green.';
     case 'barky':
       return 'Par or better after hitting a tree.';
+    case 'hogan':
+      return 'Fairway, green, two putts. A par 5 adds a second fairway.';
     case 'snake':
       return 'Three-putt. Pays the other way — the snake pays everyone else.';
     case 'other':

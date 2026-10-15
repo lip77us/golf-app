@@ -3285,6 +3285,12 @@ class SpotsSummary {
   final List<SpotTypeInfo> sheetTypes;
   final SpotsGreenieState  greenie;
   final String             birdieBasis;   // 'gross' | 'net_so'
+  /// **Every type the server knows**, in catalogue order — what the setup
+  /// checklist is built from. It is sent on every read precisely so the
+  /// client does not keep its own list of the names: a configured game's
+  /// `inPlay` holds only the group's picks, and filling the gaps from a
+  /// hardcoded map made this a second place every type is named.
+  final List<SpotTypeInfo> catalogue;
 
   const SpotsSummary({
     required this.status,
@@ -3299,6 +3305,7 @@ class SpotsSummary {
     this.sheetTypes = const [],
     this.greenie    = const SpotsGreenieState(),
     this.birdieBasis = 'gross',
+    this.catalogue  = const [],
   });
 
   /// Count for a given player on a given hole (0 if none).
@@ -3367,6 +3374,9 @@ class SpotsSummary {
       greenie: SpotsGreenieState.fromJson(
           (j['greenie'] as Map<String, dynamic>?) ?? const {}),
       birdieBasis: j['birdie_basis'] as String? ?? 'gross',
+      catalogue: (j['catalogue'] as List? ?? [])
+          .map((t) => SpotTypeInfo.fromJson(t as Map<String, dynamic>))
+          .toList(),
     );
   }
 }

@@ -64,6 +64,7 @@ SPOT_META = {
     SpotType.EAGLE:   {'entry': 'derived', 'worth':  2, 'default': True},
     SpotType.CHIPPY:  {'entry': 'sheet',   'worth':  1, 'default': True},
     SpotType.BARKY:   {'entry': 'sheet',   'worth':  1, 'default': False},
+    SpotType.HOGAN:   {'entry': 'sheet',   'worth':  1, 'default': False},
     SpotType.SNAKE:   {'entry': 'sheet',   'worth': -1, 'default': False},
     SpotType.OTHER:   {'entry': 'sheet',   'worth':  1, 'default': False},
 }
@@ -271,6 +272,23 @@ def _in_play_block(types) -> list:
             for st in SPOT_META if st in wanted]
 
 
+def catalogue_block() -> list:
+    """Every type the server knows, in catalogue order, with its label, its
+    worth, how it is captured, and whether it starts ticked.
+
+    **Sent on every read so the setup checklist can be built from it.** The
+    first version of that screen merged `in_play` with `sheet_types` and
+    filled the gaps from a hardcoded label map, because a configured game's
+    `in_play` holds only the group's own picks — which made the client a
+    second place every type is named. Adding Hogan is what proved the cost:
+    it would have needed adding twice, and forgetting the client half shows
+    a golfer the slug.
+    """
+    return [{'type': str(t), 'label': t.label, 'worth': m['worth'],
+             'entry': m['entry'], 'default': m['default']}
+            for t, m in SPOT_META.items()]
+
+
 def _par_si_by_hole(real_members) -> dict:
     """{hole: (par, stroke_index)} off the first tee that has the hole.
 
@@ -448,6 +466,7 @@ def spots_summary(foursome) -> dict:
             'payout_style'  : 'per_point',
             'players'       : players,
             'holes'         : [],
+            'catalogue'     : catalogue_block(),
             'in_play'       : _in_play_block(default_types()),
             'sheet_types'   : _in_play_block(
                                 [t for t in default_types()
@@ -609,6 +628,7 @@ def spots_summary(foursome) -> dict:
         'per_point_mode': game.per_point_mode,
         'loss_cap'      : (float(game.loss_cap)
                            if game.loss_cap is not None else None),
+        'catalogue'     : catalogue_block(),
         'in_play'       : _in_play_block(game.types or []),
         'sheet_types'   : _in_play_block(sheet),
         'greenie'       : greenie_block,

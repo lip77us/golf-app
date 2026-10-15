@@ -351,32 +351,15 @@ class _SpotsSetupScreenState extends State<SpotsSetupScreen> {
     );
   }
 
-  /// Every type the server knows about, label included.
+  /// Every type the server knows about, straight from the summary.
   ///
-  /// Built from the summary rather than typed here, so the checklist cannot
-  /// print a slug and cannot drift from `SpotType`. A configured game's
-  /// `in_play` holds only the group's own picks, so the unticked rows come
-  /// from `sheet_types` and the two derived ones are added back by name —
-  /// the server sends those in `in_play` only when they are on.
-  List<SpotTypeInfo> _mergeCatalogue(SpotsSummary s) {
-    const order = ['greenie', 'sandy', 'poley', 'birdie', 'eagle',
-                   'chippy', 'barky', 'snake', 'other'];
-    const labels = {
-      'greenie': 'Greenie', 'sandy': 'Sandy', 'poley': 'Poley',
-      'birdie': 'Birdie', 'eagle': 'Eagle or better', 'chippy': 'Chippy',
-      'barky': 'Barky', 'snake': 'Snake', 'other': 'Other',
-    };
-    const worths = {'eagle': 2, 'snake': -1};
-    final known = {
-      for (final t in [...s.inPlay, ...s.sheetTypes]) t.type: t,
-    };
-    return [
-      for (final slug in order)
-        known[slug] ??
-            SpotTypeInfo(type: slug, label: labels[slug] ?? slug,
-                         worth: worths[slug] ?? 1),
-    ];
-  }
+  /// It USED to merge `in_play` with `sheet_types` and fill the gaps from a
+  /// label map typed here — because a configured game's `in_play` holds only
+  /// the group's own picks. That made this screen a second place every type
+  /// is named, and adding Hogan is what proved the cost: two edits, and
+  /// forgetting this one shows a golfer the slug. The server sends the whole
+  /// catalogue now.
+  List<SpotTypeInfo> _mergeCatalogue(SpotsSummary s) => s.catalogue;
 
   /// "Which spots are we playing" — the agreement the feature exists for,
   /// which is why it is a card of its own under the stake rather than a line

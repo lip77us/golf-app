@@ -164,7 +164,7 @@ void main() {
     test('each one has a blurb', () {
       // A checklist row with no description is a slug with a tick box.
       for (final slug in ['greenie', 'sandy', 'poley', 'birdie', 'eagle',
-                          'chippy', 'barky', 'snake', 'other']) {
+                          'chippy', 'barky', 'hogan', 'snake', 'other']) {
         expect(spotTypeBlurb(slug), isNotEmpty, reason: '$slug has no blurb');
       }
     });
@@ -177,6 +177,39 @@ void main() {
 
     test('an unknown slug degrades to empty, not to a crash', () {
       expect(spotTypeBlurb('ferret'), '');
+    });
+  });
+
+  group('the names come from the server', () {
+    test('the checklist is the catalogue, not a list typed on the phone', () {
+      // A configured game's `in_play` holds only the group's picks, so the
+      // screen used to fill the gaps from a hardcoded label map — which made
+      // it a second place every type is named. Adding Hogan proved the cost.
+      final s = _summary({
+        'catalogue': const [
+          {'type': 'greenie', 'label': 'Greenie', 'worth': 1,
+           'entry': 'pick', 'default': true},
+          {'type': 'hogan', 'label': 'Hogan', 'worth': 1,
+           'entry': 'sheet', 'default': false},
+        ],
+        'in_play': const [_greenie],
+      });
+      expect(s.catalogue.map((t) => t.type), ['greenie', 'hogan']);
+      // Hogan is in the catalogue and NOT in play — which is exactly the row
+      // the old merge could not produce.
+      expect(s.inPlay.map((t) => t.type), ['greenie']);
+    });
+
+    test('no type name is typed into the setup screen', () {
+      final src =
+          File('lib/screens/spots_setup_screen.dart').readAsStringSync();
+      for (final label in ['Eagle or better', 'Greenie', 'Barky', 'Hogan']) {
+        // Unescaped on purpose: `"'\$label'"` would look for the literal
+        // text and pass against anything, which is a test that agrees with
+        // the bug.
+        expect(src.contains("'" + label + "'"), isFalse,
+            reason: 'spots_setup_screen names $label itself');
+      }
     });
   });
 
