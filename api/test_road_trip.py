@@ -158,13 +158,86 @@ class FieldGamesTests(_Base):
         return f'/api/rounds/{(r or self.round).id}/field-games/'
 
     def test_setting_them_writes_the_round_s_list(self):
+        # Stroke Play is an overlay and sits beside a group game — which is
+        # the only kind of pair this endpoint takes. It used to assert
+        # `irish_rumble` + `forty_balls`, two games that rank the same groups
+        # into the same pool, so it was pinning the hole the next test closes.
         r = self.client.post(self.url_fg(),
-                             {'games': ['irish_rumble', 'forty_balls']},
+                             {'games': ['low_net_round', 'forty_balls']},
                              format='json')
         self.assertEqual(r.status_code, 200)
         self.round.refresh_from_db()
         self.assertEqual(self.round.active_games,
-                         ['irish_rumble', 'forty_balls'])
+                         ['low_net_round', 'forty_balls'])
+
+    def test_two_of_the_one_pool_family_are_REFUSED(self):
+        """Irish Rumble, Better Ball, Hot Seat and 40 Balls are one
+        competition scored four ways: one pool, one board, the same groups
+        ranked. A round runs one of them.
+
+        The client enforces it from the catalog's `excludes`; this is here
+        because an endpoint that trusts the client for a rule has no rule.
+        It matters more than it reads: of the family's six pairs only
+        Rumble <-> Better Ball is guarded in the services, so for the other
+        five nothing downstream would have caught the pair.
+        """
+        for pair in (('irish_rumble', 'forty_balls'),
+                     ('hot_spot', 'irish_rumble'),
+                     ('hot_spot', 'better_ball'),
+                     ('hot_spot', 'forty_balls'),
+                     ('better_ball', 'forty_balls'),
+                     ('better_ball', 'irish_rumble')):
+            with self.subTest(pair=pair):
+                r = self.client.post(self.url_fg(), {'games': list(pair)},
+                                     format='json')
+                self.assertEqual(r.status_code, 400, r.data)
+                self.assertIn('one of them', r.data['detail'])
+                self.round.refresh_from_db()
+                # Refused means nothing was written, not written-then-trimmed.
+                for g in pair:
+                    self.assertNotIn(g, self.round.active_games or [])
+
+    def test_hot_seat_is_a_field_game_the_organiser_can_set(self):
+        """The gap this closes: Hot Seat was absent from `FIELD_GAMES`, so the
+        road-trip sheet could not offer it and this endpoint would have
+        refused it as `Not a field game` — while the per-round side-games
+        screen set it happily through `updateRound`. One game, reachable from
+        one screen and not the other.
+        """
+        r = self.client.post(self.url_fg(), {'games': ['hot_spot']},
+                             format='json')
+        self.assertEqual(r.status_code, 200, r.data)
+        self.round.refresh_from_db()
+        self.assertEqual(self.round.active_games, ['hot_spot'])
+        self.assertIn('hot_spot', r.data['field_games'])
+
+    def test_the_announcement_names_every_field_game_it_can_be_given(self):
+        """`_notify_field_games` indexes its label map with `labels[g]`, so a
+        game in FIELD_GAMES and not in the map is a KeyError inside a
+        best-effort notify — a 500 on a change already saved. The map is built
+        from the enum now, and this walks all five rather than trusting that.
+
+        It also pins the NAME: Hot Seat's label moved on 15 Oct 2026 while its
+        slug did not, and this is the one surface that would have gone on
+        announcing the old one from a hand-written copy.
+        """
+        from tournament.models import Message
+        from api.views import RoundFieldGamesView
+        expected = {'low_net_round': 'Stroke Play', 'better_ball': 'Better Ball',
+                    'irish_rumble': 'Irish Rumble', 'hot_spot': 'Hot Seat',
+                    'forty_balls': '40 Balls'}
+        self.assertEqual(set(RoundFieldGamesView.FIELD_GAMES), set(expected))
+        for game, name in expected.items():
+            with self.subTest(game=game):
+                self.round.active_games = []
+                self.round.save()
+                Message.objects.all().delete()
+                r = self.client.post(self.url_fg(), {'games': [game]},
+                                     format='json')
+                self.assertEqual(r.status_code, 200, r.data)
+                bodies = [m.body for m in Message.objects.all()]
+                self.assertTrue(any(name in b for b in bodies),
+                                f'{game} announced as {bodies}')
 
     def test_a_group_s_OWN_games_are_left_alone(self):
         # This endpoint speaks for the organiser. Skins is the group's, set

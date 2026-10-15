@@ -19,24 +19,44 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
+import '../game_catalog.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/error_view.dart';
 import '../widgets/section_card.dart';
 
-/// The games a field plays together. **Four, not the packet's five**: this app
-/// scores Low net and Low gross with ONE game — Stroke Play, whose own setup
-/// carries the net/gross switch — so offering two chips that write the same
-/// slug would let a TD pick both and get one. See the handoff note.
-const kRoadTripFieldGames = <(String, String)>[
-  ('low_net_round', 'Stroke Play'),
-  ('better_ball',   'Better Ball'),
-  ('irish_rumble',  'Irish Rumble'),
-  ('forty_balls',   '40 Balls'),
+/// The games a field plays together. **Not the packet's separate Low net and
+/// Low gross chips**: this app scores both with ONE game — Stroke Play, whose
+/// own setup carries the net/gross switch — so two chips writing the same slug
+/// would let a TD pick both and get one. See the handoff note.
+///
+/// **Ids only; the NAME comes from the catalog.** It used to carry its own
+/// labels, which made this file a second place each game is named — and the
+/// Hot Spot to Hot Seat rename is exactly what a second place costs, since
+/// this copy would have gone on saying Hot Spot with nothing to catch it.
+/// `gameDisplayName` falls back to the id, as the old `orElse` did.
+///
+/// The last four are one competition scored four ways and the sheet lets a TD
+/// hold one of them; Stroke Play is an overlay and sits beside any of them.
+/// The exclusion is NOT restated here — it is read from the catalog's own
+/// `excludes` through `applyGameToggle`, so this list says what is offered and
+/// the catalog says what combines.
+const kRoadTripFieldGames = <String>[
+  GameIds.strokePlay,
+  GameIds.betterBall,
+  GameIds.irishRumble,
+  GameIds.hotSpot,
+  GameIds.fortyBalls,
 ];
 
-String kFieldGameLabel(String id) =>
-    kRoadTripFieldGames.firstWhere((g) => g.$1 == id,
-        orElse: () => (id, id)).$2;
+String kFieldGameLabel(String id) => gameDisplayName(id);
+
+/// The offered games that exclude at least one OTHER offered game — i.e. the
+/// one-pool family, derived rather than listed so the sheet's copy cannot go
+/// stale when a game joins. Stroke Play is an overlay and excludes none of
+/// them, so it falls out on its own.
+List<String> get kOnePoolFieldGames => kRoadTripFieldGames
+    .where((a) => kRoadTripFieldGames.any((b) => !gamesCompatible(a, b)))
+    .toList();
 
 class RoadTripRoundsScreen extends StatefulWidget {
   final int    tournamentId;
@@ -104,7 +124,7 @@ class _RoadTripRoundsScreenState extends State<RoadTripRoundsScreen> {
 
   Future<void> _editGames(RoundSummary round) async {
     final current = round.activeGames
-        .where((g) => kRoadTripFieldGames.any((f) => f.$1 == g))
+        .where(kRoadTripFieldGames.contains)
         .toList();
     final picked = await showModalBottomSheet<List<String>>(
       context: context,
@@ -146,7 +166,7 @@ class _RoundCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final games = round.activeGames
-        .where((g) => kRoadTripFieldGames.any((f) => f.$1 == g))
+        .where(kRoadTripFieldGames.contains)
         .map(kFieldGameLabel)
         .toList();
     return SectionCard(
@@ -211,6 +231,12 @@ class _StateTag extends StatelessWidget {
 /// The edit sheet. **Save is dead until something changes** — a live Save on
 /// an untouched sheet invites a write that says nothing and posts a chat
 /// message about it.
+String _listOf(List<String> ids) {
+  final names = ids.map(gameDisplayName).toList();
+  if (names.length < 2) return names.join();
+  return '${names.sublist(0, names.length - 1).join(', ')} and ${names.last}';
+}
+
 class _FieldGamesSheet extends StatefulWidget {
   final int          roundNumber;
   final String       course;
@@ -253,16 +279,26 @@ class _FieldGamesSheetState extends State<_FieldGamesSheet> {
           ),
           const SizedBox(height: 14),
           Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final (id, label) in kRoadTripFieldGames)
+            for (final id in kRoadTripFieldGames)
               FilterChip(
                 selected: _picked.contains(id),
-                onSelected: (v) => setState(
-                    () => v ? _picked.add(id) : _picked.remove(id)),
-                label: Text(label),
+                // **Turning one on turns an incompatible one off**, rather
+                // than greying it out — the same call the new-round wizard
+                // makes, and through the same shared function so the two
+                // cannot drift. A TD who taps the second of two games that
+                // rank the same groups has changed his mind, not made a
+                // mistake to be blocked. The server refuses the pair too.
+                onSelected: (v) => setState(() {
+                  _picked = applyGameToggle(_picked, id, v);
+                }),
+                label: Text(kFieldGameLabel(id)),
               ),
           ]),
           const SizedBox(height: 14),
           Text(
+            '${_listOf(kOnePoolFieldGames)} all rank the same groups, so '
+            'picking one clears the others. '
+            '${gameDisplayName(GameIds.strokePlay)} sits beside any of them.\n'
             'Adding a game mid-round scores it from hole 1 using the scores '
             'already entered. The group is told about any change.',
             style: theme.textTheme.bodySmall?.copyWith(

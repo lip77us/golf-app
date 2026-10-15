@@ -7,6 +7,8 @@ library;
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:golf_mobile/game_catalog.dart';
+import 'package:golf_mobile/screens/road_trip_rounds_screen.dart';
 
 void main() {
   final screen =
@@ -32,15 +34,86 @@ void main() {
   });
 
   group('the chips are FIELD games', () {
-    test('four, not the five the packet drew', () {
+    test('it offers the five, Hot Seat among them', () {
       // Low net and Low gross are ONE game here — Stroke Play, whose own
       // setup carries the net/gross switch. Two chips writing the same slug
       // would let a TD pick both and get one.
-      expect(screen.contains("('low_net_round', 'Stroke Play')"), isTrue);
-      expect(screen.contains("('better_ball',   'Better Ball')"), isTrue);
-      expect(screen.contains("('irish_rumble',  'Irish Rumble')"), isTrue);
-      expect(screen.contains("('forty_balls',   '40 Balls')"), isTrue);
+      for (final id in <String>[
+        GameIds.strokePlay,
+        GameIds.betterBall,
+        GameIds.irishRumble,
+        GameIds.hotSpot,
+        GameIds.fortyBalls,
+      ]) {
+        expect(kRoadTripFieldGames, contains(id));
+      }
       expect(screen.contains("'Low gross'"), isFalse);
+    });
+
+    test('Hot Seat is offered here AND accepted by the endpoint', () {
+      // The gap: it was on the per-round side-games picker and not on this
+      // sheet, and FIELD_GAMES agreed with the sheet — so the one game was
+      // reachable from one screen and not the other. Both halves or neither,
+      // because a chip the server refuses is worse than no chip.
+      expect(kRoadTripFieldGames, contains(GameIds.hotSpot));
+      expect(views.contains("'hot_spot', 'forty_balls')"), isTrue);
+    });
+
+    test('the chips are named by the CATALOG, not by this file', () {
+      // This list used to carry its own labels, which made the screen a
+      // second place every game is named. Hot Spot becoming Hot Seat is what
+      // a second place costs: the copy here would have gone on saying the old
+      // name with nothing to catch it.
+      expect(kFieldGameLabel(GameIds.hotSpot), 'Hot Seat');
+      expect(kFieldGameLabel(GameIds.hotSpot), gameDisplayName(GameIds.hotSpot));
+      expect(kFieldGameLabel(GameIds.strokePlay), 'Stroke Play');
+      // An unknown id degrades to itself, as the old `orElse` did.
+      expect(kFieldGameLabel('nonsense'), 'nonsense');
+    });
+
+    test('one of the one-pool family at a time, via the shared toggle', () {
+      // Four of the five rank the same groups into the same pool. Turning one
+      // on turns an incompatible one OFF rather than greying it out — the
+      // call the new-round wizard makes, through the same shared function so
+      // the two cannot drift.
+      expect(screen.contains('applyGameToggle(_picked, id, v)'), isTrue);
+
+      var picked = <String>{GameIds.irishRumble};
+      picked = applyGameToggle(picked, GameIds.hotSpot, true);
+      expect(picked, contains(GameIds.hotSpot));
+      expect(picked, isNot(contains(GameIds.irishRumble)));
+
+      // ...and back the other way, which is the direction that was broken.
+      picked = applyGameToggle(picked, GameIds.irishRumble, true);
+      expect(picked, contains(GameIds.irishRumble));
+      expect(picked, isNot(contains(GameIds.hotSpot)));
+
+      // Stroke Play is an overlay and survives either.
+      picked = applyGameToggle({GameIds.strokePlay}, GameIds.hotSpot, true);
+      expect(picked, containsAll(<String>[GameIds.strokePlay, GameIds.hotSpot]));
+    });
+
+    test('the sheet SAYS so, and names the family from the catalog', () {
+      // A chip that silently deselects another is visible but unexplained,
+      // and the TD needs to know which games trade off. The list is derived
+      // from the catalog's `excludes`, so the sentence cannot name three
+      // games on a screen that offers four.
+      expect(kOnePoolFieldGames, <String>[
+        GameIds.betterBall,
+        GameIds.irishRumble,
+        GameIds.hotSpot,
+        GameIds.fortyBalls,
+      ]);
+      // Stroke Play excludes none of them, so it falls out on its own rather
+      // than being special-cased.
+      expect(kOnePoolFieldGames, isNot(contains(GameIds.strokePlay)));
+      expect(screen.contains('all rank the same groups, so '), isTrue);
+      expect(screen.contains('picking one clears the others'), isTrue);
+    });
+
+    test('and the server refuses the pair regardless of the sheet', () {
+      expect(views.contains('ONE_OF_THESE'), isTrue);
+      expect(views.contains('rank the same groups into the same pool'), isTrue);
     });
 
     test("a group's own games are never touched", () {

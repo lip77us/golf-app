@@ -5066,3 +5066,118 @@ old path **shadows** the redirect rule and keeps the old name serving as
 duplicate content. That is the Eclectic lesson, and this rename is the same
 shape — hand-written 301s above the generated block, pointing at the final
 slashed form, with the old directory deleted rather than left behind.
+
+### Hot Seat joins the Road Trip sheet — and the family exclusion it exposed
+
+`kRoadTripFieldGames` offered four games and `RoundFieldGamesView.FIELD_GAMES`
+held the same four, so the two agreed and nothing was broken — Hot Seat was
+simply never offered. It was reachable from the per-round side-games screen
+(which saves through `client.updateRound`) and not from the trip's own sheet,
+**one game reachable from one screen and not the other**, the shape the day
+bet arrived in. Hot Seat is recent (`games/0091`) and this list predates it.
+
+Both halves moved together, because a chip the server refuses is worse than
+no chip: `hot_spot` is in `FIELD_GAMES` and in the sheet, with a test
+asserting both.
+
+**The one-pool family is now enforced on this path.** Irish Rumble, Better
+Ball, Hot Seat and 40 Balls are one competition scored four ways — one pool,
+one board, the same groups ranked — so a round runs one. The endpoint had NO
+such check and would happily write two; `test_setting_them_writes_the_round_s_list`
+posted `irish_rumble` + `forty_balls` and asserted both landed, so the hole
+was pinned as behaviour. Adding a fourth member to a free multi-select sheet
+is what made it worth closing.
+
+- The sheet calls the shared **`applyGameToggle`**, the same function the
+  new-round wizard uses, reading the catalog's own `excludes`. Turning one on
+  turns an incompatible one OFF rather than greying it out — a TD who taps the
+  second has changed his mind, not made a mistake to block.
+- `ONE_OF_THESE` repeats it server-side, because an endpoint that trusts the
+  client for a rule has no rule. **Stroke Play is deliberately not in it**: it
+  is an overlay the board emits for every individual-ball round and sits
+  beside any of them.
+- Worth knowing how thin the rest is: of the family's six pairs **only
+  Rumble ↔ Better Ball is guarded in the services**
+  (`refuse_if_better_ball` / `_refuse_if_rumble`). Hot Seat and 40 Balls guard
+  nothing, so for the other five pairs this endpoint and the pickers are the
+  whole of it. The catalog comment claiming the exclusion is "enforced on the
+  server in both services too" is true of that one pair and of no other.
+
+**`_notify_field_games` built its labels by hand and indexed them with
+`labels[g]`** — a game in `FIELD_GAMES` and missing from the dict is a
+KeyError inside a best-effort notify, i.e. a 500 on a change the TD has
+already saved. It reads `GameType(g).label` now, with `low_net_round`
+overridden to Stroke Play (the enum says "Low Net (Round)"), and a test walks
+all five. That dict was also a second place Hot Seat is named, which is the
+other reason it went: the rename would have left it announcing the old name.
+
+**The sheet's labels come from `gameDisplayName` too.** `kRoadTripFieldGames`
+was a list of `(id, label)` tuples, so the screen named every game a second
+time — and the round card's chips read from it. It is a list of ids now and
+`kFieldGameLabel` delegates to the catalog, which is what makes the next
+rename one edit instead of a search.
+
+**The sheet now SAYS the rule**, in copy derived from the catalog rather than
+typed: `kOnePoolFieldGames` is the offered games that exclude at least one
+other offered game, so the sentence cannot name three games on a screen that
+offers four, and Stroke Play falls out of it on its own rather than being
+special-cased. A chip that silently deselects another is visible but
+unexplained, and the TD needs to know which games trade off.
+
+#### The wizard let Hot Seat and Irish Rumble both stay on
+
+Found while wiring the above, and older than it. `GameMeta.excludes` was
+**asymmetric**: Hot Seat excluded the other three, and none of the three
+excluded it back. `gamesCompatible()` is symmetric, so the pair looked
+guarded — but `new_round_wizard.dart` reads `gameMeta(g)?.excludes` DIRECTLY
+and one way, removing what the game being turned ON excludes. Turning Hot
+Seat on cleared the others; turning Irish Rumble on afterwards left Hot Seat
+exactly where it was, and with only one of the six pairs guarded in the
+services nothing downstream caught it.
+
+**`forty_balls_test` already had a test for this and its comment states the
+hazard in as many words.** It listed six ordered pairs by hand when the family
+had three games; Hot Seat arrived later with its own three edges and no
+reverse ones, so the test went on passing about the three games it knew. The
+pairs are DERIVED from the family now — a fifth game joins the loop or fails
+there — and it asserts `gamesCompatible` as well as the raw set, because
+those are the two ways callers ask and only one of them was ever wrong.
+
+The lesson is the hand-written list, not the missing edge: an exhaustive test
+that enumerates today's cases stops being exhaustive the moment the set grows,
+and it fails silently by continuing to pass.
+
+### Sixes' match-2 anchor was picked out of a set
+
+Found because the Road Trip tests above tripped it: adding three tests to
+`api/test_road_trip.py` shifted the pk sequence, and
+`MatchTwoPickerTests.test_the_anchor_stays_on_team_one_in_both_options` went
+red after months of passing. Nothing in Sixes had changed.
+
+`remaining_pairings` keeps match 1's team-1 **anchor** on team 1 in both
+options, so the two read as "who Ann partners next" rather than as four
+unrelated names. It took that anchor with `next(iter(first[0]))`, and
+`first[0]` is a frozenset — so the choice was by pk VALUE:
+`next(iter({7, 8}))` is 8, `next(iter({23, 24}))` is 24. Which of match 1's
+two golfers anchored depended on the ids those rows happened to get.
+
+**Both readings satisfy the promise**, which is why nothing ever looked
+wrong: the options still read as "who somebody partners next", just not
+always the same somebody. What it cost was explainability and a test. It is
+`anchor_of(side, roster_order)` now — the first of team 1 in **creation
+order**, which `FoursomeMembership.Meta.ordering = ['id']` already
+guarantees and which is the order the names appear on the card.
+
+**The test lesson is the sharper half.** My first replacement walked all
+three possible match-1 pairings through the database and passed against the
+bug — a fixture's pks are whatever the sequence is at that moment, so an
+end-to-end test agrees with either implementation by luck. That is the same
+property that made the original flaky, reproduced while trying to fix it.
+The rule was extracted into `anchor_of` for one reason: so the test can hand
+in `(7, 8)`, `(9, 16)`, `(23, 24)`, `(31, 32)` — pairs where set iteration
+reverses — and fail on all four against the old reading. The end-to-end
+version is kept beside it to say that `remaining_pairings` actually asks.
+
+Worth remembering generally: **a test whose inputs are pks cannot pin
+anything about pk order.** If the rule is about ordering, hand the ordering
+in.

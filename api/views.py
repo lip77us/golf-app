@@ -2626,7 +2626,20 @@ class RoundFieldGamesView(APIView):
     #: A group's own games (Skins, Nassau, Wolf) are not here: the group sets
     #: them on its own screen and settles them itself.
     FIELD_GAMES = ('low_net_round', 'better_ball', 'irish_rumble',
-                   'forty_balls')
+                   'hot_spot', 'forty_balls')
+
+    #: Four of those five rank the same groups into the SAME pool, so a round
+    #: runs one of them.  Stroke Play is not here: it is an overlay the board
+    #: emits for every individual-ball round and sits happily beside any of
+    #: them.  The client enforces this from the catalog's own `excludes`
+    #: (`applyGameToggle`), and it is repeated here because an endpoint that
+    #: trusts the client for a rule is an endpoint without the rule.
+    #:
+    #: Note the four SERVICES still only guard Rumble <-> Better Ball
+    #: (`refuse_if_better_ball` / `_refuse_if_rumble`); Hot Seat and 40 Balls
+    #: guard nothing.  This gate is what keeps the pair out of
+    #: `active_games` in the first place, by this route.
+    ONE_OF_THESE = ('better_ball', 'irish_rumble', 'hot_spot', 'forty_balls')
 
     def post(self, request, pk):
         round_obj = account_get_or_404(Round, request.user.account, pk=pk)
@@ -2645,6 +2658,16 @@ class RoundFieldGamesView(APIView):
         if bad:
             return Response(
                 {'detail': f"Not a field game: {', '.join(map(str, bad))}."},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        clash = [g for g in self.ONE_OF_THESE if g in wanted]
+        if len(clash) > 1:
+            from core.models import GameType
+            names = [GameType(g).label for g in clash]
+            named = ' and '.join([', '.join(names[:-1]), names[-1]])
+            return Response(
+                {'detail': '{} rank the same groups into the same pool, so a '
+                           'round runs one of them.'.format(named)},
                 status=status.HTTP_400_BAD_REQUEST)
 
         before = list(round_obj.active_games or [])
@@ -2673,8 +2696,16 @@ def _notify_field_games(round_obj, before, after):
     looks like money disappearing. Best-effort — a chat that will not post is
     not a reason to refuse the change the TD has already made.
     """
-    labels = {'low_net_round': 'Stroke Play', 'better_ball': 'Better Ball',
-              'irish_rumble': 'Irish Rumble', 'forty_balls': '40 Balls'}
+    # **The enum's labels, not a second copy of them.** This dict listed the
+    # four games by hand and was indexed with `labels[g]`, so a game added to
+    # FIELD_GAMES without being added here would raise a KeyError inside a
+    # best-effort notify — a 500 on a change the TD had already made. The one
+    # name that differs from the enum is Stroke Play, which is stored
+    # `low_net_round`; and Hot Seat is why this matters, since its label moved
+    # on 15 Oct 2026 while its slug did not.
+    from core.models import GameType
+    labels = {g: GameType(g).label for g in RoundFieldGamesView.FIELD_GAMES}
+    labels['low_net_round'] = 'Stroke Play'
     fields = RoundFieldGamesView.FIELD_GAMES
     added   = [g for g in after if g in fields and g not in before]
     removed = [g for g in before if g in fields and g not in after]
