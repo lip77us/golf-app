@@ -5181,3 +5181,82 @@ version is kept beside it to say that `remaining_pairings` actually asks.
 Worth remembering generally: **a test whose inputs are pks cannot pin
 anything about pk order.** If the rule is about ordering, hand the ordering
 in.
+
+### One group game per round — settled, and enforced in the services
+
+Paul, 15 Oct 2026, answering the question the Road Trip work raised. Two
+decisions:
+
+1. **All four stay mutually exclusive.** Irish Rumble, Better Ball, Hot Seat
+   and 40 Balls. Worth recording what was declined, because the technical
+   path was open: each config carries its OWN entry fee, payout table and
+   handicap settings, so two pools could have been collected and paid
+   separately, each with its own board tab and settlement line. Only Rumble
+   and Better Ball are the same competition scored two ways; Hot Seat (a
+   named anchor) and 40 Balls (a budget) are genuinely different games. The
+   call is that a group plays ONE group game, so there is one board to read
+   and one pot to settle.
+2. **A setup screen REFUSES rather than switching.** See below — the app had
+   three different answers to this.
+
+**`services/group_field.py` owns the rule**: `ONE_POOL_GAMES`,
+`GroupGameExcluded`, `refuse_if_another_one_pool_game(round, this_game)`.
+Called from every path that writes one of their configs — `setup_better_ball`
+and `setup_hot_spot` in their services, and the Irish Rumble and 40 Balls
+setup VIEWS, because those two have no service-level setup function. There is
+no single layer to put it in, which is the reason it is shared rather than
+repeated.
+
+**It keys on `active_games`, not on whether a config row exists, and that is
+a fix.** Both old guards asked
+`BetterBallConfig.objects.filter(round=...).exists()` — but a config row
+deliberately SURVIVES its game being turned off (`RoundFieldGamesView` drops
+the slug and leaves the row so the stake and payouts come back). So a TD who
+configured Better Ball, turned it off and picked Irish Rumble was told *"This
+round is already running Better Ball — turn Better Ball off first"*, which he
+had already done: a dead end whose instructions he could not follow. Verified
+against the local database before it was changed, and four existing tests had
+pinned the old basis by creating a config row and never activating it.
+
+#### The three answers to one question
+
+What the four setup endpoints did when a peer was already active:
+
+| game | before |
+|---|---|
+| Irish Rumble | refused 400, naming Better Ball — and only Better Ball |
+| Better Ball | refused 400, naming Irish Rumble — and only Irish Rumble |
+| 40 Balls | **silently stripped the other two** out of `active_games` and turned itself on; never knew about Hot Seat |
+| Hot Seat | nothing at all |
+
+All four refuse now. **40 Balls losing its auto-switch is the deliberate
+part**: configuring a game is for its numbers, and turning one off belongs to
+the side-games picker, where the chips are visible and the TD can see what he
+is dropping. A setup screen that silently ends the competition the round is
+playing is what that avoids. Turning ITSELF on stays — that is how 40 Balls is
+started.
+
+The pickers keep switching rather than refusing (`applyGameToggle`, the wizard
+and the Road Trip sheet), and that is not an inconsistency: a picker is where
+a TD says which game he wants, so the chip going quiet IS the answer.
+
+#### `except` on a subclass does not catch the base
+
+`IrishRumbleExcluded` and `BetterBallExcluded` were kept as subclasses of
+`GroupGameExcluded` so an outside importer still resolves them, and I wrote
+that this meant the existing catches "keep working". **It does not.** The
+shared guard raises the BASE, and `except BetterBallExcluded` does not catch
+a `GroupGameExcluded` — so the Better Ball setup endpoint 500ed on every
+refusal. Caught by the new tests, not by reading. Both views catch the base
+now and nothing raises the old names; they are vestigial, which
+`TheOldNamesAreVestigialTests` says out loud.
+
+**Left alone deliberately:** the Irish Rumble config auto-created during cup
+group setup (`api/views.py`, the `has_ir` branch). That is a cup round's
+PER-FOURSOME `game_type`, a different axis from a round-level field game, and
+that path never touches `active_games` — so the guard would not fire there
+anyway.
+
+Tests: `api/test_one_pool_games.py` (11 — all twelve directions of the six
+pairs, every setup endpoint both ways, the turned-off config row, and the
+vestigial names).

@@ -86,17 +86,41 @@ class SetupTests(_Base):
         self.assertTrue(FortyBallsConfig.objects.filter(
             round=self.round).exists())
 
-    def test_turning_it_on_turns_the_OTHER_TWO_off(self):
-        # **The rule is about the round**, so it holds here and not only in the
-        # wizard: two of these collect two entries for one set of group nets.
+    def test_it_REFUSES_rather_than_turning_the_other_one_off(self):
+        """**Changed 15 Oct 2026** (Paul). This endpoint used to strip Irish
+        Rumble and Better Ball out of `active_games` silently and turn itself
+        on — the only one of the four group games that did, and it never knew
+        about Hot Seat. The other two refused with a 400 naming the game in
+        the way, and Hot Seat did nothing at all: three answers to one
+        question.
+
+        They all refuse now. Configuring a game is for its numbers; turning
+        one off is the side-games picker's job, where the chips are visible
+        and a TD can see what he is dropping. A setup screen that silently
+        ends the competition the round is playing is the thing this avoids.
+        """
         self.round.active_games = ['irish_rumble', 'better_ball', 'skins']
         self.round.save(update_fields=['active_games'])
-        self.configure()
+        r = self.configure()
+        self.assertEqual(r.status_code, 400, r.data)
+        self.assertIn('Irish Rumble', r.data['detail'])
+        self.assertIn('Better Ball', r.data['detail'])
         self.round.refresh_from_db()
-        self.assertNotIn('irish_rumble', self.round.active_games)
-        self.assertNotIn('better_ball', self.round.active_games)
+        # Refused means nothing moved — not even the game it was asked for.
+        self.assertEqual(self.round.active_games,
+                         ['irish_rumble', 'better_ball', 'skins'])
+        from games.models import FortyBallsConfig
+        self.assertFalse(FortyBallsConfig.objects.filter(
+            round=self.round).exists())
+
+    def test_but_it_still_turns_ITSELF_on(self):
+        """The half that stays: configuring 40 Balls is how it is started,
+        so on a round playing none of its peers the slug goes in."""
+        self.round.active_games = ['skins']
+        self.round.save(update_fields=['active_games'])
+        self.assertEqual(self.configure().status_code, 201)
+        self.round.refresh_from_db()
         self.assertIn('forty_balls', self.round.active_games)
-        # Anything else the round was playing is untouched.
         self.assertIn('skins', self.round.active_games)
 
     def test_the_allowance_moves_in_fives(self):

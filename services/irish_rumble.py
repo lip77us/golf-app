@@ -44,6 +44,8 @@ from core.handicap_math import round_half_up
 from core.models import HandicapMode
 from games.models import IrishRumbleConfig, IrishRumbleSegmentResult
 from scoring.models import HoleScore
+from services.group_field import (GroupGameExcluded,
+                                  refuse_if_another_one_pool_game)
 from scoring.handicap import _effective_hcp, _strokes_on_hole, effective_hcp_for
 from tournament.models import Foursome
 
@@ -133,23 +135,25 @@ def _balls_per_hole(variant, par_by_hole, custom_balls=None):
     return classic
 
 
-class IrishRumbleExcluded(Exception):
-    """Irish Rumble and Better Ball are the same competition scored two ways.
+class IrishRumbleExcluded(GroupGameExcluded):
+    """Kept as a NAME, not as a rule.
 
-    The mirror of :class:`services.better_ball.BetterBallExcluded` — see there
-    for the argument. Both directions are guarded because a TD can reach the
-    two setups in either order, and a rule enforced on one side only is a rule
-    that holds until somebody clicks the other button first.
+    The rule is `services.group_field.refuse_if_another_one_pool_game`, which
+    covers all four one-pool games rather than this one pair — Hot Seat and 40
+    Balls guarded nothing until 15 Oct 2026. This subclasses the shared
+    exception so the view that catches this name keeps working.
     """
 
 
 def refuse_if_better_ball(round_obj) -> None:
-    from games.models import BetterBallConfig
-    if BetterBallConfig.objects.filter(round=round_obj).exists():
-        raise IrishRumbleExcluded(
-            'This round is already running Better Ball. Irish Rumble ranks '
-            'the same groups the same way, so a round runs one or the other '
-            '— turn Better Ball off first.')
+    """Deprecated: the shared guard, under the old name.
+
+    It no longer asks "is Better Ball configured" but "is any other one-pool
+    game being PLAYED", and it keys on `active_games` rather than on a config
+    row that deliberately survives being turned off — see the shared function
+    for the dead end that caused.
+    """
+    refuse_if_another_one_pool_game(round_obj, 'irish_rumble')
 
 
 def compute_segments(variant, par_by_hole, custom_balls=None):

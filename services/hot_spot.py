@@ -201,6 +201,11 @@ def setup_hot_spot(round_obj, *, scoring='to_par', handicap_mode=None,
     off — the same reason individual play does not offer it.
     """
     from core.models import HandicapMode
+    from services.group_field import refuse_if_another_one_pool_game
+
+    # One group game per round — Hot Seat guarded nothing until 15 Oct 2026.
+    refuse_if_another_one_pool_game(round_obj, 'hot_spot')
+
     mode = handicap_mode or HandicapMode.NET
     if mode not in (HandicapMode.NET, HandicapMode.GROSS):
         raise ValueError(

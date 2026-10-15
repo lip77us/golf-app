@@ -8945,7 +8945,6 @@ class FortyBallsSetupView(APIView):
     on turns the other two off, server-side — the wizard's toggle is a
     convenience, and a round can be edited from more than one place.
     """
-    _EXCLUDES = ('irish_rumble', 'better_ball')
 
     #: The settings a PICK was made against. A group chose 2 balls on the 1st
     #: having looked at four nets; change the allowance, the mode or the cap
@@ -9015,6 +9014,18 @@ class FortyBallsSetupView(APIView):
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
 
+        # One group game per round. These four rank the same groups into the
+        # same pool, and this is the layer that holds whichever route the
+        # round was assembled by — the pickers and the field-games endpoint
+        # enforce it too, but neither covers a round built another way.
+        from services.group_field import (GroupGameExcluded,
+                                          refuse_if_another_one_pool_game)
+        try:
+            refuse_if_another_one_pool_game(round_obj, 'forty_balls')
+        except GroupGameExcluded as exc:
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
+
         from games.models import FortyBallsConfig
         existing = FortyBallsConfig.objects.filter(round=round_obj).first()
         if existing is not None and self._picked(round_obj):
@@ -9039,8 +9050,13 @@ class FortyBallsSetupView(APIView):
                 'payouts'      : d['payouts'],
             },
         )
-        active = [g for g in (round_obj.active_games or [])
-                  if g not in self._EXCLUDES]
+        # Turning ITSELF on stays: configuring a game is how 40 Balls is
+        # started, and `test_post_saves_and_turns_the_game_on` pins it. What
+        # went is turning its PEERS off — it used to strip Irish Rumble and
+        # Better Ball from `active_games` silently (and never knew about Hot
+        # Seat). All four refuse now instead, so a round already playing one
+        # has been turned back at the guard above and never reaches this.
+        active = list(round_obj.active_games or [])
         if 'forty_balls' not in active:
             active.append('forty_balls')
         if active != (round_obj.active_games or []):
@@ -9172,14 +9188,14 @@ class IrishRumbleSetupView(APIView):
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
 
-        # Better Ball ranks the same groups the same way into the same kind of
-        # pool, so a round runs one or the other. Guarded in both directions,
-        # because the TD can reach the two setups in either order.
-        from services.irish_rumble import (IrishRumbleExcluded,
-                                           refuse_if_better_ball)
+        # One group game per round: these four rank the same groups into the
+        # same pool. Guarded in every direction, because the TD can reach the
+        # four setups in any order.
+        from services.group_field import (GroupGameExcluded,
+                                          refuse_if_another_one_pool_game)
         try:
-            refuse_if_better_ball(round_obj)
-        except IrishRumbleExcluded as exc:
+            refuse_if_another_one_pool_game(round_obj, 'irish_rumble')
+        except GroupGameExcluded as exc:
             return Response({'detail': str(exc)},
                             status=status.HTTP_400_BAD_REQUEST)
 
@@ -9299,9 +9315,13 @@ class BetterBallSetupView(APIView):
         return Response(data)
 
     def post(self, request, pk):
-        from services.better_ball import (BetterBallExcluded,
-                                          calculate_better_ball,
+        from services.better_ball import (calculate_better_ball,
                                           setup_better_ball)
+        # `GroupGameExcluded`, not the old `BetterBallExcluded`: the shared
+        # guard raises the BASE, and `except` on a subclass does not catch it.
+        # The old names survive as subclasses for any outside importer, but
+        # nothing raises them any more.
+        from services.group_field import GroupGameExcluded
         round_obj = account_get_or_404(Round, request.user.account, pk=pk)
         ser = BetterBallSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -9321,7 +9341,7 @@ class BetterBallSetupView(APIView):
                 entry_fee      = d['entry_fee'],
                 payouts        = d['payouts'],
             )
-        except BetterBallExcluded as exc:
+        except GroupGameExcluded as exc:
             return Response({'detail': str(exc)},
                             status=status.HTTP_400_BAD_REQUEST)
 
@@ -9412,16 +9432,23 @@ class HotSpotSetupView(APIView):
         ser = HotSpotSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
+        from services.group_field import GroupGameExcluded
         from services.hot_spot import setup_hot_spot
-        config = setup_hot_spot(
-            round_obj,
-            scoring       = d['scoring'],
-            handicap_mode = d['handicap_mode'],
-            net_percent   = d['net_percent'],
-            finish_rule   = d['finish_rule'],
-            entry_fee     = d['entry_fee'],
-            payouts       = d['payouts'],
-        )
+        try:
+            config = setup_hot_spot(
+                round_obj,
+                scoring       = d['scoring'],
+                handicap_mode = d['handicap_mode'],
+                net_percent   = d['net_percent'],
+                finish_rule   = d['finish_rule'],
+                entry_fee     = d['entry_fee'],
+                payouts       = d['payouts'],
+            )
+        except GroupGameExcluded as exc:
+            # The service raises, so the refusal is a 400 here rather than an
+            # uncaught 500. One group game per round — see `group_field`.
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
         return Response(self._config_dict(config), status=status.HTTP_200_OK)
 
 

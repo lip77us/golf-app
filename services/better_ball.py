@@ -49,31 +49,27 @@ from django.db import transaction
 
 from core.models import HandicapMode
 from games.models import BetterBallConfig
+from services.group_field import (GroupGameExcluded,
+                                  refuse_if_another_one_pool_game)
 
 
-class BetterBallExcluded(Exception):
-    """Better Ball and Irish Rumble are the same competition scored two ways.
+class BetterBallExcluded(GroupGameExcluded):
+    """Kept as a NAME, not as a rule — see `IrishRumbleExcluded`.
 
-    **One round runs one of them.** They rank the same groups off the same
-    cards into the same kind of pool, so a round carrying both would take two
+    **One round runs one group game.** They rank the same groups off the same
+    cards into the same kind of pool, so a round carrying two would take two
     entry fees for one competition and print two boards a golfer has no way to
-    tell apart — and the only thing separating them on screen is a number he
-    cannot see moving.
+    tell apart.
 
-    Guarded in the SERVICE rather than the wizard, so every caller is covered:
-    the setup endpoint, the cup round's auto-create, and whatever adds one
-    next. The refusal names the game already there, because the fix is to turn
-    that one off and the TD should not have to go looking for it.
+    The old version of this guard covered Better Ball and Irish Rumble only.
+    Hot Seat and 40 Balls are in the same pool and guarded nothing, so the
+    rule moved to `services.group_field` and covers all four.
     """
 
 
 def _refuse_if_rumble(round_obj) -> None:
-    from games.models import IrishRumbleConfig
-    if IrishRumbleConfig.objects.filter(round=round_obj).exists():
-        raise BetterBallExcluded(
-            'This round is already running Irish Rumble. Better Ball ranks '
-            'the same groups the same way, so a round runs one or the other '
-            '— turn Irish Rumble off first.')
+    """Deprecated: the shared guard, under the old name."""
+    refuse_if_another_one_pool_game(round_obj, 'better_ball')
 
 
 # 4 is worth its own word. `Best 4 of 4` describes the arithmetic and misses

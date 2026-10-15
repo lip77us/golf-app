@@ -235,3 +235,61 @@ def field_pool(round_obj, entry_fee) -> float:
     n = FoursomeMembership.objects.filter(
         foursome__round=round_obj, player__is_phantom=False).count()
     return round(float(entry_fee) * n, 2)
+
+
+# ── one pool, one game ─────────────────────────────────────────────────────
+
+#: The games that rank a field of foursomes into ONE pool paid to the winning
+#: GROUP.  **A round runs exactly one of them** (Paul, 15 Oct 2026).
+#:
+#: Rumble and Better Ball are the same competition scored two ways, which is
+#: the argument this module opens with. Hot Seat and 40 Balls are genuinely
+#: different games — a named anchor, and a budget across the round — so two
+#: pools COULD have been collected and paid separately; each config carries
+#: its own entry fee and payout table. The call is that a group plays one
+#: group game, so there is one board to read and one pot to settle.
+ONE_POOL_GAMES = ('irish_rumble', 'better_ball', 'hot_spot', 'forty_balls')
+
+
+class GroupGameExcluded(Exception):
+    """Two of :data:`ONE_POOL_GAMES` on one round.
+
+    Raised by every path that writes one of their configs, so the rule holds
+    whichever setup screen the TD reached first and whatever route the round
+    was assembled by. The refusal NAMES the game already there, because the
+    fix is to turn that one off and he should not have to go looking for it.
+    """
+
+
+def refuse_if_another_one_pool_game(round_obj, this_game) -> None:
+    """Refuse *this_game* if the round is already running one of its peers.
+
+    **Keyed on `active_games`, NOT on whether a config row exists** — and that
+    is a fix, not a detail. The two guards this replaces
+    (`irish_rumble.refuse_if_better_ball`, `better_ball._refuse_if_rumble`)
+    asked `BetterBallConfig.objects.filter(round=...).exists()`, and a config
+    row deliberately SURVIVES turning its game off: `RoundFieldGamesView`
+    drops the slug from `active_games` and leaves the row so the stake and the
+    payout table come back with it.
+
+    So a TD who configured Better Ball, turned it off and picked Irish Rumble
+    was told "This round is already running Better Ball — turn Better Ball off
+    first", which he had already done. A dead end whose instructions he could
+    not follow. Verified against the local database before this was written.
+
+    `active_games` is also what the pickers and `RoundFieldGamesView` mean by
+    "what this round is playing", so this now agrees with them instead of
+    answering a different question.
+    """
+    active = set(round_obj.active_games or [])
+    others = [g for g in ONE_POOL_GAMES if g != this_game and g in active]
+    if not others:
+        return
+    from core.models import GameType
+    names = [GameType(g).label for g in others]
+    named = (names[0] if len(names) == 1
+             else ' and '.join([', '.join(names[:-1]), names[-1]]))
+    raise GroupGameExcluded(
+        f'This round is already running {named}. '
+        f'{GameType(this_game).label} ranks the same groups into the same '
+        f'pool, so a round runs one of them — turn {named} off first.')

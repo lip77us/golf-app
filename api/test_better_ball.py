@@ -142,6 +142,11 @@ class ExclusionTests(_Base):
 
     def test_better_ball_is_refused_on_a_rumble_round(self):
         self._rumble()
+        # The guard reads `active_games`, not whether a config row exists —
+        # a row deliberately survives its game being turned off. See
+        # `api/test_one_pool_games.py`.
+        self.round.active_games = ['irish_rumble']
+        self.round.save(update_fields=['active_games'])
         resp = self._post()
         self.assertEqual(resp.status_code, 400)
         self.assertIn('Irish Rumble', resp.data['detail'])

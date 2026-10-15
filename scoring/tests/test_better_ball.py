@@ -286,40 +286,70 @@ class OneRoundRunsOneOfThemTests(_Base):
     separating them on screen is a number he cannot see moving.
     """
 
+    def _playing(self, *slugs):
+        """**What the round is PLAYING, not what it has a config row for.**
+
+        These tests used to create an `IrishRumbleConfig` and nothing else,
+        because the guard asked whether that row existed. It asks
+        `active_games` now, and the difference is a fix: a config row
+        deliberately survives turning its game off (`RoundFieldGamesView`
+        leaves it so the stake comes back), so the old basis told a TD who had
+        already turned Better Ball off to go and turn it off. See
+        `api/test_one_pool_games.py`.
+        """
+        self.round.active_games = list(slugs)
+        self.round.save(update_fields=['active_games'])
+
     def _rumble(self):
         from games.models import IrishRumbleConfig
+        self._playing('irish_rumble')
         return IrishRumbleConfig.objects.create(
             round=self.round, variant='classic',
             handicap_mode=HandicapMode.GROSS, segments=[
                 {'start_hole': 1, 'end_hole': 18, 'balls_to_count': 1}])
 
     def test_better_ball_is_refused_on_a_rumble_round(self):
-        from services.better_ball import BetterBallExcluded
+        from services.group_field import GroupGameExcluded
         self._rumble()
-        with self.assertRaises(BetterBallExcluded):
+        with self.assertRaises(GroupGameExcluded):
             setup_better_ball(self.round, balls_to_count=2)
 
     def test_rumble_is_refused_on_a_better_ball_round(self):
-        """**Both directions.** A TD reaches the two setups in either order,
-        and a rule enforced on one side only holds until somebody clicks the
-        other button first."""
-        from services.irish_rumble import (IrishRumbleExcluded,
-                                           refuse_if_better_ball)
+        """**Both directions.** A TD reaches the setups in any order, and a
+        rule enforced on one side only holds until somebody clicks the other
+        button first. All four are guarded now, not just this pair."""
+        from services.group_field import GroupGameExcluded
+        from services.irish_rumble import refuse_if_better_ball
         setup_better_ball(self.round, balls_to_count=2)
-        with self.assertRaises(IrishRumbleExcluded):
+        self._playing('better_ball')
+        with self.assertRaises(GroupGameExcluded):
             refuse_if_better_ball(self.round)
 
     def test_the_refusal_names_the_game_already_there(self):
         """The fix is to turn that one off, and the TD should not have to go
         looking for which one it is."""
-        from services.better_ball import BetterBallExcluded
+        from services.group_field import GroupGameExcluded
         self._rumble()
-        with self.assertRaises(BetterBallExcluded) as ctx:
+        with self.assertRaises(GroupGameExcluded) as ctx:
             setup_better_ball(self.round)
         self.assertIn('Irish Rumble', str(ctx.exception))
 
+    def test_a_config_row_that_is_turned_OFF_blocks_nothing(self):
+        """The dead end the old basis had. A round holding an Irish Rumble
+        config it is no longer playing is not running Irish Rumble."""
+        from games.models import IrishRumbleConfig
+        IrishRumbleConfig.objects.create(
+            round=self.round, variant='classic',
+            handicap_mode=HandicapMode.GROSS, segments=[
+                {'start_hole': 1, 'end_hole': 18, 'balls_to_count': 1}])
+        self._playing('better_ball')               # Rumble is OFF
+        setup_better_ball(self.round, balls_to_count=2)   # does not raise
+
     def test_a_round_with_neither_lets_either_in(self):
         from services.irish_rumble import refuse_if_better_ball
+        # The fixture's round is playing Better Ball, and the guard now reads
+        # `active_games` — so "neither" has to be said out loud.
+        self._playing()
         refuse_if_better_ball(self.round)          # does not raise
         setup_better_ball(self.round, balls_to_count=2)
         self.assertTrue(
