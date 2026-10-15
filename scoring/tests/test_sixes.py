@@ -971,6 +971,64 @@ class MatchTwoPickerTests(TestCase):
         for o in remaining_pairings(self.fs):
             self.assertIn(self.pid['Ann'], o['team1_player_ids'])
 
+    def test_the_anchor_is_team_one_s_first_golfer_on_the_card(self):
+        """Roster order decides it, and the pk values cannot.
+
+        `anchor_of` was `next(iter(frozenset))`, which picks out of a set by pk
+        VALUE: `next(iter({7, 8}))` is 8 and `next(iter({23, 24}))` is 24. So
+        which golfer anchored the two options depended on the ids those rows
+        happened to get — the test above passed or failed on that, and went
+        red only once unrelated tests had shifted the pk sequence.
+
+        **The pairs below are hard-coded because a fixture cannot pin this.**
+        A foursome's pks are whatever the sequence is at that moment, so an
+        end-to-end test agrees with either implementation by luck — the first
+        version of this test did exactly that and passed against the bug. The
+        four pairs are ones where set iteration reverses, so the old reading
+        fails on each.
+        """
+        from services.sixes import anchor_of
+        for pair in [(7, 8), (9, 16), (23, 24), (31, 32)]:
+            with self.subTest(pair=pair):
+                lo, hi = pair
+                # Set iteration genuinely reverses these, which is the whole
+                # point — if this ever stops being true the test is moot.
+                self.assertEqual(next(iter(frozenset(pair))), hi)
+                # Roster order wins whichever way round it is handed in.
+                self.assertEqual(anchor_of(frozenset(pair), [lo, hi]), lo)
+                self.assertEqual(anchor_of(frozenset(pair), [hi, lo]), hi)
+                # ...and a golfer not on the side is never the anchor.
+                self.assertEqual(anchor_of(frozenset(pair), [99, hi, lo]), hi)
+
+    def test_the_anchor_rule_holds_end_to_end_for_every_match_1(self):
+        """The same claim through the database, for all three pairings.
+
+        This is the integration half — `anchor_of` is pinned above, and this
+        says `remaining_pairings` actually asks it, with the foursome's own
+        creation order as the roster.
+        """
+        from services.sixes import remaining_pairings
+        order = [m.player_id for m in self.fs.memberships.all()]
+        names = ['Ann', 'Ben', 'Cal', 'Dee']
+        for a, b in (('Ann', 'Ben'), ('Ann', 'Cal'), ('Ben', 'Cal')):
+            rest = [n for n in names if n not in (a, b)]
+            with self.subTest(match_1=(a, b)):
+                setup_sixes(self.fs, [
+                    {'team_select_method': 'long_drive',
+                     'start_hole': 1, 'end_hole': 6,
+                     'team1_player_ids': [self.pid[a], self.pid[b]],
+                     'team2_player_ids': [self.pid[n] for n in rest]},
+                    {'team_select_method': 'long_drive',
+                     'start_hole': 7, 'end_hole': 12},
+                    {'team_select_method': 'long_drive',
+                     'start_hole': 13, 'end_hole': 18},
+                ], handicap_mode='gross')
+                expected = min((self.pid[a], self.pid[b]), key=order.index)
+                options = remaining_pairings(self.fs)
+                self.assertEqual(len(options), 2)
+                for o in options:
+                    self.assertIn(expected, o['team1_player_ids'])
+
     def test_the_summary_names_them_while_a_match_needs_teams(self):
         out = sixes_summary(self.fs)['remaining_pairings']
         self.assertEqual(len(out), 2)

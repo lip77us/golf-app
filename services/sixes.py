@@ -419,6 +419,25 @@ def _split_of(seg) -> tuple | None:
     return (s1, s2)
 
 
+def anchor_of(side, roster_order) -> int:
+    """The golfer in *side* who comes first in *roster_order*.
+
+    Its own function because the rule cannot be tested any other way. This
+    was `next(iter(side))`, which picks out of a frozenset by pk VALUE —
+    `next(iter({7, 8}))` is 8, and `next(iter({23, 24}))` is 24 — so which
+    golfer anchored the match-2 options depended on the ids those rows
+    happened to get. Both readings satisfy the promise in
+    `remaining_pairings`, which is why nothing ever looked wrong; neither is
+    explainable to a reader, and only one is reproducible.
+
+    Testing it through the database could not pin it: a fixture's pks are
+    whatever the sequence is at that moment, so the end-to-end test passed or
+    failed on luck and went red only once unrelated tests shifted the
+    sequence. The unit test hands in the pairs that reverse.
+    """
+    return next(p for p in roster_order if p in side)
+
+
 def remaining_pairings(foursome) -> list:
     """The pairings still available after match 1, newest-partner first.
 
@@ -443,7 +462,10 @@ def remaining_pairings(foursome) -> list:
     first = _split_of(segs[0])
     if first is None:
         return []
-    anchor = next(iter(first[0]))
+    # `memberships` is `ordering = ['id']` (creation order, deliberately), so
+    # `pids` is the order the names appear on the card and the anchor is the
+    # first of match 1's team 1 — see `anchor_of` for what this used to be.
+    anchor = anchor_of(first[0], pids)
     out = []
     for s1, s2 in _splits(pids):
         if {s1, s2} == {first[0], first[1]}:
