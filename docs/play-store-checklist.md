@@ -127,6 +127,42 @@ subtitle disappeared.
 Fifteen elapsed days against the required fourteen. Nothing below depends on
 the calendar any more.
 
+### DECLINED, AND THE CLOCK RESTARTED — reviewed Mon 12 Oct 2026, 9:10 PM
+
+Applied 11 Oct, reviewed the next evening, and refused: *"your app requires
+more testing before you can access production."* No reason beyond that, and
+no question answered badly — the two criteria above it stay struck through,
+so the application itself was fine.
+
+**The fourteen days do not bank.** We served the clock from 26 Sep, applied
+on day 15, and Google now wants *"at least 12 testers for 14 more days
+**starting from the review date**"*. Time served before applying counts for
+nothing once they decline, so a refusal costs a fortnight however long you
+had already waited.
+
+- **Earliest reapply: Monday 26 October 2026** (14 days from Mon 12 Oct,
+  21:10). Leave it to **Tuesday 27 October** for the same reason the first
+  clock was left to day 15 — there is nothing to gain from testing a
+  boundary that Google measures and we cannot see.
+
+**Nobody opted out — check this before anyone panics.** The console reads
+"12 testers have currently been opted in for 3 days continuously", which
+against a streak unbroken since 26 Sep looks like a reset. It is not: the
+review was Monday 21:10, so three complete days had elapsed by Friday 16 Oct,
+and 3 is exactly what a counter started at the review would show. The streak
+itself is intact. **Confirm it the same way next time** — compare the figure
+against days-since-review before reading it as a dropout, because the two
+have very different costs.
+
+**The margin problem is unchanged and now matters for another fortnight.**
+17 names on the list, ~12 opted in. One `Leave test program` tap drops the
+count below 12 and restarts the 14 days AGAIN, from whenever it recovers.
+Recruiting two or three spare testers is the only thing on this page that
+reduces risk rather than just waiting.
+
+Shipping builds into the closed track still does not reset it. Only the
+count falling below 12 does.
+
 ### Still to do, in order of what blocks the calendar
 
 - [x] **12 testers opted in** — done 26 Sep 2026. See the clock above.
@@ -135,9 +171,11 @@ the calendar any more.
       route, and not one of them asked whether the round was over. Guarded once
       after the chain (`mobile/test/completed_round_routing_test.dart`). See
       CLAUDE.md, "A finished round never opens a setup screen".
-- [x] **Apply for production access** — SUBMITTED 11 Oct 2026. The answers
-      are recorded below; keep them, because a rejection asks you to say more
-      rather than to start again, and the numbers are the hard part.
+- [ ] **Apply for production access** — submitted 11 Oct 2026, **DECLINED
+      12 Oct**. Reapply on/after **27 Oct 2026**; see the clock above. The
+      answers are recorded below and should be REUSED — the refusal did not
+      fault them, it asked for more testing time, so rewriting them would be
+      changing the one part that was accepted.
 - [ ] Confirm a REAL watch token opens the leaderboard (only a bogus token has
       been tested; it correctly fell through to the normal boot).
 - [ ] The two push defects + two QA findings — `docs/android-qa-findings.md`
