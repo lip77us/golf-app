@@ -142,7 +142,7 @@ void main() {
       // slack beside it counted this one — two tiles, two moments.
       await pumpPicker(tester, picker(holesAfter: 17, left: 40, capacity: 72));
       expect(find.text('2.2 a hole'), findsOneWidget);
-      expect(find.text('0 chosen · 18 holes to play'), findsOneWidget);
+      expect(find.text('0/40 chosen · 18 holes to play'), findsOneWidget);
       expect(find.text('32 balls slack'), findsOneWidget); // 4 x 18 - 40
     });
 
@@ -152,8 +152,21 @@ void main() {
       await pumpPicker(tester,
           picker(holesAfter: 17, left: 40, capacity: 72, count: 2));
       expect(find.text('2.2 a hole'), findsOneWidget);
-      expect(find.text('2 chosen · 17 holes to play'), findsOneWidget);
+      expect(find.text('2/40 chosen · 17 holes to play'), findsOneWidget);
       expect(find.text('30 balls slack'), findsOneWidget);   // 68 - 38
+    });
+
+    testWidgets('a threesome counts against 30, not 40', (tester) async {
+      // The denominator is the group's OWN budget — 10 a golfer by starting
+      // size — so it must not be the literal 40 the game is named after.
+      await pumpPicker(tester, picker(
+        groupSize: 3, activeHere: 3, hi: 3,
+        holesAfter: 17, left: 30, capacity: 54,
+        nets: const {1: 3, 2: 4, 3: 5},
+      ));
+      expect(find.text('0/30 chosen · 18 holes to play'), findsOneWidget);
+      expect(find.text('TO REACH 30'), findsOneWidget);  // _Figure upper-cases
+      expect(find.textContaining('/40'), findsNothing);
     });
 
     testWidgets('a settled hole says so and offers nothing', (tester) async {
@@ -223,14 +236,14 @@ void main() {
 
     testWidgets('the pace box says what is committed AND what is left',
         (tester) async {
-      // "8 chosen · 15 holes to play". The hole count alone did not say how
+      // "8/40 chosen · 15 holes to play". The hole count alone did not say how
       // much of the budget was already gone, which is the other half of
       // whether the average above it is comfortable.
       await pumpPicker(tester, picker(
           groupSize: 4, left: 32, holesAfter: 14, capacity: 60, count: null));
       expect(find.text('TO REACH 40'), findsOneWidget);
       // 14 after this one, plus the one in front of you.
-      expect(find.text('8 chosen · 15 holes to play'), findsOneWidget);
+      expect(find.text('8/40 chosen · 15 holes to play'), findsOneWidget);
     });
 
     testWidgets('a pending pick moves BOTH halves of it', (tester) async {
@@ -239,7 +252,7 @@ void main() {
       await pumpPicker(tester, picker(
           groupSize: 4, left: 32, holesAfter: 15, capacity: 60, count: 3));
       // The pick is spent, so this hole is no longer one to play.
-      expect(find.text('11 chosen · 15 holes to play'), findsOneWidget);
+      expect(find.text('11/40 chosen · 15 holes to play'), findsOneWidget);
     });
 
     testWidgets('the status box leads with the NET, slack underneath',

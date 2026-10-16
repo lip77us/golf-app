@@ -93,6 +93,16 @@ class FortyBallsPicker extends StatelessWidget {
   /// to spread, either because the budget is gone or the round is.
   /// Balls committed so far, this hole's pending pick included — the other
   /// half of the pace question the average answers.
+  ///
+  /// **Rendered against the budget (`3/40`), and the denominator is what
+  /// makes it readable at all.** A bare `3` sits inches from a picker
+  /// offering 0–4 for THIS hole, so on the early holes it reads as three
+  /// balls here rather than three of forty so far — the two are the same
+  /// small number exactly when the round is young. The denominator is the
+  /// only thing on the tile saying the figure is a running total.
+  ///
+  /// Never the literal 40: `state.budget` is 10 a golfer by STARTING size,
+  /// so a threesome reads `3/30`.
   int get _chosen => state.budget - _ballsLeft;
 
   /// `E`, `-3`, `+2`. Level is a word everywhere else in the app and should
@@ -188,7 +198,7 @@ class FortyBallsPicker extends StatelessWidget {
             // the average above is comfortable.
             note : _average == null
                 ? 'budget spent'
-                : '$_chosen chosen · $_holesLeft holes to play',
+                : '$_chosen/${state.budget} chosen · $_holesLeft holes to play',
             // Grey BEFORE a pick — they show the position going into this
             // hole, which is not yet the position coming out of it.
             muted: _count == null,
