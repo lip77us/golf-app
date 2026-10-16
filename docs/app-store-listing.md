@@ -1,4 +1,4 @@
-# App Store listing copy — Halved (v2.11.2)
+# App Store listing copy — Halved (v2.12.0)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
@@ -10,27 +10,70 @@ offerable and must not be listed. Check `game_catalog.dart` rather than the
 services directory — this list had been missing 40 Balls and Better Ball since
 they were release headlines.
 
-## Submitting 2.11.2 — everything that changes
+## Submitting 2.12.0 — everything that changes
 
 Three fields move for this submission, and the other six do not. They are not
 all in one place in App Store Connect either, so this says which is which
 rather than leaving you to diff the file.
 
-| Field | 2.11.2 |
+| Field | 2.12.0 |
 | --- | --- |
 | What's New | NEW — below |
 | Promotional text | NEW — below (editable later without review) |
-| Description | CHANGED — **Description** below, one living section (line ~261) |
+| Description | CHANGED — the Spots bullet, see **Description** below. 3,888 of 4,000 |
 | Name · Subtitle · Keywords · Privacy URL · Support URL · Category | unchanged since 2.11.0 |
 
-**The description changed by more than this release's games.** `be43d72` put
-back the headline games it had been missing since 2.9.1 — Hot Spot, 40 Balls,
-Better Ball, Fourball, Honors, Triple Nassau, Nassau Nine, Dream Round and
-Road Trip — and that correction ships with this submission too. 3,864 of 4,000
-characters.
+**The listing's primary language is English (Australia).** English (U.S.) was
+deleted on 16 Oct 2026 so each field is filled once rather than twice; the
+reason the flip could not simply be done, and the order to do it in at 2.13,
+are in `docs/go-live-checklist.md`. Nothing on a product page shows a
+customer which English it is.
 
-## Promotional text (170 max, editable without review) — 2.11.2, 161 chars
+## Promotional text (170 max, editable without review) — 2.12.0, 164 chars
+New: name your spots. Tick greenie, sandy, chippy or your own before you tee off, and an unclaimed greenie carries to the next par 3. Skins junk works the same way.
+
+## Promotional text — previous (2.11.2, 161 chars)
 New: play on your own against par — stroke play, a Nassau or a match, with presses par fights back in. Plus Six's teams the group picks and skins groups you set.
+
+## What's New (v2.12.0)
+
+Say what you are playing for before anyone tees off.
+
+SPOTS — named, not just counted. Halved used to tally your extras without
+knowing what they were, so the argument on the 18th was never "how many did
+he have" but "we weren't playing pollies". Now the group ticks the list when
+the game is set up: greenie, sandy, poley, chippy, barky, Hogan and snake,
+with anything else going in as Other — the list belongs to your group, not
+to us. On the hole, tap + Spots beside a golfer and tick what he made, one
+of each per hole. Birdies and eagles are read off the card and never
+entered; an eagle counts two and does not stack with the birdie. A snake
+counts against you. The leaderboard names them, so a total reads "chippy on
+2, birdie on 2, greenie on 7" rather than a number nobody can check.
+
+THE GREENIE CARRIES. Par 3s only, and one winner or nobody. It takes the
+green from the tee AND a par, so closest and then three putts pays nobody.
+When no one keeps it, it rolls to the next par 3 worth double, and again
+after that. Miss the last par 3 of the round and it is void. Correct a score
+later and every par 3 after it moves to match.
+
+SKINS JUNK — the same list, the same sheet. A junk is still worth a skin,
+and the two carries run separately: a tied hole carries the skin, an
+unclaimed par 3 carries the greenie, and either can happen without the
+other. Rounds already played keep the junk they were settled with.
+
+HOT SPOT IS NOW HOT SEAT. The same game — one golfer anchors the hole and
+his score counts whatever it is, and the seat rotates. Only the name moved.
+
+ALSO IN THIS RELEASE
+• 40 Balls' two figures ask different questions now: one is pace — how many
+  a hole to reach 40, and how many of the 40 are chosen — and the other is
+  where you stand, net and balls to spare
+• Hot Seat can be set as a Road Trip game
+• A round plays one group game. Irish Rumble, Better Ball, Hot Seat and 40
+  Balls rank the same groups the same way, so choosing a second one now
+  turns the first off instead of quietly running both
+• + Spots and + Junk read as buttons, and are easier to hit
+• Sixes picks the same opening pair however the groups were entered
 
 ## What's New (v2.11.2)
 
@@ -258,14 +301,34 @@ rotating.
 New: Survivor — worst score is knocked out, and the last two standing duel for
 the hole. Plus fully developed tournaments for singles, pairs, foursomes and teams.
 
-## Description (4000 max) — CURRENT, as submitted for 2.11.2 (3,864 chars)
+## Description (4000 max) — CURRENT, going up with 2.12.0 (3,888 chars)
 
 **One living section, not one per version.** Unlike What's New and the
 promotional text there is no history kept here: this is the description, and
 editing it is how it changes. If you are looking for "the 2.11.2 description",
 it is this.
 
-Changed since 2.11.0, in three separate lots:
+**APPLIED for 2.12.0 — the Spots bullet.** It read "a side game for
+one-putts, sandies, barkies and more". Two things were wrong with that. A
+one-putt is not one of the types the game offers (greenie, sandy, poley,
+birdie, eagle, chippy, barky, Hogan, snake, Other), so it named something a
+golfer would look for and not find — and **Paul ruled on 16 Oct 2026 that a
+one-putt is not a spot at all: "too easy to achieve"**, which is the real
+reason it is not in `SPOT_META` and never was.
+
+**3,888 of 4,000, measured rather than added up.** The file had carried
+3,864, which was two out — the count only matters against the 4,000 ceiling,
+but a figure nobody re-measures drifts. Re-measure from this file with:
+
+```sh
+python3 -c "import re,pathlib;s=pathlib.Path('docs/app-store-listing.md').read_text();i=s.index('Halved keeps score for the games');print(len(s[i:i+re.search(chr(10)+'## ',s[i:]).start()].rstrip()))"
+```
+
+**The website still says it**, in about eight places including the indexed
+title and meta description of `/games/spots/`. Not changed here — that is
+public SEO copy and a separate decision.
+
+Changed since 2.11.0, in three separate lots:Changed since 2.11.0, in three separate lots:
 * **Hot Spot is now Hot Seat** (15 Oct 2026) — the game is unchanged, and
   the new name is the same eight characters, so the count below still holds.
   The bullet is the only place the description names it. The What's New and
@@ -306,7 +369,8 @@ GAMES YOU CAN PLAY
   Nassau for a nine-hole or back-nine round
 • Points 5-3-1
 • Stableford, with a custom points table
-• Spots — a side game for one-putts, sandies, barkies and more
+• Spots — greenies, sandies, chippies and the rest, from a list your group
+  agrees on
 • Match Play
 • Stroke Play
 • Multi-Group Skins across foursomes, in whatever groups you are playing in
