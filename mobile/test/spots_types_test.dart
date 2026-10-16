@@ -305,6 +305,49 @@ void main() {
     });
   });
 
+  group('where a man looks for the greenie', () {
+    // Reported from a par 3: "did not see Greeny on the list", with the
+    // sheet open showing Sandy and Chippy. The greenie is a pick at the
+    // foot of the card because only one golfer can win it — but a list that
+    // silently omits the type he came looking for reads as the type being
+    // missing, not as it living somewhere better.
+    Future<void> pumpSheet(WidgetTester t, {required bool onThisHole}) async {
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Builder(builder: (ctx) => TextButton(
+            onPressed: () => showModalBottomSheet<List<String>>(
+              context: ctx,
+              builder: (_) => spotsSheetForTest(
+                title: 'Ryan · hole 7',
+                offered: [
+                  SpotTypeInfo.fromJson(_sandy),
+                  SpotTypeInfo.fromJson(_chippy),
+                ],
+                initial: const {},
+                greenieOnThisHole: onThisHole,
+              ),
+            ),
+            child: const Text('open'),
+          )),
+        ),
+      ));
+      await t.tap(find.text('open'));
+      await t.pumpAndSettle();
+    }
+
+    testWidgets('on a par 3 the sheet says where it is', (tester) async {
+      await pumpSheet(tester, onThisHole: true);
+      expect(find.textContaining('greenie is picked below'), findsOneWidget);
+      // ...and it is still not a tick, which is the whole reason for the note.
+      expect(find.text('Greenie'), findsNothing);
+    });
+
+    testWidgets('on any other hole it says nothing', (tester) async {
+      await pumpSheet(tester, onThisHole: false);
+      expect(find.textContaining('greenie is picked below'), findsNothing);
+    });
+  });
+
   group('the greenie card', () {
     Future<void> pump(WidgetTester t, SpotsGreenieHole hole,
         {void Function(int?)? onPick}) async {

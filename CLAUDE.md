@@ -5507,6 +5507,24 @@ server successfully. Without that, "wrong build" and "pointing at Railway"
 (where none of this exists — `flutter run` with no flags does exactly that)
 would both still have been live.
 
+**It was none of those. A screenshot settled it in one look**, and the answer
+was discoverability: the Spots sheet was open on a par 3 showing Sandy and
+Chippy, and the greenie pick was the row directly behind it. He had gone
+looking for Greenie *in the list*, which is the one place it is never going
+to be — it is a single-select pick at the foot of the card because only one
+golfer can win it.
+
+So the sheet now says where it is, on par 3s with the greenie in play. **A
+list that silently omits the type a man came looking for reads as the type
+being missing, not as it living somewhere better.** That is the general
+lesson: the capture lives where the design put it, and the place people
+*look* has to point at it.
+
+I had spent four checks proving the server, the widget tree and the parse
+were right — all worth having as tests, and none of them the answer. **Ask
+for the screenshot earlier.** The same note sits above the tournament watch
+link: "worth asking for the exact words before theorising about the page".
+
 #### The board names the spots, not just the count
 
 Paul, 15 Oct 2026: *"We spent the energy to capture what spot it was on a

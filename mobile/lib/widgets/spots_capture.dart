@@ -366,6 +366,14 @@ mixin SpotsCaptureMixin<T extends StatefulWidget> on State<T> {
         title: '$name · hole $hole',
         offered: offered,
         initial: {for (final t in spotsTypesFor(pid, hole, s)) t.type},
+        // **The greenie is not in this list and this is where people look
+        // for it.** Reported from a par 3: "did not see Greeny on the list".
+        // It is a pick at the foot of the card because only one golfer can
+        // win it — but a list that silently omits the type a man came
+        // looking for reads as the type being missing, not as it living
+        // somewhere better.
+        greenieOnThisHole:
+            s.greenieInPlay && s.greenie.forHole(hole) != null,
       ),
     );
     if (mounted) setState(() => _spotsOpenFor = null);
@@ -453,15 +461,34 @@ class _SpotsThisHole extends StatelessWidget {
   }
 }
 
+/// The tick sheet, for a widget test. It is built by the mixin in the app,
+/// which needs a provider tree and a live round; the sheet's own behaviour —
+/// what it offers and what it says about the greenie — does not.
+@visibleForTesting
+Widget spotsSheetForTest({
+  required String title,
+  required List<SpotTypeInfo> offered,
+  required Set<String> initial,
+  bool greenieOnThisHole = false,
+}) =>
+    _SpotsSheet(
+      title: title,
+      offered: offered,
+      initial: initial,
+      greenieOnThisHole: greenieOnThisHole,
+    );
+
 class _SpotsSheet extends StatefulWidget {
   final String             title;
   final List<SpotTypeInfo> offered;
   final Set<String>        initial;
+  final bool               greenieOnThisHole;
 
   const _SpotsSheet({
     required this.title,
     required this.offered,
     required this.initial,
+    this.greenieOnThisHole = false,
   });
 
   @override
@@ -509,6 +536,22 @@ class _SpotsSheetState extends State<_SpotsSheet> {
                 ),
             ]),
           ),
+          if (widget.greenieOnThisHole) ...[
+            const SizedBox(height: 4),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(Icons.flag_outlined,
+                  size: 15, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'The greenie is picked below this sheet, on the hole — '
+                  'only one golfer can win it.',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
+            ]),
+          ],
           const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
