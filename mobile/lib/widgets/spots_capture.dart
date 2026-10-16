@@ -112,10 +112,11 @@ class SpotsButton extends StatelessWidget {
             ),
           ),
           child: Container(
-            // 38 rather than 32. The whole pill is the target — the `+` is a
-            // glyph inside it, not the button — and the extra height is what
-            // makes that obvious to a thumb.
-            constraints: const BoxConstraints(minHeight: 38),
+            // 36, settled by looking at it: 38 cost a four-ball's hole
+            // card about 24pt for 2pt nobody could feel. The height was
+            // never what made this read as a button — the fill, the border
+            // and the label colour were — so it is the part to give back.
+            constraints: const BoxConstraints(minHeight: 36),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               if (empty) ...[

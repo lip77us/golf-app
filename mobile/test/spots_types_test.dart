@@ -296,15 +296,15 @@ void main() {
       expect(taps, 2, reason: 'the bottom of the pill did not answer');
     });
 
-    testWidgets('it is at least 38 tall, empty or filled', (tester) async {
-      // Measured rather than asserted in a comment: it was 32, which is
-      // under every touch-target guideline there is and reads as a chip.
+    testWidgets('it is at least 36 tall, empty or filled', (tester) async {
+      // Measured rather than asserted in a comment. It was 32; 38 was tried
+      // and cost a four-ball's hole card ~24pt for 2pt nobody could feel.
       final emptySize = await pumpButton(tester, types: const []);
-      expect(emptySize.height, greaterThanOrEqualTo(38));
+      expect(emptySize.height, greaterThanOrEqualTo(36));
       final filledSize = await pumpButton(tester, types: [
         SpotTypeInfo.fromJson(_sandy),
       ]);
-      expect(filledSize.height, greaterThanOrEqualTo(38));
+      expect(filledSize.height, greaterThanOrEqualTo(36));
     });
 
     testWidgets('empty is drawn in the ACTION colour, not the muted one',

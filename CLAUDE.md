@@ -5642,9 +5642,11 @@ a row already carrying a bold name and a big score box:
   not a control.
 
 Now: tinted in the primary at 7% empty and 12% filled, a primary border, a
-primary label at w600, `add_circle_outline` at 17, and 38pt tall. Worth
-knowing it costs ~6pt per player row, so a four-ball's hole card is ~24pt
-taller than it was.
+primary label at w600, `add_circle_outline` at 17, and **36pt tall** — 38 was
+tried first and cost a four-ball's hole card about 24pt for 2pt nobody could
+feel. The height was never what made it read as a button; the fill, the
+border and the label colour were, which is why the height is the part to
+give back.
 
 **Not built:** the design's open question about very long names on the Spots
 button (four golfers fit; the ellipsis handles the rest, untested against a
