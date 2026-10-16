@@ -257,6 +257,92 @@ void main() {
     });
   });
 
+  group('the button reads as a button', () {
+    // Reported: "I am afraid people don't see the button and think they
+    // have to press on the + key exactly."
+    //
+    // **The hit area was never the problem** — the whole pill has always
+    // been inside the InkWell, and the first test below passed before any
+    // of this changed. It is kept as the guard against somebody later
+    // shrinking the target onto the glyph, which is the thing being feared.
+    // What was actually wrong is everything that made it LOOK untappable:
+    // 32pt tall, no fill, the faintest border token, muted grey text, and a
+    // filled state that swallowed its own ripple.
+
+    Future<Size> pumpButton(WidgetTester t, {required List<SpotTypeInfo> types,
+                                             VoidCallback? onTap}) async {
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SpotsButton(types: types, onTap: onTap ?? () {}),
+          ),
+        ),
+      ));
+      return t.getSize(find.byType(SpotsButton));
+    }
+
+    testWidgets('the WHOLE pill answers, not just the + glyph',
+        (tester) async {
+      var taps = 0;
+      await pumpButton(tester, types: const [], onTap: () => taps++);
+      final box = tester.getRect(find.byType(SpotsButton));
+      // The far right edge, as far from the `+` as the control goes.
+      await tester.tapAt(Offset(box.right - 4, box.center.dy));
+      await tester.pump();
+      expect(taps, 1, reason: 'the label end of the pill did not answer');
+      // ...and the bottom edge, which a thumb finds before the glyph does.
+      await tester.tapAt(Offset(box.center.dx, box.bottom - 3));
+      await tester.pump();
+      expect(taps, 2, reason: 'the bottom of the pill did not answer');
+    });
+
+    testWidgets('it is at least 38 tall, empty or filled', (tester) async {
+      // Measured rather than asserted in a comment: it was 32, which is
+      // under every touch-target guideline there is and reads as a chip.
+      final emptySize = await pumpButton(tester, types: const []);
+      expect(emptySize.height, greaterThanOrEqualTo(38));
+      final filledSize = await pumpButton(tester, types: [
+        SpotTypeInfo.fromJson(_sandy),
+      ]);
+      expect(filledSize.height, greaterThanOrEqualTo(38));
+    });
+
+    testWidgets('empty is drawn in the ACTION colour, not the muted one',
+        (tester) async {
+      // The old empty state used the three faintest tokens in the theme, on
+      // a row carrying a bold name and a big score box.
+      await pumpButton(tester, types: const []);
+      final ctx = tester.element(find.byType(SpotsButton));
+      final scheme = Theme.of(ctx).colorScheme;
+      final label = tester.widget<Text>(find.text('Spots'));
+      expect(label.style?.color, scheme.primary);
+      final icon = tester.widget<Icon>(find.byType(Icon));
+      expect(icon.color, scheme.primary);
+    });
+
+    testWidgets('a tap leaves a ripple, in BOTH states', (tester) async {
+      // A decoration painted by the InkWell's child paints over the splash,
+      // which is what the filled state used to do to its own feedback. A
+      // control that does not flinch when touched is one people decide is
+      // not a control.
+      for (final types in [<SpotTypeInfo>[],
+                           [SpotTypeInfo.fromJson(_sandy)]]) {
+        await pumpButton(tester, types: types);
+        final gesture =
+            await tester.startGesture(tester.getCenter(find.byType(SpotsButton)));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.byType(InkWell), findsOneWidget);
+        final material = tester.widget<Material>(
+            find.ancestor(of: find.byType(InkWell),
+                          matching: find.byType(Material)).first);
+        expect(material.color, Colors.transparent,
+            reason: 'the ink has no transparent Material to paint into');
+        await gesture.up();
+        await tester.pumpAndSettle();
+      }
+    });
+  });
+
   group('what the sheet may offer', () {
     test('never the greenie, never a birdie', () {
       // Greenie has its own pick and birdies come off the card, so a tick of

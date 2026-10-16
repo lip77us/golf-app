@@ -5620,6 +5620,32 @@ before trusting it.
 `SPOT_META`'s flag rather than anything in the database, so a game already
 configured keeps exactly the types it was given.
 
+#### The button did not read as a button
+
+Paul, 16 Oct 2026: *"I am afraid people don't see the button and think they
+have to press on the + key exactly."*
+
+**The hit area was never the problem.** The whole pill has always been inside
+the InkWell, and a test tapping its far right edge passes against the old
+build too — it is kept as a guard against somebody later shrinking the target
+onto the glyph, which is the thing being feared rather than the thing that
+was happening. What was wrong is everything that made it LOOK untappable, on
+a row already carrying a bold name and a big score box:
+
+- the three faintest tokens in the theme — no fill, `outlineVariant` border,
+  `onSurfaceVariant` text — which together read as a disabled chip;
+- **32pt tall**, under every touch-target guideline there is;
+- and a filled state that **swallowed its own ripple**. A decoration painted
+  by the InkWell's CHILD paints over the splash, so `InkWell > Container(color:)`
+  gives no feedback at all. It is `Material > InkWell > Ink(decoration:)` now.
+  A control that does not flinch when you touch it is one people decide is
+  not a control.
+
+Now: tinted in the primary at 7% empty and 12% filled, a primary border, a
+primary label at w600, `add_circle_outline` at 17, and 38pt tall. Worth
+knowing it costs ~6pt per player row, so a four-ball's hole card is ~24pt
+taller than it was.
+
 **Not built:** the design's open question about very long names on the Spots
 button (four golfers fit; the ellipsis handles the rest, untested against a
 real 24-character name).

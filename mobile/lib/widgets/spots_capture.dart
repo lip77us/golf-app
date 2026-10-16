@@ -59,14 +59,16 @@ String spotTypeBlurb(String type) {
 /// badge to a long name would leave the row saying nothing.
 class SpotsButton extends StatelessWidget {
   final List<SpotTypeInfo> types;
-  final VoidCallback       onTap;
+  final VoidCallback onTap;
+
   /// Drawn while this golfer's sheet is open, so the row the sheet belongs to
   /// is obvious on a card of four.
-  final bool               focused;
+  final bool focused;
+
   /// `Spots` or `Junk`. **The same control for both**, because they are the
   /// same gesture over the same vocabulary — only the pot differs, and the
   /// pot is not something the hole card says.
-  final String             noun;
+  final String noun;
 
   const SpotsButton({
     super.key,
@@ -81,50 +83,68 @@ class SpotsButton extends StatelessWidget {
     final theme = Theme.of(context);
     final empty = types.isEmpty;
     final count = types.fold<int>(0, (a, t) => a + t.worth);
-    final line  = types.map((t) => t.label).join(', ');
+    final line = types.map((t) => t.label).join(', ');
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 32),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: empty ? null : theme.colorScheme.primary.withValues(alpha: .10),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: focused
-                ? theme.colorScheme.primary
-                : (empty
-                    ? theme.colorScheme.outlineVariant
-                    : theme.colorScheme.primary.withValues(alpha: .45)),
-            width: focused ? 2 : 1,
+    // **Material + Ink, not a plain Container.** A decoration painted by the
+    // InkWell's CHILD paints over the splash, so the filled state used to
+    // swallow its own ripple — a control that does not flinch when you touch
+    // it is a control people decide is not a control.
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Ink(
+          decoration: BoxDecoration(
+            // **The empty state is tinted, bordered and coloured like an
+            // action.** It used to be the three faintest tokens in the theme —
+            // no fill, `outlineVariant`, `onSurfaceVariant` text — which on a
+            // row carrying a bold name and a big score box reads as a disabled
+            // chip. Reported as: people do not see it, and the ones who do aim
+            // for the `+` glyph as if the rest were decoration.
+            color:
+                theme.colorScheme.primary.withValues(alpha: empty ? .07 : .12),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: theme.colorScheme.primary
+                  .withValues(alpha: focused ? 1 : (empty ? .5 : .45)),
+              width: focused ? 2 : 1,
+            ),
+          ),
+          child: Container(
+            // 38 rather than 32. The whole pill is the target — the `+` is a
+            // glyph inside it, not the button — and the extra height is what
+            // makes that obvious to a thumb.
+            constraints: const BoxConstraints(minHeight: 38),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              if (empty) ...[
+                Icon(Icons.add_circle_outline,
+                    size: 17, color: theme.colorScheme.primary),
+                const SizedBox(width: 5),
+                Text(noun,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600)),
+              ] else ...[
+                // The badge is laid out first and never shrinks, so a long type
+                // list eats into the names and not into the number.
+                Text('$count',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.bold)),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(line,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium
+                          ?.copyWith(color: theme.colorScheme.primary)),
+                ),
+              ],
+            ]),
           ),
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          if (empty) ...[
-            Icon(Icons.add, size: 15, color: theme.colorScheme.onSurfaceVariant),
-            const SizedBox(width: 3),
-            Text(noun,
-                style: theme.textTheme.labelMedium
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          ] else ...[
-            // The badge is laid out first and never shrinks, so a long type
-            // list eats into the names and not into the number.
-            Text('$count',
-                style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.bold)),
-            const SizedBox(width: 5),
-            Flexible(
-              child: Text(line,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelMedium
-                      ?.copyWith(color: theme.colorScheme.primary)),
-            ),
-          ],
-        ]),
       ),
     );
   }
@@ -136,12 +156,13 @@ class SpotsButton extends StatelessWidget {
 /// the next par 3, so it sits in the same single-select row as the golfers
 /// rather than being an absence of a choice.
 class GreenieCard extends StatelessWidget {
-  final SpotsGreenieHole        hole;
+  final SpotsGreenieHole hole;
   final List<({int id, String short})> players;
-  final ValueChanged<int?>      onPick;
+  final ValueChanged<int?> onPick;
+
   /// Tapping the current answer again un-answers the hole — back to
   /// undecided, which adds nothing to the next par 3.
-  final VoidCallback?           onClear;
+  final VoidCallback? onClear;
 
   const GreenieCard({
     super.key,
@@ -190,17 +211,17 @@ class GreenieCard extends StatelessWidget {
         Text(
           hole.missed
               ? '${hole.winnerShort ?? 'Closest'} was closest but did not '
-                'par it — nobody keeps this one.'
+                  'par it — nobody keeps this one.'
               : hole.pendingScore
                   ? 'Waiting on the score. A par keeps it; anything worse '
-                    'carries.'
+                      'carries.'
                   // Played out with nobody named. It has already carried, and
                   // saying so is what stops the next par 3's bigger number
                   // looking like a bug — but the chips stay live, because the
                   // group may simply not have got round to naming him.
                   : hole.unclaimed
                       ? 'Nobody recorded — it carried. Tap a name if somebody '
-                        'did take it.'
+                          'did take it.'
                       : 'On the green in one, and a par to keep it.',
           style: theme.textTheme.bodySmall?.copyWith(
               color: hole.missed
@@ -233,10 +254,14 @@ class GreenieCard extends StatelessWidget {
 String _ordinal(int n) {
   if (n % 100 >= 11 && n % 100 <= 13) return '${n}th';
   switch (n % 10) {
-    case 1:  return '${n}st';
-    case 2:  return '${n}nd';
-    case 3:  return '${n}rd';
-    default: return '${n}th';
+    case 1:
+      return '${n}st';
+    case 2:
+      return '${n}nd';
+    case 3:
+      return '${n}rd';
+    default:
+      return '${n}th';
   }
 }
 
@@ -271,8 +296,7 @@ mixin SpotsCaptureMixin<T extends StatefulWidget> on State<T> {
     if (s == null || !spotsActive(rp)) return null;
     final fs = rp.round?.foursomes.where((f) => f.id == foursomeId).firstOrNull;
     if (fs == null) return null;
-    final members =
-        fs.memberships.where((m) => !m.player.isPhantom).toList();
+    final members = fs.memberships.where((m) => !m.player.isPhantom).toList();
 
     final g = s.greenieInPlay ? s.greenie.forHole(hole) : null;
     final greenie = g == null
@@ -281,10 +305,12 @@ mixin SpotsCaptureMixin<T extends StatefulWidget> on State<T> {
             hole: g,
             players: [
               for (final m in members)
-                (id: m.player.id,
-                 short: m.player.shortName.isNotEmpty
-                     ? m.player.shortName
-                     : m.player.name),
+                (
+                  id: m.player.id,
+                  short: m.player.shortName.isNotEmpty
+                      ? m.player.shortName
+                      : m.player.name
+                ),
             ],
             onPick: (pid) => _pickGreenie(foursomeId, hole, pid),
             onClear: g.decided ? () => _clearGreenie(foursomeId, hole) : null,
@@ -300,9 +326,8 @@ mixin SpotsCaptureMixin<T extends StatefulWidget> on State<T> {
       if (got.isEmpty) continue;
       final total = got.fold<int>(0, (a, t) => a + t.worth);
       rows.add((
-        name: m.player.shortName.isNotEmpty
-            ? m.player.shortName
-            : m.player.name,
+        name:
+            m.player.shortName.isNotEmpty ? m.player.shortName : m.player.name,
         detail: got
             .map((t) => t.worth == 1 ? t.label : '${t.label} ${t.worth}')
             .join(' + '),
@@ -325,18 +350,18 @@ mixin SpotsCaptureMixin<T extends StatefulWidget> on State<T> {
   }
 
   Future<void> _pickGreenie(int foursomeId, int hole, int? pid) async {
-    final rp     = context.read<RoundProvider>();
+    final rp = context.read<RoundProvider>();
     final client = context.read<AuthProvider>().client;
     try {
-      rp.setSpotsSummary(await client.postSpotsGreenie(
-          foursomeId, holeNumber: hole, playerId: pid));
+      rp.setSpotsSummary(await client.postSpotsGreenie(foursomeId,
+          holeNumber: hole, playerId: pid));
     } catch (_) {
       _moan('Could not save the greenie. Tap again to retry.');
     }
   }
 
   Future<void> _clearGreenie(int foursomeId, int hole) async {
-    final rp     = context.read<RoundProvider>();
+    final rp = context.read<RoundProvider>();
     final client = context.read<AuthProvider>().client;
     try {
       rp.setSpotsSummary(
@@ -356,7 +381,7 @@ mixin SpotsCaptureMixin<T extends StatefulWidget> on State<T> {
   /// the same reasoning as Hot Seat's order sheet.
   Future<void> openSpotsSheet(int foursomeId, int pid, int hole) async {
     final rp = context.read<RoundProvider>();
-    final s  = rp.spotsSummary;
+    final s = rp.spotsSummary;
     if (s == null) return;
     final fs = rp.round?.foursomes.where((f) => f.id == foursomeId).firstOrNull;
     final name = fs?.memberships
@@ -384,8 +409,7 @@ mixin SpotsCaptureMixin<T extends StatefulWidget> on State<T> {
         // win it — but a list that silently omits the type a man came
         // looking for reads as the type being missing, not as it living
         // somewhere better.
-        greenieOnThisHole:
-            s.greenieInPlay && s.greenie.forHole(hole) != null,
+        greenieOnThisHole: s.greenieInPlay && s.greenie.forHole(hole) != null,
       ),
     );
     if (mounted) setState(() => _spotsOpenFor = null);
@@ -395,7 +419,7 @@ mixin SpotsCaptureMixin<T extends StatefulWidget> on State<T> {
 
   Future<void> _saveTicks(
       int foursomeId, int pid, int hole, List<String> types) async {
-    final rp     = context.read<RoundProvider>();
+    final rp = context.read<RoundProvider>();
     final client = context.read<AuthProvider>().client;
     try {
       // **Only the golfer who was edited is sent.** The endpoint leaves
@@ -404,7 +428,9 @@ mixin SpotsCaptureMixin<T extends StatefulWidget> on State<T> {
       rp.setSpotsSummary(await client.postSpotsTally(
         foursomeId,
         holeNumber: hole,
-        entries: [{'player_id': pid, 'types': types}],
+        entries: [
+          {'player_id': pid, 'types': types}
+        ],
       ));
     } catch (_) {
       _moan('Could not save spots. Tap again to retry.');
@@ -413,8 +439,7 @@ mixin SpotsCaptureMixin<T extends StatefulWidget> on State<T> {
 
   void _moan(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   void disposeSpots() {}
@@ -432,7 +457,8 @@ Widget extrasThisHole({
 class _SpotsThisHole extends StatelessWidget {
   final List<({String name, String detail, int total})> rows;
   final String heading;
-  const _SpotsThisHole({required this.rows, this.heading = 'SPOTS · THIS HOLE'});
+  const _SpotsThisHole(
+      {required this.rows, this.heading = 'SPOTS · THIS HOLE'});
 
   @override
   Widget build(BuildContext context) {
@@ -447,7 +473,9 @@ class _SpotsThisHole extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(heading,
             style: theme.textTheme.labelSmall?.copyWith(
-                fontSize: 10, letterSpacing: .5, fontWeight: FontWeight.w700,
+                fontSize: 10,
+                letterSpacing: .5,
+                fontWeight: FontWeight.w700,
                 color: theme.colorScheme.onSurfaceVariant)),
         const SizedBox(height: 4),
         for (final r in rows)
@@ -466,8 +494,8 @@ class _SpotsThisHole extends StatelessWidget {
                 child: Text(r.detail,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
               ),
               const SizedBox(width: 6),
               Text('= ${r.total}',
@@ -524,15 +552,16 @@ Widget buildExtrasSheet({
     );
 
 class _SpotsSheet extends StatefulWidget {
-  final String             title;
+  final String title;
   final List<SpotTypeInfo> offered;
-  final Set<String>        initial;
-  final bool               greenieOnThisHole;
+  final Set<String> initial;
+  final bool greenieOnThisHole;
+
   /// Lower case, singular: `spot` or `junk`. Junk has no plural — "3 junk",
   /// never "3 junks" — which is why the Done label asks for it rather than
   /// adding an `s` itself.
-  final String             noun;
-  final String             nounPlural;
+  final String noun;
+  final String nounPlural;
 
   const _SpotsSheet({
     required this.title,
@@ -562,58 +591,60 @@ class _SpotsSheetState extends State<_SpotsSheet> {
     return Padding(
       padding: EdgeInsets.fromLTRB(
           20, 0, 20, MediaQuery.of(context).viewInsets.bottom + 20),
-      child: Column(mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(widget.title,
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 2),
-          Text('Tick each ${widget.noun} he made. One of each per hole.',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          const SizedBox(height: 6),
-          Flexible(
-            child: ListView(shrinkWrap: true, children: [
-              for (final t in widget.offered)
-                CheckboxListTile(
-                  value: _picked.contains(t.type),
-                  onChanged: (on) => setState(() => on == true
-                      ? _picked.add(t.type)
-                      : _picked.remove(t.type)),
-                  title: Text(t.label),
-                  subtitle: Text(spotTypeBlurb(t.type),
-                      style: theme.textTheme.bodySmall),
-                  controlAffinity: ListTileControlAffinity.trailing,
-                  dense: true,
-                ),
-            ]),
-          ),
-          if (widget.greenieOnThisHole) ...[
-            const SizedBox(height: 4),
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Icon(Icons.flag_outlined,
-                  size: 15, color: theme.colorScheme.onSurfaceVariant),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'The greenie is picked below this sheet, on the hole — '
-                  'only one golfer can win it.',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                ),
-              ),
-            ]),
-          ],
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: () => Navigator.of(context).pop(_picked.toList()),
-              child: Text('Done · $n '
-                  '${n.abs() == 1 ? widget.noun : widget.nounPlural}'),
+      child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.title,
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 2),
+            Text('Tick each ${widget.noun} he made. One of each per hole.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 6),
+            Flexible(
+              child: ListView(shrinkWrap: true, children: [
+                for (final t in widget.offered)
+                  CheckboxListTile(
+                    value: _picked.contains(t.type),
+                    onChanged: (on) => setState(() => on == true
+                        ? _picked.add(t.type)
+                        : _picked.remove(t.type)),
+                    title: Text(t.label),
+                    subtitle: Text(spotTypeBlurb(t.type),
+                        style: theme.textTheme.bodySmall),
+                    controlAffinity: ListTileControlAffinity.trailing,
+                    dense: true,
+                  ),
+              ]),
             ),
-          ),
-        ]),
+            if (widget.greenieOnThisHole) ...[
+              const SizedBox(height: 4),
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Icon(Icons.flag_outlined,
+                    size: 15, color: theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'The greenie is picked below this sheet, on the hole — '
+                    'only one golfer can win it.',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ),
+              ]),
+            ],
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(_picked.toList()),
+                child: Text('Done · $n '
+                    '${n.abs() == 1 ? widget.noun : widget.nounPlural}'),
+              ),
+            ),
+          ]),
     );
   }
 }
