@@ -5525,6 +5525,36 @@ were right — all worth having as tests, and none of them the answer. **Ask
 for the screenshot earlier.** The same note sits above the tournament watch
 link: "worth asking for the exact words before theorising about the page".
 
+#### ...and then two real ones, from the same round
+
+**A played par 3 with no winner now carries.** Paul: *"there should have been
+a carry over"*, from a round whose first par 3 was fully scored with no
+greenie ever recorded. The rule was "only an explicit Nobody carries", on the
+reasoning that a blank must not invent a carry out of a hole nobody has
+reached — right about an unplayed hole and wrong about a played one.
+**Nobody taps to record an absence**: they miss the green, say nothing and
+walk on, which is exactly what he did. So the gate is whether every ACTIVE
+golfer has a score (`unclaimed`), not whether somebody pressed a button; a
+partly-scored par 3 still adds nothing, which is the case the old rule was
+protecting. Naming the winner afterwards takes the carry back, because the
+auto-carry is a reading of the scores rather than a decision written down.
+
+That makes the greenie's worth depend on SCORES for the first time, so the
+card goes stale if a score lands without a summary refresh.
+`_loadGameSummaries` already runs on every save and again after the sync
+drain, so it is covered — but it is why Paul saw the right answer only after
+going to hole 8 and back.
+
+**A carried greenie lost its ×2 on the way out.** The per-hole `types` block
+was built with `_in_play_block`, which labels a CATALOGUE and takes each
+worth from `SPOT_META` — the TYPE's price. A carried greenie is the one
+thing whose worth belongs to the HOLE, so the board drew `Greenie on 7` for
+a greenie worth two and the hole's own line totalled it as 1 while the money
+said 2. `_types_block` carries the real worth through. Worth remembering as a
+shape: the summary kept `(type, worth)` pairs internally and threw the worth
+away at the boundary, so the bug was invisible in the settlement and visible
+only in the labels.
+
 #### The board names the spots, not just the count
 
 Paul, 15 Oct 2026: *"We spent the energy to capture what spot it was on a

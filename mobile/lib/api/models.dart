@@ -3209,6 +3209,10 @@ class SpotsGreenieHole {
   final bool    missed;
   /// Picked, score not in yet — provisional, and the carry has not moved.
   final bool    pendingScore;
+  /// Played out with nobody recorded as taking it, so it carries without
+  /// anybody having tapped Nobody. On the course that is the commonest way a
+  /// greenie goes unclaimed: miss the green, say nothing, walk on.
+  final bool    unclaimed;
 
   const SpotsGreenieHole({
     required this.hole,
@@ -3219,6 +3223,7 @@ class SpotsGreenieHole {
     this.decided = false,
     this.missed = false,
     this.pendingScore = false,
+    this.unclaimed = false,
   });
 
   factory SpotsGreenieHole.fromJson(Map<String, dynamic> j) =>
@@ -3231,6 +3236,7 @@ class SpotsGreenieHole {
         decided:     j['decided'] as bool? ?? false,
         missed:       j['missed'] as bool? ?? false,
         pendingScore: j['pending_score'] as bool? ?? false,
+        unclaimed:    j['unclaimed'] as bool? ?? false,
       );
 }
 

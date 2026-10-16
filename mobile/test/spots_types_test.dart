@@ -416,6 +416,27 @@ void main() {
       expect(find.textContaining('Waiting on the score'), findsOneWidget);
     });
 
+    testWidgets('a played hole with nobody named says it carried',
+        (tester) async {
+      // Otherwise the next par 3's bigger number looks like a bug. The chips
+      // stay live: the group may simply not have got round to naming him.
+      await pump(tester, SpotsGreenieHole.fromJson(const {
+        'hole': 4, 'worth': 1, 'decided': true, 'unclaimed': true,
+      }));
+      expect(find.textContaining('Nobody recorded'), findsOneWidget);
+      expect(find.textContaining('it carried'), findsOneWidget);
+      expect(find.byType(ChoiceChip), findsNWidgets(3));   // 2 + Nobody
+    });
+
+    testWidgets('and the hole it carried TO names where it came from',
+        (tester) async {
+      await pump(tester, SpotsGreenieHole.fromJson(const {
+        'hole': 7, 'worth': 2, 'carried_from': 4,
+      }));
+      expect(find.text('Greenie · worth 2'), findsOneWidget);
+      expect(find.text('Carried from the 4th'), findsOneWidget);
+    });
+
     testWidgets('the winner reads as selected', (tester) async {
       await pump(tester, SpotsGreenieHole.fromJson(const {
         'hole': 3, 'worth': 1, 'winner_id': 2, 'decided': true,

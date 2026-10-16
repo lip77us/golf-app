@@ -310,6 +310,28 @@ def catalogue_block() -> list:
             for t, m in SPOT_META.items()]
 
 
+def _types_block(pairs) -> list:
+    """``[(type, worth), ...]`` → labelled rows carrying THAT worth.
+
+    Distinct from `_in_play_block`, which labels a catalogue where the worth
+    is the type's price. Here the worth is what the spot was actually worth
+    ON THAT HOLE, and the two differ for exactly one thing: a carried greenie
+    is worth what it carried. Re-deriving it from `SPOT_META` lost the carry
+    — the board drew `Greenie on 7` for a greenie worth two, and the hole's
+    own line totalled it as 1 while the money said 2.
+    """
+    out = []
+    for t, worth in pairs:
+        try:
+            st = SpotType(t)
+        except ValueError:
+            continue
+        out.append({'type': str(st), 'label': st.label, 'worth': worth})
+    # Catalogue order, as everywhere else.
+    order = {str(t): i for i, t in enumerate(SPOT_META)}
+    return sorted(out, key=lambda r: order.get(r['type'], 99))
+
+
 def _par_si_by_hole(real_members) -> dict:
     """{hole: (par, stroke_index)} off the first tee that has the hole.
 
@@ -358,10 +380,17 @@ def greenie_plan(foursome, game) -> dict:
 
     The three carry rules are unchanged:
 
-    * **Only an explicit Nobody (or a missed par) carries.** A par 3 with no
-      pick has not happened yet, so it adds nothing to the next one. Picks can
-      legitimately arrive out of order, and treating a blank as unclaimed
-      would invent a carry out of a hole nobody has played.
+    * **A PLAYED par 3 with no winner carries**, whether the group tapped
+      Nobody or simply did not tap at all (`unclaimed`). The first version
+      required the explicit tap, on the reasoning that a blank must not invent
+      a carry out of a hole nobody has reached — right about an unplayed hole
+      and wrong about a played one. On the course nobody taps to record an
+      absence: they miss the green, say nothing and walk on, which is exactly
+      what happened the first time this was tested. So the gate is whether
+      every active golfer has a score, not whether somebody pressed a button.
+    * A par 3 **nobody has finished** still adds nothing. That is the case the
+      old rule was protecting, and it keeps it: picks legitimately arrive out
+      of order, and a hole in front of the group is not an unclaimed one.
     * **A win resets it.** The next par 3 is worth 1 again.
     * **An unclaimed LAST par 3 voids the carry.** It falls out of the walk
       rather than being special-cased: the pending worth has no later par 3 to
@@ -380,6 +409,7 @@ def greenie_plan(foursome, game) -> dict:
 
     picks = {g.hole_number: g for g in game.greenies.all()}
     carry = bool(game.greenie_carry)
+    roster = _active_roster_by_hole(real_members, foursome)
     gross = {
         (r.player_id, r.hole_number): r.gross_score
         for r in HoleScore.objects.filter(
@@ -395,14 +425,27 @@ def greenie_plan(foursome, game) -> dict:
         g = picks.get(h)
         row = {'hole': h, 'worth': worth, 'carried_from': None,
                'winner_id': None, 'decided': False,
-               'missed': False, 'pending_score': False}
+               'missed': False, 'pending_score': False, 'unclaimed': False}
+        # Played = every golfer ACTIVE on the hole has a gross score. The
+        # withdrawal-aware roster, so a group that lost a man mid-round is
+        # not waiting forever on a score that is never coming.
+        active = roster.get(h, [])
+        played = bool(active) and all(
+            gross.get((pid, h)) is not None for pid in active)
         if pending:
             # Which hole the carry came off, for the "Carried from the 4th"
             # chip. The most recent par 3 before this one that resolved.
             prev = [x['hole'] for x in holes if x['decided']]
             row['carried_from'] = prev[-1] if prev else None
         if g is None:
-            if nxt is None:
+            if played:
+                # Played, and nobody is recorded as having taken it. That is
+                # the commonest way a greenie goes unclaimed — the group
+                # misses the green and says nothing.
+                row['decided'] = True
+                row['unclaimed'] = True
+                pending = worth if carry else 0
+            elif nxt is None:
                 nxt = row
             holes.append(row)
             continue
@@ -587,8 +630,8 @@ def spots_summary(foursome) -> dict:
         for hole, got in holes_map.items():
             worth = sum(w for _t, w in got)
             totals[pid] = totals.get(pid, 0) + worth
-            by_hole.setdefault(hole, {})[pid] = {
-                'worth': worth, 'types': [t for t, _w in got]}
+            by_hole.setdefault(hole, {})[pid] = {'worth': worth,
+                                                 'types': list(got)}
 
     # ---- settlement ---------------------------------------------------------
     # 2-axis (maps to services.wager): pool / per_point{all|first|average}.
@@ -663,7 +706,7 @@ def spots_summary(foursome) -> dict:
          'spots': [{'player_id': pid,
                     'short_name': short.get(pid, ''),
                     'count': by_hole[h][pid]['worth'],
-                    'types': _in_play_block(by_hole[h][pid]['types'])}
+                    'types': _types_block(by_hole[h][pid]['types'])}
                    for pid in sorted(by_hole[h])]}
         for h in sorted(by_hole)
     ]

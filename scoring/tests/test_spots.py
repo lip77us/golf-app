@@ -300,16 +300,80 @@ class GreenieCarryTests(_Base):
         self.assertEqual(sum(self._spots(s).values()), 0)
         self.assertIsNone(s['greenie']['next'])
 
-    def test_only_an_explicit_NOBODY_carries(self):
-        """A par 3 with no pick has not been played, so it adds nothing. A
-        blank that carried would invent one out of a hole nobody has reached —
-        and picks legitimately arrive out of order."""
+    def test_a_par_3_NOBODY_HAS_FINISHED_adds_nothing(self):
+        """The case the carry rule has to protect: a hole in front of the
+        group is not an unclaimed one. Picks legitimately arrive out of
+        order, and a blank that carried would invent one out of a hole
+        nobody has reached."""
         setup_spots(self.fs)
         pick_greenie(self.fs, 7, self.pid['A'])      # the 3rd is still blank
         self.score(7, 'A', 3)
         s = spots_summary(self.fs)
-        self.assertEqual(self._spots(s)['A'], 1)
+        self.assertEqual(self._spots(s)['A'], 1)     # worth 1, nothing carried
         self.assertEqual(s['greenie']['next']['hole'], 3)
+
+    def test_a_PLAYED_par_3_with_no_winner_carries_without_being_told(self):
+        """**Paul, 15 Oct 2026** — reported as "there should have been a carry
+        over", from a round where the first par 3 was fully scored and no
+        greenie was ever recorded.
+
+        Nobody taps to record an absence. They miss the green, say nothing
+        and walk on. Requiring the explicit Nobody meant the commonest way a
+        greenie goes unclaimed produced no carry at all.
+        """
+        setup_spots(self.fs)
+        for name in ('A', 'B', 'C', 'D'):
+            self.score(3, name, 4)                   # par 3, all bogeys
+        s = spots_summary(self.fs)
+        row = next(h for h in s['greenie']['holes'] if h['hole'] == 3)
+        self.assertTrue(row['unclaimed'])
+        self.assertTrue(row['decided'])
+        nxt = s['greenie']['next']
+        self.assertEqual((nxt['hole'], nxt['worth'], nxt['carried_from']),
+                         (7, 2, 3))
+
+    def test_a_PARTLY_scored_par_3_does_not_carry_yet(self):
+        """Three of four in is a hole still being played."""
+        setup_spots(self.fs)
+        for name in ('A', 'B', 'C'):
+            self.score(3, name, 4)
+        s = spots_summary(self.fs)
+        row = next(h for h in s['greenie']['holes'] if h['hole'] == 3)
+        self.assertFalse(row['unclaimed'])
+        self.assertEqual(s['greenie']['next']['hole'], 3)
+
+    def test_recording_the_winner_afterwards_TAKES_the_carry_back(self):
+        """The auto-carry is a reading of the scores, not a decision written
+        down — so naming the winner later undoes it, and every later par 3
+        moves with him."""
+        setup_spots(self.fs)
+        for name in ('A', 'B', 'C', 'D'):
+            self.score(3, name, 3)                   # all pars
+        self.assertEqual(spots_summary(self.fs)['greenie']['next']['worth'], 2)
+        pick_greenie(self.fs, 3, self.pid['A'])      # he did take it
+        s = spots_summary(self.fs)
+        self.assertEqual(self._spots(s)['A'], 1)
+        self.assertEqual(s['greenie']['next']['worth'], 1)
+
+    def test_a_withdrawn_golfer_does_not_hold_the_hole_open(self):
+        """Played means every golfer ACTIVE on the hole, so a group that lost
+        a man is not waiting on a score that is never coming."""
+        m = self.fs.memberships.get(player_id=self.pid['D'])
+        m.withdrew_after_hole = 1
+        m.save(update_fields=['withdrew_after_hole'])
+        setup_spots(self.fs)
+        for name in ('A', 'B', 'C'):
+            self.score(3, name, 4)
+        s = spots_summary(self.fs)
+        self.assertTrue(
+            next(h for h in s['greenie']['holes'] if h['hole'] == 3)['unclaimed'])
+
+    def test_carry_OFF_means_an_unclaimed_hole_dies(self):
+        setup_spots(self.fs, greenie_carry=False)
+        for name in ('A', 'B', 'C', 'D'):
+            self.score(3, name, 4)
+        self.assertEqual(
+            spots_summary(self.fs)['greenie']['next']['worth'], 1)
 
     def test_editing_an_earlier_par_3_moves_every_later_one(self):
         """Nothing stores the worth, which is the whole reason this holds."""
@@ -518,6 +582,35 @@ class TheHoleBreakdownTests(_Base):
         self.assertEqual(entry['count'], 3)
         self.assertEqual(sorted(t['type'] for t in entry['types']),
                          ['birdie', 'greenie', 'sandy'])
+
+    def test_a_CARRIED_greenie_keeps_its_worth_on_the_hole(self):
+        """Reported from a real round: the board drew `Greenie on 7` for a
+        greenie worth two, and the hole's own line totalled it as 1 while the
+        money said 2.
+
+        The per-hole types block was re-deriving each worth from `SPOT_META`,
+        which is the TYPE's price. A carried greenie is the one thing whose
+        worth is a property of the HOLE, so it has to travel with the row.
+        """
+        setup_spots(self.fs, types=['greenie'])
+        for name in ('A', 'B', 'C', 'D'):
+            self.score(3, name, 4)               # par 3 played, nobody named
+        pick_greenie(self.fs, 7, self.pid['A'])
+        self.score(7, 'A', 3)                    # par, so he keeps it
+        s = spots_summary(self.fs)
+        self.assertEqual(self._spots(s)['A'], 2)
+        entry = next(e for h in s['holes'] if h['hole'] == 7
+                     for e in h['spots'] if e['player_id'] == self.pid['A'])
+        self.assertEqual(entry['count'], 2)
+        self.assertEqual(entry['types'],
+                         [{'type': 'greenie', 'label': 'Greenie', 'worth': 2}])
+
+    def test_an_ordinary_spot_still_reports_its_own_price(self):
+        setup_spots(self.fs, types=['sandy', 'snake'])
+        self.tick(5, 'A', 'sandy', 'snake')
+        entry = spots_summary(self.fs)['holes'][0]['spots'][0]
+        self.assertEqual([(t['label'], t['worth']) for t in entry['types']],
+                         [('Sandy', 1), ('Snake', -1)])
 
     def test_the_worths_live_in_one_place(self):
         """A tick's price belongs to the TYPE, never to the row — which is

@@ -189,7 +189,14 @@ class GreenieCard extends StatelessWidget {
               : hole.pendingScore
                   ? 'Waiting on the score. A par keeps it; anything worse '
                     'carries.'
-                  : 'On the green in one, and a par to keep it.',
+                  // Played out with nobody named. It has already carried, and
+                  // saying so is what stops the next par 3's bigger number
+                  // looking like a bug — but the chips stay live, because the
+                  // group may simply not have got round to naming him.
+                  : hole.unclaimed
+                      ? 'Nobody recorded — it carried. Tap a name if somebody '
+                        'did take it.'
+                      : 'On the green in one, and a par to keep it.',
           style: theme.textTheme.bodySmall?.copyWith(
               color: hole.missed
                   ? theme.colorScheme.error
