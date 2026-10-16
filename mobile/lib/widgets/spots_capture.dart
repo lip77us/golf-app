@@ -29,7 +29,8 @@ import '../theme/halved_brand.dart';
 String spotTypeBlurb(String type) {
   switch (type) {
     case 'greenie':
-      return 'Par 3s only. On the green in one and closest to the pin.';
+      return 'Par 3s only. On the green in one from the tee, closest to '
+             'the hole, and a par.';
     case 'sandy':
       return 'Par or better after being in a bunker.';
     case 'poley':

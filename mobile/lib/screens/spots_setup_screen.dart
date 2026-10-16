@@ -411,8 +411,8 @@ class _SpotsSetupScreenState extends State<SpotsSetupScreen> {
                   value: _greenieCarry,
                   onChanged: (v) => setState(() => _greenieCarry = v),
                   title: const Text('Carry over'),
-                  subtitle: const Text('If nobody hits the green, the greenie '
-                      'rolls to the next par 3.'),
+                  subtitle: const Text('If nobody keeps it, the greenie rolls '
+                      'to the next par 3 and is worth double.'),
                   contentPadding: EdgeInsets.zero,
                   dense: true,
                 ),

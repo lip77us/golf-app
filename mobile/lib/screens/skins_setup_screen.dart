@@ -671,8 +671,8 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
                     value: _junkCarry,
                     onChanged: (v) => setState(() => _junkCarry = v),
                     title: const Text('Carry over'),
-                    subtitle: const Text('If nobody hits the green, the '
-                        'greenie rolls to the next par 3.'),
+                    subtitle: const Text('If nobody keeps it, the greenie '
+                        'rolls to the next par 3 and is worth double.'),
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                   ),

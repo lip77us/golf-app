@@ -50,8 +50,9 @@ entered; an eagle counts two and does not stack with the birdie. A snake
 counts against you. The leaderboard names them, so a total reads "chippy on
 2, birdie on 2, greenie on 7" rather than a number nobody can check.
 
-THE GREENIE CARRIES. Par 3s only, and one winner or nobody. It takes the
-green from the tee AND a par, so closest and then three putts pays nobody.
+THE GREENIE CARRIES. Par 3s only, and one winner or nobody. Three things at
+once: on the green in one from the tee, closest to the hole, and a par. So
+closest and then three putts pays nobody.
 When no one keeps it, it rolls to the next par 3 worth double, and again
 after that. Miss the last par 3 of the round and it is void. Correct a score
 later and every par 3 after it moves to match.
