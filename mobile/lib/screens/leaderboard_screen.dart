@@ -1,3 +1,4 @@
+import '../utils/spots_earned.dart';
 import '../utils/handicap_rounding.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
@@ -2924,7 +2925,7 @@ class _SkinsGroupCard extends StatelessWidget {
   }
 }
 
-/// Per-hole junk chips that wrap across lines (mirrors _SpotsHoleStrip). Each
+/// Per-hole junk chips that wrap across lines. Each
 /// pill: hole number + short name ×count in the tertiary junk colour. Sparse —
 /// only holes that had junk logged.
 class _JunkHoleStrip extends StatelessWidget {
@@ -3026,26 +3027,29 @@ class _SpotsGroupCard extends StatelessWidget {
                 ? '\$${(payout as num).formatBet()}'
                 : '\$0.00';
             return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(children: [
-                Expanded(child: Text(p['name']?.toString() ?? '—')),
-                Text('$spots spot${spots == 1 ? '' : 's'}',
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(width: 12),
-                Text(payStr, style: const TextStyle(fontWeight: FontWeight.w500)),
-              ]),
+              padding: const EdgeInsets.only(top: 3, bottom: 7),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Expanded(child: Text(p['name']?.toString() ?? '—')),
+                    Text('$spots spot${spots == 1 ? '' : 's'}',
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(width: 12),
+                    Text(payStr,
+                        style: const TextStyle(fontWeight: FontWeight.w500)),
+                  ]),
+                  // **What he is being paid FOR**, named and placed.
+                  // Capturing which spot it was is only worth the taps if it
+                  // reaches the board, and a total on its own answers the
+                  // wrong question: a golfer checks the list, not the sum.
+                  _SpotsEarned(
+                      holes: holes,
+                      playerId: (p['player_id'] as num?)?.toInt()),
+                ],
+              ),
             );
           }),
-          // Where the spots were awarded / removed (sparse — only scored holes).
-          if (holes.isNotEmpty) ...[
-            const Divider(height: 16),
-            Text('SPOTS BY HOLE',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    fontSize: 10, letterSpacing: 0.5, fontWeight: FontWeight.w700,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            const SizedBox(height: 6),
-            _SpotsHoleStrip(holes: holes),
-          ],
         ]),
       ),
     );
@@ -3136,54 +3140,56 @@ class _SpotsInPlay extends StatelessWidget {
   }
 }
 
-/// Per-hole Spots chips that wrap across lines (no horizontal scroll) so you can
-/// see many holes at once. Each pill: hole number + short name with a green (+)
-/// or red (−) spot count. Sparse — only scored holes.
-class _SpotsHoleStrip extends StatelessWidget {
+/// One golfer's spots as bubbles — `Chippy on 2 · Birdie on 2`.
+///
+/// **It replaced a hole-ordered strip** that read `2  A +1`: the same facts
+/// grouped the other way and one short of the only new one, the TYPE. Two
+/// renderings of one dataset on one card is how they come to disagree, and a
+/// leaderboard ranks GOLFERS — "what am I being paid for" is the question it
+/// is open for. The chronological read still exists where it is useful, on
+/// the hole itself, in score entry's `SPOTS · THIS HOLE`.
+///
+/// `on` is in the text deliberately: `Chippy 2` reads as two chippies.
+class _SpotsEarned extends StatelessWidget {
   final List<Map<String, dynamic>> holes;
-  const _SpotsHoleStrip({required this.holes});
+  final int? playerId;
+  const _SpotsEarned({required this.holes, required this.playerId});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    const tab = [FontFeature.tabularFigures()];
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
-      children: [
-        for (final h in holes)
+    if (playerId == null) return const SizedBox.shrink();
+
+    final earned = spotsEarnedFor(holes, playerId);
+    if (earned.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Wrap(spacing: 4, runSpacing: 4, children: [
+        for (final e in earned)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(6),
+              // A spot that costs him reads red, which is the one thing about
+              // a bubble a golfer must not have to work out from the total.
+              color: (e.worth < 0
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.primary)
+                  .withValues(alpha: .09),
+              borderRadius: BorderRadius.circular(999),
             ),
-            child: Text.rich(
-              TextSpan(children: [
-                TextSpan(
-                  text: '${h['hole']}  ',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      fontFeatures: tab,
-                      color: theme.colorScheme.onSurfaceVariant),
-                ),
-                for (final e in (h['spots'] as List? ?? [])
-                    .cast<Map<String, dynamic>>())
-                  () {
-                    final c = (e['count'] as num?)?.toInt() ?? 0;
-                    return TextSpan(
-                      text: '${e['short_name'] ?? '?'} ${c > 0 ? '+' : '−'}'
-                          '${c.abs()}   ',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontFeatures: tab,
-                          color: c >= 0 ? GameColors.win : GameColors.loss),
-                    );
-                  }(),
-              ]),
+            child: Text(
+              // A worth other than one is named, because `Greenie on 7` and
+              // `Greenie on 7 ×2` are different money and the carry is the
+              // whole reason the second exists.
+              earnedSpotLabel(e),
+              style: theme.textTheme.labelSmall?.copyWith(
+                  color: e.worth < 0
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.primary),
             ),
           ),
-      ],
+      ]),
     );
   }
 }

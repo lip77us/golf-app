@@ -5453,6 +5453,38 @@ what it is playing before the round, with anything else going in as Other.
 
 Tests: `mobile/test/spots_types_test.dart` (13). Flutter 965 green.
 
+#### The board names the spots, not just the count
+
+Paul, 15 Oct 2026: *"We spent the energy to capture what spot it was on a
+hole. We should report it on the leaderboard."* Each golfer's row now carries
+his own spots as bubbles — `Chippy on 2 · Birdie on 2 · Greenie on 7 ×2` —
+built by `utils/spots_earned.dart`, pure for the same reason `nine_totals` and
+`roster_sections` are.
+
+Three decisions in it:
+
+- **`on` is in the text.** `Chippy 2` reads as two chippies, and removing
+  that ambiguity is the only thing these bubbles exist for.
+- **A worth over one is named** (`×2`), because `Greenie on 7` and
+  `Greenie on 7 ×2` are different money and the carry is the whole reason the
+  second exists. A snake's sign lives in the colour, not the text.
+- **It replaced the hole-ordered `SPOTS BY HOLE` strip** rather than joining
+  it. That strip read `2  A +1`: the same facts grouped the other way and one
+  short of the only new one, the type. Two renderings of one dataset on one
+  card is how they come to disagree, and a leaderboard ranks GOLFERS — "what
+  am I being paid for" is the question it is open for. The chronological read
+  still exists where it is actually useful, on the hole, in score entry's
+  `SPOTS · THIS HOLE`.
+
+**Not put behind a caret**, which Paul offered. The repo's own precedent cuts
+the other way than it first looks: the Stroke Play tab hides a player's
+18-hole strip behind a tap because that board holds a whole FIELD, and Spots
+holds a foursome. More to the point, a Spots total is not checkable without
+the itemisation — `5 spots +$10` tells a golfer nothing, where
+`Chippy on 2 · Birdie on 2 · Greenie on 7 ×2` is something he can agree or
+argue with. Hiding it would be hiding the answer. It is one line to collapse
+if it reads long on a real round.
+
 #### Hogan, and the second place names were living
 
 Paul added **Hogan** on 15 Oct 2026 — fairway, green, two putts, with a par 5

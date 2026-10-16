@@ -9,6 +9,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
+import 'package:golf_mobile/utils/spots_earned.dart';
 import 'package:golf_mobile/widgets/spots_capture.dart';
 
 SpotsSummary _summary(Map<String, dynamic> over) => SpotsSummary.fromJson({
@@ -25,6 +26,7 @@ const _chippy = {'type': 'chippy', 'label': 'Chippy', 'worth': 1};
 const _snake  = {'type': 'snake',  'label': 'Snake',  'worth': -1};
 const _greenie = {'type': 'greenie', 'label': 'Greenie', 'worth': 1};
 const _birdie  = {'type': 'birdie',  'label': 'Birdie',  'worth': 1};
+const _greenie2 = {'type': 'greenie', 'label': 'Greenie', 'worth': 2};
 
 void main() {
   group('the button says what was ticked', () {
@@ -210,6 +212,64 @@ void main() {
         expect(src.contains("'" + label + "'"), isFalse,
             reason: 'spots_setup_screen names $label itself');
       }
+    });
+  });
+
+  group('what he was paid FOR, on the board', () {
+    // The capture is only worth the taps if it reaches the leaderboard, and
+    // a total on its own answers the wrong question: `5 spots +\$10` is not
+    // checkable, `Chippy on 2 · Birdie on 2` is.
+    final holes = [
+      {'hole': 7, 'spots': [
+        {'player_id': 1, 'short_name': 'A', 'count': 3,
+         'types': [_greenie2, _birdie]},
+        {'player_id': 2, 'short_name': 'B', 'count': 1, 'types': [_sandy]},
+      ]},
+      {'hole': 2, 'spots': [
+        {'player_id': 1, 'short_name': 'A', 'count': 1, 'types': [_chippy]},
+      ]},
+      {'hole': 11, 'spots': [
+        {'player_id': 1, 'short_name': 'A', 'count': -1, 'types': [_snake]},
+      ]},
+    ];
+
+    test('it is one golfer\'s own spots, in the order they happened', () {
+      // The summary groups by hole, because that is how the money settles. A
+      // board ranks golfers, so it needs the other grouping — and hole order
+      // is asserted rather than inherited from whatever order the server
+      // happened to send.
+      final got = spotsEarnedFor(holes, 1);
+      expect(got.map((e) => '${e.label}@${e.hole}'),
+             ['Chippy@2', 'Greenie@7', 'Birdie@7', 'Snake@11']);
+      expect(spotsEarnedFor(holes, 2).map((e) => e.label), ['Sandy']);
+    });
+
+    test('nobody else\'s spots leak in', () {
+      expect(spotsEarnedFor(holes, 3), isEmpty);
+      expect(spotsEarnedFor(holes, null), isEmpty);
+    });
+
+    test('a worth over one is NAMED, because it is different money', () {
+      final got = spotsEarnedFor(holes, 1);
+      expect(earnedSpotLabel(got[0]), 'Chippy on 2');
+      // The carry is the whole reason a greenie can be worth two.
+      expect(earnedSpotLabel(got[1]), 'Greenie on 7 \u00d72');
+      // A snake costs him one; the sign lives in the colour, not the text.
+      expect(earnedSpotLabel(got[3]), 'Snake on 11');
+    });
+
+    test('`on` is in the text, because `Chippy 2` reads as two chippies', () {
+      expect(earnedSpotLabel(spotsEarnedFor(holes, 2).first), 'Sandy on 7');
+    });
+
+    test('an older server with no types draws nothing, not a blank bubble',
+        () {
+      final old = [
+        {'hole': 4, 'spots': [
+          {'player_id': 1, 'short_name': 'A', 'count': 2},
+        ]},
+      ];
+      expect(spotsEarnedFor(old, 1), isEmpty);
     });
   });
 
