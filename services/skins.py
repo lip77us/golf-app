@@ -53,7 +53,16 @@ from decimal import Decimal
 from django.db import transaction
 
 from core.models import HandicapMode, MatchStatus
-from games.models import SkinsGame, SkinsHoleResult, SkinsPlayerHoleResult
+from games.models import (SkinsGame, SkinsGreenieResult, SkinsHoleResult,
+                          SkinsPlayerHoleResult)
+# **Junk uses the same named types as Spots.** One vocabulary, one greenie
+# carry, one reading of birdies off the card — see `services/spot_types.py`
+# for why that is a shared module rather than a second copy.
+from services.spot_types import (SHEET_TYPES, SPOT_META, default_types,
+                                 derived_from_scores, greenie_plan,
+                                 in_play_block, normalise_types,
+                                 par_si_by_hole, types_block)
+from core.models import SpotType
 from scoring.handicap import build_score_index, _strokes_on_hole
 from scoring.models import HoleScore
 from core.handicap_math import round_half_up
@@ -70,6 +79,10 @@ def setup_skins(
     net_percent:   int  = 100,
     carryover:     bool = True,
     allow_junk:    bool = False,
+    junk_types          = None,
+    junk_greenie_carry: bool = True,
+    junk_birdie_basis:  str  = 'gross',
+    junk_net_percent:   int  = 100,
     payout_style:   str = 'pool',
     per_point_mode: str = 'first',
     per_point_rate      = 0,
@@ -95,6 +108,16 @@ def setup_skins(
         net_percent    = net_percent,
         carryover      = carryover,
         allow_junk     = allow_junk,
+        # Omitted means the defaults, the way Spots reads it. An EMPTY list
+        # with junk ON is refused by the view, because junk that counts
+        # nothing is a switch that does nothing.
+        junk_types     = (normalise_types(junk_types)
+                          if junk_types is not None else default_types()),
+        junk_greenie_carry = bool(junk_greenie_carry),
+        junk_birdie_basis  = (junk_birdie_basis
+                              if junk_birdie_basis in ('gross', 'net_so')
+                              else 'gross'),
+        junk_net_percent   = max(50, min(130, int(junk_net_percent or 100))),
         payout_style   = payout_style if payout_style in ('pool', 'per_point') else 'pool',
         per_point_mode = per_point_mode if per_point_mode in ('average', 'all', 'first') else 'first',
         per_point_rate = Decimal(str(per_point_rate or 0)),
@@ -387,6 +410,132 @@ def calculate_skins(foursome) -> list:
 # Summary (for the game screen and leaderboard)
 # ---------------------------------------------------------------------------
 
+@transaction.atomic
+def tally_skins_junk(foursome, hole_number: int, entries: list) -> SkinsGame:
+    """Set which junk types each named golfer made on one hole.
+
+    entries: ``[{'player_id': int, 'types': ['sandy', 'chippy']}, ...]``
+
+    The list is the WHOLE truth for that golfer on that hole — what is absent
+    is unticked, which makes the sheet's Done button a plain save rather than
+    a diff.
+
+    **Writing ticks clears that row's legacy `junk_count`.** A hole from
+    before junk had names converts the moment anybody touches it, and the two
+    can never be counted together. Only the untouched holes of an old round
+    keep their history.
+    """
+    game = foursome.skins_game
+    real_ids = {m.player_id for m in
+                foursome.memberships.filter(player__is_phantom=False)}
+    in_play = set(game.junk_types or [])
+    allowed = {str(t) for t in SHEET_TYPES} & in_play
+    for e in entries:
+        pid = e.get('player_id')
+        if pid not in real_ids:
+            continue
+        picked = {str(t) for t in (e.get('types') or [])} & allowed
+        qs = SkinsPlayerHoleResult.objects.filter(
+            game=game, player_id=pid, hole_number=hole_number)
+        # The legacy row for this golfer and hole, if any, is now superseded.
+        qs.filter(junk_type__isnull=True).delete()
+        qs.filter(junk_type__in=allowed).exclude(
+            junk_type__in=picked).delete()
+        for t in picked:
+            SkinsPlayerHoleResult.objects.get_or_create(
+                game=game, player_id=pid, hole_number=hole_number,
+                junk_type=t, defaults={'junk_count': 0})
+    return game
+
+
+@transaction.atomic
+def pick_skins_greenie(foursome, hole_number: int, player_id=None) -> SkinsGame:
+    """Who took the greenie on a par 3 — or that nobody did.
+
+    `player_id=None` is **Nobody**, a real answer rather than a missing one:
+    it is what rolls the carry. Clearing the hole back to undecided is
+    `clear_skins_greenie`, and the two are different states.
+    """
+    game = foursome.skins_game
+    if player_id is not None:
+        real_ids = {m.player_id for m in
+                    foursome.memberships.filter(player__is_phantom=False)}
+        if player_id not in real_ids:
+            raise ValueError('That golfer is not playing in this group.')
+    SkinsGreenieResult.objects.update_or_create(
+        game=game, hole_number=hole_number,
+        defaults={'player_id': player_id})
+    return game
+
+
+@transaction.atomic
+def clear_skins_greenie(foursome, hole_number: int) -> SkinsGame:
+    """Un-answer a par 3 — undecided, which is not the same as Nobody."""
+    game = foursome.skins_game
+    SkinsGreenieResult.objects.filter(
+        game=game, hole_number=hole_number).delete()
+    return game
+
+
+def _junk_earned(foursome, game, real_members):
+    """``(greenie_block, {pid: {hole: [(type, worth)]}})`` for junk.
+
+    The same three sources Spots merges — ticks, the greenie pick, birdies off
+    the card — plus a fourth that only junk has: **legacy untyped counts**.
+
+    Sixteen of those exist, in four completed rounds from before junk had
+    names. They are read and never rewritten, and they come back with a
+    `None` type so the board shows the count without inventing a label for
+    it. `tally_skins_junk` clears a row's count when it writes ticks for the
+    same golfer and hole, so the two can never be added together.
+    """
+    in_play = set(game.junk_types or [])
+    par_si  = par_si_by_hole(real_members)
+    earned: dict = {}
+
+    def _add(pid, hole, spot_type, worth):
+        earned.setdefault(pid, {}).setdefault(hole, []).append(
+            (spot_type if spot_type is None else str(spot_type), worth))
+
+    rows = list(SkinsPlayerHoleResult.objects
+                .filter(game=game).select_related('player'))
+    for r in rows:
+        if r.junk_type:
+            if r.junk_type in in_play:
+                meta = SPOT_META.get(SpotType(r.junk_type))
+                if meta:
+                    _add(r.player_id, r.hole_number, r.junk_type,
+                         meta['worth'])
+        elif r.junk_count:
+            # A round played before junk had names. Its money is history.
+            _add(r.player_id, r.hole_number, None, r.junk_count)
+
+    plan = greenie_plan(foursome, greenies=game.greenies.all(),
+                        carry=game.junk_greenie_carry)
+    if str(SpotType.GREENIE) in in_play:
+        for hole, (pid, worth) in plan['awards'].items():
+            _add(pid, hole, SpotType.GREENIE, worth)
+
+    for pid, holes_map in derived_from_scores(
+            foursome, types=game.junk_types,
+            basis=game.junk_birdie_basis,
+            net_percent=game.junk_net_percent, par_si=par_si).items():
+        for hole, got in holes_map.items():
+            for spot_type, worth in got:
+                _add(pid, hole, spot_type, worth)
+
+    short = {m.player_id: (m.player.short_name or m.player.name)
+             for m in real_members}
+    greenie_block = {
+        'carry'    : plan['carry'],
+        'needs_par': True,
+        'holes'    : [dict(h, winner_short=short.get(h['winner_id']))
+                      for h in plan['holes']],
+        'next'     : plan['next'],
+    }
+    return greenie_block, earned
+
+
 def skins_summary(foursome) -> dict:
     """
     JSON-serialisable summary of a Skins game.
@@ -480,22 +629,33 @@ def skins_summary(foursome) -> dict:
             regular_skins[hr.winner_id] += hr.skins_value
 
     # ---- Junk skins per player (only when allow_junk=True) ------------------
+    # **A junk is worth a skin** — one share of the same pot, which is why
+    # these fold straight into `total_skins_by_pid` below rather than
+    # settling on their own. A greenie worth 2 is 2 junk; an eagle is 2.
     junk_skins: dict        = {m.player_id: 0 for m in real_members}
     junk_by_hole_player: dict = {}   # (hole_number, player_id) → entry dict
+    junk_greenie: dict      = {'carry': True, 'needs_par': True,
+                               'holes': [], 'next': None}
 
     if game.allow_junk:
-        for jr in (
-            SkinsPlayerHoleResult.objects
-            .filter(game=game)
-            .select_related('player')
-        ):
-            if jr.player_id in junk_skins:
-                junk_skins[jr.player_id] += jr.junk_count
-            if jr.junk_count > 0:
-                junk_by_hole_player[(jr.hole_number, jr.player_id)] = {
-                    'player_id' : jr.player_id,
-                    'short_name': jr.player.short_name,
-                    'count'     : jr.junk_count,
+        junk_greenie, earned = _junk_earned(foursome, game, real_members)
+        for pid, holes_map in earned.items():
+            if pid not in junk_skins:
+                continue
+            for hole, got in holes_map.items():
+                worth = sum(w for _t, w in got)
+                junk_skins[pid] += worth
+                short = next((m.player.short_name or m.player.name
+                              for m in real_members if m.player_id == pid), '')
+                junk_by_hole_player[(hole, pid)] = {
+                    'player_id' : pid,
+                    'short_name': short,
+                    'count'     : worth,
+                    # Named, so the board can say "Greenie on 7 ×2" rather
+                    # than "2 junk". The worth travels WITH each type: a
+                    # carried greenie's belongs to the hole, not to the type.
+                    'types'     : types_block([(t, w) for t, w in got
+                                               if t is not None]),
                 }
 
     # ---- Totals and payouts -------------------------------------------------
@@ -713,6 +873,16 @@ def skins_summary(foursome) -> dict:
         },
         'carryover' : game.carryover,
         'allow_junk': game.allow_junk,
+        # What the group agreed junk means, for the leaderboard's Junk in
+        # play card and the hole's tick sheet. Empty when junk is off.
+        'junk_in_play'     : in_play_block(game.junk_types or [])
+                             if game.allow_junk else [],
+        'junk_sheet_types' : in_play_block(
+                                [t for t in (game.junk_types or [])
+                                 if t in {str(x) for x in SHEET_TYPES}])
+                             if game.allow_junk else [],
+        'junk_greenie'     : junk_greenie,
+        'junk_birdie_basis': game.junk_birdie_basis,
         'participant_player_ids': game.participant_player_ids or [],
         'players'   : players_out,
         'holes'     : holes_out,

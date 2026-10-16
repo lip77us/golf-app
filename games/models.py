@@ -358,9 +358,33 @@ class SkinsGame(models.Model):
                     )
     allow_junk      = models.BooleanField(
                         default=False,
-                        help_text="If True the entry screen shows a per-player "
-                                  "junk-skin counter (birdies, sandies, chip-ins, etc.).",
+                        help_text="If True the hole card offers a + Junk "
+                                  "button and, on a par 3, the greenie pick.",
                     )
+
+    # ── junk's own settings ──────────────────────────────────────────────
+    #: Which named junk counts, from `core.SpotType` — the SAME vocabulary
+    #: Spots uses, because a sandy is a sandy whichever pot it is paid out
+    #: of. The last selection is kept when `allow_junk` goes off, so
+    #: switching junk off and on again does not lose the group's agreement.
+    junk_types      = models.JSONField(
+                        default=list,
+                        help_text="SpotType slugs counting as junk.",
+                    )
+    #: An unclaimed greenie rolls to the next par 3.
+    junk_greenie_carry = models.BooleanField(default=True)
+    #: **NOT `net_percent`, and not `handicap_mode`.** Those two decide who
+    #: wins the SKIN. This decides whether a birdie counts as junk, which is
+    #: a separate question: net skins with gross birdies is a valid setup.
+    #: Junk having its own pair is the whole reason `services/spot_types.py`
+    #: takes arguments rather than a game row — duck-typing would have
+    #: walked straight into this collision.
+    junk_birdie_basis  = models.CharField(
+                        max_length=8,
+                        choices=[('gross', 'Gross'), ('net_so', 'Net (SO)')],
+                        default='gross',
+                    )
+    junk_net_percent   = models.SmallIntegerField(default=100)
 
     # ── Payout mode (2-axis, shared with Stableford; maps to services.wager) ──
     # 'pool' keeps the classic Skins economics (each player antes Round.bet_unit;
@@ -451,19 +475,72 @@ class SkinsPlayerHoleResult(models.Model):
     hole_number     = models.PositiveSmallIntegerField(
                         validators=[MinValueValidator(1), MaxValueValidator(18)]
                     )
+    #: **DEPRECATED, and deliberately still here.** Junk used to be a bare
+    #: count with no notion of what it was for. Sixteen rows across four
+    #: COMPLETED rounds from May and July 2026 hold one — four of them a 2 —
+    #: and those rounds were played and settled against exactly these
+    #: numbers, so they are READ and never rewritten. A tick could not
+    #: represent them anyway: "2 of something unnamed" has no name, and one
+    #: of each type per hole is the rule.
+    #:
+    #: `tally_skins_junk` CLEARS this when it writes ticks for the same
+    #: golfer and hole, so touching an old hole converts it and the two can
+    #: never be counted together.
     junk_count      = models.PositiveSmallIntegerField(
                         default=0,
-                        help_text="Number of junk skins (birdies, sandies, etc.) "
-                                  "earned by this player on this hole.",
+                        help_text="Legacy untyped junk. Read for history; "
+                                  "new entries are typed ticks.",
+                    )
+    #: One named junk. Null means a legacy row — see `junk_count`.
+    junk_type       = models.CharField(
+                        max_length=12, choices=SpotType.choices,
+                        null=True, blank=True,
                     )
 
     class Meta:
-        unique_together = ('game', 'player', 'hole_number')
-        ordering        = ['hole_number', 'player_id']
+        # One of each TYPE per golfer per hole. A legacy row carries a NULL
+        # type and Postgres treats nulls as distinct, so this does not
+        # constrain those — there is only ever one per golfer per hole, from
+        # code that no longer writes.
+        unique_together = ('game', 'player', 'hole_number', 'junk_type')
+        ordering        = ['hole_number', 'player_id', 'junk_type']
 
     def __str__(self):
-        return (f"Junk ×{self.junk_count} — {self.player.name} "
+        what = self.get_junk_type_display() if self.junk_type else \
+            f"×{self.junk_count}"
+        return (f"Junk {what} — {self.player.name} "
                 f"hole {self.hole_number} ({self.game})")
+
+
+class SkinsGreenieResult(models.Model):
+    """Who took the greenie on one par 3 of a Skins round — or nobody.
+
+    The twin of `SpotsGreenieResult`, and separate for the same reason the
+    two games are separate: a greenie here is worth a SKIN's share of the
+    skins pot, and there it is worth a spot in its own pot. What they share
+    is the walk that works out the carry, which is
+    `services.spot_types.greenie_plan` and is written once.
+    """
+    game        = models.ForeignKey(
+                    SkinsGame, on_delete=models.CASCADE,
+                    related_name='greenies',
+                )
+    hole_number = models.PositiveSmallIntegerField(
+                    validators=[MinValueValidator(1), MaxValueValidator(18)]
+                )
+    player      = models.ForeignKey(
+                    Player, on_delete=models.CASCADE, null=True, blank=True,
+                    related_name='skins_greenies',
+                    help_text="Null = nobody hit the green.",
+                )
+
+    class Meta:
+        unique_together = ('game', 'hole_number')
+        ordering        = ['hole_number']
+
+    def __str__(self):
+        who = self.player.name if self.player_id else 'nobody'
+        return f"Greenie hole {self.hole_number} — {who} ({self.game})"
 
 
 # ---------------------------------------------------------------------------

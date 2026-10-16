@@ -249,8 +249,14 @@ class PoolJunkTests(_Base):
     """
 
     def configure(self):
+        # **`junk_types` named**, so these test the card's junk line rather
+        # than which types a group happens to be playing. With the defaults
+        # a birdie is junk too, and the man who takes the skin with a 3
+        # would earn a second share — correct, and a different subject
+        # (`JunkTypesTests` in `test_skins.py`).
         setup_skins(self.fs, handicap_mode=HandicapMode.GROSS, carryover=False,
-                    payout_style='pool', allow_junk=True)
+                    payout_style='pool', allow_junk=True,
+                    junk_types=['sandy'])
 
     def _junk(self, hole, who, count):
         from games.models import SkinsGame, SkinsPlayerHoleResult

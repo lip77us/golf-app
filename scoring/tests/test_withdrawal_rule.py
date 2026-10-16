@@ -182,9 +182,9 @@ class TheGamesReadItTests(_Shotgun):
                              f'only three were left for hole {h}')
 
     def test_spots_roster_is_right_per_hole(self):
-        from services.spots import _active_roster_by_hole
+        from services.spot_types import active_roster_by_hole
         self._wd(self.ps[1], 2)
-        roster = _active_roster_by_hole(self.members, self.fs)
+        roster = active_roster_by_hole(self.members, self.fs)
         self.assertEqual(len(roster[18]), 4, 'he played the 18th')
         self.assertEqual(len(roster[3]), 3, 'he had gone by the 3rd')
         self.assertNotIn(self.ps[1].id, roster[3])

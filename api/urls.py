@@ -157,6 +157,7 @@ urlpatterns = [
     path('foursomes/<int:pk>/skins/',        views.SkinsResultView.as_view(), name='api-skins-result'),
     path('foursomes/<int:pk>/skins/setup/',  views.SkinsSetupView.as_view(),  name='api-skins-setup'),
     path('foursomes/<int:pk>/skins/junk/',   views.SkinsJunkView.as_view(),   name='api-skins-junk'),
+    path('foursomes/<int:pk>/skins/greenie/', views.SkinsGreenieView.as_view(), name='api-skins-greenie'),
     path('foursomes/<int:pk>/spots/',        views.SpotsResultView.as_view(), name='api-spots-result'),
     path('foursomes/<int:pk>/spots/setup/',  views.SpotsSetupView.as_view(),  name='api-spots-setup'),
     path('foursomes/<int:pk>/spots/tally/',  views.SpotsTallyView.as_view(),  name='api-spots-tally'),

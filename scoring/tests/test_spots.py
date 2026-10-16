@@ -17,10 +17,10 @@ from django.test import TestCase
 
 from core.models import SpotType
 from scoring.models import HoleScore
-from services.spots import (SPOT_META, clear_greenie, default_types,
-                            derived_spots, greenie_plan, normalise_types,
-                            pick_greenie, setup_spots, spots_summary,
-                            tally_spots)
+from services.spot_types import (SPOT_META, default_types,
+                                 derived_from_scores, normalise_types)
+from services.spots import (clear_greenie, greenie_plan, pick_greenie,
+                            setup_spots, spots_summary, tally_spots)
 from ._helpers import make_tee, make_round, make_foursome
 
 PAR3S = [3, 7, 12, 16]          # in `_helpers.DEFAULT_HOLES`
@@ -252,7 +252,9 @@ class GreenieCarryTests(_Base):
 
     def test_it_appears_on_par_3s_and_nowhere_else(self):
         setup_spots(self.fs)
-        plan = greenie_plan(self.fs, self.fs.spots_game)
+        g = self.fs.spots_game
+        plan = greenie_plan(self.fs, greenies=g.greenies.all(),
+                            carry=g.greenie_carry)
         self.assertEqual([h['hole'] for h in plan['holes']], PAR3S)
 
     def test_a_win_is_worth_one_and_resets(self):
@@ -553,7 +555,11 @@ class BirdiesFromTheScorecardTests(_Base):
     def test_derived_spots_is_empty_when_neither_is_in_play(self):
         setup_spots(self.fs, types=['sandy'])
         self.score(1, 'A', 2)
-        self.assertEqual(derived_spots(self.fs, self.fs.spots_game), {})
+        g = self.fs.spots_game
+        self.assertEqual(
+            derived_from_scores(self.fs, types=g.types,
+                                basis=g.birdie_basis,
+                                net_percent=g.net_percent), {})
 
 
 class TheHoleBreakdownTests(_Base):

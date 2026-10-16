@@ -7595,6 +7595,7 @@ class SkinsSetupView(APIView):
         ser.is_valid(raise_exception=True)
 
         from services.skins import setup_skins, calculate_skins, skins_summary
+        from services.spot_types import legacy_default_types
         d = ser.validated_data
         setup_skins(
             foursome,
@@ -7602,6 +7603,16 @@ class SkinsSetupView(APIView):
             net_percent    = d.get('net_percent', 100),
             carryover      = d.get('carryover', True),
             allow_junk     = d.get('allow_junk', False),
+            # Same three cases as Spots, and the same reason. ABSENT means a
+            # client that has never heard of junk types — the shipped app —
+            # and it gets the defaults WITHOUT birdie and eagle, because
+            # those are read off the scores and would move money its screens
+            # cannot draw. A client that SENDS types can render them.
+            junk_types     = (d['junk_types'] if 'junk_types' in d
+                              else legacy_default_types()),
+            junk_greenie_carry = d.get('junk_greenie_carry', True),
+            junk_birdie_basis  = d.get('junk_birdie_basis', 'gross'),
+            junk_net_percent   = d.get('junk_net_percent', 100),
             payout_style   = d.get('payout_style', 'pool'),
             per_point_mode = d.get('per_point_mode', 'first'),
             per_point_rate = d.get('per_point_rate', 0),
@@ -7647,23 +7658,59 @@ class SkinsJunkView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        hole_number  = ser.validated_data['hole_number']
-        junk_entries = ser.validated_data['junk_entries']
+        from services.skins import skins_summary, tally_skins_junk
+        tally_skins_junk(
+            foursome,
+            hole_number=ser.validated_data['hole_number'],
+            entries=ser.validated_data['junk_entries'],
+        )
+        return Response(skins_summary(foursome))
 
-        for entry in junk_entries:
-            pid   = entry['player_id']
-            count = entry['junk_count']
-            if count == 0:
-                SkinsPlayerHoleResult.objects.filter(
-                    game=game, player_id=pid, hole_number=hole_number
-                ).delete()
-            else:
-                SkinsPlayerHoleResult.objects.update_or_create(
-                    game=game, player_id=pid, hole_number=hole_number,
-                    defaults={'junk_count': count},
-                )
 
-        from services.skins import skins_summary
+class SkinsGreenieView(APIView):
+    """
+    POST   /api/foursomes/{id}/skins/greenie/
+      Body: {"hole_number": 1..18, "player_id": N | null}
+      `null` is **Nobody**, which is what rolls the carry to the next par 3.
+
+    DELETE /api/foursomes/{id}/skins/greenie/
+      Body: {"hole_number": 1..18} — back to UNDECIDED, which is not the
+      same as Nobody: an undecided hole adds nothing to the next one.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from api.serializers import SkinsGreenieSerializer
+        ser = SkinsGreenieSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        from games.models import SkinsGame
+        from services.skins import pick_skins_greenie, skins_summary
+        try:
+            pick_skins_greenie(foursome,
+                               hole_number=ser.validated_data['hole_number'],
+                               player_id=ser.validated_data.get('player_id'))
+        except SkinsGame.DoesNotExist:
+            return Response(
+                {'detail': 'Skins game not set up for this foursome.'},
+                status=status.HTTP_400_BAD_REQUEST)
+        except ValueError as exc:
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return Response(skins_summary(foursome))
+
+    def delete(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        hole = request.data.get('hole_number')
+        if not isinstance(hole, int) or not 1 <= hole <= 18:
+            return Response({'detail': 'hole_number must be 1-18.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        from games.models import SkinsGame
+        from services.skins import clear_skins_greenie, skins_summary
+        try:
+            clear_skins_greenie(foursome, hole_number=hole)
+        except SkinsGame.DoesNotExist:
+            return Response(
+                {'detail': 'Skins game not set up for this foursome.'},
+                status=status.HTTP_400_BAD_REQUEST)
         return Response(skins_summary(foursome))
 
 

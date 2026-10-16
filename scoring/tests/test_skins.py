@@ -200,10 +200,16 @@ class SkinsTests(TestCase):
 
     def test_junk_skins_add_to_total(self):
         """When allow_junk is on, junk counts persisted on a hole add
-        to the player's total_skins (separate from regular skins)."""
+        to the player's total_skins (separate from regular skins).
+
+        **`junk_types` is named explicitly** so this tests one thing. With
+        the defaults it would also pay Alice a birdie — correct, and the
+        subject of `JunkTypesTests` below rather than of this.
+        """
         from games.models import SkinsPlayerHoleResult
         game = setup_skins(self.fs, handicap_mode='gross',
-                           carryover=False, allow_junk=True)
+                           carryover=False, allow_junk=True,
+                           junk_types=['sandy'])
         # Hole 1: Alice wins outright + records 2 junk
         submit_hole(self.fs, 1, [(self.pid['Alice'], 3),
                                   (self.pid['Bob'],   4),
@@ -326,3 +332,166 @@ class SkinsTests(TestCase):
         summary = skins_summary(self.fs)
         totals = {p['name']: p['skins_won'] for p in summary['players']}
         assert totals == {'Alice': 1, 'Bob': 0, 'Carol': 0, 'Dave': 0}, totals
+
+
+class JunkTypesTests(TestCase):
+    """Junk, set up like Spots (`handoff-skins-junk`, 15 Oct 2026).
+
+    **A junk is worth a skin** — one share of the same pot — so these check
+    the types reach `total_skins` rather than settling on their own. The
+    vocabulary, the greenie carry and the reading of birdies are all
+    `services/spot_types.py`, shared with Spots and tested there; what is
+    tested here is that junk wires into them and that a junk's worth lands in
+    the skins arithmetic.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, active_games=['skins'])
+        self.fs = make_foursome(
+            self.round,
+            [('Alice', 8), ('Bob', 12), ('Carol', 16), ('Dave', 20)],
+            tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+
+    def _game(self, **over):
+        over.setdefault('handicap_mode', 'gross')
+        over.setdefault('allow_junk', True)
+        return setup_skins(self.fs, **over)
+
+    def _junk(self, summary):
+        return {p['name']: p['junk_skins'] for p in summary['players']}
+
+    def tick(self, hole, name, *types):
+        from services.skins import tally_skins_junk
+        tally_skins_junk(self.fs, hole, [{'player_id': self.pid[name],
+                                          'types': list(types)}])
+
+    # ── the types ───────────────────────────────────────────────────────────
+
+    def test_a_tick_is_one_junk_and_lands_in_the_total(self):
+        self._game(junk_types=['sandy', 'chippy'])
+        submit_hole(self.fs, 1, [(self.pid['Alice'], 3), (self.pid['Bob'], 4),
+                                 (self.pid['Carol'], 4), (self.pid['Dave'], 4)])
+        calculate_skins(self.fs)
+        self.tick(1, 'Bob', 'sandy', 'chippy')
+        s = skins_summary(self.fs)
+        bob = next(p for p in s['players'] if p['name'] == 'Bob')
+        self.assertEqual(bob['junk_skins'], 2)
+        self.assertEqual(bob['skins_won'], 0)       # Alice won the hole
+        self.assertEqual(bob['total_skins'], 2)
+
+    def test_a_birdie_that_WINS_the_skin_is_a_skin_AND_a_junk(self):
+        """The handoff is explicit: skins and junk are independent, so one
+        hole can give one golfer several shares."""
+        self._game(junk_types=['birdie'])
+        submit_hole(self.fs, 1, [(self.pid['Alice'], 3), (self.pid['Bob'], 4),
+                                 (self.pid['Carol'], 4), (self.pid['Dave'], 4)])
+        calculate_skins(self.fs)
+        s = skins_summary(self.fs)
+        alice = next(p for p in s['players'] if p['name'] == 'Alice')
+        self.assertEqual(alice['skins_won'], 1)
+        self.assertEqual(alice['junk_skins'], 1)
+        self.assertEqual(alice['total_skins'], 2)
+
+    def test_junk_OFF_pays_nothing_however_they_scored(self):
+        self._game(allow_junk=False, junk_types=['birdie'])
+        submit_hole(self.fs, 1, [(self.pid['Alice'], 3), (self.pid['Bob'], 4),
+                                 (self.pid['Carol'], 4), (self.pid['Dave'], 4)])
+        calculate_skins(self.fs)
+        self.assertEqual(sum(self._junk(skins_summary(self.fs)).values()), 0)
+
+    def test_a_type_not_in_play_cannot_be_ticked(self):
+        self._game(junk_types=['sandy'])
+        self.tick(1, 'Bob', 'sandy', 'poley')
+        self.assertEqual(self._junk(skins_summary(self.fs))['Bob'], 1)
+
+    # ── the greenie, and ITS carry ──────────────────────────────────────────
+
+    def test_a_carried_greenie_is_worth_that_many_JUNK(self):
+        """Hole 3 is the fixture's par 3; 7, 12 and 16 follow."""
+        from services.skins import pick_skins_greenie
+        self._game(junk_types=['greenie'])
+        for name in ('Alice', 'Bob', 'Carol', 'Dave'):
+            submit_hole(self.fs, 3, [(self.pid[name], 4)])
+        pick_skins_greenie(self.fs, 7, self.pid['Bob'])
+        submit_hole(self.fs, 7, [(self.pid['Bob'], 3)])      # par, he keeps it
+        s = skins_summary(self.fs)
+        self.assertEqual(self._junk(s)['Bob'], 2)            # 1 + the carry
+        g7 = next(h for h in s['junk_greenie']['holes'] if h['hole'] == 7)
+        self.assertEqual((g7['worth'], g7['carried_from']), (2, 3))
+
+    def test_the_skin_carry_and_the_greenie_carry_are_SEPARATE(self):
+        """A tied par 3 can carry the skin while somebody takes the greenie.
+        Two carries, tracked independently — the handoff says so and it is
+        the thing most likely to get quietly fused."""
+        from services.skins import pick_skins_greenie
+        self._game(junk_types=['greenie'], carryover=True)
+        submit_hole(self.fs, 3, [(self.pid['Alice'], 3), (self.pid['Bob'], 3),
+                                 (self.pid['Carol'], 4), (self.pid['Dave'], 4)])
+        calculate_skins(self.fs)
+        pick_skins_greenie(self.fs, 3, self.pid['Alice'])
+        s = skins_summary(self.fs)
+        hole3 = next(h for h in s['holes'] if h['hole'] == 3)
+        self.assertIsNone(hole3['winner_id'])                # skin tied, carries
+        self.assertEqual(self._junk(s)['Alice'], 1)          # greenie taken
+        # ...and the NEXT par 3 is back to worth 1, untouched by the skin.
+        self.assertEqual(s['junk_greenie']['next']['worth'], 1)
+
+    def test_junk_has_its_OWN_birdie_basis_not_the_skins_handicap(self):
+        """Net skins with gross birdies is a valid setup, which is why
+        `junk_net_percent` exists beside `net_percent` rather than reusing
+        it. Duck-typing the shared engine onto the game row would have
+        collided here."""
+        g = self._game(handicap_mode='net', net_percent=100,
+                       junk_types=['birdie'], junk_birdie_basis='gross')
+        self.assertEqual(g.net_percent, 100)
+        self.assertEqual(g.junk_birdie_basis, 'gross')
+        self.assertEqual(g.junk_net_percent, 100)
+        # Dave is off 20 and strokes on every hole: a 5 on a par 4 is a net
+        # birdie and a gross bogey. Gross basis pays him nothing.
+        submit_hole(self.fs, 1, [(self.pid['Dave'], 5)])
+        self.assertEqual(self._junk(skins_summary(self.fs))['Dave'], 0)
+
+    # ── the rounds that were played before junk had names ───────────────────
+
+    def test_a_LEGACY_count_still_counts_and_is_not_rewritten(self):
+        """Sixteen of these exist in four completed rounds from May and July
+        2026. They were settled against exactly these numbers."""
+        from games.models import SkinsPlayerHoleResult
+        game = self._game(junk_types=['sandy'])
+        SkinsPlayerHoleResult.objects.create(
+            game=game, player_id=self.pid['Carol'], hole_number=5,
+            junk_count=2)
+        s = skins_summary(self.fs)
+        self.assertEqual(self._junk(s)['Carol'], 2)
+        # It has no name, and the board is not given one to invent.
+        entry = next(e for h in s['holes'] if h['hole'] == 5
+                     for e in h['junk'] if e['player_id'] == self.pid['Carol'])
+        self.assertEqual(entry['count'], 2)
+        self.assertEqual(entry['types'], [])
+
+    def test_TICKING_an_old_hole_converts_it_rather_than_adding(self):
+        """The two can never be counted together: writing ticks for a golfer
+        and hole clears that row's legacy count."""
+        from games.models import SkinsPlayerHoleResult
+        game = self._game(junk_types=['sandy'])
+        SkinsPlayerHoleResult.objects.create(
+            game=game, player_id=self.pid['Carol'], hole_number=5,
+            junk_count=2)
+        self.tick(5, 'Carol', 'sandy')
+        self.assertEqual(self._junk(skins_summary(self.fs))['Carol'], 1)
+        self.assertFalse(SkinsPlayerHoleResult.objects.filter(
+            game=game, player_id=self.pid['Carol'], hole_number=5,
+            junk_type__isnull=True).exists())
+
+    def test_an_untouched_hole_of_an_old_round_keeps_its_history(self):
+        from games.models import SkinsPlayerHoleResult
+        game = self._game(junk_types=['sandy'])
+        for hole in (5, 9):
+            SkinsPlayerHoleResult.objects.create(
+                game=game, player_id=self.pid['Carol'], hole_number=hole,
+                junk_count=2)
+        self.tick(5, 'Carol', 'sandy')
+        self.assertEqual(self._junk(skins_summary(self.fs))['Carol'], 3)

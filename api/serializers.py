@@ -1577,6 +1577,21 @@ class SkinsSetupSerializer(serializers.Serializer):
                     )
     carryover     = serializers.BooleanField(default=True)
     allow_junk    = serializers.BooleanField(default=False)
+    #: Which named junk counts — the SAME vocabulary Spots uses. Omitted
+    #: means "a client that has never heard of types", which is the shipped
+    #: app, and the view gives it the defaults WITHOUT birdie and eagle: see
+    #: `SpotsSetupSerializer` and `api/test_spots_old_client.py` for the rule
+    #: that nothing pays for a spot the client cannot show.
+    junk_types    = serializers.ListField(
+                        child=serializers.ChoiceField(choices=SpotType.choices),
+                        required=False)
+    junk_greenie_carry = serializers.BooleanField(default=True)
+    #: **Junk's own**, deliberately not `handicap_mode`/`net_percent` above —
+    #: those decide who wins the SKIN. Net skins with gross birdies is valid.
+    junk_birdie_basis  = serializers.ChoiceField(
+                        choices=['gross', 'net_so'], default='gross')
+    junk_net_percent   = serializers.IntegerField(
+                        min_value=50, max_value=130, default=100)
     # Payout mode (2-axis, maps to services.wager). Defaults preserve the
     # classic ante-pool behavior for clients that don't send them.
     payout_style   = serializers.ChoiceField(
@@ -2005,20 +2020,39 @@ class PinkBallOrderSerializer(serializers.Serializer):
 
 
 class SkinsJunkEntrySerializer(serializers.Serializer):
-    """One player's junk count for a single hole."""
-    player_id  = serializers.IntegerField()
-    junk_count = serializers.IntegerField(min_value=0, max_value=20)
+    """Which junk types one golfer made on a single hole.
+
+    **The list is the whole truth for that golfer on that hole** — what is
+    absent is unticked, which makes the sheet's Done button a plain save
+    rather than a diff. An empty list clears him, and clearing is the
+    commonest correction there is.
+    """
+    player_id = serializers.IntegerField()
+    types     = serializers.ListField(
+                    child=serializers.ChoiceField(choices=SpotType.choices),
+                    allow_empty=True)
 
 
 class SkinsJunkSerializer(serializers.Serializer):
     """
     POST /api/foursomes/{id}/skins/junk/
 
-    Upserts SkinsPlayerHoleResult rows for all players on a single hole.
-    Rows with junk_count=0 are deleted so scorers can zero out a mistake.
+    **The shape changed on 15 Oct 2026** — it was
+    `{"player_id": N, "junk_count": N}`. Unlike Spots, junk HAD been played:
+    sixteen rows in four completed rounds. Those are read and never
+    rewritten (see `SkinsPlayerHoleResult.junk_count`); what changed is only
+    what new entries look like.
     """
     hole_number  = serializers.IntegerField(min_value=1, max_value=18)
     junk_entries = SkinsJunkEntrySerializer(many=True, min_length=1)
+
+
+class SkinsGreenieSerializer(serializers.Serializer):
+    """Who took the greenie on a par 3 — `player_id: null` is **Nobody**,
+    which is what rolls the carry. DELETE on the same route is undecided."""
+    hole_number = serializers.IntegerField(min_value=1, max_value=18)
+    player_id   = serializers.IntegerField(required=False, allow_null=True,
+                                           default=None)
 
 
 class SpotsSetupSerializer(serializers.Serializer):
