@@ -109,8 +109,8 @@ description says.
 
 ## `/games/spots/`
 
-- **title** (59 chars): Spots Golf Game Rules: One-Putts, Sandies, Barkies | Halved
-- **description** (127 chars): Spots is a side bet on whatever your group agrees to count: one-putts, sandies, barkies. Tally them hole by hole and settle up.
+- **title** (59 chars): Spots Golf Game Rules: Greenies, Sandies, Barkies | Halved
+- **description** (127 chars): Spots is a side bet on whatever your group agrees to count: greenies, sandies, barkies. Tick them on the hole and settle up at the end.
 
 ## `/games/survivor/`
 

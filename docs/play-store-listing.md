@@ -42,7 +42,7 @@ match, with doubles called at a ball in the air
 • Survivor — three players, last one standing takes the hole
 • Points 5-3-1
 • Stableford, with a custom points table
-• Spots — a side game for one-putts, sandies, barkies and more
+• Spots — greenies, sandies, chippies and the rest, from a list your group agrees on
 • Match Play and Stroke Play
 • Multi-Group Skins across foursomes
 • One-round team cup

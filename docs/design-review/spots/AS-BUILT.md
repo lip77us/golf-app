@@ -16,7 +16,7 @@ Engine: `services/spots.py`. Setup is Part 1 below; Play follows it in the same 
 > it.
 
 A "spot" is a **user-defined per-hole achievement** the app cannot detect —
-one-putt, sandy, barky, whatever the group calls it. The scorer tallies them
+greenie, sandy, barky, whatever the group calls it. The scorer tallies them
 by hand, per golfer per hole, and **the count IS the data**: nothing is
 derived from gross scores, so there is no recalculation step and no way for a
 spot to be wrong except by being typed wrong.

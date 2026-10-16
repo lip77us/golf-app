@@ -1,7 +1,7 @@
 /// screens/spots_setup_screen.dart
 /// --------------------------------
 /// Setup for Spots — a capture add-on settled on its own pot. The group decides
-/// what counts (one-putt, sandy, barky, …) and tallies them by hand in score
+/// what counts (greenie, sandy, barky, …) and ticks them by hand in score
 /// entry. Knobs: value of one spot + payout style (pay-around / pool).
 /// 2–4 real players.
 
@@ -334,10 +334,11 @@ class _SpotsSetupScreenState extends State<SpotsSetupScreen> {
                           color: theme.colorScheme.primary)),
                   const SizedBox(height: 8),
                   Text(
-                    'A "spot" is anything the group agrees on — a one-putt, a '
-                    'sandy, a barky, hitting the flag. Tally them per player on '
-                    'each hole from the score-entry screen. Spots are a separate '
-                    'pot, kept apart from your main game.',
+                    'A "spot" is an extra the scores cannot show — a greenie, a '
+                    'sandy, a chippy. Tick the ones your group is playing for '
+                    'below, then tap them in per golfer on each hole from the '
+                    'score-entry screen. Spots settle on their own, apart from '
+                    'your main game.',
                     style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant),
                   ),

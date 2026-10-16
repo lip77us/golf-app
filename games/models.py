@@ -550,7 +550,7 @@ class SkinsGreenieResult(models.Model):
 class SpotsGame(models.Model):
     """
     Spots for one Foursome (2–4 real players).  A "spot" is a user-defined
-    per-hole achievement the app can't detect (one-putt, sandy, barky, …); the
+    per-hole achievement the app can't detect (greenie, sandy, barky, …); the
     scorer tallies them by hand per player per hole, like junk.  Always a
     SEPARATE payout — never folded into the main game.
 

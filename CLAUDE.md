@@ -1058,8 +1058,8 @@ already lets those rounds complete; per-game money for them is a follow-up).
 
 ## Spots (`spots`) — implemented (capture add-on, side-game-only)
 
-A standalone gambling **add-on**: user-defined per-hole achievements (one-putt,
-sandy, barky, hit-the-flag, …) the app can't detect, **tallied by hand** in
+A standalone gambling **add-on**: per-hole achievements (greenie, sandy, barky,
+chippy, …) the app can't detect, **tallied by hand** in
 score entry like junk. **Always a side game, never a primary** (`GameMeta
 .sideGameOnly`); 2–4 players; **separate payout** (never folded into the main
 game). **Excludes Skins** in any role — junk is the Skins way to do per-hole

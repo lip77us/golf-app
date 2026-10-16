@@ -1,7 +1,7 @@
 # Spots — design doc
 
 **What it is:** a gambling **add-on** that layers on top of any main game. A
-"spot" is a user-defined per-hole achievement the app can't detect — one-putt,
+"spot" is a per-hole achievement the app can't detect — greenie,
 hit-the-flag, sandy par, barky (hit a tree and still made par), greenie, etc.
 The group decides what counts; the scorer **tallies them by hand** during score
 entry, exactly the way junk is entered today. **2–4 players** (any casual group

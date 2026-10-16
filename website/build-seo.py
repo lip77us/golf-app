@@ -208,9 +208,9 @@ OVERRIDES = {
                        'tie carries it to the next hole. Full rules and carryovers worked out.',
     },
     'games/spots/index.html': {
-        'title': 'Spots Golf Game Rules: One-Putts, Sandies, Barkies | Halved',
+        'title': 'Spots Golf Game Rules: Greenies, Sandies, Barkies | Halved',
         'description': 'Spots is a side bet on whatever your group agrees to count: '
-                       'one-putts, sandies, barkies. Tally them hole by hole and settle up.',
+                       'greenies, sandies, barkies. Tick them on the hole and settle up at the end.',
     },
     'games/survivor/index.html': {
         'title': 'Survivor Golf Game Rules: Elimination, Zombies | Halved',

@@ -534,7 +534,7 @@ Derived entirely from the Dart source under `mobile/lib/screens/`. Class/widget 
 
 ### SpotsSetupScreen
 - **File:** lib/screens/spots_setup_screen.dart
-- **Purpose:** Configures Spots — a hand-tallied capture add-on (one-putt, sandy, barky, …) settled on its own pot — for 2–4 real players; side-game-only (never a primary).
+- **Purpose:** Configures Spots — a hand-tallied capture add-on (greenie, sandy, barky, …) settled on its own pot — for 2–4 real players; side-game-only (never a primary).
 - **Layout & regions:** GolfAppBar ("Spots Setup" / "Edit Spots"); scrolling body: "How the money settles" card (Pool vs Per spot SegmentedButton; per-spot reveals vs Average/Above you/Just leader + Advanced loss-cap), `StakeField` ("Ante per player" / "Value per spot"), "How Spots works" rules card; footer `GolfPrimaryButton` (Start Spots / Save Configuration).
 - **Components used:** GolfAppBar, SegmentedButton, ExpansionTile, SwitchListTile, StakeField, ErrorView, GolfPrimaryButton.
 - **Data:** Knobs — payout style (`_payoutStyle` pool/per_point, default per_point), per-point mode (`_perPointMode` average/all/first, default all = "pay around"), loss cap (`_capEnabled`/`_capCtrl`, per-point only), spot value (`_betCtrl`). Loads via ApiClient `getSpotsSummary`; edit-mode restores payoutStyle/perPointMode/lossCap/betUnit. Saves via ApiClient `postSpotsSetup(foursomeId, betUnit, payoutStyle, perPointMode, lossCap)` then `rp.loadSpots`. No handicap knob (spots are captured, not derived).

@@ -479,7 +479,7 @@ const List<GameMeta> kGameCatalog = [
     minPlayers  : 2,
     maxPlayers  : 4,
     // A capture add-on: a separate-payout side game whose per-hole tallies are
-    // entered by hand in score entry (one-putt, sandy, barky, …).
+    // entered by hand in score entry (greenie, sandy, barky, …).
     canBeSideGame       : true,
     capturesInScoreEntry: true,
     sideGameOnly        : true,   // never a primary — always an add-on

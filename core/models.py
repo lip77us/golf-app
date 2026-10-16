@@ -172,7 +172,7 @@ class GameType(models.TextChoices):
     # games/models.py FourballGame/Team/HoleResult.
     FOURBALL        = 'fourball',        'Fourball'
     # Capture add-on: user-defined per-hole achievements tallied by hand
-    # (one-putt, sandy, barky, …), settled on their own pot.  Engine in
+    # (greenie, sandy, barky, …), settled on their own pot.  Engine in
     # services/spots.py and games/models.py SpotsGame/SpotsPlayerHoleResult.
     SPOTS           = 'spots',           'Spots'
     # Honors: a side-game-only carry-token points game.  Win a hole outright
