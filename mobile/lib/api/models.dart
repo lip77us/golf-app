@@ -8550,6 +8550,9 @@ class FortyBallsPickerState {
   /// Balls the group can still leave out over the holes it has left, THIS ONE
   /// INCLUDED — the position before the hole, like [left] and [capacity].
   final int  slack;
+  /// The group's running net to par — the Status box's headline. Settled
+  /// holes only, which is `group_card`'s rule and not a second reading of it.
+  final int  net;
   final bool canPick;
   /// A later hole already has scores — the group has moved on and this one's
   /// count is settled.
@@ -8568,7 +8571,7 @@ class FortyBallsPickerState {
     required this.budget, required this.spent, required this.left,
     required this.holesAfter, required this.capacity, required this.lo,
     required this.hi, required this.dq, required this.count,
-    required this.appSet, required this.slack,
+    required this.appSet, required this.slack, this.net = 0,
     required this.canPick, required this.scoresIn, required this.par,
     required this.nets,
     this.locked = false, this.handicapMode = 'net', this.netPercent = 100,
@@ -8597,6 +8600,7 @@ class FortyBallsPickerState {
         count     : (j['count'] as num?)?.toInt(),
         appSet    : j['app_set'] as bool? ?? false,
         slack     : (j['slack'] as num?)?.toInt() ?? 0,
+        net       : (j['net']   as num?)?.toInt() ?? 0,
         canPick   : j['can_pick'] as bool? ?? false,
         locked    : j['locked'] as bool? ?? false,
         scoresIn  : j['scores_in'] as bool? ?? false,

@@ -326,6 +326,14 @@ def hole_state(foursome, hole_number: int) -> dict:
         # Never below zero: at zero every remaining ball is spoken for, which
         # is the `all count` state.
         'slack'       : max(0, cap_here - left),
+        # The group's running net, for the picker's Status box. **Taken from
+        # `group_card` rather than walked again here**: the settled-hole
+        # rule is subtle — a count the group cannot yet fill is a commitment
+        # and not a figure, which is what once gave a group -20 on an
+        # unplayed par 5 — and two readings of it would differ on exactly
+        # the holes that are hardest to reason about. `group_card`'s own
+        # docstring sanctions a single-group caller paying for its queries.
+        'net'         : group_card(foursome)['total'],
         # **Not gated on the scores being IN.** The client shows the buttons
         # as soon as the group has entered its scores locally and sends the
         # count with the hole; the server still refuses a count for a hole it

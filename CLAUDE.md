@@ -5724,3 +5724,38 @@ hole.
 
 Tests: `scoring/tests/test_skins.py::JunkTypesTests` (10),
 `api/test_skins_junk.py` (16), `mobile/test/skins_junk_test.dart` (9).
+
+
+### 40 Balls: the picker's two boxes ask two different questions
+
+Paul, 16 Oct 2026. They sat side by side as **To reach 40** and **Slack**,
+which made them look like two halves of one answer. They are not: the left
+one is about PACE and the right one about where the group stands.
+
+- **TO REACH 40** keeps `2.2 a hole` and its note becomes
+  `8 chosen · 15 holes to play`. The hole count alone never said how much of
+  the budget was already gone, which is the other half of whether that
+  average is comfortable.
+- **STATUS** replaces Slack: `Net −3` as the headline with `28 balls slack`
+  underneath. A group reads the number it is being ranked on first, and the
+  slack is a qualifier on it rather than a figure of its own. Level is `E`,
+  as it is everywhere else in the app.
+
+**The net comes from `group_card`, not a second walk.** The settled-hole rule
+is the subtle part — a count the group cannot yet fill is a commitment and
+not a figure, which is what once gave a group −20 on an unplayed par 5 — and
+two readings of it would differ on exactly the holes that are hardest to
+reason about. `hole_state` pays for `group_card`'s own queries, which its
+docstring sanctions for a single-group caller. The same module's note about
+`average` says why that rule is worth obeying: a second version is the one
+that is wrong half the time.
+
+Three existing tests pinned the old copy and now state the new; a fourth
+asserted a dash on BOTH boxes when the budget is spent, which is no longer
+true — the Status box still has a net to report, which is the point of it
+being a status.
+
+Watch the hole count when writing a test here: `_holesLeft` counts the hole
+in front of you while nothing is picked and drops it once something is, so
+`holesAfter: 14` with no pick reads `15 holes to play`. My first test had it
+off by one.

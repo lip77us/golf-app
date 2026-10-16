@@ -604,3 +604,46 @@ class ThruTests(_Base):
                           wraps=fb.scored_holes_by_foursome) as spy:
             fb.forty_balls_summary(self.round)
         self.assertEqual(spy.call_count, 1)
+
+
+class TheStatusBoxNetTests(_Base):
+    """`hole_state` carries the group's running net, for the picker's Status
+    box (Paul, 16 Oct 2026).
+
+    **It is `group_card`'s number, not a second reading of it.** The
+    settled-hole rule is the subtle part — a count the group cannot yet fill
+    is a commitment and not a figure, which is what once gave a group −20 on
+    an unplayed par 5 — and two walks over it would differ on exactly the
+    holes hardest to reason about.
+    """
+
+    def test_level_before_anything_is_played(self):
+        self.assertEqual(hole_state(self.fs, 1)['net'], 0)
+
+    def test_it_matches_the_board_hole_for_hole(self):
+        self.par_hole(1, -1, 0, 0, 1)      # a birdie, two pars, a bogey
+        set_count(self.fs, 1, 2)           # the two best count: -1
+        self.par_hole(2, 0, 0, 1, 1)
+        set_count(self.fs, 2, 2)           # two pars: level
+        self.assertEqual(hole_state(self.fs, 3)['net'],
+                         group_card(self.fs)['total'])
+        self.assertEqual(hole_state(self.fs, 3)['net'], -1)
+
+    def test_a_count_the_group_cannot_yet_FILL_is_not_in_it(self):
+        """A commitment is not a figure, and the picker reads the board's
+        rule so the two can never disagree about an unplayed hole.
+
+        **Written straight to the model**, because `set_count` refuses a
+        hole with no scores — which is where the integrity lives. The state
+        exists anyway: once the budget forces the tail the app writes a
+        count on every hole to the finish, and those holes have no scores.
+        That is the case that once gave a group −20 on an unplayed par 5.
+        """
+        from games.models import FortyBallsHoleCount
+        self.par_hole(1, -1, -1, 0, 0)
+        set_count(self.fs, 1, 2)           # -2, settled
+        before = hole_state(self.fs, 2)['net']
+        self.assertEqual(before, -2)
+        FortyBallsHoleCount.objects.create(
+            foursome=self.fs, hole_number=2, count=4)
+        self.assertEqual(hole_state(self.fs, 3)['net'], before)

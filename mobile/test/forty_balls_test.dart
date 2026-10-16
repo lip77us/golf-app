@@ -30,6 +30,7 @@ FortyBallsPickerState picker({
   bool locked = false,
   bool dq = false,
   Map<int, int> nets = const {1: 3, 2: 4, 3: 5, 4: 6},
+  int net = 0,
 }) =>
     FortyBallsPickerState.fromJson({
       'hole': 11, 'group_size': groupSize, 'active_here': activeHere,
@@ -38,6 +39,7 @@ FortyBallsPickerState picker({
       'dq': dq, 'count': count, 'app_set': false, 'slack': slack, 'can_pick': canPick, 'scores_in': scoresIn,
       'locked': locked, 'handicap_mode': 'net', 'net_percent': 100,
       'cap': true,
+      'net': net,
       'par': 4,
       'nets': {for (final e in nets.entries) '${e.key}': e.value},
     });
@@ -140,8 +142,8 @@ void main() {
       // slack beside it counted this one — two tiles, two moments.
       await pumpPicker(tester, picker(holesAfter: 17, left: 40, capacity: 72));
       expect(find.text('2.2 a hole'), findsOneWidget);
-      expect(find.text('18 to play'), findsOneWidget);
-      expect(find.text('32'), findsOneWidget);   // slack 4 x 18 - 40
+      expect(find.text('0 chosen · 18 holes to play'), findsOneWidget);
+      expect(find.text('32 balls slack'), findsOneWidget); // 4 x 18 - 40
     });
 
     testWidgets('a pick steps BOTH figures forward', (tester) async {
@@ -150,8 +152,8 @@ void main() {
       await pumpPicker(tester,
           picker(holesAfter: 17, left: 40, capacity: 72, count: 2));
       expect(find.text('2.2 a hole'), findsOneWidget);
-      expect(find.text('17 to play'), findsOneWidget);
-      expect(find.text('30'), findsOneWidget);   // 68 - 38
+      expect(find.text('2 chosen · 17 holes to play'), findsOneWidget);
+      expect(find.text('30 balls slack'), findsOneWidget);   // 68 - 38
     });
 
     testWidgets('a settled hole says so and offers nothing', (tester) async {
@@ -197,7 +199,9 @@ void main() {
     testWidgets('a spent budget reads – on both figures', (tester) async {
       await pumpPicker(tester, picker(lo: 0, hi: 0, left: 0, spent: 40,
           capacity: 28, slack: 0));
-      expect(find.text('–'), findsNWidgets(2));
+      // Only the PACE box goes to a dash — the Status box still has a net
+      // to report, which is the point of it being a status.
+      expect(find.text('–'), findsOneWidget);
       expect(find.textContaining('budget spent'), findsWidgets);
       expect(find.textContaining('Budget spent'), findsOneWidget);
     });
@@ -209,6 +213,62 @@ void main() {
       expect(find.text('Out of 40 Balls'), findsOneWidget);
       expect(find.textContaining('championship'), findsOneWidget);
       expect(find.text('0'), findsNothing);
+    });
+  });
+
+  group('the two boxes', () {
+    // Paul, 16 Oct 2026. The boxes answer two different questions and only
+    // one of them was being asked: the left one is about PACE, the right one
+    // about where the group stands.
+
+    testWidgets('the pace box says what is committed AND what is left',
+        (tester) async {
+      // "8 chosen · 15 holes to play". The hole count alone did not say how
+      // much of the budget was already gone, which is the other half of
+      // whether the average above it is comfortable.
+      await pumpPicker(tester, picker(
+          groupSize: 4, left: 32, holesAfter: 14, capacity: 60, count: null));
+      expect(find.text('TO REACH 40'), findsOneWidget);
+      // 14 after this one, plus the one in front of you.
+      expect(find.text('8 chosen · 15 holes to play'), findsOneWidget);
+    });
+
+    testWidgets('a pending pick moves BOTH halves of it', (tester) async {
+      // The figures take their position from the pick in hand, which is the
+      // reason the average is worked out on the client at all.
+      await pumpPicker(tester, picker(
+          groupSize: 4, left: 32, holesAfter: 15, capacity: 60, count: 3));
+      // The pick is spent, so this hole is no longer one to play.
+      expect(find.text('11 chosen · 15 holes to play'), findsOneWidget);
+    });
+
+    testWidgets('the status box leads with the NET, slack underneath',
+        (tester) async {
+      await pumpPicker(tester, picker(
+          groupSize: 4, left: 12, holesAfter: 9, capacity: 40,
+          slack: 28, net: -3, count: null));
+      expect(find.text('STATUS'), findsOneWidget);
+      expect(find.text('Net -3'), findsOneWidget);
+      expect(find.text('28 balls slack'), findsOneWidget);
+      // ...and the old headline is gone.
+      expect(find.text('SLACK'), findsNothing);
+    });
+
+    testWidgets('level is E, and a positive net carries its sign',
+        (tester) async {
+      // Level is a word everywhere else in the app and should be one here.
+      await pumpPicker(tester, picker(net: 0));
+      expect(find.text('Net E'), findsOneWidget);
+      await pumpPicker(tester, picker(net: 2));
+      expect(find.text('Net +2'), findsOneWidget);
+    });
+
+    testWidgets('no slack still says so, and still alerts', (tester) async {
+      await pumpPicker(tester, picker(
+          groupSize: 4, left: 12, holesAfter: 3, capacity: 12,
+          slack: 0, net: 1, count: null));
+      expect(find.text('every ball counts from here'), findsOneWidget);
+      expect(find.text('Net +1'), findsOneWidget);
     });
   });
 

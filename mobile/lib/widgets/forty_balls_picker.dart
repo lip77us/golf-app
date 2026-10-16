@@ -91,6 +91,15 @@ class FortyBallsPicker extends StatelessWidget {
 
   /// `2.2 a hole` — balls left ÷ holes left. Null when there is nothing left
   /// to spread, either because the budget is gone or the round is.
+  /// Balls committed so far, this hole's pending pick included — the other
+  /// half of the pace question the average answers.
+  int get _chosen => state.budget - _ballsLeft;
+
+  /// `E`, `-3`, `+2`. Level is a word everywhere else in the app and should
+  /// be one here.
+  static String _netLabel(int net) =>
+      net == 0 ? 'E' : (net > 0 ? '+$net' : '$net');
+
   double? get _average =>
       (_ballsLeft == 0 || _holesLeft <= 0) ? null : _ballsLeft / _holesLeft;
 
@@ -173,22 +182,30 @@ class FortyBallsPicker extends StatelessWidget {
             value: _average == null
                 ? '–'
                 : '${_average!.toStringAsFixed(1)} a hole',
+            // **What has been committed, and how long is left to commit
+            // the rest.** The hole count alone did not say how much of the
+            // budget was already gone, which is the other half of whether
+            // the average above is comfortable.
             note : _average == null
                 ? 'budget spent'
-                : '$_holesLeft to play',
+                : '$_chosen chosen · $_holesLeft holes to play',
             // Grey BEFORE a pick — they show the position going into this
             // hole, which is not yet the position coming out of it.
             muted: _count == null,
           )),
           const SizedBox(width: 10),
           Expanded(child: _Figure(
-            label: 'Slack',
-            value: _ballsLeft == 0 ? '–' : '$_slack',
+            // **Where the group STANDS**, which the box beside it does not
+            // answer: that one is about pace, this one about the score. The
+            // slack moves to the line underneath, because a group reads the
+            // number it is being ranked on first.
+            label: 'Status',
+            value: 'Net ${_netLabel(state.net)}',
             note : _ballsLeft == 0
                 ? 'budget spent'
                 : (_slack == 0
                     ? 'every ball counts from here'
-                    : 'balls you can still skip'),
+                    : '$_slack balls slack'),
             muted: _count == null,
             // Amber at zero: the group has no choices left, which is a
             // different thing from having made them.
