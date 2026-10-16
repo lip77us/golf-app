@@ -74,10 +74,20 @@ it was called *Application Loader* before 2019, which is what you'll half-rememb
 it as). Drag the file in, upload, and the build appears in App Store Connect →
 TestFlight once processing finishes, usually a few minutes.
 
-Transporter authenticates with the App Store Connect API key kept at
-`~/.appstoreconnect/private_keys/AuthKey_KQMU88YXV7.p8` (mode 600, never in git).
-The Issuer ID that goes with it is in App Store Connect → Users and Access →
-Integrations.
+Transporter authenticates with an **App Store Connect API key**, which is a
+different kind of key from the APNs one and **we do not have one** — there is no
+`.p8` on this machine that works against the App Store Connect API, and no
+Issuer ID recorded anywhere. Make one in App Store Connect → Users and Access →
+Integrations → App Store Connect API (Admin or App Manager role; the `.p8`
+downloads exactly once) and keep the Issuer ID from the same page beside it.
+
+**`AuthKey_KQMU88YXV7.p8` is NOT that key**, though this line used to say it
+was, with a path (`~/.appstoreconnect/private_keys/`) that is an empty
+directory. It is the **APNs** key — `docs/push-notifications.md` and
+`services/live_activity_push.py` — it lives in `~/.secrets/`, and signing an
+App Store Connect request with it returns 401 however correct the Issuer ID is.
+Both keys are ES256 and both are named `AuthKey_<10 chars>.p8`, which is why
+one gets mistaken for the other.
 
 Alternatives, same outcome: **Xcode → Product → Archive → Distribute App** (no
 extra install, signs in with your Apple ID instead of the key), or `xcrun altool`
@@ -85,6 +95,69 @@ if you ever script it.
 
 > Written down because it was not: after the July 2026 machine rebuild, nothing in
 > this repo recorded which tool did the upload.
+
+## The listing's primary language is English (Australia)
+
+Wrong, cosmetic, and **not fixable on a whim** — worth reading before anyone
+tries again. Nothing on an App Store product page tells a customer which
+English it is, so this costs nothing but tidiness.
+
+**English (U.S.) was DELETED on 16 Oct 2026**, while staging 2.12.0. Having
+both localizations meant every per-submission field — description, keywords,
+promo text, What's New — had to be filled **twice**, which is the only thing
+the duplicate was actually costing. One localization, one copy.
+
+**The consequence to know:** US customers used to see the en-US page and now
+see the en-AU one. The two carried identical copy and identical screenshots at
+the time of deletion, so nothing visibly changed — but if en-AU is ever edited
+in isolation, it is now the page *everyone* sees.
+
+### Why the flip could not just be done
+
+`App Information → Primary Language` is a real dropdown and it does let you
+pick English (U.S.). **Saving is what fails**, with:
+
+> In order to change this app's primary language, you must first provide all
+> the required screenshots for each version in this language.
+
+Two things about that control, both of which cost time to establish:
+
+- It is editable **only while a version is in Prepare for Submission**. Between
+  releases it is greyed out, which is the likeliest reason an earlier attempt
+  looked like an account-level lock.
+- It is in **App Information**, under General in the left sidebar. The language
+  dropdown on the *version* page (Product Page Information) only chooses which
+  localization you are editing — it is not this setting, and it is the easy one
+  to land on by mistake.
+
+Checked at the time: 2.11.0 and 2.12.0 showed the **same screenshots under both
+en-AU and en-US**, so what Apple wanted was never obvious from the UI. The
+images render identically whether a localization owns them or inherits them,
+and the only way to know which is to try the save.
+
+### Doing it properly, at 2.13
+
+The order is forced, because **Apple refuses to delete whichever localization is
+currently primary**:
+
+1. Re-add English (U.S.) and give it its **own** screenshots on the editable
+   version — do not rely on what the wells already display.
+2. App Information → Primary Language → English (U.S.) → Save.
+3. Only then remove English (Australia).
+
+**The 6.9-inch set is ready**: `~/Desktop/halved-appstore-6.9/` holds 16 PNGs at
+**1320×2868**, the size Apple requires now. Note two near-misses on the same
+machine — `~/Downloads` has ~30 at **1284×2778** (the older 6.5-inch slot) and
+the Desktop has ~49 at **1206×2622**, which is not an App Store size at all.
+`docs/store/play/screenshots` is 1080×1920 and is the **Play Store** set.
+
+Apple takes 3–10 per localization and **the first three are what appear in
+search results**.
+
+**Unresolved:** whether step 1 is enough, or whether the validation counts
+versions that are already live and therefore uneditable. If deleting en-US
+turns out to have moved that wall rather than cleared it, the answer is the
+same either way — the listing stays nominally Australian, which costs nothing.
 
 ## 6. After 2.0.0 is approved & live
 - [ ] (Optional) Flip `CLIENT_MIN_VERSION=2.0.0` on Railway if/when you want
