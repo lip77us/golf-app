@@ -122,6 +122,28 @@ class TypesTests(_Base):
         self.assertEqual(self.junk_of(got.data, self.ids[0]), 1)
 
 
+    def test_junk_ON_with_nothing_ticked_is_refused(self):
+        """A switch that counts nothing is a switch that does nothing, and
+        the handoff asks for at least one."""
+        r = self.setup_skins(junk_types=[])
+        self.assertEqual(r.status_code, 400, r.data)
+        self.assertIn('at least one', r.data['detail'].lower())
+
+    def test_junk_OFF_with_nothing_ticked_is_fine(self):
+        """Off keeps whatever was last picked, so turning it back on does
+        not lose the group's agreement."""
+        r = self.setup_skins(allow_junk=False, junk_types=[])
+        self.assertEqual(r.status_code, 201, r.data)
+
+    def test_the_catalogue_names_every_type(self):
+        """The setup checklist draws the UNTICKED rows too, so it needs the
+        whole list — and must not keep its own copy of the names."""
+        from core.models import SpotType
+        r = self.setup_skins(junk_types=['sandy'])
+        self.assertEqual([t['type'] for t in r.data['junk_catalogue']],
+                         [str(t) for t in SpotType])
+
+
 class GreenieTests(_Base):
 
     def test_a_winner_who_pars_takes_it(self):

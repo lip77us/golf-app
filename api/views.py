@@ -7597,28 +7597,32 @@ class SkinsSetupView(APIView):
         from services.skins import setup_skins, calculate_skins, skins_summary
         from services.spot_types import legacy_default_types
         d = ser.validated_data
-        setup_skins(
-            foursome,
-            handicap_mode  = d.get('handicap_mode', 'net'),
-            net_percent    = d.get('net_percent', 100),
-            carryover      = d.get('carryover', True),
-            allow_junk     = d.get('allow_junk', False),
-            # Same three cases as Spots, and the same reason. ABSENT means a
-            # client that has never heard of junk types — the shipped app —
-            # and it gets the defaults WITHOUT birdie and eagle, because
-            # those are read off the scores and would move money its screens
-            # cannot draw. A client that SENDS types can render them.
-            junk_types     = (d['junk_types'] if 'junk_types' in d
-                              else legacy_default_types()),
-            junk_greenie_carry = d.get('junk_greenie_carry', True),
-            junk_birdie_basis  = d.get('junk_birdie_basis', 'gross'),
-            junk_net_percent   = d.get('junk_net_percent', 100),
-            payout_style   = d.get('payout_style', 'pool'),
-            per_point_mode = d.get('per_point_mode', 'first'),
-            per_point_rate = d.get('per_point_rate', 0),
-            loss_cap       = d.get('loss_cap'),
-            participant_player_ids = d.get('participant_player_ids', []),
-        )
+        try:
+            setup_skins(
+                foursome,
+                handicap_mode  = d.get('handicap_mode', 'net'),
+                net_percent    = d.get('net_percent', 100),
+                carryover      = d.get('carryover', True),
+                allow_junk     = d.get('allow_junk', False),
+                # Same three cases as Spots, and the same reason. ABSENT means a
+                # client that has never heard of junk types — the shipped app —
+                # and it gets the defaults WITHOUT birdie and eagle, because
+                # those are read off the scores and would move money its screens
+                # cannot draw. A client that SENDS types can render them.
+                junk_types     = (d['junk_types'] if 'junk_types' in d
+                                  else legacy_default_types()),
+                junk_greenie_carry = d.get('junk_greenie_carry', True),
+                junk_birdie_basis  = d.get('junk_birdie_basis', 'gross'),
+                junk_net_percent   = d.get('junk_net_percent', 100),
+                payout_style   = d.get('payout_style', 'pool'),
+                per_point_mode = d.get('per_point_mode', 'first'),
+                per_point_rate = d.get('per_point_rate', 0),
+                loss_cap       = d.get('loss_cap'),
+                participant_player_ids = d.get('participant_player_ids', []),
+            )
+        except ValueError as exc:
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
         calculate_skins(foursome)
         return Response(skins_summary(foursome), status=status.HTTP_201_CREATED)
 

@@ -58,7 +58,8 @@ from games.models import (SkinsGame, SkinsGreenieResult, SkinsHoleResult,
 # **Junk uses the same named types as Spots.** One vocabulary, one greenie
 # carry, one reading of birdies off the card — see `services/spot_types.py`
 # for why that is a shared module rather than a second copy.
-from services.spot_types import (SHEET_TYPES, SPOT_META, default_types,
+from services.spot_types import (SHEET_TYPES, SPOT_META, catalogue_block,
+                                 default_types,
                                  derived_from_scores, greenie_plan,
                                  in_play_block, normalise_types,
                                  par_si_by_hole, types_block)
@@ -111,8 +112,7 @@ def setup_skins(
         # Omitted means the defaults, the way Spots reads it. An EMPTY list
         # with junk ON is refused by the view, because junk that counts
         # nothing is a switch that does nothing.
-        junk_types     = (normalise_types(junk_types)
-                          if junk_types is not None else default_types()),
+        junk_types     = _junk_types_or_refuse(allow_junk, junk_types),
         junk_greenie_carry = bool(junk_greenie_carry),
         junk_birdie_basis  = (junk_birdie_basis
                               if junk_birdie_basis in ('gross', 'net_so')
@@ -409,6 +409,25 @@ def calculate_skins(foursome) -> list:
 # ---------------------------------------------------------------------------
 # Summary (for the game screen and leaderboard)
 # ---------------------------------------------------------------------------
+
+def _junk_types_or_refuse(allow_junk, junk_types) -> list:
+    """What goes in `junk_types`, with the one case that is an error.
+
+    Omitted means the defaults, the way Spots reads it. **Junk ON with an
+    EMPTY list is refused**: a switch that counts nothing is a switch that
+    does nothing, and the handoff asks for at least one. Junk OFF keeps
+    whatever was last picked, so turning it back on does not lose the
+    group's agreement.
+    """
+    if junk_types is None:
+        return default_types()
+    picked = normalise_types(junk_types)
+    if allow_junk and not picked:
+        raise ValueError(
+            'Pick at least one junk to count — junk that counts nothing '
+            'pays nobody.')
+    return picked
+
 
 @transaction.atomic
 def tally_skins_junk(foursome, hole_number: int, entries: list) -> SkinsGame:
@@ -875,6 +894,10 @@ def skins_summary(foursome) -> dict:
         'allow_junk': game.allow_junk,
         # What the group agreed junk means, for the leaderboard's Junk in
         # play card and the hole's tick sheet. Empty when junk is off.
+        # The WHOLE list, so the setup checklist can draw an unticked row
+        # without the client keeping its own copy of the names — the same
+        # reason the Spots summary carries one.
+        'junk_catalogue'   : catalogue_block(),
         'junk_in_play'     : in_play_block(game.junk_types or [])
                              if game.allow_junk else [],
         'junk_sheet_types' : in_play_block(

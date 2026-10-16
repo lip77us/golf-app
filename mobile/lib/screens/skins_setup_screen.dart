@@ -26,6 +26,7 @@ import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/golf_primary_button.dart';
 import '../widgets/handicap_mode_selector.dart';
+import '../widgets/spots_capture.dart' show spotTypeBlurb;
 
 class SkinsSetupScreen extends StatefulWidget {
   final int foursomeId;
@@ -53,6 +54,21 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
   int    _netPercent = 100;
   bool   _carryover  = true;
   bool   _allowJunk  = false;
+  /// Which named junk counts. **Null until the first load**, which is how
+  /// "omitted" survives to the POST — an empty set would be sent as an empty
+  /// list, which means "junk is on and counts nothing".
+  Set<String>? _junkTypes;
+  bool   _junkCarry       = true;
+
+  /// Junk ON with nothing ticked is a switch that counts nothing, so Save is
+  /// dead until one is picked. The server refuses it too; this is the half
+  /// that keeps the TD out of a form he cannot save.
+  bool get _junkOk =>
+      !_allowJunk || _isSideGame ||
+      (_junkTypes ?? const <String>{}).isNotEmpty;
+
+  String _junkBirdieBasis = 'gross';
+  List<SpotTypeInfo> _junkCatalogue = const [];
 
   // ── Payout mode (progressive disclosure) ────────────────────────────────
   String _payoutStyle  = 'pool';   // 'pool' | 'per_point'
@@ -134,6 +150,10 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
           _netPercent = _summary!.netPercent;
           _carryover  = _summary!.carryover;
           _allowJunk  = _summary!.allowJunk;
+          _junkCatalogue = _summary!.junkCatalogue;
+          _junkTypes  = {for (final t in _summary!.junkInPlay) t.type};
+          _junkCarry  = _summary!.junkGreenie.carry;
+          _junkBirdieBasis = _summary!.junkBirdieBasis;
           _payoutStyle  = _summary!.payoutStyle;
           _perPointMode = _summary!.perPointMode;
           if (_summary!.lossCap != null) {
@@ -272,6 +292,12 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
         netPercent:   _netPercent,
         carryover:    _carryover,
         allowJunk:    _isSideGame ? false : _allowJunk,
+        // Off keeps the last selection, so switching junk off and on again
+        // does not lose what the group agreed. Only the switch decides
+        // whether any of it counts.
+        junkTypes:    (_junkTypes ?? const <String>{}).toList(),
+        junkGreenieCarry: _junkCarry,
+        junkBirdieBasis:  _junkBirdieBasis,
         payoutStyle:  _payoutStyle,
         perPointMode: _perPointMode,
         perPointRate: _payoutStyle == 'per_point' ? (value ?? 0.0) : 0.0,
@@ -339,10 +365,10 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
                             ? 'Save Configuration'
                             : 'Start Game',
                         loading: _starting,
-                        onPressed:
-                            (_rosterValid && _moneyOk && _participantsValid)
-                                ? _start
-                                : null,
+                        onPressed: (_rosterValid && _moneyOk &&
+                                    _participantsValid && _junkOk)
+                            ? _start
+                            : null,
                       ),
                     ),
                   ),
@@ -409,25 +435,18 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
                   // Junk is only available when Skins is the PRIMARY game —
                   // it's entered hole-by-hole during scoring, which a side
                   // game can't touch.
-                  if (!_isSideGame)
-                    SwitchListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Junk skins'),
-                      subtitle: Text(
-                        _allowJunk
-                            ? 'Entry screen shows a junk counter per player per hole.'
-                            : 'Regular skins only — no junk.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant),
-                      ),
-                      value: _allowJunk,
-                      onChanged: (v) => setState(() => _allowJunk = v),
-                    ),
                 ],
               ),
             ),
           ),
+
+          // Junk is only available when Skins is the PRIMARY game — it is
+          // entered hole-by-hole during scoring, which a side game cannot
+          // touch.
+          if (!_isSideGame) ...[
+            const SizedBox(height: 16),
+            _junkCard(theme),
+          ],
 
           const SizedBox(height: 16),
 
@@ -593,6 +612,119 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
       ),
     );
   }
+
+  /// **Junk, set up like Spots.** Replaces the single `Junk skins` switch:
+  /// one card, a switch in its header, and the type list underneath.
+  ///
+  /// A junk is worth a SKIN — one share of the same pot — which the money
+  /// note says, because it is the thing a group is most likely to assume
+  /// otherwise.
+  Widget _junkCard(ThemeData theme) {
+    final picked = _junkTypes ?? const <String>{};
+    final birdieOn = picked.contains('birdie');
+    final eagleOn  = picked.contains('eagle');
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: theme.colorScheme.outline),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SwitchListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Junk',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text(
+              'Each junk is worth one skin. Pick which ones count.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            value: _allowJunk,
+            onChanged: (v) => setState(() => _allowJunk = v),
+          ),
+          // Switching junk OFF hides the list and keeps the selection, so
+          // turning it back on does not lose the group's agreement.
+          if (_allowJunk) ...[
+            const Divider(height: 10),
+            for (final t in _junkCatalogue) ...[
+              CheckboxListTile(
+                value: picked.contains(t.type),
+                onChanged: (on) => setState(() {
+                  final next = {...picked};
+                  on == true ? next.add(t.type) : next.remove(t.type);
+                  _junkTypes = next;
+                }),
+                title: Text(t.label),
+                subtitle: Text(spotTypeBlurb(t.type),
+                    style: theme.textTheme.bodySmall),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+              ),
+              if (t.type == 'greenie' && picked.contains('greenie'))
+                Padding(
+                  padding: const EdgeInsets.only(left: 32, bottom: 6),
+                  child: SwitchListTile(
+                    value: _junkCarry,
+                    onChanged: (v) => setState(() => _junkCarry = v),
+                    title: const Text('Carry over'),
+                    subtitle: const Text('If nobody hits the green, the '
+                        'greenie rolls to the next par 3.'),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                ),
+              // One setting for both, under whichever is ticked — and under
+              // Eagle when Birdie is off, as the design specifies.
+              if ((t.type == 'birdie' && birdieOn) ||
+                  (t.type == 'eagle' && eagleOn && !birdieOn))
+                Padding(
+                  padding: const EdgeInsets.only(left: 32, bottom: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Birdies and eagles count',
+                          style: theme.textTheme.labelMedium),
+                      const SizedBox(height: 4),
+                      SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(value: 'gross', label: Text('Gross')),
+                          ButtonSegment(value: 'net_so',
+                              label: Text('Net (SO)')),
+                        ],
+                        selected: {_junkBirdieBasis},
+                        showSelectedIcon: false,
+                        onSelectionChanged: (v) =>
+                            setState(() => _junkBirdieBasis = v.first),
+                      ),
+                      const SizedBox(height: 4),
+                      // Its OWN setting: the skins handicap above decides who
+                      // wins the skin, and net skins with gross birdies is a
+                      // valid way to play.
+                      Text('Separate from the skins handicap above. Net is '
+                          'strokes off the lowest handicap in the group.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
+            ],
+            if (picked.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 4),
+                child: Text('Pick at least one junk to count.',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.error)),
+              ),
+          ],
+        ]),
+      ),
+    );
+  }
+
 }
 
 // ===========================================================================

@@ -874,6 +874,14 @@ class RoundProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Replace the Skins summary after a junk tick or a greenie pick, which
+  /// both return the recomputed one. Same reason `setSpotsSummary` exists:
+  /// the POST already did the work, so re-fetching would be a second answer.
+  void setSkinsSummary(SkinsSummary s) {
+    _skinsSummary = s;
+    notifyListeners();
+  }
+
   /// Load the Honors summary for the active foursome. Non-fatal on network
   /// errors so the entry screen keeps working offline.
   Future<void> loadHonors(int foursomeId) async {

@@ -2879,6 +2879,10 @@ class _SkinsGroupCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text('Status: ${status.replaceAll('_', ' ')}',
               style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          // What the group agreed junk means, and where the greenie is.
+          // Skins and junk divide ONE pot, so this sits above the standings
+          // rather than beside them — it is part of the same money.
+          _JunkInPlay(summary: summary),
           const Divider(height: 16),
           // **The play screen's standings block, moved here.** It answers
           // where the money went AND what the next hole is worth, in one
@@ -3126,6 +3130,89 @@ class _SpotsInPlay extends StatelessWidget {
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
       ],
+    ]);
+  }
+
+  static String _ord(int n) {
+    if (n % 100 >= 11 && n % 100 <= 13) return '${n}th';
+    switch (n % 10) {
+      case 1:  return '${n}st';
+      case 2:  return '${n}nd';
+      case 3:  return '${n}rd';
+      default: return '${n}th';
+    }
+  }
+}
+
+/// Skins' **Junk in play** card: the ticked types as pills, and the greenie
+/// carry in a sentence.
+///
+/// The twin of `_SpotsInPlay`, and separate for one reason worth stating: a
+/// junk is one share of the SKINS pot, so the sentence it ends with is about
+/// shares rather than about its own money.
+class _JunkInPlay extends StatelessWidget {
+  final Map<String, dynamic> summary;
+  const _JunkInPlay({required this.summary});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme  = Theme.of(context);
+    if (summary['allow_junk'] != true) return const SizedBox.shrink();
+    final inPlay = (summary['junk_in_play'] as List? ?? [])
+        .cast<Map<String, dynamic>>();
+    if (inPlay.isEmpty) return const SizedBox.shrink();
+    final greenie = summary['junk_greenie'] as Map<String, dynamic>? ?? {};
+    final next    = greenie['next'] as Map<String, dynamic>?;
+    final carry   = greenie['carry'] == true;
+    final hasGreenie = inPlay.any((t) => t['type'] == 'greenie');
+
+    String? carryLine;
+    if (hasGreenie) {
+      final lead = carry ? 'Greenies carry.' : 'Greenies do not carry.';
+      carryLine = next == null
+          ? '$lead No par 3s left.'
+          : '$lead Next par 3 is the ${_ord(next['hole'] as int? ?? 0)}, '
+            'worth ${next['worth'] ?? 1}.';
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 8),
+      Text('JUNK IN PLAY',
+          style: theme.textTheme.labelSmall?.copyWith(
+              fontSize: 10, letterSpacing: 0.5, fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurfaceVariant)),
+      const SizedBox(height: 5),
+      Wrap(spacing: 5, runSpacing: 5, children: [
+        for (final t in inPlay)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: .08),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                  color: theme.colorScheme.primary.withValues(alpha: .35)),
+            ),
+            child: Text(
+              (t['worth'] as num? ?? 1) == 1
+                  ? '${t['label']}'
+                  : '${t['label']} · ${(t['worth'] as num) > 0 ? '+' : ''}'
+                    '${t['worth']}',
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: theme.colorScheme.primary),
+            ),
+          ),
+      ]),
+      const SizedBox(height: 5),
+      Text(
+        // The thing a group most often assumes otherwise.
+        'Skins and junk split one pot. Each is one share.',
+        style: theme.textTheme.bodySmall
+            ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+      ),
+      if (carryLine != null)
+        Text(carryLine,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
     ]);
   }
 

@@ -2973,17 +2973,25 @@ class SkinsJunkEntry {
   final int    playerId;
   final String shortName;
   final int    count;
+  /// What made up the count, named. **Empty on a round played before junk
+  /// had names** — sixteen such rows exist and are read, never rewritten, so
+  /// the board shows the count without inventing a label for it.
+  final List<SpotTypeInfo> types;
 
   const SkinsJunkEntry({
     required this.playerId,
     required this.shortName,
     required this.count,
+    this.types = const [],
   });
 
   factory SkinsJunkEntry.fromJson(Map<String, dynamic> j) => SkinsJunkEntry(
         playerId:  j['player_id']  as int,
         shortName: j['short_name'] as String? ?? '',
         count:     j['count']      as int? ?? 0,
+        types: (j['types'] as List? ?? const [])
+            .map((t) => SpotTypeInfo.fromJson(t as Map<String, dynamic>))
+            .toList(),
       );
 }
 
@@ -3053,6 +3061,46 @@ class SkinsSummary {
   final double  perPointRate;  // $/skin (per_point)
   final double? lossCap;       // per-player loss cap (per_point); null = uncapped
 
+  // ── junk, set up like Spots ──────────────────────────────────────────────
+  /// Which named junk the group agreed to. Empty when junk is off.
+  final List<SpotTypeInfo> junkInPlay;
+  /// The subset the hole's tick sheet offers — the greenie has its own pick
+  /// and birdies come off the card.
+  final List<SpotTypeInfo> junkSheetTypes;
+  final SpotsGreenieState  junkGreenie;
+  final String             junkBirdieBasis;   // 'gross' | 'net_so'
+  /// Every type the server knows, for the setup checklist — which has to
+  /// draw the UNTICKED rows too, and must not keep its own list of names.
+  final List<SpotTypeInfo> junkCatalogue;
+
+  /// The SHEET types a golfer has on a hole — what his + Junk button reads.
+  List<SpotTypeInfo> junkSheetTypesFor(int playerId, int hole) {
+    final allowed = {for (final t in junkSheetTypes) t.type};
+    for (final h in holes) {
+      if (h.hole != hole) continue;
+      for (final e in h.junk) {
+        if (e.playerId == playerId) {
+          return [for (final t in e.types) if (allowed.contains(t.type)) t];
+        }
+      }
+    }
+    return const [];
+  }
+
+  /// Everything a golfer has on a hole, sheet or not — a greenie and a birdie
+  /// belong in the hole's own line and never on the button.
+  List<SpotTypeInfo> junkTypesFor(int playerId, int hole) {
+    for (final h in holes) {
+      if (h.hole != hole) continue;
+      for (final e in h.junk) {
+        if (e.playerId == playerId) return e.types;
+      }
+    }
+    return const [];
+  }
+
+  bool get junkGreenieInPlay => junkInPlay.any((t) => t.type == 'greenie');
+
   const SkinsSummary({
     required this.status,
     required this.handicapMode,
@@ -3069,6 +3117,11 @@ class SkinsSummary {
     this.perPointMode = 'first',
     this.perPointRate = 0.0,
     this.lossCap,
+    this.junkInPlay      = const [],
+    this.junkSheetTypes  = const [],
+    this.junkGreenie     = const SpotsGreenieState(),
+    this.junkBirdieBasis = 'gross',
+    this.junkCatalogue   = const [],
     this.scorecardHoles = const [],
     this.scorecardPlayers = const [],
     this.scorecardHolesInPlay = const [],
@@ -3110,6 +3163,18 @@ class SkinsSummary {
           .toList(),
       scorecardHolesInPlay: (j['holes_in_play'] as List? ?? const [])
           .map((e) => (e as num).toInt())
+          .toList(),
+      junkInPlay: (j['junk_in_play'] as List? ?? const [])
+          .map((t) => SpotTypeInfo.fromJson(t as Map<String, dynamic>))
+          .toList(),
+      junkSheetTypes: (j['junk_sheet_types'] as List? ?? const [])
+          .map((t) => SpotTypeInfo.fromJson(t as Map<String, dynamic>))
+          .toList(),
+      junkGreenie: SpotsGreenieState.fromJson(
+          (j['junk_greenie'] as Map<String, dynamic>?) ?? const {}),
+      junkBirdieBasis: j['junk_birdie_basis']?.toString() ?? 'gross',
+      junkCatalogue: (j['junk_catalogue'] as List? ?? const [])
+          .map((t) => SpotTypeInfo.fromJson(t as Map<String, dynamic>))
           .toList(),
     );
   }

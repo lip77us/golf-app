@@ -28,6 +28,8 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
+import '../widgets/junk_capture.dart';
+import '../widgets/spots_capture.dart';
 import '../sync/sync_service.dart';
 import '../utils/play_order.dart';
 import '../widgets/hole_header.dart';
@@ -51,12 +53,12 @@ class SkinsScreen extends StatefulWidget {
   State<SkinsScreen> createState() => _SkinsScreenState();
 }
 
-class _SkinsScreenState extends State<SkinsScreen> {
+class _SkinsScreenState extends State<SkinsScreen>
+    with JunkCaptureMixin {
   /// Unsubmitted score edits: hole → playerId → gross.
   final Map<int, Map<int, int>> _pending = {};
 
   /// Unsubmitted junk edits: hole → playerId → count.
-  final Map<int, Map<int, int>> _pendingJunk = {};
 
   int  _selectedHole   = 1;
   bool _prevHadPending = false;
@@ -187,13 +189,6 @@ class _SkinsScreenState extends State<SkinsScreen> {
     });
   }
 
-  void _adjustJunk(int playerId, int hole, int delta) {
-    setState(() {
-      final current = (_pendingJunk[hole] ?? {})[playerId] ?? 0;
-      final next    = (current + delta).clamp(0, 20);
-      _pendingJunk.putIfAbsent(hole, () => {})[playerId] = next;
-    });
-  }
 
   void _advance() {
     if (_selectedHole < 18) setState(() { _selectedHole++; _editHotPid = null; });
@@ -245,29 +240,11 @@ class _SkinsScreenState extends State<SkinsScreen> {
     if (advance) _advance();
   }
 
-  Future<void> _saveJunkIfNeeded(BuildContext ctx) async {
-    final summary = context.read<RoundProvider>().skinsSummary;
-    if (summary == null || !summary.allowJunk) return;
-
-    final junkEdits = _pendingJunk[_selectedHole];
-    if (junkEdits == null || junkEdits.isEmpty) return;
-
-    final entries = junkEdits.entries
-        .map((e) => {'player_id': e.key, 'junk_count': e.value})
-        .toList();
-
-    try {
-      final client = context.read<AuthProvider>().client;
-      await client.postSkinsJunk(
-        widget.foursomeId,
-        holeNumber:  _selectedHole,
-        junkEntries: entries,
-      );
-      setState(() { _pendingJunk.remove(_selectedHole); });
-    } catch (_) {
-      // Non-fatal — junk can be re-entered.
-    }
-  }
+  /// Junk is saved by the tick sheet itself now, the moment Done is
+  /// pressed — there is no pending state to flush on the way to the next
+  /// hole. Kept as a no-op so the callers that drain before navigating read
+  /// the same, and so nothing silently stops being saved if one is missed.
+  Future<void> _saveJunkIfNeeded(BuildContext ctx) async {}
 
   Future<void> _finishRound(
     BuildContext ctx,
@@ -520,7 +497,12 @@ class _SkinsScreenState extends State<SkinsScreen> {
                 hotSpotIdx:      hotSpot,
                 par:             par,
                 summary:         summary,
-                pendingJunk:     _pendingJunk[_selectedHole] ?? {},
+                junkTypesFor:    (pid) => junkTypesFor(
+                    pid, _selectedHole,
+                    context.read<RoundProvider>().skinsSummary),
+                onJunkTap:       (pid) =>
+                    openJunkSheet(widget.foursomeId, pid, _selectedHole),
+                junkSheetOpen:   junkSheetOpenFor,
                 onScoreSelected: (m, score) {
                   _selectScore(m, score, _selectedHole);
                   if (_editHotPid != null) {
@@ -533,9 +515,13 @@ class _SkinsScreenState extends State<SkinsScreen> {
                   }
                 },
                 onEditTap: (m) => setState(() => _editHotPid = m.player.id),
-                onJunkChanged: (pid, delta) =>
-                    _adjustJunk(pid, _selectedHole, delta),
               ),
+
+              // Junk's greenie pick on a par 3, and the hole's own junk
+              // line. Empty on every other hole. The SERVER decides which
+              // holes are par 3s — it has the pars and it is the one walking
+              // the carry.
+              ...junkFooters(rp, widget.foursomeId, _selectedHole),
 
               const SizedBox(height: 12),
 
@@ -582,10 +568,11 @@ class _SkinsHoleScoreCard extends StatelessWidget {
   final int              hotSpotIdx;
   final int              par;
   final SkinsSummary?    summary;
-  final Map<int, int>    pendingJunk; // playerId → count (local unsaved)
   final void Function(Membership, int)       onScoreSelected;
   final void Function(Membership)            onEditTap;
-  final void Function(int playerId, int delta) onJunkChanged;
+  final List<SpotTypeInfo> Function(int pid) junkTypesFor;
+  final void Function(int pid) onJunkTap;
+  final bool Function(int pid) junkSheetOpen;
 
   const _SkinsHoleScoreCard({
     required this.holeData,
@@ -597,10 +584,11 @@ class _SkinsHoleScoreCard extends StatelessWidget {
     required this.hotSpotIdx,
     required this.par,
     required this.summary,
-    required this.pendingJunk,
     required this.onScoreSelected,
     required this.onEditTap,
-    required this.onJunkChanged,
+    required this.junkTypesFor,
+    required this.onJunkTap,
+    required this.junkSheetOpen,
     this.holesInPlay = const [],
   });
 
@@ -716,13 +704,6 @@ class _SkinsHoleScoreCard extends StatelessWidget {
             // Did this player win the currently-selected hole?
             final isHoleWinner = holeOutcome?.winnerId == pid;
 
-            // Junk count for this player on this hole.
-            final junkCount = pendingJunk[pid]
-                ?? holeOutcome?.junk
-                    .where((j) => j.playerId == pid)
-                    .firstOrNull
-                    ?.count
-                ?? 0;
 
             return [
               _SkinsPlayerRow(
@@ -735,9 +716,9 @@ class _SkinsHoleScoreCard extends StatelessWidget {
                 totalSkins:        totalSkins,
                 isHoleWinner:      isHoleWinner,
                 allowJunk:         allowJunk,
-                junkCount:         junkCount,
-                onJunkAdd:    () => onJunkChanged(pid,  1),
-                onJunkRemove: () => onJunkChanged(pid, -1),
+                junkTypes:         junkTypesFor(pid),
+                onJunkTap:         () => onJunkTap(pid),
+                junkSheetOpen:     junkSheetOpen(pid),
                 onTap: (hasScore && !isHot) ? () => onEditTap(m) : null,
               ),
               if (isHot)
@@ -875,9 +856,9 @@ class _SkinsPlayerRow extends StatelessWidget {
 
   /// Whether to show the junk dot indicator + +/− controls.
   final bool        allowJunk;
-  final int         junkCount;
-  final VoidCallback onJunkAdd;
-  final VoidCallback onJunkRemove;
+  final List<SpotTypeInfo> junkTypes;
+  final VoidCallback       onJunkTap;
+  final bool               junkSheetOpen;
 
   const _SkinsPlayerRow({
     required this.position,
@@ -890,9 +871,9 @@ class _SkinsPlayerRow extends StatelessWidget {
     required this.totalSkins,
     required this.isHoleWinner,
     required this.allowJunk,
-    required this.junkCount,
-    required this.onJunkAdd,
-    required this.onJunkRemove,
+    required this.junkTypes,
+    required this.onJunkTap,
+    required this.junkSheetOpen,
   });
 
   @override
@@ -999,10 +980,11 @@ class _SkinsPlayerRow extends StatelessWidget {
             // Junk dot indicator + controls (when allow_junk).
             if (allowJunk) ...[
               const SizedBox(height: 4),
-              _JunkDots(
-                count:      junkCount,
-                onAdd:      onJunkAdd,
-                onRemove:   onJunkRemove,
+              SpotsButton(
+                types:   junkTypes,
+                onTap:   onJunkTap,
+                focused: junkSheetOpen,
+                noun:    'Junk',
               ),
             ],
           ],
@@ -1016,84 +998,6 @@ class _SkinsPlayerRow extends StatelessWidget {
 // Junk dot indicator — shows filled circles for junk count + +/− buttons
 // ===========================================================================
 
-class _JunkDots extends StatelessWidget {
-  final int          count;
-  final VoidCallback onAdd;
-  final VoidCallback onRemove;
-
-  const _JunkDots({
-    required this.count,
-    required this.onAdd,
-    required this.onRemove,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    // When count is 0 show a labeled "+ junk" affordance so it is
-    // discoverable.  A bare icon at 14px is too subtle and reads as
-    // decoration rather than a control.
-    if (count == 0) {
-      return GestureDetector(
-        onTap: onAdd,
-        behavior: HitTestBehavior.opaque,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.add_circle,
-                  size: 18, color: theme.colorScheme.tertiary),
-              const SizedBox(width: 3),
-              Text(
-                'junk',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.tertiary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // count > 0: show  −  N junk  +
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        GestureDetector(
-          onTap: onRemove,
-          behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: const EdgeInsets.all(2),
-            child: Icon(Icons.remove_circle,
-                size: 18, color: theme.colorScheme.tertiary),
-          ),
-        ),
-        const SizedBox(width: 2),
-        Text(
-          '$count junk',
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.tertiary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(width: 2),
-        GestureDetector(
-          onTap: onAdd,
-          behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: const EdgeInsets.all(2),
-            child: Icon(Icons.add_circle,
-                size: 18, color: theme.colorScheme.tertiary),
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 // ===========================================================================
 // Hole outcome strip

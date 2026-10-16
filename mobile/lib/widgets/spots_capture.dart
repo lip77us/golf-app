@@ -63,12 +63,17 @@ class SpotsButton extends StatelessWidget {
   /// Drawn while this golfer's sheet is open, so the row the sheet belongs to
   /// is obvious on a card of four.
   final bool               focused;
+  /// `Spots` or `Junk`. **The same control for both**, because they are the
+  /// same gesture over the same vocabulary — only the pot differs, and the
+  /// pot is not something the hole card says.
+  final String             noun;
 
   const SpotsButton({
     super.key,
     required this.types,
     required this.onTap,
     this.focused = false,
+    this.noun = 'Spots',
   });
 
   @override
@@ -100,7 +105,7 @@ class SpotsButton extends StatelessWidget {
           if (empty) ...[
             Icon(Icons.add, size: 15, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(width: 3),
-            Text('Spots',
+            Text(noun,
                 style: theme.textTheme.labelMedium
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
           ] else ...[
@@ -415,9 +420,19 @@ mixin SpotsCaptureMixin<T extends StatefulWidget> on State<T> {
   void disposeSpots() {}
 }
 
+/// The hole's own line — `RyanL  Greenie 2 + Birdie  = 3` — for Spots or for
+/// Skins junk. **The only place a DERIVED type is visible on the hole**, and
+/// the reason the button can safely show ticks alone.
+Widget extrasThisHole({
+  required List<({String name, String detail, int total})> rows,
+  String heading = 'SPOTS · THIS HOLE',
+}) =>
+    _SpotsThisHole(rows: rows, heading: heading);
+
 class _SpotsThisHole extends StatelessWidget {
   final List<({String name, String detail, int total})> rows;
-  const _SpotsThisHole({required this.rows});
+  final String heading;
+  const _SpotsThisHole({required this.rows, this.heading = 'SPOTS · THIS HOLE'});
 
   @override
   Widget build(BuildContext context) {
@@ -430,7 +445,7 @@ class _SpotsThisHole extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('SPOTS · THIS HOLE',
+        Text(heading,
             style: theme.textTheme.labelSmall?.copyWith(
                 fontSize: 10, letterSpacing: .5, fontWeight: FontWeight.w700,
                 color: theme.colorScheme.onSurfaceVariant)),
@@ -477,12 +492,35 @@ Widget spotsSheetForTest({
   required List<SpotTypeInfo> offered,
   required Set<String> initial,
   bool greenieOnThisHole = false,
+  String noun = 'spot',
+  String nounPlural = 'spots',
 }) =>
     _SpotsSheet(
       title: title,
       offered: offered,
       initial: initial,
       greenieOnThisHole: greenieOnThisHole,
+      noun: noun,
+      nounPlural: nounPlural,
+    );
+
+/// The sheet itself, for a caller outside this file — Skins junk opens the
+/// same one with its own noun.
+Widget buildExtrasSheet({
+  required String title,
+  required List<SpotTypeInfo> offered,
+  required Set<String> initial,
+  bool greenieOnThisHole = false,
+  String noun = 'spot',
+  String nounPlural = 'spots',
+}) =>
+    _SpotsSheet(
+      title: title,
+      offered: offered,
+      initial: initial,
+      greenieOnThisHole: greenieOnThisHole,
+      noun: noun,
+      nounPlural: nounPlural,
     );
 
 class _SpotsSheet extends StatefulWidget {
@@ -490,12 +528,19 @@ class _SpotsSheet extends StatefulWidget {
   final List<SpotTypeInfo> offered;
   final Set<String>        initial;
   final bool               greenieOnThisHole;
+  /// Lower case, singular: `spot` or `junk`. Junk has no plural — "3 junk",
+  /// never "3 junks" — which is why the Done label asks for it rather than
+  /// adding an `s` itself.
+  final String             noun;
+  final String             nounPlural;
 
   const _SpotsSheet({
     required this.title,
     required this.offered,
     required this.initial,
     this.greenieOnThisHole = false,
+    this.noun = 'spot',
+    this.nounPlural = 'spots',
   });
 
   @override
@@ -523,7 +568,7 @@ class _SpotsSheetState extends State<_SpotsSheet> {
               style: theme.textTheme.titleMedium
                   ?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 2),
-          Text('Tick each spot he made. One of each per hole.',
+          Text('Tick each ${widget.noun} he made. One of each per hole.',
               style: theme.textTheme.bodySmall
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
           const SizedBox(height: 6),
@@ -564,7 +609,8 @@ class _SpotsSheetState extends State<_SpotsSheet> {
             width: double.infinity,
             child: FilledButton(
               onPressed: () => Navigator.of(context).pop(_picked.toList()),
-              child: Text('Done · $n spot${n.abs() == 1 ? '' : 's'}'),
+              child: Text('Done · $n '
+                  '${n.abs() == 1 ? widget.noun : widget.nounPlural}'),
             ),
           ),
         ]),

@@ -2075,6 +2075,14 @@ class ApiClient {
     int    netPercent   = 100,
     bool   carryover    = true,
     bool   allowJunk    = false,
+    /// `null` means "a client that has never heard of junk types" and the
+    /// server gives it the defaults WITHOUT birdie and eagle. Do not collapse
+    /// it with `[]` — an empty list with junk ON is a switch that counts
+    /// nothing.
+    List<String>? junkTypes,
+    bool   junkGreenieCarry = true,
+    String junkBirdieBasis  = 'gross',
+    int    junkNetPercent   = 100,
     String  payoutStyle  = 'pool',
     String  perPointMode = 'first',
     double  perPointRate = 0.0,
@@ -2086,6 +2094,10 @@ class ApiClient {
       'net_percent'   : netPercent,
       'carryover'     : carryover,
       'allow_junk'    : allowJunk,
+      if (junkTypes != null) 'junk_types': junkTypes,
+      'junk_greenie_carry': junkGreenieCarry,
+      'junk_birdie_basis' : junkBirdieBasis,
+      'junk_net_percent'  : junkNetPercent,
       'payout_style'  : payoutStyle,
       'per_point_mode': perPointMode,
       'per_point_rate': perPointRate,
@@ -2097,18 +2109,43 @@ class ApiClient {
 
   /// POST /api/foursomes/{id}/skins/junk/
   ///
-  /// Upserts junk-skin counts for all players on [holeNumber].
-  /// [junkEntries] is a list of {player_id, junk_count} maps.
-  /// Returns the updated SkinsSummary.
+  /// Sets which junk types each named golfer made on [holeNumber]. Each entry
+  /// is `{'player_id': int, 'types': [slug, ...]}` and the list is the WHOLE
+  /// truth for that golfer on that hole — what is left out is unticked, and
+  /// an empty list clears him.
   Future<SkinsSummary> postSkinsJunk(
     int foursomeId, {
-    required int                       holeNumber,
-    required List<Map<String, int>>    junkEntries,
+    required int                           holeNumber,
+    required List<Map<String, dynamic>>    junkEntries,
   }) async {
     final data = await _post('/foursomes/$foursomeId/skins/junk/', {
       'hole_number' : holeNumber,
       'junk_entries': junkEntries,
     });
+    return SkinsSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Who took the greenie on a par 3 — `playerId: null` is **Nobody**, which
+  /// rolls the carry to the next par 3.
+  Future<SkinsSummary> postSkinsGreenie(
+    int foursomeId, {
+    required int holeNumber,
+    required int? playerId,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/skins/greenie/', {
+      'hole_number': holeNumber,
+      'player_id'  : playerId,
+    });
+    return SkinsSummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Un-answer a par 3 — undecided, which is not the same as Nobody.
+  Future<SkinsSummary> deleteSkinsGreenie(
+    int foursomeId, {
+    required int holeNumber,
+  }) async {
+    final data = await _delete('/foursomes/$foursomeId/skins/greenie/',
+        body: {'hole_number': holeNumber});
     return SkinsSummary.fromJson(data as Map<String, dynamic>);
   }
 

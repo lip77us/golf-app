@@ -63,6 +63,7 @@ import '../widgets/score_mark.dart';
 import '../widgets/borrowed_fourth.dart';
 import '../widgets/halved_mark.dart';
 import '../widgets/hole_grid_scorecard.dart';
+import '../widgets/junk_capture.dart';
 import '../widgets/spots_capture.dart';
 import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
@@ -145,12 +146,11 @@ class ScoreEntryScreen extends StatefulWidget {
 }
 
 class _ScoreEntryScreenState extends State<ScoreEntryScreen>
-    with SpotsCaptureMixin {
+    with SpotsCaptureMixin, JunkCaptureMixin {
   /// Unsubmitted score edits: hole → playerId → gross.
   final Map<int, Map<int, int>> _pending = {};
 
   /// Unsubmitted skins-junk edits: hole → playerId → count.
-  final Map<int, Map<int, int>> _pendingJunk = {};
 
   int  _selectedHole    = 1;
   bool _initialJumpDone = false;
@@ -1188,7 +1188,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// app-bar Exit (✕) on casual rounds: before any score, the back arrow
   /// returns to the launch page (to edit config/tees); after, ✕ exits.
   bool get _hasAnyScore {
-    if (_pending.isNotEmpty || _pendingJunk.isNotEmpty) return true;
+    if (_pending.isNotEmpty) return true;
     final rp = context.read<RoundProvider>();
     // Saved scores in the loaded scorecard — reflects a just-saved hole even
     // before the round detail (foursome.hasAnyScore) reloads.
@@ -1227,31 +1227,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     });
   }
 
-  void _adjustJunk(int playerId, int hole, int delta) {
-    setState(() {
-      final map = _pendingJunk.putIfAbsent(hole, () => {});
-      final cur = map[playerId] ?? 0;
-      final next = (cur + delta).clamp(0, 20);
-      if (next == 0) {
-        map.remove(playerId);
-        if (map.isEmpty) _pendingJunk.remove(hole);
-      } else {
-        map[playerId] = next;
-      }
-    });
-  }
 
-  int _currentJunk(int playerId, int hole, SkinsSummary? skins) {
-    if (_pendingJunk[hole]?.containsKey(playerId) == true) {
-      return _pendingJunk[hole]![playerId]!;
-    }
-    // Fall back to last saved junk count from the skins summary.
-    if (skins == null) return 0;
-    final holeData = skins.holes.where((h) => h.hole == hole).firstOrNull;
-    if (holeData == null) return 0;
-    final entry = holeData.junk.where((j) => j.playerId == playerId).firstOrNull;
-    return entry?.count ?? 0;
-  }
 
   // ── Navigation ───────────────────────────────────────────────────────────────
 
@@ -1301,10 +1277,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     int par,
   ) async {
     final scoreEdits = _pending[_selectedHole];
-    final junkEdits  = _pendingJunk[_selectedHole];
 
     if ((scoreEdits == null || scoreEdits.isEmpty) &&
-        (junkEdits == null || junkEdits.isEmpty)) {
+        true) {
       // **Nothing to SAVE is not nothing to SEND.** Auto-advance posts the
       // hole the instant the last score lands, so by the time the group picks
       // its count there are no score edits left — and this return used to walk
@@ -1350,9 +1325,6 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     }
 
     // Submit skins junk if any.
-    if (junkEdits != null && junkEdits.isNotEmpty) {
-      await _submitJunk(_selectedHole, junkEdits);
-    }
 
     // Immediate reload (may be before sync drains — that's fine, gives quick
     // feedback for other games like Nassau/Skins that recalculate server-side).
@@ -1484,22 +1456,6 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       resolvePrimary(rp.round?.primaryGame, rp.round?.activeGames.toSet() ?? {})
           == GameIds.banker;
 
-  Future<void> _submitJunk(int hole, Map<int, int> edits) async {
-    final client  = context.read<AuthProvider>().client;
-    final entries = edits.entries
-        .map((e) => {'player_id': e.key, 'junk_count': e.value})
-        .toList();
-    try {
-      await client.postSkinsJunk(
-        widget.foursomeId,
-        holeNumber:  hole,
-        junkEntries: entries,
-      );
-      if (mounted) setState(() { _pendingJunk.remove(hole); });
-    } catch (_) {
-      // Non-fatal — junk can be re-entered.
-    }
-  }
 
   /// Save pending scores/junk for the current hole without navigating.
   /// Used by the auto-advance trigger on hole 18 (where there's no next
@@ -1512,10 +1468,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final rp = context.read<RoundProvider>();
 
     final scoreEdits = _pending[_selectedHole];
-    final junkEdits  = _pendingJunk[_selectedHole];
 
     if ((scoreEdits == null || scoreEdits.isEmpty) &&
-        (junkEdits == null || junkEdits.isEmpty)) {
+        true) {
       return true;
     }
 
@@ -1548,9 +1503,6 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       setState(() { _pending.remove(_selectedHole); });
     }
 
-    if (junkEdits != null && junkEdits.isNotEmpty) {
-      await _submitJunk(_selectedHole, junkEdits);
-    }
 
     await _flushFortyBalls();
     if (!mounted) return false;
@@ -3101,7 +3053,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
 
     // Last hole in play order.
     final pendingHere = (_pending[_selectedHole]?.isNotEmpty ?? false) ||
-                       (_pendingJunk[_selectedHole]?.isNotEmpty ?? false);
+                       false;
 
     if (pendingHere) {
       return FilledButton.icon(
@@ -3309,7 +3261,6 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 handicapMode:    hMode,
                 netPercent:      hPct,
                 allowJunk:       allowJunk,
-                junkForPlayer:   (pid) => _currentJunk(pid, _selectedHole, skins),
                 blockedExtraSeg: needsTeamsSeg,
                 // Two pickers, because they ask different questions: an
                 // extra match is a free drag of all four golfers, while a
@@ -3370,8 +3321,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 // player so the normal inline picker appears (with its own
                 // Clear chip) — not a separate edit sheet.
                 onEditTap: (m) => setState(() => _editHotPid = m.player.id),
-                onJunkAdd:    (pid) => _adjustJunk(pid, _selectedHole, 1),
-                onJunkRemove: (pid) => _adjustJunk(pid, _selectedHole, -1),
+                // Junk, set up like Spots: a + Junk button per golfer
+                // opening a tick sheet of the types in play, and on a par 3
+                // the greenie pick at the foot of the card.
+                junkTypesFor: (pid) =>
+                    junkTypesFor(pid, _selectedHole, skins),
+                onJunkTap: (pid) =>
+                    openJunkSheet(widget.foursomeId, pid, _selectedHole),
+                junkSheetOpen: junkSheetOpenFor,
                 // Spots add-on (the capturesInScoreEntry carve-out): a + Spots
                 // button per golfer, opening a tick sheet of the
                 // types in play. Shown once Spots is on.
@@ -3400,7 +3357,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 // which holes those are — it has the pars and it is the one
                 // walking the carry, so a client deriving par 3s would be a
                 // second answer to the same question.
-                cardFooter: spotsFooter(rp, widget.foursomeId, _selectedHole),
+                // Spots or junk, never both — Spots excludes Skins in the
+                // catalogue and always has. On a par 3 this is the greenie
+                // pick; on any hole with something on it, the hole's own line.
+                cardFooter:
+                    spotsFooter(rp, widget.foursomeId, _selectedHole) ??
+                    junkFooter(rp, widget.foursomeId, _selectedHole),
                 bottomRow: (() {
                   if (!games.contains('irish_rumble')) return null;
                   final fs = rp.round?.foursomes
@@ -3633,7 +3595,6 @@ class _HoleScoreCard extends StatelessWidget {
   final String                  handicapMode;
   final int                     netPercent;
   final bool                    allowJunk;
-  final int  Function(int pid)  junkForPlayer;
 
   /// Non-null when the current hole is inside a Sixes extras segment that
   /// has no teams assigned yet.  Score entry is disabled until teams are set.
@@ -3662,8 +3623,9 @@ class _HoleScoreCard extends StatelessWidget {
 
   final void Function(Membership, int) onScoreSelected;
   final void Function(Membership)      onEditTap;
-  final void Function(int pid)  onJunkAdd;
-  final void Function(int pid)  onJunkRemove;
+  final List<SpotTypeInfo> Function(int pid) junkTypesFor;
+  final void Function(int pid) onJunkTap;
+  final bool Function(int pid) junkSheetOpen;
 
   /// Spots capture add-on: an inline ⊖ N spots ⊕ control under each player
   /// name (like junk, but always shows the minus — spots can go negative).
@@ -3711,13 +3673,13 @@ class _HoleScoreCard extends StatelessWidget {
     required this.handicapMode,
     required this.netPercent,
     required this.allowJunk,
-    required this.junkForPlayer,
     this.blockedExtraSeg,
     this.onOpenExtraTeamsPicker,
     required this.onScoreSelected,
     required this.onEditTap,
-    required this.onJunkAdd,
-    required this.onJunkRemove,
+    required this.junkTypesFor,
+    required this.onJunkTap,
+    required this.junkSheetOpen,
     this.spotsActive   = false,
     this.spotsTypesFor = _zeroSpots,
     this.onSpotsTap    = _noopPid,
@@ -4351,7 +4313,7 @@ class _HoleScoreCard extends StatelessWidget {
             final isHot      = idx == hotSpotIdx;
             final matchStrok = _strokesForHole(m, holeData);
 
-            final junkCount = allowJunk ? junkForPlayer(m.player.id) : 0;
+
 
             // Points 5-3-1: per-hole award and cumulative total.
             final p531Hole       = points531Summary != null
@@ -4382,7 +4344,8 @@ class _HoleScoreCard extends StatelessWidget {
                 teamLabel:           _teamLabelFor(m.player.id),
                 nameColor:           _nameColorFor(m, holeNumber),
                 allowJunk:           allowJunk,
-                junkCount:           junkCount,
+                junkTypes:           allowJunk
+                    ? junkTypesFor(m.player.id) : const [],
                 dimmed:              dimmed,
                 deemphasized:        hotSpotIdx != -1 && !isHot,
                 withdrawn:           withdrawn,
@@ -4394,8 +4357,8 @@ class _HoleScoreCard extends StatelessWidget {
                         && blockedExtraSeg == null)
                     ? () => onEditTap(m)
                     : null,
-                onJunkAdd:    allowJunk ? () => onJunkAdd(m.player.id)    : null,
-                onJunkRemove: allowJunk ? () => onJunkRemove(m.player.id) : null,
+                onJunkTap:    allowJunk ? () => onJunkTap(m.player.id) : null,
+                junkSheetOpen: allowJunk && junkSheetOpen(m.player.id),
                 spotsActive:  spotsActive,
                 spotsTypes:   spotsActive ? spotsTypesFor(m.player.id) : const [],
                 onSpotsTap:   spotsActive ? () => onSpotsTap(m.player.id) : null,
@@ -5165,9 +5128,9 @@ class _PlayerRow extends StatelessWidget {
   /// Override name color (e.g. cup singles team color). Ignored when isHot.
   final Color?        nameColor;
   final bool          allowJunk;
-  final int           junkCount;
-  final VoidCallback? onJunkAdd;
-  final VoidCallback? onJunkRemove;
+  final List<SpotTypeInfo> junkTypes;
+  final VoidCallback?      onJunkTap;
+  final bool               junkSheetOpen;
   final bool          spotsActive;
   final List<SpotTypeInfo> spotsTypes;
   final VoidCallback?      onSpotsTap;
@@ -5204,9 +5167,9 @@ class _PlayerRow extends StatelessWidget {
     this.teamLabel,
     this.nameColor,
     this.allowJunk = false,
-    this.junkCount = 0,
-    this.onJunkAdd,
-    this.onJunkRemove,
+    this.junkTypes = const [],
+    this.onJunkTap,
+    this.junkSheetOpen = false,
     this.spotsActive = false,
     this.spotsTypes = const [],
     this.onSpotsTap,
@@ -5383,10 +5346,11 @@ class _PlayerRow extends StatelessWidget {
               // Skins junk controls below name
               if (allowJunk) ...[
                 const SizedBox(height: 2),
-                _JunkDots(
-                  count:    junkCount,
-                  onAdd:    onJunkAdd ?? () {},
-                  onRemove: onJunkRemove ?? () {},
+                SpotsButton(
+                  types:   junkTypes,
+                  onTap:   onJunkTap ?? () {},
+                  focused: junkSheetOpen,
+                  noun:    'Junk',
                 ),
               ],
               // Spots: inline ⊖ N spots ⊕ (always shows the minus — negatives
@@ -5513,72 +5477,7 @@ class _PlayerRow extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Junk dot indicator — identical to skins_screen.dart _JunkDots
-// ---------------------------------------------------------------------------
 
-class _JunkDots extends StatelessWidget {
-  final int          count;
-  final VoidCallback onAdd;
-  final VoidCallback onRemove;
-
-  const _JunkDots({
-    required this.count,
-    required this.onAdd,
-    required this.onRemove,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    // A modest bump from 14px: bigger icons + a little tap padding so the
-    // control is easier to hit, while still living inline on every row.
-    if (count == 0) {
-      return GestureDetector(
-        onTap: onAdd,
-        behavior: HitTestBehavior.opaque,
-        child: Padding(
-          padding: const EdgeInsets.all(3),
-          child: Icon(Icons.add_circle_outline,
-              size: 20, color: theme.colorScheme.onSurfaceVariant),
-        ),
-      );
-    }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        GestureDetector(
-          onTap: onRemove,
-          behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: const EdgeInsets.all(3),
-            child: Icon(Icons.remove_circle_outline,
-                size: 20, color: theme.colorScheme.onSurfaceVariant),
-          ),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          '$count junk',
-          style: theme.textTheme.labelMedium?.copyWith(
-            // Dark pine — the bright-mint tertiary was too pale to read.
-            color: theme.colorScheme.primary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(width: 4),
-        GestureDetector(
-          onTap: onAdd,
-          behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: const EdgeInsets.all(3),
-            child: Icon(Icons.add_circle_outline,
-                size: 20, color: theme.colorScheme.onSurfaceVariant),
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 
 // ===========================================================================

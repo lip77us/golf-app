@@ -5623,3 +5623,76 @@ configured keeps exactly the types it was given.
 **Not built:** the design's open question about very long names on the Spots
 button (four golfers fit; the ellipsis handles the rest, untested against a
 real 24-character name).
+
+
+## Skins junk, set up like Spots — `handoff-skins-junk`
+
+Junk now has the same named types, the same greenie pick and carry, and the
+same tick sheet as Spots. The handoff says to build them on the same code and
+that is what makes this worth recording: **`services/spot_types.py` is the
+shared half**, extracted from `services/spots.py` rather than copied.
+
+**Nothing in that module reads a game row.** Every function takes what it
+needs — the types, the carry flag, the allowance — and duck-typing would have
+walked straight into a real collision: `SkinsGame` already has `net_percent`
+and it means *who wins the SKIN*. Junk's birdie basis is a different
+question, and the handoff is explicit that **net skins with gross birdies is
+a valid setup**, so junk carries its own `junk_net_percent` and
+`junk_birdie_basis` beside them.
+
+The widgets are shared the same way: `SpotsButton`, the tick sheet and
+`GreenieCard` take a noun. **Junk has no plural** — "3 junk", never "3
+junks" — which is why the Done label asks for both forms rather than adding
+an `s` itself.
+
+### A junk is worth a SKIN
+
+One share of the same pot, so the types fold into `total_skins` rather than
+settling on their own. A birdie that wins the skin is **1 skin and 1 junk**;
+one hole can give one golfer several shares. The skin carry and the greenie
+carry are **independent** — a tied par 3 can carry the skin while somebody
+takes the greenie — and a test pins that, because it is the thing most likely
+to get quietly fused.
+
+### The legacy rows are kept, not migrated
+
+Unlike Spots, junk **had been played**: sixteen `junk_count` rows in four
+COMPLETED rounds from May and July 2026, four of them a 2. Those rounds were
+settled against exactly those numbers, so they are read and never rewritten —
+and a tick could not represent them anyway, since "2 of something unnamed"
+has no name and one of each type per hole is the rule.
+
+So `junk_count` survives as a deprecated column and `junk_type` is nullable:
+**null IS the legacy row.** The engine reads them alongside ticks and the
+board shows the count without inventing a label. `tally_skins_junk` CLEARS a
+row's count when it writes ticks for the same golfer and hole, so an old hole
+converts the moment anybody touches it and the two can never be
+double-counted — while the untouched holes of that round keep their history.
+
+### The shipped-app window, and why it matters more here
+
+Same rule as Spots: a setup that never mentions `junk_types` gets the
+defaults **without** birdie and eagle. It matters more than it did there,
+because this money is a share of the skins pot — paying a birdie the client
+cannot draw moves everybody else's payout too, not just one man's.
+
+The old `{"player_id": N, "junk_count": N}` body is refused rather than
+guessed at, for the reason the count cannot be mapped: one of each type per
+hole.
+
+### What the sweep turned up
+
+- **Both screens that captured junk batched it** into a pending map and
+  flushed on the way to the next hole. The sheet posts on Done, so that
+  machinery is gone from both; `_saveJunkIfNeeded` survives as a documented
+  no-op so a caller that drains before navigating still reads the same.
+- **A test caught two things reading the files**: an orphaned `_JunkDots`
+  class left in `score_entry_screen` after its use was replaced, and the
+  greenie footer wired into score entry but **not** into `skins_screen` —
+  the dedicated play screen, which is this repo's most reliable omission.
+- Three existing tests named their `junk_types` rather than inheriting the
+  defaults. With birdies on, a man who takes the skin with a 3 earns a
+  second share: correct, and a different subject.
+
+Tests: `scoring/tests/test_skins.py::JunkTypesTests` (10),
+`api/test_skins_junk.py` (16), `mobile/test/skins_junk_test.dart` (9).
