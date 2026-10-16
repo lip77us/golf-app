@@ -124,6 +124,56 @@ def search_courses(query: str) -> list:
     return [_adapt_course_summary(c) for c in courses]
 
 
+#: GolfCourseAPI caps the proximity radius. Sending more is a 4xx, so the
+#: view clamps rather than letting a typo in a query string fail the request.
+PROXIMITY_MAX_RADIUS_MILES = 50
+#: ...and the page size. 25 is the server's ceiling, not a preference.
+PROXIMITY_MAX_LIMIT = 25
+
+
+def courses_near(latitude, longitude, radius=10, limit=25) -> list:
+    """
+    Courses within `radius` miles of a point, nearest first.
+
+    Returns `_adapt_course_summary` rows with one extra key, **`distance`** in
+    miles, which is the whole reason this endpoint exists rather than being a
+    search with a clever query.
+
+    `radius` and `limit` are CLAMPED to what the API accepts rather than
+    passed through: both have hard ceilings upstream, and a request that 4xxs
+    costs the same daily quota as one that works.
+
+    Quota: this is a new line against the 10k/day Pro allowance, so callers
+    fire it on a tap, never on every screen open.
+    """
+    radius = max(1, min(int(radius or 10), PROXIMITY_MAX_RADIUS_MILES))
+    limit  = max(1, min(int(limit or 25), PROXIMITY_MAX_LIMIT))
+
+    data = _get('/v1/proximity', params={
+        'latitude' : latitude,
+        'longitude': longitude,
+        'radius'   : radius,
+        'limit'    : limit,
+    })
+    # The search endpoint returns {"courses": [...]}; proximity is documented
+    # the same way. Fall back to a bare list so a shape change degrades to
+    # "no nearby courses" instead of raising inside a best-effort caller.
+    raw = data.get('courses') if isinstance(data, dict) else data
+    out = []
+    for c in (raw or []):
+        row = _adapt_course_summary(c)
+        # Distance rides on the summary rather than being recomputed: the API
+        # knows where it measured from, and re-deriving it here would be a
+        # second answer to the same question.
+        d = c.get('distance')
+        try:
+            row['distance'] = round(float(d), 1) if d is not None else None
+        except (TypeError, ValueError):
+            row['distance'] = None
+        out.append(row)
+    return out
+
+
 def fetch_course(course_id) -> dict:
     """
     Fetch full course data including all tee sets and hole-by-hole scorecard.

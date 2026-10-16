@@ -10525,6 +10525,13 @@ class CourseFindView(APIView):
       1. the caller's own account courses (instant select, no add),
       2. the shared catalog (clone-on-add, no GolfCourseAPI call),
       3. a live GolfCourseAPI search (imported with its tees on selection).
+
+    GET /api/courses/find/?near=home[&radius=<miles>]
+
+    The same three sources ranked by DISTANCE instead of matched on text,
+    anchored on the golfer's `Player.home_course`. Radius defaults to 25
+    miles and is clamped to 50, which is the API's own ceiling. See
+    `_near_home` for why the anchor is a course and not the device.
     Dedup is by golf_api_id, then by (name, city), preferring the cheapest add
     path (account > catalog > api) so a course in more than one source appears
     once.  The GolfCourseAPI call is BEST-EFFORT: if it errors or times out, the
@@ -10535,9 +10542,157 @@ class CourseFindView(APIView):
       * source=catalog → catalog_id (POST /catalog/courses/<id>/add/)
       * source=api     → golf_api_id (POST /courses/import/)
     """
+    #: Degrees of latitude to a mile. Longitude shrinks towards the poles,
+    #: which is why the box below divides by cos(lat).
+    _MILES_PER_DEG_LAT = 69.0
+
+    def _bbox(self, lat, lng, radius_miles):
+        """A SQL-able superset of the circle, to avoid haversine-ing the world.
+
+        Deliberately a SUPERSET: it over-selects at the corners and the real
+        distance filters those out. A box that tried to be exact would drop
+        courses that are genuinely inside the radius.
+        """
+        import math
+        dlat = radius_miles / self._MILES_PER_DEG_LAT
+        # cos() collapses to 0 at the poles and would make the box infinite.
+        cos  = max(math.cos(math.radians(float(lat))), 0.01)
+        dlng = radius_miles / (self._MILES_PER_DEG_LAT * cos)
+        lat, lng = float(lat), float(lng)
+        return lat - dlat, lat + dlat, lng - dlng, lng + dlng
+
+    def _near_home(self, request):
+        """`?near=home` — the same three sources, ranked by distance.
+
+        **Anchored on the golfer's own home course, never on the device.**
+        The app asks for no location permission and declares none, and
+        keeping that true is worth more than the convenience of a GPS fix
+        (see `docs/` and the privacy section of CLAUDE.md). A future
+        `?near=me` with explicit coordinates is a separate, deliberate
+        decision that carries an App Privacy declaration, a privacy-policy
+        rewrite and a Play Data-safety update with it.
+
+        Never errors on a golfer who has not set one up: it answers with an
+        empty list and a sentence saying what to do, because this is a
+        picker and a picker that throws is worse than one that is empty.
+        """
+        from core.models import CatalogCourse, Course as CourseModel
+        from services.geo import haversine_miles
+
+        player = getattr(request.user, 'player_profile', None)
+        home   = getattr(player, 'home_course', None) if player else None
+        if home is None:
+            return Response({'courses': [], 'anchor': None,
+                             'detail': 'Set a home course to see courses near you.'})
+        if home.latitude is None or home.longitude is None:
+            return Response({'courses': [], 'anchor': None,
+                             'detail': f'{home.name} has no map position, so there '
+                                       'is nothing to measure from. A course added '
+                                       'by hand carries no coordinates; one found '
+                                       'through the course database does.'})
+
+        try:
+            radius = int(request.query_params.get('radius') or 25)
+        except (TypeError, ValueError):
+            radius = 25
+        radius = max(1, min(radius, 50))
+
+        lat, lng = float(home.latitude), float(home.longitude)
+        lo_lat, hi_lat, lo_lng, hi_lng = self._bbox(lat, lng, radius)
+        account = request.user.account
+
+        out, seen_api, seen_name = [], set(), set()
+
+        def name_key(name, city):
+            return f'{(name or "").strip().lower()}|{(city or "").strip().lower()}'
+
+        def within(obj):
+            d = haversine_miles(lat, lng, obj.latitude, obj.longitude)
+            return d if (d is not None and d <= radius) else None
+
+        # 1. The account's own courses — already owned, so instant select.
+        own = (CourseModel.objects.for_account(account)
+               .filter(latitude__range=(lo_lat, hi_lat),
+                       longitude__range=(lo_lng, hi_lng))
+               .prefetch_related('tees'))
+        for c in own:
+            d = within(c)
+            if d is None:
+                continue
+            out.append({
+                'source': 'account', 'name': c.name, 'distance': round(d, 1),
+                'city': c.city, 'state': c.state, 'country': c.country,
+                'course_id': c.id, 'catalog_id': None,
+                'golf_api_id': c.golf_api_id or '', 'in_account': True,
+                'tee_count': sum(1 for t in c.tees.all() if t.is_current),
+            })
+            if c.golf_api_id:
+                seen_api.add(str(c.golf_api_id))
+            seen_name.add(name_key(c.name, c.city))
+
+        # 2. The shared catalog — clone-on-add, and costs no API call.
+        cat = (CatalogCourse.objects
+               .filter(latitude__range=(lo_lat, hi_lat),
+                       longitude__range=(lo_lng, hi_lng))
+               .prefetch_related('tees'))
+        for cc in cat:
+            d = within(cc)
+            if d is None or str(cc.golf_api_id) in seen_api:
+                continue
+            if name_key(cc.name, cc.city) in seen_name:
+                continue
+            out.append({
+                'source': 'catalog', 'name': cc.name, 'distance': round(d, 1),
+                'city': cc.city, 'state': cc.state, 'country': cc.country,
+                'course_id': None, 'catalog_id': cc.id,
+                'golf_api_id': cc.golf_api_id, 'in_account': False,
+                'tee_count': cc.tees.count(),
+            })
+            seen_api.add(str(cc.golf_api_id))
+            seen_name.add(name_key(cc.name, cc.city))
+
+        # 3. Live proximity — best-effort, exactly like the search branch.
+        try:
+            from services.golf_api_client import courses_near
+            api_courses = courses_near(lat, lng, radius=radius)
+        except Exception:
+            import logging, traceback
+            logging.getLogger(__name__).warning(
+                'CourseFind(near): GolfCourseAPI proximity failed; returning '
+                'local results only:\n%s', traceback.format_exc())
+            api_courses = []
+        for ac in api_courses:
+            aid = str(ac.get('id') or '').strip()
+            if not aid or aid in seen_api:
+                continue
+            name = _course_display_name(ac)
+            if name_key(name, ac.get('city')) in seen_name:
+                continue
+            out.append({
+                'source': 'api', 'name': name, 'distance': ac.get('distance'),
+                'city': ac.get('city', ''), 'state': ac.get('state', ''),
+                'country': ac.get('country', ''),
+                'course_id': None, 'catalog_id': None, 'golf_api_id': aid,
+                'in_account': False, 'tee_count': None,
+            })
+            seen_api.add(aid)
+            seen_name.add(name_key(name, ac.get('city')))
+
+        # Nearest first. A row whose distance the API omitted sorts last
+        # rather than first, which is where `None` would otherwise land.
+        out.sort(key=lambda r: (r['distance'] is None, r['distance'] or 0.0))
+        return Response({
+            'courses': out[:60],
+            'anchor': {'course_id': home.id, 'name': home.name,
+                       'radius_miles': radius},
+        })
+
     def get(self, request):
         from django.db.models import Q
         from core.models import CatalogCourse, Course as CourseModel
+
+        if (request.query_params.get('near') or '').strip().lower() == 'home':
+            return self._near_home(request)
 
         q = (request.query_params.get('q') or '').strip()
         if len(q) < 2:
