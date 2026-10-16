@@ -5453,6 +5453,60 @@ what it is playing before the round, with anything else going in as Other.
 
 Tests: `mobile/test/spots_types_test.dart` (13). Flutter 965 green.
 
+#### A greenie takes on-in-one AND a par
+
+Paul, 15 Oct 2026: *"It has to be both on the green on the first shot and a
+par."* The app can only see the second. Being closest from the tee is a human
+judgement, so the PICK records who it was and the SCORE decides whether he
+keeps it — on in one and then three putts is a bogey and pays nobody.
+
+So a par 3 has four outcomes, not two (`greenie_plan`):
+
+| | |
+|---|---|
+| a winner who **parred** | collects the worth; the next par 3 resets to 1 |
+| a winner who **did not** (`missed`) | nobody collects, and it carries exactly as Nobody would — he was closest, he just did not keep it |
+| a winner whose **score is not in** (`pending_score`) | provisional, and the carry does NOT move: the answer is not known. It resolves when the score lands, which on a real hole is seconds |
+| **Nobody**, or no pick | as before |
+
+**Par is GROSS.** The greenie is a shot — on the green from the tee, then up
+and down — so a net par off a stroke is not what is being paid for, and
+`birdie_basis` stays scoped to birdies and eagles. Worth flagging as a
+decision rather than a derivation: a high handicapper gets no help here.
+
+The card **states the rule**, because "on in one" is the half the app cannot
+enforce and a par is the half it can — without it a bogey that pays nobody
+reads as a bug. A missed par names the man and says nobody keeps it.
+
+### The greenie Paul could not select, and what it was not
+
+Reported mid-build: the greenie would not select on hole 7, before or after
+scoring a par. **The server and the client were both already right**, which
+took measuring rather than reasoning to establish, and the sequence is worth
+keeping because the same shape will recur:
+
+- the local game had `greenie` in `types`, carry on, par 3s at **4, 7, 11 and
+  16** off the real Tilden Park tee;
+- `greenie_plan` returned a row for every one of them, hole 7 included;
+- `_HoleScoreCard` has exactly ONE instantiation and it passes `cardFooter`,
+  which renders as the last child of the card's own column;
+- and `SpotsSummary.fromJson` of **the exact payload that round returned**
+  parses `greenieInPlay` true with a row for hole 7.
+
+That last one is now a test carrying the captured JSON verbatim
+(`_tildenPayload`), because the parse is the only link between a correct
+server and a correct widget that a stale build hides. **The remaining
+explanation is the build**: adding a constructor parameter to
+`_HoleScoreCard` and methods to `SpotsCaptureMixin` is not something hot
+reload picks up — it needs a full restart, and a mixin change often a
+rebuild.
+
+Worth remembering the cheaper check first: `ticks: [(2, 'chippy')]` was in
+the local database, which proves the new client had already talked to the new
+server successfully. Without that, "wrong build" and "pointing at Railway"
+(where none of this exists — `flutter run` with no flags does exactly that)
+would both still have been live.
+
 #### The board names the spots, not just the count
 
 Paul, 15 Oct 2026: *"We spent the energy to capture what spot it was on a

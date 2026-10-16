@@ -183,11 +183,21 @@ class GreenieEndpointTests(SpotsEndpointTests):
             reverse('api-spots-greenie', args=[self.fs.id]),
             {'hole_number': hole, 'player_id': player_id}, format='json')
 
-    def test_a_winner_takes_one_spot(self):
-        self._setup()
+    def test_a_winner_takes_one_spot_ONCE_HE_PARS_IT(self):
+        """On the green in one AND a par. The pick alone is provisional —
+        on in one and three putts pays nobody."""
+        from scoring.models import HoleScore
+        self._setup(types=['greenie'])
         resp = self._pick(3, self.ids[0])
         self.assertEqual(resp.status_code, 200, resp.data)
         winner = next(p for p in resp.data['players']
+                      if p['player_id'] == self.ids[0])
+        self.assertEqual(winner['spots'], 0, 'paid before the score was in')
+
+        HoleScore.objects.create(foursome=self.fs, player_id=self.ids[0],
+                                 hole_number=3, gross_score=3)   # par
+        got = self.client.get(reverse('api-spots-result', args=[self.fs.id]))
+        winner = next(p for p in got.data['players']
                       if p['player_id'] == self.ids[0])
         self.assertEqual(winner['spots'], 1)
 

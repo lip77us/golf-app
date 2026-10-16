@@ -178,6 +178,23 @@ class GreenieCard extends StatelessWidget {
             ),
           ],
         ]),
+        const SizedBox(height: 2),
+        // **The rule, on the card.** "On in one" is the half the app cannot
+        // check and a par is the half it can, so it has to say which it is
+        // enforcing — otherwise a bogey that pays nobody reads as a bug.
+        Text(
+          hole.missed
+              ? '${hole.winnerShort ?? 'Closest'} was closest but did not '
+                'par it — nobody keeps this one.'
+              : hole.pendingScore
+                  ? 'Waiting on the score. A par keeps it; anything worse '
+                    'carries.'
+                  : 'On the green in one, and a par to keep it.',
+          style: theme.textTheme.bodySmall?.copyWith(
+              color: hole.missed
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.onSurfaceVariant),
+        ),
         const SizedBox(height: 8),
         Wrap(spacing: 6, runSpacing: 6, children: [
           for (final p in players)

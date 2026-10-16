@@ -335,12 +335,33 @@ def greenie_plan(foursome, game) -> dict:
     Returns ``{'holes': [...], 'next': {...} | None, 'carry': bool,
     'awards': {hole: (player_id, worth)}}``.
 
-    Three rules, and each is load-bearing:
+    **A greenie takes two things: on the green in one, AND a par.** (Paul,
+    15 Oct 2026.) The app can only see the second. Being closest from the tee
+    is a human judgement, so the PICK records who it was and the score decides
+    whether he keeps it — on in one and then three putts is a bogey and pays
+    nobody.
 
-    * **Only an explicit Nobody carries.** A par 3 with no pick has not
-      happened yet, so it adds nothing to the next one. Picks can legitimately
-      arrive out of order, and treating a blank as unclaimed would invent a
-      carry out of a hole nobody has played.
+    So there are four outcomes per par 3, not two:
+
+    * **a winner who parred** — he collects the worth, and the next par 3
+      resets to 1.
+    * **a winner who did not** (``missed``) — nobody collects, and it carries
+      exactly as Nobody would. He was closest; he just did not keep it.
+    * **a winner whose score is not in yet** (``pending_score``) — the award
+      is provisional and the carry does NOT move, because the answer is not
+      known. It resolves itself when the score lands.
+    * **Nobody**, or no pick at all.
+
+    Par is GROSS. The greenie is a shot — on the green from the tee and up
+    and down — so a net par off a stroke is not the thing being paid for.
+    `birdie_basis` is scoped to birdies and eagles on purpose.
+
+    The three carry rules are unchanged:
+
+    * **Only an explicit Nobody (or a missed par) carries.** A par 3 with no
+      pick has not happened yet, so it adds nothing to the next one. Picks can
+      legitimately arrive out of order, and treating a blank as unclaimed
+      would invent a carry out of a hole nobody has played.
     * **A win resets it.** The next par 3 is worth 1 again.
     * **An unclaimed LAST par 3 voids the carry.** It falls out of the walk
       rather than being special-cased: the pending worth has no later par 3 to
@@ -349,6 +370,7 @@ def greenie_plan(foursome, game) -> dict:
     Par 3s are ordered by play position, not hole number — off a shotgun the
     4th can be played after the 12th, and the carry follows the group.
     """
+    from scoring.models import HoleScore
     from services.withdrawal import play_plan
     order, positions = play_plan(foursome)
     real_members = list(foursome.memberships.select_related('player', 'tee')
@@ -358,17 +380,25 @@ def greenie_plan(foursome, game) -> dict:
 
     picks = {g.hole_number: g for g in game.greenies.all()}
     carry = bool(game.greenie_carry)
+    gross = {
+        (r.player_id, r.hole_number): r.gross_score
+        for r in HoleScore.objects.filter(
+            foursome=foursome, player__is_phantom=False,
+            hole_number__in=par3s).exclude(gross_score=None)
+    }
 
     pending = 0
     holes, awards, nxt = [], {}, None
     for h in par3s:
         worth = 1 + pending
+        par = par_si.get(h, (3, 0))[0] or 3
         g = picks.get(h)
-        row = {'hole': h, 'worth': worth,
-               'carried_from': None, 'winner_id': None, 'decided': False}
+        row = {'hole': h, 'worth': worth, 'carried_from': None,
+               'winner_id': None, 'decided': False,
+               'missed': False, 'pending_score': False}
         if pending:
             # Which hole the carry came off, for the "Carried from the 4th"
-            # chip. The most recent decided par 3 before this one.
+            # chip. The most recent par 3 before this one that resolved.
             prev = [x['hole'] for x in holes if x['decided']]
             row['carried_from'] = prev[-1] if prev else None
         if g is None:
@@ -376,12 +406,27 @@ def greenie_plan(foursome, game) -> dict:
                 nxt = row
             holes.append(row)
             continue
-        row['decided'] = True
         if g.player_id:
             row['winner_id'] = g.player_id
-            awards[h] = (g.player_id, worth)
-            pending = 0
+            score = gross.get((g.player_id, h))
+            if score is None:
+                # Picked, not yet scored. Provisional: the carry must not move
+                # on a hole whose answer nobody knows.
+                row['pending_score'] = True
+                if nxt is None:
+                    nxt = row
+                holes.append(row)
+                continue
+            row['decided'] = True
+            if int(score) <= par:
+                awards[h] = (g.player_id, worth)
+                pending = 0
+            else:
+                # On in one and could not par it. Closest, and keeps nothing.
+                row['missed'] = True
+                pending = worth if carry else 0
         else:
+            row['decided'] = True
             pending = worth if carry else 0
         holes.append(row)
 
@@ -628,6 +673,9 @@ def spots_summary(foursome) -> dict:
     # an earlier par 3 moves every later one.
     greenie_block = {
         'carry' : greenie['carry'],
+        # Par is gross and the card has to say so, because "on in one" is the
+        # half the app cannot check and the par is the half it can.
+        'needs_par': True,
         'holes' : [
             dict(h, winner_short=short.get(h['winner_id'], None))
             for h in greenie['holes']

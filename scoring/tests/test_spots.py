@@ -258,6 +258,7 @@ class GreenieCarryTests(_Base):
     def test_a_win_is_worth_one_and_resets(self):
         setup_spots(self.fs, bet_unit=Decimal('1'), payout_style='pay_around')
         pick_greenie(self.fs, 3, self.pid['A'])
+        self.score(3, 'A', 3)                      # par 3 — he kept it
         s = spots_summary(self.fs)
         self.assertEqual(self._spots(s)['A'], 1)
         self.assertEqual(s['greenie']['next']['hole'], 7)
@@ -277,6 +278,7 @@ class GreenieCarryTests(_Base):
         pick_greenie(self.fs, 3, None)
         pick_greenie(self.fs, 7, None)
         pick_greenie(self.fs, 12, self.pid['B'])
+        self.score(12, 'B', 3)                     # par — he keeps all three
         s = spots_summary(self.fs)
         self.assertEqual(self._spots(s)['B'], 3)
         self.assertEqual(s['greenie']['next']['worth'], 1)   # 16 resets
@@ -304,6 +306,7 @@ class GreenieCarryTests(_Base):
         and picks legitimately arrive out of order."""
         setup_spots(self.fs)
         pick_greenie(self.fs, 7, self.pid['A'])      # the 3rd is still blank
+        self.score(7, 'A', 3)
         s = spots_summary(self.fs)
         self.assertEqual(self._spots(s)['A'], 1)
         self.assertEqual(s['greenie']['next']['hole'], 3)
@@ -317,6 +320,7 @@ class GreenieCarryTests(_Base):
                    for h in spots_summary(self.fs)['greenie']['holes']}
         self.assertEqual(by_hole[12], 3)
         pick_greenie(self.fs, 3, self.pid['A'])      # he did hit it after all
+        self.score(3, 'A', 3)                        # ...and parred it
         by_hole = {h['hole']: h['worth']
                    for h in spots_summary(self.fs)['greenie']['holes']}
         self.assertEqual(by_hole[12], 2)
@@ -334,7 +338,98 @@ class GreenieCarryTests(_Base):
     def test_a_greenie_not_in_play_pays_nothing(self):
         setup_spots(self.fs, types=['sandy'])
         pick_greenie(self.fs, 3, self.pid['A'])
+        self.score(3, 'A', 3)
         self.assertEqual(self._spots(spots_summary(self.fs))['A'], 0)
+
+
+class AGreenieNeedsAParTests(_Base):
+    """**On the green in one AND a par** (Paul, 15 Oct 2026).
+
+    The app can only see the second. Closest from the tee is a human
+    judgement, so the pick records who it was and the score decides whether
+    he keeps it.
+    """
+
+    def test_a_bogey_keeps_NOTHING_and_it_carries(self):
+        setup_spots(self.fs, bet_unit=Decimal('1'), payout_style='pay_around')
+        pick_greenie(self.fs, 3, self.pid['A'])
+        self.score(3, 'A', 4)                      # on in one, three putts
+        s = spots_summary(self.fs)
+        self.assertEqual(self._spots(s)['A'], 0)
+        row = next(h for h in s['greenie']['holes'] if h['hole'] == 3)
+        self.assertTrue(row['missed'])
+        self.assertEqual(row['winner_id'], self.pid['A'])
+        # It carries exactly as a Nobody would: he was closest and kept none.
+        nxt = s['greenie']['next']
+        self.assertEqual((nxt['hole'], nxt['worth']), (7, 2))
+
+    def test_a_birdie_keeps_it(self):
+        """Par or better. On in one and a single putt is a 2, and no group
+        docks a man for holing the putt.
+
+        Greenie ALONE in play, because a 2 on a par 3 is also a birdie and
+        the defaults pay that too — this is about the greenie.
+        """
+        setup_spots(self.fs, types=['greenie'])
+        pick_greenie(self.fs, 3, self.pid['A'])
+        self.score(3, 'A', 2)
+        self.assertEqual(self._spots(spots_summary(self.fs))['A'], 1)
+
+    def test_par_is_GROSS_even_with_a_stroke_on_the_hole(self):
+        """The greenie is a shot — on the green from the tee, then up and
+        down. A net par off a stroke is not the thing being paid for, which
+        is why `birdie_basis` is scoped to birdies and eagles."""
+        setup_spots(self.fs, types=['greenie'], birdie_basis='net_so')
+        # D is off 14 against a low of 8, so he strokes on this hole.
+        pick_greenie(self.fs, 3, self.pid['D'])
+        self.score(3, 'D', 4)
+        s = spots_summary(self.fs)
+        self.assertEqual(self._spots(s)['D'], 0)
+        self.assertTrue(next(h for h in s['greenie']['holes']
+                             if h['hole'] == 3)['missed'])
+
+    def test_a_pick_with_no_score_yet_is_PROVISIONAL(self):
+        """The carry must not move on a hole whose answer nobody knows. It
+        resolves itself when the score lands, which on a real hole is
+        seconds later."""
+        setup_spots(self.fs)
+        pick_greenie(self.fs, 3, self.pid['A'])
+        s = spots_summary(self.fs)
+        row = next(h for h in s['greenie']['holes'] if h['hole'] == 3)
+        self.assertTrue(row['pending_score'])
+        self.assertFalse(row['decided'])
+        self.assertEqual(self._spots(s)['A'], 0)
+        # ...and the next par 3 is not claimed to be worth anything yet.
+        self.assertEqual(s['greenie']['next']['hole'], 3)
+
+    def test_correcting_the_score_moves_the_money(self):
+        setup_spots(self.fs)
+        pick_greenie(self.fs, 3, self.pid['A'])
+        self.score(3, 'A', 4)
+        self.assertEqual(self._spots(spots_summary(self.fs))['A'], 0)
+        self.score(3, 'A', 3)                      # it was a 3 after all
+        self.assertEqual(self._spots(spots_summary(self.fs))['A'], 1)
+
+    def test_a_missed_par_still_carries_into_a_WIN(self):
+        setup_spots(self.fs)
+        pick_greenie(self.fs, 3, self.pid['A'])
+        self.score(3, 'A', 5)                      # closest, double bogey
+        pick_greenie(self.fs, 7, self.pid['B'])
+        self.score(7, 'B', 3)
+        self.assertEqual(self._spots(spots_summary(self.fs))['B'], 2)
+
+    def test_carry_OFF_means_a_missed_par_simply_dies(self):
+        setup_spots(self.fs, greenie_carry=False)
+        pick_greenie(self.fs, 3, self.pid['A'])
+        self.score(3, 'A', 4)
+        s = spots_summary(self.fs)
+        self.assertEqual(s['greenie']['next']['worth'], 1)
+
+    def test_the_summary_says_a_par_is_needed(self):
+        """The card has to say it: "on in one" is the half the app cannot
+        check, and the par is the half it can."""
+        setup_spots(self.fs)
+        self.assertTrue(spots_summary(self.fs)['greenie']['needs_par'])
 
 
 class BirdiesFromTheScorecardTests(_Base):

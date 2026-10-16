@@ -3203,6 +3203,12 @@ class SpotsGreenieHole {
   /// False means nobody has answered yet — which is NOT the same as Nobody
   /// having been picked. Only an answered Nobody carries.
   final bool    decided;
+  /// He was closest and did NOT par it, so he keeps nothing and it carries.
+  /// A greenie takes on the green in one AND a par; the app can only see the
+  /// second, so the pick says who was closest and the score decides.
+  final bool    missed;
+  /// Picked, score not in yet — provisional, and the carry has not moved.
+  final bool    pendingScore;
 
   const SpotsGreenieHole({
     required this.hole,
@@ -3211,6 +3217,8 @@ class SpotsGreenieHole {
     this.winnerId,
     this.winnerShort,
     this.decided = false,
+    this.missed = false,
+    this.pendingScore = false,
   });
 
   factory SpotsGreenieHole.fromJson(Map<String, dynamic> j) =>
@@ -3221,17 +3229,24 @@ class SpotsGreenieHole {
         winnerId:    j['winner_id']    as int?,
         winnerShort: j['winner_short'] as String?,
         decided:     j['decided'] as bool? ?? false,
+        missed:       j['missed'] as bool? ?? false,
+        pendingScore: j['pending_score'] as bool? ?? false,
       );
 }
 
 class SpotsGreenieState {
   final bool                   carry;
+  /// A par is required as well as being on in one. Always true today; it is
+  /// a field so the card states the rule from the server rather than from
+  /// copy typed next to the chips.
+  final bool                   needsPar;
   final List<SpotsGreenieHole> holes;
   /// The next par 3 with no answer — null once they are all in.
   final SpotsGreenieHole?      next;
 
   const SpotsGreenieState({
     this.carry = true,
+    this.needsPar = true,
     this.holes = const [],
     this.next,
   });
@@ -3239,6 +3254,7 @@ class SpotsGreenieState {
   factory SpotsGreenieState.fromJson(Map<String, dynamic> j) =>
       SpotsGreenieState(
         carry: j['carry'] as bool? ?? true,
+        needsPar: j['needs_par'] as bool? ?? true,
         holes: (j['holes'] as List? ?? [])
             .map((h) => SpotsGreenieHole.fromJson(h as Map<String, dynamic>))
             .toList(),

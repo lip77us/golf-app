@@ -4,6 +4,7 @@
 /// offers, and the three facts the greenie card has to get right.
 library;
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -28,7 +29,204 @@ const _greenie = {'type': 'greenie', 'label': 'Greenie', 'worth': 1};
 const _birdie  = {'type': 'birdie',  'label': 'Birdie',  'worth': 1};
 const _greenie2 = {'type': 'greenie', 'label': 'Greenie', 'worth': 2};
 
+/// The EXACT payload `GET /foursomes/855/spots/` returned for Paul's local
+/// Tilden Park round on 15 Oct 2026, when he reported that the greenie could
+/// not be selected on hole 7. Captured rather than hand-written, so this
+/// tests the real shape and not my idea of it.
+const _tildenPayload = r'''
+{
+    "status": "in_progress",
+    "in_play": [
+        {
+            "type": "greenie",
+            "label": "Greenie",
+            "worth": 1
+        },
+        {
+            "type": "sandy",
+            "label": "Sandy",
+            "worth": 1
+        },
+        {
+            "type": "birdie",
+            "label": "Birdie",
+            "worth": 1
+        },
+        {
+            "type": "eagle",
+            "label": "Eagle or better",
+            "worth": 2
+        },
+        {
+            "type": "chippy",
+            "label": "Chippy",
+            "worth": 1
+        }
+    ],
+    "sheet_types": [
+        {
+            "type": "sandy",
+            "label": "Sandy",
+            "worth": 1
+        },
+        {
+            "type": "chippy",
+            "label": "Chippy",
+            "worth": 1
+        }
+    ],
+    "greenie": {
+        "carry": true,
+        "needs_par": true,
+        "holes": [
+            {
+                "hole": 4,
+                "worth": 1,
+                "carried_from": null,
+                "winner_id": null,
+                "decided": false,
+                "missed": false,
+                "pending_score": false,
+                "winner_short": null
+            },
+            {
+                "hole": 7,
+                "worth": 1,
+                "carried_from": null,
+                "winner_id": null,
+                "decided": false,
+                "missed": false,
+                "pending_score": false,
+                "winner_short": null
+            },
+            {
+                "hole": 11,
+                "worth": 1,
+                "carried_from": null,
+                "winner_id": null,
+                "decided": false,
+                "missed": false,
+                "pending_score": false,
+                "winner_short": null
+            },
+            {
+                "hole": 16,
+                "worth": 1,
+                "carried_from": null,
+                "winner_id": null,
+                "decided": false,
+                "missed": false,
+                "pending_score": false,
+                "winner_short": null
+            }
+        ],
+        "next": {
+            "hole": 4,
+            "worth": 1,
+            "carried_from": null,
+            "winner_id": null,
+            "decided": false,
+            "missed": false,
+            "pending_score": false
+        }
+    },
+    "birdie_basis": "net_so",
+    "players": [
+        {
+            "player_id": 89,
+            "name": "Paul Lipkin",
+            "short_name": "Paul",
+            "spots": 2,
+            "payout": 5.0
+        },
+        {
+            "player_id": 103,
+            "name": "Ryan Lipkin",
+            "short_name": "RyanL",
+            "spots": 1,
+            "payout": 1.0
+        }
+    ],
+    "holes": [
+        {
+            "hole": 2,
+            "spots": [
+                {
+                    "player_id": 89,
+                    "short_name": "Paul",
+                    "count": 2,
+                    "types": [
+                        {
+                            "type": "birdie",
+                            "label": "Birdie",
+                            "worth": 1
+                        },
+                        {
+                            "type": "chippy",
+                            "label": "Chippy",
+                            "worth": 1
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "hole": 6,
+            "spots": [
+                {
+                    "player_id": 103,
+                    "short_name": "RyanL",
+                    "count": 1,
+                    "types": [
+                        {
+                            "type": "birdie",
+                            "label": "Birdie",
+                            "worth": 1
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "money": {
+        "bet_unit": 1.0,
+        "total_spots": 3
+    }
+}
+''';
+
 void main() {
+  group('the payload from the round that could not select a greenie', () {
+    // The server was right and so was the widget; what this pins is the
+    // PARSE, which is the only link between them that a stale build hides.
+    final s = SpotsSummary.fromJson(
+        jsonDecode(_tildenPayload) as Map<String, dynamic>);
+
+    test('greenie is in play', () {
+      expect(s.greenieInPlay, isTrue);
+      expect(s.inPlay.map((t) => t.type),
+             ['greenie', 'sandy', 'birdie', 'eagle', 'chippy']);
+    });
+
+    test('every par 3 has a row, hole 7 among them', () {
+      expect(s.greenie.holes.map((h) => h.hole), [4, 7, 11, 16]);
+      expect(s.greenie.forHole(7), isNotNull);
+      expect(s.greenie.forHole(7)!.worth, 1);
+      // A par 4 has none, which is what keeps the card off every other hole.
+      expect(s.greenie.forHole(5), isNull);
+    });
+
+    test('the carry is on and nothing is decided yet', () {
+      expect(s.greenie.carry, isTrue);
+      expect(s.greenie.holes.every((h) => !h.decided), isTrue);
+      expect(s.greenie.next?.hole, 4);
+    });
+
+    test('the sheet offers the ticks and not the greenie', () {
+      expect(s.sheetTypes.map((t) => t.type), ['sandy', 'chippy']);
+    });
+  });
+
   group('the button says what was ticked', () {
     testWidgets('empty it offers, filled it reports', (tester) async {
       await tester.pumpWidget(MaterialApp(
@@ -147,6 +345,32 @@ void main() {
       await tester.tap(find.text('Nobody'));
       expect(called, isTrue);
       expect(picked, isNull);
+    });
+
+    testWidgets('it states the rule, because half of it is unenforceable',
+        (tester) async {
+      await pump(tester, SpotsGreenieHole.fromJson(
+          const {'hole': 3, 'worth': 1}));
+      expect(find.textContaining('On the green in one'), findsOneWidget);
+      expect(find.textContaining('a par to keep it'), findsOneWidget);
+    });
+
+    testWidgets('a missed par says who was closest and that nobody keeps it',
+        (tester) async {
+      // Otherwise a bogey that pays nobody reads as a bug.
+      await pump(tester, SpotsGreenieHole.fromJson(const {
+        'hole': 3, 'worth': 1, 'winner_id': 1, 'winner_short': 'Paul',
+        'decided': true, 'missed': true,
+      }));
+      expect(find.textContaining('Paul was closest'), findsOneWidget);
+      expect(find.textContaining('nobody keeps this one'), findsOneWidget);
+    });
+
+    testWidgets('a pick with no score yet says it is waiting', (tester) async {
+      await pump(tester, SpotsGreenieHole.fromJson(const {
+        'hole': 3, 'worth': 1, 'winner_id': 1, 'pending_score': true,
+      }));
+      expect(find.textContaining('Waiting on the score'), findsOneWidget);
     });
 
     testWidgets('the winner reads as selected', (tester) async {
