@@ -5340,11 +5340,45 @@ that hole** — what is absent is unticked, which makes the sheet's Done button
 a plain save rather than a diff. An empty list clears him; golfers not named
 are untouched. New route `POST/DELETE …/spots/greenie/`.
 
-**So the backend must not reach production ahead of the app build.** The
-shipped client posts `count` and would get a 400 on every tap of the old
-stepper. A legacy alias was considered and declined: `count: 2` can only map
-to one `OTHER` tick, so it would pay the wrong money quietly where a 400 fails
-loudly. The real protection is that Spots has never been played.
+### The deploy window, measured rather than guessed
+
+The app release goes through review on Apple's schedule, so production runs
+this backend while phones run 2.11.2 for an unknown stretch. I first wrote
+here that the backend must not deploy ahead of the app build. **That was right
+about the symptom I had checked and wrong about the one that mattered**, so
+`api/test_spots_old_client.py` replays 2.11.2's exact requests and pins what
+each one does:
+
+| 2.11.2 does | result |
+|---|---|
+| `postSpotsSetup` (no `types`) | **works** — 201, playable |
+| `getSpotsSummary`, the leaderboard, the hole strip | **work** — the summary gained keys and lost none, and its `fromJson` ignores what it does not know |
+| the `⊖ N spots ⊕` stepper | **400**, and nothing is written |
+| a birdie on the card | **was quietly paid** — see below |
+
+The last row is the one worth the test. Birdie and Eagle are read off the
+SCORES, and they were in the defaults — so a 2.11.2 round would have paid for
+birdies the group never agreed to and that its screens cannot draw: no row
+explaining it, no way to turn it off, and a total that matches nothing anybody
+tallied. Worse than the 400 by a long way, and invisible.
+
+**The rule now: nothing pays for a spot the client cannot show.** A setup POST
+that does not mention `types` gets `legacy_default_types()` — the defaults
+minus the derived two. Decided at the API boundary rather than in the service,
+because the boundary is what knows the caller's capability; a client that
+SENDS `types` is one that can render them, and gets exactly what it asked for.
+Greenie stays in: it cannot pay without a pick, that app has none, so it is
+inert and starts working the moment the phone updates rather than needing the
+game reconfigured.
+
+So the window costs the hand-tally stepper and nothing else, loudly, with no
+money moving. A legacy `count` alias stays declined, and the reason is sharper
+now than "it would be lossy": the stepper posts the hole's RUNNING TOTAL, so
+mapping it would let the first tap through and fail the second. A consistent
+refusal beats a control that works once.
+
+The real protection remains that Spots has never been played — zero games in
+production — but it is no longer the only one.
 
 `_in_play_block()` is the one place a slug becomes a name, so no board can
 print a raw `eagle`. It also **orders every list by the catalogue**, which a

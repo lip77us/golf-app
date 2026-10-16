@@ -7682,7 +7682,8 @@ class SpotsSetupView(APIView):
         from api.serializers import SpotsSetupSerializer
         ser = SpotsSetupSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        from services.spots import setup_spots, spots_summary
+        from services.spots import (legacy_default_types, setup_spots,
+                                    spots_summary)
         d = ser.validated_data
         try:
             setup_spots(
@@ -7691,10 +7692,23 @@ class SpotsSetupView(APIView):
                 payout_style   = d.get('payout_style', 'per_point'),
                 per_point_mode = d.get('per_point_mode', 'all'),
                 loss_cap       = d.get('loss_cap'),
-                # `types` ABSENT means the defaults; an empty list is refused
-                # by the service, so the two cases must stay distinguishable
-                # here — `d.get('types')` would turn [] into None.
-                types          = (d['types'] if 'types' in d else None),
+                # Three cases, and they are genuinely different.
+                #   present       — the TD's own picks.
+                #   EMPTY list    — refused by the service; a game with
+                #                   nothing in play can only pay nobody. So
+                #                   `d.get('types')` is wrong here, since it
+                #                   would turn [] into None.
+                #   absent        — a client that has never heard of types,
+                #                   i.e. the shipped app. It gets the
+                #                   defaults WITHOUT birdie and eagle: those
+                #                   are read off the scores, and paying for a
+                #                   spot the caller cannot draw moves money
+                #                   for a reason nobody on that screen can
+                #                   see. **This is what makes the window
+                #                   between this deploy and the app release
+                #                   safe** rather than merely known.
+                types          = (d['types'] if 'types' in d
+                                  else legacy_default_types()),
                 greenie_carry  = d.get('greenie_carry', True),
                 birdie_basis   = d.get('birdie_basis', 'gross'),
                 net_percent    = d.get('net_percent', 100),

@@ -81,6 +81,27 @@ def default_types() -> list:
     return [str(t) for t in DEFAULT_TYPES]
 
 
+def legacy_default_types() -> list:
+    """The defaults MINUS the two that are read off the scores.
+
+    For a caller that did not mention `types` at all — which is the shipped
+    2.11.2 app, since the field did not exist when it was built.
+
+    **The rule is that nothing pays for a spot the client cannot show.**
+    Birdie and Eagle are derived, so on a phone with no notion of them they
+    would move money for a reason nobody on that screen can see: no row
+    explaining it, no way to turn it off, and a total that does not match the
+    spots anybody tallied. A control that fails loudly (that app's stepper
+    gets a 400) is recoverable; a number that is quietly wrong is not.
+
+    Greenie stays. It cannot pay without a pick, and that app has no pick, so
+    it is inert — and it starts working the moment the phone updates, rather
+    than needing the game reconfigured.
+    """
+    return [str(t) for t in DEFAULT_TYPES
+            if SPOT_META[t]['entry'] != 'derived']
+
+
 def normalise_types(types) -> list:
     """Keep the known slugs, in `SPOT_META` order, de-duplicated.
 

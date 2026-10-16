@@ -104,13 +104,28 @@ class TypesInPlayEndpointTests(SpotsEndpointTests):
     """Which spots are being played travels with every read, because the
     leaderboard's In play card and the hole sheet are both built from it."""
 
-    def test_setup_defaults_are_returned_when_types_are_OMITTED(self):
+    def test_OMITTING_types_withholds_the_two_read_off_the_scores(self):
+        """A caller that never mentions `types` has never heard of them —
+        which is the shipped app, since the field did not exist when it was
+        built. It gets the defaults MINUS birdie and eagle.
+
+        Those two are derived, so on a client with no notion of them they
+        would move money for a reason nobody on that screen can see. The
+        reasoning and the window it protects are in
+        `api/test_spots_old_client.py`; a client that SENDS `types` gets
+        exactly what it asked for, which the next test shows.
+        """
         resp = self._setup()
         slugs = [t['type'] for t in resp.data['in_play']]
-        self.assertEqual(slugs, ['greenie', 'sandy', 'birdie', 'eagle',
-                                 'chippy'])
+        self.assertEqual(slugs, ['greenie', 'sandy', 'chippy'])
         self.assertTrue(resp.data['greenie']['carry'])
         self.assertEqual(resp.data['birdie_basis'], 'gross')
+
+    def test_the_designed_defaults_are_what_a_client_ASKING_for_them_gets(self):
+        from services.spots import default_types
+        resp = self._setup(types=default_types())
+        self.assertEqual([t['type'] for t in resp.data['in_play']],
+                         ['greenie', 'sandy', 'birdie', 'eagle', 'chippy'])
 
     def test_an_EMPTY_list_is_refused_with_a_reason(self):
         """Omitted means defaults; empty means nothing in play, which can
