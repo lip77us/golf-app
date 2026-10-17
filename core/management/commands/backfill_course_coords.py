@@ -18,12 +18,50 @@ commits.
     python manage.py backfill_course_coords            # preview
     python manage.py backfill_course_coords --apply
 """
+from decimal import Decimal, InvalidOperation
+
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from core.models import CatalogCourse, Course
 from scoring.models import HoleScore
 from tournament.models import Round
+
+
+def _coord(value, limit):
+    """One coordinate, or None if it is not a usable number.
+
+    `limit` must be passed -- 90 for a latitude, 180 for a longitude. A
+    single range covering both accepts a latitude of 150, which is not a
+    place. Junk returns None rather than raising, because one bad row
+    upstream must not stop a backfill of ninety good ones.
+    """
+    if value in (None, ''):
+        return None
+    try:
+        d = Decimal(str(value)).quantize(Decimal('0.000001'))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+    return d if -limit <= d <= limit else None
+
+
+def position(data):
+    """(lat, lon) from an adapted course, or (None, None) if unusable.
+
+    **0,0 is rejected as a PAIR.** It is a real point in the Atlantic, no
+    golf course is there, and it is what a value defaulted rather than left
+    absent looks like. Either one being zero alone is fine -- the equator
+    and the Greenwich meridian both cross dry land.
+
+    Worth having because the write below goes straight into the database:
+    an unchecked coordinate is a course that silently moves, and a dot in
+    the sea is harder to notice than a missing one.
+    """
+    lat = _coord(data.get('latitude'), 90)
+    lon = _coord(data.get('longitude'), 180)
+    if lat is None or lon is None or (lat == 0 and lon == 0):
+        return None, None
+    return lat, lon
 
 
 class Command(BaseCommand):
@@ -84,11 +122,12 @@ class Command(BaseCommand):
                     f'  FETCH FAILED  {name}  ({api_id}): {exc}'))
                 continue
 
-            lat, lon = data.get('latitude'), data.get('longitude')
+            lat, lon = position(data)
             if lat is None or lon is None:
                 failed += 1
                 self.stdout.write(self.style.WARNING(
-                    f'  NO COORDS     {name}  ({api_id}) — upstream has none'))
+                    f'  NO COORDS     {name}  ({api_id}) — upstream has none '
+                    f'that can be used'))
                 continue
 
             found += 1
