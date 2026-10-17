@@ -25,7 +25,8 @@ import random
 from django.db import transaction
 
 from core.models import Player
-from scoring.handicap import par_adjusted_playing_handicap
+from scoring.handicap import (basis_rating_for,
+                              par_adjusted_playing_handicap)
 from tournament.models import Foursome, FoursomeMembership
 
 
@@ -264,6 +265,11 @@ def setup_round(
     # be distorted by a phantom 4th.
     is_tournament_round = round_obj.tournament_id is not None
 
+    # Resolved ONCE for the round, not per group -- that is the whole fix.
+    # None keeps the shipped per-group behaviour, which is right for a casual
+    # round and wrong for a field. See scoring.handicap.basis_rating_for.
+    basis_rating = basis_rating_for(round_obj)
+
     for group_number, group in enumerate(groups, start=1):
         # Explicit groups can be any size 1–4 and DON'T get a phantom
         # (single-player and 2-player groups in multi-foursome skins are
@@ -298,7 +304,8 @@ def setup_round(
             tee = tee_map[player.id]
             course_hcp  = player.course_handicap(tee)
             playing_hcp = par_adjusted_playing_handicap(
-                course_hcp, tee.par, min_par, handicap_allowance)
+                course_hcp, tee.par, min_par, handicap_allowance,
+                basis_rating=basis_rating)
             FoursomeMembership.objects.create(
                 foursome        = foursome,
                 player          = player,

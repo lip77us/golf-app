@@ -45,6 +45,21 @@ class Tournament(models.Model):
     # Cup tournaments ignore these (their scoring is per-round, per-format) and
     # keep the defaults.
     SCORING_METHODS     = [('stroke', 'Stroke play'), ('stableford', 'Stableford')]
+    #: The tee every handicap in this event is measured from. Null = the
+    #: shipped behaviour, where the reference is the lowest par in each
+    #: FOURSOME -- right for a casual round, wrong for a field, because the
+    #: same golfer then plays off a different number depending on the draw.
+    #: Naming a TEE rather than a par or a rating is deliberate: it survives a
+    #: re-rating and it is how a TD thinks ("we're playing off the White").
+    #: See scoring.handicap.par_adjusted_playing_handicap.
+    handicap_basis_tee  = models.ForeignKey(
+                            'core.Tee', on_delete=models.SET_NULL,
+                            null=True, blank=True, related_name='+',
+                            help_text='Measure every handicap from this '
+                                      "tee's course rating. Blank = use the "
+                                      'lowest par in each group.',
+                        )
+
     scoring_method      = models.CharField(
                             max_length=12, choices=SCORING_METHODS, default='stroke',
                             help_text=(
@@ -264,6 +279,25 @@ class Round(models.Model):
                             )
                         )
     bet_unit            = models.DecimalField(max_digits=6, decimal_places=2, default=5.00)
+    #: Per-round override of the tournament's basis. Null = inherit the
+    #: tournament's, and if that is null too, the shipped behaviour. A cup
+    #: can play several rounds on different courses, so the tournament
+    #: supplies a default and a round may differ.
+    #: The tee every handicap in this round is measured from. Null = the
+    #: shipped behaviour, where the reference is the lowest par in each
+    #: FOURSOME -- right for a casual round, wrong for a field, because the
+    #: same golfer then plays off a different number depending on the draw.
+    #: Naming a TEE rather than a par or a rating is deliberate: it survives a
+    #: re-rating and it is how a TD thinks ("we're playing off the White").
+    #: See scoring.handicap.par_adjusted_playing_handicap.
+    handicap_basis_tee  = models.ForeignKey(
+                            'core.Tee', on_delete=models.SET_NULL,
+                            null=True, blank=True, related_name='+',
+                            help_text='Measure every handicap from this '
+                                      "tee's course rating. Blank = use the "
+                                      'lowest par in each group.',
+                        )
+
     handicap_mode       = models.CharField(
                             max_length=20,
                             choices=[('gross','Gross'),('net','Net'),('strokes_off','Strokes Off Low')],

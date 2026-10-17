@@ -5367,7 +5367,8 @@ class FoursomeTeesView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        from scoring.handicap import par_adjusted_playing_handicap
+        from scoring.handicap import (basis_rating_for,
+                                      par_adjusted_playing_handicap)
         from services import setup_edit
 
         # BEFORE any write. Scoped to the whole foursome rather than the
@@ -5388,9 +5389,14 @@ class FoursomeTeesView(APIView):
         real_now = [m for m in memberships.values()
                     if not m.player.is_phantom and m.tee]
         old_min_par = min((m.tee.par for m in real_now), default=0)
+        # The reference has to be the SAME one the recompute below re-adds,
+        # or the recovered allowance absorbs the difference and every golfer
+        # drifts by it. None = the shipped per-group rule.
+        basis_rating = basis_rating_for(foursome.round)
+        old_ref = basis_rating if basis_rating is not None else old_min_par
         allowance_by_pid = {}
         for m in real_now:
-            base = m.playing_handicap - (m.tee.par - old_min_par)
+            base = m.playing_handicap - (m.tee.par - old_ref)
             allowance_by_pid[m.player_id] = (
                 base / m.course_handicap
                 if m.course_handicap and m.course_handicap > 0 else 1.0)
@@ -5459,7 +5465,8 @@ class FoursomeTeesView(APIView):
             else:
                 m.playing_handicap = par_adjusted_playing_handicap(
                     m.course_handicap, m.tee.par, new_min_par,
-                    allowance_by_pid.get(m.player_id, 1.0))
+                    allowance_by_pid.get(m.player_id, 1.0),
+                    basis_rating=basis_rating)
             m.save(update_fields=['tee', 'course_handicap', 'playing_handicap',
                                   'playing_handicap_override'])
 
@@ -6502,7 +6509,8 @@ class RoundAddPlayerView(APIView):
     def post(self, request, pk):
         from django.db import transaction
         from django.db.models import Max
-        from scoring.handicap import par_adjusted_playing_handicap
+        from scoring.handicap import (basis_rating_for,
+                                      par_adjusted_playing_handicap)
         from scoring.models import HoleScore
         from tournament.models import Foursome, FoursomeMembership, RoundStatus
 
@@ -6573,7 +6581,8 @@ class RoundAddPlayerView(APIView):
                 foursome=foursome, player=player, tee=tee,
                 course_handicap=course_hcp,
                 playing_handicap=par_adjusted_playing_handicap(
-                    course_hcp, tee.par, min(pars), 1.0),
+                    course_hcp, tee.par, min(pars), 1.0,
+                    basis_rating=basis_rating_for(round_obj)),
             )
 
             # A skins pool is a roster, not the round's field — somebody can

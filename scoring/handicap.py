@@ -64,18 +64,69 @@ from scoring.models import HoleScore
 from core.handicap_math import round_half_up
 
 
+def basis_rating_for(round_obj):
+    """The course rating every handicap in this round is measured from.
+
+    Resolution order, and the None at the end is the point: **round override
+    -> tournament default -> None**, where None means the shipped per-group
+    behaviour. A casual round has no tournament to carry the setting and the
+    group-par rule is right for it, so this is additive and nothing already
+    played moves.
+
+    Returns a float, or None. Takes the ROUND rather than a tee so every
+    caller resolves it the same way -- three sites recompute playing
+    handicaps (round setup, the Tees & Handicaps editor, and seating a late
+    arrival) and a second copy of this order is how they come to disagree.
+    """
+    if round_obj is None:
+        return None
+    tee = getattr(round_obj, 'handicap_basis_tee', None)
+    if tee is None:
+        tour = getattr(round_obj, 'tournament', None)
+        tee = getattr(tour, 'handicap_basis_tee', None) if tour else None
+    return float(tee.course_rating) if tee is not None else None
+
+
 def par_adjusted_playing_handicap(course_handicap: int, tee_par: int,
                                   min_group_par: int,
-                                  allowance: float = 1.0) -> int:
-    """Playing handicap including the WHS mixed-par (different-par) adjustment.
+                                  allowance: float = 1.0,
+                                  basis_rating=None) -> int:
+    """Playing handicap, measured from a reference the whole field shares.
 
-    When players compete across tees with different pars, the player on the
-    HIGHER-par tee adds the par difference to their handicap so cross-par Net
-    and Strokes-Off comparisons are equitable — e.g. a woman on a par-71 tee
-    against men on par-70 gets +1, matching GHIN's Playing Handicap. A group
-    with a single par (all men or all women) gets a 0 adjustment. `min_group_par`
-    is the lowest par among the tees in play in the group.
+    The handicap is `tee_par` minus a REFERENCE, and the only question is what
+    the reference is:
+
+    * **No basis (the default).** The reference is `min_group_par`, the lowest
+      par among the tees in that FOURSOME — the WHS mixed-par adjustment, so a
+      woman on a par-71 tee against men on par-70 gets +1. Right for a casual
+      round, where the group IS the competition.
+
+    * **A basis tee is set.** The reference is that tee's COURSE RATING. This
+      is what Golf Genius does, and it is the fix for a real defect: with the
+      group's own par as the reference, the same golfer on the same tee with
+      the same index plays off a different number depending on who she was
+      DRAWN with. At Tilden a 22.3 index on women's White came out 29 beside
+      men and 28 beside women. Against a field that does not change per
+      foursome, that is simply wrong.
+
+    Worked, at Tilden, basis = men's White (par 70, CR 69.0):
+
+        woman, 22.3, women's White (par 71, CR 73.5, slope 129) -> CH 28
+          no basis, drawn with men : 28 + (71 - 70)   = 29
+          basis                    : 28 + (71 - 69.0) = 30   <- Golf Genius
+
+    **Every handicap in the event moves when a basis is set**, not just the
+    ones that were wrong. At Tilden each men's tee is par 70, so every man
+    shifts by the same `70 - 69.0` = +1 whatever tee he is on and no match
+    between men changes; the women shift +2 from a women-only group. What is
+    left is the one stroke that was wrong.
+
+    `basis_rating` is a Decimal or float, so the whole sum is rounded rather
+    than an integer difference being added to a rounded handicap.
     """
+    if basis_rating is not None:
+        return round_half_up(course_handicap * allowance
+                             + (tee_par - float(basis_rating)))
     return round_half_up(course_handicap * allowance) + (tee_par - min_group_par)
 
 
