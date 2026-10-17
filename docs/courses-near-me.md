@@ -59,6 +59,35 @@ thing that can be subtly wrong with nothing exercising it.
 
 ---
 
+## 1b. The anchor nobody has — measured 16 Oct 2026
+
+**7 of 458 production golfers have a home course set.** It is an optional
+profile field and nothing ever prompts for it, so slice 1 as built reaches
+about 1.5% of the field; everyone else gets "Set a home course to see
+courses near you."
+
+**The fix is to stop asking, not to nag.** The course of a golfer's most
+recent round is already in the database, needs no input, and is a better
+guess at where he is than a field set once a year ago. Prefer `home_course`
+when present, fall back to the last round's course. That takes the anchor
+from 7 golfers to everyone who has played a round (136 of 365 locally).
+
+**This is the remaining work on slice 1** and it is not started.
+
+### The coordinate half is DONE — 16 Oct 2026
+
+The other reason slice 1 found nothing: a course with no position cannot be
+ranked, so it is dropped. `backfill_course_coords --apply` against
+production took account courses from **58 to 126 of 144 (40% -> 87%)** and
+the catalog from 24 to 29 of 35, for **15 API calls** — 70 rows but only 15
+distinct courses, because Tilden Park is cloned x33 across accounts and
+Poppy Hills x20.
+
+18 remain unplaced, all clones of two courses; one is **Corica Park South**,
+where upstream genuinely has no usable position. `set_course_coords` is the
+command for anything that must be placed by hand, and geocoding by name is
+deliberately not done anywhere in this repo.
+
 ## 2. Phone location — the whole chain
 
 **Verified 16 Oct 2026, and the app's position today is clean:** zero
