@@ -3167,6 +3167,27 @@ class TournamentLeaderboardView(APIView):
         })
 
 
+def _basis_tee_for_round(round_obj):
+    """The basis TEE (not its rating) -- same order as
+    `scoring.handicap.basis_rating_for`: round -> tournament -> course.
+
+    Two functions because the callers want different things from one answer:
+    the handicap wants a number, the tee picker wants the row. The order is
+    stated once in `basis_rating_for`'s docstring and mirrored here; if it
+    ever grows a fourth tier, both move.
+    """
+    if round_obj is None:
+        return None
+    tee = getattr(round_obj, 'handicap_basis_tee', None)
+    if tee is None:
+        tour = getattr(round_obj, 'tournament', None)
+        tee = getattr(tour, 'handicap_basis_tee', None) if tour else None
+    if tee is None:
+        course = getattr(round_obj, 'course', None)
+        tee = getattr(course, 'default_basis_tee', None) if course else None
+    return tee
+
+
 class TournamentHandicapBasisView(APIView):
     """
     GET    /api/tournaments/{id}/handicap-basis/ — the basis, and the tees
@@ -5455,14 +5476,41 @@ class FoursomeTeesView(APIView):
             base=Foursome.objects.select_related('round__course'),
         )
         from core.models import Tee
+        from services.tee_defaults import default_tee_for
         from .serializers import TeeSerializer
-        tees = (
+        tees = list(
             Tee.objects
             .filter(course=foursome.round.course, superseded_by__isnull=True)
             .select_related('course')
             .order_by('sort_priority', 'tee_name')
         )
-        return Response(TeeSerializer(tees, many=True).data)
+
+        # **What each golfer should be OFFERED**, which is not the same as the
+        # order above. `sort_priority` is maintained per course and at Tilden
+        # it gets the women wrong -- WHITE sits at 12 against RED's 15, so a
+        # woman is offered White when most of them play Red.
+        #
+        # Suggestions only. The response still carries the whole list in the
+        # shipped order, and a null suggestion means "no basis set here, use
+        # what you always used" -- so a client that ignores this key behaves
+        # exactly as it does today.
+        basis = _basis_tee_for_round(foursome.round)
+        suggested = {}
+        if basis is not None:
+            for sex in ('M', 'W'):
+                t = default_tee_for(sex, basis, tees)
+                suggested[sex] = t.id if t else None
+
+        # **The response stays a LIST.** `ApiClient.getFoursomeTees` decodes
+        # one, so wrapping it in an object would break every shipped app the
+        # moment this deployed. The suggestion rides on each ROW instead,
+        # where an older `fromJson` simply ignores it.
+        rows = TeeSerializer(tees, many=True).data
+        for row in rows:
+            row['suggested_for_sex'] = [
+                sex for sex, tid in suggested.items() if tid == row['id']]
+            row['is_basis'] = (basis is not None and row['id'] == basis.id)
+        return Response(rows)
 
     @transaction.atomic
     def patch(self, request, pk):

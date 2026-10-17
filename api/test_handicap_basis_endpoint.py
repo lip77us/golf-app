@@ -191,3 +191,71 @@ class ItRemembersOnTheCourse(TestCase):
                                       round_number=1, date=date(2026, 10, 17))
         casual.refresh_from_db()
         self.assertEqual(basis_rating_for(casual), 69.0)
+
+
+class TheTeePickerSuggests(TestCase):
+    """`GET /foursomes/{id}/tees/` carries a per-sex suggestion derived from
+    the basis — and must keep returning a LIST, because the shipped client
+    decodes one."""
+
+    def setUp(self):
+        from tournament.models import Foursome
+        self.account = Account.objects.create(name='Picker Acct')
+        self.user = User.objects.create_user(username='td3', account=self.account)
+        self.user.is_account_admin = True
+        self.user.save(update_fields=['is_account_admin'])
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+        self.course = Course.objects.create(account=self.account, name='Tilden Park')
+
+        def tee(name, sex, yards, cr, slope, par, prio):
+            return Tee.objects.create(
+                course=self.course, tee_name=name, sex=sex, par=par,
+                course_rating=Decimal(cr), slope=slope, sort_priority=prio,
+                holes=[{'number': n, 'par': 4, 'stroke_index': n,
+                        'yards': yards // 18} for n in range(1, 19)])
+
+        # The real Tilden rows, both sexes on the same physical boxes.
+        self.m_blue  = tee('Blue',  'M', 6258, '71.2', 125, 70, 10)
+        self.m_white = tee('White', 'M', 5764, '69.0', 122, 70, 8)
+        self.w_blue  = tee('BLUE',  'W', 6258, '76.2', 134, 71, 17)
+        self.w_white = tee('WHITE', 'W', 5764, '73.5', 129, 71, 12)
+        self.w_red   = tee('RED',   'W', 5395, '71.5', 125, 71, 15)
+
+        self.round = Round.objects.create(
+            account=self.account, course=self.course,
+            round_number=1, date=date(2026, 10, 17))
+        self.foursome = Foursome.objects.create(round=self.round, group_number=1)
+        self.url = f'/api/foursomes/{self.foursome.id}/tees/'
+
+    def test_it_is_still_a_list(self):
+        r = self.client.get(self.url)
+        self.assertEqual(r.status_code, 200)
+        self.assertIsInstance(r.data, list)
+
+    def test_no_basis_means_no_suggestion_at_all(self):
+        r = self.client.get(self.url)
+        for row in r.data:
+            self.assertEqual(row['suggested_for_sex'], [])
+            self.assertFalse(row['is_basis'])
+
+    def test_with_a_basis_the_woman_is_offered_RED(self):
+        """sort_priority would offer her WHITE (12 against RED's 15)."""
+        self.course.default_basis_tee = self.m_white
+        self.course.save(update_fields=['default_basis_tee'])
+        rows = {row['id']: row for row in self.client.get(self.url).data}
+        self.assertEqual(rows[self.w_red.id]['suggested_for_sex'], ['W'])
+        self.assertEqual(rows[self.m_white.id]['suggested_for_sex'], ['M'])
+        self.assertEqual(rows[self.w_white.id]['suggested_for_sex'], [])
+        self.assertTrue(rows[self.m_white.id]['is_basis'])
+
+    def test_the_round_can_still_override_the_course(self):
+        self.course.default_basis_tee = self.m_white
+        self.course.save(update_fields=['default_basis_tee'])
+        self.round.handicap_basis_tee = self.m_blue
+        self.round.save(update_fields=['handicap_basis_tee'])
+        rows = {row['id']: row for row in self.client.get(self.url).data}
+        self.assertEqual(rows[self.m_blue.id]['suggested_for_sex'], ['M'])
+        self.assertEqual(rows[self.w_white.id]['suggested_for_sex'], ['W'],
+                         'one down from Blue is WHITE')
