@@ -8694,3 +8694,82 @@ class RosterLastImport {
     return parts.isEmpty ? 'nothing changed' : parts.join(', ');
   }
 }
+
+/// A tee that could be the handicap basis for a round.
+class BasisTeeOption {
+  final int    teeId;
+  final String teeName;
+  final String sex;
+  final int    par;
+  final double courseRating;
+  final int    slope;
+
+  const BasisTeeOption({
+    required this.teeId, required this.teeName, required this.sex,
+    required this.par, required this.courseRating, required this.slope,
+  });
+
+  factory BasisTeeOption.fromJson(Map<String, dynamic> j) => BasisTeeOption(
+        teeId: (j['tee_id'] as num?)?.toInt() ?? 0,
+        teeName: (j['tee_name'] as String?) ?? '',
+        sex: (j['sex'] as String?) ?? '',
+        par: (j['par'] as num?)?.toInt() ?? 0,
+        courseRating: double.tryParse('${j['course_rating']}') ?? 0,
+        slope: (j['slope'] as num?)?.toInt() ?? 0,
+      );
+
+  /// `White (M) · par 70 · 69.0` — the rating is the number the basis
+  /// actually contributes, so it is shown rather than left implicit.
+  String get label {
+    final who = sex == 'M' ? 'M' : sex == 'W' ? 'W' : '';
+    return '$teeName${who.isEmpty ? '' : ' ($who)'} · par $par · $courseRating';
+  }
+}
+
+/// Which tee a round's handicaps are measured from, and where that came from.
+class RoundHandicapBasis {
+  final BasisTeeOption?      basis;
+
+  /// `round`, `tournament`, `course`, or null when nothing is set. Shown
+  /// because "why is this the basis" is what a TD asks when the number
+  /// surprises him.
+  final String?              source;
+  final String               courseName;
+  final List<BasisTeeOption> candidates;
+
+  /// Somebody has teed off. The basis decides how every hole is netted, so
+  /// moving it now would rewrite played holes.
+  final bool                 locked;
+
+  const RoundHandicapBasis({
+    this.basis, this.source, this.courseName = '',
+    this.candidates = const [], this.locked = false,
+  });
+
+  factory RoundHandicapBasis.fromJson(Map<String, dynamic> j) =>
+      RoundHandicapBasis(
+        basis: j['basis'] == null
+            ? null
+            : BasisTeeOption.fromJson(j['basis'] as Map<String, dynamic>),
+        source: j['source'] as String?,
+        courseName: (j['course_name'] as String?) ?? '',
+        candidates: ((j['candidates'] as List?) ?? const [])
+            .map((e) => BasisTeeOption.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        locked: j['locked'] == true,
+      );
+
+  /// What to say under the picker. Null source means the shipped rule, and
+  /// it is named rather than left blank so "no basis" reads as a choice.
+  String get explanation {
+    switch (source) {
+      case 'round':      return 'Set for this round.';
+      case 'tournament': return 'From the tournament.';
+      case 'course':     return 'Remembered for $courseName.';
+      default:
+        return 'Handicaps are measured from the lowest par in each group, '
+               'so the same golfer can play off a different number '
+               'depending on the draw.';
+    }
+  }
+}

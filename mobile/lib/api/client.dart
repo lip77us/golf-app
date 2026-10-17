@@ -528,6 +528,28 @@ class ApiClient {
     return PlayerProfile.fromJson(data as Map<String, dynamic>);
   }
 
+  /// Which tee a round's handicaps are measured from.
+  Future<RoundHandicapBasis> getRoundHandicapBasis(int roundId) async {
+    final data = await _get('/rounds/$roundId/handicap-basis/');
+    return RoundHandicapBasis.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Set it, and remember it on the course unless told otherwise — that is
+  /// what stops the next round here needing the same answer.
+  Future<RoundHandicapBasis> setRoundHandicapBasis(
+      int roundId, int teeId, {bool rememberOnCourse = true}) async {
+    final data = await _post('/rounds/$roundId/handicap-basis/', {
+      'tee_id': teeId,
+      'remember_on_course': rememberOnCourse,
+    });
+    return RoundHandicapBasis.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<RoundHandicapBasis> clearRoundHandicapBasis(int roundId) async {
+    final data = await _delete('/rounds/$roundId/handicap-basis/');
+    return RoundHandicapBasis.fromJson(data as Map<String, dynamic>);
+  }
+
   /// When the roster last came from Golf Genius.
   ///
   /// Its own call rather than a field on `getPlayers`, which decodes a LIST

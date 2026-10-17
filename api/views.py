@@ -3180,6 +3180,123 @@ class TournamentLeaderboardView(APIView):
         })
 
 
+class RoundHandicapBasisView(APIView):
+    """
+    GET    /api/rounds/{id}/handicap-basis/ — the basis for this round, where
+           it comes from, and the tees that could be one.
+    POST   — {"tee_id": N} sets it on the round and REMEMBERS it on the
+             course; {"remember_on_course": false} declines the second half.
+    DELETE — back to whatever the course or tournament says, and if neither,
+             to the shipped per-group rule.
+
+    **A round, not a foursome.** The basis governs every handicap in the
+    round, so setting it from one group's screen would still move the other
+    groups -- which is why this is OWN-ACCOUNT only rather than open to a
+    designated scorer the way the tee editor is. A scorer keeps his own
+    group's card; the field's reference is the TD's.
+
+    This is the casual path as much as the tournament one. A casual round has
+    no tournament to hold the setting, which is exactly why the default lives
+    on the COURSE -- see `scoring.handicap.basis_rating_for`.
+    """
+
+    def _round(self, request, pk):
+        from tournament.models import Round
+        return account_get_or_404(
+            Round, request.user.account, pk=pk,
+            base=Round.objects.select_related(
+                'course__default_basis_tee', 'handicap_basis_tee',
+                'tournament__handicap_basis_tee'),
+        )
+
+    def _candidates(self, rnd):
+        from core.models import Tee
+        return (Tee.objects
+                .filter(course_id=rnd.course_id, superseded_by__isnull=True)
+                .select_related('course')
+                .order_by('sex', '-course_rating'))
+
+    def _row(self, t):
+        return {'tee_id': t.id, 'tee_name': t.tee_name, 'sex': t.sex or '',
+                'par': t.par, 'course_rating': float(t.course_rating),
+                'slope': t.slope}
+
+    def _payload(self, rnd):
+        tee = _basis_tee_for_round(rnd)
+        # Where it came from, because "why is this the basis" is the question
+        # a TD asks when the number surprises him.
+        if rnd.handicap_basis_tee_id:
+            source = 'round'
+        elif getattr(rnd.tournament, 'handicap_basis_tee_id', None):
+            source = 'tournament'
+        elif rnd.course.default_basis_tee_id:
+            source = 'course'
+        else:
+            source = None
+        return {
+            'basis': self._row(tee) if tee else None,
+            'source': source,
+            'course_name': rnd.course.name,
+            'candidates': [self._row(t) for t in self._candidates(rnd)],
+            'locked': _round_has_real_score(rnd),
+        }
+
+    def get(self, request, pk):
+        return Response(self._payload(self._round(request, pk)))
+
+    def post(self, request, pk):
+        rnd = self._round(request, pk)
+        if _round_has_real_score(rnd):
+            return Response(
+                {'detail': 'Somebody has already teed off. Changing the basis '
+                           'now would re-net holes that have been played.'},
+                status=400)
+        tee_id = request.data.get('tee_id')
+        if tee_id in (None, ''):
+            return Response({'detail': 'tee_id is required.'}, status=400)
+        tee = self._candidates(rnd).filter(pk=tee_id).first()
+        if tee is None:
+            return Response(
+                {'detail': 'That tee is not on this round\'s course.'},
+                status=400)
+
+        rnd.handicap_basis_tee = tee
+        rnd.save(update_fields=['handicap_basis_tee'])
+        if request.data.get('remember_on_course', True):
+            course = rnd.course
+            if course.default_basis_tee_id is None:
+                course.default_basis_tee = tee
+                course.save(update_fields=['default_basis_tee'])
+        rnd.refresh_from_db()
+        return Response(self._payload(rnd))
+
+    def delete(self, request, pk):
+        rnd = self._round(request, pk)
+        if _round_has_real_score(rnd):
+            return Response(
+                {'detail': 'Somebody has already teed off.'}, status=400)
+        rnd.handicap_basis_tee = None
+        rnd.save(update_fields=['handicap_basis_tee'])
+        rnd.refresh_from_db()
+        return Response(self._payload(rnd))
+
+
+def _round_has_real_score(rnd):
+    """Has anybody who is not a phantom posted a gross score in this round.
+
+    The same threshold the tee editor uses, and for the same reason: the
+    basis decides how every hole is netted, so moving it after play has
+    started rewrites results nobody asked to change. A phantom does not
+    count -- setup writes its scores itself.
+    """
+    from scoring.models import HoleScore
+    return HoleScore.objects.filter(
+        foursome__round=rnd,
+        gross_score__isnull=False,
+        player__is_phantom=False,
+    ).exists()
+
+
 class RosterLastImportView(APIView):
     """
     GET /api/roster/last-import/ — when this account's roster last came from

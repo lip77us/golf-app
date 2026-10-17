@@ -61,6 +61,8 @@ class ConfirmTeesScreen extends StatefulWidget {
 
 class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
   bool       _loading = true;
+  RoundHandicapBasis? _basis;
+  bool       _basisBusy = false;
   bool       _saving  = false;
   Object?    _error;
   List<TeeInfo>     _tees    = [];
@@ -112,6 +114,17 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
       if (fs == null) {
         throw Exception('Foursome not found on the loaded round.');
       }
+      // Best effort, and never the reason the screen fails: a tee list that
+      // draws is worth more than the line explaining where handicaps are
+      // measured from.
+      final rid = round?.id;
+      if (rid != null) {
+        try {
+          final b = await client.getRoundHandicapBasis(rid);
+          if (mounted) setState(() => _basis = b);
+        } catch (_) {/* no card rather than an error */}
+      }
+
       _members = fs.realPlayers.toList();
       for (final m in _members) {
         _hcaps[m.player.id] = TextEditingController(
@@ -161,6 +174,92 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
   /// Takes the ids rather than reading them off `context`, because by the time
   /// the Undo action is tapped this screen has popped and its context is
   /// dead. The round provider is captured for the same reason.
+  /// **Which tee handicaps are measured from**, on the screen where golfers
+  /// are assigned to tees — because that is the moment the question comes
+  /// up, and the answer changes which tee each of them is offered below.
+  ///
+  /// Draws nothing until the server answers, and nothing at all when the
+  /// round has no candidates. Changing it re-sorts the pickers underneath,
+  /// which is the point: at Tilden a basis of men's White moves the women
+  /// from WHITE to RED.
+  Widget _basisCard() {
+    final b = _basis;
+    if (b == null || b.candidates.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Icon(Icons.flag_outlined, size: 16,
+                   color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Text('Handicaps measured from',
+                   style: theme.textTheme.labelLarge?.copyWith(
+                       fontWeight: FontWeight.bold,
+                       color: theme.colorScheme.primary)),
+            ]),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<int?>(
+              initialValue: b.basis?.teeId,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(), isDense: true),
+              // Locked once anybody has teed off: the basis decides how every
+              // hole is netted, so moving it would rewrite played holes.
+              onChanged: (b.locked || _basisBusy) ? null : _setBasis,
+              items: [
+                const DropdownMenuItem<int?>(
+                  value: null, child: Text('No basis — lowest par in the group')),
+                ...b.candidates.map((c) => DropdownMenuItem<int?>(
+                      value: c.teeId, child: Text(c.label))),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              b.locked
+                  ? 'Somebody has teed off, so this is fixed for the round.'
+                  : b.explanation,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _setBasis(int? teeId) async {
+    final rid = context.read<RoundProvider>().round?.id;
+    if (rid == null) return;
+    final client = context.read<AuthProvider>().client;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _basisBusy = true);
+    try {
+      final b = teeId == null
+          ? await client.clearRoundHandicapBasis(rid)
+          : await client.setRoundHandicapBasis(rid, teeId);
+      if (!mounted) return;
+      setState(() => _basis = b);
+      // The tee list below is sorted off the suggestion, so it has to be
+      // re-fetched — otherwise the card says one thing and the pickers
+      // underneath still offer the old default.
+      await _load();
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(e))));
+    } finally {
+      if (mounted) setState(() => _basisBusy = false);
+    }
+  }
+
   Future<void> _undo(int foursomeId, RoundProvider rp) async {
     final messenger = ScaffoldMessenger.of(context);
     final client    = context.read<AuthProvider>().client;
@@ -397,6 +496,7 @@ class _ConfirmTeesScreenState extends State<ConfirmTeesScreen> {
           ]),
         ),
         const SizedBox(height: 16),
+        _basisCard(),
         TeeAssignmentList(
           players:   _members.map((m) => m.player).toList(),
           tees:      _tees,
