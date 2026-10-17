@@ -3167,6 +3167,52 @@ class TournamentLeaderboardView(APIView):
         })
 
 
+class RosterLastImportView(APIView):
+    """
+    GET /api/roster/last-import/ — when this account's roster last came from
+    Golf Genius, and what that import did.
+
+    **Its own endpoint rather than a field on the roster**, because
+    `GET /players/` returns a LIST and `ApiClient.getPlayers` decodes one.
+    Wrapping it to add a header would break every shipped app the moment it
+    deployed, which is a bad trade for one line of text.
+
+    Answers `{"synced": false}` rather than 404 when nobody has imported:
+    "this roster has never come from Golf Genius" is a real answer and the
+    screen draws nothing, where a 404 would read as a fault.
+
+    Counts come from the run's own `result.log`, which is what the console
+    receipt shows -- so the app and the receipt cannot disagree about what a
+    given run did.
+    """
+
+    def get(self, request):
+        from console.models import ImportRun
+        run = (ImportRun.objects
+               .filter(account=request.user.account,
+                       status=ImportRun.STATUS_APPLIED)
+               .select_related('user')
+               .order_by('-applied_at', '-created_at')
+               .first())
+        if run is None:
+            return Response({'synced': False})
+
+        log = (run.result or {}).get('log') or {}
+        by = run.user
+        return Response({
+            'synced'    : True,
+            # applied_at is the moment the roster actually changed; created_at
+            # is when the file was dropped, and a run previewed one evening and
+            # applied the next morning would otherwise report the wrong day.
+            'when'      : run.applied_at or run.created_at,
+            'run_number': run.number,
+            'filename'  : run.filename,
+            'created'   : len(log.get('created') or []),
+            'updated'   : len(log.get('updated') or []),
+            'by'        : (by.get_full_name() or by.username) if by else '',
+        })
+
+
 def _basis_tee_for_round(round_obj):
     """The basis TEE (not its rating) -- same order as
     `scoring.handicap.basis_rating_for`: round -> tournament -> course.

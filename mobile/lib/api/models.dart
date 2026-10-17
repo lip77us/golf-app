@@ -8632,3 +8632,50 @@ class FortyBallsHoleState {
             Map<String, dynamic>.from(j['card'] as Map? ?? const {})),
       );
 }
+
+/// When this account's roster last came from Golf Genius.
+///
+/// `synced` false is a real answer, not an error: a roster that has never
+/// been imported draws nothing rather than an empty date.
+class RosterLastImport {
+  final bool     synced;
+  final DateTime? when;
+  final int?     runNumber;
+  final String   filename;
+  final int      created;
+  final int      updated;
+  final String   by;
+
+  const RosterLastImport({
+    required this.synced,
+    this.when,
+    this.runNumber,
+    this.filename = '',
+    this.created  = 0,
+    this.updated  = 0,
+    this.by       = '',
+  });
+
+  factory RosterLastImport.fromJson(Map<String, dynamic> j) => RosterLastImport(
+        synced   : j['synced'] == true,
+        when     : j['when'] == null
+                     ? null
+                     : DateTime.tryParse(j['when'] as String)?.toLocal(),
+        runNumber: j['run_number'] as int?,
+        filename : (j['filename'] as String?) ?? '',
+        created  : (j['created'] as int?) ?? 0,
+        updated  : (j['updated'] as int?) ?? 0,
+        by       : (j['by'] as String?) ?? '',
+      );
+
+  /// `2 added, 72 updated`, or `nothing changed` -- a run that matched
+  /// everybody and moved nothing is a real outcome and worth saying, since
+  /// otherwise it reads as a failed import.
+  String get changeSummary {
+    final parts = <String>[
+      if (created > 0) '$created added',
+      if (updated > 0) '$updated updated',
+    ];
+    return parts.isEmpty ? 'nothing changed' : parts.join(', ');
+  }
+}

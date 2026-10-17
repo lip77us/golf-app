@@ -528,6 +528,16 @@ class ApiClient {
     return PlayerProfile.fromJson(data as Map<String, dynamic>);
   }
 
+  /// When the roster last came from Golf Genius.
+  ///
+  /// Its own call rather than a field on `getPlayers`, which decodes a LIST
+  /// -- wrapping that response to carry one line of text would break every
+  /// shipped app.
+  Future<RosterLastImport> getRosterLastImport() async {
+    final data = await _get('/roster/last-import/');
+    return RosterLastImport.fromJson(data as Map<String, dynamic>);
+  }
+
   Future<List<TeeInfo>> getTees() async {
     final data = await _get('/tees/');
     return (data as List)

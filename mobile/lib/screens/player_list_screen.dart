@@ -1,6 +1,7 @@
 /// screens/player_list_screen.dart
 /// Browseable, searchable player roster with add / edit actions.
 
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -23,6 +24,7 @@ class PlayerListScreen extends StatefulWidget {
 class _PlayerListScreenState extends State<PlayerListScreen> {
   List<PlayerProfile> _all     = [];
   bool    _loading = true;
+  RosterLastImport? _lastImport;
   String? _error;
   bool    _networkError = false;
   String  _search = '';
@@ -39,6 +41,13 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
       final client = context.read<AuthProvider>().client;
       final data   = await client.getPlayers();
       if (mounted) setState(() { _all = data; });
+      // Best effort and deliberately AFTER the roster: this is a footnote
+      // about where the list came from, and it must never be the reason the
+      // list itself fails to draw.
+      try {
+        final imp = await client.getRosterLastImport();
+        if (mounted) setState(() { _lastImport = imp; });
+      } catch (_) {/* no line rather than an error */}
     } catch (e) {
       if (mounted) setState(() {
         _error = friendlyError(e);
@@ -47,6 +56,40 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
     } finally {
       if (mounted) setState(() { _loading = false; });
     }
+  }
+
+  /// Where this roster came from, and when.
+  ///
+  /// Shown HERE rather than behind a menu entry because this is the screen
+  /// a handicap gets questioned on -- "that index is stale" is answered by
+  /// the date the roster last came from Golf Genius.
+  Widget _syncLine() {
+    final imp = _lastImport;
+    // Nothing at all until we know, and nothing ever for an account that has
+    // never imported -- most have not, and a permanent "never synced" would
+    // be a nag about a feature they do not use.
+    if (imp == null || !imp.synced || imp.when == null) {
+      return const SizedBox.shrink();
+    }
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Row(
+        children: [
+          Icon(Icons.sync, size: 14,
+               color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Synced from Golf Genius '
+              '${DateFormat('MMM d').format(imp.when!)} · ${imp.changeSummary}',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   List<PlayerProfile> get _filtered {
@@ -181,6 +224,7 @@ class _PlayerListScreenState extends State<PlayerListScreen> {
               onChanged: (v) => setState(() => _search = v),
             ),
           ),
+          _syncLine(),
           Expanded(child: _buildList()),
         ],
       ),

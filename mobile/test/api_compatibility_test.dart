@@ -123,6 +123,7 @@ final Map<String, Object Function(Map<String, dynamic>)> _models = {
   'RabbitPlayerTotal': (j) => RabbitPlayerTotal.fromJson(j),
   'RabbitSegment': (j) => RabbitSegment.fromJson(j),
   'RabbitSummary': (j) => RabbitSummary.fromJson(j),
+  'RosterLastImport': (j) => RosterLastImport.fromJson(j),
   'Round': (j) => Round.fromJson(j),
   'RoundMessagesResult': (j) => RoundMessagesResult.fromJson(j),
   'RoundSummary': (j) => RoundSummary.fromJson(j),
