@@ -374,12 +374,57 @@ class TeeSerializer(serializers.ModelSerializer):
     is_custom_index = serializers.BooleanField(read_only=True)
     custom_index_of = serializers.PrimaryKeyRelatedField(read_only=True)
 
+    # **Which golfers should be OFFERED this tee**, and whether it is the one
+    # handicaps are measured from. Both derive from the basis (see
+    # `services/tee_defaults.py`), and both are computed HERE so the two
+    # endpoints that list tees cannot drift: round setup reads `/tees/`
+    # before any foursome exists and answers off the COURSE default, while
+    # `/foursomes/{id}/tees/` can also see a round or tournament override.
+    #
+    # Empty list / false whenever no basis applies, which is every account
+    # that has never set one -- so a client reading these keys behaves
+    # exactly as it does today until somebody names a tee.
+    suggested_for_sex = serializers.SerializerMethodField()
+    is_basis          = serializers.SerializerMethodField()
+
     class Meta:
         model  = Tee
         fields = ['id', 'course', 'tee_name', 'slope', 'course_rating',
                   'par', 'holes', 'sex', 'sort_priority',
-                  'is_custom_index', 'custom_index_of']
+                  'is_custom_index', 'custom_index_of',
+                  'suggested_for_sex', 'is_basis']
         read_only_fields = ['id']
+
+    def _basis(self, obj):
+        """The basis tee that governs THIS tee's course.
+
+        `basis_by_course` in the context wins when present (a round or
+        tournament override); otherwise the course's own default, which is
+        what makes the suggestion work before a round exists.
+        """
+        override = (self.context.get('basis_by_course') or {})
+        if obj.course_id in override:
+            return override[obj.course_id]
+        return getattr(obj.course, 'default_basis_tee', None)
+
+    def get_suggested_for_sex(self, obj) -> list:
+        from services.tee_defaults import default_tee_for
+        basis = self._basis(obj)
+        if basis is None:
+            return []
+        tees = self.context.get('course_tees_by_id', {}).get(obj.course_id)
+        if tees is None:
+            tees = list(obj.course.tees.filter(superseded_by__isnull=True))
+        out = []
+        for sex in ('M', 'W'):
+            pick = default_tee_for(sex, basis, tees)
+            if pick is not None and pick.id == obj.id:
+                out.append(sex)
+        return out
+
+    def get_is_basis(self, obj) -> bool:
+        basis = self._basis(obj)
+        return basis is not None and basis.id == obj.id
 
 
 # ===========================================================================

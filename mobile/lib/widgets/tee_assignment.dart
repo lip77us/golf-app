@@ -3,12 +3,26 @@ import 'package:flutter/material.dart';
 import '../api/models.dart';
 
 /// Tees at a course that a given player can play — matching sex plus any
-/// unisex tees — sorted by (sort_priority, tee_name) so the "house default"
-/// lands first.  Shared by the casual round setup tee step and the Edit Tee
-/// Boxes screen so both order tees identically.
+/// unisex tees.  Shared by the casual round setup tee step and the Edit Tee
+/// Boxes screen so both order tees identically, and **the first entry is the
+/// default** every caller takes.
+///
+/// A tee the server suggests for THIS golfer's sex floats to the top, ahead
+/// of `sortPriority`.  That priority is a per-course preference and it is
+/// routinely wrong on one side: at Tilden the men's side is maintained
+/// (White is 8, the lowest, so men default to White) while the women's
+/// lowest is WHITE at 12 against RED's 15 — so a woman is offered White when
+/// most of them play Red.  The suggestion comes off the course's handicap
+/// basis and knows that RED is one down from the men's default.
+///
+/// With no basis set the list is untouched, so this changes nothing until a
+/// course names one.
 List<TeeInfo> teesForPlayer(List<TeeInfo> all, PlayerProfile p) {
   final tees = all.where((t) => t.sex == null || t.sex == p.sex).toList()
     ..sort((a, b) {
+      final sa = a.suggestedForSex.contains(p.sex) ? 0 : 1;
+      final sb = b.suggestedForSex.contains(p.sex) ? 0 : 1;
+      if (sa != sb) return sa.compareTo(sb);
       final pc = a.sortPriority.compareTo(b.sortPriority);
       if (pc != 0) return pc;
       return a.teeName.compareTo(b.teeName);

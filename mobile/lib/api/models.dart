@@ -486,6 +486,15 @@ class TeeInfo {
   /// list response small).
   final List<Map<String, dynamic>> holes;
 
+  /// Sexes this tee is the suggested default for, derived from the course's
+  /// handicap basis. Empty when no basis is set — which is every account
+  /// that has not named one, so the shipped `sortPriority` ordering stands
+  /// until somebody does.
+  final List<String> suggestedForSex;
+
+  /// This is the tee handicaps are measured from.
+  final bool isBasis;
+
   const TeeInfo({
     required this.id,
     required this.course,
@@ -496,6 +505,8 @@ class TeeInfo {
     this.sex,
     this.sortPriority = 100,
     this.holes = const [],
+    this.suggestedForSex = const [],
+    this.isBasis = false,
   });
 
   factory TeeInfo.fromJson(Map<String, dynamic> j) => TeeInfo(
@@ -510,6 +521,10 @@ class TeeInfo {
         holes: (j['holes'] as List? ?? const [])
             .map((h) => Map<String, dynamic>.from(h as Map))
             .toList(),
+        suggestedForSex: ((j['suggested_for_sex'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toList(),
+        isBasis: j['is_basis'] == true,
       );
 
   String get display => '${course.name} — $teeName';

@@ -2044,10 +2044,23 @@ class TeeListView(APIView):
 
         # Current revisions only — retired (superseded) tees stay reachable by
         # id for the rounds that used them, but aren't offered for new setups.
-        tees = account_qs(Tee, request.user.account).filter(
-            superseded_by__isnull=True,
-        ).order_by('course__name', 'tee_name')
-        return Response(TeeSerializer(tees, many=True).data)
+        tees = list(
+            account_qs(Tee, request.user.account)
+            .filter(superseded_by__isnull=True)
+            .select_related('course__default_basis_tee')
+            .order_by('course__name', 'tee_name')
+        )
+
+        # Group once so the serializer can answer "which golfers should be
+        # offered this tee" without a query per row. Round setup reads THIS
+        # endpoint, before any foursome exists, so the answer comes off each
+        # course's own default basis.
+        by_course = {}
+        for t in tees:
+            by_course.setdefault(t.course_id, []).append(t)
+        return Response(TeeSerializer(
+            tees, many=True,
+            context={'course_tees_by_id': by_course}).data)
 
 
 class TeeDetailView(APIView):
@@ -5522,7 +5535,6 @@ class FoursomeTeesView(APIView):
             base=Foursome.objects.select_related('round__course'),
         )
         from core.models import Tee
-        from services.tee_defaults import default_tee_for
         from .serializers import TeeSerializer
         tees = list(
             Tee.objects
@@ -5540,23 +5552,19 @@ class FoursomeTeesView(APIView):
         # shipped order, and a null suggestion means "no basis set here, use
         # what you always used" -- so a client that ignores this key behaves
         # exactly as it does today.
-        basis = _basis_tee_for_round(foursome.round)
-        suggested = {}
-        if basis is not None:
-            for sex in ('M', 'W'):
-                t = default_tee_for(sex, basis, tees)
-                suggested[sex] = t.id if t else None
-
-        # **The response stays a LIST.** `ApiClient.getFoursomeTees` decodes
-        # one, so wrapping it in an object would break every shipped app the
-        # moment this deployed. The suggestion rides on each ROW instead,
+        # **The response stays a LIST.** `ApiClient.getFoursomeCourseTees`
+        # decodes one, so wrapping it in an object would break every shipped
+        # app the moment this deployed. The suggestion rides on each ROW,
         # where an older `fromJson` simply ignores it.
-        rows = TeeSerializer(tees, many=True).data
-        for row in rows:
-            row['suggested_for_sex'] = [
-                sex for sex, tid in suggested.items() if tid == row['id']]
-            row['is_basis'] = (basis is not None and row['id'] == basis.id)
-        return Response(rows)
+        #
+        # The context carries the ROUND's basis, which may override the
+        # course default, and the tee list so the serializer does not go
+        # back to the database once per row.
+        basis = _basis_tee_for_round(foursome.round)
+        ctx = {'course_tees_by_id': {foursome.round.course_id: tees}}
+        if basis is not None:
+            ctx['basis_by_course'] = {foursome.round.course_id: basis}
+        return Response(TeeSerializer(tees, many=True, context=ctx).data)
 
     @transaction.atomic
     def patch(self, request, pk):
