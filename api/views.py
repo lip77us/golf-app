@@ -3167,6 +3167,144 @@ class TournamentLeaderboardView(APIView):
         })
 
 
+class TournamentHandicapBasisView(APIView):
+    """
+    GET    /api/tournaments/{id}/handicap-basis/ — the basis, and the tees
+           that could be one.
+    POST   — {"tee_id": N} sets the tournament default;
+             {"tee_id": N, "round_id": R} overrides one round.
+    DELETE — {"round_id": R} clears that round's override, or no body clears
+             the tournament default.
+
+    **Why a tee and not a number.** A basis names a TEE ("we're playing off
+    the White"); its course rating is read from the row, so a re-rating
+    carries through and nobody is maintaining a copied figure. See
+    `scoring.handicap.par_adjusted_playing_handicap` for what it does to the
+    arithmetic.
+
+    **Setting it does not move anybody on its own.** Playing handicaps are
+    SNAPSHOTTED onto `FoursomeMembership` at setup, so an event already drawn
+    keeps the numbers it was drawn with until those memberships are
+    recomputed — which is the Tees & Handicaps screen, and is deliberately a
+    separate, visible act rather than something a settings change does to a
+    field behind the TD's back. The response says so in `applies_to`.
+    """
+
+    def _tournament(self, request, pk):
+        from tournament.models import Tournament
+        return account_get_or_404(Tournament, request.user.account, pk=pk)
+
+    def _candidates(self, tournament):
+        """Current tees on every course this tournament plays.
+
+        Scoped to the courses in play because a basis from another course
+        would be a rating measured on ground nobody is walking.
+        """
+        from core.models import Tee
+        course_ids = list(tournament.rounds.values_list('course_id', flat=True))
+        return (Tee.objects
+                .filter(course_id__in=course_ids, superseded_by__isnull=True)
+                .select_related('course')
+                .order_by('course__name', 'sex', '-course_rating'))
+
+    def _tee_row(self, t):
+        return {'tee_id': t.id, 'course_id': t.course_id,
+                'course_name': t.course.name, 'tee_name': t.tee_name,
+                'sex': t.sex or '', 'par': t.par,
+                'course_rating': float(t.course_rating), 'slope': t.slope}
+
+    def get(self, request, pk):
+        tour = self._tournament(request, pk)
+        basis = tour.handicap_basis_tee
+        rounds = []
+        for r in tour.rounds.select_related('handicap_basis_tee__course').order_by('round_number'):
+            rt = r.handicap_basis_tee
+            rounds.append({
+                'round_id': r.id, 'round_number': r.round_number,
+                'basis': self._tee_row(rt) if rt else None,
+            })
+        # Where it would come from if the tournament had none -- the course's
+        # own default is what a casual round here uses, and what seeds the
+        # next event.
+        course_defaults = []
+        seen = set()
+        for r in tour.rounds.select_related('course__default_basis_tee__course'):
+            c = r.course
+            if c.id in seen:
+                continue
+            seen.add(c.id)
+            course_defaults.append({
+                'course_id': c.id, 'course_name': c.name,
+                'basis': self._tee_row(c.default_basis_tee)
+                         if c.default_basis_tee_id else None,
+            })
+
+        return Response({
+            'basis': self._tee_row(basis) if basis else None,
+            'course_defaults': course_defaults,
+            'rounds': rounds,
+            'candidates': [self._tee_row(t) for t in self._candidates(tour)],
+            # Said out loud because a TD who sets this on a drawn event and
+            # sees nothing change would reasonably think it had not saved.
+            'applies_to': 'Rounds set up from now on. An event already drawn '
+                          'keeps its handicaps until you reopen Tees & '
+                          'Handicaps for a group.',
+        })
+
+    def post(self, request, pk):
+        from core.models import Tee
+        tour = self._tournament(request, pk)
+        tee_id = request.data.get('tee_id')
+        if tee_id in (None, ''):
+            return Response({'detail': 'tee_id is required.'}, status=400)
+        valid = {t.id: t for t in self._candidates(tour)}
+        tee = valid.get(int(tee_id))
+        if tee is None:
+            return Response(
+                {'detail': 'That tee is not on a course this tournament '
+                           'plays, so its rating describes ground nobody is '
+                           'walking.'}, status=400)
+
+        round_id = request.data.get('round_id')
+        if round_id:
+            rnd = tour.rounds.filter(pk=round_id).first()
+            if rnd is None:
+                return Response({'detail': 'No such round in this tournament.'},
+                                status=404)
+            rnd.handicap_basis_tee = tee
+            rnd.save(update_fields=['handicap_basis_tee'])
+        else:
+            tour.handicap_basis_tee = tee
+            tour.save(update_fields=['handicap_basis_tee'])
+
+        # **Remember it on the COURSE unless told not to.** That is what
+        # makes the next event here come out right with nobody setting it,
+        # and what gives casual rounds the same basis. Only fills a blank --
+        # a course that already has one is a deliberate answer, and a single
+        # event is not grounds to overwrite it.
+        if request.data.get('remember_on_course', True):
+            course = tee.course
+            if course.default_basis_tee_id is None:
+                course.default_basis_tee = tee
+                course.save(update_fields=['default_basis_tee'])
+        return self.get(request, pk)
+
+    def delete(self, request, pk):
+        tour = self._tournament(request, pk)
+        round_id = request.data.get('round_id') if request.data else None
+        if round_id:
+            rnd = tour.rounds.filter(pk=round_id).first()
+            if rnd is None:
+                return Response({'detail': 'No such round in this tournament.'},
+                                status=404)
+            rnd.handicap_basis_tee = None
+            rnd.save(update_fields=['handicap_basis_tee'])
+        else:
+            tour.handicap_basis_tee = None
+            tour.save(update_fields=['handicap_basis_tee'])
+        return self.get(request, pk)
+
+
 class TournamentFlightsView(APIView):
     """
     GET  /api/tournaments/{id}/flights/ — the current cut, and what one would be.

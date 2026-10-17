@@ -124,22 +124,43 @@ class ResolutionOrder(TestCase):
     class _Tour:
         def __init__(self, tee=None): self.handicap_basis_tee = tee
 
+    class _Course:
+        def __init__(self, tee=None): self.default_basis_tee = tee
+
     class _Round:
-        def __init__(self, tee=None, tour=None):
+        def __init__(self, tee=None, tour=None, course=None):
             self.handicap_basis_tee = tee
             self.tournament = tour
+            self.course = course or ResolutionOrder._Course()
 
     def test_no_round_is_none(self):
         self.assertIsNone(basis_rating_for(None))
 
-    def test_a_casual_round_with_nothing_set_is_none(self):
+    def test_nothing_set_anywhere_is_none(self):
         self.assertIsNone(basis_rating_for(self._Round()))
 
-    def test_the_tournament_supplies_the_default(self):
-        r = self._Round(tour=self._Tour(self._Tee('69.0')))
+    def test_the_course_supplies_it_when_nothing_else_does(self):
+        """The whole point of keeping it on the course: a CASUAL round has no
+        tournament, but it always has a course."""
+        r = self._Round(course=self._Course(self._Tee('69.0')))
         self.assertEqual(basis_rating_for(r), 69.0)
 
-    def test_the_round_overrides_the_tournament(self):
-        """A cup plays several rounds, possibly on different courses."""
-        r = self._Round(tee=self._Tee('71.2'), tour=self._Tour(self._Tee('69.0')))
+    def test_the_tournament_beats_the_course(self):
+        r = self._Round(tour=self._Tour(self._Tee('71.2')),
+                        course=self._Course(self._Tee('69.0')))
         self.assertEqual(basis_rating_for(r), 71.2)
+
+    def test_the_round_beats_both(self):
+        """A cup plays several rounds, possibly on different courses."""
+        r = self._Round(tee=self._Tee('67.3'),
+                        tour=self._Tour(self._Tee('71.2')),
+                        course=self._Course(self._Tee('69.0')))
+        self.assertEqual(basis_rating_for(r), 67.3)
+
+    def test_a_casual_round_at_tilden_gets_the_same_number_as_the_cup(self):
+        """Paul, 17 Oct: same rule for casual rounds. With the default on the
+        course they agree by construction rather than by being kept in step."""
+        tilden = self._Course(self._Tee('69.0'))
+        casual = self._Round(course=tilden)
+        cup    = self._Round(course=tilden, tour=self._Tour())
+        self.assertEqual(basis_rating_for(casual), basis_rating_for(cup))

@@ -67,11 +67,19 @@ from core.handicap_math import round_half_up
 def basis_rating_for(round_obj):
     """The course rating every handicap in this round is measured from.
 
-    Resolution order, and the None at the end is the point: **round override
-    -> tournament default -> None**, where None means the shipped per-group
-    behaviour. A casual round has no tournament to carry the setting and the
-    group-par rule is right for it, so this is additive and nothing already
-    played moves.
+    Resolution order: **this round -> its tournament -> the COURSE -> None**.
+
+    The course is the one that matters and it is deliberately last-but-one.
+    A basis is a property of the ground: at Tilden it is men's White whoever
+    is playing and whatever the event. Keeping it there rather than copying
+    it into each tournament is what makes a new event at a familiar course
+    come out right with nobody setting anything, and it is what gives CASUAL
+    rounds the same rule -- they have no tournament, but they always have a
+    course.
+
+    None still means the shipped per-group behaviour, and every course
+    starts with it null, so this is additive: nothing moves until somebody
+    names a tee.
 
     Returns a float, or None. Takes the ROUND rather than a tee so every
     caller resolves it the same way -- three sites recompute playing
@@ -84,6 +92,9 @@ def basis_rating_for(round_obj):
     if tee is None:
         tour = getattr(round_obj, 'tournament', None)
         tee = getattr(tour, 'handicap_basis_tee', None) if tour else None
+    if tee is None:
+        course = getattr(round_obj, 'course', None)
+        tee = getattr(course, 'default_basis_tee', None) if course else None
     return float(tee.course_rating) if tee is not None else None
 
 

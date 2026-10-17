@@ -519,6 +519,20 @@ class Course(models.Model):
     city            = models.CharField(max_length=80, blank=True)
     state           = models.CharField(max_length=80, blank=True)
     country         = models.CharField(max_length=80, blank=True)
+    #: The tee this course's handicaps are measured from, by default.
+    #: At Tilden that is men's White. Kept on the COURSE rather than copied
+    #: into each event because that is what makes it stable: a TD who plays
+    #: two courses should not inherit the wrong basis from whichever event
+    #: ran last, and a new tournament here picks this up with nobody setting
+    #: it. A round or a tournament may still override.
+    #: Null = the shipped per-group rule. See scoring.handicap.basis_rating_for.
+    default_basis_tee = models.ForeignKey(
+                        'core.Tee', on_delete=models.SET_NULL,
+                        null=True, blank=True, related_name='+',
+                        help_text='Measure handicaps here from this tee. '
+                                  'Blank = lowest par in each group.',
+                    )
+
     latitude        = models.DecimalField(max_digits=9, decimal_places=6,
                                           null=True, blank=True)
     longitude       = models.DecimalField(max_digits=9, decimal_places=6,
