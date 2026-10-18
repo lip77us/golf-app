@@ -11064,6 +11064,13 @@ class CourseFindView(APIView):
         if len(q) < 2:
             return Response({'courses': []})
 
+        # The account and catalog halves match on the same terms the upstream
+        # search gets, so a leading article does not quietly exclude a course
+        # already owned. "The Bridges" has to find a row stored as
+        # "Bridges (The)" here too. See services.golf_api_client.search_terms.
+        from services.golf_api_client import search_terms
+        q_local = search_terms(q)
+
         account = request.user.account
         out = []
         seen_api = set()    # golf_api_id strings already represented
@@ -11075,7 +11082,7 @@ class CourseFindView(APIView):
         # 1. The caller's own courses — instant select.
         own = (CourseModel.objects
                .for_account(account)
-               .filter(Q(name__icontains=q) | Q(city__icontains=q))
+               .filter(Q(name__icontains=q_local) | Q(city__icontains=q_local))
                .prefetch_related('tees')
                .order_by('name')[:25])
         for c in own:
@@ -11094,7 +11101,7 @@ class CourseFindView(APIView):
 
         # 2. Shared catalog — clone-on-add (free).
         cat = (CatalogCourse.objects
-               .filter(Q(name__icontains=q) | Q(city__icontains=q))
+               .filter(Q(name__icontains=q_local) | Q(city__icontains=q_local))
                .prefetch_related('tees')
                .order_by('name')[:50])
         for cc in cat:

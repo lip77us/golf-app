@@ -105,6 +105,35 @@ def _get(path: str, params: dict | None = None) -> dict:
 # Public API
 # ---------------------------------------------------------------------------
 
+#: Leading words a club name is filed under elsewhere. Upstream stores "The
+#: Bridges" as "Bridges (The)", so the article has to come off the query or
+#: the course cannot be found by its own name.
+_LEADING_ARTICLES = ('the ', 'a ', 'an ')
+
+
+def search_terms(query: str) -> str:
+    """The query to actually send upstream.
+
+    **Strips a leading article.** Reported from San Ramon, 18 Oct 2026: The
+    Bridges Golf Club did not come up. GolfCourseAPI files it as
+    `Bridges (The)`, so "The Bridges" returns eleven courses and none of them
+    is the one you played, while "Bridges" finds it immediately.
+
+    Strictly better for recall and it loses nothing: searching "Bridges"
+    returns every "The Bridges" as well as every "Bridges (The)". The cost is
+    a wider result set, which the merge already caps.
+
+    Only a LEADING article, and only when something follows it -- "The" alone
+    is somebody still typing.
+    """
+    q = (query or '').strip()
+    low = q.lower()
+    for art in _LEADING_ARTICLES:
+        if low.startswith(art) and len(q) > len(art):
+            return q[len(art):].strip()
+    return q
+
+
 def search_courses(query: str) -> list:
     """
     Search for golf courses by club name or course name.
@@ -119,7 +148,7 @@ def search_courses(query: str) -> list:
             'country'    : str,
         }]
     """
-    data    = _get('/v1/search', params={'search_query': query})
+    data    = _get('/v1/search', params={'search_query': search_terms(query)})
     courses = data.get('courses') or []
     return [_adapt_course_summary(c) for c in courses]
 
@@ -262,12 +291,33 @@ def _adapt_course_detail(raw: dict) -> dict:
 
 
 def _adapt_tee(raw: dict, sex: str) -> dict:
+    """One tee set, with **nothing invented**.
+
+    This used to default a missing slope to 113, a missing course rating to
+    72.0 and a missing par to 72 — three plausible-looking numbers that are
+    silently wrong. `_adapt_hole` was fixed for exactly this and `_adapt_tee`
+    was left behind; the course that found it was The Bridges in San Ramon,
+    where GolfCourseAPI has every slope and NO course rating at all.
+
+    Why a fabricated rating is worse than a missing one: course handicap is
+    `index x slope/113 + (CR - par)`, so a CR invented as 72.0 against a real
+    par of 72 makes that term ZERO and quietly moves every handicap at the
+    course. Nothing on screen says so. The handicap BASIS reads
+    `tee.course_rating` directly too, so one fabricated figure would become
+    the reference for a whole field.
+
+    Missing values come through as None / 0 so `services.course_quality` can
+    see them and refuse the import, which is the same call the stroke-index
+    permutation check already makes.
+    """
     holes = raw.get('holes') or []
     return {
         'name'         : raw.get('tee_name', ''),
-        'slope'        : int(raw.get('slope_rating') or 113),
-        'course_rating': float(raw.get('course_rating') or 72.0),
-        'par'          : int(raw.get('par_total') or 72),
+        'slope'        : _opt_int(raw.get('slope_rating')) or None,
+        'course_rating': (float(raw['course_rating'])
+                          if raw.get('course_rating') not in (None, '')
+                          else None),
+        'par'          : _opt_int(raw.get('par_total')),
         'sex'          : sex,           # 'M' or 'W' — derived from tees.male / tees.female
         'holes'        : [_adapt_hole(h, number=i + 1) for i, h in enumerate(holes)],
     }

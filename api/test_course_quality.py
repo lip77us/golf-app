@@ -37,7 +37,21 @@ def _good_holes(si=None):
 
 
 def _course(tees):
-    return {'id': 99, 'course_name': 'Test GC', 'tees': tees}
+    """A course as `fetch_course` returns it.
+
+    Fills in rating / slope / par on any tee that does not state them: a real
+    adapted tee ALWAYS carries those keys, and the gate refuses a tee with no
+    course rating (a guessed one moves every handicap at the course). These
+    fixtures are about the HOLE rules, so they should not trip that.
+    """
+    filled = []
+    for t in tees:
+        t = dict(t)
+        t.setdefault('course_rating', 72.1)
+        t.setdefault('slope', 125)
+        t.setdefault('par', 72)
+        filled.append(t)
+    return {'id': 99, 'course_name': 'Test GC', 'tees': filled}
 
 
 # ---------------------------------------------------------------------------

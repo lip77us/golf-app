@@ -41,7 +41,8 @@ class ShortCourseQualityGateTests(TestCase):
     def test_assert_quality_accepts_9_hole_course(self):
         warnings = assert_course_quality(
             {'id': 1, 'course_name': 'Short GC',
-             'tees': [{'name': 'White', 'holes': _holes(9)}]})
+             'tees': [{'name': 'White', 'holes': _holes(9),
+                       'course_rating': 35.2, 'slope': 121, 'par': 36}]})
         self.assertEqual(warnings, [])
 
     def test_short_18_hole_forward_tee_accepted(self):

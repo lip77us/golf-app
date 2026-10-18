@@ -128,6 +128,27 @@ def assert_course_quality(api_course):
 
     for i, tee in enumerate(tees):
         label = _tee_label(tee, i)
+
+        # **A tee with no course rating cannot be played net**, and importing
+        # one is worse than refusing it: course handicap is
+        # `index x slope/113 + (CR - par)`, so a missing CR either crashes or
+        # gets defaulted into a plausible number that silently moves every
+        # handicap at the course. The adapter used to default it to 72.0;
+        # it now reports None and this is where that lands.
+        #
+        # Same rule as the stroke index: reject rather than import a
+        # gross-only approximation, and let the TD paste a corrected card.
+        if tee.get('course_rating') in (None, ''):
+            problems.append(
+                f'{label}: no course rating. Net scoring needs one, and a '
+                f'guessed rating would change every handicap here without '
+                f'saying so.'
+            )
+        if not tee.get('slope'):
+            problems.append(f'{label}: no slope rating.')
+        if not tee.get('par'):
+            problems.append(f'{label}: no par for the tee.')
+
         holes = tee.get('holes') or []
         if not holes:
             warnings.append(
