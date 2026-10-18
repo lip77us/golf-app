@@ -47,6 +47,7 @@ Match Play
 """
 
 import logging
+import re
 
 from django.conf import settings
 from django.contrib.auth import authenticate
@@ -10441,14 +10442,43 @@ class GolfApiCourseDetailView(APIView):
         return Response(course)
 
 
+#: `Bridges (The)` -> `The Bridges`. Upstream files clubs under a trailing
+#: parenthesised article, the way a library would.
+_TRAILING_ARTICLE = re.compile(r'^(.*?),?\s*\((the|an|a)\)\s*$', re.IGNORECASE)
+
+
+def _uninvert(name: str) -> str:
+    """Put a trailing parenthesised article back at the front.
+
+    **Reported from San Ramon, 18 Oct 2026.** The Bridges Golf Club "did not
+    come up". It did -- second in the list -- as `Bridges (The)`, sitting
+    between "Waushara Country Club — Bridges" and "The Bridges — Winona, MN",
+    and it reads as a different course from the one you played. The row has
+    to be recognisable, not merely present.
+
+    This is the only fix of the three I made that addresses what he actually
+    typed: stripping a LEADING article helps somebody who types "The
+    Bridges", and he typed "Bridges".
+    """
+    m = _TRAILING_ARTICLE.match((name or '').strip())
+    if not m:
+        return (name or '').strip()
+    stem, article = m.group(1).strip(), m.group(2)
+    # `(The)` on its own is not a name to invert.
+    return f'{article.capitalize()} {stem}' if stem else (name or '').strip()
+
+
 def _course_display_name(api_course: dict) -> str:
     """
     Build the canonical name we store locally for a course returned by
     GolfCourseAPI.  If club_name and course_name differ (the club has
     multiple courses), we disambiguate; otherwise we use club_name alone.
+
+    Both halves are un-inverted first, so a course is stored and shown under
+    the name a golfer would say out loud.
     """
-    club   = (api_course.get('club_name')   or '').strip()
-    course = (api_course.get('course_name') or '').strip()
+    club   = _uninvert(api_course.get('club_name')   or '')
+    course = _uninvert(api_course.get('course_name') or '')
     if course and course != club:
         return f'{club} — {course}'
     return club

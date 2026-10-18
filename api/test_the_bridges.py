@@ -34,6 +34,7 @@ from rest_framework.test import APIClient
 from accounts.models import Account
 from core.models import CatalogCourse, Course, Tee
 from services.course_quality import CourseQualityError, assert_course_quality
+from api.views import _uninvert
 from services.golf_api_client import search_terms
 
 User = get_user_model()
@@ -145,3 +146,73 @@ class TheAdapterReportsWhatIsMissing(TestCase):
                         'course_rating': 73.6, 'par_total': 72,
                         'holes': []}, sex='M')
         self.assertEqual(t['course_rating'], 73.6)
+
+
+class TheNameIsReadableInTheList(TestCase):
+    """What ACTUALLY went wrong on 18 Oct.
+
+    He searched "Bridges", and the course WAS there -- second in the list --
+    as `Bridges (The)`, between "Waushara Country Club — Bridges" and
+    "The Bridges — Winona, MN". Present but unrecognisable is the same
+    outcome as absent.
+
+    Stripping a leading article, which I did first, helps somebody who types
+    "The Bridges". He typed "Bridges". This is the fix for what he did.
+    """
+
+    def test_the_san_ramon_club_reads_as_its_own_name(self):
+        self.assertEqual(_uninvert('Bridges (The)'), 'The Bridges')
+
+    def test_other_clubs_filed_the_same_way(self):
+        self.assertEqual(_uninvert('Olympic Club (The)'), 'The Olympic Club')
+        self.assertEqual(_uninvert('Links (The)'), 'The Links')
+
+    def test_case_and_a_stray_comma_do_not_matter(self):
+        self.assertEqual(_uninvert('bridges (the)'), 'The bridges')
+        self.assertEqual(_uninvert('Lakes, (The)'), 'The Lakes')
+
+    def test_an_ordinary_name_is_untouched(self):
+        for n in ('Waushara Country Club', 'The Bridges', 'Tilden Park GC'):
+            self.assertEqual(_uninvert(n), n)
+
+    def test_an_article_alone_is_not_a_name_to_invert(self):
+        self.assertEqual(_uninvert('(The)'), '(The)')
+        self.assertEqual(_uninvert(''), '')
+
+    def test_the_full_display_name_uses_it(self):
+        from api.views import _course_display_name
+        self.assertEqual(
+            _course_display_name({'club_name': 'Bridges (The)',
+                                  'course_name': 'Bridges (The)'}),
+            'The Bridges')
+        # A club with several courses still disambiguates.
+        self.assertEqual(
+            _course_display_name({'club_name': 'Waushara Country Club',
+                                  'course_name': 'Bridges'}),
+            'Waushara Country Club — Bridges')
+
+
+class SearchingACityIsAKnownGAP(TestCase):
+    """Not fixed, and worth stating so nobody re-chases it.
+
+    He also searched "San Ramon" and got Canyon Lakes (his own, by city) and
+    San Ramon Gc (by NAME) -- not The Bridges. GolfCourseAPI's search matches
+    the club name only; the city it returns is display data, not an index.
+    Our own account and catalog halves DO match on city, which is why two
+    San Ramon courses came back at all and the gap is easy to miss.
+
+    Nothing here to assert about upstream. This is a note with a test file
+    around it so the next person does not spend an afternoon on it.
+    """
+
+    def test_our_own_halves_do_match_on_city(self):
+        account = Account.objects.create(name='City Acct')
+        user = User.objects.create_user(username='c', account=account)
+        user.is_account_admin = True
+        user.save(update_fields=['is_account_admin'])
+        Course.objects.create(account=account, name='Canyon Lakes',
+                              city='San Ramon', state='CA')
+        c = APIClient(); c.force_authenticate(user)
+        with patch('services.golf_api_client.search_courses', return_value=[]):
+            r = c.get(reverse('api-course-find'), {'q': 'San Ramon'})
+        self.assertEqual([x['name'] for x in r.data['courses']], ['Canyon Lakes'])
