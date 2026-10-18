@@ -2,14 +2,27 @@
 api/test_the_bridges.py
 -----------------------
 Reported from San Ramon, 18 Oct 2026: **The Bridges Golf Club did not come
-up in the app.** Three separate faults sat behind that, and fixing only the
-first would have made things worse.
+up in the app.**
 
-1. GolfCourseAPI files it as `Bridges (The)`, so searching its own name
-   returns eleven other courses and not that one.
-2. The adapter FABRICATED a course rating of 72.0 when upstream had none --
-   and The Bridges has slopes for every tee and no ratings at all.
-3. Nothing refused such a course, so it would have imported looking fine.
+**The cause was one thing, not three.** GolfCourseAPI files it as
+`Bridges (The)`, so searching its own name returns eleven other Bridges and
+not the one he played. That is fixed by `search_terms`, and the course then
+imports cleanly -- the quality gate passes it with no warnings.
+
+The other two tests here cover a latent bug found while chasing that and
+**not** demonstrated by it: `_adapt_tee` invented a course rating of 72.0,
+a slope of 113 and a par of 72 when upstream omitted them. I reported The
+Bridges as having no ratings, which was wrong -- I probed `tee['rating']`
+where the adapter emits `course_rating`, so all eight tees read as None.
+Paul caught it from a screenshot of the White tee showing 70.5 and 129.
+
+The fabrication is still worth removing, because a rating guessed as 72.0
+against a real par of 72 makes `(CR - par)` zero and moves every handicap at
+a course silently. It is simply not what happened here.
+
+That misread is the SAME failure `live_activity_registry.gross_to_par`
+documents -- a helper guessing at the key a payload uses and returning
+nothing, which reads exactly like absent data.
 """
 from unittest.mock import patch
 
@@ -81,7 +94,7 @@ class TheLocalHalvesSearchTheSameWay(TestCase):
 
 
 class ARatingIsNeverInvented(TestCase):
-    """The Bridges has slopes and no course ratings."""
+    """No course yet found needs this; a guessed rating is wrong anyway."""
 
     def _course(self, **tee_over):
         tee = {'name': 'Black', 'sex': 'M', 'slope': 141,

@@ -295,9 +295,15 @@ def _adapt_tee(raw: dict, sex: str) -> dict:
 
     This used to default a missing slope to 113, a missing course rating to
     72.0 and a missing par to 72 — three plausible-looking numbers that are
-    silently wrong. `_adapt_hole` was fixed for exactly this and `_adapt_tee`
-    was left behind; the course that found it was The Bridges in San Ramon,
-    where GolfCourseAPI has every slope and NO course rating at all.
+    silently wrong. `_adapt_hole` was fixed for exactly this and `_adapt_tee`,
+    ten lines below it in the same file, was left behind.
+
+    **Found while chasing a different bug, and NOT demonstrated by it.** The
+    Bridges in San Ramon has a full rating on every tee (White is 70.5/129,
+    par 72); I reported otherwise after probing `tee['rating']` when this
+    function emits `course_rating`, so every tee read as None. The
+    fabrication below is real and worth removing on its own merit — no course
+    yet found has triggered it.
 
     Why a fabricated rating is worse than a missing one: course handicap is
     `index x slope/113 + (CR - par)`, so a CR invented as 72.0 against a real
