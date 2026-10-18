@@ -55,6 +55,10 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
   List<CourseInfo> _local = []; // account courses, for resolving 'account' hits
   List<CourseInfo> _recents = []; // last few played, shown when the box is empty
   List<CourseHit> _hits = [];
+
+  /// The course database did not answer, so these hits are local only. Said
+  /// out loud because a short list otherwise reads as a complete answer.
+  bool _localOnly = false;
   bool _searching = false;
   String? _addingKey; // the hit currently being added/imported
   late bool _editing;
@@ -111,13 +115,39 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
         () => _search(v.trim()));
   }
 
+  /// **The course database did not answer.** Without this the list is
+  /// simply shorter, which reads as "your course is not in there" rather
+  /// than "we could not ask" — and a golfer certain his course exists has
+  /// no way to tell those apart.
+  Widget _localOnlyNote(ThemeData theme) => Padding(
+        padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(Icons.cloud_off_outlined, size: 15,
+               color: theme.colorScheme.error),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              "Showing your own courses only — the course database didn't "
+              'answer. Try again in a moment.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.error),
+            ),
+          ),
+        ]),
+      );
+
   Future<void> _search(String q) async {
     final seq = ++_searchSeq;
     setState(() => _searching = true);
     try {
-      final hits = await context.read<AuthProvider>().client.findCourses(q);
+      final client = context.read<AuthProvider>().client;
+      final res = await client.findCourses(q);
       if (!mounted || seq != _searchSeq) return; // a newer search superseded us
-      setState(() { _hits = hits; _searching = false; });
+      setState(() {
+        _hits = res.hits;
+        _localOnly = res.localOnly;
+        _searching = false;
+      });
     } catch (_) {
       if (mounted && seq == _searchSeq) setState(() => _searching = false);
     }
@@ -422,6 +452,7 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
         _sectionLabel(theme, 'RECENT'),
         for (final c in recentsToShow) _suggestionCard(theme, c, _CourseKind.recent),
       ],
+      if (_localOnly) _localOnlyNote(theme),
       if (_hits.isNotEmpty) _resultsList(theme),
       if (_ctrl.text.trim().length >= 2 && !_searching && _hits.isEmpty)
         Padding(

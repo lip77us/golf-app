@@ -11150,12 +11150,20 @@ class CourseFindView(APIView):
             seen_name.add(name_key(cc.name, cc.city))
 
         # 3. Live GolfCourseAPI — best-effort; imported on selection.
+        # **Best effort, but no longer SILENT.** A failure here returns a
+        # shorter list that looks like a complete answer, so a course the
+        # golfer is certain exists simply is not there and nothing explains
+        # it. Reported 18 Oct 2026 as exactly that shape, and unprovable
+        # afterwards because the logs had rotated -- which is the argument
+        # for telling the client rather than only the log.
+        upstream = 'ok'
         try:
             from services.golf_api_client import search_courses
             api_courses = search_courses(q)
         except Exception:
             import logging
             import traceback
+            upstream = 'unavailable'
             logging.getLogger(__name__).warning(
                 'CourseFind: GolfCourseAPI search failed; returning local '
                 'results only:\n%s', traceback.format_exc())
@@ -11177,7 +11185,9 @@ class CourseFindView(APIView):
             seen_api.add(aid)
             seen_name.add(name_key(name, ac.get('city')))
 
-        return Response({'courses': out[:60]})
+        # `upstream` is a sibling key: `findCourses` reads `courses` and a
+        # client that has never heard of this ignores it.
+        return Response({'courses': out[:60], 'upstream': upstream})
 
 
 class PinkBallFoursomeOrderView(APIView):

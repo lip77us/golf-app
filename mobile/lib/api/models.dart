@@ -8773,3 +8773,14 @@ class RoundHandicapBasis {
     }
   }
 }
+
+/// The hits from a course search, and whether the course database answered.
+class CourseSearchResult {
+  final List<CourseHit> hits;
+
+  /// The upstream search could not be reached, so `hits` are the account's
+  /// own courses and the shared catalog only.
+  final bool localOnly;
+
+  const CourseSearchResult({this.hits = const [], this.localOnly = false});
+}

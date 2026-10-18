@@ -1390,14 +1390,26 @@ class ApiClient {
   /// Unified one-box course search: merges the account's own courses, the
   /// shared catalog, and a live GolfCourseAPI search into one deduped list.
   /// Best-effort on the API side — local results still return if it's down.
-  Future<List<CourseHit>> findCourses(String query) async {
+  /// Unified course search.
+  ///
+  /// Returns whether the course database answered as well as the hits,
+  /// because a failure there SHORTENS the list and otherwise says nothing —
+  /// which reads as "your course is not in there" rather than "we could not
+  /// ask". `ApiClient` is const, so this cannot be stashed on the client.
+  Future<CourseSearchResult> findCourses(String query) async {
     final data = await _get(
       '/courses/find/?q=${Uri.encodeComponent(query)}',
     );
-    final list = (data as Map<String, dynamic>)['courses'] as List? ?? [];
-    return list
-        .map((c) => CourseHit.fromJson(c as Map<String, dynamic>))
-        .toList();
+    final map  = data as Map<String, dynamic>;
+    final list = map['courses'] as List? ?? [];
+    return CourseSearchResult(
+      hits: list
+          .map((c) => CourseHit.fromJson(c as Map<String, dynamic>))
+          .toList(),
+      // Absent on an older server, which means it never failed loudly —
+      // treat that as fine rather than warning on every search.
+      localOnly: map['upstream'] == 'unavailable',
+    );
   }
 
   /// Import an api-sourced search hit (fetches its tees from GolfCourseAPI,

@@ -216,3 +216,46 @@ class SearchingACityIsAKnownGAP(TestCase):
         with patch('services.golf_api_client.search_courses', return_value=[]):
             r = c.get(reverse('api-course-find'), {'q': 'San Ramon'})
         self.assertEqual([x['name'] for x in r.data['courses']], ['Canyon Lakes'])
+
+
+class AFailedUpstreamSaysSo(TestCase):
+    """The weakness this hunt actually exposed.
+
+    Paul: "I am pretty sure I typed bridges and did not see the san ramon
+    course." The course IS in the upstream results for that query, and the
+    upstream is quick and reliable when tested (12/12 at 0.25s against a 15s
+    timeout), so I could not reproduce an absence -- and the logs that would
+    have settled it had rotated with the day's deploys.
+
+    What the hunt DID establish is that a failure here is invisible: the
+    merge returns the account and catalog rows alone, which looks like a
+    complete answer. A golfer certain his course exists cannot tell "not in
+    the database" from "we could not ask". That is worth closing whether or
+    not it is what happened.
+    """
+
+    def setUp(self):
+        self.account = Account.objects.create(name='Upstream Acct')
+        self.user = User.objects.create_user(username='u', account=self.account)
+        self.user.is_account_admin = True
+        self.user.save(update_fields=['is_account_admin'])
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        Course.objects.create(account=self.account, name='Bridges Golf Club')
+        self.url = reverse('api-course-find')
+
+    @patch('services.golf_api_client.search_courses', return_value=[])
+    def test_a_healthy_search_reports_ok(self, _m):
+        r = self.client.get(self.url, {'q': 'Bridges'})
+        self.assertEqual(r.data['upstream'], 'ok')
+
+    @patch('services.golf_api_client.search_courses',
+           side_effect=RuntimeError('upstream down'))
+    def test_a_failure_is_reported_not_swallowed(self, _m):
+        r = self.client.get(self.url, {'q': 'Bridges'})
+        self.assertEqual(r.status_code, 200, 'the picker still works')
+        self.assertEqual(r.data['upstream'], 'unavailable')
+        # ...and the local rows are still returned, which is the whole point
+        # of it being best-effort.
+        self.assertEqual([c['name'] for c in r.data['courses']],
+                         ['Bridges Golf Club'])
