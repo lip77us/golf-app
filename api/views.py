@@ -10924,10 +10924,17 @@ class CourseFindView(APIView):
 
     GET /api/courses/find/?near=home[&radius=<miles>]
 
+    GET /api/courses/find/?near=me&lat=<deg>&lng=<deg>[&radius=<miles>]
+
     The same three sources ranked by DISTANCE instead of matched on text,
-    anchored on the golfer's `Player.home_course`. Radius defaults to 25
-    miles and is clamped to 50, which is the API's own ceiling. See
-    `_near_home` for why the anchor is a course and not the device.
+    from the golfer's home course or from the device. Radius defaults to 25
+    miles and is clamped to 50, which is the API's own ceiling.
+
+    **`near=me` is the one that carries a privacy declaration** — the
+    position is cut to two decimal places before anything is done with it,
+    and its distances come back in whole miles because that is the
+    resolution the anchor justifies. `docs/location-permission.md` is the
+    record. `near=home` predates it and has no client surface.
     Dedup is by golf_api_id, then by (name, city), preferring the cheapest add
     path (account > catalog > api) so a course in more than one source appears
     once.  The GolfCourseAPI call is BEST-EFFORT: if it errors or times out, the
@@ -10987,13 +10994,72 @@ class CourseFindView(APIView):
                                        'by hand carries no coordinates; one found '
                                        'through the course database does.'})
 
+        radius = self._radius(request)
+        return self._ranked_by_distance(
+            request,
+            float(home.latitude), float(home.longitude), radius,
+            anchor={'course_id': home.id, 'name': home.name,
+                    'radius_miles': radius, 'coarse': False},
+            # The anchor is a stored course position, so a tenth of a mile is
+            # a figure we actually have. `?near=me`'s is not — see `_near_me`.
+            places=1,
+        )
+
+    def _radius(self, request):
+        """Miles, defaulted to 25 and clamped to the API's own 50 ceiling."""
         try:
             radius = int(request.query_params.get('radius') or 25)
         except (TypeError, ValueError):
             radius = 25
-        radius = max(1, min(radius, 50))
+        return max(1, min(radius, 50))
 
-        lat, lng = float(home.latitude), float(home.longitude)
+    def _near_me(self, request):
+        """`?near=me&lat=&lng=` — the same three sources, from the device.
+
+        **The position is coarsened again here** (`geo.coarse_position`), not
+        trusted from the client: see that function for why the server has to
+        own that guarantee rather than inherit it.
+
+        Distances come back in WHOLE miles, which is the one way this differs
+        from `?near=home`. At ~1.1 km of anchor slack a tenth is a digit we
+        do not have, and printing one invites "that is not 2.4 miles" from a
+        golfer standing in the car park.
+
+        A malformed coordinate is a **400**, deliberately unlike the missing
+        home course above: that is a state the golfer is in and a picker
+        answers it with a sentence, where this is a client fault and an empty
+        list would hide it.
+        """
+        from services.geo import coarse_position
+
+        lat, lng = coarse_position(request.query_params.get('lat'),
+                                   request.query_params.get('lng'))
+        if lat is None or lng is None:
+            return Response(
+                {'detail': 'near=me needs a valid lat and lng.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        radius = self._radius(request)
+        return self._ranked_by_distance(
+            request, lat, lng, radius,
+            anchor={'course_id': None, 'name': None,
+                    'radius_miles': radius, 'coarse': True},
+            places=0,
+        )
+
+    def _ranked_by_distance(self, request, lat, lng, radius, anchor, places):
+        """The three sources merged and ranked by distance from (lat, lng).
+
+        Shared by both anchors so there is one dedup, one best-effort
+        upstream call and one sort. `places` is the resolution the ANCHOR
+        justifies — rows are built and sorted on the real distance and
+        quantised once at the end, so rounding to whole miles cannot
+        reorder the list.
+        """
+
+        from core.models import CatalogCourse, Course as CourseModel
+        from services.geo import haversine_miles
+
         lo_lat, hi_lat, lo_lng, hi_lng = self._bbox(lat, lng, radius)
         account = request.user.account
 
@@ -11016,7 +11082,7 @@ class CourseFindView(APIView):
             if d is None:
                 continue
             out.append({
-                'source': 'account', 'name': c.name, 'distance': round(d, 1),
+                'source': 'account', 'name': c.name, 'distance': d,
                 'city': c.city, 'state': c.state, 'country': c.country,
                 'course_id': c.id, 'catalog_id': None,
                 'golf_api_id': c.golf_api_id or '', 'in_account': True,
@@ -11038,7 +11104,7 @@ class CourseFindView(APIView):
             if name_key(cc.name, cc.city) in seen_name:
                 continue
             out.append({
-                'source': 'catalog', 'name': cc.name, 'distance': round(d, 1),
+                'source': 'catalog', 'name': cc.name, 'distance': d,
                 'city': cc.city, 'state': cc.state, 'country': cc.country,
                 'course_id': None, 'catalog_id': cc.id,
                 'golf_api_id': cc.golf_api_id, 'in_account': False,
@@ -11076,19 +11142,25 @@ class CourseFindView(APIView):
 
         # Nearest first. A row whose distance the API omitted sorts last
         # rather than first, which is where `None` would otherwise land.
+        # Sorted on the REAL distance, before quantising, so two courses a
+        # few hundred yards apart cannot swap places merely because both
+        # round to the same whole mile.
         out.sort(key=lambda r: (r['distance'] is None, r['distance'] or 0.0))
-        return Response({
-            'courses': out[:60],
-            'anchor': {'course_id': home.id, 'name': home.name,
-                       'radius_miles': radius},
-        })
+        for row in out:
+            if row['distance'] is not None:
+                row['distance'] = (round(row['distance'], places) if places
+                                   else int(round(row['distance'])))
+        return Response({'courses': out[:60], 'anchor': anchor})
 
     def get(self, request):
         from django.db.models import Q
         from core.models import CatalogCourse, Course as CourseModel
 
-        if (request.query_params.get('near') or '').strip().lower() == 'home':
+        near = (request.query_params.get('near') or '').strip().lower()
+        if near == 'home':
             return self._near_home(request)
+        if near == 'me':
+            return self._near_me(request)
 
         q = (request.query_params.get('q') or '').strip()
         if len(q) < 2:

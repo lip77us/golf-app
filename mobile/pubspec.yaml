@@ -73,6 +73,7 @@ dependencies:
   # Brand typefaces (Schibsted Grotesk + Spline Sans) per the Halved brand
   # guidelines. Fetched/cached at runtime; used on the redesigned screens.
   google_fonts: ^6.2.1
+  geolocator: ^14.0.2
 
 dev_dependencies:
   flutter_test:

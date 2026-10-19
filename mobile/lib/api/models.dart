@@ -403,6 +403,14 @@ class CourseHit {
   final bool inAccount;
   final int? teeCount; // null when unknown (api results carry no tee count)
 
+  /// Whole miles from the anchor, on a `near=me` search only; null otherwise.
+  ///
+  /// **Whole, not a tenth, and the server decides that** — the position it
+  /// measured from is cut to two decimal places (~1.1 km), so a tenth would
+  /// be a digit nobody has. Parsed as a `num` because `?near=home` reports a
+  /// tenth from an exact course position; this client never asks for that.
+  final int? distanceMiles;
+
   const CourseHit({
     required this.source,
     required this.name,
@@ -414,6 +422,7 @@ class CourseHit {
     this.golfApiId = '',
     this.inAccount = false,
     this.teeCount,
+    this.distanceMiles,
   });
 
   String get location => [city, state].where((s) => s.isNotEmpty).join(', ');
@@ -429,6 +438,7 @@ class CourseHit {
         golfApiId: j['golf_api_id'] as String? ?? '',
         inAccount: j['in_account'] as bool? ?? false,
         teeCount: j['tee_count'] as int?,
+        distanceMiles: (j['distance'] as num?)?.round(),
       );
 }
 

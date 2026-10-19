@@ -98,17 +98,25 @@ The near-me request handler must not write them to a model, a cache keyed by
 them, or a request log. `Course.latitude/longitude` is course data and stays —
 that is a place, not a person.
 
-### c. Round in Dart, not on the server
+### c. Round in Dart **and** on the server — **DONE**
 
-Rounding server-side would mean the precise value already crossed the network
-and reached our logs and our host. The 2 dp has to happen before the HTTP
-call.
+`utils/coarse_position.coarsenForPrivacy` cuts it before the request is built
+and `services.geo.coarse_position` cuts it again on arrival. Not redundant:
+rounding only on the phone makes the server's correctness depend on the
+client's, and an older build or a replayed URL would hand us a precise
+position we would then measure from and forward upstream. Rounding on both
+sides is what makes "the server never holds a precise position" a property of
+the server.
+
+`coarsenForPrivacy` returns a **String**, deliberately — a double is a value
+somebody can re-format with six places, where a string already cut cannot
+grow them back.
 
 ---
 
-## 2 · iOS — `Info.plist`
+## 2 · iOS — `Info.plist` — **DONE**
 
-The app currently declares **no** usage descriptions at all. Two keys go in
+The app declared **no** usage descriptions at all. Two keys went in
 (`mobile/ios/Runner/Info.plist`, which is alphabetical — these land between
 the close of the `NSAppTransportSecurity` dict and `NSSupportsLiveActivities`):
 
@@ -298,9 +306,8 @@ mention.
 
 1. ~~Redact the coordinates from the API client's request line (§1a).~~
    **Done** — it went first because every declaration below depends on it.
-2. Build the design's picker (the pill, the `Near you` section, the four
-   named failure states), with the 2 dp rounding and the pre-prompt sheet.
-3. `Info.plist` keys (§2).
+2. ~~Build the design's picker.~~ **Done** — see §7.
+3. ~~`Info.plist` keys (§2).~~ **Done.**
 4. Edit both policy files, rebuild and deploy the site. **The policy must be
    live before the build is submitted** — App Review reads the URL on the
    listing, and a policy that does not mention location against a binary that
@@ -312,6 +319,67 @@ mention.
 7. Android (§5) only once the production listing exists.
 
 ---
+
+## 7 · What was built
+
+Backend:
+
+- **`?near=me&lat=&lng=`** on `CourseFindView`. `_near_home` and `_near_me`
+  now differ only in where the anchor comes from; `_ranked_by_distance` holds
+  the one dedup, the one best-effort upstream call and the one sort.
+- **`services.geo.coarse_position`** — validate, range-check per coordinate,
+  reject `0,0` as a pair, cut to 2 dp. A malformed coordinate is a **400**,
+  deliberately unlike the missing home course, which is a state the golfer is
+  in and gets a sentence: this is a client fault and an empty list would hide
+  it.
+- **Whole miles**, and the quantise happens **after** the sort, on the real
+  distance — rounding first would let two courses a few hundred yards apart
+  swap places because both round to 1. `places` is passed in as the
+  resolution the anchor justifies (1 for `near=home`, 0 for `near=me`), so
+  the field has one meaning rather than two.
+
+Mobile:
+
+- **`geolocator ^14.0.2`**. Checked rather than assumed: `geolocator_android`
+  declares **no** location permissions in its own manifest, so nothing drags
+  `ACCESS_FINE_LOCATION` in through the merge — the opposite of what I warned
+  about. It does declare a `GeolocatorLocationService` with
+  `foregroundServiceType="location"`, which cannot run without a permission
+  we are not declaring, but is worth knowing about at Play submission.
+- **`AppleSettings.allowBackgroundLocationUpdates` is set to `false`
+  explicitly, because the plugin defaults it to `true`.** It is inert without
+  `UIBackgroundModes: location` and an Always description, neither of which
+  this app has — but a flag that asks for background updates should be off
+  because we mean it, not because a plist key happens to be absent.
+- `utils/near_me.dart` owns the fix and is the **only file in the app that
+  imports `geolocator`** (hence `openLocationSettings`), so the plugin stays
+  replaceable.
+- The picker: pill → locating → `Near you` + `Clear`, home and Recent hidden
+  while results show, whole miles right-aligned in tabular figures.
+- **Each failure is its own outcome**, because the picker says something
+  different for each and **only `deniedForever` may offer Settings** — the OS
+  will never re-prompt there, and offering it on a plain "not now" sends a
+  golfer to a screen he does not need. One line is not in the design:
+  position-obtained-but-lookup-failed says *Couldn't search for courses near
+  you*, because naming the location step there would be the wrong step.
+
+### The Android gate — `nearMeOffered`
+
+**False on Android, and it is one line to flip.** With no permission
+declared, `requestPermission` returns denied forever, so the pill would sit
+there permanently answering "Location is off" — which reads as a bug, not as
+a feature that has not arrived. Hiding it is also what keeps us off the
+compliance hook: Play Data safety has to be accurate for any release
+including a closed test, so the manifest line and the form go together (§5).
+
+Worth knowing: `defaultTargetPlatform` is **android** under `flutter test`,
+so every widget test of this picker has to override it — and the binding
+checks no foundation debug variable outlives the test BODY, which runs before
+`tearDown`, so the override has to be set and cleared inside each test.
+
+Tests: `api/test_courses_near.py` (41, from 23),
+`mobile/test/near_me_test.dart` (15),
+`mobile/test/near_me_picker_test.dart` (12).
 
 ## The design — `~/Downloads/handoff-near-me/`
 
@@ -344,7 +412,13 @@ course-database claim. What it adds:
 - Verbatim copy: `Courses near me`, `Finding courses near you…`, `Near you`,
   `Clear`.
 
-### Two things it leaves open
+### The two open things, decided
+
+**Whole miles, and no `?near=home` surface** (Paul, 19 Oct 2026). So
+`?near=home` stays built, tested and unreached — deliberately, not by
+oversight, and the class docstring says so rather than leaving the next
+reader to wonder. The anchor-fallback item below is therefore not worth
+doing.
 
 1. **It never calls `?near=home`.** Slice 1 is built, tested (16 tests) and
    has no surface in this design: the denied path falls back to typed search,
@@ -362,10 +436,10 @@ course-database claim. What it adds:
    same instinct.
 
 ## Not decided here
-- **Which Flutter plugin.** Whatever is chosen must support iOS reduced
-  accuracy, must not pull in a fine-location permission on Android through
-  its own manifest (check the merged manifest, not just the pubspec), and
-  should ship its own `.xcprivacy`.
+- **The pre-prompt sheet.** Not built. The design goes straight from tap to
+  the OS prompt, which is fine for iOS; Play wants the purpose given before
+  the system dialog, so it is needed for Android at the latest. Building it
+  once serves both.
 - **The distance display contradicts the rounding, slightly.** The design
   specifies `2.4 mi`, one decimal. Rounding the anchor to 2 dp moves it by up
   to ~0.7 mi, so that decimal is below the precision we actually have, and

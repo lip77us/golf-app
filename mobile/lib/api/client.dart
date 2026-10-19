@@ -8,6 +8,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../config.dart';
 import 'models.dart';
+import '../utils/coarse_position.dart';
 
 class ApiException implements Exception {
   final int statusCode;
@@ -1396,6 +1397,30 @@ class ApiClient {
   /// because a failure there SHORTENS the list and otherwise says nothing —
   /// which reads as "your course is not in there" rather than "we could not
   /// ask". `ApiClient` is const, so this cannot be stashed on the client.
+  /// Courses near a position, nearest first — `?near=me`.
+  ///
+  /// **The coordinates are rounded to two decimal places here**, by
+  /// `coarsenForPrivacy`, and the server rounds again. Two decimals is about
+  /// 1.1 km and the number is a privacy decision: Apple reads three or more
+  /// decimal places as *Precise Location*, so sending more would contradict
+  /// the Coarse declaration whatever accuracy iOS granted. See
+  /// `docs/location-permission.md`.
+  ///
+  /// Not a `CourseSearchResult`: the near search has no `upstream` flag to
+  /// report, and a degraded proximity result is reported by the list being
+  /// short rather than by a banner.
+  Future<List<CourseHit>> findCoursesNear(double lat, double lng,
+      {int radiusMiles = 25}) async {
+    final data = await _get('/courses/find/?near=me'
+        '&lat=${coarsenForPrivacy(lat)}'
+        '&lng=${coarsenForPrivacy(lng)}'
+        '&radius=$radiusMiles');
+    final list = (data as Map<String, dynamic>)['courses'] as List? ?? [];
+    return list
+        .map((c) => CourseHit.fromJson(c as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<CourseSearchResult> findCourses(String query) async {
     final data = await _get(
       '/courses/find/?q=${Uri.encodeComponent(query)}',

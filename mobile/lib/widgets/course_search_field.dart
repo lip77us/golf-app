@@ -15,12 +15,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../api/client.dart' show ApiException;
+import '../api/client.dart' show ApiClient, ApiException;
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../theme/halved_brand.dart';
+import '../utils/near_me.dart';
 
 enum _CourseKind { home, recent }
+
+/// Where the "Courses near me" affordance is. **Idle means no location call
+/// has been made** — that is the whole point of it being a separate state
+/// rather than a loading flag: the golfer can see, before tapping, that
+/// nothing has been asked for yet.
+enum _NearState { idle, locating, results }
 
 class CourseSearchField extends StatefulWidget {
   final CourseInfo? selected;
@@ -35,12 +42,19 @@ class CourseSearchField extends StatefulWidget {
   /// home suggestion would be circular.
   final bool suggestHome;
 
+  /// Replaces the location fix + lookup. **For tests only** — the real one
+  /// goes through `Geolocator`, which has no platform binding under
+  /// `flutter test`, so without this seam none of the pill's states can be
+  /// asserted and they are the part a future edit breaks.
+  final Future<NearMeResult> Function(ApiClient client)? nearMeOverride;
+
   const CourseSearchField({
     super.key,
     required this.selected,
     required this.onSelected,
     this.selectedLabel = 'Playing today',
     this.suggestHome = true,
+    this.nearMeOverride,
   });
 
   @override
@@ -59,6 +73,16 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
   /// The course database did not answer, so these hits are local only. Said
   /// out loud because a short list otherwise reads as a complete answer.
   bool _localOnly = false;
+
+  // ── Courses near me ───────────────────────────────────────────────────────
+  // Deliberately NOT cached across opens: `_near` starts idle on every fresh
+  // picker, so reopening never shows a position from the last time.
+  _NearState _near = _NearState.idle;
+  List<CourseHit> _nearHits = [];
+
+  /// Why the last tap did not produce a list — drawn as one line under the
+  /// pill. Null when nothing has failed.
+  NearMeOutcome? _nearProblem;
   bool _searching = false;
   String? _addingKey; // the hit currently being added/imported
   late bool _editing;
@@ -107,6 +131,15 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
 
   void _onChanged(String v) {
     _debounce?.cancel();
+    // Typing returns to the normal list: a "Near you" heading over rows that
+    // are being filtered by a name is two different searches in one list.
+    if (v.trim().isNotEmpty && _near != _NearState.idle) {
+      setState(() {
+        _near = _NearState.idle;
+        _nearHits = [];
+        _nearProblem = null;
+      });
+    }
     if (v.trim().length < 2) {
       setState(() { _hits = []; _searching = false; });
       return;
@@ -135,6 +168,37 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
           ),
         ]),
       );
+
+  /// One location fix, then one lookup. Nothing here runs un-tapped.
+  Future<void> _tapNearMe() async {
+    if (_near == _NearState.locating) return;   // further taps ignored
+    setState(() {
+      _near = _NearState.locating;
+      _nearProblem = null;
+    });
+    final client = context.read<AuthProvider>().client;
+    final res = await (widget.nearMeOverride ?? coursesNearMe)(client);
+    if (!mounted) return;
+    setState(() {
+      if (res.ok) {
+        // An EMPTY ok list is a result, not a failure: it goes to the
+        // `results` state so the section says "No courses within 25 mi"
+        // with a Clear, rather than silently returning to the pill.
+        _near = _NearState.results;
+        _nearHits = res.courses;
+        _nearProblem = null;
+      } else {
+        _near = _NearState.idle;
+        _nearProblem = res.outcome;
+      }
+    });
+  }
+
+  void _clearNearMe() => setState(() {
+        _near = _NearState.idle;
+        _nearHits = [];
+        _nearProblem = null;
+      });
 
   Future<void> _search(String q) async {
     final seq = ++_searchSeq;
@@ -211,6 +275,9 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
         _hits = [];
         _addingKey = null;
         _ctrl.clear();
+        _near = _NearState.idle;
+        _nearHits = [];
+        _nearProblem = null;
       });
       FocusScope.of(context).unfocus();
     }
@@ -373,9 +440,118 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
         ),
       );
 
+  /// The "Courses near me" pill — and in `locating`, the same pill saying so.
+  ///
+  /// One control in two states rather than a pill that is replaced by a
+  /// spinner: the row must not change height when it is tapped, or the list
+  /// under the thumb jumps.
+  Widget _nearMePill(ThemeData theme) {
+    final busy = _near == _NearState.locating;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Material(
+        color: Halved.card,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          // Ignores further taps while locating, rather than queueing a
+          // second fix — one tap is one fix.
+          onTap: busy ? null : _tapNearMe,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 44),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Halved.cardBorder, width: 1.5),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(children: [
+              if (busy)
+                const SizedBox(
+                    width: 17, height: 17,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+              else
+                const Icon(Icons.place_outlined, size: 19, color: Halved.pine),
+              const SizedBox(width: 11),
+              Text(
+                busy ? 'Finding courses near you…' : 'Courses near me',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: busy
+                      ? theme.colorScheme.onSurfaceVariant
+                      : Halved.pine,
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// One line under the pill when a tap did not produce a list.
+  ///
+  /// **Settings is offered on `deniedForever` alone.** That is the only
+  /// outcome the OS will never re-prompt for; offering it on a plain refusal
+  /// sends a golfer to a screen he does not need, and offering it when
+  /// location is switched off device-wide points at the wrong screen
+  /// entirely.
+  Widget _nearMeProblem(ThemeData theme) {
+    final outcome = _nearProblem!;
+    final text = switch (outcome) {
+      NearMeOutcome.serviceOff ||
+      NearMeOutcome.denied ||
+      NearMeOutcome.deniedForever =>
+        'Location is off. Search by name instead.',
+      NearMeOutcome.timedOut => "Couldn't get your location. Try again.",
+      // Not in the design, which does not cover a position that arrived and a
+      // lookup that then failed. Saying "couldn't get your location" there
+      // would name the wrong step and send the golfer to his settings.
+      NearMeOutcome.failed =>
+        "Couldn't search for courses near you. Try again.",
+      NearMeOutcome.ok => '',
+    };
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 7, 4, 0),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(
+          child: Text(text,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        ),
+        if (outcome == NearMeOutcome.deniedForever) ...[
+          const SizedBox(width: 8),
+          TextButton(
+            style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                minimumSize: const Size(0, 32),
+                visualDensity: VisualDensity.compact),
+            onPressed: openLocationSettings,
+            child: const Text('Settings'),
+          ),
+        ],
+      ]),
+    );
+  }
+
+  /// `Near you` + `Clear`, over the rows.
+  Widget _nearMeHeader(ThemeData theme) => Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Row(children: [
+          Expanded(child: _sectionLabel(theme, 'NEAR YOU')),
+          TextButton(
+            style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 36),
+                visualDensity: VisualDensity.compact),
+            onPressed: _addingKey == null ? _clearNearMe : null,
+            child: const Text('Clear'),
+          ),
+        ]),
+      );
+
   /// One flat, neutral results list — no "in your courses" vs global split, no
   /// add/check source icons (design 9a §6). Tap picks; import is invisible.
-  Widget _resultsList(ThemeData theme) => Container(
+  Widget _resultsList(ThemeData theme, List<CourseHit> hits) => Container(
         margin: const EdgeInsets.only(top: 8),
         constraints: const BoxConstraints(maxHeight: 340),
         decoration: BoxDecoration(
@@ -385,10 +561,10 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
         child: ListView.separated(
           shrinkWrap: true,
           padding: EdgeInsets.zero,
-          itemCount: _hits.length,
+          itemCount: hits.length,
           separatorBuilder: (_, __) => const Divider(height: 1),
           itemBuilder: (_, i) {
-            final h = _hits[i];
+            final h = hits[i];
             final busy = _addingKey == _keyOf(h);
             final sub = [
               if (h.location.isNotEmpty) h.location,
@@ -403,7 +579,19 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
                   ? const SizedBox(
                       width: 18, height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2))
-                  : null,
+                  // WHOLE miles, which is what the server sends: the position
+                  // it measured from is cut to ~1.1 km, so a tenth would be a
+                  // digit nobody has. Tabular figures so the column lines up.
+                  : h.distanceMiles == null
+                      ? null
+                      : Text('${h.distanceMiles} mi',
+                          style: TextStyle(
+                            fontFeatures: const [
+                              FontFeature.tabularFigures()
+                            ],
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontSize: 13,
+                          )),
               onTap: _addingKey == null ? () => _select(h) : null,
             );
           },
@@ -439,9 +627,30 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
     final recentsToShow = _recents
         .where((c) => c.id != home?.id && c.id != selectedId)
         .toList();
-    final showQuickPick = _ctrl.text.trim().isEmpty && _hits.isEmpty;
+    final nearShowing = _near == _NearState.results;
+    // Home and Recent are HIDDEN while near-me results show: three competing
+    // lists of courses, one of them headed "Near you", is a screen nobody can
+    // read. Typing or Clear brings them back.
+    final showQuickPick =
+        _ctrl.text.trim().isEmpty && _hits.isEmpty && !nearShowing;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _searchBox(theme),
+      // Directly under the field, and only while nothing is typed — the pill
+      // is an alternative to typing, not a filter on it.
+      if (nearMeOffered && _ctrl.text.trim().isEmpty && !nearShowing)
+        _nearMePill(theme),
+      if (_nearProblem != null && !nearShowing) _nearMeProblem(theme),
+      if (nearShowing) ...[
+        _nearMeHeader(theme),
+        if (_nearHits.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 2, left: 2),
+            child: Text('No courses within 25 mi.',
+                style: theme.textTheme.bodySmall),
+          )
+        else
+          _resultsList(theme, _nearHits),
+      ],
       if (showQuickPick && home != null) ...[
         const SizedBox(height: 12),
         _sectionLabel(theme, 'YOUR HOME COURSE'),
@@ -453,7 +662,7 @@ class _CourseSearchFieldState extends State<CourseSearchField> {
         for (final c in recentsToShow) _suggestionCard(theme, c, _CourseKind.recent),
       ],
       if (_localOnly) _localOnlyNote(theme),
-      if (_hits.isNotEmpty) _resultsList(theme),
+      if (_hits.isNotEmpty) _resultsList(theme, _hits),
       if (_ctrl.text.trim().length >= 2 && !_searching && _hits.isEmpty)
         Padding(
           padding: const EdgeInsets.only(top: 8),

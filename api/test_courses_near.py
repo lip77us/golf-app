@@ -88,7 +88,7 @@ class CoursesNearHomeTests(TestCase):
         r = self.client.get(self.url, {'near': 'home', 'radius': '12'})
         self.assertEqual(r.data['anchor'],
                          {'course_id': self.home.id, 'name': 'Pebble Beach',
-                          'radius_miles': 12})
+                          'radius_miles': 12, 'coarse': False})
 
     @patch('services.golf_api_client.courses_near', return_value=[])
     def test_the_radius_is_clamped_to_what_the_api_accepts(self, _m):
@@ -189,12 +189,178 @@ class CoursesNearHomeTests(TestCase):
         self.assertAlmostEqual(args[1], float(PEBBLE[1]), places=4)
 
     def test_near_anything_else_falls_through_to_the_text_search(self):
-        """`near=me` is not implemented, and must not silently behave like
-        `near=home` -- that would make the deferral invisible."""
-        r = self.client.get(self.url, {'near': 'me'})
+        """An unrecognised `near` is a text search, not a silent proximity one.
+
+        `near=me` IS implemented now (see `CoursesNearMeTests`); this pins
+        that a typo or a future value nobody has built does not quietly
+        behave like one of the two that exist.
+        """
+        r = self.client.get(self.url, {'near': 'somewhere'})
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.data['courses'], [])      # no q, so the search is empty
         self.assertNotIn('anchor', r.data)
+
+
+class CoursesNearMeTests(TestCase):
+    """`GET /api/courses/find/?near=me&lat=&lng=` — anchored on the device.
+
+    What is pinned here is mostly the PRIVACY shape, because that is the part
+    a refactor can quietly undo: the position never reaches anything at full
+    precision, and the distance is never reported finer than the anchor
+    justifies. `docs/location-permission.md` is the argument.
+    """
+
+    def setUp(self):
+        self.account = Account.objects.create(name='Near Me')
+        self.user = User.objects.create_user(
+            username='nm', password='x', account=self.account,
+            is_account_admin=True)
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        self.url = reverse('api-course-find')
+
+        # Spyglass is ~1.2 mi from Pebble, Poppy ~0.8 mi.
+        self.spy = Course.objects.create(
+            account=self.account, name='Spyglass', city='Pebble Beach',
+            state='CA', latitude=SPYGLASS[0], longitude=SPYGLASS[1])
+        self.poppy = Course.objects.create(
+            account=self.account, name='Poppy Hills', city='Pebble Beach',
+            state='CA', latitude=POPPY[0], longitude=POPPY[1])
+
+    def _get(self, **params):
+        return self.client.get(self.url, {'near': 'me', **params})
+
+    # --- the coarsening -----------------------------------------------
+
+    @patch('services.golf_api_client.courses_near', return_value=[])
+    def test_the_position_is_cut_to_two_decimals_before_it_is_used(self, mock_near):
+        """The app rounds and the server rounds again.
+
+        Rounding only on the phone would make the server's correctness depend
+        on the client's — an older build or a replayed URL would hand us a
+        precise position that we would measure from and forward upstream.
+        """
+        self._get(lat='36.5683219', lng='-121.9500777')
+        args, _ = mock_near.call_args
+        self.assertEqual(args[0], 36.57)
+        self.assertEqual(args[1], -121.95)
+
+    @patch('services.golf_api_client.courses_near', return_value=[])
+    def test_the_upstream_never_sees_more_than_two_decimals(self, mock_near):
+        """The third party is the one that matters most: it is outside our
+        logs and our retention promise."""
+        self._get(lat='36.568321', lng='-121.950077')
+        for value in mock_near.call_args[0][:2]:
+            places = len(str(abs(value)).partition('.')[2])
+            self.assertLessEqual(places, 2, f'{value} carries {places} places')
+
+    @patch('services.golf_api_client.courses_near', return_value=[])
+    def test_the_anchor_says_it_is_coarse_and_names_no_course(self, _m):
+        r = self._get(lat='36.57', lng='-121.95', radius='12')
+        self.assertEqual(r.data['anchor'],
+                         {'course_id': None, 'name': None,
+                          'radius_miles': 12, 'coarse': True})
+
+    # --- whole miles --------------------------------------------------
+
+    @patch('services.golf_api_client.courses_near', return_value=[])
+    def test_the_distance_is_a_whole_number_of_miles(self, _m):
+        """A tenth would be a digit the anchor does not have."""
+        rows = self._get(lat=str(PEBBLE[0]), lng=str(PEBBLE[1])).data['courses']
+        self.assertTrue(rows)
+        for row in rows:
+            self.assertIsInstance(row['distance'], int)
+
+    @patch('services.golf_api_client.courses_near')
+    def test_an_api_row_is_rounded_too(self, mock_near):
+        """Upstream reports a tenth; it must not survive into our answer
+        while the local rows next to it are whole."""
+        mock_near.return_value = [_api_row('99', 'Bayonet', 7.4)]
+        rows = self._get(lat=str(PEBBLE[0]), lng=str(PEBBLE[1])).data['courses']
+        api = [r for r in rows if r['source'] == 'api'][0]
+        self.assertEqual(api['distance'], 7)
+
+    @patch('services.golf_api_client.courses_near', return_value=[])
+    def test_rounding_does_not_reorder_the_list(self, _m):
+        """Poppy (~0.8 mi) and Spyglass (~1.2 mi) both round to 1.
+
+        Sorting on the rounded figure would make their order arbitrary, so
+        the sort runs on the real distance and the quantise happens after.
+        """
+        rows = self._get(lat=str(PEBBLE[0]), lng=str(PEBBLE[1])).data['courses']
+        names = [r['name'] for r in rows]
+        self.assertEqual(names[:2], ['Poppy Hills', 'Spyglass'])
+        self.assertEqual([r['distance'] for r in rows[:2]], [1, 1])
+
+    # --- a bad request is a 400, not an empty list --------------------
+
+    def test_a_missing_position_is_a_400(self):
+        """Unlike a missing home course, which is a state the golfer is in,
+        this is a client fault and an empty list would hide it."""
+        self.assertEqual(self._get().status_code, 400)
+
+    def test_an_impossible_latitude_is_a_400(self):
+        """Per-coordinate ranges: a single range covering both would accept
+        150, which is not a place."""
+        self.assertEqual(self._get(lat='150', lng='-121.95').status_code, 400)
+
+    def test_an_impossible_longitude_is_a_400(self):
+        self.assertEqual(self._get(lat='36.57', lng='200').status_code, 400)
+
+    def test_junk_is_a_400(self):
+        self.assertEqual(self._get(lat='somewhere', lng='else').status_code, 400)
+
+    def test_the_null_island_pair_is_a_400(self):
+        """0,0 is in the Atlantic and is what a defaulted value looks like."""
+        self.assertEqual(self._get(lat='0', lng='0').status_code, 400)
+
+    @patch('services.golf_api_client.courses_near', return_value=[])
+    def test_a_single_zero_is_fine(self, _m):
+        """The equator and the Greenwich meridian both cross dry land."""
+        self.assertEqual(self._get(lat='0', lng='-121.95').status_code, 200)
+
+    # --- it degrades, like the search branch --------------------------
+
+    @patch('services.golf_api_client.courses_near',
+           side_effect=RuntimeError('upstream down'))
+    def test_a_dead_upstream_still_returns_the_local_rows(self, _m):
+        """The picker never breaks on a slow upstream — the same promise the
+        text search makes."""
+        r = self._get(lat=str(PEBBLE[0]), lng=str(PEBBLE[1]))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual({row['name'] for row in r.data['courses']},
+                         {'Spyglass', 'Poppy Hills'})
+
+    @patch('services.golf_api_client.courses_near', return_value=[])
+    def test_a_course_out_of_range_is_dropped(self, _m):
+        Course.objects.create(account=self.account, name='Harding Park',
+                              city='San Francisco', state='CA',
+                              latitude=SFO[0], longitude=SFO[1])
+        rows = self._get(lat=str(PEBBLE[0]), lng=str(PEBBLE[1])).data['courses']
+        self.assertNotIn('Harding Park', [r['name'] for r in rows])
+
+
+class CoarsePositionTests(TestCase):
+    """`services.geo.coarse_position` on its own."""
+
+    def test_it_rounds_rather_than_truncating(self):
+        from services.geo import coarse_position
+        self.assertEqual(coarse_position('36.5689', '-121.9499'),
+                         (36.57, -121.95))
+
+    def test_it_refuses_nan_and_infinity(self):
+        from services.geo import coarse_position
+        for bad in ('nan', 'inf', '-inf'):
+            self.assertEqual(coarse_position(bad, '0.5'), (None, None), bad)
+
+    def test_it_accepts_the_extremes(self):
+        from services.geo import coarse_position
+        self.assertEqual(coarse_position('90', '180'), (90.0, 180.0))
+        self.assertEqual(coarse_position('-90', '-180'), (-90.0, -180.0))
+
+    def test_an_empty_string_is_not_zero(self):
+        from services.geo import coarse_position
+        self.assertEqual(coarse_position('', '-121.95'), (None, None))
 
 
 class HaversineTests(TestCase):
