@@ -50,11 +50,53 @@ from django.conf import settings
 # Low-level HTTP helper
 # ---------------------------------------------------------------------------
 
+#: Query parameters whose VALUES may be written to a log.
+#:
+#: An ALLOWLIST rather than a denylist, which is the whole point: a denylist
+#: fails open, so the next endpoint's parameter would be logged in full until
+#: somebody remembered to add it. Here a new parameter is secret by default
+#: and shows as ``REDACTED`` until it is named safe.
+#:
+#: What this exists for is ``/v1/proximity``'s ``latitude``/``longitude``. A
+#: position is the one thing this client sends that describes a PERSON rather
+#: than a golf course, and the App Privacy and Play Data-safety answers for
+#: "near me" both claim it is not retained — a log line is retention.
+_LOGGABLE_PARAMS = frozenset({'search_query', 'radius', 'limit'})
+
+
+def _safe_url(path: str, params: dict | None = None) -> str:
+    """The request line, rebuilt for a LOG with unlisted values redacted.
+
+    Keeps `search_query` readable — a search that found the wrong course is
+    diagnosed from the term that was sent, which is how "The Bridges" filed
+    upstream as "Bridges (The)" was found — while `latitude`/`longitude`
+    become `REDACTED`.
+    """
+    base = getattr(settings, 'GOLF_API_BASE_URL', 'https://api.golfcourseapi.com')
+    out  = f'{base.rstrip("/")}{path}'
+    if params:
+        # `REDACTED`, not `[redacted]`: urlencode percent-escapes the
+        # brackets into `%5Bredacted%5D`, which reads like a value in a log.
+        shown = {
+            k: (v if k in _LOGGABLE_PARAMS else 'REDACTED')
+            for k, v in params.items() if v is not None
+        }
+        if shown:
+            out += '?' + urllib.parse.urlencode(shown)
+    return out
+
+
 def _get(path: str, params: dict | None = None) -> dict:
     """
     Execute a GET request against GolfCourseAPI.
     Raises ValueError if GOLF_API_KEY is not set.
     Raises RuntimeError on HTTP errors or network failures.
+
+    **Nothing here may log or raise the real query string.** `_safe_url` is
+    what goes into a message, including the two `RuntimeError`s — a caller
+    that logs `traceback.format_exc()` (`CourseFindView` does) would
+    otherwise print whatever the exception carries, so redacting only at the
+    `logger` call would have left the leak open one frame up.
     """
     key = getattr(settings, 'GOLF_API_KEY', '')
     if not key:
@@ -82,21 +124,22 @@ def _get(path: str, params: dict | None = None) -> dict:
     # server log.  INFO-level callers still see the higher-level
     # "CourseImportView" summary; flip the level to DEBUG via
     # DJANGO_LOG_LEVEL=DEBUG if you need the raw API payload again.
-    logger.debug('GolfCourseAPI request: %s', url)
+    safe = _safe_url(path, params)
+    logger.debug('GolfCourseAPI request: %s', safe)
 
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             body = resp.read().decode('utf-8')
             data = json.loads(body)
-            logger.debug('GolfCourseAPI response (%s): %s', url, body[:3000])
+            logger.debug('GolfCourseAPI response (%s): %s', safe, body[:3000])
             return data
     except HTTPError as exc:
         body = exc.read().decode('utf-8', errors='replace')
-        msg  = f'GolfCourseAPI HTTP {exc.code} for {url} — {body[:400]}'
+        msg  = f'GolfCourseAPI HTTP {exc.code} for {safe} — {body[:400]}'
         logger.error(msg)
         raise RuntimeError(msg) from exc
     except Exception as exc:
-        msg = f'GolfCourseAPI request failed for {url} — {type(exc).__name__}: {exc}'
+        msg = f'GolfCourseAPI request failed for {safe} — {type(exc).__name__}: {exc}'
         logger.error(msg)
         raise RuntimeError(msg) from exc
 

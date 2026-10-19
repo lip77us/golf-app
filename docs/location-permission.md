@@ -67,25 +67,30 @@ be turned on and not off were all shipped, tested and unreachable.
 
 These are not polish. Each one is a declaration being true or false.
 
-### a. `golf_api_client._get` logs coordinates at ERROR level
+### a. `golf_api_client._get` logged the request line — **DONE**
 
-```python
-msg = f'GolfCourseAPI HTTP {exc.code} for {url} — {body[:400]}'
-logger.error(msg)
-```
+`_safe_url(path, params)` now rebuilds the request line for logging with
+unlisted parameter values replaced by `REDACTED`, and it is used in all four
+message sites.
 
-`url` is the full request line, so a **failed** proximity call writes the
-golfer's coordinates into the Railway log, unconditionally, where they sit for
-as long as logs are kept. The `logger.debug` line above it does the same on
-every call when `DJANGO_LOG_LEVEL=DEBUG`.
+**The leak was latent, not live**, and the earlier note here overstated it:
+the only caller today is `?near=home`, whose coordinates are the home
+*course's* and public. It becomes real the moment `?near=me` sends the
+device's position — which is why it is fixed ahead of that rather than with
+it.
 
-That makes "we do not retain it" and the App Privacy answer **Not linked to
-the user's identity** both false — the request is authenticated, so a log line
-pairs a coordinate with an account.
+Two things about the shape, because neither is obvious:
 
-Fix: redact the query string in the error path (log `path` and the status, not
-`url`). Do this *before* answering the questionnaire, because the questionnaire
-asks about what the server does, not what the app intends.
+- **The redaction is in the exception message, not just the `logger` call.**
+  `CourseFindView` logs `traceback.format_exc()` on a proximity failure, so a
+  `RuntimeError` carrying the real query string would have printed it one
+  frame up however carefully `_get` logged.
+- **`_LOGGABLE_PARAMS` is an allowlist** (`search_query`, `radius`, `limit`).
+  A denylist fails open: the next endpoint's parameter would log in full
+  until somebody remembered it. A search term stays readable, which is how
+  "The Bridges" filed upstream as "Bridges (The)" was diagnosed.
+
+Tests: `CoordinatesNeverReachALogTests` (`api/test_courses_near.py`, 7).
 
 ### b. Nothing may persist the coordinates
 
@@ -291,10 +296,10 @@ mention.
 
 ## 6 · Order of operations
 
-1. Redact the coordinates from the API client's error log (§1a). First,
-   because every declaration below depends on it.
-2. Build the feature with the three-step fallback, the 2 dp rounding and the
-   pre-prompt sheet.
+1. ~~Redact the coordinates from the API client's request line (§1a).~~
+   **Done** — it went first because every declaration below depends on it.
+2. Build the design's picker (the pill, the `Near you` section, the four
+   named failure states), with the 2 dp rounding and the pre-prompt sheet.
 3. `Info.plist` keys (§2).
 4. Edit both policy files, rebuild and deploy the site. **The policy must be
    live before the build is submitted** — App Review reads the URL on the
@@ -308,14 +313,68 @@ mention.
 
 ---
 
-## Not decided here
+## The design — `~/Downloads/handoff-near-me/`
 
-- **The tab, and where Near me lives.** Paul is taking that to design.
+Arrived 19 Oct 2026. `course-search-field.html` (the picker's idle / locating
+/ results states) and `cup-event-details.html` (the same picker reached from
+Cup event details). It is **not a tab**: a `Courses near me` pill directly
+under the existing search field, in the existing `CourseSearchField`, built
+once for both callers.
+
+It agrees with everything above and independently names the log line
+("*Not stored, not logged, not attached to the round*") and the policy's
+course-database claim. What it adds:
+
+- **One single fix per tap** (`getCurrentPosition`, no stream, no
+  background), and **no request outside the tap** — not on picker open, app
+  launch or round start. Same rule the quota wants.
+- **Results are not cached**; the next open starts idle.
+- The `Near you` section **replaces** the home-course and Recent sections
+  while it shows, with a `Clear` link. Typing, clearing, or closing the sheet
+  resets. The picker already has both of those sections
+  (`_homeCourse`, `_recents`), so this slots in rather than needing them
+  built.
+- Distance right-aligned, tabular figures, `2.4 mi`, nearest first.
+- Named states for every failure: denied (`Location is off. Search by name
+  instead.`, linking to system settings when permanently denied, and no
+  re-prompt loop), ~10 s timeout (`Couldn't get your location. Try again.`),
+  and empty (`No courses within 25 mi.`).
+- Suggested 25 mi / top 10, flagged as a product choice. The endpoint already
+  clamps radius to 1–50 and defaults to 25.
+- Verbatim copy: `Courses near me`, `Finding courses near you…`, `Near you`,
+  `Clear`.
+
+### Two things it leaves open
+
+1. **It never calls `?near=home`.** Slice 1 is built, tested (16 tests) and
+   has no surface in this design: the denied path falls back to typed search,
+   not to the home-course anchor, and the home course is already a `Play
+   here` suggestion in the picker. That is defensible — showing courses near
+   a *different* point under a heading that says `Near you` would be a lie —
+   but it leaves the endpoint as dead code. Either it earns its own line
+   (`Near <home course>`) or it should be understood as unused. Worth
+   deciding rather than drifting.
+2. **The anchor fallback becomes less urgent, not more.** The open slice-1
+   item (fall back to the course of the golfer's most recent round, since
+   only 7 of 458 golfers have a home course) was the fix for `?near=home`
+   reaching nobody. If `?near=me` is the real answer, that work may not be
+   worth doing at all — but the picker's `Recent` section already covers the
+   same instinct.
+
+## Not decided here
 - **Which Flutter plugin.** Whatever is chosen must support iOS reduced
   accuracy, must not pull in a fine-location permission on Android through
   its own manifest (check the merged manifest, not just the pubspec), and
   should ship its own `.xcprivacy`.
-- **Whether the displayed distance is rounded.** With a ~1 km anchor error,
-  two courses a few hundred metres apart in real distance can swap places in
-  the list. Showing whole miles hides it; showing one decimal invites
-  "that's not 10.2 miles". Worth a look once there is a screen.
+- **The distance display contradicts the rounding, slightly.** The design
+  specifies `2.4 mi`, one decimal. Rounding the anchor to 2 dp moves it by up
+  to ~0.7 mi, so that decimal is below the precision we actually have, and
+  two courses a few hundred metres apart can swap places in the list. The
+  honest options are whole miles (`2 mi`) or living with it; going to 3 dp to
+  earn the decimal back is exactly what makes Apple call it Precise Location.
+  **The Coarse label costs us the first decimal of the distance** — that is
+  the trade, and it is worth stating rather than discovering.
+- **Whether the pre-prompt sheet is built.** The design goes straight from
+  tap to the OS prompt. Play wants the purpose given *before* the system
+  dialog, so this is needed for Android at the latest; building it for iOS
+  too means one path rather than two.

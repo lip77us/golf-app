@@ -216,3 +216,92 @@ class HaversineTests(TestCase):
         d = haversine_miles(Decimal('36.5683'), Decimal('-121.9500'),
                             Decimal('36.5806'), Decimal('-121.9646'))
         self.assertAlmostEqual(d, 1.17, delta=0.1)
+
+
+class CoordinatesNeverReachALogTests(TestCase):
+    """`_safe_url` — a position must not survive into a log or a traceback.
+
+    The leak this closes is LATENT rather than live: the only caller today is
+    `?near=home`, whose coordinates belong to a golf COURSE and are public.
+    It becomes a real one the moment `?near=me` passes the device's position,
+    which is why it is fixed before that ships rather than with it — the App
+    Privacy and Play Data-safety answers both claim the position is not
+    retained, and a log line is retention.
+    """
+
+    def test_coordinates_are_redacted(self):
+        from services.golf_api_client import _safe_url
+        out = _safe_url('/v1/proximity', {
+            'latitude': 37.874290, 'longitude': -122.245850,
+            'radius': 25, 'limit': 25,
+        })
+        self.assertNotIn('37.87', out)
+        self.assertNotIn('122.24', out)
+        self.assertIn('latitude=REDACTED', out)
+        self.assertIn('longitude=REDACTED', out)
+
+    def test_the_radius_and_limit_still_read(self):
+        """Redacting the whole query string would cost the diagnostics the
+        allowlist exists to keep."""
+        from services.golf_api_client import _safe_url
+        out = _safe_url('/v1/proximity', {'latitude': 1.5, 'longitude': 2.5,
+                                          'radius': 25, 'limit': 10})
+        self.assertIn('radius=25', out)
+        self.assertIn('limit=10', out)
+
+    def test_a_search_term_still_reads(self):
+        """`Bridges (The)` was diagnosed from the term that was sent."""
+        from services.golf_api_client import _safe_url
+        out = _safe_url('/v1/search', {'search_query': 'Bridges'})
+        self.assertIn('search_query=Bridges', out)
+
+    def test_an_unknown_parameter_is_secret_by_default(self):
+        """The allowlist's whole point: a denylist fails open."""
+        from services.golf_api_client import _safe_url
+        out = _safe_url('/v1/proximity', {'geo_hash': 'ezs42', 'radius': 5})
+        self.assertNotIn('ezs42', out)
+        self.assertIn('radius=5', out)
+
+    def test_the_path_survives(self):
+        from services.golf_api_client import _safe_url
+        self.assertIn('/v1/courses/1234', _safe_url('/v1/courses/1234'))
+
+    def test_the_error_message_carries_no_coordinates(self):
+        """The message, not just the logger call.
+
+        `CourseFindView` logs `traceback.format_exc()` on a proximity
+        failure, so a `RuntimeError` carrying the real query string would
+        print it one frame up however carefully `_get` logged.
+        """
+        from services import golf_api_client as gac
+
+        def boom(*a, **kw):
+            raise OSError('connection refused')
+
+        with self.settings(GOLF_API_KEY='k'):
+            with patch.object(gac.urllib.request, 'urlopen', boom):
+                with self.assertRaises(RuntimeError) as caught:
+                    gac.courses_near(37.874290, -122.245850, radius=25)
+
+        import traceback
+        text = ''.join(traceback.format_exception(caught.exception))
+        for leak in ('37.87', '122.24', '37.8742', '122.2458'):
+            self.assertNotIn(leak, text, f'{leak!r} reached the traceback')
+        self.assertIn('REDACTED', str(caught.exception))
+
+    def test_an_http_error_message_carries_no_coordinates(self):
+        from urllib.error import HTTPError
+        from services import golf_api_client as gac
+
+        def boom(*a, **kw):
+            raise HTTPError('https://api.golfcourseapi.com/v1/proximity'
+                            '?latitude=37.874290&longitude=-122.245850',
+                            400, 'Bad Request', {}, None)
+
+        with self.settings(GOLF_API_KEY='k'):
+            with patch.object(gac.urllib.request, 'urlopen', boom):
+                with self.assertRaises(RuntimeError) as caught:
+                    gac.courses_near(37.874290, -122.245850)
+
+        self.assertNotIn('37.87', str(caught.exception))
+        self.assertNotIn('122.24', str(caught.exception))
