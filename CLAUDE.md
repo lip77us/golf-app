@@ -808,14 +808,31 @@ Note the delete printed `404 Not Found` and had nonetheless worked — GitHub
 answers 404 once the Pages config is gone. `has_pages` and the site root are
 the things to check, not the command's exit.
 
-**The data inventory behind the App Privacy answers** (checked 2 Oct 2026):
-`Info.plist` declares NO location, camera, photo-library, microphone or
-tracking usage description — the app never asks for any of them. Data lives on
-the Railway backend; course lookups to GolfCourseAPI carry no PII; the
-account-deletion section matches the implemented feature. The website's
-Cloudflare Web Analytics is cookieless and aggregate and is NOT the app, so it
-does not move these answers. Re-check against `Info.plist` before answering the
-questionnaire rather than copying this line forward on trust.
+**The data inventory behind the App Privacy answers** (checked 19 Oct 2026).
+`Info.plist` declares NO camera, photo-library, microphone or tracking usage
+description — the app never asks for any of them. Data lives on the Railway
+backend; the account-deletion section matches the implemented feature. The
+website's Cloudflare Web Analytics is cookieless and aggregate and is NOT the
+app, so it does not move these answers. Re-check against `Info.plist` before
+answering the questionnaire rather than copying this line forward on trust —
+which is exactly what the two sentences below are: this note previously said
+the app declared no location description and that course lookups carried no
+PII, and both stopped being true in one commit.
+
+**Location is now declared, and it is one data type.** `?near=me` ships
+behind a `Courses near me` pill in the course picker, so the questionnaire
+gains **Location → Coarse Location, App Functionality, not linked to the
+user's identity, not used for tracking** — and nothing else moves. Coarse
+rather than Precise is earned, not asserted: the position is cut to two
+decimal places on the phone AND again on arrival, because Apple reads three
+or more decimal places as Precise Location whatever accuracy iOS granted.
+GolfCourseAPI now receives that coarse position on a proximity lookup, which
+is why §4 of the policy no longer claims we send it no personal information.
+`NSLocationWhenInUseUsageDescription` + `NSLocationDefaultAccuracyReduced`
+are the only two keys, `UIBackgroundModes` is untouched, and **Android is
+gated off** (`nearMeOffered`) until its manifest line and the Play
+Data-safety answers land together. The whole record, including the exact
+policy text, is `docs/location-permission.md`.
 
 **Still open: nothing in the app links to the policy.** Settings has a Privacy
 section, but it holds the findable-by-name switch — no screen links to

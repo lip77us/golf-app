@@ -179,7 +179,7 @@ in the same commit.
 
 ---
 
-## 4 · Privacy policy — the exact edits
+## 4 · Privacy policy — the exact edits — **DONE 19 Oct 2026**
 
 Source of truth is `docs/privacy-policy.html`; `website/privacy.html` is the
 published page and `build-zip.sh` ships it. **The two files differ only by the
@@ -188,7 +188,26 @@ identically. (One published copy at halved.golf is the rule — the GitHub Pages
 mirror was unpublished in Oct 2026 precisely because a second copy drifts.)
 
 Bump both dates at the top: `Last updated: <ship date>`. Leave the effective
-date.
+date. Both now read **October 19, 2026**; the effective date stays May 30.
+
+**Two corrections made while applying this**, because the spec was written
+before the picker was:
+
+- The control is **`Courses near me`**, not `Near me` — the policy quotes the
+  button, so it has to be the button's actual name.
+- §4e originally said course search "starts from your home course or a name
+  you type". With `?near=home` deliberately given no surface, that described
+  a fallback the app does not have. It now says you can type a name and that
+  your home course and recent courses stay one tap away, which is what the
+  picker actually does.
+
+It also drops the per-OS settings paths the draft had: naming an Android path
+would describe a permission Android users cannot grant yet, and "your device
+settings" is true on both and needs no second edit when Android ships.
+
+`build-seo.py` reported the sitemap stale (the content hash moved) and
+regenerating it moved **only** the privacy page's `lastmod`, which is the
+check that nothing else was touched. Audit: 29 pages, 0 errors, 0 warnings.
 
 ### 4a. §2 — the claim that becomes false
 
@@ -308,14 +327,16 @@ mention.
    **Done** — it went first because every declaration below depends on it.
 2. ~~Build the design's picker.~~ **Done** — see §7.
 3. ~~`Info.plist` keys (§2).~~ **Done.**
-4. Edit both policy files, rebuild and deploy the site. **The policy must be
-   live before the build is submitted** — App Review reads the URL on the
-   listing, and a policy that does not mention location against a binary that
-   asks for it is a 5.1.1 finding.
+4. ~~Edit both policy files and rebuild the site.~~ **Done.** Still to do:
+   **upload the zip.** The policy must be LIVE before the build is
+   submitted — App Review reads the URL on the listing, and a policy that
+   does not mention location against a binary that asks for it is a 5.1.1
+   finding. `build-zip.sh` only zips; the Cloudflare Pages upload is by
+   hand, so this one is Paul's.
 5. Submit, answering App Privacy per §3.
-6. Update the CLAUDE.md data-inventory note, which currently says the app
-   declares no location usage description and that course lookups carry no
-   PII. Both stop being true.
+6. ~~Update the CLAUDE.md data-inventory note.~~ **Done** — it had said the
+   app declares no location usage description and that course lookups carry
+   no PII, and both stopped being true in one commit.
 7. Android (§5) only once the production listing exists.
 
 ---
