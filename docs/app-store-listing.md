@@ -1,4 +1,4 @@
-# App Store listing copy — Halved (v2.12.0)
+# App Store listing copy — Halved (v2.12.1)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
@@ -10,18 +10,42 @@ offerable and must not be listed. Check `game_catalog.dart` rather than the
 services directory — this list had been missing 40 Balls and Better Ball since
 they were release headlines.
 
-## Submitting 2.12.0 — everything that changes
+## Submitting 2.12.1 — everything that changes
 
-Three fields move for this submission, and the other six do not. They are not
-all in one place in App Store Connect either, so this says which is which
-rather than leaving you to diff the file.
-
-| Field | 2.12.0 |
+| Field | 2.12.1 |
 | --- | --- |
 | What's New | NEW — below |
 | Promotional text | NEW — below (editable later without review) |
-| Description | CHANGED — the Spots bullet, see **Description** below. 3,888 of 4,000 |
+| **App Privacy** | **CHANGED — Location → Coarse Location added.** Done 19 Oct 2026 |
+| Description | unchanged — see the note below before you decide otherwise |
 | Name · Subtitle · Keywords · Privacy URL · Support URL · Category | unchanged since 2.11.0 |
+
+**App Privacy is in the table because it is the one that is easy to miss**,
+and because it is not on the version page: it is App Store Connect → App
+Privacy, answered once for the app rather than per build. One data type —
+**Location → Coarse Location**, purpose **App Functionality**, *not* linked
+to the user's identity, *not* used for tracking — and nothing else moves.
+`docs/location-permission.md` is the whole record, including why Coarse is
+earned rather than asserted.
+
+**The privacy policy changed too, and is already live** at
+https://halved.golf/privacy (19 Oct 2026). The URL field does not move; the
+page behind it does, and it had to be live *before* this build is submitted,
+because review reads the listing URL and a policy that does not mention
+location against a binary that asks for it is a 5.1.1 finding.
+
+**Why the description is NOT changing**, though "Courses near me" would
+reasonably belong in it: it stands at **3,888 of 4,000**, so a sentence about
+finding courses near you means cutting something else, and that is a
+deliberate edit rather than a release-day one. Worth doing at 2.13 with the
+room measured first.
+
+**This release is bigger than its version number suggests.** 2.12.1 reads
+like a patch, but four user-visible things landed *after* build 53 was cut
+and have never shipped: courses near me, the handicap basis tee, the Golf
+Genius sync line, and the course-search fixes. The What's New covers all
+four — do not trim it on the assumption that a point release has little in
+it.
 
 **The listing's primary language is English (Australia).** English (U.S.) was
 deleted on 16 Oct 2026 so each field is filled once rather than twice; the
@@ -29,11 +53,53 @@ reason the flip could not simply be done, and the order to do it in at 2.13,
 are in `docs/go-live-checklist.md`. Nothing on a product page shows a
 customer which English it is.
 
-## Promotional text (170 max, editable without review) — 2.12.0, 164 chars
+## Promotional text (170 max, editable without review) — 2.12.1, 161 chars
+New: Courses near me — tap once and the courses closest to you are listed nearest first. Halved asks for your location only on that tap, never in the background.
+
+## Promotional text — previous (2.12.0, 164 chars)
 New: name your spots. Tick greenie, sandy, chippy or your own before you tee off, and an unclaimed greenie carries to the next par 3. Skins junk works the same way.
 
 ## Promotional text — previous (2.11.2, 161 chars)
 New: play on your own against par — stroke play, a Nassau or a match, with presses par fights back in. Plus Six's teams the group picks and skins groups you set.
+
+## What's New (v2.12.1)
+
+COURSES NEAR ME. Looking for somewhere you have not played? Tap "Courses near
+me" under the search box and Halved lists the ten closest, nearest first, with
+the distance beside each.
+
+It reads your location only when you tap that button — never when you open the
+app, never when you start a round, never in the background. One reading, used
+for that one search, and not kept afterwards. It asks for an approximate
+location rather than a precise one, because finding courses within 25 miles
+does not require knowing which fairway you are standing on. Say no and nothing
+else changes: type a name the way you always have.
+
+ONE HANDICAP BASIS FOR THE WHOLE FIELD. A tournament now declares the tee its
+handicaps are figured from — the men's White, say — so every golfer's strokes
+come off one reference instead of shifting with whoever happens to be in his
+group. You set it where you assign tees, and the next event starts from the
+one you used last. A course remembers its own, so casual rounds get it too.
+That basis tee is then offered as the default when you assign tees, with women
+starting one tee shorter, which beats defaulting to whatever sat first in the
+list.
+
+MY GOLFERS SHOWS ITS LAST SYNC. The roster now says when it last came in from
+Golf Genius and what changed — "Synced from Golf Genius Oct 15 · 2 added, 72
+updated" — so you can tell at a glance whether the indexes in front of you are
+current.
+
+FINDING A COURSE BY NAME
+• A club filed under a different word now reads properly in the results. "The
+  Bridges" is stored upstream as "Bridges (The)", which was easy to scroll
+  straight past
+• When the course database cannot be reached, the list says so, instead of
+  quietly showing only the courses you already have — which looked exactly
+  like "your course is not in there"
+
+ALSO
+• The greenie's full rule now reads on the setup screens: on the green from
+  the tee, closest to the hole, and a par
 
 ## What's New (v2.12.0)
 
