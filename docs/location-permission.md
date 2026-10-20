@@ -365,6 +365,14 @@ Backend:
   deliberately unlike the missing home course, which is a state the golfer is
   in and gets a sentence: this is a client fault and an empty list would hide
   it.
+- **The nearest 10**, trimmed from the MERGED list rather than from the
+  upstream slice: local and catalog rows are in the same ranking, so capping
+  the API call alone still hands back twenty-odd. Measured against the real
+  thing — Fairfield at 25 miles returned 24 rows, which is a list you work
+  through under a heading that says "Near you". The upstream call still asks
+  for its full 25, because quota is charged per request and not per row.
+  `?near=home` keeps 60; it has no surface, and a cap is a presentation
+  choice.
 - **Whole miles**, and the quantise happens **after** the sort, on the real
   distance — rounding first would let two courses a few hundred yards apart
   swap places because both round to 1. `places` is passed in as the
@@ -440,8 +448,10 @@ course-database claim. What it adds:
   instead.`, linking to system settings when permanently denied, and no
   re-prompt loop), ~10 s timeout (`Couldn't get your location. Try again.`),
   and empty (`No courses within 25 mi.`).
-- Suggested 25 mi / top 10, flagged as a product choice. The endpoint already
-  clamps radius to 1–50 and defaults to 25.
+- Suggested 25 mi / **top 10**, flagged as a product choice. The radius
+  shipped first and the cap did not — testing at Fairfield turned up 24 rows,
+  and Paul took the design's 10 (19 Oct 2026). The endpoint clamps radius to
+  1–50 and defaults to 25.
 - Verbatim copy: `Courses near me`, `Finding courses near you…`, `Near you`,
   `Clear`.
 
@@ -467,6 +477,36 @@ doing.
    reaching nobody. If `?near=me` is the real answer, that work may not be
    worth doing at all — but the picker's `Recent` section already covers the
    same instinct.
+
+## Testing it on the Simulator — three things that cost time
+
+All three were found by Paul running it rather than by any test, and none of
+them is a thing a test could have found.
+
+**`LocationAccuracy.reduced` never returns on the Simulator.** It maps to
+`kCLLocationAccuracyReduced`, served from a cached coarse REGION that the
+Simulator frequently never populates — so the request hangs indefinitely even
+with a location set. The request is `low` now; the authorisation stays reduced
+via the plist and the transmitted figure is still 2 dp, so the declaration is
+untouched. **This is also a plausible first-fix latency problem on a real
+device**, which is the better reason for the change.
+
+**`xcrun simctl location booted set` is ambiguous with more than one
+simulator booted** — three were, and it set the location on a device the app
+was not running on, which presented as "I set it and it stayed in SF". Name
+the device: `xcrun simctl location "iPhone 17 Pro Max" set 38.30,-122.02`.
+`xcrun simctl list devices | grep Booted` is the check, and
+`xcrun simctl shutdown all` the cure.
+
+**Nothing bounded the operation end to end.** `AppleSettings.timeLimit` was
+not being enforced (the pill ran past 30 s, which proves it), and the lookup
+behind it inherited `ApiClient._timeout`'s 30 s — deliberate for cold starts,
+wrong for a spinner. Both phases now carry their own short budget and their
+own message, and `.timeout` sits beside the plugin's own limit rather than
+trusting it.
+
+Fairfield, `38.30,-122.02`, is a good test anchor: 22 courses from upstream,
+Paradise Valley at 0 mi and Rancho Solano at 3.
 
 ## Not decided here
 - **The pre-prompt sheet.** Not built. The design goes straight from tap to

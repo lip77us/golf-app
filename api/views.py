@@ -10933,7 +10933,9 @@ class CourseFindView(APIView):
     **`near=me` is the one that carries a privacy declaration** — the
     position is cut to two decimal places before anything is done with it,
     and its distances come back in whole miles because that is the
-    resolution the anchor justifies. `docs/location-permission.md` is the
+    resolution the anchor justifies. It returns the nearest
+    `_NEAR_ME_LIMIT` rows; the merged list at 25 miles runs to twenty-odd,
+    which is a list you work through rather than a list you glance at. `docs/location-permission.md` is the
     record. `near=home` predates it and has no client surface.
     Dedup is by golf_api_id, then by (name, city), preferring the cheapest add
     path (account > catalog > api) so a course in more than one source appears
@@ -10945,6 +10947,19 @@ class CourseFindView(APIView):
       * source=catalog → catalog_id (POST /catalog/courses/<id>/add/)
       * source=api     → golf_api_id (POST /courses/import/)
     """
+    #: Rows a `?near=me` search returns — the design's "top 10".
+    #:
+    #: Trimmed from the MERGED list, not from the upstream slice: local and
+    #: catalog rows are in the ranking too, so capping the API call alone
+    #: would still hand back twenty-odd. The upstream call still asks for its
+    #: full 25 — quota is charged per request, not per row, so asking for
+    #: fewer saves nothing and costs dedup headroom when a row is dropped as
+    #: a duplicate of one we already own.
+    #:
+    #: `?near=home` keeps the old 60. It has no client surface, and a cap is
+    #: a presentation choice that belongs with the screen that presents.
+    _NEAR_ME_LIMIT = 10
+
     #: Degrees of latitude to a mile. Longitude shrinks towards the poles,
     #: which is why the box below divides by cos(lat).
     _MILES_PER_DEG_LAT = 69.0
@@ -11045,9 +11060,11 @@ class CourseFindView(APIView):
             anchor={'course_id': None, 'name': None,
                     'radius_miles': radius, 'coarse': True},
             places=0,
+            limit=self._NEAR_ME_LIMIT,
         )
 
-    def _ranked_by_distance(self, request, lat, lng, radius, anchor, places):
+    def _ranked_by_distance(self, request, lat, lng, radius, anchor, places,
+                            limit=60):
         """The three sources merged and ranked by distance from (lat, lng).
 
         Shared by both anchors so there is one dedup, one best-effort
@@ -11150,7 +11167,7 @@ class CourseFindView(APIView):
             if row['distance'] is not None:
                 row['distance'] = (round(row['distance'], places) if places
                                    else int(round(row['distance'])))
-        return Response({'courses': out[:60], 'anchor': anchor})
+        return Response({'courses': out[:limit], 'anchor': anchor})
 
     def get(self, request):
         from django.db.models import Q

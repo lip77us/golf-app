@@ -319,6 +319,52 @@ class CoursesNearMeTests(TestCase):
         """The equator and the Greenwich meridian both cross dry land."""
         self.assertEqual(self._get(lat='0', lng='-121.95').status_code, 200)
 
+    # --- the cap ------------------------------------------------------
+
+    @patch('services.golf_api_client.courses_near')
+    def test_it_returns_at_most_ten_rows(self, mock_near):
+        """The design's "top 10", trimmed from the MERGED list.
+
+        Capping the upstream call alone would not do it: local and catalog
+        rows are in the same ranking, so the real list at 25 miles runs to
+        twenty-odd.
+        """
+        mock_near.return_value = [
+            _api_row(str(900 + i), f'Course {i}', 1.0 + i * 0.3)
+            for i in range(25)
+        ]
+        rows = self._get(lat=str(PEBBLE[0]), lng=str(PEBBLE[1])).data['courses']
+        self.assertEqual(len(rows), 10)
+
+    @patch('services.golf_api_client.courses_near')
+    def test_the_ten_it_keeps_are_the_NEAREST_ten(self, mock_near):
+        """Trimmed after the sort, so the cap cannot drop a closer course."""
+        mock_near.return_value = [
+            _api_row(str(900 + i), f'Course {i}', 40.0 - i)   # farthest first
+            for i in range(20)
+        ]
+        rows = self._get(lat=str(PEBBLE[0]), lng=str(PEBBLE[1]),
+                         radius='50').data['courses']
+        names = [r['name'] for r in rows]
+        distances = [r['distance'] for r in rows]
+
+        self.assertEqual(distances, sorted(distances), 'not nearest-first')
+        # The two local courses (~1 mi) take the first slots, so the API rows
+        # that survive are its nearest — Course 19 at 21 mi in, Course 0 at
+        # 40 mi out. Asserted by name rather than by a hard-coded ceiling,
+        # which would move with the fixture.
+        self.assertIn('Course 19', names)
+        self.assertNotIn('Course 0', names)
+        self.assertEqual(names[:2], ['Poppy Hills', 'Spyglass'])
+
+    @patch('services.golf_api_client.courses_near', return_value=[])
+    def test_the_upstream_is_still_asked_for_its_full_page(self, mock_near):
+        """Quota is charged per REQUEST, not per row, so asking for fewer
+        saves nothing and costs dedup headroom."""
+        self._get(lat=str(PEBBLE[0]), lng=str(PEBBLE[1]))
+        _, kwargs = mock_near.call_args
+        self.assertNotIn('limit', kwargs)   # the client's own default, 25
+
     # --- it degrades, like the search branch --------------------------
 
     @patch('services.golf_api_client.courses_near',
