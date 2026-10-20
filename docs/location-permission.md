@@ -152,7 +152,7 @@ and if we add an app-level manifest anyway, the entry is
 
 ---
 
-## 3 · App Store Connect → App Privacy
+## 3 · App Store Connect → App Privacy — **DONE 19 Oct 2026**
 
 Today the app declares no location at all. One data type is added; nothing
 else on the form moves.
@@ -174,8 +174,17 @@ traffic.
 
 **The App Privacy answers are also a code claim.** The CLAUDE.md data
 inventory says to re-check against `Info.plist` rather than copying the line
-forward — that note is what this section invalidates, and it should be updated
-in the same commit.
+forward — that note is what this section invalidated, and it was updated in
+the same commit as the policy (`b2e3ca1`).
+
+**The declaration is now ahead of the binary**, which is worth knowing rather
+than worrying about. 2.12.0+53 is what is on the store and it asks for no
+location at all, so the product page's privacy label describes a capability
+no shipped build has. That is **over**-disclosure, which is the safe
+direction — under-disclosing is what gets read as a 5.1.1/5.1.2 problem — and
+it resolves itself the moment a build carrying the picker ships. If having
+the label match exactly matters, the answer is to get that build out rather
+than to roll the declaration back.
 
 ---
 
@@ -333,7 +342,10 @@ mention.
    does not mention location against a binary that asks for it is a 5.1.1
    finding. `build-zip.sh` only zips; the Cloudflare Pages upload is by
    hand, so this one is Paul's.
-5. Submit, answering App Privacy per §3.
+5. ~~Answer App Privacy per §3.~~ **Done** — Coarse Location declared in App
+   Store Connect. Still to do: **ship a build that contains the feature.**
+   2.12.0+53 does not; it needs a version bump and an IPA, and until one goes
+   out the declaration describes a capability no shipped binary has (§3).
 6. ~~Update the CLAUDE.md data-inventory note.~~ **Done** — it had said the
    app declares no location usage description and that course lookups carry
    no PII, and both stopped being true in one commit.
