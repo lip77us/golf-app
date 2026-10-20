@@ -160,3 +160,82 @@ def assert_course_quality(api_course):
     if problems:
         raise CourseQualityError(problems)
     return warnings
+
+
+# ---------------------------------------------------------------------------
+# A record that disagrees with itself about where it is
+# ---------------------------------------------------------------------------
+
+#: Country names that mean the same place. Only the cases that actually
+#: collide: a geocoded address says `USA` where a record says
+#: `United States`, and the UK's constituent countries are routinely given
+#: where the address says `UK`. Everything else is compared literally.
+_SAME_COUNTRY = {
+    'usa': 'us', 'u.s.a.': 'us', 'us': 'us', 'u.s.': 'us',
+    'united states': 'us', 'united states of america': 'us',
+
+    'uk': 'uk', 'u.k.': 'uk', 'gb': 'uk', 'great britain': 'uk',
+    'united kingdom': 'uk', 'england': 'uk', 'scotland': 'uk',
+    'wales': 'uk', 'northern ireland': 'uk',
+
+    'uae': 'ae', 'united arab emirates': 'ae',
+    'republic of ireland': 'ie', 'ireland': 'ie', 'eire': 'ie',
+    'south korea': 'kr', 'korea': 'kr', 'republic of korea': 'kr',
+    'czechia': 'cz', 'czech republic': 'cz',
+}
+
+
+def _canonical_country(name: str) -> str:
+    key = (name or '').strip().lower().rstrip('.')
+    if not key:
+        return ''
+    return _SAME_COUNTRY.get(key) or _SAME_COUNTRY.get(key + '.') or key
+
+
+def country_contradiction(row: dict) -> str | None:
+    """Does this proximity row disagree with ITSELF about which country it is in?
+
+    Returns a one-line description, or None when the row is consistent or
+    cannot be judged.
+
+    **The case this exists for**, seen in production on 20 Oct 2026, four
+    miles from Oakland::
+
+        club_name : Royal Golf Residence
+        city      : Londrina      state: PR      country: Brazil
+        address   : "Alameda, CA, USA"
+        latitude  : 37.7798721    longitude: -122.2821855
+
+    `Alameda` is Portuguese for avenue. A Brazilian street line beginning
+    "Alameda …" was handed to a geocoder, which matched the city of Alameda,
+    California and returned its coordinates — so a club in Paraná has sat in
+    the Bay Area in the upstream database ever since. Every genuine neighbour
+    in that same response carried a real street address; this one's was the
+    bare string above.
+
+    **Why dropping is right, and only here.** The row's distance is perfectly
+    correct *for the coordinates it carries* — our maths was never wrong. But
+    a proximity list exists for one reason, position, and a record whose own
+    fields disagree about which continent it is on has nothing trustworthy to
+    offer it. The same record is still perfectly findable by NAME, where the
+    golfer is the one judging whether it is the course he meant.
+
+    **It fails open on purpose.** Hiding a real course from a picker is worse
+    than showing a strange one, so a row is dropped only when both countries
+    are present AND normalise to something different. An unknown name, a
+    missing address, an address with no country — all keep the row.
+    """
+    stated = (row.get('country') or '').strip()
+    address = (row.get('address') or '').strip()
+    if not stated or not address or ',' not in address:
+        return None
+
+    tail = address.rsplit(',', 1)[-1].strip()
+    if not tail:
+        return None
+
+    a, b = _canonical_country(stated), _canonical_country(tail)
+    if not a or not b or a == b:
+        return None
+    return (f'says country={stated!r} but its address ends {tail!r} '
+            f'({address!r})')

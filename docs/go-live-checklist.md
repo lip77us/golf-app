@@ -66,8 +66,26 @@ Order matters: **backend first**, then mobile.
 
 ```sh
 cd mobile
-flutter build ipa          # → build/ios/ipa/*.ipa
+./build-ipa.sh             # → build/ios/ipa/*.ipa
 ```
+
+**Use the script, not a bare `flutter build ipa`.** It checks the built
+`Info.plist` for BOTH location purpose strings and for the absence of a
+`location` background mode, and fails the build rather than letting Apple
+tell you two days later.
+
+Both strings have to be there, and the pair is an invariant rather than
+belt-and-braces: Apple demands the **always** string (ITMS-90683 on
+2.12.1+54) because `geolocator_apple` references `requestAlwaysAuthorization`
+in a branch, and what keeps that honest is the **when-in-use** string, since
+the plugin's `if/else if` takes the when-in-use branch whenever that key is
+present. Drop the when-in-use key and the app silently starts asking to track
+people in the background. `docs/location-permission.md` has the argument.
+
+It also lets `flutter build` regenerate `ios/Flutter/ephemeral` and never
+runs `flutter pub get` in between — a `pub get` after a clean pins the
+generated Swift package to iOS 13.0 and the build then fails against
+firebase at 15.0. `./build-ipa.sh --no-clean` skips the clean on a re-run.
 
 Then upload the `.ipa` with **Transporter** (free, Mac App Store, made by Apple —
 it was called *Application Loader* before 2019, which is what you'll half-remember

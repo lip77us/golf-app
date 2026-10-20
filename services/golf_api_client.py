@@ -305,6 +305,11 @@ def _adapt_course_summary(raw: dict) -> dict:
         'city'       : loc.get('city', ''),
         'state'      : loc.get('state', ''),
         'country'    : loc.get('country', ''),
+        # Kept for ONE job: `course_quality.country_contradiction`. The
+        # address is what the coordinates were geocoded FROM, so when it and
+        # `country` disagree the row cannot be trusted to be where it claims.
+        # Never displayed — the app shows city/state.
+        'address'    : loc.get('address', ''),
     }
 
 

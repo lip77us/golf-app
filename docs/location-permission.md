@@ -478,6 +478,155 @@ doing.
    worth doing at all — but the picker's `Recent` section already covers the
    same instinct.
 
+## ITMS-90683, and why the key Apple asks for is the wrong fix
+
+Apple answered the 2.12.1+54 delivery with:
+
+> ITMS-90683: Missing purpose string in Info.plist … should contain a
+> **NSLocationAlwaysAndWhenInUseUsageDescription** key … If you're using
+> external libraries or SDKs, they may reference APIs that require a purpose
+> string. **While your app might not use these APIs, a purpose string is
+> still required.**
+
+**It is a warning, not a rejection** — "although delivery was successful" —
+so the build reached TestFlight and was testable. It should not reach a real
+submission, though: a missing purpose string is a review finding, and the
+honest fix is cheap.
+
+**Adding the key would be the wrong fix, and the reason is not stylistic.**
+That string is shown to a golfer when an app asks to track him in the
+background. This app never asks, the policy says in as many words that it
+"never reads your location in the background", and the App Privacy answer is
+Coarse / App Functionality / no tracking. A purpose string explaining why we
+need Always location would be a sentence contradicting all three, written for
+a prompt that can never appear.
+
+**What actually trips the scanner** is a static symbol reference, not
+behaviour. `geolocator_apple`'s `PermissionHandler.m` calls
+`requestAlwaysAuthorization` in a branch, and Apple's analysis sees the
+selector in the binary. Verified rather than assumed — `strings` on the
+shipped 54 binary found `requestAlwaysAuthorization`,
+`requestWhenInUseAuthorization` and the literal
+`NSLocationAlwaysAndWhenInUseUsageDescription` (that last one from the
+`containsLocationAlwaysDescription` lookup).
+
+Worth knowing that the branch was already unreachable: the handler is
+
+```objc
+if (NSLocationWhenInUseUsageDescription present) requestWhenInUseAuthorization();
+else if (containsLocationAlwaysDescription())   requestAlwaysAuthorization();
+```
+
+an `if/else if`, and we have the WhenInUse key — so adding the Always key
+would not even have changed which authorisation we request. The problem was
+never what the app does.
+
+**The plugin's own opt-out does not work through `flutter build ipa`.**
+`BYPASS_PERMISSION_LOCATION_ALWAYS=1` `#if`s the call out, and the mechanism
+is real — `swift package dump-package` with the variable set emits
+`define: BYPASS_PERMISSION_LOCATION_ALWAYS=1`. But four builds could not get
+it to the compiler: clearing SwiftPM's manifest cache did not help, seeding
+that cache with a flagged evaluation did not help, and there was no stale
+`XCBBuildService` to blame. The proof it never landed is
+`containsLocationAlwaysDescription`, which sits inside the *same* `#if` and
+survived every attempt. **Do not spend another afternoon on this** without a
+new idea; the remaining clean answer is to drop geolocator for a local
+platform package (the project already has `halved_sms` as that pattern) for
+what is one CoreLocation call.
+
+**So we ship the purpose string — and the reason that is honest is the OTHER
+key.** The plugin's handler is
+
+```objc
+if   (NSLocationWhenInUseUsageDescription present) requestWhenInUseAuthorization();
+else if (containsLocationAlwaysDescription())      requestAlwaysAuthorization();
+```
+
+an `if/else if`. While the when-in-use key is present the always branch is
+**dead**, so the background prompt can never appear and the string is never
+shown. Its text describes the app's real, foreground-only use rather than
+inventing a background purpose:
+
+> Halved uses your approximate location only when you tap Courses near me, to
+> list golf courses close to you. It never tracks your location in the
+> background.
+
+**The pair is therefore an invariant, not a coincidence.** Remove the
+when-in-use key and the app silently begins requesting ALWAYS authorisation,
+contradicting the privacy policy and the App Privacy answers in one move.
+`build-ipa.sh` checks the built `Info.plist` for both keys and for the
+absence of a `location` entry in `UIBackgroundModes`, and fails the build
+rather than trusting any of it.
+
+**This project builds iOS plugins with Swift Package Manager, not CocoaPods**
+— there is no `Podfile`, and `ios/Flutter/ephemeral/Packages/
+FlutterGeneratedPluginSwiftPackage` is what links them. So the flag is an
+environment variable at build time rather than a Podfile `post_install`. If
+CocoaPods ever comes back, the equivalent is a `GCC_PREPROCESSOR_DEFINITIONS`
+entry in `post_install`.
+
+**`mobile/build-ipa.sh` carries the one other thing a build needs**: let
+`flutter build` regenerate `ios/Flutter/ephemeral`, and never run
+`flutter pub get` in between. A `pub get` after a clean writes a generated
+Swift package pinned to **iOS 13.0**, which then fails against firebase and
+`halved-sms` at 15.0; `flutter build` writes 15.0. That cost a build to find
+and looks nothing like its cause.
+
+## A Brazilian course four miles from Oakland
+
+Reported from TestFlight, 20 Oct 2026. The near-me list was right except for
+one row: **Royal Golf Residence, Londrina, PR — 5 mi**, between Orinda and
+Moraga.
+
+The upstream record contradicts itself:
+
+```
+city: Londrina   state: PR   country: Brazil
+address:   "Alameda, CA, USA"
+latitude:  37.7798721   longitude: -122.2821855      <- Alameda, California
+```
+
+**Our distance was correct.** It really is 4.75 miles away *for the
+coordinates it carries*; the merge, the dedup and the radius all behaved.
+
+**`Alameda` is Portuguese for avenue.** A Brazilian street line beginning
+"Alameda …" was handed to a geocoder, which matched the city of Alameda,
+California and returned its coordinates — so a club in Paraná has sat in the
+Bay Area in the upstream database ever since. The giveaway is visible in the
+same response: every genuine neighbour carries a real street address
+(`5295 Broadway Terrace, Oakland, CA 94618, USA`) and this one's is the bare
+string above, with no number and no postcode. Paul is reporting it to
+GolfCourseAPI, which is where the fix properly belongs.
+
+**`services.course_quality.country_contradiction`** drops rows like it from
+proximity results. Three things about the shape:
+
+- **Proximity only.** A list ranked purely by position cannot carry a record
+  that disagrees with itself about which continent it is on. A golfer typing
+  the name is doing the judging himself, so the text search keeps it —
+  silently making a course unfindable by name would be a worse bug than the
+  one this fixes. My first version went into BOTH branches, because the two
+  loops are identical and I used one `replace`; the suite caught it as a
+  `NameError` and there is now a test pinning the asymmetry.
+- **It fails open.** A row is dropped only when both countries are present
+  AND normalise to something different. No address, no country, no comma, an
+  unrecognised name — all keep the row. Hiding a real course from a picker is
+  the worse direction.
+- **The two aliases that matter** are US (`USA` / `United States`) and UK
+  (`Scotland` / `England` / `Wales` against an address ending `UK`). Without
+  those, the rule's most likely false positive would have been a links
+  course.
+- **Every drop is logged**, so if the rule ever eats a real course we can see
+  that it did.
+
+The adapter now keeps `address` for this one purpose. It is never displayed —
+the app shows city/state.
+
+Also worth noting: **we take the upstream `distance` entirely on trust.**
+Account and catalog rows get a bounding box and a real haversine check; API
+rows get `ac.get('distance')` unverified. Here that was harmless because
+their number was right for their coordinates, but it is an unguarded path.
+
 ## Testing it on the Simulator — three things that cost time
 
 All three were found by Paul running it rather than by any test, and none of

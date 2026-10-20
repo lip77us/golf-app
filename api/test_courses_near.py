@@ -386,6 +386,134 @@ class CoursesNearMeTests(TestCase):
         self.assertNotIn('Harding Park', [r['name'] for r in rows])
 
 
+class CountryContradictionTests(TestCase):
+    """`course_quality.country_contradiction` — a row that disagrees with itself.
+
+    Built from a real production row (20 Oct 2026): Royal Golf Residence,
+    Londrina PR Brazil, address "Alameda, CA, USA", coordinates in Alameda,
+    California, four miles from Oakland. `Alameda` is Portuguese for avenue.
+    """
+
+    #: The row exactly as GolfCourseAPI returned it, adapted.
+    ROYAL = {'id': '2t434y66', 'club_name': 'Royal Golf Residence',
+             'course_name': 'Royal Golf Residence', 'city': 'Londrina',
+             'state': 'PR', 'country': 'Brazil',
+             'address': 'Alameda, CA, USA'}
+
+    def test_the_real_row_is_caught(self):
+        from services.course_quality import country_contradiction
+        found = country_contradiction(self.ROYAL)
+        self.assertIsNotNone(found)
+        self.assertIn('Brazil', found)
+        self.assertIn('USA', found)
+
+    def test_a_genuine_neighbour_is_not(self):
+        """Claremont, from the same response."""
+        from services.course_quality import country_contradiction
+        self.assertIsNone(country_contradiction({
+            'country': 'United States',
+            'address': '5295 Broadway Terrace, Oakland, CA 94618, USA'}))
+
+    # --- it fails OPEN: hiding a real course is the worse direction ----
+
+    def test_usa_and_united_states_are_the_same_place(self):
+        from services.course_quality import country_contradiction
+        for stated in ('United States', 'USA', 'U.S.A.',
+                       'United States of America'):
+            self.assertIsNone(country_contradiction(
+                {'country': stated, 'address': '1 Road, Town, CA, USA'}),
+                stated)
+
+    def test_scotland_is_in_the_uk(self):
+        """The false positive this rule would otherwise be most likely to
+        produce — a links course whose record says Scotland and whose address
+        ends UK."""
+        from services.course_quality import country_contradiction
+        for stated in ('Scotland', 'England', 'Wales', 'Great Britain'):
+            self.assertIsNone(country_contradiction(
+                {'country': stated,
+                 'address': 'Golf Place, St Andrews KY16 9JA, UK'}), stated)
+
+    def test_a_missing_field_keeps_the_row(self):
+        from services.course_quality import country_contradiction
+        for row in ({'country': 'Brazil'},
+                    {'address': '1 Road, Town, USA'},
+                    {'country': '', 'address': ''},
+                    {'country': 'Brazil', 'address': 'no commas here'},
+                    {'country': 'Brazil', 'address': 'Rua X, '}):
+            self.assertIsNone(country_contradiction(row), row)
+
+    def test_an_unknown_country_name_is_compared_literally(self):
+        from services.course_quality import country_contradiction
+        self.assertIsNone(country_contradiction(
+            {'country': 'Portugal', 'address': 'Rua do Golfe, Lisboa, Portugal'}))
+        self.assertIsNotNone(country_contradiction(
+            {'country': 'Portugal', 'address': 'Rua do Golfe, Lisboa, Spain'}))
+
+
+class ContradictingRowsAreDroppedTests(TestCase):
+    """The filter, through the endpoint."""
+
+    def setUp(self):
+        self.account = Account.objects.create(name='Drop')
+        self.user = User.objects.create_user(
+            username='dp', password='x', account=self.account,
+            is_account_admin=True)
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        self.url = reverse('api-course-find')
+
+    def _rows(self, **params):
+        return self.client.get(self.url, {'near': 'me', 'lat': str(PEBBLE[0]),
+                                          'lng': str(PEBBLE[1]),
+                                          **params}).data['courses']
+
+    @patch('services.golf_api_client.courses_near')
+    def test_the_brazilian_course_in_alameda_is_dropped(self, mock_near):
+        royal = _api_row('2t434y66', 'Royal Golf Residence', 4.75,
+                         city='Londrina')
+        royal.update(state='PR', country='Brazil',
+                     address='Alameda, CA, USA')
+        good = _api_row('99', 'Claremont Country Club', 1.0, city='Oakland')
+        good.update(country='United States',
+                    address='5295 Broadway Terrace, Oakland, CA 94618, USA')
+        mock_near.return_value = [royal, good]
+
+        names = [r['name'] for r in self._rows()]
+        self.assertIn('Claremont Country Club', names)
+        self.assertNotIn('Royal Golf Residence', names)
+
+    @patch('services.golf_api_client.search_courses')
+    def test_a_NAME_search_still_finds_it(self, mock_search):
+        """The rule is about proximity ONLY, and this is the half that is
+        easy to break.
+
+        A list ranked purely by position cannot carry a record that
+        contradicts itself about which continent it is on. A golfer typing
+        "Royal Golf Residence" is doing the judging himself, so there is
+        nothing to protect him from — and silently making a course
+        unfindable by name would be a far worse bug than the one this fixes.
+
+        (Written because my first version of the filter went into BOTH
+        branches: one `replace` call, two identical loops.)
+        """
+        royal = _api_row('2t434y66', 'Royal Golf Residence', None,
+                         city='Londrina')
+        royal.update(state='PR', country='Brazil',
+                     address='Alameda, CA, USA')
+        mock_search.return_value = [royal]
+
+        r = self.client.get(self.url, {'q': 'Royal Golf'})
+        self.assertIn('Royal Golf Residence',
+                      [row['name'] for row in r.data['courses']])
+
+    @patch('services.golf_api_client.courses_near')
+    def test_a_row_with_no_address_is_kept(self, mock_near):
+        """Fails open — most upstream rows carry no address at all."""
+        mock_near.return_value = [_api_row('99', 'Somewhere GC', 2.0)]
+        self.assertIn('Somewhere GC', [r['name'] for r in self._rows()])
+
+
 class CoarsePositionTests(TestCase):
     """`services.geo.coarse_position` on its own."""
 

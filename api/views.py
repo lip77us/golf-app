@@ -11075,6 +11075,7 @@ class CourseFindView(APIView):
         """
 
         from core.models import CatalogCourse, Course as CourseModel
+        from services.course_quality import country_contradiction
         from services.geo import haversine_miles
 
         lo_lat, hi_lat, lo_lng, hi_lng = self._bbox(lat, lng, radius)
@@ -11143,6 +11144,18 @@ class CourseFindView(APIView):
         for ac in api_courses:
             aid = str(ac.get('id') or '').strip()
             if not aid or aid in seen_api:
+                continue
+            # A row that disagrees with itself about which country it is in
+            # has nothing to offer a list ranked purely by position. Logged
+            # rather than dropped quietly: this hides a course, and if the
+            # rule ever eats a real one we want to be able to see that it
+            # did. Name search is unaffected.
+            contradiction = country_contradiction(ac)
+            if contradiction:
+                import logging
+                logging.getLogger(__name__).warning(
+                    'CourseFind(near): dropped %r — %s',
+                    _course_display_name(ac), contradiction)
                 continue
             name = _course_display_name(ac)
             if name_key(name, ac.get('city')) in seen_name:
