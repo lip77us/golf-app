@@ -180,6 +180,40 @@ void main() {
       expect(r.outcome, NearMeOutcome.failed);
     });
 
+    test('a FIX that never returns is bounded too, without the plugin', () async {
+      // The plugin's `timeLimit` is what cancels the CoreLocation request, but
+      // its enforcement is somebody else's code and this is the step that
+      // strands the golfer. A position future that simply never completes
+      // must still end as a timeout.
+      final r = await coursesNearMe(
+        _SpyClient(),
+        isServiceEnabled: () async => true,
+        checkPermission: () async => LocationPermission.whileInUse,
+        requestPermission: () async => LocationPermission.whileInUse,
+        getPosition: () => Completer<Position>().future,
+      );
+      expect(r.outcome, NearMeOutcome.timedOut);
+    }, timeout: const Timeout(Duration(seconds: 30)));
+
+    test('a lookup that never returns is bounded, and is failed', () async {
+      // Reported from the simulator: the pill span for 20 s. `ApiClient`'s
+      // own timeout is 30 s — deliberately, for cold starts — so bounding
+      // only the FIX left a spinner that could run for forty seconds.
+      final r = await coursesNearMe(
+        _HangingClient(),
+        isServiceEnabled: () async => true,
+        checkPermission: () async => LocationPermission.whileInUse,
+        requestPermission: () async => LocationPermission.whileInUse,
+        getPosition: () async => _at(36.57, -121.95),
+      );
+      expect(r.outcome, NearMeOutcome.failed);
+    }, timeout: const Timeout(Duration(seconds: 30)));
+
+    test('the lookup budget is its own, short, number', () {
+      expect(kNearMeLookupTimeout.inSeconds, lessThanOrEqualTo(10));
+      expect(kNearMeTimeout.inSeconds, lessThanOrEqualTo(10));
+    });
+
     test('an empty result is ok, not a failure', () async {
       // "No courses within 25 mi" is an answer. Drawing it as a failure
       // would tell a golfer to check his settings over an empty county.
@@ -210,6 +244,15 @@ void main() {
       expect(nearMeOffered, isFalse);
     });
   });
+}
+
+/// Never answers — what a wedged upstream looks like from the phone.
+class _HangingClient extends ApiClient {
+  _HangingClient() : super(token: 't');
+  @override
+  Future<List<CourseHit>> findCoursesNear(double a, double b,
+          {int radiusMiles = 25}) =>
+      Completer<List<CourseHit>>().future;   // never completes
 }
 
 class _EmptyClient extends ApiClient {

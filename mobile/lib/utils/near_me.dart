@@ -8,8 +8,11 @@
 ///    proximity call is a new line against a 10k/day allowance.
 ///  * **One fix, then stop.** `getCurrentPosition`, never a stream, never a
 ///    background update.
-///  * **Reduced accuracy**, asked for explicitly. A 25-mile search cannot use
-///    a 5 m fix.
+///  * **Reduced AUTHORISATION**, via `NSLocationDefaultAccuracyReduced` in
+///    the plist — so iOS never grants a precise fix and shows the golfer no
+///    "Precise: On" toggle. What earns the Coarse Location label, though, is
+///    the 2 dp rounding on the way out (`coarsenForPrivacy`), not the
+///    accuracy constant: Apple reads the label off what is TRANSMITTED.
 ///  * **Every failure has a name**, because the picker has to say something
 ///    different for each: location switched off at the device, refused now,
 ///    refused permanently (which is the only one that can offer Settings),
@@ -46,6 +49,18 @@ bool get nearMeOffered => defaultTargetPlatform != TargetPlatform.android;
 
 /// How long to wait for a fix before giving up. The handoff's figure.
 const Duration kNearMeTimeout = Duration(seconds: 10);
+
+/// How long to wait for the course lookup, once a position is in hand.
+///
+/// **Bounded HERE rather than in `ApiClient`, whose 30 s is deliberate** — its
+/// comment records a real bug, a cold Django autoreloader taking well over
+/// 10 s on the first request and a tighter limit turning that into an
+/// apparent "login failed". That reasoning holds for login and does not hold
+/// for a pill somebody is watching: 10 s of fix plus 30 s of lookup is a
+/// spinner that runs for forty seconds, which is the first thing testing
+/// found. One tap gets one short budget per phase, each with its own honest
+/// message, and the request itself can go on being generous everywhere else.
+const Duration kNearMeLookupTimeout = Duration(seconds: 10);
 
 /// Why a near-me search could not run — or [ok] if it did.
 enum NearMeOutcome {
@@ -124,7 +139,13 @@ Future<NearMeResult> coursesNearMe(
 
   final Position pos;
   try {
-    pos = await (getPosition ?? _singleReducedFix)();
+    // `.timeout` as well as `AppleSettings.timeLimit`, deliberately. The
+    // plugin's own limit is the one that can cancel the CoreLocation request
+    // properly, so it stays — but belt and braces, because this is the step
+    // that strands the golfer and its enforcement is somebody else's code.
+    // iOS reduced accuracy answers from a cached coarse region, which on the
+    // Simulator can be slow to populate or never populate at all.
+    pos = await (getPosition ?? _singleReducedFix)().timeout(kNearMeTimeout);
   } on TimeoutException {
     return const NearMeResult(NearMeOutcome.timedOut);
   } on LocationServiceDisabledException {
@@ -135,18 +156,36 @@ Future<NearMeResult> coursesNearMe(
   }
 
   try {
-    final hits = await client.findCoursesNear(pos.latitude, pos.longitude,
-        radiusMiles: radiusMiles);
+    final hits = await client
+        .findCoursesNear(pos.latitude, pos.longitude, radiusMiles: radiusMiles)
+        .timeout(kNearMeLookupTimeout);
     return NearMeResult(NearMeOutcome.ok, hits);
   } catch (_) {
+    // A lookup that timed out and one that failed are the same thing to the
+    // golfer — the position was fine and the search did not come back — so
+    // both are `failed` and both say "Couldn't search for courses near you".
     return const NearMeResult(NearMeOutcome.failed);
   }
 }
 
-/// One fix at reduced accuracy, with the timeout attached.
+/// One fix, at the lowest accuracy that actually returns one.
+///
+/// **`low`, not `reduced`, and that is a bug fix rather than a weakening.**
+/// `LocationAccuracy.reduced` maps to `kCLLocationAccuracyReduced`, which
+/// answers from a cached coarse REGION — and the iOS Simulator frequently
+/// never populates that region, so the request simply never returns even
+/// with a custom location set. Reported from testing: the pill span past
+/// thirty seconds because of this, not because of a slow lookup.
+///
+/// Nothing about the privacy position changes. `NSLocationDefaultAccuracyReduced`
+/// is still true, so the AUTHORISATION is reduced and iOS coarsens whatever
+/// we ask for; and the figure that leaves the phone is still cut to two
+/// decimal places, which is the thing the Coarse Location declaration
+/// actually rests on. Asking for `low` only picks the CoreLocation path that
+/// answers.
 Future<Position> _singleReducedFix() => Geolocator.getCurrentPosition(
       locationSettings: AppleSettings(
-        accuracy: LocationAccuracy.reduced,
+        accuracy: LocationAccuracy.low,
         timeLimit: kNearMeTimeout,
         // **Explicitly false**: the plugin defaults it to TRUE. It only does
         // anything with `UIBackgroundModes: location` and an Always usage
