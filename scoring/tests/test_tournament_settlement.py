@@ -23,8 +23,8 @@ from django.test import TestCase
 from core.models import RoundStatus
 
 from games.models import (
-    DayBetConfig, IrishRumbleConfig, LowNetChampionshipConfig,
-    MiniSinglesConfig, PinkBallConfig,
+    BetterBallConfig, DayBetConfig, HotSpotConfig, IrishRumbleConfig,
+    LowNetChampionshipConfig, MiniSinglesConfig, PinkBallConfig,
 )
 from services.tournament_settlement import tournament_settlement
 from ._helpers import (
@@ -93,6 +93,80 @@ class SettlementBase(TestCase):
     def _by_key(self, s):
         return {g['key'] + (f"·{g['round_number']}" if g['round_number'] else ''): g
                 for g in s['games']}
+
+
+class OnePoolFamilyTests(SettlementBase):
+    """Every member of the one-pool family reaches the receipt.
+
+    **Hot Seat and Better Ball did not, for months.** Irish Rumble, 40 Balls
+    and the ball game had blocks written out by hand and these two never got
+    one, so their entry fees were collected and their pots never appeared.
+    Reported by a TD after a Hot Seat round, by which point he had worked his
+    own money out on paper.
+    """
+
+    def test_the_spec_table_covers_the_family_exactly(self):
+        """The structural guard, and the point of the whole change.
+
+        The pots are driven off `ONE_POOL_GAMES` now, so a sixth game cannot
+        join the family and be silently left out of settlement — it either
+        gets a spec or this fails.
+        """
+        from services.group_field import ONE_POOL_GAMES
+        from services.tournament_settlement import _ONE_POOL_SPECS
+        self.assertEqual(sorted(_ONE_POOL_SPECS), sorted(ONE_POOL_GAMES))
+
+    def _settle_with(self, config_maker):
+        config_maker(self.rounds[0])
+        self._play(self.rounds[0])
+        self._play(self.rounds[1])
+        self._close()
+        return tournament_settlement(self.tourn)
+
+    def test_hot_seat_reaches_the_receipt(self):
+        s = self._settle_with(lambda r: HotSpotConfig.objects.create(
+            round=r, handicap_mode='net', net_percent=100,
+            entry_fee=Decimal('5.00'),
+            payouts=[{'place': 1, 'amount': 40}]))
+
+        pot = self._by_key(s).get('hot_spot·1')
+        self.assertIsNotNone(pot, f"no Hot Seat pot in {[g['label'] for g in s['games']]}")
+        self.assertEqual(pot['label'], 'Hot Seat · R1')
+        self.assertEqual(pot['entries_in'], 40.0)        # $5 x 8 golfers
+        self.assertEqual(pot['prizes_out'], 40.0)        # the $40 place
+        self.assertTrue(s['sum_zero'], msg=s['blocking'])
+
+    def test_better_ball_reaches_the_receipt(self):
+        s = self._settle_with(lambda r: BetterBallConfig.objects.create(
+            round=r, balls_to_count=2, handicap_mode='net', net_percent=100,
+            entry_fee=Decimal('5.00'),
+            payouts=[{'place': 1, 'amount': 40}]))
+
+        pot = self._by_key(s).get('better_ball·1')
+        self.assertIsNotNone(pot, f"no Better Ball pot in {[g['label'] for g in s['games']]}")
+        self.assertEqual(pot['entries_in'], 40.0)
+        self.assertEqual(pot['prizes_out'], 40.0)
+        self.assertTrue(s['sum_zero'], msg=s['blocking'])
+
+    def test_better_ball_is_labelled_with_the_name_the_td_typed(self):
+        """Better Ball is the one whose label comes from the summary rather
+        than from the spec table, because the TD names it."""
+        s = self._settle_with(lambda r: BetterBallConfig.objects.create(
+            round=r, balls_to_count=2, name='Two Best', handicap_mode='net',
+            net_percent=100, entry_fee=Decimal('5.00'),
+            payouts=[{'place': 1, 'amount': 40}]))
+        labels = [g['label'] for g in s['games']]
+        self.assertIn('Two Best · R1', labels)
+
+    def test_a_group_prize_splits_among_the_real_golfers(self):
+        s = self._settle_with(lambda r: HotSpotConfig.objects.create(
+            round=r, handicap_mode='net', net_percent=100,
+            entry_fee=Decimal('5.00'),
+            payouts=[{'place': 1, 'amount': 40}]))
+        shares = [p for g in s['golfers'] for p in g['prizes']
+                  if 'Hot Seat' in p['game']]
+        self.assertTrue(shares, 'nobody was paid the Hot Seat prize')
+        self.assertTrue(all('ways' in p['detail'] for p in shares))
 
 
 class ChampionshipOnlyTests(SettlementBase):

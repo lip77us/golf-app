@@ -178,19 +178,61 @@ def _ordinal(n):
     return f"{n}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n, 'th') }".replace(' ', '')
 
 
+#: How each of the one-pool group games is read into a pot, keyed by the slug
+#: in :data:`services.group_field.ONE_POOL_GAMES` — `(config attribute, the
+#: summary key holding the ranked rows, label)`. A label of None means take it
+#: from the summary's own `name`, which Better Ball has because the TD names it.
+#:
+#: **Driven off that list rather than written out as a branch each**, because
+#: writing them out is how this broke: Irish Rumble, 40 Balls and the ball game
+#: had blocks and **Hot Seat and Better Ball did not**, so their entry fees were
+#: collected and their pots never reached a receipt. Hot Seat was reported by a
+#: TD who had already worked his own money out by hand. The docstring above even
+#: named Better Ball while not handling it.
+#:
+#: `TestEveryOnePoolGameSettles` asserts this table covers `ONE_POOL_GAMES`
+#: exactly, so a sixth game cannot be added to the family without either a spec
+#: here or a failing test.
+_ONE_POOL_SPECS = {
+    'irish_rumble': ('irish_rumble_config', 'overall', 'Irish Rumble'),
+    'better_ball' : ('better_ball_config',  'overall', None),
+    'hot_spot'    : ('hot_spot_config',     'overall', 'Hot Seat'),
+    'forty_balls' : ('forty_balls_config',  'results', '40 Balls'),
+}
+
+
+def _one_pool_summary(slug, round_obj):
+    """That game's summary. Imported lazily, as the per-game blocks did."""
+    if slug == 'irish_rumble':
+        from services.irish_rumble import irish_rumble_summary
+        return irish_rumble_summary(round_obj)
+    if slug == 'better_ball':
+        from services.better_ball import better_ball_summary
+        return better_ball_summary(round_obj)
+    if slug == 'hot_spot':
+        from services.hot_spot import hot_spot_summary
+        return hot_spot_summary(round_obj)
+    if slug == 'forty_balls':
+        from services.forty_balls import forty_balls_summary
+        return forty_balls_summary(round_obj)
+    raise KeyError(slug)
+
+
 def _group_game_pots(tournament):
     """
-    Irish Rumble, 40 Balls and the ball game — **re-drawn every round**, so each
-    appears once per round, entered separately and won separately. A group that
-    wins the ball on both days collects twice.
+    The group games — **re-drawn every round**, so each appears once per round,
+    entered separately and won separately. A group that wins the ball on both
+    days collects twice.
 
-    A round carries at most ONE of Irish Rumble / 40 Balls / Better Ball, so
-    those three never both appear for the same round number.
+    A round carries at most ONE of the :data:`ONE_POOL_GAMES` family (Irish
+    Rumble, Better Ball, Hot Seat, 40 Balls), so no two of those ever appear
+    for the same round number. The ball game is NOT in that family and is
+    handled separately below — a round may run it alongside a group game.
 
-    Both pay a GROUP, and the place splits among its real golfers: the
+    They all pay a GROUP, and the place splits among its real golfers: the
     borrowed 4th is not a person and cannot be paid.
     """
-    from services.irish_rumble import irish_rumble_summary
+    from services.group_field import ONE_POOL_GAMES
     from services.red_ball import red_ball_summary
 
     pots = []
@@ -198,35 +240,30 @@ def _group_game_pots(tournament):
         players = _real_player_ids(round_obj)
         n = round_obj.round_number
 
-        if getattr(round_obj, 'irish_rumble_config', None) is not None:
-            summary = irish_rumble_summary(round_obj)
-            pot = _Pot('irish_rumble', f'Irish Rumble · R{n}', n)
+        for slug in ONE_POOL_GAMES:
+            attr, rows_key, label = _ONE_POOL_SPECS[slug]
+            if getattr(round_obj, attr, None) is None:
+                continue
+            summary = _one_pool_summary(slug, round_obj)
+            name = label or summary.get('name') or slug
+            pot = _Pot(slug, f'{name} · R{n}', n)
             pot.enter(players, float(summary.get('entry_fee') or 0))
-            for row in summary.get('overall', []):
+            for row in summary.get(rows_key) or []:
                 share = row.get('per_person_payout') or 0
                 if not share:
                     continue
-                ways = row.get('split_ways') or row.get('n_real_players') or 1
-                for m in _group_member_ids(round_obj, row['foursome_id']):
+                ways = (row.get('split_ways') or row.get('n_real_players') or 1)
+                # 40 Balls ranks by group NUMBER and the rest carry the
+                # foursome id outright; both reach the same group.
+                fs_id = row.get('foursome_id')
+                if fs_id is None and row.get('group_number') is not None:
+                    fs_id = _foursome_id_for_group(round_obj,
+                                                   row['group_number'])
+                who = row.get('group') or f"Group {row.get('group_number')}"
+                for m in _group_member_ids(round_obj, fs_id):
                     pot.pay(m, share,
-                            detail=f"{_ordinal(row['rank'])} — {row['group']} "
-                                   f"({ways} ways)")
-            pots.append(pot)
-
-        if getattr(round_obj, 'forty_balls_config', None) is not None:
-            from services.forty_balls import forty_balls_summary
-            summary = forty_balls_summary(round_obj)
-            pot = _Pot('forty_balls', f'40 Balls · R{n}', n)
-            pot.enter(players, float(summary.get('entry_fee') or 0))
-            for row in summary.get('results', []):
-                share = row.get('per_person_payout') or 0
-                if not share:
-                    continue
-                ways = row.get('split_ways') or 1
-                for m in _group_member_ids(round_obj, row['foursome_id']):
-                    pot.pay(m, share,
-                            detail=f"{_ordinal(row['rank'])} — Group "
-                                   f"{row['group_number']} ({ways} ways)")
+                            detail=f'{_ordinal(row["rank"])} — {who} '
+                                   f'({ways} ways)')
             pots.append(pot)
 
         if getattr(round_obj, 'pink_ball_config', None) is not None:
