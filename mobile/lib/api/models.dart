@@ -1806,6 +1806,11 @@ class SixesSummary {
   /// which is why the ribbon can say `so far` and mean it.
   final Map<int, double> moneyByPlayer;
 
+  /// The stake per MATCH, each — `$10 a match` on the board's ledger. The
+  /// server has sent it as `money.bet_unit` all along; nothing parsed it
+  /// until the ledger needed to name the figure the marks add up to.
+  final double betUnit;
+
   /// The two pairings the group may still choose from — empty once every
   /// match has its teams.
   final List<SixesPairingOption> remainingPairings;
@@ -1818,6 +1823,7 @@ class SixesSummary {
     required this.handicapMode,
     required this.netPercent,
     this.moneyByPlayer = const {},
+    this.betUnit = 0,
     this.handicapAllocation = 'per_segment',
     this.scoringFormat      = 'classic',
     this.holes       = const [],
@@ -1861,6 +1867,7 @@ class SixesSummary {
             (e['player_id'] as num).toInt():
                 ((e['amount'] as num?) ?? 0).toDouble(),
       },
+      betUnit: (((j['money'] as Map?)?['bet_unit'] as num?) ?? 0).toDouble(),
       remainingPairings: (j['remaining_pairings'] as List? ?? const [])
           .map((e) =>
               SixesPairingOption.fromJson((e as Map).cast<String, dynamic>()))
