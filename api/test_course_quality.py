@@ -175,6 +175,44 @@ class CourseImportQualityGateTests(TestCase):
         self.assertFalse(Course.objects.filter(account=self.account).exists())
 
     @patch('services.golf_api_client.fetch_course')
+    def test_the_refusal_names_the_reason_not_just_bad_hole_data(
+            self, mock_fetch):
+        """A zero-tee course is reported as such.
+
+        Annandale GC (Pasadena) comes back from GolfCourseAPI with no tees at
+        all, and the old `detail` called that "invalid hole data" -- which
+        sends the user looking for a data error that is not there.  The client
+        shows `detail` and nothing else, so the reason has to be in it.
+        """
+        empty = self._adapted(_good_holes())
+        empty['tees'] = []
+        mock_fetch.return_value = empty
+
+        resp = self.client.post(
+            reverse('api-course-import'), {'course_id': 99}, format='json',
+        )
+        self.assertEqual(resp.status_code, 422, resp.data)
+        self.assertIn('no tees', resp.data['detail'])
+        self.assertNotIn('invalid hole data', resp.data['detail'])
+        self.assertEqual(resp.data['problems'], ['Course has no tees.'])
+
+    @patch('services.golf_api_client.fetch_course')
+    def test_several_problems_lead_with_one_and_count_the_rest(
+            self, mock_fetch):
+        # A tee missing its rating, slope and par gives three problems; the
+        # snackbar is one line, so it leads with one and says how many more.
+        bare = self._adapted(_good_holes())
+        bare['tees'][0].update(course_rating=None, slope=None, par=None)
+        mock_fetch.return_value = bare
+
+        resp = self.client.post(
+            reverse('api-course-import'), {'course_id': 99}, format='json',
+        )
+        self.assertEqual(resp.status_code, 422, resp.data)
+        self.assertEqual(len(resp.data['problems']), 3)
+        self.assertIn('(+2 more)', resp.data['detail'])
+
+    @patch('services.golf_api_client.fetch_course')
     def test_good_import_still_succeeds(self, mock_fetch):
         mock_fetch.return_value = self._adapted(_good_holes())
         resp = self.client.post(

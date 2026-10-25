@@ -622,6 +622,34 @@ breaks net scoring (every hole allocates handicap strokes identically).
 - **Not gated:** the `seed_catalog_from_courses` backfill (migrates existing
   local data) — revisit if needed.
 
+#### The refusal now names the reason — a zero-tee course is not "bad data"
+Reported from the picker, 25 Oct 2026: **Annandale Golf Club (Pasadena)
+"is not registering any tees."** It is not the app. `fetch_course('3vzs9mg0')`
+returns the club, the city and **zero tees** — a private club with a stub
+record upstream — so the gate refuses it on `Course has no tees.` and nothing
+is written, which is right.
+
+What was wrong is what the user was told. The 422's `detail` read *"This
+course has invalid hole data and was not imported"* and the `problems` list
+naming the real reason was **sent and never read**: `_failAdd`
+(`course_search_field.dart`) renders `ApiException.message`, which is
+`detail` alone. So a course with NO data was reported as a course with BAD
+data, which sends you looking for a defect that is not there instead of
+pasting the scorecard. The `detail` now leads with the first problem and
+counts the rest (`… (+2 more)`); `problems` is still sent in full for a
+caller that can draw the list. **No client change** — this is why the reason
+has to be in `detail`.
+
+**Searching for it needs the right spelling.** `search_courses('Annandale')`
+finds it; `'Annendale'` returns **zero rows** — the upstream search does not
+fuzzy-match, so a misspelling looks exactly like a course that is not in the
+database.
+
+**The answer for a course like this is the paste path** — Courses →
+`Paste a scorecard` (`CoursePasteScreen`, the toolbar icon beside the FAB).
+That stays account-private and is never cataloged, which is correct here:
+nobody else should inherit a card typed off one club's scorecard.
+
 ### Copy-on-write tees (round-history freeze) — implemented
 Makes an account `Tee` IMMUTABLE once a round references it, so a completed
 round's scorecard stays frozen against the exact hole data (par + stroke index)

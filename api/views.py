@@ -10804,10 +10804,17 @@ class CourseImportView(APIView):
         try:
             assert_course_quality(api_course)
         except CourseQualityError as exc:
+            # The client's snackbar renders `detail` and nothing else, so the
+            # reason has to be IN it.  A course rejected for having no tees AT
+            # ALL was reported as "invalid hole data", which sends the user
+            # looking for a data error that is not there -- the record is
+            # empty, and the answer is to paste the scorecard.  `problems` is
+            # still sent in full for a caller that can render the list.
+            first = (exc.problems or ['Its hole data is invalid.'])[0]
+            rest = len(exc.problems) - 1
             return Response(
                 {
-                    'detail': 'This course has invalid hole data and was not '
-                              'imported.',
+                    'detail': first + (f' (+{rest} more)' if rest > 0 else ''),
                     'problems': exc.problems,
                 },
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
