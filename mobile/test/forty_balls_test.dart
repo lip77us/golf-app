@@ -755,6 +755,47 @@ void main() {
       expect(src.contains('ListTile('), isFalse);
     });
 
+    test('the keypad is mounted, and the inline picker steps aside', () {
+      // **Source-level, because nothing compiles this screen.** No test
+      // imports `score_entry_screen.dart`, so `flutter test` says nothing
+      // about it — the full suite passed green while the file carried two
+      // `undefined_identifier` errors. The analyzer is the only real check,
+      // and these are the wiring facts it cannot assert.
+      final src = File('lib/screens/score_entry_screen.dart').readAsStringSync();
+
+      expect(src.contains('FortyBallsKeypad('), isTrue,
+          reason: 'the keypad is never mounted');
+      expect(src.contains("import '../widgets/forty_balls_keypad.dart';"),
+          isTrue);
+
+      // Two entry controls for one number, inches apart, is worse than
+      // either: the row keeps its box, the keypad does the entering.
+      expect(src.contains('useKeypad'), isTrue);
+      expect(src.contains('const SizedBox.shrink()\n                : blockedExtraSeg'),
+          isTrue,
+          reason: 'the inline picker is still drawn under the keypad');
+
+      // It is 40 Balls' control, not every round's.
+      final at = src.indexOf('FortyBallsKeypad(');
+      expect(src.substring(0, at).contains("games.contains('forty_balls')"),
+          isTrue, reason: 'the keypad is not gated on the game');
+    });
+
+    test('the keypad follows the SAME cursor as the inline picker', () {
+      // `_editHotPid` is the override a scorer gets by tapping a row already
+      // scored. Two cursors would disagree about whose row is live, and the
+      // keypad would enter against the wrong golfer.
+      final src = File('lib/screens/score_entry_screen.dart').readAsStringSync();
+      // Scoped to the method that mounts it, rather than a character count
+      // that drifts the moment a comment is edited.
+      final at = src.indexOf('FortyBallsKeypad(');
+      final method = src.indexOf('Widget _buildBottomBar');
+      expect(src.substring(method, at).contains('_editHotPid'), isTrue,
+          reason: 'the keypad computes its own cursor');
+      expect(src.contains('_fbCursor'), isFalse,
+          reason: 'a second cursor was reintroduced');
+    });
+
     test('the leaderboard dispatches the tab', () {
       final src = File('lib/screens/leaderboard_screen.dart').readAsStringSync();
       expect(src.contains("case 'forty_balls':"), isTrue);

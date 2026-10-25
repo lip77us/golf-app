@@ -43,6 +43,7 @@ import '../widgets/stroke_play_progress_grid.dart';
 import '../utils/play_order.dart';
 import '../api/client.dart' show NetworkException;
 import '../widgets/error_view.dart' show friendlyError;
+import '../widgets/forty_balls_keypad.dart';
 import '../widgets/forty_balls_picker.dart';
 import '../widgets/hole_header.dart';
 import '../game_colors.dart';
@@ -160,6 +161,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// popping a separate edit sheet. Null = follow the natural next-scorer.
   /// Cleared whenever the hole changes.
   int? _editHotPid;
+
+  /// Strokes this golfer gets on the hole, for the keypad's `1 stroke · par 3`
+  /// line. A thin read of the scorecard rather than a call into
+  /// `_HoleScoreCard._strokesForHole`, which is that widget's own and takes
+  /// its handicap mode from fields the screen does not hold.
+  int _keypadStrokes(Membership m, Scorecard sc) =>
+      sc.holeData(_selectedHole)?.scoreFor(m.player.id)?.handicapStrokes ?? 0;
 
   /// The Hot Spot order sheet is offered ONCE per visit to this screen.
   /// Dismissing it leaves the amber banner and its Set order button, so this
@@ -2884,10 +2892,54 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         !isThreesome &&
         (mpFoursomeId == null || mpFoursomeId == widget.foursomeId);
 
+    // **40 Balls enters its scores on a keypad** (`handoff-forty-balls 2`).
+    // The cursor is `_hotSpotIdx` — the first golfer with no score — which
+    // recomputes every build, so entering one advances to the next without
+    // any focus state of its own. `_editHotPid` — the SAME override the
+    // inline picker uses — takes over when a scorer taps back to fix a
+    // number, and clears the moment that score lands.
+    //
+    // It sits at the HEAD of the status bars rather than over the screen:
+    // the pager below it is how this screen changes hole, and a sheet that
+    // covered it would need its own Next — which is the second pager the
+    // tray deliberately does not grow either.
+    final fbActive = games.contains('forty_balls') &&
+                     rp.round?.status != 'complete';
+    var fbIdx = fbActive ? _hotSpotIdx(players, scores) : -1;
+    if (fbActive && _editHotPid != null) {
+      // The same override the inline picker uses when a scorer taps back to
+      // a golfer already scored — reused rather than reinvented, so the two
+      // controls cannot disagree about whose row is live.
+      final i = players.indexWhere((p) =>
+          p.player.id == _editHotPid &&
+          !p.isWithdrawnOnHole(_selectedHole));
+      if (i != -1) fbIdx = i;
+    }
+    final fbMember = (fbIdx >= 0 && fbIdx < players.length)
+        ? players[fbIdx] : null;
+
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (fbMember != null)
+            FortyBallsKeypad(
+              playerName: fbMember.player.name,
+              par       : par,
+              strokes   : _keypadStrokes(fbMember, sc),
+              onScore   : (n) {
+                _selectScore(fbMember, n, _selectedHole);
+                // Editing a tapped golfer is a one-shot, exactly as it is for
+                // the inline picker: once a value lands, the natural next
+                // scorer resumes.
+                if (_editHotPid != null) {
+                  setState(() => _editHotPid = null);
+                }
+              },
+              // `-1` is this screen's clear, not a score of minus one.
+              onClear   : () =>
+                  _selectScore(fbMember, -1, _selectedHole),
+            ),
           // Nassau match status bar
           if (nas != null)
             _MatchStatusBar(
@@ -3210,6 +3262,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                     summary: rp.tripleCupSummary!, hole: _selectedHole),
               // Active hole score card
               _HoleScoreCard(
+                useKeypad: _activeGames(rp.round).contains('forty_balls') &&
+                           rp.round?.status != 'complete',
                 fortyBallsNet: _activeGames(rp.round).contains('forty_balls')
                                && _fbState?.hole == _selectedHole
                     ? _fbState?.net
@@ -3653,8 +3707,14 @@ class _HoleScoreCard extends StatelessWidget {
   /// other game, and on 40 Balls until the first load lands.
   final int? fortyBallsNet;
 
+  /// 40 Balls enters on a keypad at the foot of the screen, so the active
+  /// row must NOT also carry an inline picker — two controls for one number,
+  /// inches apart, is worse than either.
+  final bool useKeypad;
+
   const _HoleScoreCard({
     this.fortyBallsNet,
+    this.useKeypad = false,
     this.solo = false,
     this.anchorId,
     required this.holeData,
@@ -4393,7 +4453,12 @@ class _HoleScoreCard extends StatelessWidget {
             final boxColor   = teamColor ?? Halved.pine;
             final washColor  =
                 boxColor.withValues(alpha: teamColor != null ? 0.10 : 0.14);
-            final entryControl = blockedExtraSeg == null
+            // The keypad owns entry for 40 Balls; the row keeps its box and
+            // its `isHot` outline, which is the whole of what the design
+            // asks the row to show.
+            final entryControl = useKeypad
+                ? const SizedBox.shrink()
+                : blockedExtraSeg == null
                 ? InlineScorePicker(
                     par:             par,
                     strokes:         matchStrok,
