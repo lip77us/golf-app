@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
 import 'package:golf_mobile/game_catalog.dart';
+import 'package:golf_mobile/theme/halved_brand.dart';
 import 'package:golf_mobile/widgets/forty_balls_board.dart';
 import 'package:golf_mobile/widgets/hole_grid_scorecard.dart';
 import 'package:golf_mobile/widgets/forty_balls_picker.dart';
@@ -430,6 +431,36 @@ void main() {
         ]),
       ]);
       expect(find.text('+14 vs pace'), findsOneWidget);
+    });
+
+    testWidgets('the pace tick contrasts with whatever it stands on',
+        (tester) async {
+      // Reported: black on the amber fill was too subtle to find. Once the
+      // fill passes the tick the group is ahead, so the mark has to flip —
+      // its whole job is being compared against the fill's edge.
+      Color tickColour(WidgetTester t) {
+        final boxes = t.widgetList<Container>(find.byType(Container))
+            .where((c) {
+              final d = c.decoration;
+              return d is BoxDecoration &&
+                     c.constraints?.maxWidth == 3.0;
+            });
+        expect(boxes, hasLength(1), reason: 'expected exactly one tick');
+        return (boxes.first.decoration as BoxDecoration).color!;
+      }
+
+      const eighteen = [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+      ];
+      // Ahead: the fill has run past the tick, so it is light.
+      await pumpBoard(tester,
+          [group(spent: 34, left: 6, thru: 9, holesInPlay: eighteen)]);
+      expect(tickColour(tester), Halved.cream);
+
+      // Behind: the tick stands on the empty track, so it is dark.
+      await pumpBoard(tester,
+          [group(spent: 12, left: 28, thru: 9, holesInPlay: eighteen)]);
+      expect(tickColour(tester), isNot(Halved.cream));
     });
 
     testWidgets('behind pace carries its sign too', (tester) async {

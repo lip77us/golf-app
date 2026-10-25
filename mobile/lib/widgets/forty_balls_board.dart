@@ -539,9 +539,24 @@ class _BudgetLine extends StatelessWidget {
             ),
             if (evenPace != null)
               Positioned(
-                left: (w * (evenPace / group.budget)).clamp(0.0, w - 2),
+                left: (w * (evenPace / group.budget)).clamp(0.0, w - 3),
+                // **The tick contrasts against whatever it is standing on**,
+                // which changes with the group: once the fill passes the tick
+                // the group is ahead of pace, and a dark mark on the amber
+                // fill was too subtle to find. Light over the fill, dark over
+                // the empty track — the one mark that has to be legible on
+                // both, because its whole job is to be compared with the
+                // fill's edge.
                 child: Container(
-                    width: 2, height: 6, color: theme.colorScheme.onSurface),
+                  width: 3,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: group.spent >= evenPace
+                        ? Halved.cream
+                        : theme.colorScheme.onSurface,
+                    borderRadius: BorderRadius.circular(1.5),
+                  ),
+                ),
               ),
           ]),
         );
