@@ -29,6 +29,11 @@ Future<void> openWatchedRound(
     BuildContext context, SharedRoundSummary r) async {
   final client = context.read<AuthProvider>().client;
   final nav    = Navigator.of(context);
+  // **`isTournament`, deliberately — NOT `belongsUnderTournaments`.** That
+  // one answers which LIST a row belongs on; this answers what `id` is. A
+  // watched round of an event is filed under Tournaments and still opens the
+  // ROUND's own board, which is the board that exists for it. Reading the
+  // other flag here would send a round id to `joinTournament`.
   try {
     if (r.isTournament) {
       await client.joinTournament(r.id);

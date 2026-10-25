@@ -100,8 +100,11 @@ class _TournamentListScreenState extends State<TournamentListScreen>
       // Tournaments I was invited to WATCH (cross-account, read-only).
       List<SharedRoundSummary> observing = [];
       try {
+        // `belongsUnderTournaments`, not `isTournament`: a watched ROUND of
+        // an event belongs here too. The flag says what `id` IS; this says
+        // what the row is PART of. See `SharedRoundSummary`.
         observing = (await client.getSharedRounds())
-            .where((r) => r.isTournament)
+            .where((r) => r.belongsUnderTournaments)
             .toList();
       } catch (_) {/* ignore — observed tournaments are non-critical */}
       if (mounted) {
@@ -482,7 +485,7 @@ class _TournamentListScreenState extends State<TournamentListScreen>
   /// A tournament I'm only WATCHING (read-only). Tapping opens the read-only
   /// leaderboard, never the score-entry round screen.
   Widget _observingTournamentCard(SharedRoundSummary r) {
-    final title = r.courseName.isEmpty ? r.groupLabel : r.courseName;
+    final title = r.courseName.isEmpty ? r.listLabel : r.courseName;
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
@@ -493,7 +496,13 @@ class _TournamentListScreenState extends State<TournamentListScreen>
         ),
         title: Text(title,
             style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text('Observing · ${r.groupLabel}',
+        // `listLabel`, so a watched ROUND of an event reads
+        // `Copperopolis Fall 26 · Round 2` rather than the creator's name —
+        // which under Tournaments names a person where the reader is looking
+        // for an event. A watched tournament is unchanged: it has no
+        // tournament_id of its own and falls back to `groupLabel`, which for
+        // that row already IS the event name.
+        subtitle: Text('Observing · ${r.listLabel}',
             maxLines: 2, overflow: TextOverflow.ellipsis),
         trailing: r.status == 'in_progress'
             ? const HalvedLivePill()

@@ -4289,6 +4289,29 @@ class SharedRoundsView(APIView):
         seen_rounds = set()
 
         def _round_row(r):
+            """One watched ROUND.
+
+            **`is_tournament` stays False even for a tournament round**, and
+            the tournament is named in its own fields instead. Reported by a
+            TD on 20 Oct: a watcher found his 40 Balls round on the Rounds
+            menu rather than under Tournaments, which is where he had told
+            him to look.
+
+            Flipping the flag is the obvious fix and breaks the shipped app.
+            `utils/shared_round.openWatchedRound` reads `id` as the
+            TOURNAMENT id whenever the flag is true — `joinTournament(r.id)`,
+            `TournamentLeaderboardScreen(tournamentId: r.id)` — so a round id
+            sent under a true flag opens the wrong event or 404s on every
+            phone already out there.
+
+            So the row carries `tournament_id` beside the flag. A client that
+            understands it files the round under Tournaments and still opens
+            the ROUND; one that does not sees exactly what it sees today.
+            That is the same shape `active_games` and `upstream` were added
+            in, and `mobile/test/api_compatibility_test.dart` is why it
+            matters.
+            """
+            t = r.tournament
             return {
                 'id':            r.id,
                 'date':          r.date,
@@ -4301,6 +4324,10 @@ class SharedRoundsView(APIView):
                                  or r.account.name,
                 'your_name':     None,
                 'is_tournament': False,
+                # Null on a casual round, which is most of them.
+                'tournament_id':   t.id if t else None,
+                'tournament_name': t.name if t else None,
+                'round_number':    r.round_number if t else None,
             }
 
         # 1. Casual rounds I'm a WATCHER of.
@@ -4311,7 +4338,8 @@ class SharedRoundsView(APIView):
             qs = (
                 Round.objects.filter(id__in=watch_round_ids)
                 .exclude(account=request.user.account)
-                .select_related('course', 'account', 'created_by')
+                .select_related('course', 'account', 'created_by',
+                                'tournament')
                 .order_by('-date', '-created_at')
             )
             for r in qs:

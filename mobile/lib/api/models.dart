@@ -799,6 +799,34 @@ class SharedRoundSummary {
   /// than a single round — routes to the tournament leaderboard.
   final bool isTournament;
 
+  /// The event a watched ROUND belongs to, when it belongs to one.
+  ///
+  /// **Separate from [isTournament] on purpose.** That flag says what [id]
+  /// IS, and `openWatchedRound` reads it that way — so a tournament round
+  /// cannot be marked with it without sending a round id where a tournament
+  /// id is expected. This says what the round is PART of, which is a
+  /// different question and the one the list screens need: a round of an
+  /// event belongs under Tournaments, and still opens the round's own board.
+  final int?    tournamentId;
+  final String? tournamentName;
+  final int?    roundNumber;
+
+  /// Where this row belongs: the Tournaments list, or Casual Rounds.
+  ///
+  /// The one place the two screens ask, so they cannot drift into showing a
+  /// row twice or not at all.
+  bool get belongsUnderTournaments => isTournament || tournamentId != null;
+
+  /// What to call it in a list. A tournament round says which event and which
+  /// round, because `Paul Lipkin` under Tournaments names a person where the
+  /// reader is looking for an event.
+  String get listLabel {
+    if (tournamentName == null) return groupLabel;
+    return roundNumber == null
+        ? tournamentName!
+        : '$tournamentName · Round $roundNumber';
+  }
+
   const SharedRoundSummary({
     required this.id,
     required this.date,
@@ -810,6 +838,9 @@ class SharedRoundSummary {
     required this.groupLabel,
     required this.yourName,
     this.isTournament = false,
+    this.tournamentId,
+    this.tournamentName,
+    this.roundNumber,
   });
 
   factory SharedRoundSummary.fromJson(Map<String, dynamic> j) =>
@@ -824,6 +855,11 @@ class SharedRoundSummary {
         groupLabel:   j['group_label'] as String? ?? '',
         yourName:     j['your_name'] as String? ?? '',
         isTournament: j['is_tournament'] as bool? ?? false,
+        // Absent on an older server, which simply means every watched round
+        // keeps filing as casual — what it did before these existed.
+        tournamentId:   j['tournament_id'] as int?,
+        tournamentName: j['tournament_name'] as String?,
+        roundNumber:    j['round_number'] as int?,
       );
 }
 

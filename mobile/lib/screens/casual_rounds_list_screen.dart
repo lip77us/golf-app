@@ -117,8 +117,10 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
       // best-effort treatment; status filtering happens per-tab below.
       List<SharedRoundSummary> observing = [];
       try {
+        // The exact complement of the Tournaments list's filter, so a
+        // watched round lands on exactly one of the two screens.
         observing = (await client.getSharedRounds())
-            .where((r) => !r.isTournament)
+            .where((r) => !r.belongsUnderTournaments)
             .toList();
       } catch (_) {/* ignore — observed rounds are non-critical */}
 

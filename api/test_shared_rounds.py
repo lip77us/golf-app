@@ -21,7 +21,7 @@ from rest_framework.test import APIClient
 from accounts.models import Account
 from core.models import Course, Player
 from tournament.models import (
-    Round, Foursome, FoursomeMembership, Watcher,
+    Round, Foursome, FoursomeMembership, Tournament, Watcher,
 )
 
 
@@ -153,3 +153,73 @@ class SharedRoundsTests(TestCase):
         user_d.save(update_fields=['phone'])
         client_d = APIClient(); client_d.force_authenticate(user_d)
         self.assertEqual(client_d.get(self.url).data, [])
+
+
+class AWatchedTournamentRoundNamesItsEventTests(TestCase):
+    """A watched round that belongs to a tournament says so.
+
+    Reported by a TD on 20 Oct 2026: a watcher found his 40 Balls round on
+    the Rounds menu rather than under Tournaments, which is where he had
+    told him to look. `_round_row` hardcoded `is_tournament: False` for every
+    round, tournament or not, and the two list screens split on exactly that.
+    """
+
+    def setUp(self):
+        self.acct_a, self.round_a = _watched_round(
+            'Paul Group', 'Pebble Beach', '+15105550123', status='complete')
+        self.acct_b, self.user_b = _user_with_phone(
+            'Bob Golf', 'bob', '+15105550123')
+        self.client = APIClient()
+        self.client.force_authenticate(self.user_b)
+        self.url = reverse('api-shared-rounds')
+
+    def _row(self):
+        rows = [r for r in self.client.get(self.url).data
+                if not r['is_tournament'] and r['id'] == self.round_a.id]
+        self.assertEqual(len(rows), 1)
+        return rows[0]
+
+    def test_a_casual_round_names_no_tournament(self):
+        row = self._row()
+        self.assertIsNone(row['tournament_id'])
+        self.assertIsNone(row['tournament_name'])
+        self.assertIsNone(row['round_number'])
+
+    def test_a_tournament_round_carries_its_event(self):
+        t = Tournament.objects.create(
+            account=self.acct_a, name='Copperopolis Fall 26',
+            start_date=timezone.now().date())
+        self.round_a.tournament = t
+        self.round_a.round_number = 2
+        self.round_a.save(update_fields=['tournament', 'round_number'])
+
+        row = self._row()
+        self.assertEqual(row['tournament_id'], t.id)
+        self.assertEqual(row['tournament_name'], 'Copperopolis Fall 26')
+        self.assertEqual(row['round_number'], 2)
+
+    def test_is_tournament_stays_FALSE_on_a_tournament_round(self):
+        """The compatibility constraint, and the reason for the new fields.
+
+        `openWatchedRound` on every shipped phone reads `id` as the
+        TOURNAMENT id whenever this flag is true. Flipping it for a round
+        would send a round id to `joinTournament` and open the wrong event,
+        or 404. The flag says what `id` IS; the new fields say what the round
+        is PART of.
+        """
+        t = Tournament.objects.create(
+            account=self.acct_a, name='Fall Cup',
+            start_date=timezone.now().date())
+        self.round_a.tournament = t
+        self.round_a.save(update_fields=['tournament'])
+        self.assertIs(self._row()['is_tournament'], False)
+
+    def test_the_round_is_still_reachable_by_its_own_id(self):
+        # Filing it under Tournaments must not change what opens: the round's
+        # own board is the board that exists for it.
+        t = Tournament.objects.create(
+            account=self.acct_a, name='Fall Cup',
+            start_date=timezone.now().date())
+        self.round_a.tournament = t
+        self.round_a.save(update_fields=['tournament'])
+        self.assertEqual(self._row()['id'], self.round_a.id)
