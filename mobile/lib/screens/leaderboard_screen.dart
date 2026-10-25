@@ -12138,7 +12138,7 @@ class _HotSpotCard extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Wrap(spacing: 12, runSpacing: 4, children: [
-          _key(theme, Halved.roleFill, 'Hot spot',
+          _key(theme, Halved.roleFill, 'Hot Seat',
               border: Halved.roleLine),
           _key(theme, Halved.mint, 'Counted'),
           _key(theme, Halved.cautionGround, 'Capped',

@@ -5395,7 +5395,7 @@ class _PlayerRow extends StatelessWidget {
                       border: Border.all(color: Halved.roleLine),
                     ),
                     child: Text(
-                      'HOT SPOT',
+                      'HOT SEAT',
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: Halved.role,
                         fontWeight: FontWeight.bold,
