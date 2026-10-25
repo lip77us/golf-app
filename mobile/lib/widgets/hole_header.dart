@@ -118,6 +118,15 @@ class HoleHeader extends StatelessWidget {
   /// a card. See the class doc.
   final bool standalone;
 
+  /// A game's own figure, bottom-right. 40 Balls puts the group's net there.
+  ///
+  /// **Bottom-right rather than the top-right the design draws**, because in
+  /// this app that corner is already the `?` legend's and has been on six
+  /// screens. Same side, one row down, no collision — and the badge does not
+  /// need to carry a "thru" either, because the line above it already says
+  /// how many holes are left.
+  final Widget? badge;
+
   const HoleHeader({
     super.key,
     required this.holeData,
@@ -127,6 +136,7 @@ class HoleHeader extends StatelessWidget {
     this.trailing,
     this.holesInPlay = const [],
     this.standalone = false,
+    this.badge,
   });
 
   @override
@@ -181,6 +191,8 @@ class HoleHeader extends StatelessWidget {
       ),
       if (trailing != null)
         Positioned(top: 2, right: 2, child: trailing!),
+      if (badge != null)
+        Positioned(right: 6, bottom: 6, child: badge!),
     ]);
   }
 }

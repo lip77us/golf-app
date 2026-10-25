@@ -3210,6 +3210,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                     summary: rp.tripleCupSummary!, hole: _selectedHole),
               // Active hole score card
               _HoleScoreCard(
+                fortyBallsNet: _activeGames(rp.round).contains('forty_balls')
+                               && _fbState?.hole == _selectedHole
+                    ? _fbState?.net
+                    : null,
                 solo: soloVariantOf(games) != null,
                 bankerSummary: resolvePrimary(
                         rp.round?.primaryGame, games) == GameIds.banker
@@ -3645,7 +3649,12 @@ class _HoleScoreCard extends StatelessWidget {
   /// `widgets/solo_board.dart` for why red is a side here and not a loss.
   final bool solo;
 
+  /// The group's net to par, drawn as the hole header's badge. Null on every
+  /// other game, and on 40 Balls until the first load lands.
+  final int? fortyBallsNet;
+
   const _HoleScoreCard({
+    this.fortyBallsNet,
     this.solo = false,
     this.anchorId,
     required this.holeData,
@@ -4257,6 +4266,11 @@ class _HoleScoreCard extends StatelessWidget {
             players:     players,
             courseName:  courseName,
             holesInPlay: holesInPlay,
+            // 40 Balls only: the group's net, which the reworked packet moves
+            // out of the picker and onto the header.
+            badge: fortyBallsNet == null
+                ? null
+                : FortyBallsNetBadge(net: fortyBallsNet!),
             // "?" legend — explains the row meta (handicap chip, dots, tee,
             // totals, game-specific badges). Adaptive to the active game(s)
             // so we don't show irrelevant rows.
@@ -5699,6 +5713,7 @@ class _GameStatusSection extends StatelessWidget {
   final int?                        fortyBallsFoursomeId;
   final Object?                     fortyBallsToken;
   final ValueChanged<FortyBallsPickerState?>? onFortyBallsState;
+
   /// The hole's nets as entered, and the count held for it.
   final Map<int, int>               fortyBallsLocalNets;
   final int?                        fortyBallsPending;

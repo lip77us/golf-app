@@ -681,3 +681,39 @@ class _TrayLockNote extends StatelessWidget {
                 color: Halved.role, fontSize: 12, height: 1.35)),
       );
 }
+
+/// The group's net to par, for [HoleHeader.badge].
+///
+/// **This is where the Net figure went.** It used to be one of the picker's
+/// two boxes (Paul, 16 Oct: Status replaced Slack so the number a group is
+/// ranked on came first); the reworked packet takes it out of the tray and
+/// puts it on the hole header, where it reads once for the whole screen
+/// instead of competing with the pace figure beside it. Removing it from one
+/// place without adding it here would simply have deleted it — `state.net`
+/// had exactly one reader in the app.
+class FortyBallsNetBadge extends StatelessWidget {
+  final int net;
+  const FortyBallsNetBadge({super.key, required this.net});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Halved.pine,
+          borderRadius: BorderRadius.circular(Halved.rChip),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(
+            // `E`, `-3`, `+2` — level is a word everywhere else in the app.
+            net == 0 ? 'E' : (net > 0 ? '+$net' : '$net'),
+            style: const TextStyle(
+                color: Halved.cream, fontSize: 16, fontWeight: FontWeight.w700,
+                height: 1.05),
+          ),
+          const Text('GROUP',
+              style: TextStyle(
+                  color: Halved.cream, fontSize: 8.5,
+                  fontWeight: FontWeight.w700, letterSpacing: 0.7)),
+        ]),
+      );
+}
