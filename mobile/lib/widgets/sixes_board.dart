@@ -76,7 +76,7 @@ class SixesMatch {
     if (!drawn) return '—';
     if (isDone) {
       if (seg.winner == 'Halved' || margin == 0) return 'Push';
-      return closedOut ? '${margin.abs()} & $toPlay' : '${margin.abs()} UP';
+      return closedOut ? '${margin.abs()}&$toPlay' : '${margin.abs()} UP';
     }
     if (played.isEmpty) return '—';
     return margin == 0 ? 'AS' : '${margin.abs()} UP';
@@ -145,7 +145,8 @@ class SixesBoard extends StatelessWidget {
           match: live ?? matches.last,
           holes: grid,
           players: _s.players,
-          over: live == null),
+          over: live == null,
+          matchCount: matches.length),
       const SizedBox(height: 10),
       _HolesWonCard(matches: matches),
       if (live != null) ...[
@@ -164,9 +165,12 @@ class _LiveMatchCard extends StatelessWidget {
   final List<Map<String, dynamic>> holes;
   final List<Map<String, dynamic>> players;
   final bool over;
+  /// How many matches the round has, for the `3 matches` the header shows in
+  /// place of `Next:` once there is no next hole.
+  final int matchCount;
   const _LiveMatchCard({
     required this.match, required this.holes, required this.players,
-    required this.over,
+    required this.over, required this.matchCount,
   });
 
   int? _parOf(int hole) {
@@ -241,7 +245,10 @@ class _LiveMatchCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (next != null)
+          if (over)
+            Text('$matchCount ${matchCount == 1 ? 'match' : 'matches'}',
+                style: const TextStyle(fontSize: 11, color: Halved.muted))
+          else if (next != null)
             Text('Next: $next${par == null ? '' : ' · par $par'}',
                 style: const TextStyle(fontSize: 11, color: Halved.muted)),
         ]),
@@ -275,12 +282,26 @@ class _LiveMatchCard extends StatelessWidget {
                     // either side would say somebody is.
                     color: colour ?? Halved.muted)),
           ),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('thru ${match.thru} of ${match.total}',
-                style: const TextStyle(fontSize: 12, color: Halved.muted)),
-            Text(match.toPlay == 0 ? 'none to play' : '${match.toPlay} to play',
-                style: const TextStyle(fontSize: 12, color: Halved.muted)),
-          ]),
+          // Once the round is over, `thru 6 of 6 / none to play` states the
+          // obvious. The slot answers a different question then: WHICH match
+          // this result belongs to, since the card is no longer live.
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: over
+              ? [
+                  Text(match.seg.label.replaceFirst('M', 'Match '),
+                      style: const TextStyle(
+                          fontSize: 12, color: Halved.muted)),
+                  const Text('Final',
+                      style: TextStyle(fontSize: 12, color: Halved.muted)),
+                ]
+              : [
+                  Text('thru ${match.thru} of ${match.total}',
+                      style: const TextStyle(
+                          fontSize: 12, color: Halved.muted)),
+                  Text(match.toPlay == 0
+                          ? 'none to play' : '${match.toPlay} to play',
+                      style: const TextStyle(
+                          fontSize: 12, color: Halved.muted)),
+                ]),
         ]),
         if (!over) ...[
           const SizedBox(height: 8),
@@ -346,8 +367,15 @@ class _HolesWonCard extends StatelessWidget {
               style: const TextStyle(
                   fontSize: 12, fontWeight: FontWeight.w700,
                   color: Halved.deepPine)),
-          Text(_status(m),
-              style: const TextStyle(fontSize: 10, color: Halved.muted)),
+          Builder(builder: (_) {
+            final (text, colour) = _status(m);
+            return Text(text,
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight:
+                        colour == null ? FontWeight.w400 : FontWeight.w700,
+                    color: colour ?? Halved.muted));
+          }),
         ]),
       ),
       Expanded(child: Column(
@@ -361,20 +389,31 @@ class _HolesWonCard extends StatelessWidget {
           ]),
           const SizedBox(height: 5),
           Row(children: [
-            _legend(_sideA, m.sideLabel(true)),
+            _legend(_sideA, m.sideLabel(true), m, true),
             const SizedBox(width: 12),
-            _legend(_sideB, m.sideLabel(false)),
+            _legend(_sideB, m.sideLabel(false), m, false),
           ]),
         ],
       )),
     ]);
   }
 
-  static String _status(SixesMatch m) {
-    if (!m.drawn) return 'Undrawn';
-    if (m.isLive) return 'Live';
-    if (m.isDone) return m.figure == 'Push' ? 'Push' : 'Final';
-    return '${m.seg.startHole}–${m.seg.endHole}';
+  /// Range before it starts, `Live` while it runs, and once it is
+  /// decided the RESULT itself — `2&1` — in the winning side's colour
+  /// (V2, 24 Oct).
+  ///
+  /// `Final` was a word that said only that the match had stopped. The
+  /// result says that AND what it was, in the same space, which is what
+  /// a reader scanning three rows is after.
+  static (String, Color?) _status(SixesMatch m) {
+    if (!m.drawn) return ('Undrawn', null);
+    if (m.isLive) return ('Live', null);
+    if (m.isDone) {
+      return m.figure == 'Push'
+          ? ('Push', null)
+          : (m.figure, m.leaderColour);
+    }
+    return ('${m.seg.startHole}–${m.seg.endHole}', null);
   }
 
   static Widget _tile(int hole, String? side, bool isNext) {
@@ -408,21 +447,49 @@ class _HolesWonCard extends StatelessWidget {
     );
   }
 
-  static Widget _legend(Color c, String label) => Flexible(
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 8, height: 8,
-            decoration:
-                BoxDecoration(color: c, borderRadius: BorderRadius.circular(2)),
-          ),
+  /// A side's swatch and name — and, once the match is decided, a `won 2&1`
+  /// tag in that side's colour (V2, 24 Oct).
+  ///
+  /// The tag sits beside the WINNER rather than at the end of the row,
+  /// because the partners rotate: which of the two names won is the thing
+  /// being read, and a result floating at the end of the row would have to
+  /// be traced back to one of them.
+  static Widget _legend(Color c, String label, SixesMatch m, bool isA) {
+    final decided = m.isDone && m.figure != 'Push' && m.leaderColour != null;
+    final won = decided && ((m.margin > 0) == isA);
+    return Flexible(
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          width: 8, height: 8,
+          decoration:
+              BoxDecoration(color: c, borderRadius: BorderRadius.circular(2)),
+        ),
+        const SizedBox(width: 5),
+        Flexible(
+          child: Text(label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: won ? FontWeight.w700 : FontWeight.w400,
+                  color: won ? Halved.deepPine : Halved.muted)),
+        ),
+        if (won) ...[
           const SizedBox(width: 5),
-          Flexible(
-            child: Text(label,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, color: Halved.muted)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: c,
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: Text('won ${m.figure}',
+                style: const TextStyle(
+                    fontSize: 10, fontWeight: FontWeight.w700,
+                    color: Halved.cream)),
           ),
-        ]),
-      );
+        ],
+      ]),
+    );
+  }
 }
 
 Widget _shell({

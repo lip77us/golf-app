@@ -77,12 +77,14 @@ void main() {
       expect(match(winners: const ['T1', 'T1']).figure, '2 UP');
     });
 
-    test('a close-out reads N & M', () {
-      // 3 up with 2 to play, decided on the 4th.
+    test('a close-out reads N&M, closed up', () {
+      // 3 up with 2 to play, decided on the 4th. No spaces: the packet
+      // writes it `2&1` and the V2 screenshots render both the big figure
+      // and the `won 2&1` tag that way.
       final m = match(status: 'complete', winner: 'Team 1',
           winners: const ['T1', 'T1', 'Halved', 'T1']);
       expect(m.closedOut, isTrue);
-      expect(m.figure, '3 & 2');
+      expect(m.figure, '3&2');
     });
 
     test('a match that goes the distance reads N UP, not N & 0', () {
@@ -113,6 +115,37 @@ void main() {
       expect(m.drawn, isFalse);
       expect(m.figure, '—');
       expect(m.nextHole, isNull, reason: 'nothing to play until it is drawn');
+    });
+  });
+
+  group('a decided match says WHAT it was, not that it ended', () {
+    // V2, 24 Oct: `Final` was a word that said only that the match had
+    // stopped. The status under the label is the result now, in the winning
+    // side's colour, and the winning side carries a `won 2&1` tag.
+
+    test('a push is still a push', () {
+      final m = match(status: 'halved', winner: 'Halved',
+          winners: const ['T1', 'T2', 'Halved', 'Halved', 'Halved', 'Halved']);
+      expect(m.figure, 'Push');
+      expect(m.leaderColour, isNull,
+          reason: 'nobody won, so nothing takes a side colour');
+    });
+
+    test('the result carries the winner colour', () {
+      final a = match(status: 'complete', winner: 'Team 1',
+          winners: const ['T1', 'T1', 'Halved', 'T1']);
+      final b = match(status: 'complete', winner: 'Team 2',
+          winners: const ['T2', 'T2', 'Halved', 'T2']);
+      expect(a.figure, '3&2');
+      expect(b.figure, '3&2');
+      expect(a.leaderColour, isNot(b.leaderColour),
+          reason: 'the same figure, opposite sides');
+    });
+
+    test('a live match has no result to show yet', () {
+      final m = match(winners: const ['T1', 'T1']);
+      expect(m.isDone, isFalse);
+      expect(m.figure, '2 UP');
     });
   });
 
