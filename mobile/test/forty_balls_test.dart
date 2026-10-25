@@ -364,7 +364,10 @@ void main() {
           1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
         ]),
       ]);
-      expect(find.text('Thru 9'), findsOneWidget);
+      // The bare figure now: the pine header carries the word, so the cell
+      // does not repeat it eighteen times down the board.
+      expect(find.text('9'), findsOneWidget);
+      expect(find.text('THRU'), findsOneWidget);   // ...once, in the header
       // Not F — there are nine to come.
       expect(find.text('F'), findsNothing);
     });
@@ -380,9 +383,12 @@ void main() {
         ]),
       ]);
       final name  = tester.getTopRight(find.text('Group 1')).dx;
-      final thru  = tester.getTopLeft(find.text('Thru 9')).dx;
+      final thru  = tester.getTopLeft(find.text('9')).dx;
       final total = tester.getTopLeft(find.text('−5')).dx;
-      expect(thru, greaterThan(name));
+      // `greaterThanOrEqualTo` rather than `greaterThan`: the name cell is
+      // Expanded and the columns are adjacent, so its right edge IS the thru
+      // cell's left edge. The ordering is the claim, not a gap between them.
+      expect(thru, greaterThanOrEqualTo(name));
       expect(thru, lessThan(total));
     });
 
@@ -391,8 +397,8 @@ void main() {
       // the budget's `pending` and a golfer's `thru` are different
       // questions. `holes_left` is 3 in this fixture; thru is 1.
       await pumpBoard(tester, [group(thru: 1)]);
-      expect(find.text('Thru 1'), findsOneWidget);
-      expect(find.text('Thru 15'), findsNothing);
+      expect(find.text('1'), findsWidgets);        // the rank is a 1 too
+      expect(find.text('15'), findsNothing);
     });
 
     testWidgets('every hole in play reads F, not Thru 18', (tester) async {
@@ -487,6 +493,80 @@ void main() {
           [group(dq: true, rank: null, ranking: null, left: 20, capacity: 16)]);
       expect(find.text('OUT'), findsOneWidget);
       expect(find.textContaining('20 owed, room for 16'), findsOneWidget);
+    });
+
+    testWidgets('the header labels the columns, once', (tester) async {
+      await pumpBoard(tester, [group(), group(number: 2, rank: 2)]);
+      for (final h in ['#', 'GROUP', 'THRU', 'TOT', 'PRIZE']) {
+        expect(find.text(h), findsOneWidget, reason: h);
+      }
+    });
+
+    testWidgets('PRIZE is absent when there is no pool', (tester) async {
+      // A column headed PRIZE over an empty column is a promise of money
+      // that was never collected.
+      tester.view.physicalSize = const Size(1400, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: FortyBallsBoard(
+          data: {'handicap_mode': 'net', 'net_percent': 100,
+                 'net_max_double_bogey': true, 'entry_fee': 0.0,
+                 'pool': 0.0, 'payouts': [], 'n_groups': 1,
+                 'results': [group(rank: 1)]},
+          names: _names,
+        )),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('PRIZE'), findsNothing);
+    });
+
+    testWidgets('the meta line states the scoring and the budget',
+        (tester) async {
+      await pumpBoard(tester, [group()]);
+      expect(find.text('Net · best balls'), findsOneWidget);
+      expect(find.text('40 a group'), findsOneWidget);
+      expect(find.text('Pool \$80'), findsOneWidget);
+    });
+
+    testWidgets('the ledger says PROJECTED while a group is still out',
+        (tester) async {
+      // A prize on a board that can still move is a promise the round has
+      // not made.
+      await pumpBoard(tester, [group(spent: 34, left: 6)]);
+      expect(find.text('Projected · pays the group'), findsOneWidget);
+      expect(find.text('Pays the group'), findsNothing);
+    });
+
+    testWidgets('...and drops PROJECTED once every group is in',
+        (tester) async {
+      await pumpBoard(tester, [group(spent: 40, left: 0, slack: 0)]);
+      expect(find.text('Pays the group'), findsOneWidget);
+      expect(find.textContaining('Projected'), findsNothing);
+    });
+
+    testWidgets('the ledger names the group and how many ways it splits',
+        (tester) async {
+      await pumpBoard(tester, [group()]);
+      expect(find.text('Group 1 · 4 ways'), findsOneWidget);
+      expect(find.text('\$150'), findsWidgets);  // the row and the ledger
+    });
+
+    testWidgets('no pool, no ledger', (tester) async {
+      tester.view.physicalSize = const Size(1400, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: FortyBallsBoard(
+          data: {'handicap_mode': 'net', 'net_percent': 100,
+                 'net_max_double_bogey': true, 'entry_fee': 0.0,
+                 'pool': 0.0, 'payouts': [], 'n_groups': 1,
+                 'results': [group(rank: 1)]},
+          names: _names,
+        )),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('pays the group'), findsNothing);
     });
 
     testWidgets('the card is the STANDARD card, named and indexed',

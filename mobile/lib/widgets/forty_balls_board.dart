@@ -16,6 +16,15 @@ import '../theme/halved_brand.dart';
 import '../utils/stroke_play_standing.dart';
 import 'hole_grid_scorecard.dart';
 
+/// Column widths, shared by the pine header and every row beneath it.
+///
+/// One place because a header that disagrees with its rows is worse than no
+/// header at all — it labels the wrong column, confidently.
+const double _kRankW  = 26;
+const double _kThruW  = 40;
+const double _kTotW   = 52;
+const double _kPrizeW = 56;
+
 class FortyBallsBoard extends StatefulWidget {
   final Map<String, dynamic> data;
   /// Names by player id, for the card's rows. Empty simply leaves them blank.
@@ -45,37 +54,140 @@ class _FortyBallsBoardState extends State<FortyBallsBoard> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
       children: [
-        Row(children: [
-          _chip(context, 'Groups', '${_s.nGroups}'),
-          const SizedBox(width: 12),
-          _chip(context, 'Entry', '\$${_s.entryFee.toStringAsFixed(0)}'),
-          const Spacer(),
-          Text('Pool \$${_s.pool.toStringAsFixed(0)}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onSurfaceVariant)),
-        ]),
+        _metaLine(context),
         const SizedBox(height: 10),
-        for (final g in _s.results)
-          _GroupRow(
-            group : g,
-            isOpen: g.foursomeId == _openId,
-            names : widget.names,
-            onTap : () => setState(() =>
-                _openId = _openId == g.foursomeId ? null : g.foursomeId),
-          ),
+        // The rows as one TABLE rather than a stack of cards, which is what
+        // lets a pine header label them. The open row is a background tint
+        // now instead of a border, because a border inside a continuous
+        // table reads as a seam.
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Column(children: [
+            _tableHeader(context),
+            for (final g in _s.results)
+              _GroupRow(
+                group : g,
+                isOpen: g.foursomeId == _openId,
+                names : widget.names,
+                onTap : () => setState(() =>
+                    _openId = _openId == g.foursomeId ? null : g.foursomeId),
+              ),
+          ]),
+        ),
+        const SizedBox(height: 14),
+        _ledger(context),
       ],
     );
   }
 
-  Widget _chip(BuildContext context, String label, String value) {
+  /// `Net · best balls   40 a group   Pool $150`.
+  Widget _metaLine(BuildContext context) {
     final theme = Theme.of(context);
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Text('$label ', style: theme.textTheme.bodySmall
-          ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-      Text(value, style: theme.textTheme.bodySmall
-          ?.copyWith(fontWeight: FontWeight.bold)),
+    final mode = _s.handicapMode == 'gross'
+        ? 'Gross'
+        : 'Net${_s.netPercent == 100 ? '' : ' ${_s.netPercent}%'}';
+    final budget = _s.results.isEmpty ? 40 : _s.results.first.budget;
+    final muted = theme.textTheme.bodySmall
+        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    return Row(children: [
+      Text('$mode · best balls', style: muted),
+      Text('   ·   ', style: muted),
+      Text('$budget a group', style: muted),
+      const Spacer(),
+      Text('Pool \$${_s.pool.toStringAsFixed(0)}',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(fontWeight: FontWeight.bold)),
     ]);
+  }
+
+  Widget _tableHeader(BuildContext context) => Container(
+        color: Halved.pine,
+        padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+        child: DefaultTextStyle(
+          style: const TextStyle(
+              color: Halved.cream, fontSize: 10,
+              fontWeight: FontWeight.w700, letterSpacing: 0.7),
+          child: Row(children: [
+            const SizedBox(width: _kRankW, child: Text('#')),
+            const Expanded(child: Text('GROUP')),
+            const SizedBox(width: _kThruW,
+                child: Text('THRU', textAlign: TextAlign.end)),
+            const SizedBox(width: _kTotW,
+                child: Text('TOT', textAlign: TextAlign.end)),
+            SizedBox(width: _kPrizeW,
+                child: Text(_s.pool > 0 ? 'PRIZE' : '',
+                    textAlign: TextAlign.end)),
+          ]),
+        ),
+      );
+
+  /// What the pot pays, and to whom.
+  ///
+  /// **`Projected` while any group is still out**, because a prize column on
+  /// a board that can still move is a promise the round has not made. The
+  /// same reason the row's figure is italic until the group finishes.
+  Widget _ledger(BuildContext context) {
+    final theme = Theme.of(context);
+    if (_s.pool <= 0) return const SizedBox.shrink();
+    final done = _s.results.every((g) => g.isFinished || g.dq);
+    final paid = _s.results.where((g) => g.payout > 0).toList();
+
+    Widget band(String text) => Container(
+          width: double.infinity,
+          color: Halved.deepPine,
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+          child: Text(text,
+              style: const TextStyle(
+                  color: Halved.cream, fontSize: 11,
+                  fontWeight: FontWeight.w700, letterSpacing: 0.6)),
+        );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: Column(children: [
+        band(done ? 'Pays the group' : 'Projected · pays the group'),
+        Container(
+          color: theme.colorScheme.surface,
+          child: Column(children: [
+            if (paid.isEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Nothing settled yet.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                ),
+              )
+            else
+              for (final g in paid)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
+                  child: Row(children: [
+                    Expanded(
+                      child: Text(
+                        'Group ${g.groupNumber} · ${g.splitWays} ways',
+                        style: theme.textTheme.bodySmall),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Halved.brightMint.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(7),
+                      ),
+                      child: Text('\$${g.payout.toStringAsFixed(0)}',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  ]),
+                ),
+          ]),
+        ),
+        band('\$${_s.pool.toStringAsFixed(0)} pool · '
+             '\$${_s.entryFee.toStringAsFixed(0)} a golfer'),
+      ]),
+    );
   }
 }
 
@@ -94,24 +206,24 @@ class _GroupRow extends StatelessWidget {
     final theme = Theme.of(context);
     final thru = _thru(group);
     return Container(
-      margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-            color: isOpen ? Halved.pine : theme.colorScheme.outlineVariant,
-            width: isOpen ? 1.4 : 1),
+        // Open is a TINT, not a border: inside a continuous table a border
+        // reads as a seam between two tables rather than as one row lifting.
+        color: isOpen
+            ? Halved.pine.withValues(alpha: 0.07)
+            : theme.colorScheme.surface,
+        border: Border(
+            bottom: BorderSide(color: theme.colorScheme.outlineVariant)),
       ),
       child: Column(children: [
         InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
           child: Padding(
             padding: const EdgeInsets.all(10),
             child: Column(children: [
               Row(children: [
                 SizedBox(
-                  width: 26,
+                  width: _kRankW,
                   child: Text(
                       group.rank == null
                           ? '–'
@@ -132,34 +244,36 @@ class _GroupRow extends StatelessWidget {
                   // "pending" and a golfer's "thru" are different questions.
                   // The server answers this one, along the group's own play
                   // order, so a shotgun round reads correctly.
-                  child: Row(children: [
-                    Flexible(
-                      child: Text('Group ${group.groupNumber}',
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleSmall
-                              ?.copyWith(fontWeight: FontWeight.bold)),
-                    ),
-                    if (thru != null) ...[
-                      const SizedBox(width: 8),
-                      Text(thru,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant)),
-                    ],
-                  ]),
-                ),
-                if (group.dq) ...[
-                  _Tag('OUT'),
-                  const SizedBox(width: 8),
-                ],
-                SizedBox(
-                  width: 48,
-                  child: Text(_total(group),
-                      textAlign: TextAlign.end,
+                  child: Text('Group ${group.groupNumber}',
+                      overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleSmall
                           ?.copyWith(fontWeight: FontWeight.bold)),
                 ),
+                // **Its own column now, under a THRU header** — still to the
+                // right of the name and left of the total, which is the slot
+                // that reads as belonging to the group rather than the money.
+                // The header carries the word, so the cell is the bare
+                // figure: `9`, not `Thru 9`.
                 SizedBox(
-                  width: 56,
+                  width: _kThruW,
+                  child: Text(thru ?? '',
+                      textAlign: TextAlign.end,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                ),
+                SizedBox(
+                  width: _kTotW,
+                  child: group.dq
+                      ? Align(
+                          alignment: Alignment.centerRight,
+                          child: _Tag('OUT'))
+                      : Text(_total(group),
+                          textAlign: TextAlign.end,
+                          style: theme.textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.bold)),
+                ),
+                SizedBox(
+                  width: _kPrizeW,
                   child: Text(
                     group.payout == 0
                         ? ''
@@ -199,8 +313,8 @@ class _GroupRow extends StatelessWidget {
     );
   }
 
-  /// `Thru 12`, `F` when every hole in play is in, and nothing at all before
-  /// the group starts — an empty slot rather than `Thru 0`.
+  /// `12`, `F` when every hole in play is in, and nothing at all before the
+  /// group starts — an empty slot rather than a `0`.
   ///
   /// **`F` is measured against the holes IN PLAY, not against 18**, because
   /// this board has the list and a nine-hole round would otherwise never
@@ -210,7 +324,9 @@ class _GroupRow extends StatelessWidget {
     final t = g.thru;
     if (t == null || t == 0) return null;
     final n = g.holesInPlay.length;
-    return (n > 0 && t >= n) ? 'F' : 'Thru $t';
+    // The bare figure — the pine header says THRU once, so the cell does not
+    // repeat the word down every row.
+    return (n > 0 && t >= n) ? 'F' : '$t';
   }
 
   /// The ranking figure — one decimal only when the 4/3 factor made it
