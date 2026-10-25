@@ -379,21 +379,59 @@ class _BudgetLine extends StatelessWidget {
       note = 'slack ${group.slack}';
     }
 
-    return Row(children: [
-      SizedBox(
-        width: 64,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(3),
-          child: LinearProgressIndicator(
-            value: frac.clamp(0.0, 1.0),
-            minHeight: 5,
-            backgroundColor: theme.colorScheme.surfaceContainerHighest,
-            valueColor: AlwaysStoppedAnimation(
-                group.dq ? theme.colorScheme.error : Halved.pine),
-          ),
-        ),
-      ),
-      const SizedBox(width: 8),
+    // **Full width, with a tick where an even pace would be** (reworked
+    // packet, 24 Oct). The old 64px meter said how much of the budget was
+    // gone; it could not say whether that was early. The gap between the
+    // fill and the tick is the whole question — a group at −5 having spent
+    // 34 of 40 by the 9th is in trouble the figure alone does not show.
+    //
+    // Ahead of pace takes the amber, because spending early is how a group
+    // runs out of choices. Behind is simply room to spend.
+    final holes = group.holesInPlay.isEmpty ? 18 : group.holesInPlay.length;
+    final thru  = group.thru ?? 0;
+    // No pace before a group starts or once it is done — there is nothing to
+    // be off at either end.
+    final double? evenPace = (thru <= 0 || thru >= holes || group.budget <= 0)
+        ? null
+        : group.budget * thru / holes;
+    final int? vsPace =
+        evenPace == null ? null : (group.spent - evenPace).round();
+    final ahead = vsPace != null && vsPace > 0 && !group.dq;
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      LayoutBuilder(builder: (context, c) {
+        final w = c.maxWidth;
+        return SizedBox(
+          height: 6,
+          child: Stack(children: [
+            Container(
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            FractionallySizedBox(
+              widthFactor: frac.clamp(0.0, 1.0),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: group.dq
+                      ? theme.colorScheme.error
+                      : (ahead ? Halved.caution : Halved.pine),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+            if (evenPace != null)
+              Positioned(
+                left: (w * (evenPace / group.budget)).clamp(0.0, w - 2),
+                child: Container(
+                    width: 2, height: 6, color: theme.colorScheme.onSurface),
+              ),
+          ]),
+        );
+      }),
+      const SizedBox(height: 4),
+      Row(children: [
       Text('${group.spent} of ${group.budget}',
           style: theme.textTheme.labelSmall
               ?.copyWith(fontWeight: FontWeight.w600)),
@@ -407,6 +445,18 @@ class _BudgetLine extends StatelessWidget {
                   ?.copyWith(color: colour, fontWeight: FontWeight.w600)),
         ),
       ],
+      if (vsPace != null && !group.dq) ...[
+        const Spacer(),
+        Text(
+          vsPace == 0 ? 'on pace'
+                      : '${vsPace > 0 ? '+' : ''}$vsPace vs pace',
+          style: theme.textTheme.labelSmall?.copyWith(
+              color: ahead ? Halved.caution
+                           : theme.colorScheme.onSurfaceVariant,
+              fontWeight: ahead ? FontWeight.w700 : FontWeight.w600),
+        ),
+      ],
+      ]),
     ]);
   }
 }

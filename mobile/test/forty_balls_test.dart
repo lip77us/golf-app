@@ -414,6 +414,52 @@ void main() {
       expect(find.text('Group 1'), findsOneWidget);
     });
 
+    testWidgets('the bar says whether the spend is EARLY', (tester) async {
+      // The rework's whole point. `34 of 40` cannot say whether that is a
+      // problem; 34 by the 9th of 18 is, and the figure alone never said so.
+      // Even pace at thru 9 of 18 on a 40 budget is 20, so 34 is +14.
+      await pumpBoard(tester, [
+        group(spent: 34, left: 6, thru: 9, holesInPlay: const [
+          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+        ]),
+      ]);
+      expect(find.text('+14 vs pace'), findsOneWidget);
+    });
+
+    testWidgets('behind pace carries its sign too', (tester) async {
+      await pumpBoard(tester, [
+        group(spent: 12, left: 28, thru: 9, holesInPlay: const [
+          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+        ]),
+      ]);
+      expect(find.text('-8 vs pace'), findsOneWidget);
+    });
+
+    testWidgets('there is no pace before a group starts, or once it is done',
+        (tester) async {
+      // Nothing to be off at either end, so the figure is absent rather than
+      // zero — `on pace` on the 1st tee would be a judgement about nothing.
+      await pumpBoard(tester, [group(thru: null)]);
+      expect(find.textContaining('vs pace'), findsNothing);
+
+      await pumpBoard(tester, [
+        group(thru: 2, holesInPlay: const [1, 2]),   // thru == holes
+      ]);
+      expect(find.textContaining('vs pace'), findsNothing);
+    });
+
+    testWidgets('a DQd group gets no pace reading', (tester) async {
+      // Its budget cannot come out at all, so being early or late about it
+      // is not a thing to say.
+      await pumpBoard(tester, [
+        group(dq: true, rank: null, ranking: null, left: 20, capacity: 16,
+            thru: 9, holesInPlay: const [
+          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+        ]),
+      ]);
+      expect(find.textContaining('vs pace'), findsNothing);
+    });
+
     testWidgets('a finished group drops the slack', (tester) async {
       await pumpBoard(tester, [group(spent: 40, left: 0, slack: 0)]);
       expect(find.text('40 of 40'), findsOneWidget);
