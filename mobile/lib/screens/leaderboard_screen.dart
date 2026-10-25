@@ -11,6 +11,7 @@ import '../utils/match_notation.dart';
 import '../utils/nassau_team_style.dart';
 import '../widgets/solo_board.dart';
 import '../widgets/forty_balls_board.dart';
+import '../widgets/sixes_board.dart';
 import '../widgets/banker_board.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/icon_help_sheet.dart';
@@ -4346,24 +4347,16 @@ class _SixesGroupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme    = Theme.of(context);
-    final summary  = group['summary'] as Map<String, dynamic>? ?? {};
-    final segments = (summary['segments'] as List? ?? []);
-    final money    = summary['money']   as Map<String, dynamic>? ?? const {};
-    final byPlayer = (money['by_player'] as List? ?? const []);
-    final betUnit  = (money['bet_unit'] as num?)?.toDouble() ?? 0.0;
-    final holes    = (summary['holes']   as List? ?? const [])
-        .cast<Map<String, dynamic>>();
-    final players  = (summary['players'] as List? ?? const [])
-        .cast<Map<String, dynamic>>();
-    final holesInPlay = (summary['holes_in_play'] as List? ?? const [])
-        .map((e) => e as int)
-        .toList();
-
-    // In a single-foursome round the "Group N" header is pointless.
-    // _ByGroupView injects this flag so we can hide it.
+    // **The board is `widgets/sixes_board.dart` now** — live match, holes
+    // won, strokes and ledger, per `handoff-sixes-leaderboard` (24 Oct
+    // 2026). What stays here is the group header, which belongs to the LIST
+    // of groups rather than to any one game's board.
+    //
+    // The old card's job was a line per match saying who beat whom. The
+    // format's point is that the partners rotate, and a flat team-vs-team
+    // line could not show it: the two teams are not the same two teams from
+    // one match to the next.
     final singleGroup = group['_single_group'] == true;
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -4373,115 +4366,13 @@ class _SixesGroupCard extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             const Divider(height: 12),
           ],
-
-          // Per-match rows: label + score on line 1, then the team
-          // composition as a subtitle so it's clear who beat whom for
-          // this particular 6-hole (or early-finish) match.  The score
-          // (e.g. "4 and 2") is the primary signal; the subtitle is the
-          // "who".
-          ...segments.map((s) {
-            final seg = s as Map<String, dynamic>;
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Result first, at the weight the hole range used to
-                  // carry. Walking down a fairway you are reading for who
-                  // won, not for which six holes this was — you already
-                  // know that. So the two swap places and swap fonts.
-                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Expanded(
-                      child: Builder(builder: (_) {
-                        if (_isUndrawn(seg, segments)) {
-                          return Text(
-                            'Teams TBD',
-                            style: theme.textTheme.bodyLarge?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                                fontStyle: FontStyle.italic,
-                                fontWeight: FontWeight.w500),
-                          );
-                        }
-                        final parts  = _segmentParts(seg);
-                        final base   = theme.textTheme.bodyLarge?.copyWith(
-                            // onSurface, not onSurfaceVariant: low-contrast
-                            // grey is the first thing to vanish in daylight,
-                            // and the losing side still has to be readable.
-                            color: theme.colorScheme.onSurface,
-                            fontWeight: FontWeight.w500);
-                        final leader = base?.copyWith(
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.w700);
-                        return RichText(
-                          text: TextSpan(style: base, children: [
-                            if (parts.leader != null) ...[
-                              TextSpan(text: parts.leader, style: leader),
-                              TextSpan(text: parts.joiner),
-                            ],
-                            TextSpan(text: parts.trailer),
-                          ]),
-                        );
-                      }),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(_segmentScore(seg),
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w700)),
-                  ]),
-                  const SizedBox(height: 1),
-                  Text(seg['label']?.toString() ?? '',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant)),
-                ],
-              ),
-            );
-          }),
-
-          // Per-player money totals: shown only when the bet unit is
-          // non-zero so a round played "for fun" stays uncluttered.
-          if (byPlayer.isNotEmpty && betUnit > 0) ...[
-            const Divider(height: 16),
-            Text(
-              'Money (unit \$${betUnit.formatBet()})',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            ...byPlayer.map((row) {
-              final r     = row as Map<String, dynamic>;
-              final name  = r['name']?.toString() ?? '';
-              final amt   = (r['amount'] as num?)?.toDouble() ?? 0.0;
-              final sign  = amt > 0 ? '+' : (amt < 0 ? '\u2212' : ''); // +, −, ""
-              final color = amt > 0
-                  ? Colors.green.shade700
-                  : amt < 0
-                      ? Colors.red.shade700
-                      : theme.colorScheme.onSurfaceVariant;
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 1),
-                child: Row(children: [
-                  Expanded(child: Text(name)),
-                  Text(
-                    '$sign\$${amt.abs().formatBet()}',
-                    style: TextStyle(color: color, fontWeight: FontWeight.w600),
-                  ),
-                ]),
-              );
-            }),
-          ],
-
-          // Per-hole gross scorecard — the same table the Skins card shows
-          // under its money box. Each hole highlights the winning best-net
-          // "score" (the low net that won the hole for its team) via winner_id.
-          if (holes.isNotEmpty) ...[
-            const Divider(height: 20),
-            HoleGridScorecard(holes: holes, participants: players, legend: null,
-                holesInPlay: holesInPlay),
-          ],
+          SixesBoard(group: group),
         ]),
       ),
     );
   }
 }
+
 
 // ---- Points 5-3-1 group card ----
 
