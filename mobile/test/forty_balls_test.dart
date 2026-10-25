@@ -433,6 +433,46 @@ void main() {
       expect(find.text('+14 vs pace'), findsOneWidget);
     });
 
+    testWidgets('a small lead is printed, not shouted', (tester) async {
+      // From a real screenshot: two holes in, three balls early, 31 of the
+      // slack untouched — and the bar went the alarmed brown. That is noise
+      // in the one colour the board keeps for trouble.
+      const eighteen = [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+      ];
+      // Even pace at thru 2 of 18 on 40 is 4.4, so 7 spent is +3.
+      await pumpBoard(tester,
+          [group(spent: 7, left: 33, slack: 31, thru: 2,
+                 holesInPlay: eighteen)]);
+      expect(find.text('+3 vs pace'), findsOneWidget,
+          reason: 'the figure still appears');
+
+      final fill = tester.widgetList<Container>(find.byType(Container))
+          .where((c) {
+            final d = c.decoration;
+            return d is BoxDecoration && d.color == Halved.caution;
+          });
+      expect(fill, isEmpty, reason: 'three balls early is not an alarm');
+    });
+
+    testWidgets('a material lead still is', (tester) async {
+      // A tenth of the budget — 4 on 40. Even pace at thru 2 is 4.4, so 9
+      // spent is +5.
+      const eighteen = [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+      ];
+      await pumpBoard(tester,
+          [group(spent: 9, left: 31, slack: 29, thru: 2,
+                 holesInPlay: eighteen)]);
+      expect(find.text('+5 vs pace'), findsOneWidget);
+      final fill = tester.widgetList<Container>(find.byType(Container))
+          .where((c) {
+            final d = c.decoration;
+            return d is BoxDecoration && d.color == Halved.caution;
+          });
+      expect(fill, isNotEmpty, reason: 'five balls early is worth the amber');
+    });
+
     testWidgets('the pace tick contrasts with whatever it stands on',
         (tester) async {
       // Reported: black on the amber fill was too subtle to find. Once the

@@ -512,7 +512,19 @@ class _BudgetLine extends StatelessWidget {
         : group.budget * thru / holes;
     final int? vsPace =
         evenPace == null ? null : (group.spent - evenPace).round();
-    final ahead = vsPace != null && vsPace > 0 && !group.dq;
+    // **Amber needs a MATERIAL lead, not any lead at all.** The first
+    // version coloured every positive deviation, so a group two holes in,
+    // three balls early, with 31 of its slack untouched, drew an alarmed
+    // brown bar — which is noise, and noise in the one colour the board
+    // uses for trouble.
+    //
+    // A tenth of the budget: 4 balls on 40, 3 on a threesome's 30. Below
+    // that the figure is still printed, just not shouted — early in a round
+    // a couple of balls either way is how the game is played. The real
+    // danger signal is the slack running out, and the line beside this
+    // already says that in its own words.
+    final materialLead = (group.budget / 10).ceil();
+    final ahead = vsPace != null && vsPace >= materialLead && !group.dq;
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       LayoutBuilder(builder: (context, c) {
