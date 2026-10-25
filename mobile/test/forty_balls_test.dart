@@ -61,112 +61,80 @@ Future<void> pumpPicker(WidgetTester tester, FortyBallsPickerState s,
 }
 
 void main() {
-  group('the picker', () {
-    testWidgets('one button per count, 0 to the group size', (tester) async {
+  group('the tray', () {
+    // The dark tray replaced the light picker card (`handoff-forty-balls 2`,
+    // revised 24 Oct). Same maths, same bounds, same callbacks — a re-skin,
+    // which is why the arithmetic assertions below are the old ones with new
+    // copy rather than new tests.
+
+    testWidgets('one count per ball, 0 to the group size', (tester) async {
       await pumpPicker(tester, picker());
-      for (final n in ['0', '1', '2', '3', '4']) {
-        expect(find.text(n), findsOneWidget);
+      // By KEY, not by text: the tally beside the rack renders a bare `0`
+      // too, so `find.text('0')` matches two things and says nothing about
+      // either.
+      for (var n = 0; n <= 4; n++) {
+        expect(find.byKey(ValueKey('fb-count-$n')), findsOneWidget,
+            reason: 'count $n');
       }
+      expect(find.byKey(const ValueKey('fb-count-5')), findsNothing);
     });
 
     testWidgets('a threesome tops out at 3', (tester) async {
       await pumpPicker(tester, picker(groupSize: 3, activeHere: 3, hi: 3,
-          left: 30, capacity: 54, slack: 24));
-      expect(find.text('3'), findsOneWidget);
-      expect(find.text('4'), findsNothing);
-    });
-
-    testWidgets('there is NO default, and the pager says what is missing',
-        (tester) async {
-      // The same pattern a missing score uses, because it is the same gap.
-      await pumpPicker(tester, picker());
-      expect(find.text('Pick how many balls count to move on'), findsOneWidget);
+          left: 30, capacity: 54, slack: 24,
+          nets: const {1: 3, 2: 4, 3: 5}));
+      expect(find.byKey(const ValueKey('fb-count-3')), findsOneWidget);
+      expect(find.byKey(const ValueKey('fb-count-4')), findsNothing);
     });
 
     testWidgets('the counts are DRAWN on a hole nobody has played yet',
         (tester) async {
-      // Reported from testing: hiding them behind `Waiting on the last score`
-      // read as an error on arriving at a fresh hole. The counts stand there
-      // dim, like the score boxes above them.
+      // Reported from testing: hiding them read as an error on arriving at a
+      // fresh hole. They stand there dim, like the score boxes above them.
       final taps = <int>[];
       await pumpPicker(tester, picker(scoresIn: false, nets: const {}),
           onPick: taps.add);
-      expect(find.text('Waiting on the last score'), findsNothing);
-      for (final n in ['0', '1', '2', '3', '4']) {
-        expect(find.text(n), findsOneWidget);
+      for (var n = 0; n <= 4; n++) {
+        expect(find.byKey(ValueKey('fb-count-$n')), findsOneWidget);
       }
-      expect(find.text('Pick once every score on the hole is in'),
-          findsOneWidget);
-      // Drawn, but dead — there is nothing yet to choose between.
-      await tester.tap(find.text('2'));
-      expect(taps, isEmpty);
+      await tester.tap(find.byKey(const ValueKey('fb-count-2')));
+      expect(taps, isEmpty, reason: 'drawn, but nothing to choose between');
     });
 
     testWidgets('it waits on a MISSING NET, not on the hole being posted',
         (tester) async {
-      // **The rule moved.** It used to wait for the server to have the scores,
-      // which meant it showed nothing while the group was entering. Now it
-      // waits for the nets — from wherever they are — so three of four is
-      // still not enough to choose on, but four unposted ones are.
       final taps = <int>[];
       await pumpPicker(tester,
           picker(scoresIn: false, nets: const {1: 3, 2: 4, 3: 5}),
           onPick: taps.add);
-      await tester.tap(find.text('2'));
+      await tester.tap(find.byKey(const ValueKey('fb-count-2')));
       expect(taps, isEmpty);
     });
 
     testWidgets('four UNPOSTED nets are enough to pick on', (tester) async {
       final taps = <int>[];
       await pumpPicker(tester, picker(scoresIn: false), onPick: taps.add);
-      for (final n in ['0', '1', '2', '3', '4']) {
-        expect(find.text(n), findsOneWidget);
-      }
-      await tester.tap(find.text('2'));
+      await tester.tap(find.byKey(const ValueKey('fb-count-2')));
       expect(taps, [2]);
     });
 
-    test('the pager and the picker share one readiness rule', () {
+    test('the pager and the tray share one readiness rule', () {
       // Written twice they would drift, and the pager would name a pick the
-      // card was not offering.
+      // tray was not offering.
       final s = picker(scoresIn: false, nets: const {});
       expect(fortyBallsReady(s, const {}), isFalse);
       expect(fortyBallsReady(s, const {1: 3, 2: 4, 3: 5}), isFalse);
       expect(fortyBallsReady(s, const {1: 3, 2: 4, 3: 5, 4: 6}), isTrue);
     });
 
-    testWidgets('the hole in front of you is one of the holes to play',
-        (tester) async {
-      // Reported from the 1st tee: `2.4 a hole, 17 to play` before a ball had
-      // been struck. The figure counted the holes AFTER this one while the
-      // slack beside it counted this one — two tiles, two moments.
-      await pumpPicker(tester, picker(holesAfter: 17, left: 40, capacity: 72));
-      expect(find.text('2.2 a hole'), findsOneWidget);
-      expect(find.text('0/40 chosen · 18 holes to play'), findsOneWidget);
-      expect(find.text('32 balls slack'), findsOneWidget); // 4 x 18 - 40
-    });
-
-    testWidgets('a pick steps BOTH figures forward', (tester) async {
-      // 40 - 2 = 38 balls over the 17 holes after this one, and the slack
-      // loses the two balls this hole did not take.
-      await pumpPicker(tester,
-          picker(holesAfter: 17, left: 40, capacity: 72, count: 2));
-      expect(find.text('2.2 a hole'), findsOneWidget);
-      expect(find.text('2/40 chosen · 17 holes to play'), findsOneWidget);
-      expect(find.text('30 balls slack'), findsOneWidget);   // 68 - 38
-    });
-
-    testWidgets('a threesome counts against 30, not 40', (tester) async {
-      // The denominator is the group's OWN budget — 10 a golfer by starting
-      // size — so it must not be the literal 40 the game is named after.
-      await pumpPicker(tester, picker(
-        groupSize: 3, activeHere: 3, hi: 3,
-        holesAfter: 17, left: 30, capacity: 54,
-        nets: const {1: 3, 2: 4, 3: 5},
-      ));
-      expect(find.text('0/30 chosen · 18 holes to play'), findsOneWidget);
-      expect(find.text('TO REACH 30'), findsOneWidget);  // _Figure upper-cases
-      expect(find.textContaining('/40'), findsNothing);
+    testWidgets('counts outside lo..hi cannot be tapped', (tester) async {
+      final taps = <int>[];
+      // No slack: 4 is the only legal count.
+      await pumpPicker(tester, picker(lo: 4, hi: 4, left: 12, holesAfter: 2,
+          capacity: 12, slack: 0), onPick: taps.add);
+      await tester.tap(find.byKey(const ValueKey('fb-count-1')));
+      await tester.tap(find.byKey(const ValueKey('fb-count-4')));
+      expect(taps, [4]);
     });
 
     testWidgets('a settled hole says so and offers nothing', (tester) async {
@@ -176,114 +144,154 @@ void main() {
       expect(find.textContaining('fixed at 2'), findsOneWidget);
     });
 
-    testWidgets('counts outside lo..hi cannot be tapped', (tester) async {
-      final taps = <int>[];
-      // No slack: 4 is the only legal count.
-      await pumpPicker(tester, picker(lo: 4, hi: 4, left: 12, holesAfter: 2,
-          capacity: 12, slack: 0), onPick: taps.add);
-      await tester.tap(find.text('1'));
-      await tester.tap(find.text('4'));
-      expect(taps, [4]);
-    });
-
-    testWidgets('a pick names the counted golfers and the hole result',
-        (tester) async {
-      // Best two of 3,4,5,6 on a par 4 is −1.
-      await pumpPicker(tester, picker(count: 2));
-      expect(find.textContaining('Alan'), findsOneWidget);
-      expect(find.textContaining('Aldo'), findsOneWidget);
-      // The house minus (U+2212), via the shared `toParLabel`.
-      expect(find.textContaining('\u22121'), findsOneWidget);
-    });
-
-    testWidgets('zero balls says the hole is level, not that it is −0',
-        (tester) async {
-      await pumpPicker(tester, picker(count: 0));
-      expect(find.textContaining('level'), findsOneWidget);
-    });
-
-    testWidgets('slack 0 is amber and says every ball counts', (tester) async {
-      await pumpPicker(tester, picker(lo: 4, hi: 4, left: 12, holesAfter: 2,
-          capacity: 12, slack: 0));
-      expect(find.text('every ball counts from here'), findsOneWidget);
-      expect(find.textContaining('No slack left'), findsOneWidget);
-    });
-
-    testWidgets('a spent budget reads – on both figures', (tester) async {
-      await pumpPicker(tester, picker(lo: 0, hi: 0, left: 0, spent: 40,
-          capacity: 28, slack: 0));
-      // Only the PACE box goes to a dash — the Status box still has a net
-      // to report, which is the point of it being a status.
-      expect(find.text('–'), findsOneWidget);
-      expect(find.textContaining('budget spent'), findsWidgets);
-      expect(find.textContaining('Budget spent'), findsOneWidget);
-    });
-
-    testWidgets('a group that is OUT says so and offers no buttons',
+    testWidgets('a group that is OUT says so and offers no counts',
         (tester) async {
       await pumpPicker(tester,
           picker(dq: true, left: 20, capacity: 16, canPick: false));
       expect(find.text('Out of 40 Balls'), findsOneWidget);
       expect(find.textContaining('championship'), findsOneWidget);
-      expect(find.text('0'), findsNothing);
+      expect(find.byKey(const ValueKey('fb-count-0')), findsNothing);
     });
   });
 
-  group('the two boxes', () {
-    // Paul, 16 Oct 2026. The boxes answer two different questions and only
-    // one of them was being asked: the left one is about PACE, the right one
-    // about where the group stands.
+  group('the ball rack', () {
+    // The rack is the only place the budget is a QUANTITY rather than a
+    // number — `19 of 40` is arithmetic, two rows of dots is a glance.
 
-    testWidgets('the pace box says what is committed AND what is left',
+    testWidgets('it counts against the budget, and starts empty',
         (tester) async {
-      // "8/40 chosen · 15 holes to play". The hole count alone did not say how
-      // much of the budget was already gone, which is the other half of
-      // whether the average above it is comfortable.
-      await pumpPicker(tester, picker(
-          groupSize: 4, left: 32, holesAfter: 14, capacity: 60, count: null));
-      expect(find.text('TO REACH 40'), findsOneWidget);
-      // 14 after this one, plus the one in front of you.
-      expect(find.text('8/40 chosen · 15 holes to play'), findsOneWidget);
+      await pumpPicker(tester, picker(holesAfter: 17, left: 40, capacity: 72));
+      expect(find.text('0 of 40 counted'), findsOneWidget);
+      expect(find.text('40'), findsOneWidget);  // ...left
     });
 
-    testWidgets('a pending pick moves BOTH halves of it', (tester) async {
-      // The figures take their position from the pick in hand, which is the
-      // reason the average is worked out on the client at all.
-      await pumpPicker(tester, picker(
-          groupSize: 4, left: 32, holesAfter: 15, capacity: 60, count: 3));
-      // The pick is spent, so this hole is no longer one to play.
-      expect(find.text('11/40 chosen · 15 holes to play'), findsOneWidget);
+    testWidgets('a pick fills it', (tester) async {
+      await pumpPicker(tester,
+          picker(holesAfter: 17, left: 40, capacity: 72, count: 2));
+      expect(find.text('2 of 40 counted'), findsOneWidget);
+      expect(find.text('38'), findsOneWidget);  // left
     });
 
-    testWidgets('the status box leads with the NET, slack underneath',
-        (tester) async {
+    testWidgets('a threesome racks 30, not 40', (tester) async {
+      // The budget is 10 a golfer by STARTING size, so it must not be the
+      // literal 40 the game is named after.
       await pumpPicker(tester, picker(
-          groupSize: 4, left: 12, holesAfter: 9, capacity: 40,
-          slack: 28, net: -3, count: null));
-      expect(find.text('STATUS'), findsOneWidget);
-      expect(find.text('Net -3'), findsOneWidget);
-      expect(find.text('28 balls slack'), findsOneWidget);
-      // ...and the old headline is gone.
-      expect(find.text('SLACK'), findsNothing);
-    });
-
-    testWidgets('level is E, and a positive net carries its sign',
-        (tester) async {
-      // Level is a word everywhere else in the app and should be one here.
-      await pumpPicker(tester, picker(net: 0));
-      expect(find.text('Net E'), findsOneWidget);
-      await pumpPicker(tester, picker(net: 2));
-      expect(find.text('Net +2'), findsOneWidget);
-    });
-
-    testWidgets('no slack still says so, and still alerts', (tester) async {
-      await pumpPicker(tester, picker(
-          groupSize: 4, left: 12, holesAfter: 3, capacity: 12,
-          slack: 0, net: 1, count: null));
-      expect(find.text('every ball counts from here'), findsOneWidget);
-      expect(find.text('Net +1'), findsOneWidget);
+        groupSize: 3, activeHere: 3, hi: 3,
+        holesAfter: 17, left: 30, capacity: 54,
+        nets: const {1: 3, 2: 4, 3: 5},
+      ));
+      expect(find.text('0 of 30 counted'), findsOneWidget);
+      expect(find.textContaining('of 40'), findsNothing);
     });
   });
+
+  group('the two figures', () {
+    // Pace and slack. **The NET is deliberately not here** — the packet moves
+    // it to the hole header, which is a change to score entry rather than to
+    // the tray. Until that lands the figure has no home, which is why the
+    // wiring commit carries it.
+
+    testWidgets('the hole in front of you is one of the holes to play',
+        (tester) async {
+      // Reported from the 1st tee: `2.4 a hole` before a ball had been
+      // struck. The figure counted the holes AFTER this one while the slack
+      // beside it counted this one — two tiles, two moments.
+      await pumpPicker(tester, picker(holesAfter: 17, left: 40, capacity: 72));
+      expect(find.text('2.2'), findsOneWidget);
+      expect(find.text('a hole to reach 40'), findsOneWidget);
+      expect(find.text('32'), findsOneWidget);          // 4 x 18 - 40
+      expect(find.text('slack · balls you can skip'), findsOneWidget);
+    });
+
+    testWidgets('a pick steps BOTH figures forward', (tester) async {
+      // 38 balls over the 17 holes after this one, and the slack loses the
+      // two balls this hole did not take.
+      await pumpPicker(tester,
+          picker(holesAfter: 17, left: 40, capacity: 72, count: 2));
+      expect(find.text('2.2'), findsOneWidget);
+      expect(find.text('30'), findsOneWidget);          // 68 - 38
+    });
+
+    testWidgets('the pace figure names the group OWN budget', (tester) async {
+      await pumpPicker(tester, picker(
+        groupSize: 3, activeHere: 3, hi: 3,
+        holesAfter: 17, left: 30, capacity: 54,
+        nets: const {1: 3, 2: 4, 3: 5},
+      ));
+      expect(find.text('a hole to reach 30'), findsOneWidget);
+    });
+
+    testWidgets('a spent budget reads a dash for pace', (tester) async {
+      await pumpPicker(tester, picker(lo: 0, hi: 0, left: 0, spent: 40,
+          capacity: 28, slack: 0));
+      expect(find.text('–'), findsOneWidget);
+      expect(find.textContaining('Budget spent'), findsOneWidget);
+    });
+
+    testWidgets('no slack says so, and the lock note explains', (tester) async {
+      await pumpPicker(tester, picker(lo: 4, hi: 4, left: 12, holesAfter: 2,
+          capacity: 12, slack: 0));
+      expect(find.textContaining('No slack left'), findsOneWidget);
+    });
+  });
+
+  group('the tray header and actions', () {
+    testWidgets('the header states what let the tray rise', (tester) async {
+      await pumpPicker(tester, picker());
+      expect(find.text('All 4 scores in'), findsOneWidget);
+    });
+
+    testWidgets('Edit scores appears only when there is a way back',
+        (tester) async {
+      await pumpPicker(tester, picker());
+      expect(find.text('Edit scores'), findsNothing);
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: SingleChildScrollView(
+          child: FortyBallsPicker(
+            state: picker(), names: _names, onPick: (_) {},
+            onEditScores: () {},
+          ),
+        )),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Edit scores'), findsOneWidget);
+    });
+
+    testWidgets('the CTA says what is missing until a count is picked',
+        (tester) async {
+      // `Next hole` on a hole with no count would be a button that refuses.
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: SingleChildScrollView(
+          child: FortyBallsPicker(
+            state: picker(), names: _names, onPick: (_) {}, onNext: () {},
+          ),
+        )),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Pick a count'), findsOneWidget);
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: SingleChildScrollView(
+          child: FortyBallsPicker(
+            state: picker(count: 2), names: _names, onPick: (_) {},
+            onNext: () {},
+          ),
+        )),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Next hole'), findsOneWidget);
+    });
+
+    testWidgets('no navigation callbacks means no action row', (tester) async {
+      // The tray has to be usable inside a screen that already has its own
+      // pager, rather than growing a second one.
+      await pumpPicker(tester, picker(count: 2));
+      expect(find.text('Next hole'), findsNothing);
+      expect(find.text('Pick a count'), findsNothing);
+    });
+  });
+
 
   group('the board', () {
     Map<String, dynamic> group({

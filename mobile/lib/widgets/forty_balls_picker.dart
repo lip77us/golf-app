@@ -21,7 +21,6 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import 'error_view.dart';
 import '../theme/halved_brand.dart';
-import '../utils/stroke_play_standing.dart';
 
 /// Every golfer on the hole has a net — locally or on the server.
 ///
@@ -50,6 +49,16 @@ class FortyBallsPicker extends StatelessWidget {
   /// not been posted. Overrides the server's.
   final int? pendingCount;
 
+  /// Back to the scores for this hole. Null hides the link — the tray can be
+  /// drawn without owning the way back when the screen keeps its own.
+  final VoidCallback? onEditScores;
+
+  /// Hole navigation, when the tray owns it. Both null leaves the action row
+  /// off entirely, so the tray stays usable inside a screen that already has
+  /// its own pager rather than growing a second one.
+  final VoidCallback? onBack;
+  final VoidCallback? onNext;
+
   const FortyBallsPicker({
     super.key,
     required this.state,
@@ -58,6 +67,9 @@ class FortyBallsPicker extends StatelessWidget {
     this.busy = false,
     this.localNets = const {},
     this.pendingCount,
+    this.onEditScores,
+    this.onBack,
+    this.onNext,
   });
 
   Map<int, int> get _nets =>
@@ -131,100 +143,39 @@ class FortyBallsPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     if (state.dq) {
-      return _shell(context, child: _Note(
+      return _tray(child: const _TrayNote(
         icon: Icons.block,
-        colour: theme.colorScheme.error,
         title: 'Out of 40 Balls',
-        body: 'This group owes ${state.left} balls with room for '
-              '${state.capacity}. The budget cannot come out. Scores still '
-              'count for the championship.',
+        body: 'The budget cannot come out. Scores still count for the '
+              'championship.',
       ));
     }
-
     if (state.locked) {
-      return _shell(context, child: _Note(
+      return _tray(child: _TrayNote(
         icon: Icons.lock_outline,
-        colour: theme.colorScheme.onSurfaceVariant,
         title: 'Settled',
-        body: 'The group has moved on, so this hole\'s count is fixed'
+        body: "The group has moved on, so this hole's count is fixed"
               '${state.count == null ? '' : ' at ${state.count}'}.',
       ));
     }
 
-    return _shell(
-      context,
-      header: Row(children: [
-        Text('40 Balls · how many count?',
-            style: theme.textTheme.titleSmall
-                ?.copyWith(fontWeight: FontWeight.bold)),
-        const Spacer(),
-        Text('best nets count',
-            style: theme.textTheme.labelSmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-      ]),
-      child: Column(children: [
-        Row(children: [
-          for (var n = 0; n <= state.groupSize; n++) ...[
-            if (n > 0) const SizedBox(width: 8),
-            Expanded(child: _CountButton(
-              n        : n,
-              selected : _count == n,
-              // Outside `lo..hi` the budget would not come out, so the button
-              // is dead rather than a pick that gets refused.
-              // Dim until every net is in — the counts are there from the
-              // moment the hole opens, but there is nothing to choose
-              // between until the group can see what it is choosing.
-              enabled  : !busy && _ready && state.canPick &&
-                         n >= state.lo && n <= state.hi,
-              onTap    : () => onPick(n),
-            )),
-          ],
-        ]),
+    return _tray(child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _header(),
+        const SizedBox(height: 14),
+        _rack(),
+        const SizedBox(height: 16),
+        _countRow(),
         const SizedBox(height: 10),
-        _resultLine(context),
-        const SizedBox(height: 12),
-        Row(children: [
-          Expanded(child: _Figure(
-            label: 'To reach ${state.budget}',
-            value: _average == null
-                ? '–'
-                : '${_average!.toStringAsFixed(1)} a hole',
-            // **What has been committed, and how long is left to commit
-            // the rest.** The hole count alone did not say how much of the
-            // budget was already gone, which is the other half of whether
-            // the average above is comfortable.
-            note : _average == null
-                ? 'budget spent'
-                : '$_chosen/${state.budget} chosen · $_holesLeft holes to play',
-            // Grey BEFORE a pick — they show the position going into this
-            // hole, which is not yet the position coming out of it.
-            muted: _count == null,
-          )),
-          const SizedBox(width: 10),
-          Expanded(child: _Figure(
-            // **Where the group STANDS**, which the box beside it does not
-            // answer: that one is about pace, this one about the score. The
-            // slack moves to the line underneath, because a group reads the
-            // number it is being ranked on first.
-            label: 'Status',
-            value: 'Net ${_netLabel(state.net)}',
-            note : _ballsLeft == 0
-                ? 'budget spent'
-                : (_slack == 0
-                    ? 'every ball counts from here'
-                    : '$_slack balls slack'),
-            muted: _count == null,
-            // Amber at zero: the group has no choices left, which is a
-            // different thing from having made them.
-            alert: _slack == 0 && _ballsLeft > 0,
-          )),
-        ]),
+        _hint(),
+        const SizedBox(height: 14),
+        _figures(),
         if (state.lo == state.hi) ...[
-          const SizedBox(height: 10),
-          _LockNote(
+          const SizedBox(height: 12),
+          _TrayLockNote(
             text: state.left == 0
                 ? 'Budget spent. Every remaining hole counts 0, and the app '
                   'has filled them in.'
@@ -232,221 +183,217 @@ class FortyBallsPicker extends StatelessWidget {
                   '${state.hi}, and the app has filled them in.',
           ),
         ],
-      ]),
-    );
+        if (onEditScores != null || onNext != null) ...[
+          const SizedBox(height: 16),
+          _actions(),
+        ],
+      ],
+    ));
   }
 
-  Widget _resultLine(BuildContext context) {
-    final theme = Theme.of(context);
-    final n = _count;
-    if (!_ready) {
-      // Stated as the ordinary order of things, not as a fault: the scores
-      // come first and the pick follows them.
-      return Align(
-        alignment: Alignment.centerLeft,
-        child: Text('Pick once every score on the hole is in',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-      );
-    }
-    if (n == null) {
-      return Align(
-        alignment: Alignment.centerLeft,
-        child: Text('Pick how many balls count to move on',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-      );
-    }
-    if (n == 0) {
-      return Align(
-        alignment: Alignment.centerLeft,
-        child: Text('No balls counted — the hole is level.',
-            style: theme.textTheme.bodySmall),
-      );
-    }
-    final r = result;
-    final counted = countedAt(n)
-        .map((id) => names[id] ?? '')
-        .where((s) => s.isNotEmpty)
-        .join(' · ');
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text.rich(TextSpan(children: [
-        TextSpan(text: '$counted  '),
-        TextSpan(
-          text: r == null ? '' : toParLabel(r),
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: r == null || r == 0
-                ? theme.colorScheme.onSurface
-                : (r < 0 ? Halved.pine : Halved.caution),
+  /// `All 4 scores in` + `Edit scores`.
+  ///
+  /// The tray only rises once every score is in, so the header states the
+  /// thing that let it rise — and offers the way back, because the commonest
+  /// reason to look at a finished hole is that one of the numbers is wrong.
+  Widget _header() => Row(children: [
+        Expanded(
+          child: Text(
+            state.scoresIn
+                ? 'All ${state.activeHere} scores in'
+                : 'Scores still coming in',
+            style: const TextStyle(
+                color: Halved.cream, fontWeight: FontWeight.w700),
           ),
         ),
-      ]), style: theme.textTheme.bodySmall),
-    );
-  }
-
-  Widget _shell(BuildContext context, {Widget? header, required Widget child}) {
-    final theme = Theme.of(context);
-    return Container(
-      margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        if (header != null) ...[header, const SizedBox(height: 10)],
-        child,
-      ]),
-    );
-  }
-}
-
-class _CountButton extends StatelessWidget {
-  final int n;
-  final bool selected;
-  final bool enabled;
-  final VoidCallback onTap;
-  const _CountButton({
-    required this.n, required this.selected,
-    required this.enabled, required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: enabled ? onTap : null,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        height: 46,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected
-              ? Halved.pine
-              : (enabled ? null : theme.colorScheme.surfaceContainerHighest),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: selected ? Halved.pine : theme.colorScheme.outlineVariant,
-            width: selected ? 1.6 : 1,
+        if (onEditScores != null)
+          GestureDetector(
+            onTap: onEditScores,
+            child: const Text('Edit scores',
+                style: TextStyle(
+                    color: Halved.brightMint, fontWeight: FontWeight.w700)),
           ),
-        ),
-        child: Text('$n',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: selected
-                  ? Colors.white
-                  : (enabled
-                      ? theme.colorScheme.onSurface
-                      : theme.colorScheme.onSurfaceVariant.withOpacity(0.45)),
-            )),
-      ),
-    );
-  }
-}
+      ]);
 
-class _Figure extends StatelessWidget {
-  final String label;
-  final String value;
-  final String note;
-  final bool muted;
-  final bool alert;
-  const _Figure({
-    required this.label, required this.value, required this.note,
-    this.muted = false, this.alert = false,
-  });
+  /// One dot per ball in the budget, filled as they are counted.
+  ///
+  /// **The rack is the only place the budget is a QUANTITY rather than a
+  /// number.** `19 of 40` is arithmetic a group has to do something with;
+  /// two rows of dots with a fifth of the second row left is a glance. The
+  /// rows split the budget in half, so a threesome draws 15 and 15 rather
+  /// than a ragged 20 and 10.
+  Widget _rack() {
+    final chosen = _chosen.clamp(0, state.budget);
+    final perRow = (state.budget / 2).ceil();
+    Widget dot(int i) => Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: i < chosen ? Halved.cream : Colors.transparent,
+            border: Border.all(
+                color: i < chosen ? Halved.cream : Halved.muted, width: 1.2),
+          ),
+        );
+    Widget row(int from, int to) => Padding(
+          padding: const EdgeInsets.only(bottom: 5),
+          child: Row(children: [
+            for (var i = from; i < to; i++) ...[
+              if (i > from) const Spacer(),
+              dot(i),
+            ],
+          ]),
+        );
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final fg = alert
-        ? Halved.caution
-        : (muted ? theme.colorScheme.onSurfaceVariant
-                 : theme.colorScheme.onSurface);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: alert
-            ? Halved.cautionGround
-            : theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label.toUpperCase(),
-            style: theme.textTheme.labelSmall?.copyWith(
-                fontSize: 9, letterSpacing: 0.5,
-                color: theme.colorScheme.onSurfaceVariant)),
-        const SizedBox(height: 2),
-        Text(value, style: theme.textTheme.titleMedium
-            ?.copyWith(fontWeight: FontWeight.bold, color: fg)),
-        Text(note,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelSmall?.copyWith(
-                color: alert ? Halved.caution
-                             : theme.colorScheme.onSurfaceVariant)),
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Text('BALL BUDGET',
+            style: TextStyle(
+                color: Halved.muted, fontSize: 11,
+                fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+        const Spacer(),
+        Text('$chosen of ${state.budget} counted',
+            style: const TextStyle(
+                color: Halved.cream, fontWeight: FontWeight.w700)),
       ]),
-    );
-  }
-}
-
-class _LockNote extends StatelessWidget {
-  final String text;
-  const _LockNote({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Icon(Icons.lock_outline, size: 14,
-          color: theme.colorScheme.onSurfaceVariant),
-      const SizedBox(width: 8),
-      Expanded(child: Text(text,
-          style: theme.textTheme.labelSmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant))),
+      const SizedBox(height: 10),
+      row(0, perRow),
+      row(perRow, state.budget),
+      const SizedBox(height: 4),
+      Row(children: [
+        _tally('$chosen', 'counted'),
+        const Spacer(),
+        _tally('${_ballsLeft.clamp(0, state.budget)}', 'left'),
+      ]),
     ]);
   }
+
+  Widget _tally(String value, String label) => Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Text(value,
+              style: const TextStyle(
+                  color: Halved.cream, fontSize: 17,
+                  fontWeight: FontWeight.w700)),
+          const SizedBox(width: 5),
+          Text(label,
+              style: const TextStyle(color: Halved.muted, fontSize: 12)),
+        ],
+      );
+
+  Widget _countRow() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Text('HOW MANY COUNT ON ${state.hole}?',
+                style: const TextStyle(
+                    color: Halved.muted, fontSize: 11,
+                    fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+            const Spacer(),
+            const Text('BEST NETS',
+                style: TextStyle(
+                    color: Halved.muted, fontSize: 11,
+                    fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+          ]),
+          const SizedBox(height: 10),
+          Row(children: [
+            for (var n = 0; n <= state.groupSize; n++) ...[
+              if (n > 0) const SizedBox(width: 6),
+              Expanded(child: _TrayCount(
+                // Keyed so a test can reach one count without matching the
+                // bare numerals the rack's tally also renders.
+                key: ValueKey('fb-count-$n'),
+                n: n,
+                selected: _count == n,
+                // Outside `lo..hi` the budget would not come out, so the
+                // button is dead rather than a pick that gets refused.
+                enabled: !busy && _ready && state.canPick &&
+                         n >= state.lo && n <= state.hi,
+                onTap: () => onPick(n),
+              )),
+            ],
+          ]),
+        ],
+      );
+
+  Widget _hint() => Text(
+        _count == null
+            ? 'Tap a count. The best nets light up.'
+            : (result == null
+                ? 'Tap a count. The best nets light up.'
+                : 'Hole plays ${_netLabel(result!)}.'),
+        style: const TextStyle(color: Halved.muted, fontSize: 12),
+      );
+
+  /// The two figures.
+  ///
+  /// **Pace and slack, and the NET is deliberately not here** — the packet
+  /// moves it to the hole header, where it reads once for the whole screen
+  /// instead of competing with the pace figure beside it. That was a real
+  /// decision of Paul's (16 Oct: Status replaced Slack precisely so the
+  /// number a group is ranked on came first), so the header badge is part of
+  /// this change rather than a separate nicety: drop it from here without
+  /// adding it there and the figure is simply gone.
+  Widget _figures() => Row(children: [
+        Expanded(child: _TrayFigure(
+          value: _average == null ? '–' : _average!.toStringAsFixed(1),
+          label: 'a hole to reach ${state.budget}',
+          muted: _count == null,
+        )),
+        const SizedBox(width: 10),
+        Expanded(child: _TrayFigure(
+          value: '$_slack',
+          label: 'slack · balls you can skip',
+          muted: _count == null,
+          // Amber at zero: the group has no choices left, which is a
+          // different thing from having made them.
+          alert: _slack == 0 && _ballsLeft > 0,
+        )),
+      ]);
+
+  Widget _actions() => Row(children: [
+        if (onBack != null) ...[
+          GestureDetector(
+            onTap: onBack,
+            child: Container(
+              width: 46, height: 46,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Halved.muted, width: 1.4),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(Icons.chevron_left,
+                  color: Halved.cream, size: 22),
+            ),
+          ),
+          const SizedBox(width: 10),
+        ],
+        Expanded(child: _TrayCta(
+          // **The label is the gate.** `Next hole` on a hole with no count
+          // would be a button that refuses, so until a count is picked it
+          // says what is missing instead.
+          label: _count == null ? 'Pick a count' : 'Next hole',
+          enabled: _count != null && onNext != null,
+          onTap: onNext,
+        )),
+      ]);
+
+  /// The dark sheet itself.
+  Widget _tray({required Widget child}) => Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          color: Halved.deepPine,
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(Halved.rCard)),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+        child: child,
+      );
+
+
 }
 
-class _Note extends StatelessWidget {
-  final IconData icon;
-  final Color colour;
-  final String title;
-  final String body;
-  const _Note({required this.icon, required this.colour,
-               required this.title, required this.body});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Icon(icon, size: 18, color: colour),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: theme.textTheme.titleSmall
-              ?.copyWith(fontWeight: FontWeight.bold, color: colour)),
-          const SizedBox(height: 2),
-          Text(body, style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        ]),
-      ),
-    ]);
-  }
-}
-
-// ---------------------------------------------------------------------------
-
-/// The picker, wired: it fetches its own hole state and posts the pick.
-///
-/// **Self-loading rather than provider-fed.** Its data is one hole of one
-/// foursome and it is the only consumer; threading a summary through
-/// `RoundProvider` and four load sites would be more moving parts for a card
-/// that has to refetch after every score anyway. [refreshToken] is what makes
-/// that work — the score-entry screen bumps it when a hole is saved or the
-/// hole changes, and the card reloads.
 class FortyBallsPickerCard extends StatefulWidget {
   final int foursomeId;
   final int hole;
@@ -558,4 +505,179 @@ class _FortyBallsPickerCardState extends State<FortyBallsPickerCard> {
       pendingCount: widget.pendingCount,
     );
   }
+}
+
+
+// ---------------------------------------------------------------------------
+// The tray's own controls. Dark-ground versions of the light card's, kept
+// private here rather than generalised: nothing else in the app draws on
+// deep pine at this size, and a shared "dark chip" with one caller is a
+// guess about the second one.
+// ---------------------------------------------------------------------------
+
+class _TrayCount extends StatelessWidget {
+  final int n;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+  const _TrayCount({
+    super.key,
+    required this.n, required this.selected,
+    required this.enabled, required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Color fill = selected
+        ? Halved.brightMint
+        : (enabled ? Halved.pine.withValues(alpha: 0.35) : Colors.transparent);
+    final Color text = selected
+        ? Halved.deepPine
+        : (enabled ? Halved.cream : Halved.muted);
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      selected: selected,
+      label: '$n counting',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(Halved.rChip),
+          onTap: enabled ? onTap : null,
+          child: Container(
+            height: 52,
+            decoration: BoxDecoration(
+              color: fill,
+              borderRadius: BorderRadius.circular(Halved.rChip),
+              border: selected
+                  ? null
+                  : Border.all(
+                      color: enabled ? Halved.muted : Halved.muted
+                          .withValues(alpha: 0.4),
+                      width: 1.2),
+            ),
+            alignment: Alignment.center,
+            child: Text('$n',
+                style: TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.w700, color: text)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrayFigure extends StatelessWidget {
+  final String value;
+  final String label;
+  final bool muted;
+  final bool alert;
+  const _TrayFigure({
+    required this.value, required this.label,
+    this.muted = false, this.alert = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colour = alert
+        ? Halved.role
+        : (muted ? Halved.muted : Halved.cream);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: Halved.pine.withValues(alpha: 0.28),
+        borderRadius: BorderRadius.circular(Halved.rChip),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(value,
+              style: TextStyle(
+                  fontSize: 22, fontWeight: FontWeight.w700, color: colour)),
+          const SizedBox(height: 2),
+          Text(label,
+              style: const TextStyle(color: Halved.muted, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrayCta extends StatelessWidget {
+  final String label;
+  final bool enabled;
+  final VoidCallback? onTap;
+  const _TrayCta({required this.label, required this.enabled, this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: enabled
+            ? Halved.brightMint
+            : Halved.pine.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(Halved.rCta),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(Halved.rCta),
+          onTap: enabled ? onTap : null,
+          child: Container(
+            height: 46,
+            alignment: Alignment.center,
+            child: Text(label,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: enabled ? Halved.deepPine : Halved.muted,
+                )),
+          ),
+        ),
+      );
+}
+
+class _TrayNote extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String body;
+  const _TrayNote({
+    required this.icon, required this.title, required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: Halved.muted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                        color: Halved.cream, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 3),
+                Text(body,
+                    style: const TextStyle(
+                        color: Halved.muted, fontSize: 12, height: 1.35)),
+              ],
+            ),
+          ),
+        ],
+      );
+}
+
+class _TrayLockNote extends StatelessWidget {
+  final String text;
+  const _TrayLockNote({required this.text});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(
+          color: Halved.role.withValues(alpha: 0.16),
+          borderRadius: BorderRadius.circular(Halved.rChip),
+        ),
+        child: Text(text,
+            style: const TextStyle(
+                color: Halved.role, fontSize: 12, height: 1.35)),
+      );
 }
