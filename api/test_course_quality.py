@@ -13,7 +13,9 @@ from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.core import mail
+from django.core.cache import cache
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 
@@ -220,3 +222,157 @@ class CourseImportQualityGateTests(TestCase):
         )
         self.assertEqual(resp.status_code, 201, resp.data)
         self.assertTrue(CatalogCourse.objects.filter(golf_api_id='99').exists())
+
+
+# ---------------------------------------------------------------------------
+# A refusal is announced — it writes nothing, so without this it is invisible
+# ---------------------------------------------------------------------------
+
+@override_settings(COURSE_IMPORT_ALERT_EMAIL='ops@halved.golf')
+class RefusalIsAnnouncedTests(TestCase):
+    """The gap a golf club had to email us about.
+
+    A member could not add their own course, and because the gate refuses
+    before any DB write there was no row naming who had tried or which course
+    it was — and the view's own log line sits below the gate, so it only ever
+    described imports that succeeded.
+    """
+
+    def setUp(self):
+        cache.clear()          # the throttle is a real cache key
+        mail.outbox = []
+        # Burn an Account id so account_id != user_id.  With the two equal a
+        # log line printing the account in both slots would pass the assertions
+        # below while naming the wrong thing.
+        Account.objects.create(name='Filler')
+        Account.objects.create(name='Filler 2')
+        self.account = Account.objects.create(name='Acct A')
+        self.user = User.objects.create_user(
+            username='+16265551234', account=self.account,
+            phone='+16265551234',
+        )
+        assert self.account.id != self.user.id, 'fixture must not coincide'
+        self.user.is_account_admin = True
+        self.user.save(update_fields=['is_account_admin'])
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def _no_tees(self):
+        return {
+            'id': '3vzs9mg0', 'club_name': 'Annandale Golf Club',
+            'course_name': 'Annandale Golf Club', 'city': 'Pasadena',
+            'state': 'CA', 'country': 'US',
+            'latitude': Decimal('34.1'), 'longitude': Decimal('-118.1'),
+            'tees': [],
+        }
+
+    def _import(self):
+        return self.client.post(
+            reverse('api-course-import'), {'course_id': '3vzs9mg0'},
+            format='json',
+        )
+
+    # -- the log -----------------------------------------------------------
+
+    @patch('services.golf_api_client.fetch_course')
+    def test_the_refusal_logs_the_user_and_the_course(self, mock_fetch):
+        mock_fetch.return_value = self._no_tees()
+        with self.assertLogs('services.course_import_report', 'WARNING') as cm:
+            resp = self._import()
+        self.assertEqual(resp.status_code, 422, resp.data)
+        line = '\n'.join(cm.output)
+        self.assertIn('REFUSED', line)
+        self.assertIn(f'user={self.user.id}', line)
+        self.assertIn(f'account={self.account.id}', line)
+        self.assertIn('Annandale Golf Club', line)
+        self.assertIn('Course has no tees.', line)
+
+    @patch('services.golf_api_client.fetch_course')
+    def test_the_log_does_not_carry_the_phone_number(self, mock_fetch):
+        """A phone is this app's identity key; an id is enough to find the row.
+
+        The log is a retained platform log read by anyone with Railway access.
+        The EMAIL carries the phone, because that is a direct message about one
+        person to help rather than a record that sits around.
+        """
+        mock_fetch.return_value = self._no_tees()
+        with self.assertLogs('services.course_import_report', 'WARNING') as cm:
+            self._import()
+        self.assertNotIn('6265551234', '\n'.join(cm.output))
+
+    # -- the email ---------------------------------------------------------
+
+    @patch('services.golf_api_client.fetch_course')
+    def test_the_operator_is_emailed_with_who_and_why(self, mock_fetch):
+        mock_fetch.return_value = self._no_tees()
+        self._import()
+        self.assertEqual(len(mail.outbox), 1)
+        msg = mail.outbox[0]
+        self.assertEqual(msg.to, ['ops@halved.golf'])
+        self.assertIn('Annandale Golf Club', msg.subject)
+        self.assertIn('Course has no tees.', msg.body)
+        self.assertIn('+16265551234', msg.body)        # the phone IS here
+        self.assertIn(str(self.user.id), msg.body)
+        self.assertIn('3vzs9mg0', msg.body)
+
+    @patch('services.golf_api_client.fetch_course')
+    def test_one_email_per_course_per_day(self, mock_fetch):
+        """Three taps from one frustrated member is not three emails."""
+        mock_fetch.return_value = self._no_tees()
+        with self.assertLogs('services.course_import_report', 'WARNING') as cm:
+            self._import()
+            self._import()
+            self._import()
+        self.assertEqual(len(mail.outbox), 1)
+        # ...but every attempt is still logged, which is what answers "who".
+        self.assertEqual(sum('REFUSED' in o for o in cm.output), 3)
+
+    @patch('services.golf_api_client.fetch_course')
+    def test_a_different_course_is_its_own_report(self, mock_fetch):
+        mock_fetch.return_value = self._no_tees()
+        self._import()
+        other = self._no_tees()
+        other['id'] = 'zzzz1111'
+        other['club_name'] = other['course_name'] = 'Somewhere Else GC'
+        mock_fetch.return_value = other
+        self.client.post(reverse('api-course-import'),
+                         {'course_id': 'zzzz1111'}, format='json')
+        self.assertEqual(len(mail.outbox), 2)
+
+    @override_settings(COURSE_IMPORT_ALERT_EMAIL='')
+    @patch('services.golf_api_client.fetch_course')
+    def test_an_empty_address_turns_the_email_off_but_not_the_log(self, mock_fetch):
+        mock_fetch.return_value = self._no_tees()
+        with self.assertLogs('services.course_import_report', 'WARNING'):
+            resp = self._import()
+        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(mail.outbox, [])
+
+    # -- it must never cost the golfer his error message -------------------
+
+    @patch('services.course_import_report.send_mail',
+           side_effect=RuntimeError('smtp down'))
+    @patch('services.golf_api_client.fetch_course')
+    def test_a_mail_outage_still_returns_the_422(self, mock_fetch, _mail):
+        mock_fetch.return_value = self._no_tees()
+        resp = self._import()
+        self.assertEqual(resp.status_code, 422, resp.data)
+        self.assertIn('no tees', resp.data['detail'])
+        # And still nothing written.
+        self.assertFalse(CatalogCourse.objects.exists())
+        self.assertFalse(Course.objects.exists())
+
+    @patch('services.golf_api_client.fetch_course')
+    def test_a_good_import_announces_nothing(self, mock_fetch):
+        mock_fetch.return_value = {
+            'id': 'okok0001', 'club_name': 'Fine GC', 'course_name': 'Fine GC',
+            'city': 'X', 'state': 'CA', 'country': 'US',
+            'latitude': Decimal('1.0'), 'longitude': Decimal('2.0'),
+            'tees': [{'name': 'Blue', 'slope': 130,
+                      'course_rating': Decimal('72.1'), 'par': 72, 'sex': 'M',
+                      'holes': _good_holes()}],
+        }
+        resp = self.client.post(reverse('api-course-import'),
+                                {'course_id': 'okok0001'}, format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(mail.outbox, [])

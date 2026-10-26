@@ -10804,6 +10804,15 @@ class CourseImportView(APIView):
         try:
             assert_course_quality(api_course)
         except CourseQualityError as exc:
+            # Announce it.  A refusal writes NOTHING -- that is the gate doing
+            # its job -- so without this there is no record that anybody tried,
+            # and the view's own log line below describes successful imports
+            # only.  A golf club once had to email us because a member could
+            # not add their own course and we could not identify him.
+            from services.course_import_report import report_import_refusal
+            report_import_refusal(request.user, course_id, course_name,
+                                  exc.problems)
+
             # The client's snackbar renders `detail` and nothing else, so the
             # reason has to be IN it.  A course rejected for having no tees AT
             # ALL was reported as "invalid hole data", which sends the user

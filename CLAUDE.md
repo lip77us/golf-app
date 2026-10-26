@@ -622,33 +622,89 @@ breaks net scoring (every hole allocates handicap strokes identically).
 - **Not gated:** the `seed_catalog_from_courses` backfill (migrates existing
   local data) — revisit if needed.
 
-#### The refusal now names the reason — a zero-tee course is not "bad data"
-Reported from the picker, 25 Oct 2026: **Annandale Golf Club (Pasadena)
-"is not registering any tees."** It is not the app. `fetch_course('3vzs9mg0')`
-returns the club, the city and **zero tees** — a private club with a stub
-record upstream — so the gate refuses it on `Course has no tees.` and nothing
-is written, which is right.
+#### A refused import is now ANNOUNCED — and names the reason
 
-What was wrong is what the user was told. The 422's `detail` read *"This
-course has invalid hole data and was not imported"* and the `problems` list
-naming the real reason was **sent and never read**: `_failAdd`
-(`course_search_field.dart`) renders `ApiException.message`, which is
-`detail` alone. So a course with NO data was reported as a course with BAD
-data, which sends you looking for a defect that is not there instead of
-pasting the scorecard. The `detail` now leads with the first problem and
-counts the rest (`… (+2 more)`); `problems` is still sent in full for a
-caller that can draw the list. **No client change** — this is why the reason
-has to be in `detail`.
+Annandale Golf Club (Pasadena), 25 Oct 2026, and the chain is worth all of it
+because every link taught something.
 
-**Searching for it needs the right spelling.** `search_courses('Annandale')`
-finds it; `'Annendale'` returns **zero rows** — the upstream search does not
-fuzzy-match, so a misspelling looks exactly like a course that is not in the
-database.
+**It started as a report with no reporter.** The golf shop emailed: *"one of
+our members is having trouble downloading our course… it says it cannot
+import our course because there are no tee markers."* True, and correct
+behaviour — `fetch_course('3vzs9mg0')` returned the club, the city and **zero
+tees**, so the gate refused it and wrote nothing. Paul then filled the tee
+data in at GolfCourseAPI himself, after which the same import succeeded with
+all five sets. **The upstream record was the whole problem, and it was
+fixable by hand** — worth knowing, because private clubs are where that
+database thins out (the Madison MS Annandale has 9 tees; the Pasadena one and
+the Ajax ON one had none, and both are private).
 
-**The answer for a course like this is the paste path** — Courses →
-`Paste a scorecard` (`CoursePasteScreen`, the toolbar icon beside the FAB).
-That stays account-private and is never cataloged, which is correct here:
-nobody else should inherit a card typed off one club's scorecard.
+**Then: who was the member?** Unanswerable. The gate runs before any DB write
+inside `CourseImportView`'s `@transaction.atomic`, so a refusal leaves no
+`Course`, no `CatalogCourse`, no audit row — and the view's own log line sits
+*below* the gate, so it only ever described imports that SUCCEEDED. The only
+Southern-California course in the entire production database was Paul's own
+copy from that evening, and `CatalogCourse` 89 was created ten milliseconds
+before it, so nobody had ever got the course in. Railway's log buffer had
+nothing. A real user hit a wall, gave up, and left no trace at all.
+
+So two fixes, and the second is the one that matters:
+
+1. **The `detail` names the reason.** It read *"This course has invalid hole
+   data and was not imported"* while `problems` — which said `Course has no
+   tees.` — was **sent and never read**: `_failAdd`
+   (`course_search_field.dart`) renders `ApiException.message`, i.e. `detail`
+   alone. A course with NO data was reported as one with BAD data, which
+   sends you hunting a defect that is not there. `detail` now leads with the
+   first problem and counts the rest (`… (+2 more)`). **No client change** —
+   which is exactly why the reason has to live in `detail`.
+2. **`services/course_import_report.py`** logs the refusal and emails the
+   operator. `COURSE_IMPORT_ALERT_EMAIL` defaults to `COURSE_REPORT_EMAIL`
+   (same inbox: a course record is wrong, arriving by a different door) and
+   **empty turns the email off while keeping the log.**
+
+**The log names the user by id and account id; the EMAIL carries the phone.**
+Deliberate split. A phone number is this app's cross-account identity key and
+does not belong in a retained platform log that anyone with Railway access
+reads; an id is enough, since whoever is reading has database access by
+definition. The email is a direct message about one person to help, not a
+record that sits around. `test_the_log_does_not_carry_the_phone_number` pins
+it, and was **checked by making it fail** before being trusted.
+
+**One email per course per day, never a throttled log.** A broken course is a
+property of the COURSE, so the second golfer tells the operator nothing new,
+while three taps from one frustrated member must not send three emails. The
+log is never throttled — it is what answers *who tried*. `cache.add()` so the
+first caller wins; it is Django's default LocMemCache (no `CACHES` block), so
+this is per worker process rather than exact, which is the right trade: a
+throttle that dropped the FIRST report would be worse than one that
+occasionally repeats.
+
+**Why the email and not just the log:** a member who cannot add his home
+course is the most churn-prone moment in the app, and the only reason this
+one was ever heard about is that a pro shop went looking for the developer.
+
+**Fixture note:** the first version of these tests had `account_id` and
+`user_id` equal, so a log line printing the account in both slots would have
+passed. The fixture burns two `Account` rows to force them apart — the same
+lesson as the Sixes anchor test, where inputs that coincide cannot pin the
+distinction they exist to check.
+
+**Still silent, deliberately out of scope:** the other early returns in that
+view (no name → 400, upstream down → 502/503) announce nothing either.
+
+**Searching needs the right spelling.** `search_courses('Annandale')` finds
+it; `'Annendale'` returns **zero rows** — the upstream search does not
+fuzzy-match, so a misspelling is indistinguishable from a course that is not
+in the database.
+
+**The other route for a course like this is the paste path** — Courses →
+`Paste a scorecard` (`CoursePasteScreen`, the toolbar icon beside the FAB),
+which stays account-private and is never cataloged. Correct for a card typed
+off one club's scorecard; wrong if the fix belongs upstream, which here it
+did.
+
+Tests: `api/test_course_quality.py` (26) — `RefusalIsAnnouncedTests` (8) plus
+the two naming cases on the gate itself.
 
 ### Copy-on-write tees (round-history freeze) — implemented
 Makes an account `Tee` IMMUTABLE once a round references it, so a completed

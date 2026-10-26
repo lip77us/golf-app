@@ -145,6 +145,13 @@ CONSOLE_HOSTS = [h.strip() for h in _console_hosts.split(',') if h.strip()]
 # shared catalog directly for staff; this is the copy a human reads.
 COURSE_REPORT_EMAIL = os.environ.get('COURSE_REPORT_EMAIL', 'info@halved.golf')
 
+# Where a REFUSED course import is mailed (the quality gate rejecting a course
+# with broken or absent hole data).  Unset = follow COURSE_REPORT_EMAIL, since
+# it is the same kind of problem arriving by a different door; set it empty to
+# turn the emails off and keep only the log line.
+COURSE_IMPORT_ALERT_EMAIL = os.environ.get('COURSE_IMPORT_ALERT_EMAIL',
+                                           COURSE_REPORT_EMAIL)
+
 ROOT_URLCONF = 'my_golf_app.urls'
 
 TEMPLATES = [
