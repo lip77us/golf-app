@@ -10809,21 +10809,78 @@ class CourseImportView(APIView):
             # and the view's own log line below describes successful imports
             # only.  A golf club once had to email us because a member could
             # not add their own course and we could not identify him.
+            from core.models import (
+                CatalogCourse as _CatalogCourse, Course as _Course,
+            )
+            from services.catalog import (
+                clone_catalog_to_account as _clone_to_account,
+            )
             from services.course_import_report import report_import_refusal
+            from .serializers import CourseSerializer as _CourseSerializer
+
+            # A KNOWN-GOOD COPY WE ALREADY HOLD BEATS AN UPSTREAM REGRESSION.
+            # The shared catalog is where every other add path reads from --
+            # the picker's `catalog` branch clones it without re-running this
+            # gate -- so serving it here is the same trust decision, not a new
+            # one.  What it buys is that somebody else's bad edit upstream can
+            # no longer block a member from a course we demonstrably have.
+            # The operator is still told, because the upstream record is still
+            # wrong and our copy may be missing tees added since.
+            held = (_CatalogCourse.objects
+                    .filter(golf_api_id=str(course_id)).first())
+            if held is not None and held.tees.exists():
+                report_import_refusal(request.user, course_id, course_name,
+                                      exc.problems, served_from_catalog=True)
+                mine = (_Course.objects
+                        .for_account(request.user.account)
+                        .filter(golf_api_id=str(course_id)).first())
+                if mine is not None and not force_update:
+                    # The same 409 the normal path returns, so "already exists
+                    # -- use Update" keeps working rather than reading as a
+                    # fresh import that did nothing.
+                    return Response(
+                        {'already_exists': True,
+                         'course': _CourseSerializer(mine).data},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                course_obj, _ = _clone_to_account(
+                    held, request.user.account,
+                    replace_tees=bool(force_update),
+                )
+                return Response(
+                    {
+                        'course' : _CourseSerializer(course_obj).data,
+                        'warning': (
+                            f'Added from our own copy of {course_name}. The '
+                            f'course database has a problem with this record '
+                            f'and we have been notified.'
+                        ),
+                        'problems': exc.problems,
+                    },
+                    status=status.HTTP_201_CREATED,
+                )
+
             report_import_refusal(request.user, course_id, course_name,
                                   exc.problems)
 
-            # The client's snackbar renders `detail` and nothing else, so the
-            # reason has to be IN it.  A course rejected for having no tees AT
-            # ALL was reported as "invalid hole data", which sends the user
-            # looking for a data error that is not there -- the record is
-            # empty, and the answer is to paste the scorecard.  `problems` is
-            # still sent in full for a caller that can render the list.
-            first = (exc.problems or ['Its hole data is invalid.'])[0]
-            rest = len(exc.problems) - 1
+            # `detail` is what the GOLFER reads -- friendlyError() hands it
+            # straight to a red snackbar -- so it must be about his situation,
+            # not about ours.  It briefly led with the gate's own first problem,
+            # which is accurate and unreadable: a member was shown a sentence
+            # about handicap allocation and an 18-integer stroke-index array,
+            # in red, for four seconds.  The technical reason lives in
+            # `problems`, which the operator alert and the console render.
+            #
+            # "We have been told" is only honest because report_import_refusal
+            # above actually tells somebody.  Do not keep this wording if that
+            # call ever goes away.
             return Response(
                 {
-                    'detail': first + (f' (+{rest} more)' if rest > 0 else ''),
+                    'detail': (
+                        f"We don't have complete scorecard data for "
+                        f"{course_name} yet, so it can't be added. We've been "
+                        f"told about it and will get it fixed."
+                    ),
                     'problems': exc.problems,
                 },
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,

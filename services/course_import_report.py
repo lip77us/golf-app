@@ -70,25 +70,53 @@ def _who(user):
     }
 
 
-def log_refusal(user, course_id, course_name, problems):
-    """Record the refusal.  No phone number — see the module docstring."""
+def log_refusal(user, course_id, course_name, problems,
+                served_from_catalog=False):
+    """Record the event.  No phone number — see the module docstring.
+
+    `served_from_catalog` distinguishes the two outcomes, because they are not
+    the same incident: one golfer was blocked, the other got his course from a
+    copy we already held while the upstream record stayed broken.  Both need
+    fixing upstream; only one is urgent for the person.
+    """
     w = _who(user)
     logger.warning(
-        'CourseImportView REFUSED: course_id=%s name=%r user=%s account=%s '
+        'CourseImportView %s: course_id=%s name=%r user=%s account=%s '
         'problems=%s',
+        'SERVED-FROM-CATALOG' if served_from_catalog else 'REFUSED',
         course_id, course_name, w['user_id'], w['account_id'], list(problems),
     )
 
 
-def refusal_email(user, course_id, course_name, problems):
-    """Compose (subject, body).  Pure — no sending, no settings beyond the address."""
+def refusal_email(user, course_id, course_name, problems,
+                  served_from_catalog=False):
+    """Compose (subject, body).  Pure — no sending, no settings beyond the address.
+
+    The two outcomes get different words on purpose.  An email saying "a golfer
+    could not add this course" about a golfer who DID add it is the kind of
+    false line that makes an operator distrust the whole alert.
+    """
     w = _who(user)
-    subject = f'Halved: course import refused — {course_name}'
-    lines = [
-        f'A golfer could not add "{course_name}" to Halved.',
-        '',
-        'Why it was refused:',
-    ]
+    if served_from_catalog:
+        subject = f'Halved: upstream course data broken — {course_name}'
+        head = [
+            f'A golfer added "{course_name}" from OUR OWN catalog copy, '
+            f'because the upstream record is broken.',
+            '',
+            'He was not blocked — but the upstream record still needs fixing,',
+            'and our copy may be missing tees that have been added since.',
+            '',
+            'What is wrong upstream:',
+        ]
+    else:
+        subject = f'Halved: course import refused — {course_name}'
+        head = [
+            f'A golfer could not add "{course_name}" to Halved.',
+            '',
+            'Why it was refused:',
+        ]
+
+    lines = list(head)
     lines += [f'  - {p}' for p in (problems or ['(no reason recorded)'])]
     lines += [
         '',
@@ -101,25 +129,37 @@ def refusal_email(user, course_id, course_name, problems):
         f'  GolfCourseAPI id   {course_id}',
         f'  name               {course_name}',
         '',
-        'Nothing was written — the quality gate runs before any database write,',
-        'so there is no course to clean up and no partial data in the catalog.',
-        '',
-        'To fix it: fill the missing data in upstream at GolfCourseAPI and have',
-        'them search again, or have them paste the scorecard (Courses -> the',
-        'paste-a-scorecard button), which stays private to their own account.',
     ]
+    if served_from_catalog:
+        lines += [
+            'Fix the upstream record at GolfCourseAPI, then re-import to',
+            'refresh the shared catalog.',
+        ]
+    else:
+        lines += [
+            'Nothing was written — the quality gate runs before any database',
+            'write, so there is no course to clean up and no partial data in',
+            'the catalog.',
+            '',
+            'To fix it: fill the missing data in upstream at GolfCourseAPI and',
+            'have them search again, or have them paste the scorecard (Courses',
+            '-> the paste-a-scorecard button), which stays private to their own',
+            'account.',
+        ]
     return subject, '\n'.join(lines)
 
 
-def report_import_refusal(user, course_id, course_name, problems):
-    """Log the refusal, and email the operator at most once per course per day.
+def report_import_refusal(user, course_id, course_name, problems,
+                          served_from_catalog=False):
+    """Log the event, and email the operator at most once per course per day.
 
     Returns True when an email was actually sent.  Never raises: the caller is
-    in the middle of returning a 422 that the golfer needs to see, and a mail
+    in the middle of returning a response the golfer needs to see, and a mail
     outage must not turn a clear refusal into a 500.
     """
     try:
-        log_refusal(user, course_id, course_name, problems)
+        log_refusal(user, course_id, course_name, problems,
+                    served_from_catalog=served_from_catalog)
     except Exception:          # pragma: no cover - logging must never fail a request
         pass
 
@@ -137,7 +177,8 @@ def report_import_refusal(user, course_id, course_name, problems):
         # A cache outage should not cost us the notification.
         logger.exception('course-import refusal throttle unavailable')
 
-    subject, body = refusal_email(user, course_id, course_name, problems)
+    subject, body = refusal_email(user, course_id, course_name, problems,
+                                  served_from_catalog=served_from_catalog)
     try:
         send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [addr],
                   fail_silently=False)

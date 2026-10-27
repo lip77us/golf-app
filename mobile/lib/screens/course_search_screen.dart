@@ -307,9 +307,15 @@ class _CourseDetailSheetState extends State<_CourseDetailSheet> {
           backgroundColor: Colors.orange,
         ));
       } else {
+        // 7s, not the 4s default: the server's refusal explains what went
+        // wrong with the COURSE and what happens next, and a member reported
+        // exactly this message as unreadable at the default duration.  Matches
+        // CourseSearchField._failAdd, which already gives a reason-bearing
+        // error the longer window.
         scaffoldMsg.showSnackBar(SnackBar(
           content:         Text(friendlyError(e)),
           backgroundColor: Colors.red,
+          duration:        const Duration(seconds: 7),
         ));
       }
     } catch (e) {

@@ -706,6 +706,92 @@ did.
 Tests: `api/test_course_quality.py` (26) — `RefusalIsAnnouncedTests` (8) plus
 the two naming cases on the gate itself.
 
+#### ...and then the fix made the GOLFER's message worse
+
+Two days later the same member tried again, upstream had a *different*
+defect, and the alert worked perfectly — which is how we found out what he
+was being shown. `friendlyError()` returns `ApiException.message`, i.e.
+`detail` verbatim, straight into a red snackbar. So he read:
+
+> *Orange: stroke indexes must be 1..18 with each value appearing exactly
+> once (this allocates handicap strokes per hole). Got: [1, 2, 4, 5, …].
+> (+2 more)*
+
+**Accurate, and unreadable.** I had put the reason in `detail` because the
+client renders nothing else — correct about the plumbing, wrong about the
+reader. `detail` and `problems` serve two audiences and one field cannot be
+both: **`detail` is the golfer's** (names the course, says it can't be added
+and that somebody has been told), **`problems` is the operator's** and still
+carries every technical line, which is what the alert and the console render.
+
+The giveaway was in the club's own email: they wrote *"there are no tee
+markers"*, which is **nothing the app ever said**. That was a member
+interpreting *"invalid hole data"* — the message was so unhelpful he had to
+guess, and he guessed right.
+
+`"We've been told about it"` is only honest because `report_import_refusal`
+fires immediately above it. There is a comment saying so; do not keep the
+wording if that call ever moves.
+
+Also: `course_search_screen.dart` showed that error at the **4-second
+default** where `CourseSearchField._failAdd` already used 7. Now 7 on both.
+
+#### A copy we already hold beats an upstream regression
+
+The deeper problem was that a member was blocked from a course **we
+demonstrably had**. We had imported a clean Annandale into the shared catalog
+three weeks earlier; somebody then edited the women's tees upstream and broke
+them, and the gate refused the whole course on the strength of the new
+payload alone.
+
+So on a gate failure `CourseImportView` now looks for a catalog row with that
+`golf_api_id` and, if it **has tees**, clones that instead of refusing — 201
+with a `warning` the client already renders (the full-DB screen draws it
+orange for 8s). The reasoning that makes this safe rather than a loosening:
+**the picker's `catalog` branch already clones that same row without running
+this gate at all**, so serving it here is the same trust decision, not a new
+one. A row with no tees is explicitly NOT a fallback — it would "succeed"
+into a course nobody can score.
+
+**The operator is still told, and told the truth.** `report_import_refusal`
+gained `served_from_catalog`, because an email saying *"a golfer could not add
+this course"* about a golfer who just added it is the kind of false line that
+makes somebody stop trusting the alert. The log says `SERVED-FROM-CATALOG`
+rather than `REFUSED`, and the body leads with *"he was not blocked — but the
+upstream record still needs fixing"*.
+
+It returns the ordinary **409** when the account already has the course, so
+*"already exists — use Update"* keeps working instead of reading as a fresh
+import that did nothing.
+
+#### What was done to the data, not just the code
+
+Operational, 27 Oct 2026, both verified after: `upsert_catalog_course`
+refreshed **catalog 89** from 5 men's tees to all 10 (the five original rows
+updated in place, `curated=False`; Green, Yellow and the three women's sets
+created), and `clone_catalog_to_account(..., replace_tees=True)` brought
+**course 192** (the only account copy) to the same 10 with **zero superseded
+rows**, because no round had been played on it. A catalog refresh does NOT
+touch account clones — that is the copy-on-add model working as intended, and
+it is why the second step was needed at all.
+
+**`CourseFindView` returns `{'courses': [...]}`, not `results`.** Cost one
+wrong-looking empty answer mid-diagnosis.
+
+#### The one still open
+
+`CourseSearchScreen` (Manage Courses → *Search the full course database*)
+ignores the catalog and always calls the API, so it is the one door that can
+fail where the main picker succeeds — and it is the door that failed this
+member twice. The catalog fallback above means it no longer fails *this*
+way, which is why it was not also hidden from non-staff. The duplication is
+still there.
+
+Tests: `api/test_course_quality.py` (32) — `RefusalIsAnnouncedTests` (8),
+`HeldCopyBeatsUpstreamTests` (5), and the three stating the `detail` /
+`problems` split, including the exact stroke-index message a member was
+shown.
+
 ### Copy-on-write tees (round-history freeze) — implemented
 Makes an account `Tee` IMMUTABLE once a round references it, so a completed
 round's scorecard stays frozen against the exact hole data (par + stroke index)

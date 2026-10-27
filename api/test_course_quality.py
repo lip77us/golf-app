@@ -177,14 +177,15 @@ class CourseImportQualityGateTests(TestCase):
         self.assertFalse(Course.objects.filter(account=self.account).exists())
 
     @patch('services.golf_api_client.fetch_course')
-    def test_the_refusal_names_the_reason_not_just_bad_hole_data(
+    def test_detail_is_written_for_the_golfer_not_the_operator(
             self, mock_fetch):
-        """A zero-tee course is reported as such.
+        """`detail` names the COURSE and what happens next, not the defect.
 
-        Annandale GC (Pasadena) comes back from GolfCourseAPI with no tees at
-        all, and the old `detail` called that "invalid hole data" -- which
-        sends the user looking for a data error that is not there.  The client
-        shows `detail` and nothing else, so the reason has to be in it.
+        friendlyError() hands `detail` straight to a red snackbar.  A version
+        of this led with the gate's own first problem, which is accurate and
+        unreadable: an Annandale member was shown a sentence about handicap
+        allocation and an 18-integer stroke-index array.  The technical reason
+        belongs in `problems`, which the operator alert renders.
         """
         empty = self._adapted(_good_holes())
         empty['tees'] = []
@@ -194,15 +195,37 @@ class CourseImportQualityGateTests(TestCase):
             reverse('api-course-import'), {'course_id': 99}, format='json',
         )
         self.assertEqual(resp.status_code, 422, resp.data)
-        self.assertIn('no tees', resp.data['detail'])
-        self.assertNotIn('invalid hole data', resp.data['detail'])
+        detail = resp.data['detail']
+        self.assertIn('Bad GC', detail)                  # names the course
+        self.assertIn("can't be added", detail)          # says what happened
+        self.assertIn('told about it', detail)           # and what happens next
+        # None of the gate's vocabulary reaches him.
+        for jargon in ('stroke index', 'hole data', 'permutation', 'Got:'):
+            self.assertNotIn(jargon, detail)
+        # ...but it is still there in full for the alert.
         self.assertEqual(resp.data['problems'], ['Course has no tees.'])
 
     @patch('services.golf_api_client.fetch_course')
-    def test_several_problems_lead_with_one_and_count_the_rest(
-            self, mock_fetch):
-        # A tee missing its rating, slope and par gives three problems; the
-        # snackbar is one line, so it leads with one and says how many more.
+    def test_a_stroke_index_array_never_reaches_the_golfer(self, mock_fetch):
+        """The exact message a member was shown, in red, for four seconds."""
+        bad = self._adapted(
+            [{'number': n, 'par': 4,
+              'stroke_index': 17 if n == 4 else n, 'yards': 400}
+             for n in range(1, 19)]
+        )
+        mock_fetch.return_value = bad
+
+        resp = self.client.post(
+            reverse('api-course-import'), {'course_id': 99}, format='json',
+        )
+        self.assertEqual(resp.status_code, 422, resp.data)
+        self.assertNotIn('[', resp.data['detail'])       # no array
+        self.assertTrue(any('stroke index' in p for p in resp.data['problems']))
+
+    @patch('services.golf_api_client.fetch_course')
+    def test_every_problem_still_travels_in_problems(self, mock_fetch):
+        # A tee missing its rating, slope and par gives three problems.  The
+        # golfer sees one sentence; the alert sees all three.
         bare = self._adapted(_good_holes())
         bare['tees'][0].update(course_rating=None, slope=None, par=None)
         mock_fetch.return_value = bare
@@ -212,7 +235,8 @@ class CourseImportQualityGateTests(TestCase):
         )
         self.assertEqual(resp.status_code, 422, resp.data)
         self.assertEqual(len(resp.data['problems']), 3)
-        self.assertIn('(+2 more)', resp.data['detail'])
+        for prob in resp.data['problems']:
+            self.assertNotIn(prob, resp.data['detail'])
 
     @patch('services.golf_api_client.fetch_course')
     def test_good_import_still_succeeds(self, mock_fetch):
@@ -357,7 +381,7 @@ class RefusalIsAnnouncedTests(TestCase):
         mock_fetch.return_value = self._no_tees()
         resp = self._import()
         self.assertEqual(resp.status_code, 422, resp.data)
-        self.assertIn('no tees', resp.data['detail'])
+        self.assertIn("can't be added", resp.data['detail'])
         # And still nothing written.
         self.assertFalse(CatalogCourse.objects.exists())
         self.assertFalse(Course.objects.exists())
@@ -376,3 +400,140 @@ class RefusalIsAnnouncedTests(TestCase):
                                 {'course_id': 'okok0001'}, format='json')
         self.assertEqual(resp.status_code, 201, resp.data)
         self.assertEqual(mail.outbox, [])
+
+
+# ---------------------------------------------------------------------------
+# A copy we already hold beats an upstream regression
+# ---------------------------------------------------------------------------
+
+@override_settings(COURSE_IMPORT_ALERT_EMAIL='ops@halved.golf')
+class HeldCopyBeatsUpstreamTests(TestCase):
+    """Annandale's women's tees were edited upstream and broke, three weeks
+    after we had already imported a clean copy into the shared catalog.  The
+    gate then refused the whole course -- so a member was blocked from a
+    course we demonstrably had, by somebody else's bad edit.
+
+    The picker's `catalog` branch clones that copy without re-running this
+    gate, so serving it from the import path is the same trust decision, not
+    a new one.
+    """
+
+    API_ID = '3vzs9mg0'
+
+    def setUp(self):
+        cache.clear()
+        mail.outbox = []
+        self.account = Account.objects.create(name='Member Acct')
+        self.user = User.objects.create_user(
+            username='+18185175766', account=self.account,
+            phone='+18185175766',
+        )
+        self.user.is_account_admin = True
+        self.user.save(update_fields=['is_account_admin'])
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def _upstream(self, tees):
+        return {
+            'id': self.API_ID, 'club_name': 'Annandale Golf Club',
+            'course_name': 'Annandale Golf Club', 'city': 'Pasadena',
+            'state': 'CA', 'country': 'US',
+            'latitude': Decimal('34.1'), 'longitude': Decimal('-118.1'),
+            'tees': tees,
+        }
+
+    def _good_tee(self, name='Orange', sex='M'):
+        return {'name': name, 'slope': 134, 'course_rating': Decimal('73.0'),
+                'par': 70, 'sex': sex, 'holes': _good_holes()}
+
+    def _broken_tee(self, name='Orange', sex='W'):
+        holes = [dict(h) for h in _good_holes()]
+        holes[3]['stroke_index'] = holes[8]['stroke_index']   # duplicate
+        return {'name': name, 'slope': 141, 'course_rating': Decimal('79.2'),
+                'par': 70, 'sex': sex, 'holes': holes}
+
+    def _seed_catalog(self):
+        """Import a clean course first — this is how the good copy got there."""
+        with patch('services.golf_api_client.fetch_course') as mf:
+            mf.return_value = self._upstream([self._good_tee()])
+            resp = self.client.post(reverse('api-course-import'),
+                                    {'course_id': self.API_ID}, format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+        Course.objects.filter(account=self.account).delete()   # he loses his copy
+        mail.outbox = []
+        cache.clear()
+        return CatalogCourse.objects.get(golf_api_id=self.API_ID)
+
+    @patch('services.golf_api_client.fetch_course')
+    def test_the_member_gets_the_course_instead_of_a_refusal(self, mock_fetch):
+        held = self._seed_catalog()
+        mock_fetch.return_value = self._upstream(
+            [self._good_tee(), self._broken_tee()])
+
+        resp = self.client.post(reverse('api-course-import'),
+                                {'course_id': self.API_ID}, format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertIn('course', resp.data)
+        self.assertIn('our own copy', resp.data['warning'])
+        # He actually has it, with the tees the catalog holds.
+        mine = Course.objects.get(account=self.account, golf_api_id=self.API_ID)
+        self.assertEqual(mine.tees.count(), held.tees.count())
+
+    @patch('services.golf_api_client.fetch_course')
+    def test_the_operator_is_still_told_and_is_not_told_he_was_blocked(
+            self, mock_fetch):
+        """The alert must not claim a golfer could not add a course he added."""
+        self._seed_catalog()
+        mock_fetch.return_value = self._upstream(
+            [self._good_tee(), self._broken_tee()])
+
+        with self.assertLogs('services.course_import_report', 'WARNING') as cm:
+            self.client.post(reverse('api-course-import'),
+                             {'course_id': self.API_ID}, format='json')
+        self.assertIn('SERVED-FROM-CATALOG', '\n'.join(cm.output))
+
+        self.assertEqual(len(mail.outbox), 1)
+        body = mail.outbox[0].body
+        self.assertIn('OUR OWN catalog copy', body)
+        self.assertIn('was not blocked', body)
+        self.assertNotIn('could not add', body)
+        self.assertIn('stroke index', body)        # the real reason is there
+
+    @patch('services.golf_api_client.fetch_course')
+    def test_a_course_we_do_not_hold_is_still_refused(self, mock_fetch):
+        """No held copy, no fallback — the gate still protects the catalog."""
+        mock_fetch.return_value = self._upstream([self._broken_tee()])
+        resp = self.client.post(reverse('api-course-import'),
+                                {'course_id': 'neverseen'}, format='json')
+        self.assertEqual(resp.status_code, 422, resp.data)
+        self.assertFalse(
+            CatalogCourse.objects.filter(golf_api_id='neverseen').exists())
+        self.assertFalse(Course.objects.filter(account=self.account).exists())
+
+    @patch('services.golf_api_client.fetch_course')
+    def test_a_catalog_row_with_no_tees_is_no_fallback_at_all(self, mock_fetch):
+        """An empty held row would "succeed" into a course nobody can score."""
+        CatalogCourse.objects.create(golf_api_id='emptyrow',
+                                     name='Empty GC', city='X', state='CA')
+        mock_fetch.return_value = self._upstream([self._broken_tee()])
+        resp = self.client.post(reverse('api-course-import'),
+                                {'course_id': 'emptyrow'}, format='json')
+        self.assertEqual(resp.status_code, 422, resp.data)
+
+    @patch('services.golf_api_client.fetch_course')
+    def test_already_having_it_still_reads_as_already_having_it(
+            self, mock_fetch):
+        """409, not a 201 that claims a fresh import which did nothing."""
+        self._seed_catalog()
+        # Give him the copy back.
+        mock_fetch.return_value = self._upstream([self._good_tee()])
+        self.client.post(reverse('api-course-import'),
+                         {'course_id': self.API_ID}, format='json')
+        cache.clear()
+
+        mock_fetch.return_value = self._upstream(
+            [self._good_tee(), self._broken_tee()])
+        resp = self.client.post(reverse('api-course-import'),
+                                {'course_id': self.API_ID}, format='json')
+        self.assertEqual(resp.status_code, 409, resp.data)
+        self.assertTrue(resp.data['already_exists'])
