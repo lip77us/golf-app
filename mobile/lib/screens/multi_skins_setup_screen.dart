@@ -20,6 +20,7 @@ import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/inline_message.dart';
+import '../widgets/skin_validation_card.dart';
 
 class MultiSkinsSetupScreen extends StatefulWidget {
   final int roundId;
@@ -46,6 +47,9 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
   // group pool.  Per-foursome games default to SO Low instead.
   String _mode       = 'net';
   int    _netPercent = 100;
+  // Validation (services/skin_rules.py) — the same two rules round skins has.
+  String _skinMinimum = 'none';
+  bool   _birdieSteal = false;
 
   final TextEditingController _betCtrl = TextEditingController();
   bool _betCtrlInitialized = false;
@@ -140,6 +144,8 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
         if (configured) _editing = true;
         _mode       = _summary!.handicapMode;
         _netPercent = _summary!.netPercent;
+        _skinMinimum = _summary!.skinMinimum;
+        _birdieSteal = _summary!.birdieSteal;
         if (!_betCtrlInitialized) {
           // Default to $10 (the common "everyone throw in a ten" amount).
           // Existing game: use whatever the user previously saved.
@@ -235,6 +241,8 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
         handicapMode  : _mode,
         netPercent    : _netPercent,
         betUnit       : _betUnit,
+        skinMinimum   : _skinMinimum,
+        birdieSteal   : _birdieSteal,
       );
       // Refresh round so multi_skins shows up in activeGames, and pre-load
       // the summary into the provider.
@@ -303,6 +311,15 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
                 netPercent:       _netPercent,
                 onModeChanged:    (m) => setState(() => _mode = m),
                 onPercentChanged: (p) => setState(() => _netPercent = p),
+              ),
+              const Divider(height: 32),
+
+              // ── Validation ───────────────────────────────────────────────
+              SkinValidationCard(
+                minimum:     _skinMinimum,
+                birdieSteal: _birdieSteal,
+                onMinimumChanged: (v) => setState(() => _skinMinimum = v),
+                onBirdieStealChanged: (v) => setState(() => _birdieSteal = v),
               ),
               const Divider(height: 32),
 

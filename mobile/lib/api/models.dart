@@ -3104,6 +3104,13 @@ class SkinsSummary {
   final int    netPercent;
   final bool   carryover;
   final bool   allowJunk;
+  /// 'none' | 'net_par' | 'gross_par' — the lowest score that can win a skin.
+  final String skinMinimum;
+  /// A gross birdie or better beats any net score.
+  final bool   birdieSteal;
+  /// The server's own phrase for the rules in force, '' when neither is on —
+  /// test it rather than render "no minimum" at a group playing plain skins.
+  final String skinRules;
   /// Players IN the game (subset side game). Empty = all real players.
   final List<int> participantPlayerIds;
   final List<SkinsPlayerTotal> players;
@@ -3175,6 +3182,9 @@ class SkinsSummary {
     required this.netPercent,
     required this.carryover,
     required this.allowJunk,
+    this.skinMinimum = 'none',
+    this.birdieSteal = false,
+    this.skinRules   = '',
     this.participantPlayerIds = const [],
     required this.players,
     required this.holes,
@@ -3208,6 +3218,11 @@ class SkinsSummary {
       netPercent:   hcap['net_percent'] as int?    ?? 100,
       carryover:    j['carryover']  as bool? ?? true,
       allowJunk:    j['allow_junk'] as bool? ?? false,
+      // Defaults are the "the server did not tell us" case, which for an
+      // older server is also the correct behaviour: plain skins.
+      skinMinimum:  j['skin_minimum'] as String? ?? 'none',
+      birdieSteal:  j['birdie_steal'] as bool?   ?? false,
+      skinRules:    j['skin_rules']   as String? ?? '',
       participantPlayerIds: (j['participant_player_ids'] as List? ?? const [])
           .map((e) => e as int).toList(),
       players: (j['players'] as List? ?? [])
@@ -4448,6 +4463,11 @@ class MultiSkinsSummary {
   final String status;
   final String handicapMode;
   final int    netPercent;
+  /// Same three keys round skins uses, same meanings — one vocabulary for
+  /// one rule, so a board draws the pool's rules with the code it has.
+  final String skinMinimum;
+  final bool   birdieSteal;
+  final String skinRules;
   final List<MultiSkinsPlayerTotal> players;
   final List<MultiSkinsHole>        holes;
   final double betUnit;
@@ -4463,6 +4483,9 @@ class MultiSkinsSummary {
     required this.status,
     required this.handicapMode,
     required this.netPercent,
+    this.skinMinimum = 'none',
+    this.birdieSteal = false,
+    this.skinRules   = '',
     required this.players,
     required this.holes,
     required this.betUnit,
@@ -4486,6 +4509,9 @@ class MultiSkinsSummary {
       status:       j['status']        as String? ?? 'pending',
       handicapMode: hcap['mode']        as String? ?? 'net',
       netPercent:   hcap['net_percent'] as int?    ?? 100,
+      skinMinimum:  j['skin_minimum'] as String? ?? 'none',
+      birdieSteal:  j['birdie_steal'] as bool?   ?? false,
+      skinRules:    j['skin_rules']   as String? ?? '',
       players: (j['players'] as List? ?? [])
           .map((p) => MultiSkinsPlayerTotal.fromJson(p as Map<String, dynamic>))
           .toList(),

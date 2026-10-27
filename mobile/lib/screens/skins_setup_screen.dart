@@ -27,6 +27,7 @@ import '../widgets/golf_app_bar.dart';
 import '../widgets/golf_primary_button.dart';
 import '../widgets/handicap_mode_selector.dart';
 import '../widgets/spots_capture.dart' show spotTypeBlurb;
+import '../widgets/skin_validation_card.dart';
 
 class SkinsSetupScreen extends StatefulWidget {
   final int foursomeId;
@@ -53,6 +54,9 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
   String _mode       = 'strokes_off';
   int    _netPercent = 100;
   bool   _carryover  = true;
+  // Validation (services/skin_rules.py).  Both default off: plain skins.
+  String _skinMinimum = 'none';
+  bool   _birdieSteal = false;
   bool   _allowJunk  = false;
   /// Which named junk counts. **Null until the first load**, which is how
   /// "omitted" survives to the POST — an empty set would be sent as an empty
@@ -149,6 +153,8 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
           _mode       = _summary!.handicapMode;
           _netPercent = _summary!.netPercent;
           _carryover  = _summary!.carryover;
+          _skinMinimum = _summary!.skinMinimum;
+          _birdieSteal = _summary!.birdieSteal;
           _allowJunk  = _summary!.allowJunk;
           _junkCatalogue = _summary!.junkCatalogue;
           _junkTypes  = {for (final t in _summary!.junkInPlay) t.type};
@@ -291,6 +297,8 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
         handicapMode: _mode,
         netPercent:   _netPercent,
         carryover:    _carryover,
+        skinMinimum:  _skinMinimum,
+        birdieSteal:  _birdieSteal,
         allowJunk:    _isSideGame ? false : _allowJunk,
         // Off keeps the last selection, so switching junk off and on again
         // does not lose what the group agreed. Only the switch decides
@@ -438,6 +446,16 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
                 ],
               ),
             ),
+          ),
+
+          const SizedBox(height: 16),
+          // Validation applies in EITHER role — unlike junk, it needs nothing
+          // tapped during scoring, it only changes who wins a hole.
+          SkinValidationCard(
+            minimum:     _skinMinimum,
+            birdieSteal: _birdieSteal,
+            onMinimumChanged: (v) => setState(() => _skinMinimum = v),
+            onBirdieStealChanged: (v) => setState(() => _birdieSteal = v),
           ),
 
           // Junk is only available when Skins is the PRIMARY game — it is

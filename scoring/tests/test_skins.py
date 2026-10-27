@@ -495,3 +495,131 @@ class JunkTypesTests(TestCase):
                 junk_count=2)
         self.tick(5, 'Carol', 'sandy')
         self.assertEqual(self._junk(skins_summary(self.fs))['Carol'], 3)
+
+
+class SkinValidationTests(TestCase):
+    """The two rules through the real engine — gross/par lookup and all.
+
+    `services/skin_rules.py` pins the semantics as pure units; what these
+    cover is the WIRING: that the engine finds each golfer's gross and the par
+    of his own tee, and that "nobody validated" lands on the same carry / kill
+    branches a tie does.
+
+    Indexes 0 and 18 on a 113/72 tee mean the scratch player gets no strokes
+    and the other gets exactly one on every hole, so a hole's outcome does not
+    depend on which stroke index it carries.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course)
+        self.fs    = make_foursome(
+            self.round, [('Scratch', 0), ('Hack', 18)], tee=self.tee,
+        )
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+
+    def _won(self):
+        calculate_skins(self.fs)
+        s = skins_summary(self.fs)
+        return {p['name']: p['skins_won'] for p in s['players']}
+
+    # ── one hole, three settings, three answers ────────────────────────────
+
+    def _both_bogey(self):
+        """Hole 1 is par 4.  Both shoot 5; Hack's stroke makes it a net par."""
+        submit_hole(self.fs, 1, [(self.pid['Scratch'], 5),
+                                 (self.pid['Hack'], 5)])
+
+    def test_with_no_minimum_a_net_par_off_a_stroke_wins(self):
+        setup_skins(self.fs, handicap_mode='net', carryover=True)
+        self._both_bogey()
+        self.assertEqual(self._won(), {'Scratch': 0, 'Hack': 1})
+
+    def test_net_par_minimum_still_lets_it_win(self):
+        setup_skins(self.fs, handicap_mode='net', carryover=True,
+                    skin_minimum='net_par')
+        self._both_bogey()
+        self.assertEqual(self._won(), {'Scratch': 0, 'Hack': 1})
+
+    def test_gross_par_minimum_refuses_it(self):
+        """The rule as the user described it: gross 5 is a bogey, so the skin
+        is not won and (carryover on) it carries."""
+        setup_skins(self.fs, handicap_mode='net', carryover=True,
+                    skin_minimum='gross_par')
+        self._both_bogey()
+        self.assertEqual(self._won(), {'Scratch': 0, 'Hack': 0})
+        hole1, = [h for h in skins_summary(self.fs)['holes']
+                  if h['hole'] == 1]
+        self.assertIsNone(hole1['winner_id'])
+        self.assertTrue(hole1['is_carry'])
+
+    def test_an_unvalidated_hole_carries_its_skin_onto_the_next(self):
+        setup_skins(self.fs, handicap_mode='net', carryover=True,
+                    skin_minimum='gross_par')
+        self._both_bogey()                       # hole 1 unwon, carries
+        submit_hole(self.fs, 2, [(self.pid['Scratch'], 4),   # gross par
+                                 (self.pid['Hack'], 6)])
+        self.assertEqual(self._won(), {'Scratch': 2, 'Hack': 0})
+
+    def test_without_carryover_an_unvalidated_hole_dies(self):
+        setup_skins(self.fs, handicap_mode='net', carryover=False,
+                    skin_minimum='gross_par')
+        self._both_bogey()
+        submit_hole(self.fs, 2, [(self.pid['Scratch'], 4),
+                                 (self.pid['Hack'], 6)])
+        self.assertEqual(self._won(), {'Scratch': 1, 'Hack': 0})
+
+    # ── the steal ──────────────────────────────────────────────────────────
+
+    def _natural_against_a_net_tie(self):
+        """Par 4: Scratch makes a real 3; Hack's 4 nets to 3.  Level on net."""
+        submit_hole(self.fs, 1, [(self.pid['Scratch'], 3),
+                                 (self.pid['Hack'], 4)])
+
+    def test_without_the_steal_the_natural_only_ties(self):
+        setup_skins(self.fs, handicap_mode='net', carryover=True)
+        self._natural_against_a_net_tie()
+        self.assertEqual(self._won(), {'Scratch': 0, 'Hack': 0})
+
+    def test_the_steal_turns_that_tie_into_an_outright_win(self):
+        setup_skins(self.fs, handicap_mode='net', carryover=True,
+                    birdie_steal=True)
+        self._natural_against_a_net_tie()
+        self.assertEqual(self._won(), {'Scratch': 1, 'Hack': 0})
+
+    def test_the_steal_beats_a_strictly_lower_net(self):
+        """Hack nets 2 off his stroke; Scratch's natural birdie takes it."""
+        setup_skins(self.fs, handicap_mode='net', carryover=True,
+                    birdie_steal=True)
+        submit_hole(self.fs, 1, [(self.pid['Scratch'], 3),   # natural birdie
+                                 (self.pid['Hack'], 3)])     # net 2
+        # Both made a natural 3, so the steal filter keeps both and the NET
+        # decides — the game is still a net game.
+        self.assertEqual(self._won(), {'Scratch': 0, 'Hack': 1})
+
+    def test_a_hole_with_no_natural_is_unaffected_by_the_steal(self):
+        setup_skins(self.fs, handicap_mode='net', carryover=True,
+                    birdie_steal=True)
+        self._both_bogey()
+        self.assertEqual(self._won(), {'Scratch': 0, 'Hack': 1})
+
+    # ── both at once ───────────────────────────────────────────────────────
+
+    def test_both_rules_together(self):
+        setup_skins(self.fs, handicap_mode='net', carryover=True,
+                    skin_minimum='gross_par', birdie_steal=True)
+        self._natural_against_a_net_tie()
+        # The natural clears the gross-par minimum by definition.
+        self.assertEqual(self._won(), {'Scratch': 1, 'Hack': 0})
+
+    def test_the_defaults_are_off(self):
+        game = setup_skins(self.fs, handicap_mode='net')
+        self.assertEqual(game.skin_minimum, 'none')
+        self.assertFalse(game.birdie_steal)
+
+    def test_an_unknown_minimum_is_stored_as_none(self):
+        """Fails open — a typo must not quietly start voiding skins."""
+        game = setup_skins(self.fs, handicap_mode='net',
+                           skin_minimum='eagle_or_better')
+        self.assertEqual(game.skin_minimum, 'none')

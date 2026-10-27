@@ -224,3 +224,84 @@ class TheShippedAppTests(_Base):
              'junk_entries': [{'player_id': self.ids[0], 'junk_count': 2}]},
             format='json')
         self.assertEqual(r.status_code, 400, r.data)
+
+
+class SkinValidationEndpointTests(_Base):
+    """The two validation rules through the serializer / view / urls.
+
+    `services/skin_rules.py` owns the semantics and `scoring/tests/` prove the
+    engines; what these cover is the boundary — that the settings round-trip,
+    that the summary reports them, and that a client which says nothing keeps
+    playing plain skins.
+    """
+
+    def _score(self, hole, scores):
+        """scores: {player_index: gross}."""
+        for idx, gross in scores.items():
+            HoleScore.objects.update_or_create(
+                foursome=self.fs, player_id=self.ids[idx],
+                hole_number=hole, defaults={'gross_score': gross},
+            )
+
+    def _summary(self):
+        r = self.client.get(reverse('api-skins-result', args=[self.fs.id]))
+        self.assertEqual(r.status_code, 200, r.data)
+        return r.data
+
+    def test_the_settings_round_trip(self):
+        r = self.setup_skins(skin_minimum='gross_par', birdie_steal=True)
+        self.assertEqual(r.status_code, 201, r.data)
+        self.assertEqual(r.data['skin_minimum'], 'gross_par')
+        self.assertTrue(r.data['birdie_steal'])
+        s = self._summary()
+        self.assertEqual(s['skin_minimum'], 'gross_par')
+        self.assertTrue(s['birdie_steal'])
+
+    def test_the_summary_carries_a_phrase_for_the_board(self):
+        self.setup_skins(skin_minimum='net_par', birdie_steal=True)
+        line = self._summary()['skin_rules']
+        self.assertIn('net par', line)
+        self.assertIn('steal', line)
+
+    def test_plain_skins_gets_an_empty_phrase_not_a_sentence(self):
+        """So a client can test it rather than print "no minimum" at a group
+        that never asked for one."""
+        self.setup_skins()
+        s = self._summary()
+        self.assertEqual(s['skin_rules'], '')
+        self.assertEqual(s['skin_minimum'], 'none')
+        self.assertFalse(s['birdie_steal'])
+
+    def test_a_client_that_sends_nothing_plays_plain_skins(self):
+        """The shipped app sends neither field; it must not start validating."""
+        r = self.client.post(
+            reverse('api-skins-setup', args=[self.fs.id]),
+            {'handicap_mode': 'gross', 'carryover': True}, format='json')
+        self.assertEqual(r.status_code, 201, r.data)
+        self.assertEqual(r.data['skin_minimum'], 'none')
+        self.assertFalse(r.data['birdie_steal'])
+
+    def test_a_bad_minimum_is_a_400_not_a_silent_rule(self):
+        r = self.setup_skins(skin_minimum='eagle_or_better')
+        self.assertEqual(r.status_code, 400, r.data)
+
+    def test_gross_par_changes_who_the_endpoint_pays(self):
+        """Everybody over par on hole 1: with the minimum nobody wins it."""
+        # A is scratch, all four are — so gross == net and nobody can validate
+        # a 5 on a par 4.
+        self.setup_skins(handicap_mode='gross', skin_minimum='gross_par')
+        self._score(1, {0: 5, 1: 6, 2: 6, 3: 6})
+        self.client.post(reverse('api-skins-setup', args=[self.fs.id]),
+                         {'handicap_mode': 'gross', 'carryover': True,
+                          'skin_minimum': 'gross_par'}, format='json')
+        hole1, = [h for h in self._summary()['holes'] if h['hole'] == 1]
+        self.assertIsNone(hole1['winner_id'])
+
+    def test_without_the_minimum_that_same_hole_is_won(self):
+        self.setup_skins(handicap_mode='gross')
+        self._score(1, {0: 5, 1: 6, 2: 6, 3: 6})
+        self.client.post(reverse('api-skins-setup', args=[self.fs.id]),
+                         {'handicap_mode': 'gross', 'carryover': True},
+                         format='json')
+        hole1, = [h for h in self._summary()['holes'] if h['hole'] == 1]
+        self.assertEqual(hole1['winner_id'], self.ids[0])

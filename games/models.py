@@ -1,6 +1,11 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 
+# Skin validation choices live with the RULE, not with the model — both
+# SkinsGame and MultiSkinsGame carry the same two fields and one engine
+# decides them (services/skin_rules.py).
+from services.skin_rules import MIN_NONE, SKIN_MINIMUM_CHOICES
+
 from core.models import (MatchStatus, TeamSelectMethod, HandicapMode, Player,
                          GameType, SpotType)
 from tournament.models import Round, Foursome, TournamentTeam
@@ -412,6 +417,22 @@ class SkinsGame(models.Model):
     # 4-some). Empty = all real players in the foursome. Flows through the pool,
     # per-hole winner, carryover, junk, and WD segments. docs/parallel-games.md.
     participant_player_ids = models.JSONField(default=list)
+    # ── Skin validation (services/skin_rules.py) ─────────────────────────
+    # A skin cannot be won with a bad hole however many strokes you get, and
+    # a natural birdie can outrank a manufactured one.  Both default OFF, so
+    # every existing game keeps playing plain skins.
+    skin_minimum    = models.CharField(
+                        max_length=10, choices=SKIN_MINIMUM_CHOICES,
+                        default=MIN_NONE,
+                        help_text='Lowest score that can win a skin: no '
+                                  'minimum, net par or better, or gross par '
+                                  'or better (stricter — a net par made off '
+                                  'a stroke is a gross bogey and fails).')
+    birdie_steal    = models.BooleanField(
+                        default=False,
+                        help_text='A gross birdie or better beats any net '
+                                  'score: if anybody makes one, only those '
+                                  'players can win the hole.')
     created_at      = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -1226,6 +1247,22 @@ class MultiSkinsGame(models.Model):
                         max_digits=6, decimal_places=2, default=10.00,
                         help_text="Dollar entry fee per participating player.",
                     )
+    # ── Skin validation (services/skin_rules.py) ─────────────────────────
+    # A skin cannot be won with a bad hole however many strokes you get, and
+    # a natural birdie can outrank a manufactured one.  Both default OFF, so
+    # every existing game keeps playing plain skins.
+    skin_minimum    = models.CharField(
+                        max_length=10, choices=SKIN_MINIMUM_CHOICES,
+                        default=MIN_NONE,
+                        help_text='Lowest score that can win a skin: no '
+                                  'minimum, net par or better, or gross par '
+                                  'or better (stricter — a net par made off '
+                                  'a stroke is a gross bogey and fails).')
+    birdie_steal    = models.BooleanField(
+                        default=False,
+                        help_text='A gross birdie or better beats any net '
+                                  'score: if anybody makes one, only those '
+                                  'players can win the hole.')
     participants    = models.ManyToManyField(
                         Player,
                         related_name='multi_skins_games',

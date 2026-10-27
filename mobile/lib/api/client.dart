@@ -2157,6 +2157,12 @@ class ApiClient {
     double  perPointRate = 0.0,
     double? lossCap,
     List<int> participantPlayerIds = const [], // [] = all
+    /// 'none' | 'net_par' | 'gross_par' — the lowest score that can win a
+    /// skin. Gross par is the stricter one: a net par made off a stroke is a
+    /// gross bogey and fails it.
+    String skinMinimum = 'none',
+    /// A gross birdie or better beats any net score.
+    bool   birdieSteal  = false,
   }) async {
     final data = await _post('/foursomes/$foursomeId/skins/setup/', {
       'handicap_mode' : handicapMode,
@@ -2172,6 +2178,8 @@ class ApiClient {
       'per_point_rate': perPointRate,
       if (lossCap != null) 'loss_cap': lossCap,
       'participant_player_ids': participantPlayerIds,
+      'skin_minimum'  : skinMinimum,
+      'birdie_steal'  : birdieSteal,
     });
     return SkinsSummary.fromJson(data as Map<String, dynamic>);
   }
@@ -2511,11 +2519,15 @@ class ApiClient {
     String   handicapMode = 'net',
     int      netPercent   = 100,
     double?  betUnit,
+    String   skinMinimum  = 'none',
+    bool     birdieSteal  = false,
   }) async {
     final body = <String, dynamic>{
       'handicap_mode'  : handicapMode,
       'net_percent'    : netPercent,
       'participant_ids': participantIds,
+      'skin_minimum'   : skinMinimum,
+      'birdie_steal'   : birdieSteal,
     };
     if (betUnit != null) body['bet_unit'] = betUnit.toStringAsFixed(2);
     final data = await _post('/rounds/$roundId/multi-skins/setup/', body);

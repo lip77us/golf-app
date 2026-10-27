@@ -57,6 +57,7 @@ from games.models import (
 from scoring.handicap import build_score_index, _strokes_on_hole
 from scoring.models import HoleScore
 from core.handicap_math import round_half_up
+from services import skin_rules
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +165,8 @@ def setup_multi_skins(
     handicap_mode:   str  = HandicapMode.NET,
     net_percent:     int  = 100,
     bet_unit:        float | None = None,
+    skin_minimum:    str  = skin_rules.MIN_NONE,
+    birdie_steal:    bool = False,
 ) -> MultiSkinsGame:
     """
     Create (or replace) the Multi-Skins pool anchored on this host round.
@@ -180,6 +183,9 @@ def setup_multi_skins(
     """
     net_percent = max(0, min(200, int(net_percent)))
 
+    skin_minimum = skin_rules.normalise_minimum(skin_minimum)
+    birdie_steal = bool(birdie_steal)
+
     game, created = MultiSkinsGame.objects.get_or_create(
         round    = round_obj,
         defaults = {
@@ -187,14 +193,19 @@ def setup_multi_skins(
             'net_percent'  : net_percent,
             'bet_unit'     : bet_unit if bet_unit is not None else round_obj.bet_unit,
             'status'       : MatchStatus.PENDING,
+            'skin_minimum' : skin_minimum,
+            'birdie_steal' : birdie_steal,
         },
     )
     if not created:
         game.handicap_mode = handicap_mode
         game.net_percent   = net_percent
+        game.skin_minimum  = skin_minimum
+        game.birdie_steal  = birdie_steal
         if bet_unit is not None:
             game.bet_unit = bet_unit
-        game.save(update_fields=['handicap_mode', 'net_percent', 'bet_unit'])
+        game.save(update_fields=['handicap_mode', 'net_percent', 'bet_unit',
+                                 'skin_minimum', 'birdie_steal'])
 
     pids = valid_participant_ids(round_obj, participant_ids)
     game.participants.set(pids)
@@ -510,6 +521,33 @@ def _build_pool_so_index(game: MultiSkinsGame, member_by_canon: dict) -> dict:
 # Calculator
 # ---------------------------------------------------------------------------
 
+def _pool_gross_and_pars(game) -> tuple:
+    """({cid: {hole: gross}}, {cid: {hole: par}}) keyed by CANONICAL id.
+
+    The validation rules need gross and par, which the pool score index does
+    not carry.  Both are read through `_resolve_participant_memberships`, so a
+    golfer is measured against the card he actually played on -- his own tee in
+    his own round, which in a cross-round pool is not the host's.
+    """
+    members = _resolve_participant_memberships(game)
+    gross: dict = {}
+    pars: dict = {}
+    for cid, m in members.items():
+        if m is None:
+            continue
+        pars[cid] = {
+            h['number']: h.get('par')
+            for h in ((m.tee.holes or []) if m.tee_id else [])
+            if h.get('number')
+        }
+        rows = HoleScore.objects.filter(
+            foursome_id=m.foursome_id, player_id=m.player_id,
+        ).only('hole_number', 'gross_score')
+        gross[cid] = {r.hole_number: r.gross_score for r in rows
+                      if r.gross_score is not None}
+    return gross, pars
+
+
 @transaction.atomic
 def _calculate_game(game: MultiSkinsGame) -> list:
     """Recompute MultiSkinsHoleResult rows for a pool.  Returns saved rows."""
@@ -522,6 +560,7 @@ def _calculate_game(game: MultiSkinsGame) -> list:
         return []
 
     score_index = _build_pool_score_index(game)   # keyed by canonical id
+    gross_index, par_index = _pool_gross_and_pars(game)
 
     rows         = []
     fully_scored = 0
@@ -539,8 +578,18 @@ def _calculate_game(game: MultiSkinsGame) -> list:
             continue
 
         fully_scored += 1
-        min_score = min(scores.values())
-        leaders   = [cid for cid, s in scores.items() if s == min_score]
+        # Same decider as round skins (services/skin_rules).  An empty answer
+        # means nobody validated, which here lands on the pool's own rule for
+        # an unwon hole: the skin dies (no carryover in a cross-round pool).
+        leaders = skin_rules.decide(
+            scores,
+            {cid: gross_index.get(cid, {}).get(hole_num)
+             for cid in participant_ids},
+            {cid: par_index.get(cid, {}).get(hole_num)
+             for cid in participant_ids},
+            minimum      = game.skin_minimum,
+            birdie_steal = game.birdie_steal,
+        )
 
         winner_id = leaders[0] if len(leaders) == 1 else None
         rows.append(MultiSkinsHoleResult(
@@ -604,6 +653,9 @@ def multi_skins_summary(round_obj) -> dict:
         return {
             'status'   : MatchStatus.PENDING,
             'handicap' : {'mode': HandicapMode.NET, 'net_percent': 100},
+            'skin_minimum': skin_rules.MIN_NONE,
+            'birdie_steal': False,
+            'skin_rules'  : '',
             'players'  : [],
             'holes'    : [],
             'money'    : {'bet_unit': bet_unit, 'pool': 0.0, 'total_skins': 0},
@@ -775,6 +827,13 @@ def _summary_for_game(game: MultiSkinsGame) -> dict:
             'mode'       : game.handicap_mode,
             'net_percent': game.net_percent,
         },
+        # Same three keys round skins emits, same meanings — one vocabulary
+        # for one rule, so a client draws the pool's rules with the code it
+        # already has.
+        'skin_minimum': game.skin_minimum,
+        'birdie_steal': game.birdie_steal,
+        'skin_rules'  : skin_rules.rules_line(game.skin_minimum,
+                                              game.birdie_steal),
         'players'  : players_out,
         'holes'    : holes_out,
         'money'    : {

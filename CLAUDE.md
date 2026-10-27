@@ -6022,3 +6022,108 @@ Watch the hole count when writing a test here: `_holesLeft` counts the hole
 in front of you while nothing is picked and drops it once something is, so
 `holesAfter: 14` with no pick reads `15 holes to play`. My first test had it
 off by one.
+
+## Skin validation — a minimum, and gross birdies steal
+
+Asked for by Paul on 27 Oct 2026 after a user described his Friday game:
+*"you win the skin with your stroke but you have to validate the skin with a
+gross par and birdies steal."* Added to **both** skins engines —
+per-foursome `SkinsGame` and the cross-group/cross-round `MultiSkinsGame`.
+
+`SkinsGame.skin_minimum` / `birdie_steal` and the same pair on
+`MultiSkinsGame` (`games/0098`). Both default OFF, so every existing game and
+the shipped app keep playing plain skins.
+
+### Two minimums, because they are different house rules
+
+`NET_PAR` requires the score the game is scored on to be par or better;
+`GROSS_PAR` requires the GROSS to be — **stricter, and the one the user
+actually described**, since a net par made off a stroke is a gross bogey and
+fails it. Paul asked for "net par minimum"; the user's own rule was gross par.
+Both are built rather than one guessed at, which is the Spots-checklist
+principle: the app is not the authority on which rule a group plays. In a
+GROSS game the two coincide, which is correct and not a collision — there is
+no net score to be more lenient about.
+
+### The design: TWO FILTERS, ONE RANKING
+
+`services/skin_rules.py`. Both rules decide **who is eligible**; neither
+changes **how scores compare**. Ranking stays on the score the game is already
+scored on, so a net game stays a net game and two players who both make a
+natural birdie are separated by their NET rather than re-ranked on gross. That
+is what makes the rules compose — either, both or neither, in any
+combination — instead of three special cases, and it means a stroke is never
+silently ignored.
+
+**The steal outranks the minimum and can never contradict it**: a gross birdie
+is better than par, so anyone passing the steal filter passes either minimum
+automatically.
+
+**A minimum is a validation on the WINNER, so the next valid claim takes the
+skin** rather than the hole going unwon. Low net over par, somebody else at
+net par: the second man wins it.
+
+### `decide()` returns LEADERS, not a winner
+
+0, 1 or several ids, and the caller owns what a non-single answer means —
+because the two engines disagree: round skins CARRIES a tied hole (when
+`carryover`) while the pool KILLS it. **Nobody qualifying returns an empty
+list, which both callers already treat exactly like a tie**, so the third
+outcome needed no new branch in either engine. That is the whole reason it is
+a filter returning leaders rather than a `winner_id`.
+
+### Par is per golfer, which is a deliberate departure
+
+Each man is measured against the par of HIS OWN tee. Every other game here
+takes one layout for the foursome (`services.triple_cup._par_by_hole` says
+so), which is right when the question is about the hole. This question is
+about the GOLFER — did *he* make par — so on a mixed-tee card, where men's and
+women's pars can differ, his own card decides. In the cross-round pool that
+also means his own tee in his own ROUND, read through
+`_resolve_participant_memberships`.
+
+**Everything fails open.** An unknown minimum normalises to `none`, and a
+missing par or gross passes rather than voiding a skin — a typo must not
+quietly start changing who gets paid.
+
+### The decorator trap, hit again
+
+`setup_sixes` has a note in this file about a helper inserted immediately
+above a function landing BETWEEN `@transaction.atomic` and the `def`. **I did
+exactly that to `calculate_skins` and `_calculate_game`**, moving atomicity
+onto two new read-only helpers and stripping it from both calculators. The
+traceback gave it away (`contextlib.py inner` in the frame above the helper)
+along with a second error — `HoleScore` is in `scoring.models`, not
+`tournament.models`, and skins.py already imports it at module level. Insert
+**above the decorator**, and check the line above the `def` afterwards.
+
+### Mobile
+
+`widgets/skin_validation_card.dart` is ONE control used by both setup screens,
+for the same reason the rule is one module. It passes the server's own slugs
+through untranslated, and its footer states the consequence that plain skins
+never has — **a hole can now go unwon**. `SkinsSummary` and
+`MultiSkinsSummary` both gained `skinMinimum` / `birdieSteal` / `skinRules`,
+the last being the server's own phrase and **empty when neither rule is on**,
+so a client tests it instead of printing "no minimum" at a group playing plain
+skins.
+
+`mobile/test/skin_validation_test.dart` asserts at the SOURCE that both setup
+screens render the card AND post both values, and that the client sends them
+on both endpoints — this repo's recurring failure is a rule reachable from one
+screen and not the other (the day bet, Hot Seat on the Road Trip sheet). A
+screen that draws the control and never posts it looks identical until
+somebody plays a round.
+
+**Still unbuilt:** nothing on the LEADERBOARD states the rules in force.
+`skin_rules` is on both summaries ready for it, and it matters — when a skin
+goes unwon a player needs to know why, which is the `_NotSetUpYet` lesson.
+
+Tests: `scoring/tests/test_skin_rules.py` (28 — the semantics as pure units,
+including both-naturals, mixed par and every fail-open case),
+`SkinValidationTests` in `scoring/tests/test_skins.py` (12 — the wiring, and
+one hole where all three minimum settings give three different answers),
+`MultiSkinsValidationTests` in `scoring/tests/test_multi_skins.py` (7 — across
+groups, and that re-running setup updates the rules),
+`SkinValidationEndpointTests` in `api/test_skins_junk.py` (7) and
+`mobile/test/skin_validation_test.dart` (14).

@@ -67,6 +67,7 @@ from core.models import SpotType
 from scoring.handicap import build_score_index, _strokes_on_hole
 from scoring.models import HoleScore
 from core.handicap_math import round_half_up
+from services import skin_rules
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +90,8 @@ def setup_skins(
     per_point_rate      = 0,
     loss_cap            = None,
     participant_player_ids = None,
+    skin_minimum:   str = skin_rules.MIN_NONE,
+    birdie_steal:  bool = False,
 ) -> 'SkinsGame':
     """
     Create (or replace) the Skins game for a foursome.
@@ -104,6 +107,8 @@ def setup_skins(
     net_percent = max(0, min(200, int(net_percent)))
 
     game = SkinsGame.objects.create(
+        skin_minimum   = skin_rules.normalise_minimum(skin_minimum),
+        birdie_steal   = bool(birdie_steal),
         foursome       = foursome,
         handicap_mode  = handicap_mode,
         net_percent    = net_percent,
@@ -266,6 +271,37 @@ def _skins_withdrawal_plan(real_members, foursome) -> dict:
 # Calculator
 # ---------------------------------------------------------------------------
 
+def _gross_and_pars(foursome, player_ids):
+    """({pid: {hole: gross}}, {pid: {hole: par}}) for the validation rules.
+
+    `build_score_index` returns only the adjusted score, so the two new rules
+    need gross and par fetched alongside rather than derived from it: a net
+    score cannot tell you whether the gross was a par, which is the whole
+    point of the gross-par minimum.
+
+    Par is read from EACH GOLFER'S OWN TEE.  Every other game here takes one
+    layout for the foursome, which is right when the question is about the
+    hole; this question is about the golfer, and on a mixed-tee card the pars
+    can differ (see services/skin_rules).
+    """
+    gross: dict = {}
+    for hs in HoleScore.objects.filter(
+            foursome=foursome, player_id__in=player_ids).only(
+            'player_id', 'hole_number', 'gross_score'):
+        if hs.gross_score is not None:
+            gross.setdefault(hs.player_id, {})[hs.hole_number] = hs.gross_score
+
+    pars: dict = {}
+    for m in foursome.memberships.select_related('tee').all():
+        if m.player_id not in player_ids or m.tee_id is None:
+            continue
+        pars[m.player_id] = {
+            h['number']: h.get('par')
+            for h in (m.tee.holes or []) if h.get('number')
+        }
+    return gross, pars
+
+
 @transaction.atomic
 def calculate_skins(foursome) -> list:
     """
@@ -316,6 +352,11 @@ def calculate_skins(foursome) -> list:
             net_percent   = game.net_percent,
         )
 
+    # Gross + par for the validation rules.  Cheap and unconditional: the
+    # rules are read per hole below and a branch here would only move the
+    # question somewhere it is harder to see.
+    gross_index, par_index = _gross_and_pars(foursome, real_ids)
+
     # Wipe prior hole results — re-created from scratch each call.
     SkinsHoleResult.objects.filter(game=game).delete()
 
@@ -347,8 +388,18 @@ def calculate_skins(foursome) -> list:
             scored += 1
             pot    += 1  # this hole adds 1 to the pot
 
-            min_score = min(scores_by_id.values())
-            leaders   = [pid for pid, s in scores_by_id.items() if s == min_score]
+            # One decider for both engines (services/skin_rules).  With
+            # both rules off this is the plain min() it has always been; an
+            # EMPTY answer means nobody validated, which falls through to the
+            # same carry / kill branches a tie does -- the skin simply was
+            # not won.
+            leaders = skin_rules.decide(
+                scores_by_id,
+                {pid: gross_index.get(pid, {}).get(hole_num) for pid in roster},
+                {pid: par_index.get(pid, {}).get(hole_num) for pid in roster},
+                minimum      = game.skin_minimum,
+                birdie_steal = game.birdie_steal,
+            )
 
             if len(leaders) == 1:
                 # Outright winner — collects the whole pot.
@@ -565,6 +616,9 @@ def skins_summary(foursome) -> dict:
             'handicap'  : {'mode': str, 'net_percent': int},
             'carryover' : bool,
             'allow_junk': bool,
+            'skin_minimum': 'none' | 'net_par' | 'gross_par',
+            'birdie_steal': bool,
+            'skin_rules'  : str,   # '' when neither rule is on
             'players'   : [
                 {
                     'player_id'  : int,
@@ -616,6 +670,9 @@ def skins_summary(foursome) -> dict:
             'handicap'  : {'mode': HandicapMode.STROKES_OFF, 'net_percent': 100},
             'carryover' : True,
             'allow_junk': False,
+            'skin_minimum': skin_rules.MIN_NONE,
+            'birdie_steal': False,
+            'skin_rules'  : '',
             'players'   : [],
             'holes'     : [],
             'money'     : {'bet_unit': bet_unit, 'pool': 0.0, 'total_skins': 0},
@@ -892,6 +949,14 @@ def skins_summary(foursome) -> dict:
         },
         'carryover' : game.carryover,
         'allow_junk': game.allow_junk,
+        # The validation rules in force, plus a ready phrase for a board that
+        # wants to state them.  Empty string when neither is on, so a client
+        # can test it instead of rendering "no minimum" at a group playing
+        # plain skins.
+        'skin_minimum': game.skin_minimum,
+        'birdie_steal': game.birdie_steal,
+        'skin_rules'  : skin_rules.rules_line(game.skin_minimum,
+                                              game.birdie_steal),
         # What the group agreed junk means, for the leaderboard's Junk in
         # play card and the hole's tick sheet. Empty when junk is off.
         # The WHOLE list, so the setup checklist can draw an unticked row

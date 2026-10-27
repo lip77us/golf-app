@@ -499,3 +499,88 @@ class MultiSkinsScorecardDotsTests(TestCase):
         # A1 carries none.
         self.assertEqual(sum(self._dots(s, self.pid['A1']).values()), 0)
         self.assertEqual(sum(self._dots(s, self.pid['A2']).values()), 9)
+
+
+class MultiSkinsValidationTests(TestCase):
+    """The same two rules in the cross-group pool.
+
+    The pool has NO carryover, so "nobody validated" lands on its own rule for
+    an unwon hole: the skin dies.  That divergence from round skins is the
+    reason `skin_rules.decide()` returns leaders and lets each engine own what
+    a non-single answer means.
+
+    A1 and B4 play in DIFFERENT groups, which is the point: the pool has to
+    find each golfer's gross and his own tee's par in his own foursome.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course)
+        self.g1 = make_foursome(self.round, [('A1', 0), ('A2', 9)],
+                                tee=self.tee, group_number=1)
+        self.g2 = make_foursome(self.round, [('B1', 18), ('B2', 9)],
+                                tee=self.tee, group_number=2)
+        self.pid = {}
+        for fs in (self.g1, self.g2):
+            for m in fs.memberships.select_related('player'):
+                self.pid[m.player.name] = m.player_id
+        # The pool is A1 (scratch, group 1) against B1 (18, group 2).
+        self.roster = [self.pid['A1'], self.pid['B1']]
+
+    def _pool(self, **kw):
+        return setup_multi_skins(self.round, self.roster,
+                                 handicap_mode='net', **kw)
+
+    def _won(self):
+        calculate_multi_skins(self.round)
+        s = multi_skins_summary(self.round)
+        return {p['name']: p['skins_won'] for p in s['players']}
+
+    def _both_bogey(self):
+        """Par 4.  Both shoot 5; B1's stroke makes his a net par."""
+        submit_hole(self.g1, 1, [(self.pid['A1'], 5), (self.pid['A2'], 6)])
+        submit_hole(self.g2, 1, [(self.pid['B1'], 5), (self.pid['B2'], 6)])
+
+    def test_with_no_minimum_the_net_par_wins_across_groups(self):
+        self._pool()
+        self._both_bogey()
+        self.assertEqual(self._won(), {'A1': 0, 'B1': 1})
+
+    def test_gross_par_minimum_refuses_it_and_the_skin_dies(self):
+        self._pool(skin_minimum='gross_par')
+        self._both_bogey()
+        self.assertEqual(self._won(), {'A1': 0, 'B1': 0})
+
+    def test_net_par_minimum_lets_it_through(self):
+        self._pool(skin_minimum='net_par')
+        self._both_bogey()
+        self.assertEqual(self._won(), {'A1': 0, 'B1': 1})
+
+    def test_a_natural_birdie_steals_from_another_group(self):
+        self._pool(birdie_steal=True)
+        # A1 makes a real 3 in group 1; B1's 4 nets to 3 in group 2.
+        submit_hole(self.g1, 1, [(self.pid['A1'], 3), (self.pid['A2'], 6)])
+        submit_hole(self.g2, 1, [(self.pid['B1'], 4), (self.pid['B2'], 6)])
+        self.assertEqual(self._won(), {'A1': 1, 'B1': 0})
+
+    def test_without_the_steal_that_hole_is_a_tie_and_dies(self):
+        self._pool()
+        submit_hole(self.g1, 1, [(self.pid['A1'], 3), (self.pid['A2'], 6)])
+        submit_hole(self.g2, 1, [(self.pid['B1'], 4), (self.pid['B2'], 6)])
+        self.assertEqual(self._won(), {'A1': 0, 'B1': 0})
+
+    def test_the_defaults_are_off(self):
+        game = self._pool()
+        self.assertEqual(game.skin_minimum, 'none')
+        self.assertFalse(game.birdie_steal)
+
+    def test_re_running_setup_updates_the_rules(self):
+        """get_or_create's update branch has to carry them too, or a TD who
+        edits the pool silently keeps the old rules."""
+        self._pool(skin_minimum='net_par', birdie_steal=True)
+        game = self._pool(skin_minimum='gross_par', birdie_steal=False)
+        self.assertEqual(game.skin_minimum, 'gross_par')
+        self.assertFalse(game.birdie_steal)
+        game.refresh_from_db()
+        self.assertEqual(game.skin_minimum, 'gross_par')
+        self.assertFalse(game.birdie_steal)

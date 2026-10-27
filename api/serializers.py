@@ -1621,6 +1621,15 @@ class SkinsSetupSerializer(serializers.Serializer):
                         min_value=0, max_value=200, default=100,
                     )
     carryover     = serializers.BooleanField(default=True)
+    # Skin validation (services/skin_rules.py).  Both default OFF so a client
+    # that does not send them keeps playing plain skins -- which is also what
+    # the shipped app does, so no build is stranded.
+    skin_minimum  = serializers.ChoiceField(
+                        choices=['none', 'net_par', 'gross_par'],
+                        default='none', required=False,
+                    )
+    birdie_steal  = serializers.BooleanField(default=False, required=False)
+
     allow_junk    = serializers.BooleanField(default=False)
     #: Which named junk counts — the SAME vocabulary Spots uses. Omitted
     #: means "a client that has never heard of types", which is the shipped
@@ -1671,6 +1680,14 @@ class MultiSkinsSetupSerializer(serializers.Serializer):
     net_percent     = serializers.IntegerField(
                         min_value=0, max_value=200, default=100,
                     )
+    # Skin validation (services/skin_rules.py).  Both default OFF so a client
+    # that does not send them keeps playing plain skins -- which is also what
+    # the shipped app does, so no build is stranded.
+    skin_minimum  = serializers.ChoiceField(
+                        choices=['none', 'net_par', 'gross_par'],
+                        default='none', required=False,
+                    )
+    birdie_steal  = serializers.BooleanField(default=False, required=False)
     bet_unit        = serializers.DecimalField(
                         max_digits=6, decimal_places=2, required=False,
                         help_text="Entry fee per player.  Defaults to "

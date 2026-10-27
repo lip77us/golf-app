@@ -8014,6 +8014,11 @@ class SkinsSetupView(APIView):
                 per_point_rate = d.get('per_point_rate', 0),
                 loss_cap       = d.get('loss_cap'),
                 participant_player_ids = d.get('participant_player_ids', []),
+                # Absent means plain skins, which is what the shipped app
+                # plays -- these two only move money for a client that asked
+                # for them.
+                skin_minimum   = d.get('skin_minimum', 'none'),
+                birdie_steal   = d.get('birdie_steal', False),
             )
         except ValueError as exc:
             return Response({'detail': str(exc)},
@@ -8984,6 +8989,8 @@ class MultiSkinsSetupView(APIView):
             handicap_mode   = d.get('handicap_mode', 'net'),
             net_percent     = d.get('net_percent', 100),
             bet_unit        = d.get('bet_unit'),
+            skin_minimum    = d.get('skin_minimum', 'none'),
+            birdie_steal    = d.get('birdie_steal', False),
         )
         active = list(round_obj.active_games or [])
         if 'multi_skins' not in active:
