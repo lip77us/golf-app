@@ -239,3 +239,67 @@ def country_contradiction(row: dict) -> str | None:
         return None
     return (f'says country={stated!r} but its address ends {tail!r} '
             f'({address!r})')
+
+
+# ---------------------------------------------------------------------------
+# Yardage cross-check — OPERATOR ONLY
+# ---------------------------------------------------------------------------
+
+def yardage_notes(api_course) -> list:
+    """Notes where a tee's STATED total disagrees with the sum of its holes.
+
+    **These are for us, never for the golfer.**  Paul, 27 Oct 2026: *"as long
+    as it is only a warning to us and not to the user.  They never care about
+    the accuracy of total yards."*  He is right, and the mechanics agree: yards
+    feed the display and the combo-tee indicator, while scoring reads par and
+    stroke index — so a four-yard typo must not colour a snackbar at a golfer
+    who is trying to add his home course.
+
+    That is why this is a separate function with its own return value rather
+    than more entries in `assert_course_quality`'s warnings list: THAT list
+    reaches the user through `result['warning']`.  Two audiences, two channels,
+    kept apart by construction — the same split `detail` and `problems` needed
+    one commit earlier, after the technical reason was shown to a member in a
+    red snackbar.
+
+    Never raises and never blocks an import: a mismatch is a HINT that some
+    per-hole number is wrong, not proof, and refusing a course over it would
+    block real courses for something cosmetic.
+
+    Why it earns its keep: at Annandale three stated totals disagreed with
+    their holes, and all three were real errors — Green's 1st and 18th (which
+    also broke a combo), a combo blended from the wrong column on two holes,
+    and one genuine typo in the total itself.  None of it was visible to the
+    app, because the adapter used to drop `total_yards` entirely.
+    """
+    tees = api_course.get('tees') or []
+    # Only grumble about a MISSING total when the card carries them elsewhere.
+    # Plenty of courses simply have no such field, and reporting every tee of
+    # every one of those is noise that would get the whole check ignored.
+    any_stated = any(t.get('total_yards') for t in tees)
+
+    notes = []
+    for i, tee in enumerate(tees):
+        label = _tee_label(tee, i)
+        sex = tee.get('sex') or '?'
+        holes = tee.get('holes') or []
+        total = sum((h.get('yards') or 0) for h in holes)
+        if not total:
+            # No per-hole yardages at all — there is nothing to compare, and
+            # a rating-only tee is a legitimate shape (see the 0-hole rule).
+            continue
+
+        stated = tee.get('total_yards')
+        if not stated:
+            if any_stated:
+                notes.append(
+                    f'{label} ({sex}): no stated total; the holes add to {total}.'
+                )
+            continue
+
+        if int(stated) != total:
+            notes.append(
+                f'{label} ({sex}): stated total {stated} but the holes add to '
+                f'{total} (off by {int(stated) - total:+d}).'
+            )
+    return notes

@@ -372,6 +372,13 @@ def _adapt_tee(raw: dict, sex: str) -> dict:
                           if raw.get('course_rating') not in (None, '')
                           else None),
         'par'          : _opt_int(raw.get('par_total')),
+        # The tee's own STATED total yardage, kept so the import can compare it
+        # with the sum of the holes.  It was dropped for a long time, and that
+        # is why three real hole errors in one course (Annandale, Oct 2026)
+        # were invisible: a stated total that disagrees with the holes is the
+        # cheapest signal that a per-hole number is wrong.  None when the API
+        # omits it -- NOT 0, which would read as a course of zero length.
+        'total_yards'  : _opt_int(raw.get('total_yards')) or None,
         'sex'          : sex,           # 'M' or 'W' — derived from tees.male / tees.female
         'holes'        : [_adapt_hole(h, number=i + 1) for i, h in enumerate(holes)],
     }

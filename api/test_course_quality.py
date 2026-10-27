@@ -23,6 +23,7 @@ from accounts.models import Account
 from core.models import CatalogCourse, Course
 from services.course_quality import (
     CourseQualityError, assert_course_quality, validate_tee_holes,
+    yardage_notes,
 )
 from services.golf_api_client import _adapt_hole
 
@@ -537,3 +538,156 @@ class HeldCopyBeatsUpstreamTests(TestCase):
                                 {'course_id': self.API_ID}, format='json')
         self.assertEqual(resp.status_code, 409, resp.data)
         self.assertTrue(resp.data['already_exists'])
+
+
+# ---------------------------------------------------------------------------
+# The yardage cross-check — ours, never the golfer's
+# ---------------------------------------------------------------------------
+
+def _yd_tee(name, stated, yards, sex='M'):
+    return {'name': name, 'sex': sex, 'slope': 130,
+            'course_rating': Decimal('70.0'), 'par': 70,
+            'total_yards': stated,
+            'holes': [{'number': i + 1, 'par': 4, 'stroke_index': i + 1,
+                       'yards': y} for i, y in enumerate(yards)]}
+
+
+class YardageNotesUnitTests(TestCase):
+    """Pure units.  Every shape here came off the real Annandale card."""
+
+    def test_a_matching_total_says_nothing(self):
+        self.assertEqual(
+            yardage_notes({'tees': [_yd_tee('Blue', 180, [10] * 18)]}), [])
+
+    def test_a_mismatch_names_the_tee_the_sex_and_the_gap(self):
+        # Green: stated 5003 against holes that add to 5049.
+        yards = [322] + [269] * 16 + [458]
+        note, = yardage_notes({'tees': [_yd_tee('Green', 5003, yards)]})
+        self.assertIn('Green', note)
+        self.assertIn('(M)', note)
+        self.assertIn('5003', note)
+        self.assertIn(str(sum(yards)), note)
+        self.assertIn('off by', note)
+
+    def test_the_gap_is_signed_so_the_direction_reads(self):
+        over = yardage_notes({'tees': [_yd_tee('A', 200, [10] * 18)]})[0]
+        under = yardage_notes({'tees': [_yd_tee('B', 160, [10] * 18)]})[0]
+        self.assertIn('+20', over)
+        self.assertIn('-20', under)
+
+    def test_a_missing_total_is_flagged_when_the_card_has_others(self):
+        """Women's Orange carried none while every other tee did."""
+        note, = yardage_notes({'tees': [
+            _yd_tee('Blue', 180, [10] * 18),
+            _yd_tee('Orange', None, [10] * 18, sex='W'),
+        ]})
+        self.assertIn('Orange', note)
+        self.assertIn('(W)', note)
+        self.assertIn('no stated total', note)
+
+    def test_a_card_stating_no_totals_at_all_is_silent(self):
+        """Many courses have no such field; grumbling about every tee of every
+        one of those is how a check earns being ignored."""
+        self.assertEqual(yardage_notes({'tees': [
+            _yd_tee('Blue', None, [10] * 18),
+            _yd_tee('White', None, [10] * 18),
+        ]}), [])
+
+    def test_a_tee_with_no_per_hole_yardage_is_skipped(self):
+        """A rating-only tee is legitimate — there is nothing to compare."""
+        self.assertEqual(
+            yardage_notes({'tees': [_yd_tee('Rating only', 6000,
+                                            [None] * 18)]}), [])
+
+    def test_it_never_raises_on_a_junk_payload(self):
+        for junk in ({}, {'tees': None}, {'tees': [{}]},
+                     {'tees': [{'holes': None, 'total_yards': None}]}):
+            yardage_notes(junk)
+
+
+@override_settings(COURSE_IMPORT_ALERT_EMAIL='ops@halved.golf')
+class YardageIsOperatorOnlyTests(TestCase):
+    """Paul, 27 Oct 2026: "only a warning to us and not to the user.  They
+    never care about the accuracy of total yards."
+    """
+
+    def setUp(self):
+        cache.clear()
+        mail.outbox = []
+        self.account = Account.objects.create(name='Acct Y')
+        self.user = User.objects.create_user(
+            username='+15105550000', account=self.account,
+            phone='+15105550000',
+        )
+        self.user.is_account_admin = True
+        self.user.save(update_fields=['is_account_admin'])
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        self.hole_sum = sum((h.get('yards') or 0) for h in _good_holes())
+
+    def _payload(self, stated):
+        return {
+            'id': 'yard0001', 'club_name': 'Yardage GC',
+            'course_name': 'Yardage GC', 'city': 'X', 'state': 'CA',
+            'country': 'US', 'latitude': Decimal('1.0'),
+            'longitude': Decimal('2.0'),
+            'tees': [{'name': 'Blue', 'slope': 130,
+                      'course_rating': Decimal('72.1'), 'par': 72, 'sex': 'M',
+                      'total_yards': stated, 'holes': _good_holes()}],
+        }
+
+    def _import(self, stated):
+        with patch('services.golf_api_client.fetch_course') as mf:
+            mf.return_value = self._payload(stated)
+            return self.client.post(reverse('api-course-import'),
+                                    {'course_id': 'yard0001'}, format='json')
+
+    def test_the_import_still_succeeds(self):
+        resp = self._import(self.hole_sum + 58)
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertTrue(Course.objects.filter(account=self.account).exists())
+
+    def test_the_response_says_nothing_about_yardage(self):
+        """`result['warning']` is the USER's channel and must stay clean."""
+        resp = self._import(self.hole_sum + 58)
+        blob = str(resp.data).replace('Yardage GC', '')
+        for leak in ('off by', 'add to', 'stated total', '+58'):
+            self.assertNotIn(leak, blob)
+        self.assertNotIn('warning', resp.data)
+
+    def test_we_are_told_in_the_log_and_by_email(self):
+        with self.assertLogs('services.course_import_report', 'WARNING') as cm:
+            self._import(self.hole_sum + 58)
+        line = '\n'.join(cm.output)
+        self.assertIn('YARDAGE', line)
+        self.assertIn(f'user={self.user.id}', line)
+        self.assertNotIn('5105550000', line)     # phone stays out of the log
+
+        self.assertEqual(len(mail.outbox), 1)
+        body = mail.outbox[0].body
+        self.assertIn('does not match', body)
+        self.assertIn('+15105550000', body)      # ...and is in the email
+        self.assertIn('Nobody was blocked', body)
+
+    def test_a_course_that_adds_up_says_nothing_at_all(self):
+        resp = self._import(self.hole_sum)
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(mail.outbox, [])
+
+    def test_the_yardage_throttle_is_its_own(self):
+        """A refusal and a yardage note for the same course must not silence
+        each other: different findings, and the first of each is worth having.
+        """
+        from services.course_import_report import (
+            report_import_refusal, report_yardage_notes,
+        )
+        self.assertTrue(report_import_refusal(
+            self.user, 'samecourse', 'Same GC', ['Course has no tees.']))
+        self.assertTrue(report_yardage_notes(
+            self.user, 'samecourse', 'Same GC', ['Blue (M): off by +4.']))
+        self.assertEqual(len(mail.outbox), 2)
+
+    def test_no_notes_means_no_email_even_when_called_directly(self):
+        from services.course_import_report import report_yardage_notes
+        self.assertFalse(report_yardage_notes(self.user, 'x', 'X GC', []))
+        self.assertEqual(mail.outbox, [])

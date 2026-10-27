@@ -10927,6 +10927,16 @@ class CourseImportView(APIView):
         for name in incomplete_tees:
             _log.warning('Tee "%s" imported without full 18-hole data.', name)
 
+        # A tee whose STATED total disagrees with the sum of its holes.  This
+        # goes to US and never into `result` -- a golfer does not care that a
+        # total is four yards out, and yards feed the display and the combo-tee
+        # indicator rather than scoring.  `result['warning']` below is the
+        # user-facing channel and must stay free of this.
+        from services.course_quality import yardage_notes
+        from services.course_import_report import report_yardage_notes
+        report_yardage_notes(request.user, course_id, course_name,
+                             yardage_notes(api_course))
+
         # ── Upsert the shared catalog, then copy-on-add into this account ─────
         catalog_course = upsert_catalog_course(api_course, course_id, course_name)
         # Backfill provenance on a legacy name-matched copy so future re-imports

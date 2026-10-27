@@ -792,6 +792,82 @@ Tests: `api/test_course_quality.py` (32) — `RefusalIsAnnouncedTests` (8),
 `problems` split, including the exact stroke-index message a member was
 shown.
 
+#### The stated total vs the sum of the holes — a check we never had
+
+Paul asked, 27 Oct 2026: *"Did you check the yardages listed for the tees
+vs. the sum of the holes?"* I had not, and could not have: GolfCourseAPI's
+TeeBox carries **`total_yards`** beside `par_total`, and **`_adapt_tee` read
+the par and dropped the yardage.** So the app fetched the one number that
+cross-checks eighteen others and threw it away.
+
+Checking it by hand against the raw payload found **three mismatches in one
+course, and all three were real errors**:
+
+| tee | stated | holes | |
+|---|---|---|---|
+| Green (M) | 5003 | 5049 | **−46** |
+| Orange/Blue Combo (M) | 6386 | 6328 | **+58** |
+| Blue/White Combo (M) | 5796 | 5792 | **+4** |
+
+**Green triangulated to one fix.** Its 1st and 18th read 322 and 458; the
+White/Green Combo had **282** and **452** on those holes, which matched no
+parent and was the loose end from the combo check. 322−282 = 40, 458−452 = 6,
+and 40+6 = **46** — exactly Green's shortfall. Setting Green's two holes to
+the combo's values made Green add up to its own stated total AND made the
+combo resolve. One error, three symptoms, in three different places.
+
+**The Orange/Blue Combo's stated total was the third witness.** Its men's and
+women's cards differed on holes 3 and 17 — a mirror swap, where each took the
+longer on one and the shorter on the other. Both blends were internally legal
+and resolved cleanly, so nothing in the combo logic could tell which was
+right. The men's STATED total was exactly the women's hole sum, which settled
+it: the men's holes were wrong.
+
+**Blue/White was the total itself.** Every hole sourced cleanly from a parent
+and no hole had Blue and White four yards apart, so no hole edit could close
+the gap without breaking the sourcing. 5796 should read 5792.
+
+### It is OURS, not the golfer's — and that needed a second channel
+
+Paul: *"as long as it is only a warning to us and not to the user. They never
+care about the accuracy of total yards."* Right, and the mechanics agree —
+yards feed the display and the combo-tee indicator while scoring reads par and
+stroke index.
+
+That is why `yardage_notes()` is a **separate function with its own return
+value** rather than more entries in `assert_course_quality`'s warnings list:
+**that list reaches the user**, through `result['warning']` and an orange
+snackbar. Same split `detail` and `problems` needed one commit earlier, learnt
+the same way — two audiences, two channels, kept apart by construction rather
+than by remembering. `report_yardage_notes` logs and emails on the operator
+channel and **puts nothing in the response**, which a test asserts by scanning
+the whole payload for the vocabulary.
+
+Three rules in the check, each there to stop it being ignored:
+- **A missing total is flagged only when the card states others.** Plenty of
+  courses carry no such field, and a note per tee on every one of those is
+  noise that gets the whole check tuned out. (Annandale's women's Orange was
+  the real case: the one tee of twelve without one.)
+- **A tee with no per-hole yardage is skipped** — a rating-only tee is a
+  legitimate shape, and there is nothing to compare.
+- **It never blocks an import and never raises.** A mismatch is a HINT that a
+  per-hole number is wrong, not proof.
+
+Its own throttle key, so a refusal and a yardage note for one course do not
+silence each other.
+
+**`total_yards` is not STORED**, only checked at import. Storing it needs a
+migration on `Tee` and `CatalogTee` and would let the console's course editor
+run the same check later; worth doing if the editor ever wants it.
+
+Verified against the live card: the two remaining Annandale discrepancies, and
+nothing else, with `assert_course_quality` returning no user-facing warnings.
+
+Tests: `api/test_course_quality.py` (45) — `RefusalIsAnnouncedTests` (8),
+`HeldCopyBeatsUpstreamTests` (5), `YardageNotesUnitTests` (7),
+`YardageIsOperatorOnlyTests` (6), and the three on the `detail` / `problems`
+split.
+
 ### Copy-on-write tees (round-history freeze) — implemented
 Makes an account `Tee` IMMUTABLE once a round references it, so a completed
 round's scorecard stays frozen against the exact hole data (par + stroke index)

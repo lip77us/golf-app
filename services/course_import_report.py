@@ -187,3 +187,81 @@ def report_import_refusal(user, course_id, course_name, problems,
         # The 422 already went back to the golfer and is the part that matters.
         logger.exception('course-import refusal email failed for %s', course_id)
         return False
+
+
+def yardage_email(user, course_id, course_name, notes):
+    """Compose (subject, body) for the yardage cross-check.  Pure."""
+    w = _who(user)
+    subject = f'Halved: course yardage does not add up — {course_name}'
+    lines = [
+        f'"{course_name}" imported fine, but some tees state a total yardage',
+        'that does not match the sum of their holes.',
+        '',
+        'Nobody was blocked and no golfer was shown this: yards feed the',
+        'display and the combo-tee indicator, not scoring.  It is worth a look',
+        'because a stated total that disagrees with the holes is usually a',
+        'per-hole number being wrong.',
+        '',
+        'What does not add up:',
+    ]
+    lines += [f'  - {n}' for n in notes]
+    lines += [
+        '',
+        'Imported by:',
+        f'  user id    {w["user_id"]}',
+        f'  account    {w["account_id"]}',
+        f'  phone      {w["phone"] or "(none on file)"}',
+        '',
+        'Course:',
+        f'  GolfCourseAPI id   {course_id}',
+        f'  name               {course_name}',
+        '',
+        'Fix it upstream at GolfCourseAPI, then re-import to refresh the',
+        'shared catalog and any account copy.',
+    ]
+    return subject, '\n'.join(lines)
+
+
+def report_yardage_notes(user, course_id, course_name, notes):
+    """Log the yardage mismatches and email the operator, once per course/day.
+
+    Returns True when an email was sent.  Never raises, and never puts anything
+    in the HTTP response -- this channel is deliberately invisible to the
+    golfer, who does not care that a tee's total is four yards out.
+
+    Its own throttle key, so a yardage note and a refusal for the same course
+    do not silence each other: they are different findings and the first of
+    each is worth having.
+    """
+    if not notes:
+        return False
+
+    try:
+        w = _who(user)
+        logger.warning(
+            'CourseImportView YARDAGE: course_id=%s name=%r user=%s '
+            'account=%s notes=%s',
+            course_id, course_name, w['user_id'], w['account_id'], list(notes),
+        )
+    except Exception:          # pragma: no cover - logging must never fail a request
+        pass
+
+    addr = _alert_address()
+    if not addr:
+        return False
+
+    key = f'course-import-yardage:{course_id}'
+    try:
+        if not cache.add(key, 1, EMAIL_THROTTLE_SECONDS):
+            return False
+    except Exception:
+        logger.exception('course-import yardage throttle unavailable')
+
+    subject, body = yardage_email(user, course_id, course_name, notes)
+    try:
+        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [addr],
+                  fail_silently=False)
+        return True
+    except Exception:
+        logger.exception('course-import yardage email failed for %s', course_id)
+        return False
