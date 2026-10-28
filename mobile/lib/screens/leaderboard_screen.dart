@@ -1596,10 +1596,12 @@ class _LowNetView extends StatefulWidget {
 }
 
 class _LowNetViewState extends State<_LowNetView> {
-  /// Player rows currently expanded to show their hole-by-hole strip. Multiple
-  /// can be open at once; a row toggles closed only when re-tapped. Resets to
-  /// empty when the tab's state is recreated (leaving and returning).
-  final Set<int> _expandedPids = <int>{};
+  /// The one player row open to its hole-by-hole strip, if any.
+  ///
+  /// **One at a time** (Design, 28 Oct 2026). Several open at once turned a
+  /// ranked table into a stack of scorecards, which is what the landscape
+  /// grid is for; the point of this board is comparing rows.
+  int? _expandedPid;
 
   /// 12A — the selected Stroke Play display mode ('gross' / 'net' /
   /// 'strokes_off'). Null until first build, where it's set to the computed
@@ -1730,7 +1732,8 @@ class _LowNetViewState extends State<_LowNetView> {
         selector,
         chips,
         const SizedBox(height: 10),
-        _headerRow(theme, showNet: showNet, adjLabel: adjLabel),
+        _headerRow(theme, showNet: showNet, showMoney: anyPayout,
+            adjLabel: adjLabel),
         for (final r in results)
           ..._playerBlock(theme, r as Map<String, dynamic>,
               showNet: showNet, showMoney: anyPayout),
@@ -1752,7 +1755,7 @@ class _LowNetViewState extends State<_LowNetView> {
         ),
         const SizedBox(height: 4),
         Text(
-          'Tap a player for their hole-by-hole scores.',
+          'Tap a player for their hole-by-hole scores. One at a time.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodySmall
               ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
@@ -1761,11 +1764,14 @@ class _LowNetViewState extends State<_LowNetView> {
     );
   }
 
-  static const double _rankW = 26;
-  static const double _colW  = 44;
+  static const double _rankW  = 26;
+  static const double _colW   = 44;
+  static const double _thruW  = 34;
+  static const double _moneyW = 52;
 
   Widget _headerRow(ThemeData theme,
-      {required bool showNet, String adjLabel = 'Net'}) {
+      {required bool showNet, required bool showMoney,
+       String adjLabel = 'Net'}) {
     final style = theme.textTheme.labelSmall?.copyWith(
         fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant);
     Widget h(String t, double w) =>
@@ -1776,12 +1782,17 @@ class _LowNetViewState extends State<_LowNetView> {
         h('#', _rankW),
         const SizedBox(width: 4),
         Expanded(child: Text('Player', style: style)),
-        // Adjusted-to-par first (Net or Strokes-off per the selected mode),
-        // Gross-to-par second. Raw totals are dropped — not meaningful mid-round.
-        if (showNet) h(adjLabel, _colW),
+        // **# · Player · Thru · Gross · Tot · Prize** (Design, 28 Oct 2026).
+        //
+        // `Tot` is the score the board RANKS on, to par — so in Strokes-off
+        // mode it is the strokes-off figure, which is why the old `S-Off`
+        // column went: it was the same number in a second place.
+        //
+        // No chevron gutter: the whole row is the control.
+        h('Thru', _thruW),
         h('Gross', _colW),
-        h('Thru', _colW),
-        const SizedBox(width: 24), // chevron gutter
+        h('Tot', _colW),
+        if (showMoney) h('Prize', _moneyW),
       ]),
     );
   }
@@ -1810,7 +1821,7 @@ class _LowNetViewState extends State<_LowNetView> {
     final holes    = (row['holes'] as List? ?? []);
     final thru     = row['holes_played'] as int? ?? holes.length;
     final grossTp  = _grossToPar(row);
-    final expanded = pid != null && _expandedPids.contains(pid);
+    final expanded = pid != null && _expandedPid == pid;
     final showPay  = showMoney && payout != null;
     // Total handicap strokes this player receives over the round (prospective),
     // and whether there's a scorecard strip to expand — a not-yet-started
@@ -1819,22 +1830,51 @@ class _LowNetViewState extends State<_LowNetView> {
     final hasStrip = pid != null &&
         (holes.isNotEmpty || (row['stroke_plan'] as Map? ?? const {}).isNotEmpty);
 
-    Widget toParCell(int? v) => SizedBox(
+    /// Gross-to-par, plain — the reference the Tot box is read against.
+    Widget grossCell(int? v) => SizedBox(
           width: _colW,
           child: Text(_ntpLabel(v),
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: toParColor(v))),
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onSurfaceVariant)),
         );
+
+    /// **Tot is a filled box** (Design, 28 Oct 2026): pine under par, deep
+    /// pine level, grey over. It is the figure the board ranks on, so it is
+    /// the one thing on the row that should be findable without reading.
+    Widget totCell(int? v) {
+      final fill = v == null
+          ? Halved.cardBorder
+          : v < 0
+              ? Halved.pine
+              : v == 0
+                  ? Halved.deepPine
+                  : Halved.muted;
+      return SizedBox(
+        width: _colW,
+        child: Center(
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 38),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+                color: fill, borderRadius: BorderRadius.circular(6)),
+            child: Text(_ntpLabel(v),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w700,
+                    color: Colors.white)),
+          ),
+        ),
+      );
+    }
     final thruLabel = holes.isEmpty ? '—' : (thru >= 18 ? 'F' : '$thru');
 
     final rowWidget = InkWell(
       onTap: !hasStrip
           ? null
-          : () => setState(() =>
-              expanded ? _expandedPids.remove(pid) : _expandedPids.add(pid)),
+          : () => setState(() => _expandedPid = expanded ? null : pid),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
         decoration: BoxDecoration(
@@ -1860,7 +1900,7 @@ class _LowNetViewState extends State<_LowNetView> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         fontSize: 14, fontWeight: FontWeight.w600)),
-                if (showNet || showPay)
+                if (showNet)
                   Row(mainAxisSize: MainAxisSize.min, children: [
                     if (showNet)
                       Text('CH $ch',
@@ -1879,36 +1919,30 @@ class _LowNetViewState extends State<_LowNetView> {
                               fontWeight: FontWeight.w600,
                               color: theme.colorScheme.primary)),
                     ],
-                    if (showNet && showPay)
-                      Text('  ·  ',
-                          style: TextStyle(
-                              fontSize: 10,
-                              color: theme.colorScheme.onSurfaceVariant)),
-                    if (showPay)
-                      Text('\$${payout.formatBet()}',
-                          style: TextStyle(
-                              fontSize: 10, color: Colors.green.shade700)),
                   ]),
               ],
             ),
           ),
-          // Net-to-par first, Gross-to-par second (gross-only rounds show one).
-          if (showNet) toParCell(ntp),
-          toParCell(grossTp),
           SizedBox(
-            width: _colW,
+            width: _thruW,
             child: Text(thruLabel,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
           ),
-          SizedBox(
-            width: 24,
-            child: !hasStrip
-                ? const SizedBox()
-                : Icon(expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 20, color: theme.colorScheme.onSurfaceVariant),
-          ),
+          grossCell(grossTp),
+          // In a gross round the ranked figure IS gross to par, so the box
+          // carries that rather than repeating the plain column.
+          totCell(showNet ? ntp : grossTp),
+          if (showMoney)
+            SizedBox(
+              width: _moneyW,
+              child: Text(showPay ? '\$${payout.formatBet()}' : '',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ),
         ]),
       ),
     );

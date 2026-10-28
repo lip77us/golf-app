@@ -148,7 +148,12 @@ class NassauBoardData {
       ],
       stake:      s.betUnit,
       pressStake: s.pressUnit,
-      net:        s.payoutTotalCapped,
+      // **The LIVE figure** (Design, 28 Oct 2026). `payoutTotalCapped` is
+      // money already banked, and a bet only banks when its nine closes —
+      // so a match 2 UP front and 2 UP overall read `All square · now $0`
+      // on a card whose whole headline is the money. This is what changes
+      // hands if the match ended now, which is what `· now` means.
+      net:        s.payoutLiveTotal,
       lossCap:    s.lossCap,
       balls: balls,
       claremont: isClaremont

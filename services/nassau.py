@@ -1330,6 +1330,32 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
     top_press_total = sum(_press_payout(p['result']) for p in top_presses_out)
     bot_press_total = sum(_press_payout(p['result']) for p in bot_presses_out)
 
+    # ── LIVE money: what changes hands if the match ended right now ───────
+    #
+    # The settled figures above read a stored `result`, which is only
+    # written once a bet closes. So a match 2 UP on the front and 2 UP
+    # overall reported `All square · now $0` — a board whose whole headline
+    # is the money, saying nothing at all for most of a round (Design, 28
+    # Oct 2026).
+    #
+    # A bet with a live margin counts to whoever is ahead; a bet that has
+    # not started counts nothing, which is what keeps a not-yet-played back
+    # nine out of the figure rather than guessing at it.
+    def _live(result, margin, holes_played, unit) -> float:
+        if result:
+            return unit if result == 'team1' else (-unit if result == 'team2'
+                                                   else 0.0)
+        if not holes_played or not margin:
+            return 0.0
+        return unit if margin > 0 else -unit
+
+    def _live_press(rows) -> float:
+        return sum(_live(r['result'], r['margin'] or 0,
+                         # A press with a margin has been played; its own
+                         # holes are the only ones that count toward it.
+                         1 if r['margin'] is not None else 0, press_unit)
+                   for r in rows)
+
     # ── Standard bet payouts ─────────────────────────────────────────────��
     front9_pay  = _payout(game.front9_result)
     back9_pay   = _payout(game.back9_result)
@@ -1608,6 +1634,23 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
             'bottom_presses' : bot_press_total,
             'bottom_total'   : bot_total,
             'total'          : top_total + bot_total,
+            # The same arithmetic over LIVE standings. `total` is the money
+            # already banked; this is the money on the table.
+            'live_total'     : _clamp_to_cap(
+                _live(game.front9_result, front9_margin, holes_front, bet_unit)
+                + _live(game.back9_result, back9_margin, holes_back, bet_unit)
+                + _live(game.overall_result, overall_margin, len(holes_out),
+                        bet_unit)
+                + _live_press(top_presses_out)
+                + (_live(game.bottom_front9_result, bot_front9_margin,
+                         holes_front, bet_unit)
+                   + _live(game.bottom_back9_result, bot_back9_margin,
+                           holes_back, bet_unit)
+                   + _live(game.bottom_overall_result, bot_overall_margin,
+                           len(holes_out), bet_unit)
+                   + _live_press(bot_presses_out)
+                   if is_claremont else 0.0),
+                game.loss_cap),
             # With 2 sides the cap is a clamp of the net total to ±cap (the
             # loser pays the winner the difference, capped). `total` is from
             # team1's perspective. None when uncapped.

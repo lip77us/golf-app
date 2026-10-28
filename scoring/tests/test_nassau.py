@@ -550,3 +550,103 @@ class BottomBetReportsItsCloseOutTests(TestCase):
             self.assertIn('decided_remaining', block, key)
             self.assertIn('* 2', block,
                           f'{key} must use the 2-points-a-hole swing')
+
+
+class LiveMoneyTests(TestCase):
+    """`payouts.live_total` — what changes hands if the match ended now.
+
+    Reported by Design, 28 Oct 2026: a match 2 UP on the front and 2 UP
+    overall drew `All square · now $0`, on a card whose whole headline is
+    the money. The settled figures read a stored `result`, which is only
+    written when a bet CLOSES — so for most of a round they are all zero.
+    """
+
+    def setUp(self):
+        self.tee = make_tee()
+        self.round = make_round(self.tee.course, handicap_mode='net',
+                                net_max_double_bogey=False)
+        self.fs = make_foursome(
+            self.round,
+            [('T1A', 8), ('T1B', 12), ('T2A', 16), ('T2B', 20)],
+            tee=self.tee,
+        )
+        members = {m.player.name: m
+                   for m in self.fs.memberships.select_related('player')}
+        self.pid = {n: m.player_id for n, m in members.items()}
+        self.team1 = [self.pid['T1A'], self.pid['T1B']]
+        self.team2 = [self.pid['T2A'], self.pid['T2B']]
+        self.round.bet_unit = Decimal('10')
+        self.round.save(update_fields=['bet_unit'])
+
+    def _win_holes(self, n):
+        """Team 1 takes `n` holes from the 1st; the rest are halved."""
+        for hole in range(1, n + 1):
+            submit_hole(self.fs, hole, [
+                (self.pid['T1A'], 4), (self.pid['T1B'], 4),
+                (self.pid['T2A'], 5), (self.pid['T2B'], 5),
+            ])
+        calculate_nassau(self.fs)
+
+    def test_a_live_lead_is_money_on_the_table(self):
+        setup_nassau(self.fs, self.team1, self.team2, handicap_mode='gross')
+        self._win_holes(2)
+        s = nassau_summary(self.fs)
+        self.assertEqual(s['front9']['margin'], 2)
+        self.assertEqual(s['overall']['margin'], 2)
+        # Nothing has CLOSED, so the settled total is still nothing...
+        self.assertEqual(s['payouts']['total'], 0.0)
+        # ...while the front and the overall are each worth the bet.
+        self.assertEqual(s['payouts']['live_total'], 20.0)
+
+    def test_a_nine_that_has_not_started_counts_NOTHING(self):
+        """The back nine is not a bet anybody is losing yet."""
+        setup_nassau(self.fs, self.team1, self.team2, handicap_mode='gross')
+        self._win_holes(2)
+        s = nassau_summary(self.fs)
+        self.assertEqual(s['back9']['holes_played'], 0)
+        # front + overall only; a third bet would make it 30.
+        self.assertEqual(s['payouts']['live_total'], 20.0)
+
+    def test_all_square_is_still_nothing(self):
+        setup_nassau(self.fs, self.team1, self.team2, handicap_mode='gross')
+        for hole in range(1, 5):
+            submit_hole(self.fs, hole, [
+                (self.pid['T1A'], 4), (self.pid['T1B'], 4),
+                (self.pid['T2A'], 4), (self.pid['T2B'], 4),
+            ])
+        calculate_nassau(self.fs)
+        s = nassau_summary(self.fs)
+        self.assertEqual(s['payouts']['live_total'], 0.0)
+
+    def test_it_agrees_with_the_settled_total_once_everything_closes(self):
+        """The two figures must converge, or the card changes its mind at
+        the 18th about money nobody moved."""
+        setup_nassau(self.fs, self.team1, self.team2, handicap_mode='gross')
+        for hole in range(1, 19):
+            submit_hole(self.fs, hole, [
+                (self.pid['T1A'], 4), (self.pid['T1B'], 4),
+                (self.pid['T2A'], 5), (self.pid['T2B'], 5),
+            ])
+        calculate_nassau(self.fs)
+        s = nassau_summary(self.fs)
+        self.assertEqual(s['payouts']['live_total'],
+                         s['payouts']['total_capped'])
+
+    def test_the_cap_clamps_the_live_figure_too(self):
+        """Otherwise the headline promises more than the cap can pay."""
+        self.round.bet_unit = Decimal('5')
+        self.round.save(update_fields=['bet_unit'])
+        setup_nassau(self.fs, self.team1, self.team2,
+                     handicap_mode='gross', loss_cap=Decimal('6'))
+        self._win_holes(2)
+        s = nassau_summary(self.fs)
+        self.assertEqual(s['payouts']['live_total'], 6.0)
+
+    def test_claremont_counts_its_points_bets_too(self):
+        setup_nassau(self.fs, self.team1, self.team2,
+                     handicap_mode='gross', variant='claremont')
+        self._win_holes(2)
+        s = nassau_summary(self.fs)
+        self.assertEqual(s['variant'], 'claremont')
+        # Front + overall on the top, and the same two on the bottom.
+        self.assertEqual(s['payouts']['live_total'], 40.0)

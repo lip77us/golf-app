@@ -4911,6 +4911,13 @@ class NassauSummary {
   final double payoutTotal;
   final double? lossCap;        // per-side loss cap, or null when uncapped
   final double  payoutTotalCapped;  // payoutTotal clamped to ±lossCap
+  /// What changes hands **if the match ended now** — every bet with a live
+  /// margin counted to whoever is ahead, already clamped to the cap.
+  ///
+  /// The settled figures read a stored result, which is only written when a
+  /// bet closes, so a match 2 UP on the front and 2 UP overall reported `$0`
+  /// for most of a round. A bet that has not started counts nothing.
+  final double  payoutLiveTotal;
 
   // Hole-by-hole data
   final List<NassauHoleData> holes;
@@ -4962,6 +4969,7 @@ class NassauSummary {
     required this.payoutTotal,
     this.lossCap,
     this.payoutTotalCapped = 0.0,
+    this.payoutLiveTotal = 0.0,
     required this.holes,
     required this.canPress,
     this.pressAvailableNine,
@@ -5044,6 +5052,10 @@ class NassauSummary {
       lossCap:             (payouts['loss_cap']        as num?)?.toDouble(),
       payoutTotalCapped:   (payouts['total_capped']    as num?)?.toDouble()
                             ?? (payouts['total']       as num?)?.toDouble() ?? 0.0,
+      // An older server sends no live figure; the settled one is what
+      // the board drew before, so it degrades to exactly that.
+      payoutLiveTotal:     (payouts['live_total'] as num?)?.toDouble()
+          ?? (payouts['total_capped'] as num?)?.toDouble() ?? 0.0,
       holes: ((j['holes'] as List?) ?? [])
           .map((h) => NassauHoleData.fromJson(h as Map<String, dynamic>))
           .toList(),
