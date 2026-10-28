@@ -623,3 +623,54 @@ class SkinValidationTests(TestCase):
         game = setup_skins(self.fs, handicap_mode='net',
                            skin_minimum='eagle_or_better')
         self.assertEqual(game.skin_minimum, 'none')
+
+
+class JunkBelongsToThePrimaryGameTests(TestCase):
+    """Junk is tapped in during score entry, so it belongs to the game that
+    owns the card.  A side Skins uses Spots for per-hole extras — which is
+    exactly why the catalog un-excluded Spots from Skins.
+
+    `skins_setup_screen` has hidden the control for a long time; this makes it
+    a rule instead of a convention one client happens to follow.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course)
+        self.fs    = make_foursome(
+            self.round, [('Ann', 5), ('Ben', 12)], tee=self.tee)
+
+    def _setup(self, **kw):
+        return setup_skins(self.fs, handicap_mode='gross',
+                           allow_junk=True, junk_types=['sandy'], **kw)
+
+    def test_a_side_skins_cannot_have_junk(self):
+        self.round.primary_game = 'low_net_round'
+        self.round.save(update_fields=['primary_game'])
+        self.fs.refresh_from_db()
+        game = self._setup()
+        self.assertFalse(game.allow_junk)
+        self.assertEqual(game.junk_types, [])
+
+    def test_skins_as_the_primary_keeps_it(self):
+        self.round.primary_game = 'skins'
+        self.round.save(update_fields=['primary_game'])
+        self.fs.refresh_from_db()
+        game = self._setup()
+        self.assertTrue(game.allow_junk)
+        self.assertEqual(game.junk_types, ['sandy'])
+
+    def test_a_round_with_NO_stored_primary_is_left_alone(self):
+        """Tournament and legacy rounds store none, and there is no
+        server-side `primaryGameOf` fallback — guessing would switch junk off
+        for rounds that legitimately have it."""
+        self.assertIsNone(self.round.primary_game)
+        game = self._setup()
+        self.assertTrue(game.allow_junk)
+
+    def test_it_is_the_SERVICE_that_refuses_so_every_caller_is_covered(self):
+        """Not the view: the lesson setup_sixes' team lock already records."""
+        import inspect
+        from services import skins as skins_service
+        src = inspect.getsource(skins_service.setup_skins)
+        self.assertIn('primary_game', src)

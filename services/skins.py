@@ -106,6 +106,23 @@ def setup_skins(
     SkinsGame.objects.filter(foursome=foursome).delete()
     net_percent = max(0, min(200, int(net_percent)))
 
+    # Junk belongs to the game that owns the CARD.  It is tapped in during
+    # score entry, so it is only available while Skins is the round's primary
+    # game; a side Skins uses Spots for per-hole extras, which is why the
+    # catalog un-excluded Spots from Skins ("a side Skins has junk off → no
+    # overlap").  `skins_setup_screen` already hides the control -- this is
+    # what makes it a RULE rather than a convention one client happens to
+    # follow, and it lives in the service so every caller is covered.
+    #
+    # A null `primary_game` is LEFT ALONE: tournament and legacy rounds store
+    # none, there is no server-side equivalent of the client's
+    # `primaryGameOf` fallback, and guessing would switch junk off for rounds
+    # that legitimately have it.
+    primary = getattr(foursome.round, 'primary_game', None)
+    if primary and primary != 'skins':
+        allow_junk = False
+        junk_types = []
+
     game = SkinsGame.objects.create(
         skin_minimum   = skin_rules.normalise_minimum(skin_minimum),
         birdie_steal   = bool(birdie_steal),

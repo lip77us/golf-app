@@ -66,6 +66,33 @@ class Halved {
   static const disabledFill = Color(0xFFD3DAD5);
   static const disabledText = Color(0xFF93A099);
 
+  // ── Golfer / side colours ─────────────────────────────────────────────────
+  /// One colour per golfer or side, for boards that mark WHO rather than what.
+  ///
+  /// Shared because they were about to be a third private copy: the Sixes
+  /// board declared its own clay (`#B45309`) and the skins board needs six.
+  /// Ordered so the first two are the two a 2v2 match uses, which is what
+  /// makes `golfer(0)` and `golfer(1)` read as sides without a second list.
+  ///
+  /// **Six is the ceiling, and it repeats past that.** A foursome and a
+  /// Sixes match never exceed it; a cross-round skins pool can hold far more,
+  /// and a board that big has to identify golfers by NAME rather than colour —
+  /// `golfer()` wrapping is a visible reminder, not a licence.
+  static const teamPine  = pine;               // #0F6E56
+  static const teamClay  = Color(0xFFB45309);
+  static const teamSlate = Color(0xFF475569);
+  static const teamRust  = Color(0xFF9A3412);
+  static const teamFern  = Color(0xFF3BD89A);
+  static const teamDune  = Color(0xFFA16207);
+
+  static const List<Color> golferColours = [
+    teamPine, teamClay, teamSlate, teamRust, teamFern, teamDune,
+  ];
+
+  /// The colour for the nth golfer on a board, wrapping past six.
+  static Color golfer(int index) =>
+      golferColours[index.abs() % golferColours.length];
+
   // ── Radius ────────────────────────────────────────────────────────────────
   static const double rCta  = 16; // CTA buttons
   static const double rCard = 18; // cards

@@ -1348,8 +1348,25 @@ A standalone gambling **add-on**: per-hole achievements (greenie, sandy, barky,
 chippy, …) the app can't detect, **tallied by hand** in
 score entry like junk. **Always a side game, never a primary** (`GameMeta
 .sideGameOnly`); 2–4 players; **separate payout** (never folded into the main
-game). **Excludes Skins** in any role — junk is the Skins way to do per-hole
-extras. Full design doc: `docs/spots.md`.
+game). Full design doc: `docs/spots.md`.
+
+**It RUNS alongside Skins** (`excludes` is Vegas / Triple Cup / Multi-Skins
+only). This line used to say Spots "excludes Skins in any role — junk is the
+Skins way to do per-hole extras", which was the v1 rule and was relaxed: a
+SIDE Skins has junk forced off, so there is no overlap to protect against,
+and Spots is then the only way that round can pay per-hole extras at all.
+The catalog comment is the accurate one.
+
+**Junk is restricted to Skins-as-PRIMARY, in the service** (`setup_skins`
+forces `allow_junk=False` when the round stores a `primary_game` that is not
+`skins`). It had been a client convention — `skins_setup_screen` hides the
+control — while the endpoint took `allow_junk` at face value, so an older
+build or a replayed request could have paid junk out of a side game's pot.
+A **null** `primary_game` is deliberately left alone: tournament and legacy
+rounds store none, there is no server-side equivalent of the client's
+`primaryGameOf` fallback, and guessing would switch junk off for rounds that
+legitimately have it. Tests: `JunkBelongsToThePrimaryGameTests`
+(`scoring/tests/test_skins.py`, 4).
 
 **The architectural carve-out it introduced:** side games were assumed to be
 pure leaderboard overlays with no score-entry effect. Spots is the first

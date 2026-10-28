@@ -3066,6 +3066,9 @@ class SkinsJunkEntry {
 /// Per-hole outcome for the skins grid.
 class SkinsHole {
   final int         hole;
+  /// The hole's par. The server has always sent it; nothing parsed it until
+  /// the board's Up-next card needed it.
+  final int?        par;
   final int?        winnerId;
   final String?     winnerShort;
   final int         skinsValue;  // skins at stake / awarded
@@ -3075,6 +3078,7 @@ class SkinsHole {
 
   const SkinsHole({
     required this.hole,
+    this.par,
     required this.winnerId,
     required this.winnerShort,
     required this.skinsValue,
@@ -3086,6 +3090,7 @@ class SkinsHole {
 
   factory SkinsHole.fromJson(Map<String, dynamic> j) => SkinsHole(
         hole:        j['hole']         as int? ?? 0,
+        par:         j['par']          as int?,
         winnerId:    j['winner_id']    as int?,
         winnerShort: j['winner_short'] as String?,
         skinsValue:  j['skins_value']  as int? ?? 1,
