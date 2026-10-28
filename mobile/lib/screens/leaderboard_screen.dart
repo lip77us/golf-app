@@ -37,7 +37,6 @@ import 'tournament_settlement_screen.dart';
 import '../widgets/stroke_dots.dart';
 import '../widgets/pinned_hole_grid.dart';
 import '../utils/nine_totals.dart';
-import '../utils/skin_rules_display.dart';
 import '../utils/skins_board_model.dart';
 import '../widgets/skins_board.dart';
 import '../utils/nassau_board_model.dart';
