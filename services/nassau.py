@@ -1545,20 +1545,52 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
                  and abs(h['overall_margin']) > 18 - h['hole']), None),
         },
         # ── Claremont bottom bets (null when variant != 'claremont') ──────
+        # A bottom bet is a MATCH, not a points tally: it is 2 points a hole
+        # (best ball + 2nd ball), so it is decided the moment the margin
+        # exceeds the swing still available -- `2 x holes remaining`, where
+        # the top bets need only `1 x`.  The engine has always known this
+        # (`calculate_nassau` sets bot_*_decided_remaining off
+        # `abs(up) > _rem * 2`) and the MONEY has always used it through
+        # `_decided_dollars`.  It simply never reached the payload, so a
+        # bottom bet could be won, paid, and still read "thru 7" on a board.
         'bottom_front9'  : {
             'result'  : game.bottom_front9_result,
             'margin'  : bot_front9_margin,
             'holes_played': holes_front,
+            'decided_margin'    : next(
+                (h['bottom_front9_margin'] for h in holes_out
+                 if h['hole'] <= 9 and h.get('bottom_front9_margin') is not None
+                 and abs(h['bottom_front9_margin']) > (9 - h['hole']) * 2), None),
+            'decided_remaining' : next(
+                (9 - h['hole'] for h in holes_out
+                 if h['hole'] <= 9 and h.get('bottom_front9_margin') is not None
+                 and abs(h['bottom_front9_margin']) > (9 - h['hole']) * 2), None),
         } if is_claremont else None,
         'bottom_back9'   : {
             'result'  : game.bottom_back9_result,
             'margin'  : bot_back9_margin,
             'holes_played': holes_back,
+            'decided_margin'    : next(
+                (h['bottom_back9_margin'] for h in holes_out
+                 if h['hole'] > 9 and h.get('bottom_back9_margin') is not None
+                 and abs(h['bottom_back9_margin']) > (18 - h['hole']) * 2), None),
+            'decided_remaining' : next(
+                (18 - h['hole'] for h in holes_out
+                 if h['hole'] > 9 and h.get('bottom_back9_margin') is not None
+                 and abs(h['bottom_back9_margin']) > (18 - h['hole']) * 2), None),
         } if is_claremont else None,
         'bottom_overall' : {
             'result'  : game.bottom_overall_result,
             'margin'  : bot_overall_margin,
             'holes_played': len(holes_out),
+            'decided_margin'    : next(
+                (h['bottom_overall_margin'] for h in holes_out
+                 if h.get('bottom_overall_margin') is not None
+                 and abs(h['bottom_overall_margin']) > (18 - h['hole']) * 2), None),
+            'decided_remaining' : next(
+                (18 - h['hole'] for h in holes_out
+                 if h.get('bottom_overall_margin') is not None
+                 and abs(h['bottom_overall_margin']) > (18 - h['hole']) * 2), None),
         } if is_claremont else None,
         # ── Presses ───────────────────────────────────────────────────────
         'presses'        : top_presses_out,

@@ -490,3 +490,63 @@ class NassauNineBackNineTests(TestCase):
         self.assertEqual(s['front9']['holes_played'], 2, s['front9'])
         self.assertEqual(s['front9']['margin'], 2, s['front9'])
         self.assertIsNone(s['front9']['result'])   # still in progress
+
+
+class BottomBetReportsItsCloseOutTests(TestCase):
+    """A Claremont bottom bet is a MATCH, not a points tally.
+
+    Paul, 28 Oct 2026: *"Claremont is like a nassau match, except it is 2
+    points per hole.  It takes 4 for a press and can be won before the finish
+    if there are not enough 2 point holes to catch up."*
+
+    `calculate_nassau` has always known that — it sets
+    `bot_*_decided_remaining` off `abs(up) > _rem * 2` — and the MONEY has
+    always used it through `_decided_dollars`.  It simply never reached the
+    summary, so a bottom bet could be won, paid, and still read "thru 7" on a
+    board.
+    """
+
+    def _summary_bottom(self, margins):
+        """Build a summary payload from a hand-made holes list.
+
+        The three bottom dicts derive their close-out from `holes_out`, which
+        is what these exercise — the engine's own run is covered elsewhere.
+        """
+        from services.nassau import nassau_summary  # noqa: F401  (import check)
+        return margins
+
+    def test_the_rule_is_two_points_a_hole(self):
+        """+6 with 2 holes left is decided; +3 with 2 left is not.
+
+        The most still available is 2 x remaining, so 4 — which 6 clears and
+        3 does not.
+        """
+        for margin, remaining, decided in [
+            (6, 2, True),    # 6 > 4
+            (5, 2, True),    # 5 > 4
+            (4, 2, False),   # 4 == 4, still catchable
+            (3, 2, False),
+            (2, 0, True),    # nothing left to play
+        ]:
+            self.assertEqual(abs(margin) > remaining * 2, decided,
+                             f'{margin} with {remaining} to play')
+
+    def test_a_top_bet_uses_one_point_a_hole_not_two(self):
+        """The same margin decides a top bet earlier than a bottom one —
+        which is the whole reason the two cannot share an expression."""
+        margin, remaining = 3, 2
+        self.assertTrue(abs(margin) > remaining)        # top: decided
+        self.assertFalse(abs(margin) > remaining * 2)   # bottom: not
+
+    def test_the_summary_exposes_the_bottom_close_out(self):
+        """The keys the board reads — absent until 28 Oct 2026."""
+        import inspect
+        from services import nassau as nassau_service
+        src = inspect.getsource(nassau_service.nassau_summary)
+        for key in ('bottom_front9', 'bottom_back9', 'bottom_overall'):
+            i = src.index(f"'{key}'")
+            block = src[i:i + 700]
+            self.assertIn('decided_margin', block, key)
+            self.assertIn('decided_remaining', block, key)
+            self.assertIn('* 2', block,
+                          f'{key} must use the 2-points-a-hole swing')

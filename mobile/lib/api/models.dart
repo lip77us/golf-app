@@ -4798,8 +4798,16 @@ class NassauBottomBetResult {
   final String? result;    // 'team1' | 'team2' | 'halved' | null
   final int     margin;    // running points margin (+ve = T1 leading)
   final int     holesPlayed;
+  /// A bottom bet is a MATCH at 2 points a hole, so it closes out when the
+  /// margin exceeds `2 x holes remaining` — not when the points run out.
+  /// Frozen margin at that moment; null when it ran to the natural end.
+  final int?    decidedMargin;
+  /// Holes remaining when it was decided. > 0 = an early finish.
+  final int?    decidedRemaining;
 
   const NassauBottomBetResult({
+    this.decidedMargin,
+    this.decidedRemaining,
     required this.result,
     required this.margin,
     required this.holesPlayed,
@@ -4810,6 +4818,8 @@ class NassauBottomBetResult {
         result:      j['result']       as String?,
         margin:      j['margin']       as int? ?? 0,
         holesPlayed: j['holes_played'] as int? ?? 0,
+        decidedMargin:    j['decided_margin']    as int?,
+        decidedRemaining: j['decided_remaining'] as int?,
       );
 
   bool get isComplete => result != null;
