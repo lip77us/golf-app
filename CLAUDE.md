@@ -6168,3 +6168,27 @@ groups, and that re-running setup updates the rules),
 `mobile/test/skin_validation_test.dart` (14) and
 `mobile/test/skin_rules_display_test.dart` (13 — including that the board does
 not start naming the rules itself again).
+
+### `build-ipa.sh` — the generated Swift package is EDITED, not deleted
+
+The archive fails Target Integrity unless
+`ios/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage/Package.swift`
+declares `.iOS("15.0")`: firebase-core, firebase-messaging and halved-sms all
+require 15.0. Flutter generates it at **13.0**, its own default, and does NOT
+read the Xcode project's deployment target (which is 15.0 and always was).
+
+**Two orderings were tried and this file documented both as the fix. Both are
+wrong**, and the second claimed "`flutter build` reads the Xcode project and
+writes 15.0" — it does not. That claim cost build 57 (27 Oct 2026), and a
+previous commit (`a55ea48`) had already cost one discovering the note was
+backwards.
+
+- `rm` then build → the build runs pub resolution itself and re-creates 13.0.
+- `pub get`, `rm`, then build → the same thing.
+
+So the script **stops deleting it and raises the platform in place**: generate
+(`pub get`), `sed` 13.x → 15.0, then build WITHOUT removing it. The build only
+regenerates the package when it is absent or pub resolution is stale, so an
+edited one survives. It fails loudly before the archive if the platform line
+has changed shape, and re-checks after it in case the build regenerated it
+anyway.
