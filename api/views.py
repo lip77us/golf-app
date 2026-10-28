@@ -81,6 +81,7 @@ from core.models import (Player, Tee, Course, HandicapMode, GameType,
 from tournament.models import Tournament, Round, Foursome, FoursomeMembership
 from scoring.models import HoleScore
 from scoring.phantom import PhantomScoreProvider, get_algorithm, DEFAULT_ALGORITHM_ID
+from services import game_settings
 
 from .serializers import (
     SoloSetupSerializer,
@@ -1198,6 +1199,13 @@ def _build_leaderboard(round_obj: Round) -> dict:
                          games['low_net_round'].get('handicap_mode') == 'strokes_off')
         games['low_net_round']['so_available'] = so_available
         games['low_net_round']['primary_game_is_so'] = bool(primary_is_so)
+
+    # 13 — the rules every board states: handicap mode and allowance, the
+    # variant, presses, carry, payout style, loss cap. ONE writer, here,
+    # rather than at the forty-six places a block is built — and in the
+    # server's own words, so no client re-derives a label. See
+    # services/game_settings.py for why the stake is not among them.
+    game_settings.attach(games)
 
     return games
 
@@ -3158,6 +3166,8 @@ class TournamentLeaderboardView(APIView):
             if summary is not None:
                 games['day_bet'] = {'label': summary['label'], **summary}
 
+        game_settings.attach(games)
+
         return Response({
             'tournament_id'  : tournament.id,
             'tournament_name': tournament.name,
@@ -3177,6 +3187,8 @@ class TournamentLeaderboardView(APIView):
                                    'bogey — par + 2, plus any strokes you get '
                                    'on that hole.'),
             },
+            # Same one writer as the casual board — a tournament tab must
+            # not state its settings in different words.
             'games'          : games,
         })
 

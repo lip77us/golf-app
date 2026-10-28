@@ -40,6 +40,7 @@ class NassauBoardData {
     required this.net,
     this.lossCap,
     this.claremont,
+    this.balls = const [],
     this.single = false,
     this.noMoney = false,
     this.showSides = true,
@@ -60,6 +61,14 @@ class NassauBoardData {
   final double net;
   final double? lossCap;
   final ClaremontView? claremont;
+
+  /// Claremont only: the two counted balls per side, per hole.
+  ///
+  /// The bottom bet is 2 points a hole — one for the lower LOW ball and one
+  /// for the lower SECOND ball — so these four nets are what the points are
+  /// made of, and the only way a reader can check them. Empty on every other
+  /// variant, where there is no second ball and nothing to show.
+  final List<NassauBallsHole> balls;
 
   /// One 18-hole match: Overall only, no Front/Back cards.
   final bool single;
@@ -100,6 +109,24 @@ class NassauBoardData {
       }
     });
 
+    final isClaremont = s.variant == 'claremont';
+    // Indexed by hole so a shotgun round (whose `holes` arrive in play order)
+    // still lines these up under the tiles, which are drawn by hole number.
+    final byHole = {for (final h in s.holes) h.hole: h};
+    final balls = isClaremont
+        ? List<NassauBallsHole>.generate(18, (i) {
+            final h = byHole[i + 1];
+            return NassauBallsHole(
+              hole:     i + 1,
+              lowA:     h?.t1Net,
+              secondA:  h?.t12ndNet,
+              lowB:     h?.t2Net,
+              secondB:  h?.t22ndNet,
+              delta:    h?.bottomDelta,
+            );
+          })
+        : const <NassauBallsHole>[];
+
     return NassauBoardData(
       sides: [
         NassauSide(name: nameOf(s.team1), colourIndex: 0,
@@ -123,7 +150,8 @@ class NassauBoardData {
       pressStake: s.pressUnit,
       net:        s.payoutTotalCapped,
       lossCap:    s.lossCap,
-      claremont: s.variant == 'claremont'
+      balls: balls,
+      claremont: isClaremont
           ? ClaremontView(
               front:   s.bottomFront9  == null ? null
                   : NassauBetView.fromBottom(s.bottomFront9!,  startHole: 1),
@@ -321,6 +349,40 @@ class NassauPressView {
       ),
     );
   }
+}
+
+/// One hole's counted balls, from the two sides, for Claremont's bottom bet.
+///
+/// `delta` is the SERVER's net points for side 0 on this hole (−2..+2) — not
+/// recomputed from the four nets, because the engine owns what a tied ball
+/// does and a second reading of it is a second opinion about money.
+class NassauBallsHole {
+  const NassauBallsHole({
+    required this.hole,
+    this.lowA,
+    this.secondA,
+    this.lowB,
+    this.secondB,
+    this.delta,
+  });
+
+  final int  hole;
+  final int? lowA;
+  final int? secondA;
+  final int? lowB;
+  final int? secondB;
+  final int? delta;
+
+  bool get played => lowA != null && lowB != null;
+
+  /// Which side took the lower ball of a pair, or null when level / unplayed.
+  int? _winnerOf(int? a, int? b) {
+    if (a == null || b == null || a == b) return null;
+    return a < b ? 0 : 1;
+  }
+
+  int? get lowWinner    => _winnerOf(lowA, lowB);
+  int? get secondWinner => _winnerOf(secondA, secondB);
 }
 
 class ClaremontView {

@@ -60,6 +60,56 @@ Future<void> _pump(WidgetTester t, NassauBoardData d) => t.pumpWidget(
     );
 
 void main() {
+
+  group('claremont balls', () {
+    /// Reported 28 Oct 2026: *"I think I selected Claremont on the
+    /// leaderboard, but I don't see the bottom row with the high and low
+    /// balls."* The points line was there; the balls it is made of were not.
+    Map<String, dynamic> hole(int h, int t1, int t1b, int t2, int t2b,
+            int delta) =>
+        {
+          'hole': h, 'winner': t1 < t2 ? 'team1' : (t2 < t1 ? 'team2' : 'halved'),
+          't1_net': t1, 't1_2nd_net': t1b,
+          't2_net': t2, 't2_2nd_net': t2b, 'bottom_delta': delta,
+        };
+
+    NassauBoardData claremont() => NassauBoardData.fromSummary(_nassau(
+          variant: 'claremont',
+          front: _bet(margin: 1, holesPlayed: 1),
+          overall: _bet(margin: 1, holesPlayed: 1),
+          bottomFront: _bet(margin: 1, holesPlayed: 1),
+          bottomOverall: _bet(margin: 1, holesPlayed: 1),
+          holes: [hole(1, 4, 6, 5, 5, 0)],
+        ));
+
+    testWidgets('the block is drawn, labelled with what the numbers are',
+        (t) async {
+      await _pump(t, claremont());
+      // Without the label `4/5` is two numbers nobody can decode.
+      expect(find.text('BALLS · LOW / 2ND'), findsWidgets);
+    });
+
+    testWidgets('both sides\' balls are drawn for a played hole', (t) async {
+      await _pump(t, claremont());
+      // Text.rich, so the whole run is one widget: `4` `/` `6`.
+      expect(find.textContaining('4', findRichText: true), findsWidgets);
+      expect(find.textContaining('6', findRichText: true), findsWidgets);
+    });
+
+    testWidgets('a standard Nassau draws no balls block at all', (t) async {
+      await _pump(t, NassauBoardData.fromSummary(_nassau(
+        front: _bet(margin: 1, holesPlayed: 1),
+        holes: [hole(1, 4, 6, 5, 5, 0)],
+      )));
+      expect(find.text('BALLS · LOW / 2ND'), findsNothing);
+    });
+
+    testWidgets('the Points line still reads above it', (t) async {
+      await _pump(t, claremont());
+      expect(find.text('Points'), findsWidgets);
+    });
+  });
+
   group('the sides', () {
     testWidgets('named from short names, with vs between', (t) async {
       await _pump(t, NassauBoardData.fromSummary(_nassau()));

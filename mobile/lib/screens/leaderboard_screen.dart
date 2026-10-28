@@ -42,6 +42,7 @@ import '../widgets/skins_board.dart';
 import '../utils/nassau_board_model.dart';
 import '../widgets/nassau_board.dart';
 import '../widgets/game_switcher.dart';
+import '../widgets/game_settings_strip.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   final int roundId;
@@ -881,7 +882,19 @@ class _GameView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final data = game.data as Map<String, dynamic>;
+    final view = _view(context, data);
+    // The settings strip rides ABOVE every game's view, in one place, for the
+    // reason the server writes the words: twenty-five views each drawing
+    // their own would be twenty-five chances to draw it differently.
+    final chips = settingsChipsOf(data);
+    if (chips.isEmpty) return view;
+    return Column(children: [
+      GameSettingsStrip(chips),
+      Expanded(child: view),
+    ]);
+  }
 
+  Widget _view(BuildContext context, Map<String, dynamic> data) {
     switch (gameKey) {
       case 'stableford':
         return _StablefordView(data: data);
@@ -2714,9 +2727,22 @@ class _ByGroupView extends StatelessWidget {
           ...(groups[gi] as Map<String, dynamic>),
           '_single_group': singleGroup,
         };
+        // Per-group settings appear ONLY when the block has none — i.e. when
+        // the groups disagree, which is the one case a strip at the top of
+        // the tab would be telling half the field something untrue. Saying
+        // them in both places would be saying them twice.
+        final chips = settingsChipsOf(data).isEmpty
+            ? settingsChipsOf(g)
+            : const <String>[];
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: builder(group: g),
+          child: chips.isEmpty
+              ? builder(group: g)
+              : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  GameSettingsStrip(chips,
+                      padding: const EdgeInsets.only(bottom: 6)),
+                  builder(group: g),
+                ]),
         );
       },
     );
@@ -10489,12 +10515,6 @@ class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
     return pct == 100 ? 'Net' : 'Net ($pct%)';
   }
 
-  static String _pressLabel(String mode) => switch (mode) {
-        'none'        => 'No presses',
-        'manual_auto' => 'Manual + auto presses',
-        _             => 'Auto presses',
-      };
-
   static String _fmtMoney(double v) {
     if (v == 0) return '—';
     final sign = v > 0 ? '+' : '−';
@@ -10572,7 +10592,6 @@ class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
     final cardHolesInPlay =
         ((card['holes_in_play'] as List?) ?? const []).cast<int>();
     final bet       = (summary['bet_amount'] as num?)?.toDouble() ?? 0.0;
-    final pressMode = summary['press_mode']?.toString() ?? 'auto';
     final liveBets  = (summary['live_bets'] as num?)?.toInt() ?? 0;
 
     final singleGroup = group['_single_group'] == true;
@@ -10600,14 +10619,18 @@ class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
             ),
             Text(statusLabel, style: theme.textTheme.labelSmall),
           ]),
-          const SizedBox(height: 2),
-          Text(
-            '${_pressLabel(pressMode)}'
-            '${liveBets > 0 ? '  ·  $liveBets bet'
-                              '${liveBets == 1 ? '' : 's'} still live' : ''}',
-            style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant),
-          ),
+          // The press MODE moved to the settings strip above the card, which
+          // states it for every game in one vocabulary — saying it here as
+          // well would be the same rule in two wordings. What stays is the
+          // thing the strip cannot know: how many bets are still live.
+          if (liveBets > 0) ...[
+            const SizedBox(height: 2),
+            Text(
+              '$liveBets bet${liveBets == 1 ? '' : 's'} still live',
+              style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ],
 
           // **Who is who, once.** Everything below this line — the pairings,
           // the scorecard rows, the by-hole tints — is short names, because

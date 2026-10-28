@@ -6348,3 +6348,112 @@ without failing the finder.
 
 Tests: `mobile/test/game_switcher_test.dart` (9), including that the
 leaderboard no longer contains a `TabBar(`.
+
+## Claremont's two balls, and the settings strip on every board
+
+Two things reported on 28 Oct 2026, from one Nassau round.
+
+### "I don't see the bottom row with the high and low balls"
+
+Claremont's bottom bet is **2 points a hole** — one for the lower LOW ball
+and one for the lower SECOND ball — and the board drew the points line
+without the balls it is made of, which makes it a figure nobody can check.
+
+The nets were never missing: `nassau_summary` has always emitted `t1_net`,
+`t1_2nd_net`, `t2_net` and `t2_2nd_net` per hole, and `NassauHoleData`
+already parsed all four. **`NassauBoardData` kept only a winner enum per
+hole**, so there was nothing on the board's own model to draw them from. The
+model now carries `balls` — one `NassauBallsHole` per hole, Claremont only
+(no second ball exists on any other variant, so the list is empty and the
+block never draws).
+
+- **Indexed by HOLE NUMBER, not arrival order.** The summary's holes come
+  back in play order, so a shotgun round would have put the 7th's balls
+  under the 1st's tile. The shotgun sweep's own lesson, and a test holds it.
+- **`delta` is the server's.** The engine owns what a tied ball does, so the
+  hole's net points are read, never recomputed from the four nets — a test
+  hands in nets that would read as two points against a server saying one.
+- `_BallsBlock` draws **a row per side** (`4/6`), tinted in that side's own
+  colour, then the hole's points. No label column: the 9-wide alignment with
+  the tiles above is the point, because a reader checks a hole by reading
+  straight down it, and the sides card above already names them in order.
+  A ball that side WON is bold in its colour.
+
+The round that reported it was genuinely Claremont — worth knowing that
+`_effective_variant` silently degrades a stored `claremont` to `none` off
+2v2, so a non-2v2 round would have shown nothing for a different reason.
+
+### The settings a round is played under — `services/game_settings.py`
+
+Paul: *"It would be good to know the settings that I am playing with in the
+leaderboard… In all games."*
+
+**One writer, server-side**, because the alternative is twenty-five boards
+each spelling the same six rules. That is the `gross_to_par` shape (three
+copies, one wrong, failing invisibly) and the skins-rules shape (the client
+re-deriving labels the server had already written), and this file records
+both. The server emits the WORDS; `widgets/game_settings_strip.dart` renders
+them verbatim and formats nothing — a test asserts the widget contains no
+`%` and no `toStringAsFixed`.
+
+It reads the keys the summaries already SHARE rather than asking each game:
+`net_percent`, `handicap` and `handicap_mode` appear in 69, 58 and 40 places
+across `services/`, because they are this codebase's conventions and not one
+game's invention. A game with a rule nobody else has still says it on its
+own card; this is the common floor.
+
+- **Attached in ONE pass** at the end of `_build_leaderboard` and of
+  `TournamentLeaderboardView`, not at the forty-six places a block is built.
+- **Unknown values are SKIPPED, never printed.** `handicap_mode` also takes
+  `keep_rotating` / `amount` / `place` in other games' fields, so a generic
+  reader that printed what it found would show a golfer a slug. A missing
+  key is simply a rule this game does not have.
+- **The order is FIXED**, so two cards never list the same facts in a
+  different order — a summary built off a jsonb column does not preserve key
+  order (`console.plan._FIELD_ORDER` exists for the same reason).
+- **Multi-group blocks get the chips only when every group AGREES**, which is
+  every casual round and most tournaments. Two foursomes can play different
+  allowances, and a strip at the top of a tab covering both would be telling
+  half the field something untrue — so there the block stays blank and
+  `_ByGroupView` draws each group's own chips above its card. The group list
+  is found by scanning every list of dicts carrying a `summary`, because the
+  key is `by_group` in some games and `foursomes` in others: picking one is
+  what hid a Points 5-3-1 round from the Strokes-Off tab.
+- **The stake is deliberately absent.** Its unit is game-specific — a hole, a
+  skin, a point, a ball — so naming it generically would be guessing, and
+  every board already carries its own money line. What belongs here is the
+  rules a golfer forgets he agreed to.
+- An unconfigured game (`{label}` alone) gets nothing, which is correct:
+  there are no settings yet, and that is the `_NotSetUpYet` case.
+
+**Solo states its own**, via the now-public `game_settings.handicap_chip`.
+It has no `handicap_mode` to read — a solo game against par in gross is
+stroke play with extra words — and it passes `always_percent`, because the
+allowance is the ONLY setting that game has and 100% is as worth saying as
+110%. `attach` never replaces a `settings` key a game set for itself, which
+is the escape hatch for exactly this.
+
+**Verified against the real database before claiming it**: 60 rounds, every
+configured game stating its rules (`Strokes off · Claremont · Auto presses`
+on the reported round), and the only blanks unconfigured games.
+
+#### The duplication it exposed, and the part not swept
+
+`leaderboard_screen.dart` carries **six private `_hcapLabel` copies** —
+Points 5-3-1, Wolf, Rabbit, Red Ball, Three-Person Match, Sequoya 3s — each
+spelling the handicap mode into its own card header as `Net (90%)` / `SO`.
+The strip now states the same fact above those cards in the server's
+wording. **They are NOT removed**: six card headers in a 10k-line file is
+its own change, and this file's own note warns that string-matching edits
+there hit the wrong card. Outstanding.
+
+What WAS removed is the one straight collision: Sequoya's `_pressLabel`,
+which wrote `Auto presses` beside a strip now saying it. Its line keeps the
+half the strip cannot know — how many bets are still live. The source test
+forbids the board typing any of the strip's other words, so the next one
+fails there rather than shipping.
+
+Tests: `scoring/tests/test_game_settings.py` (23 — the words, the fixed
+order, the refusals, the unanimity rule), `mobile/test/game_settings_strip_test.dart`
+(8) and the `claremont balls` groups in `mobile/test/nassau_board_model_test.dart`
+(7) and `mobile/test/nassau_board_test.dart` (4).

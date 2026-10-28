@@ -55,6 +55,7 @@ NassauSummary _nassau({
     });
 
 void main() {
+  _claremontBallsTests();
   group('a bet states what the SERVER decided', () {
     test('not started reads starts, with the bet\'s first hole', () {
       final d = NassauBoardData.fromSummary(_nassau());
@@ -340,6 +341,105 @@ void _singlesMatchShape() {
       expect(s.singleMatch, isFalse);
       expect(s.isEighteenHoleMatch, isTrue);
       expect(NassauBoardData.fromSummary(s).single, isTrue);
+    });
+  });
+}
+
+/// Claremont's bottom bet is 2 points a hole — one for the lower LOW ball
+/// and one for the lower SECOND ball. Reported 28 Oct 2026: *"I think I
+/// selected Claremont on the leaderboard, but I don't see the bottom row
+/// with the high and low balls."* The nets reached Dart and the board kept
+/// only a winner enum per hole, so there was nothing to draw them from.
+void _claremontBallsTests() {
+  Map<String, dynamic> hole(int h, {
+    int? t1, int? t1b, int? t2, int? t2b, int? delta,
+  }) =>
+      {
+        'hole': h, 'winner': null,
+        't1_net': t1, 't1_2nd_net': t1b,
+        't2_net': t2, 't2_2nd_net': t2b,
+        'bottom_delta': delta,
+      };
+
+  group('claremont balls', () {
+    test('a standard Nassau carries none', () {
+      final d = NassauBoardData.fromSummary(_nassau(
+        holes: [hole(1, t1: 4, t1b: 5, t2: 5, t2b: 5, delta: 1)],
+      ));
+      expect(d.balls, isEmpty,
+          reason: 'there is no second ball to show');
+    });
+
+    test('claremont carries all eighteen, played or not', () {
+      final d = NassauBoardData.fromSummary(_nassau(
+        variant: 'claremont',
+        holes: [hole(1, t1: 4, t1b: 5, t2: 5, t2b: 5, delta: 1)],
+      ));
+      expect(d.balls.length, 18);
+      expect(d.balls.first.played, isTrue);
+      expect(d.balls[1].played, isFalse);
+    });
+
+    test('the four nets arrive on the right side', () {
+      final d = NassauBoardData.fromSummary(_nassau(
+        variant: 'claremont',
+        holes: [hole(1, t1: 4, t1b: 6, t2: 5, t2b: 5, delta: 0)],
+      ));
+      final b = d.balls.first;
+      expect([b.lowA, b.secondA], [4, 6]);
+      expect([b.lowB, b.secondB], [5, 5]);
+    });
+
+    test('each ball names its own winner, and a tie names nobody', () {
+      final split = NassauBoardData.fromSummary(_nassau(
+        variant: 'claremont',
+        // Side 0 takes the low ball, side 1 takes the second: one point each.
+        holes: [hole(1, t1: 4, t1b: 6, t2: 5, t2b: 5, delta: 0)],
+      )).balls.first;
+      expect(split.lowWinner, 0);
+      expect(split.secondWinner, 1);
+
+      final level = NassauBoardData.fromSummary(_nassau(
+        variant: 'claremont',
+        holes: [hole(1, t1: 4, t1b: 5, t2: 4, t2b: 5, delta: 0)],
+      )).balls.first;
+      expect(level.lowWinner, isNull);
+      expect(level.secondWinner, isNull);
+    });
+
+    test('the points are the SERVER\'s, never recomputed from the nets', () {
+      // The engine owns what a tied ball does. Here the nets would read as
+      // two points to side 0 and the server says one — the board must say
+      // one, because a second reading is a second opinion about money.
+      final d = NassauBoardData.fromSummary(_nassau(
+        variant: 'claremont',
+        holes: [hole(1, t1: 4, t1b: 5, t2: 5, t2b: 6, delta: 1)],
+      ));
+      expect(d.balls.first.delta, 1);
+    });
+
+    test('they line up by HOLE NUMBER, not arrival order', () {
+      // A shotgun round's holes arrive in play order, and the grid above is
+      // drawn by hole number — the shotgun sweep's own lesson.
+      final d = NassauBoardData.fromSummary(_nassau(
+        variant: 'claremont',
+        holes: [
+          hole(7, t1: 4, t1b: 5, t2: 5, t2b: 5, delta: 1),
+          hole(8, t1: 5, t1b: 5, t2: 4, t2b: 4, delta: -2),
+        ],
+      ));
+      expect(d.balls[6].hole, 7);
+      expect(d.balls[6].lowA, 4);
+      expect(d.balls[7].delta, -2);
+      expect(d.balls[0].played, isFalse, reason: 'hole 1 was never played');
+    });
+
+    test('an unplayed hole is not played even with a stray net', () {
+      final d = NassauBoardData.fromSummary(_nassau(
+        variant: 'claremont',
+        holes: [hole(1, t1: 4)],
+      ));
+      expect(d.balls.first.played, isFalse);
     });
   });
 }

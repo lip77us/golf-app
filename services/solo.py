@@ -34,6 +34,7 @@ from games.models import SoloGame
 from scoring.handicap import effective_hcp_for, make_strokes_fn
 from scoring.models import HoleScore
 from services.hole_plan import play_order
+from services.game_settings import handicap_chip
 
 
 # ── the golfer ──────────────────────────────────────────────────────────────
@@ -245,6 +246,13 @@ def solo_summary(round_obj) -> dict:
         # No money anywhere: a solo round has nothing to settle, which is why
         # there is no entry fee, payout table or settlement block here.
         'for_fun': True,
+        # Stated HERE rather than left to `game_settings.attach`, because
+        # Solo has no `handicap_mode` to read generically — it is always Net
+        # by design. `always_percent` is the point: the allowance is the only
+        # setting this game has, and 100% is as worth saying as 110%.
+        'settings': [c for c in [
+            handicap_chip('net', cfg.net_percent, always_percent=True)
+        ] if c],
     }
     if cfg.variant == SoloGame.Variant.NASSAU:
         out['auto_press'] = cfg.auto_press

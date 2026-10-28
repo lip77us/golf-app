@@ -163,6 +163,14 @@ class _NineCard extends StatelessWidget {
             const Spacer(),
             _Status(data: data, bet: points!),
           ]),
+          // The two counted balls, which ARE the bottom bet: a point for the
+          // lower low ball and a point for the lower second ball. Without
+          // them the points line is a figure nobody can check — reported
+          // exactly that way (28 Oct 2026).
+          if (data.balls.isNotEmpty) ...[
+            const SizedBox(height: 7),
+            _BallsBlock(data: data, startIndex: startIndex),
+          ],
         ],
         for (final p in presses) ...[
           const SizedBox(height: 8),
@@ -171,6 +179,148 @@ class _NineCard extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// Claremont's balls: one row per side (`low/2nd`), then the hole's points.
+///
+/// The rows are in the same order as the sides card above and tinted in the
+/// same two colours, which is what identifies them — a label column would
+/// break the 9-column alignment with the tiles, and the alignment is the
+/// point: a reader checks a hole by reading straight down it.
+class _BallsBlock extends StatelessWidget {
+  const _BallsBlock({required this.data, required this.startIndex});
+  final NassauBoardData data;
+  final int startIndex;
+
+  List<NassauBallsHole> get _nine =>
+      data.balls.skip(startIndex).take(9).toList();
+
+  @override
+  Widget build(BuildContext context) {
+    final nine = _nine;
+    if (nine.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('BALLS · LOW / 2ND',
+          style: TextStyle(
+              fontSize: 9.5, fontWeight: FontWeight.w700,
+              letterSpacing: .4, color: Halved.muted)),
+      const SizedBox(height: 4),
+      for (var side = 0; side < 2; side++) ...[
+        if (side == 1) const SizedBox(height: 3),
+        _BallsRow(data: data, nine: nine, side: side),
+      ],
+      const SizedBox(height: 4),
+      _PointsRow(data: data, nine: nine),
+    ]);
+  }
+}
+
+class _BallsRow extends StatelessWidget {
+  const _BallsRow(
+      {required this.data, required this.nine, required this.side});
+  final NassauBoardData data;
+  final List<NassauBallsHole> nine;
+  final int side;
+
+  @override
+  Widget build(BuildContext context) {
+    final colour = _sideColour(data, side);
+    return Row(children: [
+      for (var i = 0; i < 9; i++)
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(right: i == 8 ? 0 : 3),
+            child: _BallsCell(
+                hole: nine[i], side: side, colour: colour),
+          ),
+        ),
+    ]);
+  }
+}
+
+class _BallsCell extends StatelessWidget {
+  const _BallsCell(
+      {required this.hole, required this.side, required this.colour});
+  final NassauBallsHole hole;
+  final int side;
+  final Color colour;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!hole.played) {
+      return Container(
+        height: 20,
+        decoration: BoxDecoration(
+            border: Border.all(color: Halved.cardBorder, width: 1),
+            borderRadius: BorderRadius.circular(5)),
+      );
+    }
+    final low    = side == 0 ? hole.lowA    : hole.lowB;
+    final second = side == 0 ? hole.secondA : hole.secondB;
+    // A ball this side WON is bold in the side's colour; a ball it lost or
+    // halved stays plain, so the two points on the hole are legible without
+    // a legend.
+    final wonLow    = hole.lowWinner    == side;
+    final wonSecond = hole.secondWinner == side;
+    TextStyle st(bool won) => TextStyle(
+        fontSize: 10, height: 1.1,
+        fontWeight: won ? FontWeight.w700 : FontWeight.w500,
+        color: won ? colour : Halved.muted);
+    return Container(
+      height: 20,
+      decoration: BoxDecoration(
+          color: colour.withValues(alpha: .07),
+          borderRadius: BorderRadius.circular(5)),
+      alignment: Alignment.center,
+      child: Text.rich(
+        TextSpan(children: [
+          TextSpan(text: '${low ?? '–'}', style: st(wonLow)),
+          const TextSpan(text: '/',
+              style: TextStyle(
+                  fontSize: 9, height: 1.1, color: Halved.cardBorder)),
+          TextSpan(text: '${second ?? '–'}', style: st(wonSecond)),
+        ]),
+        maxLines: 1,
+      ),
+    );
+  }
+}
+
+/// The hole's net points for side 0, in the gaining side's colour.
+class _PointsRow extends StatelessWidget {
+  const _PointsRow({required this.data, required this.nine});
+  final NassauBoardData data;
+  final List<NassauBallsHole> nine;
+
+  @override
+  Widget build(BuildContext context) => Row(children: [
+        for (var i = 0; i < 9; i++)
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(right: i == 8 ? 0 : 3),
+              child: Builder(builder: (_) {
+                final d = nine[i].delta;
+                if (!nine[i].played || d == null) {
+                  return const SizedBox(height: 14);
+                }
+                final colour = d == 0
+                    ? Halved.muted
+                    : _sideColour(data, d > 0 ? 0 : 1);
+                final n = d.abs();
+                return SizedBox(
+                  height: 14,
+                  child: Center(
+                    child: Text(d == 0 ? '–' : '+$n',
+                        style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: colour)),
+                  ),
+                );
+              }),
+            ),
+          ),
+      ]);
 }
 
 class _Status extends StatelessWidget {
