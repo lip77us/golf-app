@@ -6209,3 +6209,87 @@ regenerates the package when it is absent or pub resolution is stale, so an
 edited one survives. It fails loudly before the archive if the platform line
 has changed shape, and re-checks after it in case the build regenerated it
 anyway.
+
+## The skins board — one widget, every skins leaderboard
+
+Built from `~/Downloads/handoff-skins-leaderboard` (28 Oct 2026), whose first
+instruction is the one that shaped it: *"one widget used by every Skins
+leaderboard (casual, multi-group, side game tabs). Do not draw a second skins
+table anywhere."* Three cards — what the next hole is worth, where the skins
+went, what everyone is owed.
+
+`widgets/skins_board.dart` + `utils/skins_board_model.dart`. Both
+`SkinsSummary` and `MultiSkinsSummary` convert into one `SkinsBoardData`, so
+the widget never learns which produced it. It **replaced** the per-foursome
+`_SkinsStandingsBlock` (241 lines, deleted) and the pool's own player `Table`,
+which were the two skins tables the packet is about.
+
+### What is derived and what is taken verbatim
+
+Only what the server does not answer: which hole is next, which holes carried
+into it, how many skins ride, how far round the group is.
+
+**The money is NOT computed.** The reference derives
+`net = stake × (golfers × won − total)`, which is right for per-point/all with
+no junk, no withdrawal and no loss cap — and wrong for pool mode, which we
+also support. `skins_summary` emits a signed zero-sum `net` that accounts for
+all of it, and the board renders that. A test fixes a case where the
+reference formula says `+$3` and the truth is `+$1.50`. Same rule as
+`gross_to_par` and the skin-rules chip: one place decides, everywhere else
+renders.
+
+**Skins riding is not re-counted from the carried run.** A carried hole's
+stored `skins_value` is already the pot INCLUDING itself, so two carried
+holes ride as three — which is what the design draws, arrived at from the
+engine rather than by counting tiles.
+
+### Play order for the walk, hole number for the grid
+
+The summary's holes come back in `hole_plan.play_order`, so "up next" off a
+shotgun from the 7th is the 8th and not hole 1, and the last hole played can
+have the smallest number. The GRID sorts by hole number, because a scorecard
+is a scorecard whatever order it was played in. Two tests cover the split —
+this is the mistake the shotgun sweep found six times.
+
+### Three departures from the packet, all because it could not know
+
+- **Junk.** The design has none, and junk is a share of the same pot. Ticks
+  total `skins_won + junk_skins`, junk **outlined** rather than filled, so the
+  count always reconciles with the money beside it (Paul, 28 Oct). Note junk
+  only ever appears when Skins is the PRIMARY game.
+- **The pool never carries**, so its Up-next card would read "No carry · 1
+  skin" eighteen times. `showNext: false` — which is the design's own config
+  flag, so this is using the packet rather than departing from it.
+- **Per-golfer `thru` in the ledger, pool only.** A cross-round pool spans
+  groups at different paces and a board that hid that would be misleading
+  about who still has holes to come. Null in a single foursome, where it would
+  be the same number four times.
+
+**The validation rules sit under HOLES** (Paul's call), as a footnote on the
+grid: they decide what it takes for a tile to be won at all, which is why a
+hole can carry with nobody tied. That retired `_SkinRulesInPlay`, which had
+been its own chip on each card for a day.
+
+**Golfer colours are shared now** — `Halved.golferColours` / `Halved.golfer(i)`,
+six wrapping. They were about to be a third private copy (the Sixes board
+declares its own clay). Six is the ceiling and it WRAPS: a foursome never
+exceeds it, a cross-round pool can, and a board that big has to identify
+golfers by name.
+
+**Colour follows the ROSTER, not the standings**, or a golfer changes colour
+the moment he wins a skin and the hole tiles stop matching the ledger
+swatches.
+
+**`SkinsHole.par`** is parsed at last — the server has always sent it; nothing
+read it until the Up-next card.
+
+**Still open:** the **game switcher** at the top of every leaderboard is now
+specified by a THIRD packet (40 Balls, Sixes, this) and still is not built.
+It is shared across every board, not this one's to own. Also note the "API
+shape (skins summary)" block above shows `handicap_mode` flat; the real
+payload nests it as `handicap: {mode, net_percent}`, which is what the Dart
+has always parsed.
+
+Tests: `mobile/test/skins_board_model_test.dart` (18 — the walk, both shotgun
+cases, the pool, and the money) and `mobile/test/skins_board_test.dart` (16,
+including that both cards render the one board).

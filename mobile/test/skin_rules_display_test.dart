@@ -69,24 +69,28 @@ void main() {
     });
   });
 
-  group('both skins boards show it', () {
-    // The per-foursome card and the cross-group pool are different widgets
-    // over the same three summary keys, and this repo's recurring failure is
-    // a thing reachable on one surface and not its twin.
-    test('the card and the pool both render _SkinRulesInPlay', () {
-      final src = File('lib/screens/leaderboard_screen.dart').readAsStringSync();
-      // Once for the class, once per board.
-      final uses = '_SkinRulesInPlay(summary:'.allMatches(src).length;
-      expect(uses, 2,
-          reason: 'expected the per-foursome card AND the pool to render it');
+  group('the board shows it', () {
+    // This began as its own chip on each of the two skins cards.  The rules
+    // now live INSIDE `SkinsBoard`, under its HOLES grid, because that is
+    // what they are a footnote on — and because both cards draw that one
+    // board, they still reach every skins surface.  `skins_board_test`
+    // asserts the two cards render it; this asserts the board renders the
+    // rules the right way.
+    test('SkinsBoard reads the server phrase rather than rebuilding it', () {
+      final src = File('lib/widgets/skins_board.dart').readAsStringSync();
+      expect(src.contains('skinRuleChips('), isTrue,
+          reason: 'the board is not using the server phrase');
+      // The hand-written labels must not come back.
+      for (final typed in ["'Net par or better'", "'Gross par or better'",
+                           "'Gross birdies steal'"]) {
+        expect(src.contains(typed), isFalse,
+            reason: 'the board is naming the rules itself again: $typed');
+      }
     });
 
-    test('it reads the server phrase rather than rebuilding it', () {
-      final src = File('lib/screens/leaderboard_screen.dart').readAsStringSync();
-      expect(src.contains('skinRuleChips('), isTrue);
-      // The old hand-written labels must not come back.
-      expect(src.contains("'Net par or better'"), isFalse,
-          reason: 'the board is naming the rules itself again');
+    test('the consequence is stated with them', () {
+      final src = File('lib/widgets/skins_board.dart').readAsStringSync();
+      expect(src.contains('goes unwon'), isTrue);
     });
   });
 }

@@ -174,6 +174,7 @@ class SkinsBoardData {
             skinsWon:  s.players[i].skinsWon,
             junkSkins: 0,          // the pool has no junk
             net:       s.players[i].payout,
+            thru:      s.players[i].thru,
           ),
       ],
       holes: [
@@ -205,6 +206,7 @@ class SkinsBoardGolfer {
     required this.skinsWon,
     required this.junkSkins,
     required this.net,
+    this.thru,
   });
 
   final int playerId;
@@ -220,6 +222,13 @@ class SkinsBoardGolfer {
   final int junkSkins;
   /// The SERVER's signed, zero-sum net. Never recomputed.
   final double net;
+  /// How far round this golfer is — pool only, null in a single foursome.
+  ///
+  /// A cross-round pool spans groups playing at different paces, so a board
+  /// that hid it would be quietly misleading about who still has holes to
+  /// come. In one foursome everybody is on the same hole and the line would
+  /// be noise, so it is absent rather than repeated four times.
+  final int? thru;
 
   int get totalSkins => skinsWon + junkSkins;
 }

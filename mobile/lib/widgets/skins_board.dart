@@ -404,10 +404,23 @@ class _LedgerRow extends StatelessWidget {
               ),
               const SizedBox(width: 9),
               Expanded(
-                child: Text(golfer.name,
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w600)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(golfer.name,
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w600)),
+                    if (golfer.thru != null)
+                      Text(
+                          golfer.thru == 0
+                              ? 'not started'
+                              : 'thru ${golfer.thru}',
+                          style: const TextStyle(
+                              fontSize: 11, color: Halved.muted)),
+                  ],
+                ),
               ),
             ]),
           ),

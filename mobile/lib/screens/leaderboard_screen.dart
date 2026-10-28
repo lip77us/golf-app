@@ -38,6 +38,8 @@ import '../widgets/stroke_dots.dart';
 import '../widgets/pinned_hole_grid.dart';
 import '../utils/nine_totals.dart';
 import '../utils/skin_rules_display.dart';
+import '../utils/skins_board_model.dart';
+import '../widgets/skins_board.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   final int roundId;
@@ -2769,59 +2771,15 @@ class _MultiSkinsView extends StatelessWidget {
                         color: theme.colorScheme.onSurfaceVariant),
                   ),
                 ]),
-                // The pool's own validation rules. Same widget as the
-                // per-foursome card, reading the same three keys -- one rule
-                // stated one way, wherever a golfer meets it.
-                _SkinRulesInPlay(summary: data),
                 const SizedBox(height: 4),
-                Table(
-                  columnWidths: const {
-                    0: FlexColumnWidth(),
-                    1: FixedColumnWidth(36),
-                    2: FixedColumnWidth(40),
-                    3: FixedColumnWidth(56),
-                  },
-                  children: [
-                    TableRow(children: [
-                      Text('Player',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                              fontWeight: FontWeight.bold)),
-                      Text('Thru', textAlign: TextAlign.right,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                              fontWeight: FontWeight.bold)),
-                      Text('Skins', textAlign: TextAlign.right,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                              fontWeight: FontWeight.bold)),
-                      Text('Payout', textAlign: TextAlign.right,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                              fontWeight: FontWeight.bold)),
-                    ]),
-                    for (final p in players)
-                      TableRow(children: [
-                        Text(
-                          (p['short_name'] as String?)?.isNotEmpty == true
-                              ? p['short_name'] as String
-                              : (p['name'] as String? ?? ''),
-                          style: theme.textTheme.bodySmall,
-                        ),
-                        Text(
-                          (p['thru'] as int? ?? 0) == 0
-                              ? '—' : '${p['thru']}',
-                          textAlign: TextAlign.right,
-                          style: theme.textTheme.bodySmall,
-                        ),
-                        Text('${p['skins_won'] ?? 0}',
-                            textAlign: TextAlign.right,
-                            style: theme.textTheme.bodySmall),
-                        Text(
-                          '\$${((p['payout'] as num?)?.toDouble() ?? 0.0)
-                              .toStringAsFixed(2)}',
-                          textAlign: TextAlign.right,
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ]),
-                  ],
-                ),
+                // **The board** — the same widget the per-foursome card
+                // draws, so the pool is not a second skins table with its own
+                // opinion about money.  Per-golfer `thru` rides in the ledger
+                // because a pool spans groups at different paces, which one
+                // foursome never does.
+                SkinsBoard(
+                    data: SkinsBoardData.fromPool(
+                        MultiSkinsSummary.fromJson(data))),
               ],
             ),
           ),
@@ -2889,25 +2847,16 @@ class _SkinsGroupCard extends StatelessWidget {
           // Skins and junk divide ONE pot, so this sits above the standings
           // rather than beside them — it is part of the same money.
           _JunkInPlay(summary: summary),
-          // Beside junk for the same reason junk is here: it is part of what
-          // the pot pays for, and it is the only place the board explains a
-          // hole that nobody won.
-          _SkinRulesInPlay(summary: summary),
           const Divider(height: 16),
-          // **The play screen's standings block, moved here.** It answers
-          // where the money went AND what the next hole is worth, in one
-          // strip; the per-player list it replaces could only total it up.
-          //
-          // `currentHole` is the last hole DECIDED rather than one in play — a
-          // board is read after the fact, so the strip opens on the newest
-          // result, which is the same rule every grid on this screen follows.
-          _SkinsStandingsBlock(
-            skins: SkinsSummary.fromJson(summary),
-            currentHole: holes
-                .where((h) => h['winner_id'] != null)
-                .map((h) => (h['hole'] as num?)?.toInt() ?? 0)
-                .fold<int>(0, (a, b) => a > b ? a : b),
-          ),
+          // **The board** (handoff-skins-leaderboard): what the next hole is
+          // worth, where the skins went, and what everyone is owed — the same
+          // three cards the cross-group pool draws, from the same widget.
+          // It replaces a standings strip that answered the first and third
+          // in a different shape, and it carries the validation rules under
+          // its own HOLES grid, which is why `_SkinRulesInPlay` is no longer
+          // called here: the rules would otherwise print twice.
+          SkinsBoard(data: SkinsBoardData.fromSkins(
+              SkinsSummary.fromJson(summary))),
           // Per-hole scorecard — gross scores with the skin-winner cell
           // highlighted, mirroring the Multi-Group Skins view.  Adds a
           // visual answer to "who actually won each hole?" right next
@@ -3154,28 +3103,6 @@ class _SpotsInPlay extends StatelessWidget {
   }
 }
 
-/// Skins' **Junk in play** card: the ticked types as pills, and the greenie
-/// carry in a sentence.
-///
-/// The twin of `_SpotsInPlay`, and separate for one reason worth stating: a
-/// junk is one share of the SKINS pot, so the sentence it ends with is about
-/// shares rather than about its own money.
-/// The skins VALIDATION rules in force, on the board.
-///
-/// The settings live on the setup screen, but the consequence shows up here
-/// and nowhere else: with a minimum on, **a hole can go unwon with nobody
-/// tied** — which plain skins never does — so a player staring at a carried
-/// pot has no way to work out why. Same reason `_NotSetUpYet` exists.
-///
-/// The phrase is the SERVER'S (`summary['skin_rules']`), not built here: one
-/// rule, one place that names it, so the board and the engine cannot come to
-/// disagree about what is being played. Empty means neither rule is on, and
-/// this draws nothing rather than announcing "no minimum" at a group playing
-/// plain skins.
-///
-/// Reads the raw summary map rather than a decoded model because it serves
-/// both the per-foursome card and the pool, and those hold different types
-/// over the same three keys.
 class _SkinRulesInPlay extends StatelessWidget {
   final Map<String, dynamic> summary;
   const _SkinRulesInPlay({required this.summary});
@@ -11575,247 +11502,6 @@ class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
 // already exists and is the same shape.
 // ---------------------------------------------------------------------------
 
-class _SkinsStandingsBlock extends StatefulWidget {
-  final SkinsSummary skins;
-  final int          currentHole;
-
-  const _SkinsStandingsBlock({
-    required this.skins,
-    required this.currentHole,
-  });
-
-  @override
-  State<_SkinsStandingsBlock> createState() => _SkinsStandingsBlockState();
-}
-
-class _SkinsStandingsBlockState extends State<_SkinsStandingsBlock> {
-  final ScrollController _ctrl = ScrollController();
-  static const double _stride = 36.0; // 32px cell + 4px gap
-
-  @override
-  void initState() {
-    super.initState();
-    _schedule();
-  }
-
-  @override
-  void didUpdateWidget(covariant _SkinsStandingsBlock old) {
-    super.didUpdateWidget(old);
-    if (old.currentHole != widget.currentHole) _schedule();
-  }
-
-  void _schedule() => WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_ctrl.hasClients) return;
-        final target = ((widget.currentHole - 4) * _stride)
-            .clamp(0.0, _ctrl.position.maxScrollExtent);
-        _ctrl.animateTo(target,
-            duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
-      });
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final skins       = widget.skins;        // aliases keep the body unchanged
-    final currentHole = widget.currentHole;
-    final theme = Theme.of(context);
-
-    // Sort by total_skins descending.
-    final sorted = List.of(skins.players)
-      ..sort((a, b) => b.totalSkins.compareTo(a.totalSkins));
-
-    // Build a lookup from hole → SkinsHole for the strip.
-    final holeMap = { for (final h in skins.holes) h.hole: h };
-
-    // Count carry pot entering each hole so the strip can show accumulated value.
-    // We pre-compute the pot for every hole for efficiency.
-    final potByHole = <int, int>{};
-    int runningPot = 1;
-    for (int h = 1; h <= 18; h++) {
-      potByHole[h] = runningPot;
-      final hd = holeMap[h];
-      if (hd == null) break; // not yet scored
-      if (hd.winnerId != null || hd.isDead) {
-        runningPot = 1;
-      } else if (hd.isCarry) {
-        runningPot++;
-      }
-    }
-
-    // **Not a Card of its own any more.** On score entry this stood alone in a
-    // scroll view and needed its own frame; here it is a section INSIDE the
-    // group card, and a bordered box inside a bordered box reads as two
-    // objects where there is one.
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // The `Skins standings · Pool: $N` header row this carried on
-            // score entry is gone: the group card it now sits inside already
-            // names the group, the payout mode and the pool, one line above.
-            // Two pool figures a centimetre apart is the thing that got the
-            // points table cut down to one.
-
-            // ── 18-hole strip ────────────────────────────────────────────────
-            SizedBox(
-              height: 44,
-              child: ListView.separated(
-                controller: _ctrl,
-                scrollDirection: Axis.horizontal,
-                itemCount: 18,
-                separatorBuilder: (_, __) => const SizedBox(width: 4),
-                itemBuilder: (_, idx) {
-                  final h   = idx + 1;
-                  final hd  = holeMap[h];
-                  final pot = potByHole[h] ?? 1;
-                  final isCurrent = h == currentHole;
-
-                  // Decide cell appearance.
-                  Color  bgColor;
-                  Color  fgColor;
-                  String topLabel;   // hole number
-                  String botLabel;   // winner initials / pot / dot
-
-                  if (hd == null) {
-                    // Unplayed.
-                    bgColor  = theme.colorScheme.surfaceContainerHighest;
-                    fgColor  = theme.colorScheme.onSurfaceVariant;
-                    topLabel = '$h';
-                    botLabel = pot > 1 ? '$pot' : '·';
-                    // If carry is accumulating into this unplayed hole, amber.
-                    if (pot > 1) {
-                      bgColor = Colors.amber.shade100;
-                      fgColor = Colors.amber.shade900;
-                    }
-                  } else if (hd.winnerId != null) {
-                    // Winner decided.
-                    bgColor  = Colors.green.shade100;
-                    fgColor  = Colors.green.shade900;
-                    topLabel = '$h';
-                    botLabel = hd.winnerShort ?? '?';
-                    // If it was a carry win, show the pot value above initials.
-                    if (hd.skinsValue > 1) botLabel = '${hd.winnerShort}×${hd.skinsValue}';
-                  } else if (hd.isDead) {
-                    // Killed (tied, no carryover).
-                    bgColor  = Colors.grey.shade200;
-                    fgColor  = Colors.grey.shade600;
-                    topLabel = '$h';
-                    botLabel = '✕';
-                  } else {
-                    // Tied with carryover — skin carrying forward.
-                    bgColor  = Colors.amber.shade100;
-                    fgColor  = Colors.amber.shade900;
-                    topLabel = '$h';
-                    botLabel = '→';
-                  }
-
-                  return Container(
-                    width: 32,
-                    decoration: BoxDecoration(
-                      color: bgColor,
-                      borderRadius: BorderRadius.circular(6),
-                      border: isCurrent
-                          ? Border.all(
-                              color: theme.colorScheme.primary,
-                              width: 2,
-                            )
-                          : null,
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(topLabel,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: fgColor,
-                              fontSize: 9,
-                            )),
-                        const SizedBox(height: 1),
-                        Text(
-                          botLabel,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: fgColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: botLabel.length > 3 ? 8 : 10,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            // ── Player standings rows ────────────────────────────────────────
-            for (final p in sorted)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(children: [
-                  Text(p.name,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(fontWeight: FontWeight.w600)),
-                  const Spacer(),
-                  if (p.totalSkins > 0) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade100,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '${p.totalSkins} skin${p.totalSkins > 1 ? 's' : ''}',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: Colors.green.shade800,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '\$${p.payout.toStringAsFixed(2)}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.green.shade800,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ] else
-                    Text('—',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                ]),
-              ),
-          ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Hot Spot — the group-vs-field board, with each group's card in anchor order
-// ---------------------------------------------------------------------------
-
-/// One anchor per hole whose score always counts, plus the best net of the
-/// other three.
-///
-/// The board is the same shape as Irish Rumble's — groups ranked against the
-/// field, money to the winning GROUP — and the card is where the game shows:
-/// the group is listed in ANCHOR order, so the dark cells run diagonally down
-/// it and a glance says whose hole it was.
-///
-/// Three marks, and each is a different fact:
-///   * **dark** — the anchor's score, which counted whatever it was;
-///   * **green** — the best net of the other three, the second counted ball
-///     (`Halved.mint`, the counted-ball green the family already uses);
-///   * **amber outline** — clamped at net double bogey. `Halved.caution`
-///     rather than `warning`, because the cap is a RULE of the game and not a
-///     mistake the golfer made.
 class _HotSpotView extends StatefulWidget {
   final Map<String, dynamic> data;
   const _HotSpotView({required this.data});
