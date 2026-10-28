@@ -88,9 +88,18 @@ void main() {
       }
     });
 
-    test('the consequence is stated with them', () {
+    test('the consequence is stated with them, and ASKED FOR', () {
+      // It used to be a const in the widget, which is how a round playing
+      // the gross steal alone got told its holes could go unwon over a
+      // qualification it had not switched on. The board asks `skinRuleNote`
+      // now; the words live in one place, beside the rules they belong to.
       final src = File('lib/widgets/skins_board.dart').readAsStringSync();
-      expect(src.contains('goes unwon'), isTrue);
+      expect(src.contains('skinRuleNote('), isTrue,
+          reason: 'the board must ask for the consequence, not spell it');
+      expect(src.contains('goes unwon'), isFalse,
+          reason: 'a second copy of the sentence is a second rule');
+      final help = File('lib/utils/skin_rules_display.dart').readAsStringSync();
+      expect(help.contains('goes unwon'), isTrue);
     });
   });
 }

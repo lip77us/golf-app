@@ -305,3 +305,51 @@ class SkinValidationEndpointTests(_Base):
                          format='json')
         hole1, = [h for h in self._summary()['holes'] if h['hole'] == 1]
         self.assertEqual(hole1['winner_id'], self.ids[0])
+
+
+class JunkIsPickableOnAFreshGameTests(_Base):
+    """Reported from the setup screen, 28 Oct 2026: *"skins setup does not let
+    me pick junk, but requires at least one."*
+
+    `catalogue_block()` was on the CONFIGURED payload only. Before a game
+    exists `skins_summary` returns its empty/pending shape, which carried no
+    catalogue — so the setup screen drew the junk switch with **no type
+    rows**. Nothing to tick, while the screen's own gate (junk on with
+    nothing ticked is a switch that counts nothing) refused to save. Neither
+    forwards nor back.
+    """
+
+    def _summary(self):
+        r = self.client.get(reverse('api-skins-result', args=[self.fs.id]))
+        self.assertEqual(r.status_code, 200, r.data)
+        return r.data
+
+    def test_a_game_that_does_not_exist_yet_still_names_every_junk_type(self):
+        from games.models import SkinsGame
+        self.assertFalse(SkinsGame.objects.filter(foursome=self.fs).exists())
+        cat = self._summary()['junk_catalogue']
+        self.assertTrue(cat, 'nothing to tick on a fresh setup')
+        slugs = {t['type'] for t in cat}
+        for expected in ('greenie', 'sandy', 'birdie'):
+            self.assertIn(expected, slugs)
+
+    def test_the_catalogue_is_the_same_before_and_after_setup(self):
+        """It is a vocabulary, not a choice — it cannot depend on the game."""
+        before = self._summary()['junk_catalogue']
+        self.setup_skins(junk_types=['sandy'])
+        after = self._summary()['junk_catalogue']
+        self.assertEqual([t['type'] for t in before], [t['type'] for t in after])
+
+    def test_nothing_is_in_play_before_anything_is_chosen(self):
+        s = self._summary()
+        self.assertEqual(s['junk_in_play'], [])
+        self.assertEqual(s['junk_sheet_types'], [])
+        self.assertFalse(s['allow_junk'])
+
+    def test_the_fresh_payload_carries_every_key_the_screen_reads(self):
+        """A missing key reads as a default, which is how this hid."""
+        s = self._summary()
+        for key in ('junk_catalogue', 'junk_in_play', 'junk_sheet_types',
+                    'junk_greenie', 'junk_birdie_basis', 'allow_junk',
+                    'carryover', 'skin_minimum', 'birdie_steal'):
+            self.assertIn(key, s, key)

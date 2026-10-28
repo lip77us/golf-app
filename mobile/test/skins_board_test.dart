@@ -13,6 +13,8 @@ SkinsSummary _skins({
   bool carryover = true,
   double betUnit = 1.0,
   String rules = '',
+  String minimum = 'none',
+  bool steal = false,
 }) =>
     SkinsSummary.fromJson({
       'status': 'in_progress',
@@ -20,6 +22,8 @@ SkinsSummary _skins({
       'carryover': carryover,
       'allow_junk': true,
       'skin_rules': rules,
+      'skin_minimum': minimum,
+      'birdie_steal': steal,
       'players': players,
       'holes': holes,
       'money': {'bet_unit': betUnit, 'pool': 4.0, 'total_skins': 0},
@@ -177,7 +181,12 @@ void main() {
     testWidgets('the rules sit under HOLES, as a footnote on the grid',
         (t) async {
       await _pump(t, SkinsBoardData.fromSkins(_skins(
+        // The SLUGS as well as the phrase. This test used to name a minimum
+        // in the phrase alone and still expect the minimum's consequence —
+        // which passed only because that sentence was unconditional, so the
+        // test agreed with the bug.
         rules: 'gross par or better to win · gross birdies steal',
+        minimum: 'gross_par', steal: true,
         players: [_p(1, 'Paul')],
         holes: [for (var h = 1; h <= 18; h++) _unplayed(h)],
       )));
@@ -230,6 +239,66 @@ void main() {
       expect(Halved.golferColours.length, 6);
       expect(Halved.golfer(0), Halved.golfer(6));
       expect(Halved.golfer(1), isNot(Halved.golfer(0)));
+    });
+  });
+
+  group('the rules footnote', () {
+    /// Reported from the board, 28 Oct 2026: *"The leaderboard says, a hole
+    /// where no one qualifies goes unwon, when there is no qualification
+    /// checked."*
+    ///
+    /// The block is gated on the rules PHRASE being non-empty, and a gross
+    /// steal puts a phrase there — so a round playing steal alone drew the
+    /// minimum's consequence. The sentence was a `const`; `skinRuleNote`
+    /// already decided it per rule and had no caller.
+    final four = [_p(1, 'Paul'), _p(2, 'Dave'), _p(3, 'Sam'), _p(4, 'Mike')];
+    final holes = [
+      for (var h = 1; h <= 4; h++) _won(h, 1),
+      for (var h = 5; h <= 18; h++) _unplayed(h),
+    ];
+
+    testWidgets('plain skins says nothing at all', (t) async {
+      await _pump(t, SkinsBoardData.fromSkins(
+          _skins(players: four, holes: holes)));
+      expect(find.textContaining('qualifies'), findsNothing);
+      expect(find.textContaining('gross birdie'), findsNothing);
+    });
+
+    testWidgets('a steal alone never claims a hole can go unwon', (t) async {
+      await _pump(t, SkinsBoardData.fromSkins(_skins(
+        players: four, holes: holes,
+        rules: 'gross birdies steal', steal: true)));
+      expect(find.text('Gross birdies steal'), findsOneWidget);
+      expect(find.textContaining('qualifies'), findsNothing);
+      expect(find.text('A gross birdie beats a lower net score.'),
+          findsOneWidget);
+    });
+
+    testWidgets('a minimum does, because it can', (t) async {
+      await _pump(t, SkinsBoardData.fromSkins(_skins(
+        players: four, holes: holes,
+        rules: 'net par or better to win', minimum: 'net_par')));
+      expect(find.text('Net par or better to win'), findsOneWidget);
+      expect(find.text('A hole where nobody qualifies goes unwon.'),
+          findsOneWidget);
+    });
+
+    testWidgets('both on: the minimum owns the consequence', (t) async {
+      await _pump(t, SkinsBoardData.fromSkins(_skins(
+        players: four, holes: holes,
+        rules: 'net par or better to win · gross birdies steal',
+        minimum: 'net_par', steal: true)));
+      expect(find.text('Net par or better to win · Gross birdies steal'),
+          findsOneWidget);
+      expect(find.text('A hole where nobody qualifies goes unwon.'),
+          findsOneWidget);
+    });
+
+    testWidgets('the sentence is not typed into the widget', (t) async {
+      // It is chosen by `skinRuleNote`, so the board cannot drift from it.
+      final src = File('lib/widgets/skins_board.dart').readAsStringSync();
+      expect(src.contains("const Text('A hole where nobody"), isFalse);
+      expect(src.contains('skinRuleNote('), isTrue);
     });
   });
 }

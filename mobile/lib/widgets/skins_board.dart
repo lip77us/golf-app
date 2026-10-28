@@ -177,6 +177,8 @@ class _HolesCard extends StatelessWidget {
       rows.add(byNumber.sublist(i, (i + 9).clamp(0, byNumber.length)));
     }
     final nextHole = data.nextHole?.hole;
+    final note = skinRuleNote(
+        minimum: data.skinMinimum, birdieSteal: data.birdieSteal);
 
     return Container(
       decoration: BoxDecoration(
@@ -219,9 +221,17 @@ class _HolesCard extends StatelessWidget {
               style: const TextStyle(
                   fontSize: 11.5, fontWeight: FontWeight.w600,
                   color: Halved.pine)),
-          const SizedBox(height: 2),
-          const Text('A hole where nobody qualifies goes unwon.',
-              style: TextStyle(fontSize: 11.5, color: Halved.muted)),
+          // The consequence is per RULE, which is why it comes from
+          // `skinRuleNote` and not from a const: a minimum can leave a hole
+          // unwon with nobody tied, and a gross steal never can — it changes
+          // who wins, not whether anybody does. This was hardcoded to the
+          // minimum's sentence, so a round playing steal alone was told holes
+          // could go unwon over a qualification it had not switched on.
+          if (note.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(note,
+                style: const TextStyle(fontSize: 11.5, color: Halved.muted)),
+          ],
         ],
       ]),
     );

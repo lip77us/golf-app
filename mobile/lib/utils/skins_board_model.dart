@@ -35,6 +35,8 @@ class SkinsBoardData {
     required this.basis,
     this.showNext = true,
     this.rulesLine = '',
+    this.skinMinimum = 'none',
+    this.birdieSteal = false,
   });
 
   final List<SkinsBoardGolfer> golfers;
@@ -49,6 +51,14 @@ class SkinsBoardData {
   final bool showNext;
   /// The validation rules in force, in the server's words. '' when none.
   final String rulesLine;
+
+  /// The rule SLUGS, beside the phrase, because the two answer different
+  /// questions. [rulesLine] is what is in force and is the server's wording;
+  /// these say WHICH rule, which is what decides the consequence sentence —
+  /// a minimum can leave a hole unwon with nobody tied, and a steal never
+  /// can. Reading that off the phrase would be parsing prose for logic.
+  final String skinMinimum;
+  final bool   birdieSteal;
 
   // ── the walk ─────────────────────────────────────────────────────────────
 
@@ -155,6 +165,8 @@ class SkinsBoardData {
       carry:     s.carryover,
       basis:     _basisLabel[s.handicapMode] ?? 'Net',
       rulesLine: s.skinRules,
+      skinMinimum: s.skinMinimum,
+      birdieSteal: s.birdieSteal,
     );
   }
 
@@ -194,6 +206,8 @@ class SkinsBoardData {
       basis:     _basisLabel[s.handicapMode] ?? 'Net',
       showNext:  false,
       rulesLine: s.skinRules,
+      skinMinimum: s.skinMinimum,
+      birdieSteal: s.birdieSteal,
     );
   }
 }

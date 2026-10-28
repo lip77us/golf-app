@@ -693,6 +693,24 @@ def skins_summary(foursome) -> dict:
             'players'   : [],
             'holes'     : [],
             'money'     : {'bet_unit': bet_unit, 'pool': 0.0, 'total_skins': 0},
+            # The junk CATALOGUE belongs here too, not only on a configured
+            # game.  Without it a first-time setup drew the junk switch with
+            # NO TYPE ROWS: nothing to tick, while the screen's own gate
+            # ("junk on with nothing ticked is a switch that counts nothing")
+            # refused to save.  The TD could neither pick junk nor get past
+            # the form -- reported from the setup screen, 28 Oct 2026.
+            #
+            # `junk_catalogue` is the whole vocabulary and is always the same,
+            # so it is safe to send before any game exists.  The three
+            # in-play lists stay empty, because nothing has been chosen yet.
+            'junk_catalogue'   : catalogue_block(),
+            'junk_in_play'     : [],
+            'junk_sheet_types' : [],
+            # An ABSENCE, not a hand-built state: the client defaults every
+            # greenie field (carry -> true), so spelling one out here would
+            # only be a second shape to drift from the real one.
+            'junk_greenie'     : {},
+            'junk_birdie_basis': 'gross',
         }
 
     real_members = list(
