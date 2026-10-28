@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/halved_brand.dart';
 import '../utils/nassau_board_model.dart';
+import 'dashed_border.dart';
 
 /// The Nassau board — ONE widget for every Nassau leaderboard.
 ///
@@ -134,12 +135,13 @@ class _NineCard extends StatelessWidget {
     final presses = data.presses.where((p) =>
         bothNines || (p.from >= startIndex + 1 && p.from <= startIndex + 9));
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Halved.card,
-        border: Border.fromBorderSide(border),
-        borderRadius: BorderRadius.circular(16),
-      ),
+    // **A nine that has not started is drawn as absent** (Design, 28 Oct
+    // 2026): dashed border, no fill, faint dashed tiles — and no ball rows,
+    // because an empty 2x9 grid was the tallest thing on the screen and
+    // said nothing.
+    final waiting = bet.notStarted;
+
+    final body = Padding(
       padding: const EdgeInsets.fromLTRB(14, 11, 14, 13),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -150,12 +152,13 @@ class _NineCard extends StatelessWidget {
           _Status(data: data, bet: bet),
         ]),
         const SizedBox(height: 8),
-        _Tiles(data: data, startIndex: startIndex),
+        _Tiles(data: data, startIndex: startIndex,
+            waiting: waiting),
         if (bothNines) ...[
           const SizedBox(height: 4),
-          _Tiles(data: data, startIndex: 9),
+          _Tiles(data: data, startIndex: 9, waiting: waiting),
         ],
-        if (points != null) ...[
+        if (points != null && !waiting) ...[
           const SizedBox(height: 9),
           Row(children: [
             const Text('Points',
@@ -178,10 +181,26 @@ class _NineCard extends StatelessWidget {
         ],
       ]),
     );
+
+    if (waiting) {
+      return CustomPaint(
+        painter: DashedRRect(
+            color: Halved.cardBorder, width: 1.5, radius: 16),
+        child: body,
+      );
+    }
+    return Container(
+      decoration: BoxDecoration(
+        color: Halved.card,
+        border: Border.fromBorderSide(border),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: body,
+    );
   }
 }
 
-/// Claremont's balls: one row per side (`low/2nd`), then the hole's points.
+/// Claremont's balls: one row per side, each cell that side's `low/2nd`.
 ///
 /// The rows are in the same order as the sides card above and tinted in the
 /// same two colours, which is what identifies them — a label column would
@@ -209,8 +228,9 @@ class _BallsBlock extends StatelessWidget {
         if (side == 1) const SizedBox(height: 3),
         _BallsRow(data: data, nine: nine, side: side),
       ],
-      const SizedBox(height: 4),
-      _PointsRow(data: data, nine: nine),
+      // **No per-hole points row** (Design, 28 Oct 2026). The won ball is
+      // already bold in its side's colour and the `Points` line above
+      // carries the running total, so a third row repeated both.
     ]);
   }
 }
@@ -287,41 +307,6 @@ class _BallsCell extends StatelessWidget {
 }
 
 /// The hole's net points for side 0, in the gaining side's colour.
-class _PointsRow extends StatelessWidget {
-  const _PointsRow({required this.data, required this.nine});
-  final NassauBoardData data;
-  final List<NassauBallsHole> nine;
-
-  @override
-  Widget build(BuildContext context) => Row(children: [
-        for (var i = 0; i < 9; i++)
-          Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(right: i == 8 ? 0 : 3),
-              child: Builder(builder: (_) {
-                final d = nine[i].delta;
-                if (!nine[i].played || d == null) {
-                  return const SizedBox(height: 14);
-                }
-                final colour = d == 0
-                    ? Halved.muted
-                    : _sideColour(data, d > 0 ? 0 : 1);
-                final n = d.abs();
-                return SizedBox(
-                  height: 14,
-                  child: Center(
-                    child: Text(d == 0 ? '–' : '+$n',
-                        style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: colour)),
-                  ),
-                );
-              }),
-            ),
-          ),
-      ]);
-}
 
 class _Status extends StatelessWidget {
   const _Status({required this.data, required this.bet});
@@ -347,9 +332,12 @@ class _Status extends StatelessWidget {
 }
 
 class _Tiles extends StatelessWidget {
-  const _Tiles({required this.data, required this.startIndex});
+  const _Tiles(
+      {required this.data, required this.startIndex, this.waiting = false});
   final NassauBoardData data;
   final int startIndex;
+  /// The nine has not started: every tile is a faint dashed outline.
+  final bool waiting;
 
   @override
   Widget build(BuildContext context) => Row(children: [
@@ -363,6 +351,7 @@ class _Tiles extends StatelessWidget {
                     ? data.holes[i]
                     : NassauHoleWinner.notPlayed,
                 data: data,
+                dashed: waiting,
               ),
             ),
           ),
@@ -371,10 +360,12 @@ class _Tiles extends StatelessWidget {
 
 class _Tile extends StatelessWidget {
   const _Tile(
-      {required this.hole, required this.winner, required this.data});
+      {required this.hole, required this.winner, required this.data,
+       this.dashed = false});
   final int hole;
   final NassauHoleWinner winner;
   final NassauBoardData data;
+  final bool dashed;
 
   @override
   Widget build(BuildContext context) {
@@ -391,14 +382,27 @@ class _Tile extends StatelessWidget {
         bg = Colors.transparent; fg = Halved.cardBorder;
         border = Border.all(color: Halved.cardBorder, width: 1.2);
     }
+    final label = SizedBox(
+      height: 26,
+      child: Center(
+        child: Text('$hole',
+            style: TextStyle(
+                fontSize: 10.5, fontWeight: FontWeight.w700, color: fg)),
+      ),
+    );
+    if (dashed) {
+      return CustomPaint(
+        painter: const DashedRRect(
+            color: Halved.cardBorder, width: 1.2, radius: 6),
+        child: label,
+      );
+    }
     return Container(
       height: 26,
       decoration: BoxDecoration(
           color: bg, border: border, borderRadius: BorderRadius.circular(6)),
       alignment: Alignment.center,
-      child: Text('$hole',
-          style: TextStyle(
-              fontSize: 10.5, fontWeight: FontWeight.w700, color: fg)),
+      child: label,
     );
   }
 }

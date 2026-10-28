@@ -69,14 +69,54 @@ class GrossParMinimumTests(SimpleTestCase):
 
 
 class BirdieStealTests(SimpleTestCase):
-    def test_a_natural_birdie_beats_a_lower_net(self):
-        """1 has the better net (2 off a stroke); 2 made a real birdie."""
+    """**A gross birdie beats a net birdie, not a net eagle** (Paul, via
+    Design, 28 Oct 2026).
+
+    The first build let any natural win outright. The rule exists to say a
+    birdie made with a shot does not beat one made without; it was never
+    meant to outrank a score two under.
+    """
+
+    def test_a_natural_beats_a_net_BIRDIE(self):
+        """2 made a real 3. 1 made a net 3 off a stroke — the steal's case."""
         self.assertEqual(
-            decide({1: 2, 2: 3}, {1: 4, 2: 3}, PAR4, birdie_steal=True), [2])
+            decide({1: 3, 2: 3}, {1: 4, 2: 3}, PAR4, birdie_steal=True), [2])
+
+    def test_a_natural_does_NOT_beat_a_net_EAGLE(self):
+        """1 is net 2 on a par 4 — two under, and it keeps the hole.
+
+        This inverted when the rule was narrowed; the old version gave it to
+        the natural, which is the defect Design reported.
+        """
+        self.assertEqual(
+            decide({1: 2, 2: 3}, {1: 4, 2: 3}, PAR4, birdie_steal=True), [1])
+
+    def test_the_exception_is_the_BEST_ball_not_the_natural_s_rival(self):
+        """Three balls: a natural, a net birdie, and a net eagle.
+
+        The net eagle is nobody's rival in particular — it simply means the
+        best score on the hole is two under, so the steal is off for all of
+        them and the low net takes it.
+        """
+        self.assertEqual(
+            decide({1: 3, 2: 3, 3: 2}, {1: 3, 2: 4, 3: 4}, PAR4,
+                   birdie_steal=True), [3])
 
     def test_without_the_rule_the_low_net_keeps_it(self):
         self.assertEqual(
             decide({1: 2, 2: 3}, {1: 4, 2: 3}, PAR4, birdie_steal=False), [1])
+
+    def test_no_par_means_no_natural_at_all(self):
+        """Fail open, and it falls out rather than being special-cased.
+
+        A birdie cannot be recognised without a par, so nothing is a natural
+        and the steal has nothing to act on — the low net takes it, exactly
+        as with the rule switched off.
+        """
+        self.assertEqual(
+            decide({1: 2, 2: 3}, {1: 4, 2: 3}, {}, birdie_steal=True), [1])
+        self.assertEqual(
+            decide({1: 2, 2: 3}, {1: 4, 2: 3}, {}, birdie_steal=False), [1])
 
     def test_naturals_are_separated_by_NET_not_regraded_on_gross(self):
         """Two real birdies: the game is still a net game.  1 has a stroke."""

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
 import 'package:golf_mobile/utils/nassau_board_model.dart';
+import 'package:golf_mobile/widgets/dashed_border.dart';
 import 'package:golf_mobile/widgets/nassau_board.dart';
 
 Map<String, dynamic> _bet({
@@ -60,6 +61,7 @@ Future<void> _pump(WidgetTester t, NassauBoardData d) => t.pumpWidget(
     );
 
 void main() {
+  _notStartedTests();
 
   group('claremont balls', () {
     /// Reported 28 Oct 2026: *"I think I selected Claremont on the
@@ -241,8 +243,15 @@ void main() {
     testWidgets('a decided bottom bet says how many holes were left',
         (t) async {
       // Two points a hole: +6 with 2 to play cannot be caught.
+      //
+      // The top front bet carries the same holes played: the two bets share
+      // the HOLES, so a bottom bet seven holes in on a nine that has not
+      // started is not a state the engine can produce — and since a
+      // not-started nine now draws as absent, a fixture saying both would
+      // be testing a screen nobody can reach.
       await _pump(t, NassauBoardData.fromSummary(_nassau(
           variant: 'claremont',
+          front: _bet(margin: 3, holesPlayed: 7),
           bottomFront: {'result': null, 'margin': 6, 'holes_played': 7,
                         'decided_margin': 6, 'decided_remaining': 2},
           payouts: {'total': 10.0, 'total_capped': 10.0})));
@@ -261,6 +270,51 @@ void main() {
       final src = File('lib/screens/leaderboard_screen.dart').readAsStringSync();
       expect(src.contains('NassauBoard('), isTrue,
           reason: 'the Nassau tab must use the one board');
+    });
+  });
+}
+
+/// A nine that has not started draws as ABSENT (Design, 28 Oct 2026):
+/// dashed card, no fill, dashed tiles, and no Claremont ball rows — the
+/// empty 2x9 grid was the tallest thing on the screen and said nothing.
+void _notStartedTests() {
+  group('a nine that has not started', () {
+    testWidgets('says when it starts and draws no balls', (t) async {
+      await _pump(t, NassauBoardData.fromSummary(_nassau(
+        variant: 'claremont',
+        front: _bet(margin: 2, holesPlayed: 4),
+        bottomFront: {'result': null, 'margin': 2, 'holes_played': 4},
+        bottomOverall: {'result': null, 'margin': 2, 'holes_played': 4},
+        holes: [
+          for (var h = 1; h <= 4; h++)
+            {'hole': h, 'winner': 'team1', 't1_net': 4, 't1_2nd_net': 5,
+             't2_net': 5, 't2_2nd_net': 5, 'bottom_delta': 2},
+        ],
+      )));
+      expect(find.text('starts 10'), findsOneWidget);
+      // The front nine is under way, so ONE balls block is drawn — the back
+      // nine's is withheld rather than drawn empty.
+      expect(find.text('BALLS · LOW / 2ND'), findsOneWidget);
+    });
+
+    testWidgets('both nines waiting draws no balls at all', (t) async {
+      await _pump(t, NassauBoardData.fromSummary(_nassau(
+        variant: 'claremont',
+        bottomFront: {'result': null, 'margin': 0, 'holes_played': 0},
+      )));
+      expect(find.text('BALLS · LOW / 2ND'), findsNothing);
+    });
+
+    testWidgets('it is dashed, and a live nine is not', (t) async {
+      await _pump(t, NassauBoardData.fromSummary(_nassau(
+        front: _bet(margin: 1, holesPlayed: 3),
+      )));
+      // One dashed frame per waiting element: the back nine's card plus its
+      // nine tiles. The live front nine contributes none.
+      final dashed = t.widgetList<CustomPaint>(find.byType(CustomPaint))
+          .where((w) => w.painter is DashedRRect)
+          .length;
+      expect(dashed, 10);
     });
   });
 }

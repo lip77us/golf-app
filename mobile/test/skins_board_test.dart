@@ -13,8 +13,10 @@ SkinsSummary _skins({
   bool carryover = true,
   double betUnit = 1.0,
   String rules = '',
+  String note = '',
   String minimum = 'none',
   bool steal = false,
+  String payoutStyle = 'per_point',
 }) =>
     SkinsSummary.fromJson({
       'status': 'in_progress',
@@ -22,8 +24,11 @@ SkinsSummary _skins({
       'carryover': carryover,
       'allow_junk': true,
       'skin_rules': rules,
+      // The CONSEQUENCE is the server's sentence now, not derived here.
+      'skin_rules_note': note,
       'skin_minimum': minimum,
       'birdie_steal': steal,
+      'payout_style': payoutStyle,
       'players': players,
       'holes': holes,
       'money': {'bet_unit': betUnit, 'pool': 4.0, 'total_skins': 0},
@@ -187,6 +192,7 @@ void main() {
         // test agreed with the bug.
         rules: 'gross par or better to win · gross birdies steal',
         minimum: 'gross_par', steal: true,
+        note: 'A hole where nobody qualifies goes unwon.',
         players: [_p(1, 'Paul')],
         holes: [for (var h = 1; h <= 18; h++) _unplayed(h)],
       )));
@@ -267,17 +273,20 @@ void main() {
     testWidgets('a steal alone never claims a hole can go unwon', (t) async {
       await _pump(t, SkinsBoardData.fromSkins(_skins(
         players: four, holes: holes,
-        rules: 'gross birdies steal', steal: true)));
+        rules: 'gross birdies steal', steal: true,
+        note: 'A gross birdie beats a net birdie, not a net eagle.')));
       expect(find.text('Gross birdies steal'), findsOneWidget);
       expect(find.textContaining('qualifies'), findsNothing);
-      expect(find.text('A gross birdie beats a lower net score.'),
+      // Design's wording, and the ENGINE's rule: a net eagle still wins.
+      expect(find.text('A gross birdie beats a net birdie, not a net eagle.'),
           findsOneWidget);
     });
 
     testWidgets('a minimum does, because it can', (t) async {
       await _pump(t, SkinsBoardData.fromSkins(_skins(
         players: four, holes: holes,
-        rules: 'net par or better to win', minimum: 'net_par')));
+        rules: 'net par or better to win', minimum: 'net_par',
+        note: 'A hole where nobody qualifies goes unwon.')));
       expect(find.text('Net par or better to win'), findsOneWidget);
       expect(find.text('A hole where nobody qualifies goes unwon.'),
           findsOneWidget);
@@ -287,7 +296,11 @@ void main() {
       await _pump(t, SkinsBoardData.fromSkins(_skins(
         players: four, holes: holes,
         rules: 'net par or better to win · gross birdies steal',
-        minimum: 'net_par', steal: true)));
+        minimum: 'net_par', steal: true,
+        // The server picks ONE sentence: the minimum outranks the steal,
+        // because a natural clears any minimum and so can never be the
+        // reason a hole goes unwon.
+        note: 'A hole where nobody qualifies goes unwon.')));
       expect(find.text('Net par or better to win · Gross birdies steal'),
           findsOneWidget);
       expect(find.text('A hole where nobody qualifies goes unwon.'),
@@ -299,6 +312,8 @@ void main() {
       final src = File('lib/widgets/skins_board.dart').readAsStringSync();
       expect(src.contains("const Text('A hole where nobody"), isFalse);
       expect(src.contains('skinRuleNote('), isTrue);
+      // And it is no longer derived either — the server writes it.
+      expect(src.contains('goes unwon'), isFalse);
     });
   });
 }

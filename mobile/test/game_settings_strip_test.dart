@@ -133,10 +133,13 @@ bool tester_hasOverflow(WidgetTester t) =>
 /// Money on a board is never a raw API number.
 void _poolFormatTests() {
   test('the skins pool is formatted, not interpolated', () {
-    // The API sends a double, so `'Pool: \$$pool'` drew `Pool: $40.0` —
+    // The API sends a double, so interpolating it raw drew `Pool: $40.0` —
     // a stray decimal beside a ledger that formats every other figure.
+    // (The colon went with Design's group-header change; the formatting is
+    // the part this pins.)
     final src = File('lib/screens/leaderboard_screen.dart').readAsStringSync();
-    expect(src.contains(r"'Pool: \$$pool'"), isFalse);
-    expect(src.contains(r"'Pool: \$${pool.formatBet()}'"), isTrue);
+    expect(src.contains(r"$pool'"), isFalse,
+        reason: 'the pool is interpolated raw somewhere');
+    expect(src.contains(r"'Pool \$${pool.formatBet()}'"), isTrue);
   });
 }

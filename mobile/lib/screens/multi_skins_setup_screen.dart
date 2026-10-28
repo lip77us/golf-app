@@ -316,7 +316,10 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
 
               // ── Validation ───────────────────────────────────────────────
               SkinValidationCard(
-                minimum:     _skinMinimum,
+                // The server's words for each rule, so this screen and the
+            // board cannot describe one rule two ways.
+            ruleCopy:    _summary?.skinRuleCopy ?? const [],
+            minimum:     _skinMinimum,
                 birdieSteal: _birdieSteal,
                 onMinimumChanged: (v) => setState(() => _skinMinimum = v),
                 onBirdieStealChanged: (v) => setState(() => _birdieSteal = v),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../utils/skin_rules_display.dart';
+
 /// The two skins validation rules, as one control used by BOTH setup screens.
 ///
 /// Round skins and the cross-group pool carry the same two settings and one
@@ -17,6 +19,7 @@ class SkinValidationCard extends StatelessWidget {
     required this.birdieSteal,
     required this.onMinimumChanged,
     required this.onBirdieStealChanged,
+    this.ruleCopy = const [],
     this.enabled = true,
   });
 
@@ -24,6 +27,11 @@ class SkinValidationCard extends StatelessWidget {
   final bool birdieSteal;
   final ValueChanged<String> onMinimumChanged;
   final ValueChanged<bool> onBirdieStealChanged;
+  /// `summary['skin_rule_copy']` — the server's catalogue of what each rule
+  /// does. The card renders those words and writes none of its own: this
+  /// screen was one of the five places the steal was spelled, and its
+  /// sentence had drifted to something the engine never did.
+  final List<dynamic> ruleCopy;
   final bool enabled;
 
   static const _options = <(String, String, String)>[
@@ -35,21 +43,22 @@ class SkinValidationCard extends StatelessWidget {
      'Stricter: a net par made off a stroke is a gross bogey and fails.'),
   ];
 
-  /// What the two settings do together, in a sentence.  Worth stating because
-  /// the interesting case is not either rule alone — it is that a hole can now
-  /// go unwon, which plain skins never does unless somebody ties.
+  /// What the settings in force do, in the server's own sentences.
+  ///
+  /// Both are listed rather than one, unlike the board's footnote: a setup
+  /// screen is where a TD decides, so the steal's rule is worth stating even
+  /// when a minimum is also on.
   String _effect() {
     final bits = <String>[];
-    if (minimum == 'net_par') {
-      bits.add('a hole where nobody is net par or better goes unwon');
-    } else if (minimum == 'gross_par') {
-      bits.add('a hole where nobody makes a gross par goes unwon');
+    void add(String? note) {
+      if (note != null && note.isNotEmpty && !bits.contains(note)) {
+        bits.add(note);
+      }
     }
-    if (birdieSteal) {
-      bits.add('a gross birdie beats any net score');
-    }
+    if (minimum != 'none') add(skinRuleCopy(ruleCopy, minimum)?['note']);
+    if (birdieSteal) add(skinRuleCopy(ruleCopy, 'birdie_steal')?['note']);
     if (bits.isEmpty) return 'Plain skins — the lowest score wins the hole.';
-    return '${bits.join(', and ')}.';
+    return bits.join(' ');
   }
 
   @override
@@ -95,10 +104,14 @@ class SkinValidationCard extends StatelessWidget {
             SwitchListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
-              title: const Text('Gross birdies steal'),
+              title: Text(
+                  skinRuleCopy(ruleCopy, 'birdie_steal')?['label'] ??
+                      'Gross birdies steal'),
               subtitle: Text(
                 birdieSteal
-                    ? 'A real birdie beats a lower net score.'
+                    // The server's words, so the setup screen and the board
+                    // cannot describe one rule two ways.
+                    ? (skinRuleCopy(ruleCopy, 'birdie_steal')?['note'] ?? '')
                     : 'Strokes decide the hole however it was made.',
                 style: muted,
               ),

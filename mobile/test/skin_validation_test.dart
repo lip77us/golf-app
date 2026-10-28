@@ -7,6 +7,19 @@ import 'package:golf_mobile/widgets/skin_validation_card.dart';
 
 void main() {
   group('SkinValidationCard', () {
+    // The server's catalogue — `summary['skin_rule_copy']`. The card writes
+    // none of these words itself: it was one of FIVE places the rules were
+    // spelled, and its sentence had drifted to something the engine never
+    // did (`beats any net score`).
+    const ruleCopy = [
+      {'key': 'net_par', 'label': 'Net par or better to win',
+       'note': 'A hole where nobody qualifies goes unwon.'},
+      {'key': 'gross_par', 'label': 'Gross par or better to win',
+       'note': 'A hole where nobody qualifies goes unwon.'},
+      {'key': 'birdie_steal', 'label': 'Gross birdies steal',
+       'note': 'A gross birdie beats a net birdie, not a net eagle.'},
+    ];
+
     Future<void> pump(WidgetTester t, {
       String minimum = 'none',
       bool steal = false,
@@ -19,6 +32,7 @@ void main() {
               child: SkinValidationCard(
                 minimum: minimum,
                 birdieSteal: steal,
+                ruleCopy: ruleCopy,
                 onMinimumChanged: onMin ?? (_) {},
                 onBirdieStealChanged: onSteal ?? (_) {},
               ),
@@ -56,9 +70,40 @@ void main() {
     });
 
     testWidgets('both rules on are described together', (t) async {
+      // A setup screen lists BOTH, unlike the board's footnote: this is
+      // where a TD decides, so the steal's rule is worth stating even when
+      // a minimum is also on.
       await pump(t, minimum: 'net_par', steal: true);
-      expect(find.textContaining('and a gross birdie beats any net score'),
-          findsOneWidget);
+      // Twice over, legitimately: once under the switch that turns it on and
+      // once in the effect line that sums up both rules.
+      expect(
+          find.textContaining(
+              'A gross birdie beats a net birdie, not a net eagle.'),
+          findsNWidgets(2));
+      expect(find.textContaining('goes unwon'), findsOneWidget);
+      // And the effect line carries BOTH, in one sentence pair.
+      final effect = t.widgetList<Text>(find.byType(Text))
+          .map((w) => w.data ?? '')
+          .firstWhere((d) => d.contains('goes unwon'));
+      expect(effect, contains('net eagle'));
+    });
+
+    testWidgets('with no catalogue it states nothing rather than guessing',
+        (t) async {
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: SkinValidationCard(
+              minimum: 'net_par',
+              birdieSteal: true,
+              onMinimumChanged: (_) {},
+              onBirdieStealChanged: (_) {},
+            ),
+          ),
+        ),
+      ));
+      expect(find.textContaining('goes unwon'), findsNothing);
+      expect(find.textContaining('net eagle'), findsNothing);
     });
 
     testWidgets('picking a minimum reports the server slug', (t) async {

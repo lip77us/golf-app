@@ -656,6 +656,8 @@ def multi_skins_summary(round_obj) -> dict:
             'skin_minimum': skin_rules.MIN_NONE,
             'birdie_steal': False,
             'skin_rules'  : '',
+            'skin_rules_note': '',
+            'skin_rule_copy' : skin_rules.copy_block(),
             'players'  : [],
             'holes'    : [],
             'money'    : {'bet_unit': bet_unit, 'pool': 0.0, 'total_skins': 0},
@@ -834,6 +836,12 @@ def _summary_for_game(game: MultiSkinsGame) -> dict:
         'birdie_steal': game.birdie_steal,
         'skin_rules'  : skin_rules.rules_line(game.skin_minimum,
                                               game.birdie_steal),
+        # The CONSEQUENCE, and the catalogue a setup screen draws options
+        # from. Both here for the reason the chips already were: this rule
+        # was spelled in five places on the client and they had drifted.
+        'skin_rules_note': skin_rules.rules_note(game.skin_minimum,
+                                                 game.birdie_steal),
+        'skin_rule_copy' : skin_rules.copy_block(),
         'players'  : players_out,
         'holes'    : holes_out,
         'money'    : {

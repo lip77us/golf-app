@@ -452,6 +452,9 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
           // Validation applies in EITHER role — unlike junk, it needs nothing
           // tapped during scoring, it only changes who wins a hole.
           SkinValidationCard(
+            // The server's words for each rule, so this screen and the
+            // board cannot describe one rule two ways.
+            ruleCopy:    _summary?.skinRuleCopy ?? const [],
             minimum:     _skinMinimum,
             birdieSteal: _birdieSteal,
             onMinimumChanged: (v) => setState(() => _skinMinimum = v),

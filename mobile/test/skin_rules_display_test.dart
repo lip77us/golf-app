@@ -39,33 +39,44 @@ void main() {
     });
   });
 
-  group('skinRuleNote — the consequence, not the setting', () {
-    test('a minimum means a hole can go unwon', () {
-      for (final m in ['net_par', 'gross_par']) {
-        expect(skinRuleNote(minimum: m, birdieSteal: false),
-               'A hole where nobody qualifies goes unwon.',
-               reason: m);
-      }
+  group('skinRuleNote — the server\'s sentence, verbatim', () {
+    // It used to derive the sentence from the slugs, which made the client a
+    // second place the rule was worded. It was worded in FIVE, and by the
+    // time Design read them they disagreed: the published note said a gross
+    // birdie `beats a lower net score`, which the engine never did.
+    test('it returns what the server sent', () {
+      expect(skinRuleNote('A hole where nobody qualifies goes unwon.'),
+             'A hole where nobody qualifies goes unwon.');
+      expect(skinRuleNote('A gross birdie beats a net birdie, not a net eagle.'),
+             'A gross birdie beats a net birdie, not a net eagle.');
     });
 
-    test('the minimum outranks the steal in the note', () {
-      // Both on: the unwon hole is the surprising one, and a natural birdie
-      // clears any minimum anyway, so the steal never causes an unwon hole.
-      expect(skinRuleNote(minimum: 'gross_par', birdieSteal: true),
-             contains('goes unwon'));
+    test('nothing sent is nothing drawn', () {
+      expect(skinRuleNote(null), '');
+      expect(skinRuleNote(''), '');
+      expect(skinRuleNote('   '), '');
+    });
+  });
+
+  group('skinRuleCopy — the catalogue, for options not yet chosen', () {
+    final catalogue = [
+      {'key': 'net_par', 'label': 'Net par or better to win',
+       'note': 'A hole where nobody qualifies goes unwon.'},
+      {'key': 'birdie_steal', 'label': 'Gross birdies steal',
+       'note': 'A gross birdie beats a net birdie, not a net eagle.'},
+    ];
+
+    test('finds an option by the server\'s own key', () {
+      expect(skinRuleCopy(catalogue, 'birdie_steal')?['label'],
+             'Gross birdies steal');
+      expect(skinRuleCopy(catalogue, 'birdie_steal')?['note'],
+             'A gross birdie beats a net birdie, not a net eagle.');
     });
 
-    test('the steal alone says what it does', () {
-      expect(skinRuleNote(minimum: 'none', birdieSteal: true),
-             'A gross birdie beats a lower net score.');
-    });
-
-    test('plain skins says nothing at all', () {
-      expect(skinRuleNote(minimum: 'none', birdieSteal: false), '');
-    });
-
-    test('an unknown minimum is treated as none', () {
-      expect(skinRuleNote(minimum: 'eagle_or_better', birdieSteal: false), '');
+    test('null for an option the server did not send', () {
+      expect(skinRuleCopy(catalogue, 'gross_par'), isNull);
+      expect(skinRuleCopy(null, 'birdie_steal'), isNull,
+             reason: 'no catalogue is different from an empty option');
     });
   });
 
@@ -88,18 +99,52 @@ void main() {
       }
     });
 
-    test('the consequence is stated with them, and ASKED FOR', () {
-      // It used to be a const in the widget, which is how a round playing
-      // the gross steal alone got told its holes could go unwon over a
-      // qualification it had not switched on. The board asks `skinRuleNote`
-      // now; the words live in one place, beside the rules they belong to.
+    test('the consequence is ASKED FOR, and spelled nowhere', () {
+      // It began as a const in the widget, which is how a round playing the
+      // gross steal alone got told its holes could go unwon over a
+      // qualification it had not switched on. Deriving it in
+      // `skin_rules_display` fixed that and left the client as one of FIVE
+      // places the rules were worded — and by the time Design read them they
+      // disagreed: the published note said a gross birdie `beats a lower net
+      // score`, which the engine never did. `services/skin_rules.py` writes
+      // every one of these sentences now.
       final src = File('lib/widgets/skins_board.dart').readAsStringSync();
       expect(src.contains('skinRuleNote('), isTrue,
           reason: 'the board must ask for the consequence, not spell it');
-      expect(src.contains('goes unwon'), isFalse,
-          reason: 'a second copy of the sentence is a second rule');
-      final help = File('lib/utils/skin_rules_display.dart').readAsStringSync();
-      expect(help.contains('goes unwon'), isTrue);
+
+      for (final f in [
+        'lib/widgets/skins_board.dart',
+        'lib/utils/skin_rules_display.dart',
+        'lib/widgets/skin_validation_card.dart',
+        'lib/api/client.dart',
+      ]) {
+        final body = File(f).readAsStringSync();
+        for (final sentence in [
+          "'A hole where nobody qualifies",
+          "'A gross birdie beats",
+          "'A real birdie beats",
+          "beats a lower net score'",
+          "beats any net score'",
+        ]) {
+          expect(body.contains(sentence), isFalse,
+              reason: '$f still writes a rule the server owns: $sentence');
+        }
+      }
+    });
+
+    test('the setup card reads the catalogue, and is given one', () {
+      // A card with no catalogue draws no sentence at all, which reads as a
+      // design choice rather than a missing wire.
+      final card =
+          File('lib/widgets/skin_validation_card.dart').readAsStringSync();
+      expect(card.contains('skinRuleCopy(ruleCopy'), isTrue);
+      for (final f in [
+        'lib/screens/skins_setup_screen.dart',
+        'lib/screens/multi_skins_setup_screen.dart',
+      ]) {
+        expect(File(f).readAsStringSync().contains('ruleCopy:'), isTrue,
+            reason: f);
+      }
     });
   });
 }

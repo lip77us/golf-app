@@ -2877,37 +2877,43 @@ class _SkinsGroupCard extends StatelessWidget {
     // interpolation drew `Pool: $40.0` — money with a stray decimal, beside
     // a ledger that formats every other figure properly.
     final pool     = (money['pool'] as num?) ?? 0;
-    final status   = summary['status']?.toString() ?? 'pending';
     // Payout mode (Pool vs Per-skin: pay leader / pay above / vs average).
     final style    = summary['payout_style']?.toString() ?? 'pool';
     final ppMode   = summary['per_point_mode']?.toString() ?? 'first';
     final rate     = (summary['per_point_rate'] as num?)?.toDouble() ?? 0.0;
     final modeLabel = style == 'pool'
-        ? 'Pool: \$${pool.formatBet()}'
+        ? 'Pool \$${pool.formatBet()}'
         : 'Per skin · ${switch (ppMode) {
             'first' => 'pay leader',
             'all'   => 'pay above',
             _       => 'vs avg',
           }} · \$${rate.formatBet()}/skin';
+    final single = group['_single_group'] == true;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Text('Group ${group['group_number']}',
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            const Spacer(),
-            Text(modeLabel, style: const TextStyle(fontSize: 12)),
-          ]),
-          const SizedBox(height: 2),
-          Text('Status: ${status.replaceAll('_', ' ')}',
-              style: const TextStyle(fontSize: 11, color: Colors.grey)),
+    // **No outer card, and no `Status:` line** (Design, 28 Oct 2026). The
+    // board below is already three cards, so wrapping it put a white card
+    // inside a white card — and the Up next card says where the round is
+    // better than a status word does.
+    //
+    // A group NAME belongs to the list of groups rather than to any one
+    // board, so on a multi-group board it sits above as a plain label with
+    // the pot beside it, and on a single-group board it is absent entirely.
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (!single)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+              child: Row(children: [
+                Text('Group ${group['group_number']}',
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                const Spacer(),
+                Text(modeLabel, style: const TextStyle(fontSize: 12)),
+              ]),
+            ),
           // What the group agreed junk means, and where the greenie is.
           // Skins and junk divide ONE pot, so this sits above the standings
           // rather than beside them — it is part of the same money.
           _JunkInPlay(summary: summary),
-          const Divider(height: 16),
+          const SizedBox(height: 10),
           // **The board** (handoff-skins-leaderboard): what the next hole is
           // worth, where the skins went, and what everyone is owed — the same
           // three cards the cross-group pool draws, from the same widget.
@@ -2922,19 +2928,25 @@ class _SkinsGroupCard extends StatelessWidget {
           // visual answer to "who actually won each hole?" right next
           // to the totals above.
           if (holes.isNotEmpty) ...[
-            const Divider(height: 20),
-            HoleGridScorecard(
-              holes:        holes,
-              participants: players,
-              holesInPlay:  (summary['holes_in_play'] as List? ?? const [])
-                  .map((e) => e as int).toList(),
+            const SizedBox(height: 10),
+            Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: HoleGridScorecard(
+                  holes:        holes,
+                  participants: players,
+                  holesInPlay:  (summary['holes_in_play'] as List? ?? const [])
+                      .map((e) => e as int).toList(),
+                ),
+              ),
             ),
           ],
           // Where junk was logged (sparse — only holes with junk). Answers
           // "which holes did the junk get scored on?", which the aggregate
           // per-player totals above and the win-only scorecard can't show.
           if (holes.any((h) => (h['junk'] as List? ?? const []).isNotEmpty)) ...[
-            const Divider(height: 16),
+            const SizedBox(height: 12),
             Text('JUNK BY HOLE',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     fontSize: 10, letterSpacing: 0.5, fontWeight: FontWeight.w700,
@@ -2942,9 +2954,7 @@ class _SkinsGroupCard extends StatelessWidget {
             const SizedBox(height: 6),
             _JunkHoleStrip(holes: holes),
           ],
-        ]),
-      ),
-    );
+    ]);
   }
 }
 
@@ -3574,13 +3584,20 @@ class _NassauGroupCard extends StatelessWidget {
     final t1Full = nas.team1.map((p) => p.name).join(' & ');
     final t2Full = nas.team2.map((p) => p.name).join(' & ');
 
-    // Team colors: use actual cup team colours for cup matches, orange for casual
+    // Sides take the TEAM colours — teamPine and teamClay (Design, 28 Oct
+    // 2026). They were Material blue and orange, which belong to no part of
+    // this palette and made a Nassau the one board whose sides matched
+    // nothing else a golfer had seen all round.
+    //
+    // A cup match keeps its own declared colours: a cup's teams are named
+    // and coloured by the TD, and overriding those would be the fourball's
+    // hardcoded-blue defect arriving by another route.
     final t1Color    = isCupMatch
         ? _cupTeamColor(group['team1_colour'] as String?)
-        : Colors.blue.shade700;
+        : Halved.golfer(0);
     final team2Color = isCupMatch
         ? _cupTeamColor(group['team2_colour'] as String?)
-        : Colors.orange.shade800;
+        : Halved.golfer(1);
 
 
     String signedDollar(double v) {
@@ -3684,11 +3701,13 @@ class _NassauGroupCard extends StatelessWidget {
       );
     }
 
-    // ── Casual match: original layout ─────────────────────────────────────
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    // ── Casual match ──────────────────────────────────────────────────────
+    //
+    // **No outer card** (Design, 28 Oct 2026). The sides card, the nine
+    // cards and the money card are each their own card already and sit
+    // directly on the page surface; wrapping them put a white card inside a
+    // white card, and the scorecard below inherited the same wrapper.
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
 
           // **The board** (handoff-nassau-leaderboard).  One widget for every
           // Nassau leaderboard, so the sides, the two nines with their
@@ -3702,7 +3721,7 @@ class _NassauGroupCard extends StatelessWidget {
           )),
           if (isCapped)
             Padding(
-              padding: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
               child: Text(
                 // The headline is the CAPPED figure — what actually changes
                 // hands — so the real position has to be said too, or the
@@ -3716,14 +3735,24 @@ class _NassauGroupCard extends StatelessWidget {
 
           // Scorecard: dots show where handicap strokes fall; the "Index" row
           // shows the whole-round stroke plan (which holes get strokes).
+          //
+          // Its own card now, rather than a divider inside a shared one —
+          // the board above is a stack of cards, so a rule across the page
+          // would be the only thing on the screen pretending they are one
+          // object.
           if (scHoles.isNotEmpty) ...[
-            const Divider(height: 20),
-            HoleGridScorecard(holes: scHoles, participants: scPlayers,
-                legend: null, holesInPlay: scHolesInPlay),
+            const SizedBox(height: 10),
+            Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: HoleGridScorecard(holes: scHoles,
+                    participants: scPlayers, legend: null,
+                    holesInPlay: scHolesInPlay),
+              ),
+            ),
           ],
-        ]),
-      ),
-    );
+    ]);
   }
 
 

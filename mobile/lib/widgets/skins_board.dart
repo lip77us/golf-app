@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/halved_brand.dart';
+import 'dashed_border.dart';
 import '../utils/skin_rules_display.dart';
 import '../utils/skins_board_model.dart';
 
@@ -82,10 +83,16 @@ class _UpNext extends StatelessWidget {
     final unclaimed = data.unclaimedAtEnd;
 
     final headline = over ? '${data.totalSkinsWon}' : '$riding';
+    // **A pool quotes no figure here** (Design, 28 Oct 2026). What a skin
+    // pays is `pool / skins won`, which changes every time another is won —
+    // so the money on this card would be a number nobody is paid. Skins
+    // riding is the fact that survives either way.
     final sub = over
         ? 'skins won'
-        : 'skin${riding == 1 ? '' : 's'} · '
-          '\$${_plain(riding * data.stake * (data.golfers.length - 1))}';
+        : data.isPool
+            ? 'skin${riding == 1 ? '' : 's'} riding'
+            : 'skin${riding == 1 ? '' : 's'} · '
+              '\$${_plain(riding * data.stake * (data.golfers.length - 1))}';
 
     return Container(
       decoration: BoxDecoration(
@@ -177,8 +184,7 @@ class _HolesCard extends StatelessWidget {
       rows.add(byNumber.sublist(i, (i + 9).clamp(0, byNumber.length)));
     }
     final nextHole = data.nextHole?.hole;
-    final note = skinRuleNote(
-        minimum: data.skinMinimum, birdieSteal: data.birdieSteal);
+    final note = skinRuleNote(data.rulesNote);
 
     return Container(
       decoration: BoxDecoration(
@@ -260,12 +266,7 @@ class _HoleTile extends StatelessWidget {
     final won = hole.isWon;
     final colour = won ? Halved.golfer(hole.colourOf ?? 0) : null;
 
-    // `×N` says what a tile PAID, and on the next hole what is riding on it.
-    final multiplier = won
-        ? (hole.value > 1 ? '×${hole.value}' : null)
-        : (isNext && riding > 1 ? '×$riding' : null);
-
-    late final BoxDecoration deco;
+    BoxDecoration? deco;
     late final Color fg;
     if (won) {
       deco = BoxDecoration(color: colour, borderRadius: BorderRadius.circular(6));
@@ -278,12 +279,12 @@ class _HoleTile extends StatelessWidget {
       );
       fg = Halved.deepPine;
     } else if (hole.played) {
-      // Tied — carried, or killed when carry is off. Either way nobody took it.
-      deco = BoxDecoration(
-        color: Halved.card,
-        border: Border.all(color: Halved.muted, width: 1.5),
-        borderRadius: BorderRadius.circular(6),
-      );
+      // Tied — carried, or killed when carry is off. Either way nobody took
+      // it, which is why the border is DASHED (Design, 28 Oct 2026): a solid
+      // dark outline read almost exactly like the next-hole tile's 2pt solid
+      // deep pine, so the hole you are about to play and the holes nobody
+      // won looked like the same state.
+      deco = null;
       fg = Halved.muted;
     } else {
       deco = BoxDecoration(
@@ -293,21 +294,41 @@ class _HoleTile extends StatelessWidget {
       fg = Halved.cardBorder;
     }
 
+    if (deco == null) {
+      return CustomPaint(
+        painter: const DashedRRect(color: Halved.muted, width: 1.5),
+        child: _tileBody(fg),
+      );
+    }
     return Container(
       height: 34,
       decoration: deco,
       alignment: Alignment.center,
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text('${hole.hole}',
-            style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w700,
-                color: fg, height: 1.1)),
-        if (multiplier != null)
-          Text(multiplier,
+      child: _tileBody(fg),
+    );
+  }
+
+  Widget _tileBody(Color fg) {
+    // `×N` says what a tile PAID, and on the next hole what is riding on it.
+    final won = hole.isWon;
+    final multiplier = won
+        ? (hole.value > 1 ? '×${hole.value}' : null)
+        : (isNext && riding > 1 ? '×$riding' : null);
+    return SizedBox(
+      height: 34,
+      child: Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('${hole.hole}',
               style: TextStyle(
-                  fontSize: 9.5, fontWeight: FontWeight.w600,
+                  fontSize: 11, fontWeight: FontWeight.w700,
                   color: fg, height: 1.1)),
-      ]),
+          if (multiplier != null)
+            Text(multiplier,
+                style: TextStyle(
+                    fontSize: 9.5, fontWeight: FontWeight.w600,
+                    color: fg, height: 1.1)),
+        ]),
+      ),
     );
   }
 }
@@ -340,7 +361,13 @@ class _Ledger extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 13, color: Color(0xFFB9CCC3))),
               const Spacer(),
-              Text('\$${_plain(data.stake)} a skin',
+              Text(
+                  // The pot, not a price: with a pool a skin has no fixed
+                  // worth, and the ledger's own money column is already each
+                  // golfer's share of it.
+                  data.isPool
+                      ? '\$${_plain(data.pool)} pool'
+                      : '\$${_plain(data.stake)} a skin',
                   style: const TextStyle(
                       fontSize: 20, fontWeight: FontWeight.w700,
                       color: Colors.white)),

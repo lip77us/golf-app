@@ -2161,7 +2161,8 @@ class ApiClient {
     /// skin. Gross par is the stricter one: a net par made off a stroke is a
     /// gross bogey and fails it.
     String skinMinimum = 'none',
-    /// A gross birdie or better beats any net score.
+    /// A gross birdie beats a net birdie — not a net eagle, which still
+    /// wins on net. `services/skin_rules.py` owns the rule and its words.
     bool   birdieSteal  = false,
   }) async {
     final data = await _post('/foursomes/$foursomeId/skins/setup/', {

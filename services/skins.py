@@ -690,6 +690,8 @@ def skins_summary(foursome) -> dict:
             'skin_minimum': skin_rules.MIN_NONE,
             'birdie_steal': False,
             'skin_rules'  : '',
+            'skin_rules_note': '',
+            'skin_rule_copy' : skin_rules.copy_block(),
             'players'   : [],
             'holes'     : [],
             'money'     : {'bet_unit': bet_unit, 'pool': 0.0, 'total_skins': 0},
@@ -992,6 +994,12 @@ def skins_summary(foursome) -> dict:
         'birdie_steal': game.birdie_steal,
         'skin_rules'  : skin_rules.rules_line(game.skin_minimum,
                                               game.birdie_steal),
+        # The CONSEQUENCE, and the catalogue a setup screen draws options
+        # from. Both here for the reason the chips already were: this rule
+        # was spelled in five places on the client and they had drifted.
+        'skin_rules_note': skin_rules.rules_note(game.skin_minimum,
+                                                 game.birdie_steal),
+        'skin_rule_copy' : skin_rules.copy_block(),
         # What the group agreed junk means, for the leaderboard's Junk in
         # play card and the hole's tick sheet. Empty when junk is off.
         # The WHOLE list, so the setup checklist can draw an unticked row

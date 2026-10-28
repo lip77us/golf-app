@@ -35,6 +35,9 @@ class SkinsBoardData {
     required this.basis,
     this.showNext = true,
     this.rulesLine = '',
+    this.rulesNote = '',
+    this.payoutStyle = 'pool',
+    this.pool = 0,
     this.skinMinimum = 'none',
     this.birdieSteal = false,
   });
@@ -51,6 +54,19 @@ class SkinsBoardData {
   final bool showNext;
   /// The validation rules in force, in the server's words. '' when none.
   final String rulesLine;
+  /// The server's consequence sentence — rendered, never derived.
+  final String rulesNote;
+
+  /// How the money is paid, and the pot when it is a pool.
+  ///
+  /// **With a pool there is no price per skin** (Design, 28 Oct 2026): a
+  /// skin is worth `pool / skins won`, which changes every time another one
+  /// is won. The board quoted `$10 a skin` out of the ante, which is a
+  /// number nobody is paid.
+  final String payoutStyle;
+  final double pool;
+
+  bool get isPool => payoutStyle == 'pool';
 
   /// The rule SLUGS, beside the phrase, because the two answer different
   /// questions. [rulesLine] is what is in force and is the server's wording;
@@ -165,6 +181,9 @@ class SkinsBoardData {
       carry:     s.carryover,
       basis:     _basisLabel[s.handicapMode] ?? 'Net',
       rulesLine: s.skinRules,
+      rulesNote: s.skinRulesNote,
+      payoutStyle: s.payoutStyle,
+      pool: s.pool,
       skinMinimum: s.skinMinimum,
       birdieSteal: s.birdieSteal,
     );
@@ -206,6 +225,12 @@ class SkinsBoardData {
       basis:     _basisLabel[s.handicapMode] ?? 'Net',
       showNext:  false,
       rulesLine: s.skinRules,
+      rulesNote: s.skinRulesNote,
+      // A cross-round pool is a pool by construction — there is no
+      // per-skin price to choose, which is why the summary has no
+      // style to read.
+      payoutStyle: 'pool',
+      pool: s.pool,
       skinMinimum: s.skinMinimum,
       birdieSteal: s.birdieSteal,
     );

@@ -3111,11 +3111,17 @@ class SkinsSummary {
   final bool   allowJunk;
   /// 'none' | 'net_par' | 'gross_par' — the lowest score that can win a skin.
   final String skinMinimum;
-  /// A gross birdie or better beats any net score.
+  /// A gross birdie beats a net birdie — not a net eagle, which still
+    /// wins on net. `services/skin_rules.py` owns the rule and its words.
   final bool   birdieSteal;
   /// The server's own phrase for the rules in force, '' when neither is on —
   /// test it rather than render "no minimum" at a group playing plain skins.
   final String skinRules;
+  /// The CONSEQUENCE sentence and the option catalogue, both
+  /// the server's words. See utils/skin_rules_display.dart for
+  /// why the client no longer writes either.
+  final String skinRulesNote;
+  final List<dynamic> skinRuleCopy;
   /// Players IN the game (subset side game). Empty = all real players.
   final List<int> participantPlayerIds;
   final List<SkinsPlayerTotal> players;
@@ -3190,6 +3196,8 @@ class SkinsSummary {
     this.skinMinimum = 'none',
     this.birdieSteal = false,
     this.skinRules   = '',
+    this.skinRulesNote = '',
+    this.skinRuleCopy  = const [],
     this.participantPlayerIds = const [],
     required this.players,
     required this.holes,
@@ -3228,6 +3236,8 @@ class SkinsSummary {
       skinMinimum:  j['skin_minimum'] as String? ?? 'none',
       birdieSteal:  j['birdie_steal'] as bool?   ?? false,
       skinRules:    j['skin_rules']   as String? ?? '',
+      skinRulesNote: j['skin_rules_note'] as String? ?? '',
+      skinRuleCopy:  (j['skin_rule_copy'] as List?) ?? const [],
       participantPlayerIds: (j['participant_player_ids'] as List? ?? const [])
           .map((e) => e as int).toList(),
       players: (j['players'] as List? ?? [])
@@ -4473,6 +4483,11 @@ class MultiSkinsSummary {
   final String skinMinimum;
   final bool   birdieSteal;
   final String skinRules;
+  /// The CONSEQUENCE sentence and the option catalogue, both
+  /// the server's words. See utils/skin_rules_display.dart for
+  /// why the client no longer writes either.
+  final String skinRulesNote;
+  final List<dynamic> skinRuleCopy;
   final List<MultiSkinsPlayerTotal> players;
   final List<MultiSkinsHole>        holes;
   final double betUnit;
@@ -4491,6 +4506,8 @@ class MultiSkinsSummary {
     this.skinMinimum = 'none',
     this.birdieSteal = false,
     this.skinRules   = '',
+    this.skinRulesNote = '',
+    this.skinRuleCopy  = const [],
     required this.players,
     required this.holes,
     required this.betUnit,
@@ -4517,6 +4534,8 @@ class MultiSkinsSummary {
       skinMinimum:  j['skin_minimum'] as String? ?? 'none',
       birdieSteal:  j['birdie_steal'] as bool?   ?? false,
       skinRules:    j['skin_rules']   as String? ?? '',
+      skinRulesNote: j['skin_rules_note'] as String? ?? '',
+      skinRuleCopy:  (j['skin_rule_copy'] as List?) ?? const [],
       players: (j['players'] as List? ?? [])
           .map((p) => MultiSkinsPlayerTotal.fromJson(p as Map<String, dynamic>))
           .toList(),
