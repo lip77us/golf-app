@@ -6115,9 +6115,25 @@ screen and not the other (the day bet, Hot Seat on the Road Trip sheet). A
 screen that draws the control and never posts it looks identical until
 somebody plays a round.
 
-**Still unbuilt:** nothing on the LEADERBOARD states the rules in force.
-`skin_rules` is on both summaries ready for it, and it matters — when a skin
-goes unwon a player needs to know why, which is the `_NotSetUpYet` lesson.
+**The board states them** (`_SkinRulesInPlay`, `leaderboard_screen.dart`), on
+BOTH the per-foursome skins card — beside `_JunkInPlay`, because the two
+divide one pot — and the cross-group pool. It draws nothing when neither rule
+is on, rather than announcing "no minimum" at a group playing plain skins.
+
+**The chips carry the SERVER'S words.** `utils/skin_rules_display.dart`
+`skinRuleChips()` SPLITS `summary['skin_rules']` on the middot rather than
+re-deriving labels from `skin_minimum` / `birdie_steal`. The first version did
+re-derive them, which made the board a second place that names the rules —
+exactly the failure the `detail` / `problems` split had just been about, two
+commits earlier, in a docstring claiming the opposite. The slugs are still
+read, but only for a yes/no.
+
+**The note states the CONSEQUENCE, not the setting**, because the setting is
+already in the chip above it: *"A hole where nobody qualifies goes unwon."*
+That is the thing plain skins never does, and the reason any of this belongs
+on a board — a player looking at a carried pot otherwise has no way to work
+out why nobody won. The minimum outranks the steal in that line, since a
+natural birdie clears any minimum and so can never cause an unwon hole.
 
 Tests: `scoring/tests/test_skin_rules.py` (28 — the semantics as pure units,
 including both-naturals, mixed par and every fail-open case),
@@ -6125,5 +6141,7 @@ including both-naturals, mixed par and every fail-open case),
 one hole where all three minimum settings give three different answers),
 `MultiSkinsValidationTests` in `scoring/tests/test_multi_skins.py` (7 — across
 groups, and that re-running setup updates the rules),
-`SkinValidationEndpointTests` in `api/test_skins_junk.py` (7) and
-`mobile/test/skin_validation_test.dart` (14).
+`SkinValidationEndpointTests` in `api/test_skins_junk.py` (7),
+`mobile/test/skin_validation_test.dart` (14) and
+`mobile/test/skin_rules_display_test.dart` (13 — including that the board does
+not start naming the rules itself again).

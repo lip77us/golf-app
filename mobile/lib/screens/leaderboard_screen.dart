@@ -37,6 +37,7 @@ import 'tournament_settlement_screen.dart';
 import '../widgets/stroke_dots.dart';
 import '../widgets/pinned_hole_grid.dart';
 import '../utils/nine_totals.dart';
+import '../utils/skin_rules_display.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   final int roundId;
@@ -2768,6 +2769,10 @@ class _MultiSkinsView extends StatelessWidget {
                         color: theme.colorScheme.onSurfaceVariant),
                   ),
                 ]),
+                // The pool's own validation rules. Same widget as the
+                // per-foursome card, reading the same three keys -- one rule
+                // stated one way, wherever a golfer meets it.
+                _SkinRulesInPlay(summary: data),
                 const SizedBox(height: 4),
                 Table(
                   columnWidths: const {
@@ -2884,6 +2889,10 @@ class _SkinsGroupCard extends StatelessWidget {
           // Skins and junk divide ONE pot, so this sits above the standings
           // rather than beside them — it is part of the same money.
           _JunkInPlay(summary: summary),
+          // Beside junk for the same reason junk is here: it is part of what
+          // the pot pays for, and it is the only place the board explains a
+          // hole that nobody won.
+          _SkinRulesInPlay(summary: summary),
           const Divider(height: 16),
           // **The play screen's standings block, moved here.** It answers
           // where the money went AND what the next hole is worth, in one
@@ -3151,6 +3160,74 @@ class _SpotsInPlay extends StatelessWidget {
 /// The twin of `_SpotsInPlay`, and separate for one reason worth stating: a
 /// junk is one share of the SKINS pot, so the sentence it ends with is about
 /// shares rather than about its own money.
+/// The skins VALIDATION rules in force, on the board.
+///
+/// The settings live on the setup screen, but the consequence shows up here
+/// and nowhere else: with a minimum on, **a hole can go unwon with nobody
+/// tied** — which plain skins never does — so a player staring at a carried
+/// pot has no way to work out why. Same reason `_NotSetUpYet` exists.
+///
+/// The phrase is the SERVER'S (`summary['skin_rules']`), not built here: one
+/// rule, one place that names it, so the board and the engine cannot come to
+/// disagree about what is being played. Empty means neither rule is on, and
+/// this draws nothing rather than announcing "no minimum" at a group playing
+/// plain skins.
+///
+/// Reads the raw summary map rather than a decoded model because it serves
+/// both the per-foursome card and the pool, and those hold different types
+/// over the same three keys.
+class _SkinRulesInPlay extends StatelessWidget {
+  final Map<String, dynamic> summary;
+  const _SkinRulesInPlay({required this.summary});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final line  = summary['skin_rules']?.toString() ?? '';
+    if (line.isEmpty) return const SizedBox.shrink();
+
+    // The chips carry the SERVER'S words (split from its own phrase); the
+    // slugs are read only for the note's yes/no.  See
+    // utils/skin_rules_display.dart.
+    final chips = skinRuleChips(line);
+    final note  = skinRuleNote(
+      minimum:     summary['skin_minimum']?.toString() ?? 'none',
+      birdieSteal: summary['birdie_steal'] == true,
+    );
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 8),
+      Text('TO WIN A SKIN',
+          style: theme.textTheme.labelSmall?.copyWith(
+              fontSize: 10, letterSpacing: 0.5, fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurfaceVariant)),
+      const SizedBox(height: 5),
+      Wrap(spacing: 5, runSpacing: 5, children: [
+        for (final c in chips)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: .08),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                  color: theme.colorScheme.primary.withValues(alpha: .35)),
+            ),
+            child: Text(c,
+                style: theme.textTheme.labelSmall
+                    ?.copyWith(color: theme.colorScheme.primary)),
+          ),
+      ]),
+      if (note.isNotEmpty) ...[
+        const SizedBox(height: 5),
+        Text(note,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+      ],
+    ]);
+  }
+}
+
+
 class _JunkInPlay extends StatelessWidget {
   final Map<String, dynamic> summary;
   const _JunkInPlay({required this.summary});
