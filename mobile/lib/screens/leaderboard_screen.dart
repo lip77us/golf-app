@@ -1,5 +1,4 @@
 import '../utils/spots_earned.dart';
-import '../utils/handicap_rounding.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:provider/provider.dart';
@@ -8349,25 +8348,37 @@ class _CupSingles18GroupCard extends StatelessWidget {
 // _QuotaNassauGroupCard — one leaderboard card per cup Quota Nassau foursome
 // ---------------------------------------------------------------------------
 
-// Player identity is colour, not "P1/P2" — three fixed colours in roster order.
-const List<Color> _kTripleColours = [
-  Color(0xFF1976D2), Color(0xFFEF6C00), Color(0xFF7B3FA0),
-];
+// ---------------------------------------------------------------------------
+// _TripleNassauGroupCard — the match picker, the shared board, net position
+// ---------------------------------------------------------------------------
 
-class _TripleNassauGroupCard extends StatelessWidget {
+/// Three golfers, no teams: every PAIR plays its own 1v1 Nassau, so a round
+/// is three matches and each golfer is in two of them.
+///
+/// Built from `~/Downloads/handoff-triple-nassau-leaderboard`, whose scope
+/// line is what shapes it: *"the board in the middle is the shared
+/// NassauBoard, mounted once and re-fed when a match is picked. This packet
+/// adds only the match picker and the net position card around it."*
+///
+/// So there is no Triple Nassau board. `TripleNassauMatch.match` is already a
+/// full [NassauSummary], which is what makes that possible — the picker
+/// chooses one and hands it to the same widget the 2v2 and 1v1 boards use.
+class _TripleNassauGroupCard extends StatefulWidget {
   final Map<String, dynamic> group;
   const _TripleNassauGroupCard({required this.group});
 
-  static String _money(double v) {
-    if (v == 0) return '\$0.00';
-    return v > 0 ? '+\$${v.toStringAsFixed(2)}' : '−\$${v.abs().toStringAsFixed(2)}';
-  }
+  @override
+  State<_TripleNassauGroupCard> createState() => _TripleNassauGroupCardState();
+}
+
+class _TripleNassauGroupCardState extends State<_TripleNassauGroupCard> {
+  /// Null until the reader picks: the default follows whoever is looking,
+  /// and that is not known until build.
+  int? _picked;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final groupNum = group['group_number'] as int? ?? 0;
-    final single   = group['_single_group'] == true;
+    final group = widget.group;
     final raw = group['summary'] as Map<String, dynamic>?;
     if (raw == null) {
       return const Card(child: Padding(
@@ -8375,445 +8386,264 @@ class _TripleNassauGroupCard extends StatelessWidget {
         child: Text('Triple Nassau not yet set up for this group.')));
     }
     final s = TripleNassauSummary.fromJson(raw);
-    // player_id → colour (roster order).
+    if (s.matches.isEmpty) {
+      return const Card(child: Padding(
+        padding: EdgeInsets.all(12),
+        child: Text('Triple Nassau not yet set up for this group.')));
+    }
+
+    // Colour is IDENTITY here, and it follows the roster rather than the
+    // side: Paul is one colour in both of his matches, or the picker and the
+    // board would disagree about who is who the moment a match is switched.
     final colourOf = <int, Color>{
       for (var i = 0; i < s.players.length; i++)
-        s.players[i].playerId: _kTripleColours[i % 3],
+        s.players[i].playerId: Halved.golfer(i),
     };
-    final shortOf = <int, String>{
+    final nameOf = <int, String>{
       for (final p in s.players) p.playerId: p.shortName,
     };
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (!single)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Text('Group $groupNum',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
+    final myPid = context.read<AuthProvider>().player?.id;
+    final picked = (_picked ?? _defaultMatch(s, myPid))
+        .clamp(0, s.matches.length - 1);
+
+    final boards = [
+      for (final m in s.matches) _boardFor(m, colourOf),
+    ];
+
+    final groupNum = group['group_number'] as int? ?? 0;
+    final single   = group['_single_group'] == true;
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (!single)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text('Group $groupNum',
+              style: const TextStyle(fontWeight: FontWeight.bold)),
+        ),
+      _MatchPicker(
+        matches: s.matches,
+        colourOf: colourOf,
+        nameOf: nameOf,
+        selected: picked,
+        onPick: (i) => setState(() => _picked = i),
+      ),
+      const SizedBox(height: 10),
+      NassauBoard(data: boards[picked]),
+      const SizedBox(height: 10),
+      _TripleNetPosition(
+        players: s.players,
+        colourOf: colourOf,
+        // `Final` only when every bet in all three matches has settled —
+        // this card totals all of them, so one live match keeps it `now`.
+        done: boards.every((b) => b.allDone),
+      ),
+    ]);
+  }
+
+  /// The reader's first match, else the first — *"default is the reader's
+  /// first match"*. A watcher has no match of his own and gets match 1.
+  static int _defaultMatch(TripleNassauSummary s, int? myPid) {
+    if (myPid == null) return 0;
+    final i = s.matches.indexWhere(
+        (m) => m.player1Id == myPid || m.player2Id == myPid);
+    return i < 0 ? 0 : i;
+  }
+
+  /// One match as board data, with the SIDES CARD HIDDEN: the picker above
+  /// already names the two golfers, and drawing it again would say it twice.
+  static NassauBoardData _boardFor(
+          TripleNassauMatch m, Map<int, Color> colourOf) =>
+      NassauBoardData.fromSummary(
+        m.match,
+        showSides: false,
+        side0Colour: colourOf[_sideId(m.match.team1, m.player1Id)],
+        side1Colour: colourOf[_sideId(m.match.team2, m.player2Id)],
+      );
+
+  /// Who is on a side — read off the match's own team list, falling back to
+  /// the match row's id. Taking the id alone would colour the board wrongly
+  /// if the engine ever emitted the pair in the other order.
+  static int? _sideId(List<NassauPlayerInfo> team, int? fallback) =>
+      team.isNotEmpty ? team.first.playerId : fallback;
+}
+
+/// Three equal buttons, one per match: swatch + first name, `v`, swatch +
+/// first name. The selected one takes a 2pt pine border.
+class _MatchPicker extends StatelessWidget {
+  const _MatchPicker({
+    required this.matches,
+    required this.colourOf,
+    required this.nameOf,
+    required this.selected,
+    required this.onPick,
+  });
+
+  final List<TripleNassauMatch> matches;
+  final Map<int, Color> colourOf;
+  final Map<int, String> nameOf;
+  final int selected;
+  final ValueChanged<int> onPick;
+
+  @override
+  Widget build(BuildContext context) => Row(children: [
+        for (var i = 0; i < matches.length; i++)
+          Expanded(
+            child: Padding(
+              padding:
+                  EdgeInsets.only(right: i == matches.length - 1 ? 0 : 6),
+              child: _MatchButton(
+                match: matches[i],
+                colourOf: colourOf,
+                nameOf: nameOf,
+                selected: i == selected,
+                onTap: () => onPick(i),
               ),
-            // Matchup line — colour = identity.
-            Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
-              for (var i = 0; i < s.players.length; i++) ...[
-                if (i > 0) const Text('  v  ',
-                    style: TextStyle(color: Color(0xFF5C6B62), fontSize: 12)),
-                _dot(_kTripleColours[i % 3]),
-                const SizedBox(width: 4),
-                Text(s.players[i].shortName, style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: _kTripleColours[i % 3])),
-              ],
-            ]),
-            const SizedBox(height: 12),
-            _matrix(theme, s, colourOf, shortOf),
-            if (s.matches.any((m) => m.match.presses.isNotEmpty)) ...[
-              const Divider(height: 22),
-              _sectionLabel(theme, 'Presses'),
-              const SizedBox(height: 2),
-              ..._pressRows(theme, s, colourOf),
-            ],
-            if (s.scorecard.isNotEmpty) ...[
-              const Divider(height: 22),
-              _sectionLabel(theme, 'Round progress — gross scores'),
-              const SizedBox(height: 4),
-              _roundProgress(theme, s, colourOf),
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text('Gross scores. Each match is allocated on its own — '
-                    'the pair’s handicap difference from SI 1 down — so a hole '
-                    'can be a stroke hole in one match and not another. The '
-                    'won-by rows are the per-match hole winners.',
-                    style: TextStyle(fontSize: 11,
-                        color: theme.colorScheme.onSurfaceVariant, height: 1.4)),
-              ),
-            ],
-            const Divider(height: 22),
-            _sectionLabel(theme, 'Net position'),
-            for (final p in s.players)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(children: [
-                  _dot(colourOf[p.playerId] ?? Colors.grey),
-                  const SizedBox(width: 8),
-                  // Full name — the settlement rows have room to spell it out.
-                  Expanded(child: Text(
-                      p.name.isNotEmpty ? p.name : p.shortName,
-                      style: const TextStyle(fontWeight: FontWeight.w700))),
-                  const SizedBox(width: 8),
-                  Text(_money(p.net), style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                      color: p.net > 0
-                          ? const Color(0xFF388E3C)
-                          : p.net < 0 ? const Color(0xFFD32F2F)
-                                      : theme.colorScheme.onSurfaceVariant)),
-                ]),
-              ),
-            const SizedBox(height: 6),
-            Text('Each player’s two matches netted together — Front 9 / Back 9 / '
-                'Overall each worth \$${s.betUnit.toStringAsFixed(2)} per match.',
-                style: TextStyle(fontSize: 11.5,
-                    color: theme.colorScheme.onSurfaceVariant, height: 1.4)),
-          ],
+            ),
+          ),
+      ]);
+}
+
+class _MatchButton extends StatelessWidget {
+  const _MatchButton({
+    required this.match,
+    required this.colourOf,
+    required this.nameOf,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final TripleNassauMatch match;
+  final Map<int, Color> colourOf;
+  final Map<int, String> nameOf;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final a = match.player1Id, b = match.player2Id;
+    return Material(
+      color: Halved.card,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected ? Halved.pine : Halved.cardBorder,
+              width: selected ? 2 : 1.2,
+            ),
+          ),
+          // 44pt minimum, which is the packet's number and the touch target.
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            alignment: Alignment.center,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                _side(a),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 5),
+                  child: Text('v',
+                      style: TextStyle(
+                          fontSize: 11, color: Halved.muted,
+                          fontWeight: FontWeight.w600)),
+                ),
+                _side(b),
+              ]),
+            ),
+          ),
         ),
       ),
     );
   }
 
-  static String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.length >= 2 && parts[0].isNotEmpty && parts[1].isNotEmpty) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    final w = parts.isEmpty ? '' : parts[0];
-    return (w.length >= 2 ? w.substring(0, 2) : w).toUpperCase();
-  }
-
-  // Round-progress: fixed label column + horizontally-scrollable cells.
-  Widget _roundProgress(ThemeData theme, TripleNassauSummary s,
-      Map<int, Color> colourOf) {
-    final holes = s.scorecard;
-    const cellW = 26.0, rowH = 22.0, labelW = 118.0;
-    final muted = theme.colorScheme.onSurfaceVariant;
-
-    int getsVs(TripleNassauPlayer p, TripleNassauPlayer opp) {
-      if (s.handicapMode == 'gross') return 0;
-      final d = (p.playingHandicap ?? 0) - (opp.playingHandicap ?? 0);
-      return d <= 0 ? 0 : roundHalfUp(d * s.netPercent / 100);
-    }
-
-    // Per-player "gets" summary vs each opponent, e.g. "gets 5 v JS · 10 v DP".
-    String getsLabel(TripleNassauPlayer p) {
-      final bits = <String>[];
-      for (final o in s.players) {
-        if (o.playerId == p.playerId) continue;
-        final n = getsVs(p, o);
-        if (n > 0) bits.add('$n v ${_initials(o.name)}');
-      }
-      return bits.isEmpty ? 'scratch' : 'gets ${bits.join(' · ')}';
-    }
-
-    Widget lbl(Widget child) =>
-        SizedBox(width: labelW, height: rowH, child: Align(
-            alignment: Alignment.centerLeft, child: child));
-    Widget txt(String t, {Color? c, bool bold = false, double size = 11.5}) =>
-        SizedBox(width: cellW, height: rowH, child: Center(child: Text(t,
-            style: TextStyle(fontSize: size, color: c,
-                fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
-                fontFeatures: const [FontFeature.tabularFigures()]))));
-
-    // Won-by cell for a match on a hole.
-    Widget wonCell(TripleNassauMatch m, int hole) {
-      final hd = m.match.holes.where((h) => h.hole == hole).firstOrNull;
-      if (hd == null || hd.winner == null) {
-        return SizedBox(width: cellW, height: rowH,
-            child: Center(child: Text('·', style: TextStyle(color: muted))));
-      }
-      if (hd.winner == 'halved') {
-        return SizedBox(width: cellW, height: rowH, child: Center(
-            child: Text('=', style: TextStyle(fontSize: 11, color: muted))));
-      }
-      final winId = hd.winner == 'team1' ? m.player1Id : m.player2Id;
-      final c = colourOf[winId] ?? Colors.grey;
-      return SizedBox(width: cellW, height: rowH, child: Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
-            decoration: BoxDecoration(color: c.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(4)),
-            child: Text(_initials(s.players.firstWhere(
-                    (p) => p.playerId == winId,
-                    orElse: () => s.players.first).name)[0],
-                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: c)))));
-    }
-
-    // Fixed label column.
-    final labels = <Widget>[
-      lbl(Text('Hole', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11))),
-      lbl(Text('Par', style: TextStyle(fontStyle: FontStyle.italic, color: muted, fontSize: 11))),
-      lbl(Text('SI', style: TextStyle(color: muted, fontSize: 11))),
-      for (final p in s.players)
-        lbl(Row(children: [
-          Container(width: 8, height: 8, margin: const EdgeInsets.only(right: 4),
-              decoration: BoxDecoration(color: colourOf[p.playerId] ?? Colors.grey,
-                  shape: BoxShape.circle)),
-          Flexible(child: Text.rich(TextSpan(children: [
-            TextSpan(text: _initials(p.name), style: const TextStyle(
-                fontWeight: FontWeight.w700, fontSize: 11)),
-            TextSpan(text: '  ${getsLabel(p)}', style: TextStyle(
-                fontSize: 8.5, color: muted)),
-          ]), overflow: TextOverflow.ellipsis)),
-        ])),
-      for (final m in s.matches)
-        lbl(Text('${_initials(s.players.firstWhere((p)=>p.playerId==m.player1Id, orElse:()=>s.players.first).name)}'
-            ' · ${_initials(s.players.firstWhere((p)=>p.playerId==m.player2Id, orElse:()=>s.players.first).name)}',
-            style: TextStyle(fontStyle: FontStyle.italic, fontWeight: FontWeight.w700,
-                fontSize: 10, color: muted))),
-    ];
-
-    // ── OUT / IN / TOT ──────────────────────────────────────────────────────
-    const summaryW = 28.0;
-    final byNum = {for (final h in holes) h.hole: h};
-    final split = NineSplit.of([for (final h in holes) h.hole]);
-
-    Widget sumCell(String t) => SizedBox(
-          width: summaryW, height: rowH,
-          child: Center(
-            child: Text(t,
-                style: const TextStyle(
-                    fontSize: 10.5, fontWeight: FontWeight.w700)),
-          ),
-        );
-
-    /// A golfer's gross over a nine — an em dash until it is complete.
-    Widget grossTotal(int pid, List<int> ns) {
-      var total = 0;
-      for (final n in ns) {
-        final g = byNum[n]?.gross[pid];
-        if (g == null) return sumCell('—');
-        total += g;
-      }
-      return sumCell('$total');
-    }
-
-    int parSum(List<int> ns) {
-      var t = 0;
-      for (final n in ns) {
-        t += byNum[n]?.par ?? 0;
-      }
-      return t;
-    }
-
-    /// front · OUT · back · IN · TOT. Without `sum` the slots are blank, which
-    /// is right for the stroke-index row and for a match's per-hole verdict.
-    List<Widget> withTotals(Widget Function(int) cell,
-        {Widget Function(List<int>)? sum}) {
-      final f = sum ?? (List<int> _) => sumCell('');
-      return [
-        for (final n in split.front) cell(n),
-        if (split.showOut) f(split.front),
-        for (final n in split.back) cell(n),
-        if (split.showIn) f(split.back),
-        if (split.showTot) f(split.all),
-      ];
-    }
-
-    // Scrollable cell rows (aligned 1:1 with the labels).
-    final cellRows = <Widget>[
-      Row(children: [
-        for (final n in split.front) txt('$n', bold: true),
-        if (split.showOut) sumCell('OUT'),
-        for (final n in split.back) txt('$n', bold: true),
-        if (split.showIn) sumCell('IN'),
-        if (split.showTot) sumCell('TOT'),
-      ]),
-      Row(children: withTotals(
-          (n) => txt('${byNum[n]?.par ?? '-'}', c: muted),
-          sum: (ns) => sumCell('${parSum(ns)}'))),
-      Row(children: withTotals(
-          (n) => txt('${byNum[n]?.strokeIndex ?? '-'}', c: muted, size: 10.5))),
-      for (final p in s.players)
-        Row(children: withTotals(
-            (n) => txt(byNum[n]?.gross[p.playerId]?.toString() ?? '–'),
-            sum: (ns) => grossTotal(p.playerId, ns))),
-      for (final m in s.matches)
-        Row(children: withTotals((n) => wonCell(m, n))),
-    ];
-
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: labels),
-      Expanded(child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: cellRows))),
-    ]);
-  }
-
-  // Press detail across all three matches (top presses only — Triple Nassau is
-  // Standard variant, no Claremont bottom).
-  List<Widget> _pressRows(ThemeData theme, TripleNassauSummary s,
-      Map<int, Color> colourOf) {
-    final muted = theme.colorScheme.onSurfaceVariant;
-    String initOf(int? pid) => _initials(s.players
-        .firstWhere((p) => p.playerId == pid, orElse: () => s.players.first).name);
-
-    String resultLabel(NassauPressResult p, String a, String b) {
-      if (p.result == null) {
-        final m = p.margin ?? 0;
-        if (m == 0) return 'AS';
-        return '${m > 0 ? a : b} ${m.abs()}UP';
-      }
-      if (p.result == 'halved') return 'AS · Final';
-      final m = (p.margin ?? 0).abs();
-      final w = p.result == 'team1' ? a : b;
-      if (m == 0) return '$w wins · Final';
-      return p.holesRemaining > 0
-          ? '$w $m&${p.holesRemaining}'
-          : '$w ${m}UP · Final';
-    }
-
-    final rows = <Widget>[];
-    for (final m in s.matches) {
-      if (m.match.presses.isEmpty) continue;
-      final a = initOf(m.player1Id), b = initOf(m.player2Id);
-      for (final p in m.match.presses) {
-        final resolved = p.result == 'team1' || p.result == 'team2';
-        final winColour = p.result == 'team1'
-            ? colourOf[m.player1Id]
-            : p.result == 'team2'
-                ? colourOf[m.player2Id]
-                : ((p.margin ?? 0) == 0
-                    ? muted
-                    : ((p.margin ?? 0) > 0
-                        ? colourOf[m.player1Id]
-                        : colourOf[m.player2Id]));
-        var res = resultLabel(p, a, b);
-        if (resolved && s.pressUnit > 0) {
-          res += ' · +\$${s.pressUnit.toStringAsFixed(2)}';
-        }
-        rows.add(Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: Row(children: [
-            _dot(colourOf[m.player1Id] ?? Colors.grey),
-            const SizedBox(width: 2),
-            Text(a, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5)),
-            Text(' v ', style: TextStyle(color: muted, fontSize: 10)),
-            _dot(colourOf[m.player2Id] ?? Colors.grey),
-            const SizedBox(width: 2),
-            Text(b, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5)),
-            const SizedBox(width: 8),
-            Expanded(child: Text(
-                '${p.pressType == 'manual' ? 'Manual' : 'Auto'} Press '
-                '${p.nine == 'front' ? 'F9' : 'B9'} holes ${p.startHole}–${p.endHole}',
-                style: TextStyle(fontSize: 11.5, color: muted))),
-            Text(res, style: TextStyle(fontSize: 11.5,
-                fontWeight: FontWeight.w700, color: winColour ?? muted)),
-          ]),
-        ));
-      }
-    }
-    return rows;
-  }
-
-  Widget _matrix(ThemeData theme, TripleNassauSummary s,
-      Map<int, Color> colourOf, Map<int, String> shortOf) {
-    Widget cell(NassauBetResult b, Color winColour) {
-      final live = !b.isComplete;
-      String txt;
-      Color fg;
-      Color bg;
-      if (b.result == 'halved') {
-        txt = 'AS'; fg = theme.colorScheme.onSurfaceVariant;
-        bg = theme.colorScheme.surfaceContainerHighest;
-      } else if (b.result == 'team1' || b.result == 'team2') {
-        fg = winColour;   // winColour already resolved to the winner
-        if (b.decidedMargin != null && b.decidedRemaining != null &&
-            b.decidedRemaining! > 0) {
-          txt = '${b.decidedMargin}&${b.decidedRemaining}';
-        } else {
-          txt = b.margin.abs() == 0 ? 'wins' : '${b.margin.abs()}UP';
-        }
-        bg = winColour;   // solid = final
-      } else {
-        // live
-        if (b.holesPlayed == 0) {
-          txt = '—'; fg = theme.colorScheme.onSurfaceVariant;
-          bg = theme.colorScheme.surfaceContainerHighest;
-        } else if (b.margin == 0) {
-          txt = 'AS'; fg = theme.colorScheme.onSurfaceVariant;
-          bg = theme.colorScheme.surfaceContainerHighest;
-        } else {
-          txt = '${b.margin.abs()}UP'; fg = winColour;
-          bg = winColour.withValues(alpha: 0.13);
-        }
-      }
-      final solidFinal = b.isComplete && b.result != 'halved';
-      return Expanded(
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 2),
-          padding: const EdgeInsets.symmetric(vertical: 6),
+  Widget _side(int? pid) => Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          width: 8, height: 8,
           decoration: BoxDecoration(
-              color: bg, borderRadius: BorderRadius.circular(8)),
-          child: Column(children: [
-            Text(txt, style: TextStyle(
-                fontWeight: FontWeight.w800, fontSize: 12.5,
-                color: solidFinal ? Colors.white : fg)),
-            if (live && b.holesPlayed > 0)
-              Text('thru ${b.holesPlayed}', style: TextStyle(
-                  fontSize: 9.5,
-                  color: solidFinal ? Colors.white70
-                                    : theme.colorScheme.onSurfaceVariant)),
-            if (b.isComplete && b.result != 'halved' && b.decidedRemaining == null)
-              const Text('Final', style: TextStyle(
-                  fontSize: 9.5, color: Colors.white70)),
-          ]),
-        ),
-      );
-    }
-
-    // Winner colour for a bet: team1 → match's player1 colour, team2 → player2.
-    Color winnerColour(TripleNassauMatch m, NassauBetResult b) {
-      final live = !b.isComplete;
-      final leader = live
-          ? (b.margin > 0 ? m.player1Id : b.margin < 0 ? m.player2Id : null)
-          : (b.result == 'team1' ? m.player1Id
-             : b.result == 'team2' ? m.player2Id : null);
-      return colourOf[leader] ?? Colors.grey;
-    }
-
-    Widget matchRow(TripleNassauMatch m) {
-      final n = m.match;
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 5),
-        child: Row(children: [
-          SizedBox(
-            width: 96,
-            child: Row(children: [
-              _dot(colourOf[m.player1Id] ?? Colors.grey),
-              const SizedBox(width: 3),
-              Flexible(child: Text(shortOf[m.player1Id] ?? '?',
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5))),
-              const Text(' v ', style: TextStyle(
-                  color: Color(0xFF5C6B62), fontSize: 10)),
-              _dot(colourOf[m.player2Id] ?? Colors.grey),
-              const SizedBox(width: 3),
-              Flexible(child: Text(shortOf[m.player2Id] ?? '?',
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5))),
-            ]),
+            color: colourOf[pid] ?? Halved.muted,
+            borderRadius: BorderRadius.circular(2),
           ),
-          cell(n.front9,  winnerColour(m, n.front9)),
-          cell(n.back9,   winnerColour(m, n.back9)),
-          cell(n.overall, winnerColour(m, n.overall)),
+        ),
+        const SizedBox(width: 5),
+        Text(nameOf[pid] ?? '—',
+            style: const TextStyle(
+                fontSize: 12.5, fontWeight: FontWeight.w700,
+                color: Halved.deepPine)),
+      ]);
+}
+
+/// Every bet and press from both of a golfer's matches, netted. Zero-sum
+/// across the three, which is the only figure on this screen that answers
+/// "what do I actually owe" — each board above is one match of two.
+class _TripleNetPosition extends StatelessWidget {
+  const _TripleNetPosition({
+    required this.players,
+    required this.colourOf,
+    required this.done,
+  });
+
+  final List<TripleNassauPlayer> players;
+  final Map<int, Color> colourOf;
+  final bool done;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        decoration: BoxDecoration(
+          color: Halved.deepPine,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Net position · ${done ? 'Final' : 'now'}',
+              style: const TextStyle(
+                  fontSize: 12.5, color: Color(0xFFB9CCC3))),
+          const SizedBox(height: 8),
+          for (final p in players) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(children: [
+                Container(
+                  width: 9, height: 9,
+                  decoration: BoxDecoration(
+                    color: colourOf[p.playerId] ?? Halved.muted,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                      p.shortName.isNotEmpty ? p.shortName : p.name,
+                      style: const TextStyle(
+                          fontSize: 14.5, fontWeight: FontWeight.w700,
+                          color: Colors.white)),
+                ),
+                Text(_tnMoney(p.net),
+                    style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w700,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        // Mint marks a golfer who is UP. Everyone else is
+                        // plain white — red would read as a second state on a
+                        // card whose whole job is one number per man.
+                        color: p.net > 0
+                            ? Halved.brightMint
+                            : Colors.white)),
+              ]),
+            ),
+          ],
         ]),
       );
-    }
+}
 
-    return Column(children: [
-      Row(children: [
-        const SizedBox(width: 96),
-        for (final l in const ['Front 9', 'Back 9', 'Overall'])
-          Expanded(child: Text(l, textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700,
-                  letterSpacing: 0.4, color: theme.colorScheme.onSurfaceVariant))),
-      ]),
-      const SizedBox(height: 5),
-      for (final m in s.matches) matchRow(m),
-    ]);
-  }
-
-  Widget _dot(Color c) => Container(width: 10, height: 10,
-      decoration: BoxDecoration(color: c, shape: BoxShape.circle));
-
-  Widget _sectionLabel(ThemeData theme, String t) => Padding(
-        padding: const EdgeInsets.only(bottom: 4),
-        child: Text(t, style: TextStyle(
-            fontWeight: FontWeight.w700, fontSize: 12.5,
-            color: theme.colorScheme.primary)),
-      );
+String _tnMoney(double v) {
+  final a = v.abs();
+  final n = a % 1 == 0 ? a.toStringAsFixed(0) : a.toStringAsFixed(2);
+  if (v == 0) return '\$0';
+  return '${v > 0 ? '+' : '−'}\$$n';
 }
 
 class _QuotaNassauGroupCard extends StatelessWidget {

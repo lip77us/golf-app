@@ -6457,3 +6457,59 @@ Tests: `scoring/tests/test_game_settings.py` (23 — the words, the fixed
 order, the refusals, the unanimity rule), `mobile/test/game_settings_strip_test.dart`
 (8) and the `claremont balls` groups in `mobile/test/nassau_board_model_test.dart`
 (7) and `mobile/test/nassau_board_test.dart` (4).
+
+## Triple Nassau's board — the picker, and no board of its own
+
+`handoff-triple-nassau-leaderboard`, whose scope line is the whole build:
+*"the board in the middle is the shared NassauBoard, mounted once and re-fed
+when a match is picked. This packet adds only the match picker and the net
+position card around it."*
+
+**There is no Triple Nassau board, and that is the point.**
+`TripleNassauMatch.match` is already a full `NassauSummary` — the engine has
+always emitted each pair's 1v1 as an ordinary Nassau — so the picker chooses
+one and hands it to the same widget the 2v2 and 1v1 boards use. `NassauBoard`
+had been documented for this since it was written ("2v2, 1v1, Triple Nassau
+— one match at a time") and needed no change at all: `showSides`,
+`side0Colour` and `side1Colour` were already there.
+
+What it REPLACED is the old bespoke card — a 3×3 matrix, its own press rows,
+a merged round-progress scorecard and a net block, 466 lines. Two drawings
+of one game is how the two come to disagree, which is the standing lesson
+here.
+
+- **Colour is identity and follows the ROSTER, not the side.** Paul is side 0
+  in both his matches but Jim is side 1 in one and side 0 in another, so
+  colouring by side would change a man's colour the moment the reader
+  switched matches. `Halved.golfer(i)` in roster order, which is the same
+  function the skins board uses — so a golfer keeps one colour across every
+  board. A test hands in the two matches Jim is in and asserts he does.
+- **The sides card is hidden** (`showSides: false`): the picker above already
+  names the two golfers.
+- **The default match follows the READER** — his first — and a watcher, who
+  is in none of them, gets match 1.
+- **Net position is the SERVER's per-golfer figure**, never summed from the
+  three boards: each board is one match of a golfer's two, and the server has
+  already added both plus every press. Zero-sum across the three, which a
+  test pins. `Final` only when all three matches have settled — one live
+  match keeps the whole card on `now`, because it totals all of them.
+- Mint marks a golfer who is UP; everyone else is plain white. Red would be
+  a second state on a card whose whole job is one number per man.
+
+**Two things the old card had and this does not**, both deliberate but worth
+a decision from Design rather than silence:
+- the **merged gross scorecard** across the three matches (the Stroke Play
+  tab carries gross for the round, so it is not lost, just not here);
+- the note that **each match allocates its own strokes** — the pair's
+  handicap difference — so a hole can be a stroke hole in one match and not
+  another. That is Triple-Nassau-specific and appears nowhere else now. The
+  three pills imply it; nothing states it.
+
+**Open in the packet, left as drawn:** the net position card is dark and sits
+directly under the board's dark money card, where the newer group boards use
+the light ledger with a pine header. The packet says build what's drawn, so
+it is dark.
+
+Tests: `mobile/test/triple_nassau_board_test.dart` (8) — including that the
+card renders `NassauBoard` and defines no `_matrix` or `_pressRows` of its
+own, which is the thing most likely to creep back.
