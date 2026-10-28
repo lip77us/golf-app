@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart' show Color;
+
 import '../api/models.dart';
 
 /// One shape for the Nassau board, whatever produced it.
@@ -81,6 +83,8 @@ class NassauBoardData {
     NassauSummary s, {
     bool showSides = true,
     bool noMoney = false,
+    Color? side0Colour,
+    Color? side1Colour,
   }) {
     String nameOf(List<NassauPlayerInfo> t) =>
         t.isEmpty ? '—' : t.map((p) => p.shortName).join(' & ');
@@ -98,8 +102,10 @@ class NassauBoardData {
 
     return NassauBoardData(
       sides: [
-        NassauSide(name: nameOf(s.team1), colourIndex: 0),
-        NassauSide(name: nameOf(s.team2), colourIndex: 1),
+        NassauSide(name: nameOf(s.team1), colourIndex: 0,
+            colour: side0Colour),
+        NassauSide(name: nameOf(s.team2), colourIndex: 1,
+            colour: side1Colour),
       ],
       holes: holes,
       front:   NassauBetView.fromBet(s.front9,  label: 'Front', startHole: 1),
@@ -138,9 +144,20 @@ class NassauBoardData {
 enum NassauHoleWinner { side0, side1, halved, notPlayed }
 
 class NassauSide {
-  const NassauSide({required this.name, required this.colourIndex});
+  const NassauSide({
+    required this.name,
+    required this.colourIndex,
+    this.colour,
+  });
   final String name;
   final int colourIndex;
+  /// An explicit colour that OVERRIDES the palette slot.
+  ///
+  /// A cup match's sides have their own declared colours and a board that
+  /// drew them pine-and-clay would be the fourball card's hardcoded-blue
+  /// defect arriving by another route. Null everywhere else, where the slot
+  /// is the right answer.
+  final Color? colour;
 }
 
 /// One bet — a nine, the overall, or a press — as the board states it.
@@ -154,6 +171,7 @@ class NassauBetView {
     required this.done,
     required this.notStarted,
     required this.points,
+    this.holesPlayed = 0,
   });
 
   final String label;
@@ -166,6 +184,8 @@ class NassauBetView {
   final String sub;
   final bool done;
   final bool notStarted;
+  /// Carried so a caller never has to parse `sub` back apart.
+  final int holesPlayed;
   /// Claremont's points row rather than a match-play status.
   final bool points;
 
@@ -179,7 +199,7 @@ class NassauBetView {
       return NassauBetView(
         label: label, startHole: startHole, leader: null,
         headline: '—', sub: 'starts $startHole',
-        done: false, notStarted: true, points: false,
+        done: false, notStarted: true, points: false, holesPlayed: 0,
       );
     }
     final decided = (b.decidedRemaining ?? 0) > 0 && b.decidedMargin != null;
@@ -189,6 +209,7 @@ class NassauBetView {
         label: label, startHole: startHole, leader: _leaderOf(m),
         headline: '${m.abs()}&${b.decidedRemaining}', sub: 'Final',
         done: true, notStarted: false, points: false,
+        holesPlayed: b.holesPlayed,
       );
     }
     final over = b.result != null;
@@ -198,6 +219,7 @@ class NassauBetView {
       headline: up == 0 ? 'AS' : '$up UP',
       sub: over ? (up == 0 ? 'Push' : 'Final') : 'thru ${b.holesPlayed}',
       done: over, notStarted: false, points: false,
+      holesPlayed: b.holesPlayed,
     );
   }
 
@@ -234,6 +256,7 @@ class NassauBetView {
               ? 'Final · ${b.decidedRemaining} to play'
               : (m == 0 ? 'Push' : 'Final'),
       done: over, notStarted: false, points: true,
+      holesPlayed: b.holesPlayed,
     );
   }
 }

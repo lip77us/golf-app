@@ -40,6 +40,8 @@ import '../utils/nine_totals.dart';
 import '../utils/skin_rules_display.dart';
 import '../utils/skins_board_model.dart';
 import '../widgets/skins_board.dart';
+import '../utils/nassau_board_model.dart';
+import '../widgets/nassau_board.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   final int roundId;
@@ -3620,16 +3622,10 @@ class _NassauGroupCard extends StatelessWidget {
       return '$sign\$${v.abs().formatBet()}';
     }
 
-    // When the cap clamps the settlement, the headline shows the (smaller)
-    // amount that actually changes hands \u2014 so surface the real, uncapped match
-    // position too, or the losing side can't see how big the hole really is.
+    // The headline shows the CAPPED amount — what actually changes
+    // hands — so the board states the uncapped position beside it.
     final isCapped = nas.lossCap != null &&
         nas.payoutTotal.abs() > nas.lossCap! + 0.001;
-    String capContext(double rawSigned) {
-      if (!isCapped) return '';
-      final mag = rawSigned.abs().formatBet();
-      return rawSigned >= 0 ? '  (up \$$mag)' : '  (down \$$mag)';
-    }
 
     // ── Cup match: QuotaNassau-style layout ──────────────────────────────
     // Use the Overall bet's holesPlayed as the "thru N" count — it
@@ -3712,224 +3708,29 @@ class _NassauGroupCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-          // Matchup line — player short names in team colors
-          Center(
-            child: RichText(
-              text: TextSpan(
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
-                children: [
-                  TextSpan(
-                    text: t1Names,
-                    style: const TextStyle(color: Colors.blue),
-                  ),
-                  TextSpan(
-                    text: '  vs  ',
-                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                  TextSpan(
-                    text: t2Names,
-                    style: TextStyle(color: team2Color),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // "Thru N" — centered under the names while play is in progress.
-          if (thru > 0 && thru < 18)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  'Thru $thru',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant),
-                ),
-              ),
-            ),
-
-          const Divider(height: 16),
-
-          // ── Top bet rows ──────────────────────────────────────────────
-          if (nas.isClaremont)
+          // **The board** (handoff-nassau-leaderboard).  One widget for every
+          // Nassau leaderboard, so the sides, the two nines with their
+          // presses, Claremont's points rows and the money are all stated
+          // once.  It replaced a matchup line, two blocks of bet rows and a
+          // summary footer that answered the same questions in another shape.
+          NassauBoard(data: NassauBoardData.fromSummary(
+            nas,
+            side0Colour: t1Color,
+            side1Colour: team2Color,
+          )),
+          if (isCapped)
             Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text('Top (Nassau)',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary)),
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                // The headline is the CAPPED figure — what actually changes
+                // hands — so the real position has to be said too, or the
+                // losing side cannot see how deep the hole is.
+                'Cap applied — the match is '
+                '${signedDollar(nas.payoutTotal)} before it.',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
             ),
-          // Only show the live bets — an Overall-only game is an 18-hole match.
-          if (nas.playFront) ...[
-            // Nassau Nine: the single match rides the 'front' bet — label it
-            // "Match" (it covers the whole round, not a front nine).
-            _betRow(nas.singleMatch ? 'Match'
-                    : nas.isClaremont ? 'F9' : 'Front 9',
-                nas.front9,  t1Names, t2Names, theme, team2Color: team2Color),
-            const SizedBox(height: 4),
-          ],
-          if (nas.playBack) ...[
-            _betRow(nas.isClaremont ? 'B9' : 'Back 9',  nas.back9,   t1Names, t2Names, theme, team2Color: team2Color),
-            const SizedBox(height: 4),
-          ],
-          if (nas.playOverall)
-            _betRow(nas.isClaremont ? 'All' : 'Overall', nas.overall, t1Names, t2Names, theme, team2Color: team2Color),
-
-          // Top presses
-          if (nas.presses.isNotEmpty) ...[
-            const Divider(height: 14),
-            ..._pressRows(nas.presses, t1Names, t2Names, theme, team2Color: team2Color),
-          ],
-
-          // ── Bottom (Claremont) bet rows ───────────────────────────────
-          if (nas.isClaremont &&
-              nas.bottomFront9 != null &&
-              nas.bottomBack9  != null &&
-              nas.bottomOverall != null) ...[
-            const Divider(height: 14),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text('Bottom (Claremont)',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary)),
-            ),
-            if (nas.singleMatch)
-              _bottomBetRow('Match', nas.bottomFront9!, t1Names, t2Names, theme, team2Color: team2Color)
-            else ...[
-              _bottomBetRow('F9',  nas.bottomFront9!,  t1Names, t2Names, theme, team2Color: team2Color),
-              const SizedBox(height: 4),
-              _bottomBetRow('B9',  nas.bottomBack9!,   t1Names, t2Names, theme, team2Color: team2Color),
-              const SizedBox(height: 4),
-              _bottomBetRow('All', nas.bottomOverall!, t1Names, t2Names, theme, team2Color: team2Color),
-            ],
-            if (nas.bottomPresses.isNotEmpty) ...[
-              const Divider(height: 14),
-              ..._pressRows(nas.bottomPresses, t1Names, t2Names, theme,
-                  labelPrefix: 'Bot ', isBottom: true, team2Color: team2Color),
-            ],
-          ],
-
-          const Divider(height: 16),
-
-          // ── Summary footer ────────────────────────────────────────────
-          if (isCupMatch) ...[
-            // Cup match: show team points and match value
-            Row(children: [
-              Expanded(
-                child: Builder(builder: (_) {
-                  // Tally cup points: 1 segment pt per nine/overall won
-                  double segPts1(NassauBetResult? bet) {
-                    if (bet == null) return 0;
-                    if (bet.result == 'team1') return cupPointValue;
-                    if (bet.result == 'halved') return cupPointValue / 2;
-                    return 0;
-                  }
-                  double segPts2(NassauBetResult? bet) {
-                    if (bet == null) return 0;
-                    if (bet.result == 'team2') return cupPointValue;
-                    if (bet.result == 'halved') return cupPointValue / 2;
-                    return 0;
-                  }
-                  final t1Total = segPts1(nas.front9) + segPts1(nas.back9) + segPts1(nas.overall);
-                  final t2Total = segPts2(nas.front9) + segPts2(nas.back9) + segPts2(nas.overall);
-                  String fmtPts(double v) => v % 1 == 0 ? v.toInt().toString() : v.toString();
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${team1Name.isNotEmpty ? team1Name : t1Names}: ${fmtPts(t1Total)} pts',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: GameColors.team1,
-                        ),
-                      ),
-                      Text(
-                        '${team2Name.isNotEmpty ? team2Name : t2Names}: ${fmtPts(t2Total)} pts',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: GameColors.team2,
-                        ),
-                      ),
-                    ],
-                  );
-                }),
-              ),
-              Builder(builder: (_) {
-                final pv = cupPointValue % 1 == 0 ? cupPointValue.toInt().toString() : cupPointValue.toString();
-                return Text(
-                  'Match: $pv/$pv/$pv pts',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant),
-                );
-              }),
-            ]),
-          ] else ...[
-            // Casual match: show dollar amounts
-            Row(children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (nas.isClaremont) ...[
-                      Text(
-                        'Top:  ${signedDollar(nas.payoutTopTotal)}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: totalColor(nas.payoutTopTotal)),
-                      ),
-                      Text(
-                        'Bot:  ${signedDollar(nas.payoutBottomTotal)}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: totalColor(nas.payoutBottomTotal)),
-                      ),
-                      const SizedBox(height: 2),
-                    ],
-                    Text(
-                      // payoutTotalCapped == payoutTotal when uncapped; the
-                      // "(down $X)" suffix shows the real hole when capped.
-                      '$t1Names: ${signedDollar(nas.payoutTotalCapped)}'
-                      '${capContext(nas.payoutTotal)}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: totalColor(nas.payoutTotalCapped),
-                      ),
-                    ),
-                    Text(
-                      '$t2Names: ${signedDollar(-nas.payoutTotalCapped)}'
-                      '${capContext(-nas.payoutTotal)}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: totalColor(-nas.payoutTotalCapped),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    'Match: \$${nas.betUnit.formatBet()}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                  if (nas.pressUnit > 0)
-                    Text(
-                      'Press: \$${nas.pressUnit.formatBet()}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant),
-                    ),
-                  if (nas.lossCap != null)
-                    Text(
-                      'Cap: \$${nas.lossCap!.formatBet()}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant),
-                    ),
-                ],
-              ),
-            ]),
-          ],
 
           // Scorecard: dots show where handicap strokes fall; the "Index" row
           // shows the whole-round stroke plan (which holes get strokes).
