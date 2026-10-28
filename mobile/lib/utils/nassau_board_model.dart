@@ -134,7 +134,11 @@ class NassauBoardData {
               money: s.payoutBottomTotal,
             )
           : null,
-      single:   s.singleMatch,
+      // TWO flags mean "one 18-hole match": `single_match` is the stored
+      // setting, and `isEighteenHoleMatch` is the shape a Singles Match
+      // actually arrives in (no front, no back, one golfer a side). Reading
+      // only the first drew Front and Back cards that could never fill.
+      single:   s.singleMatch || s.isEighteenHoleMatch,
       noMoney:  noMoney,
       showSides: showSides,
     );

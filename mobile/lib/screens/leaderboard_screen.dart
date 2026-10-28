@@ -3105,58 +3105,6 @@ class _SpotsInPlay extends StatelessWidget {
   }
 }
 
-class _SkinRulesInPlay extends StatelessWidget {
-  final Map<String, dynamic> summary;
-  const _SkinRulesInPlay({required this.summary});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final line  = summary['skin_rules']?.toString() ?? '';
-    if (line.isEmpty) return const SizedBox.shrink();
-
-    // The chips carry the SERVER'S words (split from its own phrase); the
-    // slugs are read only for the note's yes/no.  See
-    // utils/skin_rules_display.dart.
-    final chips = skinRuleChips(line);
-    final note  = skinRuleNote(
-      minimum:     summary['skin_minimum']?.toString() ?? 'none',
-      birdieSteal: summary['birdie_steal'] == true,
-    );
-
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const SizedBox(height: 8),
-      Text('TO WIN A SKIN',
-          style: theme.textTheme.labelSmall?.copyWith(
-              fontSize: 10, letterSpacing: 0.5, fontWeight: FontWeight.w700,
-              color: theme.colorScheme.onSurfaceVariant)),
-      const SizedBox(height: 5),
-      Wrap(spacing: 5, runSpacing: 5, children: [
-        for (final c in chips)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withValues(alpha: .08),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                  color: theme.colorScheme.primary.withValues(alpha: .35)),
-            ),
-            child: Text(c,
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(color: theme.colorScheme.primary)),
-          ),
-      ]),
-      if (note.isNotEmpty) ...[
-        const SizedBox(height: 5),
-        Text(note,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-      ],
-    ]);
-  }
-}
-
-
 class _JunkInPlay extends StatelessWidget {
   final Map<String, dynamic> summary;
   const _JunkInPlay({required this.summary});
@@ -3475,30 +3423,7 @@ class _MatchLeaderboardCardState extends State<_MatchLeaderboardCard> {
     final n1 = full(p1, 'Player 1');
     final n2 = full(p2, 'Player 2');
 
-    final margin  = nas.overall.margin;        // + = player 1 up
     final thru    = nas.overall.holesPlayed;
-    final decided = nas.overall.result != null;
-    final leaderColor =
-        margin > 0 ? t1Color : margin < 0 ? t2Color : theme.colorScheme.onSurface;
-    final leaderName = margin > 0 ? n1 : margin < 0 ? n2 : null;
-
-    String status;
-    if (decided) {
-      final left = 18 - thru;
-      status = left > 0
-          ? '$leaderName wins ${margin.abs()}&$left'
-          : '$leaderName wins ${margin.abs()} up';
-    } else if (margin == 0) {
-      status = 'All Square';
-    } else {
-      status = '$leaderName ${margin.abs()} UP';
-    }
-
-    // Award the current leader the stake even mid-match (status-screen style).
-    final bet = nas.betUnit;
-    final money = margin == 0
-        ? (decided ? 'Halved — no money' : 'All square — no money')
-        : '$leaderName  +\$${bet.formatBet()}';
 
     return Card(
       child: Padding(
@@ -3534,22 +3459,17 @@ class _MatchLeaderboardCardState extends State<_MatchLeaderboardCard> {
             ),
           const Divider(height: 14),
 
-          // Match status + running money
-          Center(
-            child: Text(status,
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(color: leaderColor, fontWeight: FontWeight.bold)),
-          ),
-          const SizedBox(height: 2),
-          Center(
-            child: Text(money,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: margin == 0
-                      ? theme.colorScheme.onSurfaceVariant
-                      : Colors.green.shade700,
-                  fontWeight: FontWeight.w600,
-                )),
-          ),
+          // **The board**, the same one the casual and cup matches draw.
+          //
+          // A Singles Match is one 18-hole bet, so the board collapses to a
+          // single card over both nines plus the money — which is what the
+          // centred status line and money line it replaced were saying in
+          // two Texts.  `showSides` off: the header above already names both
+          // golfers in full.
+          NassauBoard(data: NassauBoardData.fromSummary(
+            widget.nas,
+            showSides: false,
+          )),
           const SizedBox(height: 10),
 
           // Per-hole scorecard — gross + strokes-off dots + hole-winner tint,
@@ -3592,12 +3512,6 @@ class _NassauGroupCard extends StatelessWidget {
 
     // Cup match metadata
     final isCupMatch    = group['is_cup_match'] == true;
-    final cupPointValue = (group['cup_point_value'] as num?)?.toDouble() ?? 1.0;
-    final team1Name     = group['team1_name'] as String? ?? '';
-    final team2Name     = group['team2_name'] as String? ?? '';
-
-    final t1Names = nas.team1.map((p) => p.shortName).join(' & ');
-    final t2Names = nas.team2.map((p) => p.shortName).join(' & ');
     // Full names for the cup-match header (named once up top).
     final t1Full = nas.team1.map((p) => p.name).join(' & ');
     final t2Full = nas.team2.map((p) => p.name).join(' & ');
@@ -3610,11 +3524,6 @@ class _NassauGroupCard extends StatelessWidget {
         ? _cupTeamColor(group['team2_colour'] as String?)
         : Colors.orange.shade800;
 
-    Color totalColor(double total) {
-      if (total > 0) return Colors.green.shade700;
-      if (total < 0) return Colors.red.shade700;
-      return theme.colorScheme.onSurface;
-    }
 
     String signedDollar(double v) {
       if (v == 0) return '\$0.00';
@@ -3672,10 +3581,25 @@ class _NassauGroupCard extends StatelessWidget {
                 ),
               ),
             const Divider(height: 14),
-            // Team1 on left, team2 on right
-            _cupSegRow('F9',  nas.front9,  t1Color, team2Color, theme),
-            _cupSegRow('B9',  nas.back9,   t1Color, team2Color, theme),
-            _cupSegRow('All', nas.overall, t1Color, team2Color, theme),
+            // **The board**, the same one the casual match draws.
+            //
+            // `noMoney` because a cup match plays for POINTS — stake lines
+            // would be inventing a bet nobody made.  The Overall status
+            // still shows in the dark card, which is where the three
+            // `_cupSegRow`s this replaced used to live.
+            //
+            // `showSides` off because the header above already names both
+            // sides in full, and the cup's OWN colours are passed rather
+            // than the palette slots: a cup's teams have declared colours,
+            // and drawing them pine-and-clay would be the fourball card's
+            // hardcoded-blue defect arriving by another route.
+            NassauBoard(data: NassauBoardData.fromSummary(
+              nas,
+              noMoney: true,
+              showSides: false,
+              side0Colour: t1Color,
+              side1Colour: team2Color,
+            )),
             // Round Progress — the per-hole grid (gross + strokes-off dots +
             // hole-winner tint), same as the score-entry Round Progress card.
             if (scHoles.isNotEmpty) ...[
@@ -3744,279 +3668,11 @@ class _NassauGroupCard extends StatelessWidget {
     );
   }
 
-  /// Cup segment row: "1 UP" badge on the leading team's side, "All Square"
-  /// in the centre when level.  Mirrors the QuotaNassau card layout.
-  /// [leftIsTeam2] = true means team2 (red) is shown on the left side.
-  static Widget _cupSegRow(
-    String label,
-    NassauBetResult bet,
-    Color leftColor, Color rightColor,
-    ThemeData theme, {
-    bool leftIsTeam2 = false,
-  }) {
-    final holes  = bet.holesPlayed;
-    final margin = bet.margin;
-    final result = bet.result;
-    final segLen = label == 'All' ? 18 : 9;
 
-    Widget badge(String text, Color color) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.4)),
-      ),
-      child: Text(text, style: TextStyle(
-          fontSize: 12, fontWeight: FontWeight.bold, color: color)),
-    );
 
-    String upText(int abs) {
-      final holesLeft = segLen - holes;
-      if (holes > 0 && holesLeft > 0 && abs > holesLeft) return '$abs&$holesLeft';
-      return '$abs UP';
-    }
 
-    Widget? leftW, centerW, rightW;
-    if (holes == 0) {
-      centerW = Text('Not started', style: TextStyle(
-          fontSize: 12, color: theme.colorScheme.onSurfaceVariant,
-          fontStyle: FontStyle.italic));
-    } else if (result == 'halved' || (result == null && margin == 0)) {
-      centerW = badge('All Square', theme.colorScheme.onSurfaceVariant);
-    } else {
-      // team1 wins when result=='team1' or (in-progress) margin > 0
-      final team1Wins = result == 'team1' || (result == null && margin > 0);
-      final dm = bet.decidedMargin, dr = bet.decidedRemaining;
-      final text = (dm != null && dr != null && dr > 0)
-          ? '${dm.abs()}&$dr' : upText(margin.abs());
-      if (leftIsTeam2) {
-        // team2 on left: team2 wins → left badge; team1 wins → right badge
-        if (team1Wins) {
-          rightW = badge(text, rightColor);
-        } else {
-          leftW = badge(text, leftColor);
-        }
-      } else {
-        // team1 on left (original): team1 wins → left badge
-        if (team1Wins) {
-          leftW = badge(text, leftColor);
-        } else {
-          rightW = badge(text, rightColor);
-        }
-      }
-    }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [
-        SizedBox(width: 36,
-            child: Text(label, style: theme.textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onSurfaceVariant))),
-        Expanded(child: Padding(
-          padding: const EdgeInsets.only(right: 14),
-          child: Align(alignment: Alignment.centerRight,
-              child: leftW ?? const SizedBox()),
-        )),
-        SizedBox(width: 68, child: Center(
-            child: centerW ?? Container(
-                width: 1, height: 24,
-                color: theme.colorScheme.outlineVariant))),
-        Expanded(child: Padding(
-          padding: const EdgeInsets.only(left: 14),
-          child: Align(alignment: Alignment.centerLeft,
-              child: rightW ?? const SizedBox()),
-        )),
-      ]),
-    );
-  }
 
-  static Widget _betRow(
-    String label,
-    NassauBetResult bet,
-    String t1Names,
-    String t2Names,
-    ThemeData theme, {
-    Color? team2Color,
-  }) {
-    final t2Color   = team2Color ?? Colors.orange.shade700;
-    final result   = bet.result;
-    final nineLen  = label == 'Overall' ? 18 : 9;
-    final holesLeft = nineLen - bet.holesPlayed;
-    String display;
-    Color  color = theme.colorScheme.onSurface;
-
-    if (result == null) {
-      final m = bet.margin;
-      if (m == 0) {
-        display = bet.holesPlayed == 0 ? 'Not started' : 'AS';
-      } else {
-        final leader = m > 0 ? t1Names : t2Names;
-        // Colour the running leader in their team colour (matches the
-        // completed-nine row below).
-        color = m > 0 ? Colors.blue.shade700 : t2Color;
-        if (bet.holesPlayed > 0 && holesLeft > 0 && m.abs() > holesLeft) {
-          // Mathematically decided before last hole — match-play "&" notation.
-          display = '$leader ${m.abs()}&$holesLeft';
-        } else {
-          display = '$leader ${m.abs()}UP';
-        }
-      }
-    } else if (result == 'halved') {
-      display = 'AS · Final';
-      color   = theme.colorScheme.onSurfaceVariant;
-    } else {
-      // Completed nine — show winner name + score, tagged Final so a plain
-      // "1 UP" reads as over (not a live lead). "&" already implies closed.
-      final won    = result == 'team1';
-      final winner = won ? t1Names : t2Names;
-      color = won ? Colors.blue.shade700 : t2Color;
-      // Use frozen decided score if the nine ended early (e.g. "JimD & Paul 5&4").
-      final dm = bet.decidedMargin;
-      final dr = bet.decidedRemaining;
-      if (dm != null && dr != null && dr > 0) {
-        display = '$winner ${dm.abs()}&$dr';
-      } else {
-        final m = bet.margin.abs();
-        display = m > 0 ? '$winner ${m}UP · Final' : '$winner wins · Final';
-      }
-    }
-
-    return Row(children: [
-      SizedBox(width: 72, child: Text(label, style: theme.textTheme.bodySmall)),
-      Expanded(
-        child: Text(display,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(fontWeight: FontWeight.w600, color: color)),
-      ),
-    ]);
-  }
-
-  static String _pressResultLabel(
-      NassauPressResult p, String t1Names, String t2Names) {
-    if (p.result == null) {
-      // Still active — show running hole margin.
-      final m = p.margin ?? 0;
-      if (m == 0) return 'AS';
-      final leader = m > 0 ? t1Names : t2Names;
-      return '$leader ${m.abs()}UP';
-    }
-    if (p.result == 'halved') return 'AS · Final';
-    final m      = (p.margin ?? 0).abs();
-    final winner = p.result == 'team1' ? t1Names : t2Names;
-    if (m == 0) return '$winner wins · Final';
-    // "N&M" already reads as a closed-out match; a plain "N UP" is ambiguous
-    // with a live lead, so tag it Final.
-    final score  = p.holesRemaining > 0
-        ? '$m&${p.holesRemaining}'
-        : '${m}UP · Final';
-    return '$winner $score';
-  }
-
-  /// Bottom press label — margin is in *points* (max ±2/hole), not holes.
-  static String _bottomPressResultLabel(
-      NassauPressResult p, String t1Names, String t2Names) {
-    if (p.result == null) {
-      // Still active — show running point margin.
-      final m = p.margin ?? 0;
-      if (m == 0) return 'AS';
-      final leader = m > 0 ? t1Names : t2Names;
-      return '$leader +${m.abs()} pts';
-    }
-    if (p.result == 'halved') return 'AS · Final';
-    final m      = (p.margin ?? 0).abs();
-    final winner = p.result == 'team1' ? t1Names : t2Names;
-    if (m == 0) return '$winner wins · Final';
-    return '$winner +$m pts · Final';
-  }
-
-  /// Shared press rows widget — used for both top and bottom presses.
-  static Iterable<Widget> _pressRows(
-    List<NassauPressResult> presses,
-    String t1Names,
-    String t2Names,
-    ThemeData theme, {
-    String labelPrefix = '',
-    bool isBottom = false,
-    Color? team2Color,
-  }) {
-    final t2Color = team2Color ?? Colors.orange.shade700;
-    return presses.map((p) {
-      final resultLabel = isBottom
-          ? _bottomPressResultLabel(p, t1Names, t2Names)
-          : _pressResultLabel(p, t1Names, t2Names);
-      Color resultColor;
-      if (p.result == 'team1') {
-        resultColor = Colors.blue.shade700;
-      } else if (p.result == 'team2') {
-        resultColor = t2Color;
-      } else {
-        // In-progress press: colour the running leader by margin (AS neutral).
-        final m = p.margin ?? 0;
-        resultColor = m == 0
-            ? theme.colorScheme.onSurfaceVariant
-            : (m > 0 ? Colors.blue.shade700 : t2Color);
-      }
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(children: [
-          Text(
-            '$labelPrefix${p.pressType == 'manual' ? 'Manual' : 'Auto'} Press holes '
-            '${p.startHole}–${p.endHole}',
-            style: theme.textTheme.bodySmall,
-          ),
-          const Spacer(),
-          Text(resultLabel,
-              style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w600, color: resultColor)),
-        ]),
-      );
-    });
-  }
-
-  /// Bet row for Claremont bottom (margin in points, not holes).
-  static Widget _bottomBetRow(
-    String label,
-    NassauBottomBetResult bet,
-    String t1Names,
-    String t2Names,
-    ThemeData theme, {
-    Color? team2Color,
-  }) {
-    final t2Color = team2Color ?? Colors.orange.shade700;
-    final result = bet.result;
-    String display;
-    Color  color = theme.colorScheme.onSurface;
-
-    if (result == null) {
-      final m = bet.margin;
-      if (m == 0) {
-        display = bet.holesPlayed == 0 ? 'Not started' : 'AS';
-      } else {
-        final leader = m > 0 ? t1Names : t2Names;
-        display = '$leader ${m > 0 ? '+$m' : '$m'} pts';
-        color   = m > 0 ? Colors.blue.shade700 : t2Color;
-      }
-    } else if (result == 'halved') {
-      display = 'AS · Final';
-      color   = theme.colorScheme.onSurfaceVariant;
-    } else {
-      final won    = result == 'team1';
-      final winner = won ? t1Names : t2Names;
-      color   = won ? Colors.blue.shade700 : t2Color;
-      final m = bet.margin.abs();
-      display = m > 0 ? '$winner +$m pts · Final' : '$winner wins · Final';
-    }
-
-    return Row(children: [
-      SizedBox(width: 72, child: Text(label, style: theme.textTheme.bodySmall)),
-      Expanded(
-        child: Text(display,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(fontWeight: FontWeight.w600, color: color)),
-      ),
-    ]);
-  }
 }
 
 // ---- Sixes group card ----
@@ -4025,130 +3681,9 @@ class _SixesGroupCard extends StatelessWidget {
   final Map<String, dynamic> group;
   const _SixesGroupCard({required this.group});
 
-  /// Pretty-print a team as "Paul & Mike" (2 players) or "Paul, Mike, Kim"
-  /// (3+).  Empty list → "—".
-  static String _teamString(List players) {
-    final names = players.map((p) => p.toString()).toList();
-    if (names.isEmpty) return '—';
-    if (names.length == 2) return '${names[0]} & ${names[1]}';
-    return names.join(', ');
-  }
 
-  /// Team-vs-team subtitle for one segment, broken into parts so the
-  /// caller can render the leading / winning team with extra emphasis
-  /// (bold + primary colour).  The flat string the leaderboard used to
-  /// show buried the leader on in-progress segments; this returns
-  /// `leader`, `joiner`, and `trailer` instead so a RichText widget can
-  /// style each piece independently.
-  static ({String? leader, String joiner, String trailer, String tone})
-      _segmentParts(Map<String, dynamic> seg) {
-    // Short names here: these lines are read at arm's length, walking, in
-    // the sun. The money table below still carries full names, so nobody
-    // is left guessing who "ES" is. Falls back to 'players' for a payload
-    // from a server that predates 'players_short'.
-    List _names(String team) {
-      final t = seg[team] as Map<String, dynamic>? ?? const {};
-      final short = t['players_short'] as List?;
-      if (short != null && short.isNotEmpty) return short;
-      return t['players'] as List? ?? const [];
-    }
-    final t1  = _names('team1');
-    final t2  = _names('team2');
-    final t1s = _teamString(t1);
-    final t2s = _teamString(t2);
-    final winner = seg['winner']?.toString() ?? '—';
-    final status = seg['status']?.toString() ?? 'pending';
 
-    if (winner == 'Team 1') {
-      return (leader: t1s, joiner: ' beat ', trailer: t2s, tone: 'won');
-    }
-    if (winner == 'Team 2') {
-      return (leader: t2s, joiner: ' beat ', trailer: t1s, tone: 'won');
-    }
-    if (winner == 'Halved') {
-      // No 'Halved — ' prefix: the score column on the same line already
-      // says Halved, and saying it twice is exactly the surplus text that
-      // makes this card hard to scan outdoors.
-      return (leader: null, joiner: '',
-              trailer: '$t1s vs $t2s', tone: 'halved');
-    }
 
-    // In progress or pending — derive the leader from the last hole's
-    // signed margin (+ve = team 1 ahead, −ve = team 2 ahead).
-    final holes = (seg['holes'] as List? ?? const []);
-    final lastMargin = holes.isEmpty
-        ? 0
-        : (((holes.last as Map<String, dynamic>)['margin'] as num?)?.toInt() ?? 0);
-
-    if (status == 'in_progress' && lastMargin > 0) {
-      return (leader: t1s, joiner: ' vs ', trailer: t2s, tone: 'leading');
-    }
-    if (status == 'in_progress' && lastMargin < 0) {
-      return (leader: t2s, joiner: ' vs ', trailer: t1s, tone: 'leading');
-    }
-    return (leader: null, joiner: '', trailer: '$t1s vs $t2s', tone: 'pending');
-  }
-
-  /// True when this match's pairing has NOT been revealed to the group yet.
-  ///
-  /// Sixes assigns all three pairings at setup, but the group only LEARNS
-  /// matches 2 and 3 when Segment 1 finishes and they spin the wheel (see
-  /// the draw in score_entry_screen.dart). Printing them here spoils the
-  /// draw, and — worse — reads as settled fact to four golfers who haven't
-  /// picked partners yet. An extra match is undrawn until its teams are
-  /// actually chosen by the loser of the previous one.
-  static bool _isUndrawn(Map<String, dynamic> seg, List segments) {
-    List names(String team) {
-      final t = seg[team] as Map<String, dynamic>? ?? const {};
-      return t['players'] as List? ?? const [];
-    }
-    if (names('team1').isEmpty || names('team2').isEmpty) return true;
-
-    final standard = segments
-        .cast<Map<String, dynamic>>()
-        .where((x) => x['is_extra'] != true)
-        .toList();
-    if (seg['is_extra'] == true) return false;   // teams exist ⇒ chosen
-    if (standard.isEmpty || identical(standard.first, seg)) return false;
-
-    final firstStatus = standard.first['status']?.toString();
-    return firstStatus != 'complete' && firstStatus != 'halved';
-  }
-
-  /// Result text for one segment, shown to the right of the match label.
-  /// Since team composition rotates every match, we show the match SCORE
-  /// (e.g. "4 and 2") instead of repeating team names.  Mirrors
-  /// SixesSegment.statusDisplay in models.dart so the same language
-  /// appears on the scoring screen and the leaderboard.
-  static String _segmentScore(Map<String, dynamic> seg) {
-    final holes    = (seg['holes'] as List? ?? const []);
-    final status   = seg['status']?.toString() ?? 'pending';
-    final winner   = seg['winner']?.toString() ?? '—';
-    final startH   = (seg['start_hole'] as num?)?.toInt() ?? 1;
-    final endH     = (seg['end_hole']   as num?)?.toInt() ?? startH;
-    final played   = holes.length;
-    final lastMarg = holes.isEmpty
-        ? 0
-        : (((holes.last as Map<String, dynamic>)['margin'] as num?)?.toInt() ?? 0);
-    final absMarg  = lastMarg.abs();
-    // num_holes is the segment's true length (wrap-aware for a shotgun); fall
-    // back to end-start+1 for older payloads / normal rounds.
-    final totalH   = (seg['num_holes'] as num?)?.toInt() ?? (endH - startH + 1);
-    final holesLeft = totalH - played;
-
-    if (status == 'complete' || status == 'halved') {
-      if (winner == 'Halved') return 'Halved';
-      // Early finish: "X and Y" (e.g. "4 and 2" = 4 up with 2 to play)
-      if (holesLeft > 0) return '$absMarg and $holesLeft';
-      // Ran the full segment
-      return absMarg > 0 ? '$absMarg UP' : 'Halved';
-    }
-    if (status == 'in_progress') {
-      if (lastMarg == 0) return 'AS thru $played';
-      return '$absMarg UP thru $played';
-    }
-    return 'Pending';
-  }
 
   @override
   Widget build(BuildContext context) {

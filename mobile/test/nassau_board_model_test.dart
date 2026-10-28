@@ -280,6 +280,8 @@ void main() {
     });
   });
 
+  _singlesMatchShape();
+
   group('shapes', () {
     test('sides are named from the short names', () {
       final d = NassauBoardData.fromSummary(_nassau());
@@ -310,6 +312,34 @@ void main() {
       expect(d.holes[2], NassauHoleWinner.halved);
       expect(d.holes[3], NassauHoleWinner.notPlayed);
       expect(d.holes.length, 18);
+    });
+  });
+}
+
+/// A Singles Match arrives as `is_eighteen_hole_match` rather than
+/// `single_match`, and reading only the latter drew Front and Back cards that
+/// could never fill.
+void _singlesMatchShape() {
+  group('one 18-hole match', () {
+    NassauSummary singles() => NassauSummary.fromJson({
+          'status': 'in_progress',
+          'play_front': false, 'play_back': false, 'play_overall': true,
+          'bet_unit': 10.0, 'press_unit': 0.0,
+          'teams': {
+            'team1': [{'player_id': 1, 'name': 'Paul', 'short_name': 'Paul'}],
+            'team2': [{'player_id': 2, 'name': 'Dave', 'short_name': 'Dave'}],
+          },
+          'front9': _bet(), 'back9': _bet(),
+          'overall': _bet(margin: 2, holesPlayed: 12),
+          'presses': const [], 'holes': const [],
+          'payouts': {'total': 10.0, 'total_capped': 10.0},
+        });
+
+    test('is single even though single_match was never set', () {
+      final s = singles();
+      expect(s.singleMatch, isFalse);
+      expect(s.isEighteenHoleMatch, isTrue);
+      expect(NassauBoardData.fromSummary(s).single, isTrue);
     });
   });
 }
