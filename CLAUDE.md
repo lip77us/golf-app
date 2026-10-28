@@ -6293,3 +6293,58 @@ has always parsed.
 Tests: `mobile/test/skins_board_model_test.dart` (18 — the walk, both shotgun
 cases, the pool, and the money) and `mobile/test/skins_board_test.dart` (16,
 including that both cards render the one board).
+
+## The game switcher — four packets asked, none had built it
+
+`widgets/game_switcher.dart`. 40 Balls, Sixes, skins and Nassau all open with
+the same paragraph: *"shared segmented control… Past five items it scrolls and
+keeps the active one centred. Where boards swipe, the thumb tracks the swipe.
+**Do not use pill or underline tabs.**"* The leaderboard was using a Material
+`TabBar`, which is exactly the underline tabs that sentence rules out — so
+every board built to a packet was quietly assuming a control that did not
+exist.
+
+**It is not `HalvedSegmented`.** That one is a `Row` of equal or fixed-width
+segments with no scroller, which is right for a closed set read in one glance
+(the size picker, Survivors/Standings). A leaderboard carries as many games as
+the round is playing, so this is **sized to each label**, **scrolls**, and
+**centres the active game**. Same visual language, different job — split for
+the reason `StrokeDotRow` and `StrokeDotColumn` are.
+
+**It takes a `TabController`, not a selected index**, because an index cannot
+describe a half-finished drag. `controller.animation` is a FRACTIONAL index
+mid-swipe, and the thumb lerps both its offset and its width between the two
+neighbouring labels — which is what the reference's `place(p)` does. The
+active label darkens over the same fraction, so a swipe reads as half-finished
+rather than snapping. The `TabBarView` is untouched, so the swipe itself is
+unchanged.
+
+**Labels are measured with a `TextPainter`, not laid out.** The thumb has to
+know a label's width before the first frame or it starts at zero and snaps.
+
+### The bug worth remembering: a height that excluded its own margin
+
+`GameSwitcher.height` is what a caller hands to `PreferredSize`, and it first
+read `38 + 3*2 = 44` while the control also carried a 6pt bottom margin. The
+row then overflowed its box by exactly that margin — which **does not look
+broken**. It moves the labels out of the hit area, so taps silently miss. The
+height now includes the margin. If an app-bar control ever stops responding to
+taps while looking perfect, measure its box against its contents first.
+
+### Two test-environment traps this hit
+
+- **`MediaQuery` does not resize the test surface.** The default window is 800
+  wide, so a phone-width assertion made against a `MediaQuery` override is
+  measuring nothing. `t.binding.setSurfaceSize(...)` with a tear-down.
+- **The test font is one square per glyph**, so `Settlement` is far wider here
+  than on a device and starts off-screen at 390pt. The tap test calls
+  `ensureVisible` first — which is what the strip is for, and what a user
+  does.
+
+Finders in these tests are **scoped to the switcher** (`_inSwitcher`), because
+the `TabBarView` pages carry the same words and an unscoped `.first` picks
+whichever comes first in the tree — which may be off-screen, so the tap misses
+without failing the finder.
+
+Tests: `mobile/test/game_switcher_test.dart` (9), including that the
+leaderboard no longer contains a `TabBar(`.

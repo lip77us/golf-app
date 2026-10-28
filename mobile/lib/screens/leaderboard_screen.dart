@@ -42,6 +42,7 @@ import '../utils/skins_board_model.dart';
 import '../widgets/skins_board.dart';
 import '../utils/nassau_board_model.dart';
 import '../widgets/nassau_board.dart';
+import '../widgets/game_switcher.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   final int roundId;
@@ -498,13 +499,18 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
                 watchToken: watchToken, isFinal: isFinal,
                 hasReceipt: hasReceipt),
         ],
+        // The game switcher, not a TabBar — four design packets specify it
+        // and all four say "do not use pill or underline tabs", which is
+        // what the Material TabBar here was. It still drives the same
+        // TabController, so the TabBarView below keeps the swipe and the
+        // thumb tracks it.
         bottom: (_tabController != null && _gameTabs.isNotEmpty)
-            ? TabBar(
-                controller: _tabController,
-                isScrollable: true,
-                tabs: _gameTabs
-                    .map((g) => Tab(text: _label(g, lb)))
-                    .toList(),
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(GameSwitcher.height),
+                child: GameSwitcher(
+                  controller: _tabController!,
+                  labels: _gameTabs.map((g) => _label(g, lb)).toList(),
+                ),
               )
             : null,
       ),
