@@ -126,7 +126,10 @@ legacy/tournament rounds (null `primary_game`).
   `seed_demo` round; mid-round withdrawal settlement (the universal unblocker
   already lets a fourball round complete).
 
-### Skins (`skins`) — **fully implemented, not yet tested in production**
+### Skins (`skins`) — implemented and PLAYED in production
+(This heading read "not yet tested in production" for a long time after
+it stopped being true — there are settled skins rounds in prod from May
+and July 2026, and sixteen legacy junk rows among them.)
 - 2–4 players; 1 skin per hole to best score; optional carryover on ties; optional junk skins (manual integer count per player per hole); pool-based settlement (bet_unit × n_players, split proportional to total_skins).
 - Handicap: Net / Gross / Strokes-Off-Low (all three supported).
 - Mutually exclusive with all other casual games.
@@ -1292,10 +1295,30 @@ roster_size × bet_unit / 18`, split within the segment by skins won (regular +
 junk). So a skin on a 3-player hole is worth less than on a 4-player hole.
 Killed holes + post-game-over holes evaporate. No-WD round = single 18-hole
 segment with the full roster = unchanged. Summary gains
-`withdrawals`, per-hole `is_killed`, and `money.pool_at_risk`. (Per-skin payout
-styles — pay-the-winner / pay-those-above — aren't in Skins yet; when added they
-settle each segment as a closed game instead of fractioning, noted in the plan
-helper.)
+`withdrawals`, per-hole `is_killed`, and `money.pool_at_risk`. 
+
+**KNOWN GAP — `per_point` ignores all of the above.** The note here used to
+say per-skin payout styles "aren't in Skins yet; when added they settle each
+segment as a closed game instead of fractioning". They WERE added
+(`payout_style` = `pool` | `per_point`, `per_point_mode` =
+`average` | `all` | `first`) and that second half was never done, so the
+warning sat here reading as hypothetical while it was live. `skins_summary`
+settles per-point on **`total_skins_by_pid`** — the whole round — and then
+overwrites `payout_by_pid` wholesale, discarding the segment-aware pool math
+above it:
+
+```python
+net_by_pid    = _wager_settle(dict(total_skins_by_pid), cfg)
+payout_by_pid = {pid: net_by_pid.get(pid, 0.0) for pid in payout_by_pid}
+```
+
+So a golfer who withdrew after the 6th is settled against skins won on holes
+7–18, holes he was not in. **Pool mode is correct; only `per_point` is
+wrong.** The fix is the one the old note described — settle each segment as
+its own closed game and sum the nets — and it needs a withdrawal AND
+per-point to collide, which is why it has not surfaced. Recorded rather than
+fixed (Paul, 27 Oct 2026); do not "simplify" the segment loop away in the
+meantime, because pool mode depends on it.
 
 **Sixes:** `apply_withdrawal_to_sixes()` marks the affected + remaining segments
 `is_void` (void) or leaves them active (solo). Best-ball uses the lone ball
