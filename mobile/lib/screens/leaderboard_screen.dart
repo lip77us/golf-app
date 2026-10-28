@@ -886,12 +886,37 @@ class _GameView extends StatelessWidget {
     // The settings strip rides ABOVE every game's view, in one place, for the
     // reason the server writes the words: twenty-five views each drawing
     // their own would be twenty-five chances to draw it differently.
-    final chips = settingsChipsOf(data);
+    // **Stroke Play shows it only below 100%** (Paul, 28 Oct 2026). That
+    // board owns an explicit Gross / Net / Strokes-off selector, so a chip
+    // naming the mode is the same axis stated twice — and they can disagree:
+    // a strokes-off round whose Stroke Play block is configured Net drew
+    // `Net` directly above a highlighted `Strokes-off`.
+    //
+    // An ALLOWANCE is the exception, because the three selectors cannot say
+    // it. `Net 90%` is a fact about the money that nothing else on that
+    // board carries, so it stays.
+    final chips = (gameKey == 'low_net_round' && !_belowFullAllowance(data))
+        ? const <String>[]
+        : settingsChipsOf(data);
     if (chips.isEmpty) return view;
-    return Column(children: [
+    // `stretch`, not the Column's default centre: every card on these boards
+    // runs the full width, and a centred strip above them reads as a caption
+    // rather than as the board's own heading.
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       GameSettingsStrip(chips),
       Expanded(child: view),
     ]);
+  }
+
+  /// Is this block playing at less than a full handicap allowance?
+  ///
+  /// Read from the block itself rather than from the chip's words — a client
+  /// parsing `Net 90%` for its digits would be deriving a rule out of a
+  /// label the server wrote for a human.
+  static bool _belowFullAllowance(Map<String, dynamic> data) {
+    final h = data['handicap'];
+    final pct = (h is Map ? h['net_percent'] : data['net_percent']) as num?;
+    return pct != null && pct < 100;
   }
 
   Widget _view(BuildContext context, Map<String, dynamic> data) {
@@ -2849,14 +2874,17 @@ class _SkinsGroupCard extends StatelessWidget {
     final players  = (summary['players'] as List? ?? []).cast<Map<String, dynamic>>();
     final holes    = (summary['holes']   as List? ?? []).cast<Map<String, dynamic>>();
     final money    = summary['money'] as Map<String, dynamic>? ?? {};
-    final pool     = money['pool'] ?? 0;
+    // `formatBet`, not the raw number: the API sends a double, so a straight
+    // interpolation drew `Pool: $40.0` — money with a stray decimal, beside
+    // a ledger that formats every other figure properly.
+    final pool     = (money['pool'] as num?) ?? 0;
     final status   = summary['status']?.toString() ?? 'pending';
     // Payout mode (Pool vs Per-skin: pay leader / pay above / vs average).
     final style    = summary['payout_style']?.toString() ?? 'pool';
     final ppMode   = summary['per_point_mode']?.toString() ?? 'first';
     final rate     = (summary['per_point_rate'] as num?)?.toDouble() ?? 0.0;
     final modeLabel = style == 'pool'
-        ? 'Pool: \$$pool'
+        ? 'Pool: \$${pool.formatBet()}'
         : 'Per skin · ${switch (ppMode) {
             'first' => 'pay leader',
             'all'   => 'pay above',
