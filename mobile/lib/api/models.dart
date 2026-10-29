@@ -4176,7 +4176,9 @@ class RabbitSegment {
   /// leg plays out its full range and this is the only signal it's settled.
   /// Null while the leg is still live (or from a server predating the field).
   final int?   decidedOn;
-  final double value;       // per-leg stake (bet_unit, or bet_unit/2 for 1-hole extra)
+  final double value;       // per-leg stake, INCLUDING anything carried in
+  /// What rolled in from loose rabbits before it — 0 without carry.
+  final double carriedIn;
   final double payout;
 
   const RabbitSegment({
@@ -4191,6 +4193,7 @@ class RabbitSegment {
     required this.complete,
     this.decidedOn,
     this.value = 0.0,
+    this.carriedIn = 0.0,
     required this.payout,
   });
 
@@ -4215,6 +4218,7 @@ class RabbitSegment {
         complete:    j['complete']    as bool? ?? false,
         decidedOn:   j['decided_on']  as int?,
         value:       (j['value']      as num?)?.toDouble() ?? 0.0,
+        carriedIn:   (j['carried_in'] as num?)?.toDouble() ?? 0.0,
         payout:      (j['payout']     as num?)?.toDouble() ?? 0.0,
       );
 }
@@ -4313,6 +4317,8 @@ class RabbitSummary {
   final String handicapAllocation;
   /// Extra-rabbit legs enabled (accumulate only).
   final bool   extraRabbits;
+  /// A loose rabbit rolls its stake into the next one.
+  final bool   carry;
   final List<RabbitSegment>     segments;
   final List<RabbitPlayerTotal> players;
   final List<RabbitHole>        holes;
@@ -4334,6 +4340,7 @@ class RabbitSummary {
     required this.numSegments,
     this.handicapAllocation = 'per_segment',
     this.extraRabbits = false,
+    this.carry = false,
     required this.segments,
     required this.players,
     required this.holes,
@@ -4368,6 +4375,7 @@ class RabbitSummary {
       netPercent:   hcap['net_percent'] as int?    ?? 100,
       handicapAllocation: hcap['allocation'] as String? ?? 'per_segment',
       extraRabbits: j['extra_rabbits'] as bool? ?? false,
+      carry:        j['carry']         as bool? ?? false,
       accumulate:   j['accumulate']   as bool? ?? true,
       numSegments:  j['num_segments'] as int?  ?? 1,
       segments: (j['segments'] as List? ?? [])

@@ -23,6 +23,7 @@ class RabbitBoardData {
     required this.holes,
     required this.stake,
     required this.accumulate,
+    required this.carry,
     required this.roundOver,
     this.currentHolderId,
     this.currentLead = 0,
@@ -39,6 +40,8 @@ class RabbitBoardData {
 
   final double stake;
   final bool accumulate;
+  /// A loose rabbit rolls its stake into the next one.
+  final bool carry;
   final bool roundOver;
 
   final int? currentHolderId;
@@ -113,6 +116,7 @@ class RabbitBoardData {
             complete: g.complete,
             decidedOn: g.decidedOn,
             value: g.value,
+            carriedIn: g.carriedIn,
             payout: g.payout,
           ),
       ],
@@ -129,6 +133,7 @@ class RabbitBoardData {
       ],
       stake: s.segValue,
       accumulate: s.accumulate,
+      carry: s.carry,
       roundOver: over,
       currentHolderId: s.currentHolderId,
       currentLead: s.currentLead,
@@ -176,6 +181,7 @@ class RabbitBoardLeg {
     required this.lead,
     required this.complete,
     required this.value,
+    required this.carriedIn,
     required this.payout,
     this.holderId,
     this.holderShort,
@@ -192,7 +198,10 @@ class RabbitBoardLeg {
   final int lead;
   final bool complete;
   final int? decidedOn;
+  /// The leg's stake INCLUDING anything carried into it.
   final double value;
+  /// What rolled in from loose rabbits before it — 0 without carry.
+  final double carriedIn;
   final double payout;
 
   /// `R1` / `Extra`.

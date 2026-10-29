@@ -1026,6 +1026,18 @@ class RabbitGame(models.Model):
                                   "single hole is worth half the stake.  No effect "
                                   "in stop-after-one mode.",
                     )
+    carry         = models.BooleanField(
+                        default=False,
+                        help_text="A rabbit that ends LOOSE carries its stake "
+                                  "into the next one, so the next holder wins "
+                                  "that stake plus everything carried in. "
+                                  "Without it a loose rabbit simply pays "
+                                  "nothing. Carries accumulate across "
+                                  "consecutive loose rabbits; a loose LAST "
+                                  "rabbit has nothing to carry into, so that "
+                                  "stake is never won. Off by default — it "
+                                  "changes what every later rabbit is worth.",
+                    )
     created_at    = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

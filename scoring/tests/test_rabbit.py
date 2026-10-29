@@ -641,3 +641,144 @@ class SettingsChipsTests(TestCase):
                       self._chips(num_segments=3, extra_rabbits=True))
         self.assertNotIn('Extra rabbits',
                          self._chips(num_segments=3, extra_rabbits=False))
+
+
+class CarryTests(TestCase):
+    """A loose rabbit rolls its stake into the next one.
+
+    Asked for by Paul on 28 Oct 2026, *"defaulting to no"* — it changes what
+    every later rabbit is worth, so a group opts into it.
+
+    Carry is SETTLEMENT only: who holds a rabbit and when it is decided are
+    untouched, which is what keeps the change small and what lets these
+    tests flip the switch on one scored round and compare.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course)
+        self.round.bet_unit = 5
+        self.round.save(update_fields=['bet_unit'])
+        self.fs = make_foursome(
+            self.round, [('Ann', 0), ('Ben', 0), ('Cal', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+
+    def _play(self, winners):
+        """`winners` maps hole -> the name who wins it outright, or None for
+        a halved hole."""
+        for hole in range(1, 19):
+            w = winners.get(hole)
+            submit_hole(self.fs, hole, [
+                (self.pid[n], 4 if n == w else (4 if w is None else 5))
+                for n in ('Ann', 'Ben', 'Cal')
+            ])
+        calculate_rabbit(self.fs)
+
+    def _summary(self, carry):
+        g = self.fs.rabbit_game
+        g.carry = carry
+        g.save(update_fields=['carry'])
+        return rabbit_summary(self.fs)
+
+    def _legs(self, s):
+        return [(x['value'], x['carried_in'], x['payout'])
+                for x in s['segments']]
+
+    def _money(self, s):
+        return {p['short_name']: p['money'] for p in s['players']}
+
+    def test_it_is_OFF_by_default(self):
+        setup_rabbit(self.fs, num_segments=3)
+        self.assertFalse(self.fs.rabbit_game.carry)
+        # And an unset kwarg keeps a round playing what it was playing.
+        setup_rabbit(self.fs, num_segments=3, accumulate=False)
+        self.assertFalse(self.fs.rabbit_game.carry)
+
+    def test_a_loose_rabbit_rolls_its_stake_into_the_next(self):
+        # R1 (1-6) halved throughout -> loose. R2 (7-12) to Ann.
+        setup_rabbit(self.fs, num_segments=3, accumulate=False)
+        self._play({7: 'Ann', 13: 'Ben'})
+
+        off = self._summary(False)
+        self.assertEqual(self._legs(off)[0], (5.0, 0.0, 0.0),
+                         'without carry a loose rabbit pays nothing')
+        self.assertEqual(self._legs(off)[1][0], 5.0)
+
+        on = self._summary(True)
+        self.assertEqual(self._legs(on)[0], (5.0, 0.0, 0.0),
+                         'the loose rabbit still pays nobody')
+        value, carried, payout = self._legs(on)[1]
+        self.assertEqual((value, carried), (10.0, 5.0),
+                         'R1s stake rides on R2')
+        self.assertEqual(payout, 20.0, 'two opponents at $10')
+
+    def test_carries_ACCUMULATE_across_consecutive_loose_rabbits(self):
+        # R1 and R2 both loose; R3 takes all three stakes.
+        setup_rabbit(self.fs, num_segments=3, accumulate=False)
+        self._play({13: 'Ann'})
+        legs = self._legs(self._summary(True))
+        # `value` is the leg's own stake PLUS what rolled in, so it grows.
+        self.assertEqual(legs[0][:2], (5.0, 0.0))
+        self.assertEqual(legs[1][:2], (10.0, 5.0))
+        self.assertEqual(legs[2][:2], (15.0, 10.0))
+        # Ann takes all three stakes from two opponents.
+        self.assertEqual(legs[2][2], 30.0)
+
+    def test_a_loose_LAST_rabbit_is_won_by_nobody(self):
+        """There is nothing to carry into, so that stake is never won.
+
+        It falls out of the walk rather than being special-cased.
+        """
+        setup_rabbit(self.fs, num_segments=3, accumulate=False)
+        self._play({1: 'Ann', 7: 'Ben'})
+        on = self._summary(True)
+        self.assertEqual(self._legs(on)[2], (5.0, 0.0, 0.0))
+        # ...and the money is the same as with carry off, because no carry
+        # ever reached anybody.
+        self.assertEqual(self._money(on), self._money(self._summary(False)))
+
+    def test_it_stays_zero_sum(self):
+        setup_rabbit(self.fs, num_segments=3, accumulate=False)
+        self._play({7: 'Ann', 13: 'Ben'})
+        for carry in (False, True):
+            money = self._money(self._summary(carry))
+            self.assertAlmostEqual(sum(money.values()), 0.0, places=2,
+                                   msg=f'carry={carry}')
+
+    def test_the_total_at_risk_does_not_change(self):
+        """A carry MOVES a stake; it does not add one.
+
+        `max_liability` counts each leg's own stake once, so a group cannot
+        be told it is playing for more than it put up.
+        """
+        setup_rabbit(self.fs, num_segments=3, accumulate=False)
+        self._play({7: 'Ann'})
+        self.assertEqual(self._summary(True)['money']['max_liability'],
+                         self._summary(False)['money']['max_liability'])
+
+    def test_a_LIVE_rabbit_shows_what_is_actually_riding_on_it(self):
+        """The card has to say what is at stake on the hole in front of you,
+        which is the leg's own stake plus whatever rolled in."""
+        setup_rabbit(self.fs, num_segments=3, accumulate=False)
+        for hole in range(1, 9):          # R1 halved, R2 under way
+            submit_hole(self.fs, hole, [
+                (self.pid[n], 4) for n in ('Ann', 'Ben', 'Cal')])
+        calculate_rabbit(self.fs)
+        legs = self._legs(self._summary(True))
+        self.assertEqual(legs[1][:2], (10.0, 5.0))
+        # ...and it rides on THAT leg only, not on every unplayed one after.
+        self.assertEqual(legs[2][:2], (5.0, 0.0))
+
+    def test_carried_in_is_zero_everywhere_without_carry(self):
+        setup_rabbit(self.fs, num_segments=3, accumulate=False)
+        self._play({13: 'Ann'})
+        for value, carried, _ in self._legs(self._summary(False)):
+            self.assertEqual(carried, 0.0)
+            self.assertEqual(value, 5.0)
+
+    def test_the_chip_appears_only_when_it_is_on(self):
+        setup_rabbit(self.fs, num_segments=3, carry=True)
+        self.assertIn('Carry', rabbit_summary(self.fs)['settings'])
+        setup_rabbit(self.fs, num_segments=3, carry=False)
+        self.assertNotIn('Carry', rabbit_summary(self.fs)['settings'])

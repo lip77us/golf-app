@@ -2329,6 +2329,10 @@ class RabbitSetupSerializer(serializers.Serializer):
                         choices=['per_segment', 'full_round'],
                         default='full_round')
     extra_rabbits = serializers.BooleanField(default=False)
+    #: A loose rabbit rolls its stake into the next. Off by default —
+    #: it changes what every later rabbit is worth, so an older client
+    #: that does not send it keeps playing the game it was playing.
+    carry         = serializers.BooleanField(default=False)
 
 
 class SequoyaThreesSetupSerializer(serializers.Serializer):

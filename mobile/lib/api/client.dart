@@ -2464,6 +2464,7 @@ class ApiClient {
     int    numSegments  = 1,
     String handicapAllocation = 'full_round',
     bool   extraRabbits = false,
+    bool   carry = false,
   }) async {
     final data = await _post('/foursomes/$foursomeId/rabbit/setup/', {
       'handicap_mode': handicapMode,
@@ -2472,6 +2473,7 @@ class ApiClient {
       'num_segments' : numSegments,
       'handicap_allocation': handicapAllocation,
       'extra_rabbits': extraRabbits,
+      'carry'        : carry,
     });
     return RabbitSummary.fromJson(data as Map<String, dynamic>);
   }

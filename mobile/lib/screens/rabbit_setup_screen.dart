@@ -64,6 +64,10 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
   // Extra rabbits (accumulate only): leftover holes from an early-decided leg
   // start a fresh rabbit; a single-hole rabbit pays half the stake.
   bool _extraRabbits = false;
+  /// A loose rabbit rolls its stake into the next. **Off by
+  /// default** (Paul, 28 Oct 2026): it changes what every later
+  /// rabbit is worth, so it is a thing a group opts into.
+  bool _carry = false;
 
   final TextEditingController _betCtrl = TextEditingController();
   /// True once a stake is entered or "no stakes" is chosen (gates Start).
@@ -124,6 +128,7 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
           _segments     = _summary!.numSegments;
           _allocation   = _summary!.handicapAllocation;
           _extraRabbits = _summary!.extraRabbits;
+          _carry = _summary!.carry;
         }
         // Keep the segment count valid for this round's hole count (a 9-hole
         // round can't split into 2 even matches; fall back to 3 → three 3-hole
@@ -193,6 +198,7 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
         numSegments:  _segments,
         handicapAllocation: _allocation,
         extraRabbits: _extraRabbits && _accumulate,
+        carry: _carry,
       );
       rp.setRabbitSummary(summary);
 
@@ -385,6 +391,25 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
             ),
             const SizedBox(height: 16),
           ],
+
+          // ── Carry ──
+          _Card(
+            title: 'Carry',
+            child: SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _carry,
+              onChanged: (v) => setState(() => _carry = v),
+              title: const Text('A loose rabbit carries into the next'),
+              subtitle: const Text(
+                  'Nobody holds a rabbit at the end of its holes, so its stake '
+                  'rolls into the next one — whoever wins that takes both. '
+                  'Carries build up across loose rabbits in a row. Without '
+                  'this, a loose rabbit simply pays nothing.\n\n'
+                  'The last rabbit has nothing to carry into, so if that one '
+                  'ends loose its stake is never won.'),
+            ),
+          ),
+          const SizedBox(height: 16),
 
           StakeField(
             controller: _betCtrl,

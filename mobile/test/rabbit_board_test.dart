@@ -13,11 +13,12 @@ import 'package:golf_mobile/widgets/rabbit_board.dart';
 Map<String, dynamic> _seg(int i, int a, int b, {
   int? holder, String? short, int lead = 0, bool complete = true,
   int? decidedOn, double value = 5, double payout = 0, bool extra = false,
+  double carriedIn = 0,
 }) => {
       'index': i, 'is_extra': extra, 'start_hole': a, 'end_hole': b,
       'holes': b - a + 1, 'holder_id': holder, 'holder_short': short,
       'lead': lead, 'complete': complete, 'decided_on': decidedOn,
-      'value': value, 'payout': payout,
+      'value': value, 'carried_in': carriedIn, 'payout': payout,
     };
 
 Map<String, dynamic> _hole(int h, int seg, {
@@ -39,6 +40,7 @@ RabbitSummary _rabbit({
   required List<Map<String, dynamic>> holes,
   String status = 'in_progress',
   bool accumulate = true,
+  bool carry = false,
   List<Map<String, dynamic>>? players,
   int? currentHolder,
   int currentLead = 0,
@@ -50,6 +52,7 @@ RabbitSummary _rabbit({
       'accumulate': accumulate,
       'num_segments': 3,
       'extra_rabbits': false,
+      'carry': carry,
       'segments': segments,
       'players': players ?? [
         {'player_id': 1, 'name': 'Paul Lipkin', 'short_name': 'Paul',
@@ -235,6 +238,85 @@ void main() {
       for (final banned in ['payout *', 'money =', '..sort(']) {
         expect(src.contains(banned), isFalse, reason: banned);
       }
+    });
+  });
+
+  group('carry', () {
+    // A loose rabbit rolls its stake into the next. Off by default — it
+    // changes what every later rabbit is worth (Paul, 28 Oct 2026).
+    testWidgets('a live rabbit says what rolled into it', (t) async {
+      await _pump(t, RabbitBoardData.fromSummary(_rabbit(
+        carry: true,
+        segments: [
+          _seg(1, 1, 6, payout: 0),
+          _seg(2, 7, 12, holder: 1, short: 'Paul', lead: 1,
+              complete: false, value: 10, carriedIn: 5),
+          _seg(3, 13, 18, complete: false),
+        ],
+        holes: [
+          for (var h = 1; h <= 8; h++) _hole(h, h <= 6 ? 1 : 2, holder: 1),
+          for (var h = 9; h <= 18; h++)
+            _hole(h, h <= 12 ? 2 : 3, played: false),
+        ],
+        currentHolder: 1, currentLead: 1,
+      )));
+      expect(find.textContaining('\$10 riding'), findsOneWidget);
+      expect(find.textContaining('\$5 carried'), findsOneWidget);
+    });
+
+    testWidgets('a loose rabbit that CARRIED says so, not "no winner"',
+        (t) async {
+      await _pump(t, RabbitBoardData.fromSummary(_rabbit(
+        status: 'complete',
+        carry: true,
+        segments: [
+          _seg(1, 1, 6, payout: 0),
+          _seg(2, 7, 12, holder: 1, short: 'Paul', decidedOn: 12,
+              payout: 20, value: 10, carriedIn: 5),
+          _seg(3, 13, 18, holder: 2, short: 'Sam', decidedOn: 18, payout: 10),
+        ],
+        holes: [for (var h = 1; h <= 18; h++) _hole(h, 1, holder: 1)],
+      )));
+      expect(find.text('carried'), findsOneWidget);
+      expect(find.text('no winner'), findsNothing);
+    });
+
+    testWidgets('a loose LAST rabbit has nowhere to carry to', (t) async {
+      await _pump(t, RabbitBoardData.fromSummary(_rabbit(
+        status: 'complete',
+        carry: true,
+        segments: [
+          _seg(1, 1, 9, holder: 1, short: 'Paul', decidedOn: 9, payout: 10),
+          _seg(2, 10, 18, payout: 0),
+        ],
+        holes: [for (var h = 1; h <= 18; h++) _hole(h, 1, holder: 1)],
+      )));
+      expect(find.text('no winner'), findsOneWidget,
+          reason: 'that stake is never won by anybody');
+      expect(find.text('carried'), findsNothing);
+    });
+
+    testWidgets('without carry the card says nothing about it', (t) async {
+      await _pump(t, RabbitBoardData.fromSummary(_rabbit(
+        status: 'complete',
+        segments: [
+          _seg(1, 1, 9, payout: 0),
+          _seg(2, 10, 18, holder: 1, short: 'Paul', decidedOn: 18, payout: 10),
+        ],
+        holes: [for (var h = 1; h <= 18; h++) _hole(h, 1, holder: 1)],
+      )));
+      expect(find.text('no winner'), findsOneWidget);
+      expect(find.text('CARRY'), findsNothing);
+      expect(find.textContaining('carried'), findsNothing);
+    });
+
+    test('the setup screen offers it, and posts it', () {
+      final screen =
+          File('lib/screens/rabbit_setup_screen.dart').readAsStringSync();
+      expect(screen.contains('_carry'), isTrue);
+      expect(screen.contains('carry: _carry'), isTrue);
+      final client = File('lib/api/client.dart').readAsStringSync();
+      expect(client.contains("'carry'        : carry,"), isTrue);
     });
   });
 }

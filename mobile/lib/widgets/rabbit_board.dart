@@ -135,6 +135,7 @@ class _LiveLeg extends StatelessWidget {
         Text(
           [
             '\$${_plain(leg.value)} riding',
+            if (leg.carriedIn > 0) '\$${_plain(leg.carriedIn)} carried',
             if (leg.halfStake) 'half stake, one hole',
           ].join(' · '),
           style: const TextStyle(
@@ -180,6 +181,11 @@ class _RoundOver extends StatelessWidget {
         ]),
       );
 
+  /// The last rabbit has nothing to carry into, so a loose one there is
+  /// money nobody wins — `no winner` even with carry on.
+  bool _isLast(RabbitBoardLeg leg) =>
+      data.rabbits.isNotEmpty && data.rabbits.last.index == leg.index;
+
   Widget _legRow(RabbitBoardLeg leg) {
     final colour = _colour(data, leg.holderId);
     return Padding(
@@ -224,7 +230,9 @@ class _RoundOver extends StatelessWidget {
         ),
         Text(
           leg.loose
-              ? 'no winner'
+              // Carried, not simply lost: the stake went to the next rabbit
+              // rather than nowhere, which is a different thing to be told.
+              ? (data.carry && !_isLast(leg) ? 'carried' : 'no winner')
               : leg.decidedOn != null
                   ? 'won on ${leg.decidedOn}'
                   : 'held to ${leg.endHole}',
@@ -272,7 +280,11 @@ class _ByHole extends StatelessWidget {
                   fontSize: 9.5, fontWeight: FontWeight.w700,
                   letterSpacing: .4, color: Halved.muted)),
           const Spacer(),
-          Text(data.accumulate ? 'ACCUMULATE' : 'STOP AFTER ONE',
+          Text(
+              [
+                data.accumulate ? 'ACCUMULATE' : 'STOP AFTER ONE',
+                if (data.carry) 'CARRY',
+              ].join(' · '),
               style: const TextStyle(
                   fontSize: 9.5, fontWeight: FontWeight.w700,
                   letterSpacing: .4, color: Halved.muted)),
@@ -302,7 +314,7 @@ class _ByHole extends StatelessWidget {
             Text(
               leg.complete
                   ? (leg.loose
-                      ? 'Loose'
+                      ? (data.carry ? 'Loose\ncarry' : 'Loose')
                       : '${leg.holderShort ?? ''}'
                         '${leg.decidedOn != null ? '\nwon ${leg.decidedOn}' : ''}')
                   : 'Live',

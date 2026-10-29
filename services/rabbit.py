@@ -60,6 +60,7 @@ def setup_rabbit(
     num_segments: int = 1,
     handicap_allocation: str = RabbitGame.ALLOC_FULL_ROUND,
     extra_rabbits: bool = False,
+    carry: bool = False,
 ) -> 'RabbitGame':
     """Create (or replace) the Rabbit game for a foursome.  Safe to call
     again — the prior game + its hole results are dropped first."""
@@ -83,6 +84,7 @@ def setup_rabbit(
         num_segments        = num_segments,
         handicap_allocation = allocation,
         extra_rabbits       = extras,
+        carry               = bool(carry),
         status              = MatchStatus.PENDING,
     )
 
@@ -603,12 +605,13 @@ def _phcp_in_play(mode, npct, phcp, low_phcp) -> int:
 def _settings_chips(game, holes_in_play: int) -> list:
     """The rules in force, in the server's words — see services/game_settings.
 
-    **`Carry` and `Rolls on` are NOT here**, and that is not an oversight:
-    the design packet lists both as setup options and neither exists.
-    `carry` appears nowhere in this module — a loose rabbit pays nothing and
-    carries nothing into the next — and rolling a rabbit forward when it is
-    decided early is unconditional rather than a switch. Drawing either chip
-    would be telling a group it had chosen something it never did.
+    **`Rolls on` is NOT here**, and that is not an oversight: the design
+    packet lists it as a setup option and it is not one — rolling a rabbit
+    forward when it is decided early is unconditional. A chip for it would
+    tell a group it had chosen something it never did.
+
+    `Carry` IS a switch now, and appears only when it is on: a group playing
+    without it has not chosen anything to report.
     """
     from services.game_settings import handicap_chip
 
@@ -626,6 +629,8 @@ def _settings_chips(game, holes_in_play: int) -> list:
             out.append(f'{n} \u00d7 {each}')
     if game.extra_rabbits:
         out.append('Extra rabbits')
+    if game.carry:
+        out.append('Carry')
     return out
 
 
@@ -642,6 +647,7 @@ def rabbit_summary(foursome) -> dict:
             'accumulate'   : True,
             'num_segments' : 1,
             'extra_rabbits': False,
+            'carry'        : False,
             'segments'     : [],
             'players'      : [],
             'holes'        : [],
@@ -774,13 +780,30 @@ def rabbit_summary(foursome) -> dict:
     money_by_pid = {pid: 0.0 for pid in real_ids}
     seg_out: list = []
     max_at_risk  = 0.0
+    # **Carry** (off by default): a rabbit that ends LOOSE rolls its stake
+    # into the next one, so the next holder wins that stake plus everything
+    # carried in. It is settlement only — who holds the rabbit and when it
+    # is decided are untouched, which is what keeps this change small.
+    #
+    # Three rules the loop has to get right:
+    #   * carries ACCUMULATE across consecutive loose rabbits;
+    #   * a carry rides on the LIVE rabbit too, so the card can say what is
+    #     actually at stake on the hole in front of you;
+    #   * it stops at the first incomplete leg — the money is on that leg,
+    #     not on every unplayed one after it.
+    #
+    # A loose LAST rabbit has nothing to carry into, so that stake is never
+    # won by anybody. That falls out rather than being special-cased.
+    carried = 0.0
     for s in segments:
         seg_holes = s['holes']
         holder_id = s['holder']
         lead      = s['lead']
         complete  = s['complete']
-        value     = s['value']
-        max_at_risk += value
+        base      = s['value']
+        value     = base + carried
+        # The leg's OWN stake, once. A carry moves money already counted.
+        max_at_risk += base
         payout = 0.0
         if complete and holder_id is not None:
             payout = value * (n - 1)            # holder's net gain this leg
@@ -788,6 +811,11 @@ def rabbit_summary(foursome) -> dict:
             for pid in real_ids:
                 if pid != holder_id:
                     money_by_pid[pid] -= value
+            carried = 0.0
+        elif complete:
+            carried = value if game.carry else 0.0
+        else:
+            carried = 0.0
         seg_out.append({
             'index'       : s['index'],
             'is_extra'    : s['is_extra'],
@@ -804,6 +832,9 @@ def rabbit_summary(foursome) -> dict:
             'lead'        : lead,
             'complete'    : complete,
             'value'       : value,
+            # What rolled in from loose rabbits before it — 0 without carry,
+            # and what the board's `$5 carried` line reads.
+            'carried_in'  : round(value - base, 2),
             'payout'      : payout,        # to the holder; others split −payout
         })
 
@@ -837,6 +868,7 @@ def rabbit_summary(foursome) -> dict:
         'accumulate'   : game.accumulate,
         'num_segments' : game.num_segments,
         'extra_rabbits': game.extra_rabbits,
+        'carry'        : game.carry,
         # Stated HERE rather than left to `game_settings.attach`, which reads
         # the keys the summaries SHARE. How a rabbit is caught and how the
         # round is split are Rabbit's own rules, and the board's settings
