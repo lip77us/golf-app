@@ -34,18 +34,15 @@ ScoreShape shapeForScore(int score, int par) {
 
 /// Colours for the notation.
 ///
-/// **The clay is a near-collision worth knowing about.** The packet gives
-/// `#FDF6EF` / `#8A4A1C`, and `Halved.cautionGround` / `Halved.caution` are
-/// `#FDF3E7` / `#8A5216` — within a few values. They are kept apart here
-/// because they MEAN different things: caution is the app's voice for a score
-/// that was capped or a setting that needs attention, and this is simply a
-/// bogey. If Design would rather they were one token, this is the place to
-/// collapse them — but it should be a decision, not a drift.
+/// The bogey ink is [Halved.clayInk], which carries the note about its
+/// near-collision with `Halved.caution`. It moved there when the Points board
+/// needed the same `#8A4A1C` for a total under target: two boards wearing one
+/// ink must not each hold their own copy of it.
 class _Clay {
   static const parFill    = Color(0xFFBFDCC6);
   static const bogeyFill  = Color(0xFFFDF6EF);
   static const bogeyLine  = Color(0xFFD9A27A);
-  static const bogeyText  = Color(0xFF8A4A1C);
+  static const bogeyText  = Halved.clayInk;
   static const doubleFill = Color(0xFFFAEBDD);
 }
 

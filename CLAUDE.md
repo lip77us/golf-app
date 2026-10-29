@@ -6349,6 +6349,120 @@ without failing the finder.
 Tests: `mobile/test/game_switcher_test.dart` (9), including that the
 leaderboard no longer contains a `TabBar(`.
 
+## The Points 5-3-1 board — and the settings strip that could not see four games
+
+`~/Downloads/handoff-points-leaderboard`, the fifth packet with the same
+scope line: *"one widget used by every Points 5-3-1 leaderboard. Do not draw
+a second Points board."* Three cards — the hole just played, where the points
+went, what everyone is owed.
+
+`widgets/points_board.dart` + `utils/points_board_model.dart`. It replaced
+the per-group table and the awards grid in `leaderboard_screen.dart` (223
+lines down to 48); `_Points531HoleGrid` SURVIVES because Three-Person Match
+draws it too, and that is not a second Points board.
+
+### The money is read, and a real round proves it has to be
+
+The packet's reference carries its own `money()` with three modes, and
+`(points − 3 × holes) × stake` for vs-Average. Ours settles through the
+shared wager engine, which also offers **pool** and an optional **loss cap**
+that clips the losers and rescales the winners pro-rata.
+
+Foursome 257 in the local database finished **58 · 57 · 47** over 18 holes
+against a target of 54, so the formula says `+$4 / +$3 / −$7`. The $6 cap
+settled it **`+$3.43 / +$2.57 / −$6.00`**. A board doing its own arithmetic
+would have shown three golfers a figure nobody was paid — which is the same
+`gross_to_par` lesson, in the one column where it costs money.
+
+### Target, not par — and three a hole over the holes IN PLAY
+
+"Target" replaces "par" everywhere on this board, which is the packet's rule
+and a real one: par is a number of strokes and this card counts points, so
+`+15` against par reads as fifteen shots. The reference hardcodes **54**;
+`par_per_hole × holes` gives 27 on a nine-holer and 21 to a group thru 7,
+from two facts the server already sends.
+
+### Hole number inside each nine, play order for the walk
+
+The grid draws Out and In by hole NUMBER — the skins board settled this one
+board ago, and Out only means anything counted that way. The NEXT hole comes
+from play order, so off a shotgun from the 18th it is the 1st.
+
+**A nine draws once one of its holes is played, and the nine holding the next
+hole always draws.** The reference hides the back nine until hole 10, which
+assumes a round starting at the 1st; from the 10th tee the back nine is the
+one being played and the FRONT is the one that has not started.
+
+**The nine subtotal is a running total**, deliberately against this app's own
+em-dash rule (`utils/nine_totals.dart`). That rule exists because a partial
+OUT of strokes reads as a finished one. Points ACCUMULATE, so a partial
+subtotal is a real number rather than a misleading one, the dashed cells
+beside it say the nine is unfinished, and the packet's worked example depends
+on it.
+
+**A tie is read off equal NET, never equal points.** A `4` can be a share of
+low (5 and 3 split) or a share of second (3 and 1), so reading the points
+back would call an outright second a tie.
+
+`Halved.golferTints` holds the three second-place tints, declared rather than
+blended: `#B7D9CB` is 70% of the way from teamPine to white on red, 74% on
+green and 69% on blue, so no single ratio reproduces the set. Only three are
+designed, because the only game that uses them is three-handed. And
+`Halved.clayInk` (`#8A4A1C`) came out of `forty_balls_keypad`'s private
+`_Clay`, since a second board now wears the same ink.
+
+### The settings strip could not see four games
+
+`settings_chips` reads `payout_style`, `per_point_mode` and `loss_cap` at the
+TOP level of a summary — and **Points 5-3-1, Skins, Spots and Honors all nest
+them under `money`**. Only Stableford puts them flat. So the strip shipped
+yesterday naming "the rules a golfer forgets he agreed to" found the
+settlement chip for one game in five, and foursome 257's **$6 loss cap was
+named nowhere in the app**.
+
+`_pick(summary, key)` falls back to the `money` block, top level winning
+because a game that states a key outright means it. Points now reads
+`Strokes off · Against the average · Loses at most $6`, and Skins gained its
+`Pool`.
+
+**That is also what retires the old card's header and footer without losing
+anything**: `Points 5-3-1 — SO · Per point` and `Bet unit $1 · Par is 3 pts /
+hole · Loss cap $6/player` are now the strip, the ledger's `$1 a point` and
+its `Target N pts`. Same collision Sequoya's `_pressLabel` had.
+
+### Two things only the device showed
+
+- **`Flexible` defaults to `flex: 1`**, so the ledger header's label and its
+  stake SPLIT the row and the stake sat in the middle. Nothing overflows, so
+  no test saw it. The measurement that pins it had to be taken at **900pt**:
+  at phone width the test font is wide enough to fill the split half, which
+  puts the box's right edge in the same place either way — the first version
+  of that test passed against the bug, and was only trusted after being made
+  to fail.
+- **`TYLaw Law`.** The muted surname exists to tell two Pauls apart; a short
+  name that already ends in it gets none.
+
+### `flutter build ios --simulator` fails and exits 0
+
+The `build-ipa.sh` note about the generated `Package.swift` applies to the
+SIMULATOR build too, and nothing there edits it — so the build prints
+*"Encountered error while building for simulator"*, **exits 0**, and leaves
+whatever was in `build/ios/iphonesimulator/` alone. I installed and drove a
+four-month-old app for twenty minutes before checking a timestamp. Before
+trusting a simulator build:
+
+```bash
+cd mobile && flutter pub get && sed -i '' 's/\.iOS("13\.[0-9]*")/.iOS("15.0")/' \
+  ios/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage/Package.swift
+```
+
+then build, and check `ls -la build/ios/iphonesimulator/Runner.app/Frameworks/
+App.framework/flutter_assets/kernel_blob.bin` is from this minute.
+
+Tests: `mobile/test/points_board_model_test.dart` (16),
+`mobile/test/points_board_test.dart` (18) and
+`TheMoneyBlockIsReadTests` in `scoring/tests/test_game_settings.py` (6).
+
 ## Claremont's two balls, and the settings strip on every board
 
 Two things reported on 28 Oct 2026, from one Nassau round.

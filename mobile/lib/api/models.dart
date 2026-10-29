@@ -2644,12 +2644,15 @@ class Points531HoleEntry {
 /// One hole in the points grid — [entries] are sorted winner-first.
 class Points531Hole {
   final int hole;
+  /// The hole's par. Null on a round with no tee assigned yet.
+  final int? par;
   final List<Points531HoleEntry> entries;
 
-  const Points531Hole({required this.hole, required this.entries});
+  const Points531Hole({required this.hole, this.par, required this.entries});
 
   factory Points531Hole.fromJson(Map<String, dynamic> j) => Points531Hole(
         hole: j['hole'] as int? ?? 0,
+        par: (j['par'] as num?)?.toInt(),
         entries: (j['entries'] as List? ?? [])
             .map((e) => Points531HoleEntry.fromJson(e as Map<String, dynamic>))
             .toList(),
@@ -2830,6 +2833,13 @@ class Points531Summary {
   final List<Map<String, dynamic>> scorecardPlayers;
   final List<int> scorecardHolesInPlay;
 
+  /// Every hole this round plays, in PLAY order. `[1..18]` for an ordinary
+  /// round, `[7..18, 1..6]` off a shotgun, nine entries on a nine-holer.
+  final List<int> holesInPlay;
+
+  /// The last hole PLAYED, in play order — 0 before the round starts.
+  final int currentHole;
+
   const Points531Summary({
     required this.status,
     required this.handicapMode,
@@ -2844,6 +2854,8 @@ class Points531Summary {
     this.scorecardHoles = const [],
     this.scorecardPlayers = const [],
     this.scorecardHolesInPlay = const [],
+    this.holesInPlay = const [],
+    this.currentHole = 0,
   });
 
   bool get isNet        => handicapMode == 'net';
@@ -2881,6 +2893,10 @@ class Points531Summary {
           (((j['scorecard'] as Map?)?['holes_in_play']) as List? ?? const [])
               .map((e) => (e as num).toInt())
               .toList(),
+      holesInPlay: (j['holes_in_play'] as List? ?? const [])
+          .map((e) => (e as num).toInt())
+          .toList(),
+      currentHole: (j['current_hole'] as num?)?.toInt() ?? 0,
     );
   }
 }

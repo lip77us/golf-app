@@ -107,6 +107,26 @@ def _handicap_chip(s: dict) -> str | None:
     return handicap_chip(mode, pct)
 
 
+def _pick(summary: dict, key: str):
+    """A value from the summary, falling back to its ``money`` block.
+
+    **Four of the five games that HAVE a settlement mode nest it.**
+    ``payout_style``, ``per_point_mode`` and ``loss_cap`` sit under ``money``
+    in Points 5-3-1, Skins, Spots and Honors, and at the top level only in
+    Stableford — so reading the top level alone found the chip for one game
+    out of five and silently said nothing for the rest. A real Points round in
+    the local database carried a **$6 loss cap** that no surface named.
+
+    Top level wins, because a game that states a key outright means it.
+    """
+    if key in summary:
+        return summary.get(key)
+    money = summary.get('money')
+    if isinstance(money, dict):
+        return money.get(key)
+    return None
+
+
 def _money(v) -> str:
     try:
         f = float(v)
@@ -133,22 +153,22 @@ def settings_chips(summary: dict) -> list[str]:
         if chip:
             out.append(chip)
 
-    carry = summary.get('carryover')
+    carry = _pick(summary, 'carryover')
     if isinstance(carry, bool):
         out.append('Carries on' if carry else 'No carry')
 
     # `payout_style` and `per_point_mode` are two halves of one answer: the
     # style says pool or per-point and the mode says WHICH per-point. Naming
     # `per_point` itself would tell a golfer nothing the mode does not.
-    style = summary.get('payout_style')
+    style = _pick(summary, 'payout_style')
     if style == 'per_point':
-        chip = _PAYOUT.get(summary.get('per_point_mode'))
+        chip = _PAYOUT.get(_pick(summary, 'per_point_mode'))
     else:
         chip = _PAYOUT.get(style)
     if chip:
         out.append(chip)
 
-    cap = summary.get('loss_cap')
+    cap = _pick(summary, 'loss_cap')
     if cap not in (None, '', 0, 0.0):
         money = _money(cap)
         if money:

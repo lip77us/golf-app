@@ -108,6 +108,53 @@ class ChipsTests(SimpleTestCase):
         self.assertEqual(settings_chips('nonsense'), [])
 
 
+class TheMoneyBlockIsReadTests(SimpleTestCase):
+    """Four of the five games with a settlement mode nest it under `money`.
+
+    The first version read the top level only, so Points 5-3-1, Skins, Spots
+    and Honors said nothing about how they settle — and a real Points round
+    in the local database carried a **$6 loss cap** that no surface named.
+    """
+
+    def test_a_nested_settlement_mode_is_named(self):
+        self.assertEqual(
+            settings_chips({
+                'handicap': {'mode': 'strokes_off', 'net_percent': 100},
+                'money': {'bet_unit': 1.0, 'payout_style': 'per_point',
+                          'per_point_mode': 'average'},
+            }),
+            ['Strokes off', 'Against the average'])
+
+    def test_a_nested_loss_cap_is_named(self):
+        """Foursome 257's own shape."""
+        self.assertIn(
+            'Loses at most $6',
+            settings_chips({
+                'handicap': {'mode': 'strokes_off', 'net_percent': 100},
+                'money': {'payout_style': 'per_point',
+                          'per_point_mode': 'average', 'loss_cap': 6.0},
+            }))
+
+    def test_a_nested_pool_is_named(self):
+        self.assertIn('Pool',
+                      settings_chips({'money': {'payout_style': 'pool'}}))
+
+    def test_a_nested_carryover_is_named(self):
+        self.assertIn('Carries on',
+                      settings_chips({'money': {'carryover': True}}))
+
+    def test_the_top_level_wins(self):
+        """A game that states a key outright means it."""
+        self.assertIn(
+            'Pool',
+            settings_chips({'payout_style': 'pool',
+                            'money': {'payout_style': 'per_point',
+                                      'per_point_mode': 'first'}}))
+
+    def test_a_money_block_that_is_not_a_dict_is_ignored(self):
+        self.assertEqual(settings_chips({'money': 12}), [])
+
+
 class AttachTests(SimpleTestCase):
     def test_a_flat_block_gets_its_chips(self):
         games = {'skins': {'label': 'Skins', 'carryover': True,

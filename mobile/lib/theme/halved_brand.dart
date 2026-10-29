@@ -93,6 +93,38 @@ class Halved {
   static Color golfer(int index) =>
       golferColours[index.abs() % golferColours.length];
 
+  /// The same golfer, a shade down — for a cell that is HIS but is not his
+  /// best (Points 5-3-1's second place, three against five).
+  ///
+  /// **Hand-picked, not blended**, and that is why they are declared rather
+  /// than computed: `#B7D9CB` is 70% of the way from teamPine to white on
+  /// red, 74% on green and 69% on blue, so no single ratio reproduces the
+  /// set and a blend would quietly be a different palette.
+  ///
+  /// Only the first three are designed, because the only game that uses
+  /// them is three-handed. Past that it falls back to a 70% blend — close,
+  /// honest about being a fallback, and a board that large should be
+  /// identifying golfers by name anyway (see [golferColours]).
+  static const List<Color> golferTints = [
+    Color(0xFFB7D9CB), Color(0xFFEFCDB0), Color(0xFFC6CDD8),
+  ];
+
+  static Color golferTint(int index) {
+    final i = index.abs() % golferColours.length;
+    if (i < golferTints.length) return golferTints[i];
+    return Color.lerp(golferColours[i], Colors.white, 0.70)!;
+  }
+
+  /// The ink a figure wears when it is on the wrong side of a baseline —
+  /// a bogey in the 40 Balls notation, a Points total under target.
+  ///
+  /// **A near-collision worth knowing about:** [caution] is `#8A5216`,
+  /// within a few values. They are kept apart because they MEAN different
+  /// things — caution is the app's voice for a setting that needs attention,
+  /// and this is simply a number that is behind. If Design would rather they
+  /// were one token, this is the place to collapse them.
+  static const clayInk = Color(0xFF8A4A1C);
+
   // ── Radius ────────────────────────────────────────────────────────────────
   static const double rCta  = 16; // CTA buttons
   static const double rCard = 18; // cards

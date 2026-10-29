@@ -46,6 +46,8 @@ import '../widgets/stroke_play_board.dart';
 import '../widgets/rabbit_board.dart';
 import '../utils/rabbit_board_model.dart';
 import '../utils/stroke_play_board_model.dart';
+import '../widgets/points_board.dart';
+import '../utils/points_board_model.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   final int roundId;
@@ -3646,225 +3648,51 @@ class _Points531GroupCard extends StatelessWidget {
   final Map<String, dynamic> group;
   const _Points531GroupCard({required this.group});
 
-  /// Friendly handicap tag for the card header: "Net (90%)", "Gross", "SO".
-  static String _hcapLabel(Map<String, dynamic> hcap) {
-    final mode = hcap['mode']?.toString() ?? 'net';
-    if (mode == 'gross') return 'Gross';
-    if (mode == 'strokes_off') return 'SO';
-    final pct = (hcap['net_percent'] as num?)?.toInt() ?? 100;
-    return pct == 100 ? 'Net' : 'Net ($pct%)';
-  }
-
-  /// Compact settlement-mode tag for the card header.
-  static String _modeLabel(Map<String, dynamic> money) {
-    if (money['payout_style']?.toString() == 'pool') return 'Pool';
-    return switch (money['per_point_mode']?.toString()) {
-      'first' => 'Pay leader',
-      'all'   => 'Pay above',
-      _       => 'Per point',
-    };
-  }
-
   @override
   Widget build(BuildContext context) {
-    final theme    = Theme.of(context);
-    final summary  = group['summary'] as Map<String, dynamic>? ?? {};
-    final hcap     = summary['handicap'] as Map<String, dynamic>? ?? const {};
-    final status   = summary['status']?.toString() ?? 'pending';
-    final players  = (summary['players'] as List? ?? const []);
-    final holes    = (summary['holes']   as List? ?? const []);
-    // The standard card's payload, which the server sends beside the game's
-    // own awards grid.
-    final scorecard = summary['scorecard'] as Map<String, dynamic>? ?? const {};
-    final scHoles = (scorecard['holes'] as List? ?? const [])
-        .map((h) => Map<String, dynamic>.from(h as Map))
-        .toList();
-    final scPlayers = (scorecard['players'] as List? ?? const [])
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-    final scHolesInPlay = (scorecard['holes_in_play'] as List? ?? const [])
-        .map((e) => (e as num).toInt())
-        .toList();
-    final money    = summary['money']    as Map<String, dynamic>? ?? const {};
-    final betUnit  = (money['bet_unit']  as num?)?.toDouble() ?? 0.0;
-    final parPH    = (money['par_per_hole'] as num?)?.toInt() ?? 3;
-    final lossCap  = (money['loss_cap']  as num?)?.toDouble();
-
-    // In a single-foursome round the "Group N" header is pointless.
-    final singleGroup = group['_single_group'] == true;
-
-    // Short pretty label for the status line — mirrors the ones used
-    // by other cards so the leaderboard stays visually consistent.
-    String statusLabel;
-    switch (status) {
-      case 'complete':    statusLabel = 'Final';       break;
-      case 'in_progress': statusLabel = 'In progress'; break;
-      default:            statusLabel = 'Pending';     break;
+    final raw = group['summary'] as Map<String, dynamic>?;
+    if (raw == null) {
+      return const Card(child: Padding(
+        padding: EdgeInsets.all(12),
+        child: Text('Points 5-3-1 not yet set up for this group.')));
+    }
+    final s = Points531Summary.fromJson(raw);
+    if (s.players.isEmpty) {
+      return const Card(child: Padding(
+        padding: EdgeInsets.all(12),
+        child: Text('Points 5-3-1 not yet set up for this group.')));
     }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          if (!singleGroup) ...[
-            Text('Group ${group['group_number']}',
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            const Divider(height: 12),
-          ],
-
-          // Header: mode + status tag
-          Row(children: [
-            Expanded(
-              child: Text(
-                'Points 5-3-1 — ${_hcapLabel(hcap)} · ${_modeLabel(money)}',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(statusLabel,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant)),
-            ),
-          ]),
-
-          const SizedBox(height: 10),
-
-          // Player totals — always visible, even before any hole is
-          // scored, so the card has presence from the start of the round.
-          if (players.isEmpty)
-            Text('No players yet.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant))
-          else
-            ...players.map((p) {
-              final r     = p as Map<String, dynamic>;
-              final name  = r['name']?.toString() ?? '';
-              final pts   = (r['points'] as num?)?.toDouble() ?? 0.0;
-              final hp    = (r['holes_played'] as num?)?.toInt() ?? 0;
-              final money = (r['money'] as num?)?.toDouble() ?? 0.0;
-              final delta = pts - parPH * hp;
-              final deltaSign  = delta > 0 ? '+' : (delta < 0 ? '\u2212' : '');
-              final deltaColor = delta > 0
-                  ? Colors.green.shade700
-                  : delta < 0
-                      ? Colors.red.shade700
-                      : theme.colorScheme.onSurfaceVariant;
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(children: [
-                  Expanded(
-                      child: Text(name,
-                          style: const TextStyle(fontWeight: FontWeight.w600))),
-                  // Points total (with "vs par" delta next to it so the
-                  // user can see at a glance who's up and who's down).
-                  Text('${_fmtPoints(pts)} pts',
-                      style: theme.textTheme.bodyMedium),
-                  const SizedBox(width: 8),
-                  Text(
-                    '($deltaSign${_fmtPoints(delta.abs())})',
-                    style: TextStyle(
-                        color: deltaColor, fontWeight: FontWeight.w600,
-                        fontSize: 12),
-                  ),
-                  if (betUnit > 0) ...[
-                    const SizedBox(width: 10),
-                    SizedBox(
-                      width: 72,
-                      child: Text(
-                        _fmtMoney(money),
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          color: money > 0
-                              ? Colors.green.shade700
-                              : money < 0
-                                  ? Colors.red.shade700
-                                  : theme.colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ]),
-              );
-            }),
-
-          // Per-hole awards grid — compact, expandable. Collapsed by default
-          // so the card matches the size of the Sixes card at a glance. It
-          // stays beside the scorecard below: this one is the game (who took
-          // five and who took one), that one is the round.
-          if (holes.isNotEmpty) ...[
-            const Divider(height: 20),
-            _Points531HoleGrid(
-              holes:   holes,
-              players: players,
-              holesInPlay: (summary['holes_in_play'] as List? ?? const [])
-                  .map((e) => e as int)
-                  .toList(),
-              currentHole: summary['current_hole'] as int? ?? 0,
-            ),
-          ],
-
-          if (betUnit > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                'Bet unit \$${betUnit.formatBet()}  '
-                '\u2022  Par is $parPH pts / hole.'
-                '${lossCap != null ? '  \u2022  Loss cap \$${lossCap.formatBet()}/player.' : ''}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant),
-              ),
-            ),
-
-          // **The card, at the bottom — gross only.** Points 5-3-1 had no
-          // scorecard at all: the only per-hole view was its own awards grid,
-          // so a net or strokes-off golfer could not see where his strokes
-          // fell or what anybody actually shot.
-          //
-          // **No `showPoints` here**, unlike score entry. The awards grid
-          // above is already this card's points table, and the block would be
-          // the same numbers in the same order a few rows down. Score entry
-          // has no awards grid of its own, which is why the block is the only
-          // place the points appear there.
-          if (scHoles.isNotEmpty) ...[
-            const Divider(height: 20),
-            HoleGridScorecard(
-              holes:        scHoles,
-              participants: scPlayers,
+    final single = group['_single_group'] == true;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (!single)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+          child: Text('Group ${group['group_number']}',
+              style: const TextStyle(fontWeight: FontWeight.bold)),
+        ),
+      PointsBoard(data: PointsBoardData.fromSummary(s)),
+      // The standard card, under the board. The board's own grid is POINTS;
+      // this is what everybody actually shot, which is the other half a net
+      // or strokes-off golfer needs and the only place the stroke dots are.
+      if (s.scorecardHoles.isNotEmpty) ...[
+        const SizedBox(height: 10),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: HoleGridScorecard(
+              holes:        s.scorecardHoles,
+              participants: s.scorecardPlayers,
               legend:       null,
-              holesInPlay:  scHolesInPlay,
+              holesInPlay:  s.scorecardHolesInPlay,
             ),
-          ],
-        ]),
-      ),
-    );
-  }
-
-  /// Drop trailing ".0" from whole numbers while keeping ".5" on half-points
-  /// (the only possible fraction with 5/3/1 tie-splits: 4.5, 3.5, 1.5, 2.5
-  /// can't occur but (5+3)/2=4, (3+1)/2=2, (5+3+1)/3=3 are all whole;
-  /// the pair average rule makes .5 impossible with these numerators).
-  /// Keeping this helper anyway so a future rule change (e.g. 4/2/1)
-  /// wouldn't need a UI patch.
-  static String _fmtPoints(double v) {
-    if ((v * 2).roundToDouble() == v * 2 && v == v.roundToDouble()) {
-      return v.toStringAsFixed(0);
-    }
-    return v.toStringAsFixed(1);
-  }
-
-  /// Format money as "+$3.00" / "−$1.50" / "—".
-  static String _fmtMoney(double v) {
-    if (v == 0) return '—';
-    final sign = v > 0 ? '+' : '\u2212';
-    return '$sign\$${v.abs().formatBet()}';
+          ),
+        ),
+      ],
+    ]);
   }
 }
+
 
 /// Leaderboard card for a Wolf foursome.  Shows the standings (points +
 /// money, zero-based so the table nets to zero) with each player's holes
