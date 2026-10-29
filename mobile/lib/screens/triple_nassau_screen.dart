@@ -239,10 +239,10 @@ class _TripleNassauScreenState extends State<TripleNassauScreen> {
   Future<void> _finishRound(BuildContext ctx, List<Membership> players) async {
     final rp = context.read<RoundProvider>();
     final sc = rp.scorecard;
-    int unscored = 0;
+    final unscored = <int>[];
     if (sc != null) {
       for (final h in _playOrder(rp)) {
-        if (_effectiveScores(sc, h).isEmpty) unscored++;
+        if (_effectiveScores(sc, h).isEmpty) unscored.add(h);
       }
     }
     if (!await confirmCompleteRound(ctx, unscoredHoles: unscored)) return;

@@ -12,6 +12,7 @@ import '../widgets/error_view.dart';
 import '../widgets/game_chip.dart';
 import '../widgets/round_chat_button.dart';
 import '../utils/match_handicap.dart';
+import '../utils/round_complete.dart';
 import '../utils/primary_handicap.dart';
 import '../utils/skins_pool_link.dart';
 
@@ -157,7 +158,8 @@ class _RoundScreenState extends State<RoundScreen> {
                       roundId: round.id,
                       submitting: rp.submitting,
                       allScored: round.allHolesScored,
-                      holesRemaining: round.holesRemaining,
+                      unscoredHoles: round.holesUnscored,
+                      awaitingHoles: round.holesAwaiting,
                     ))
               : isComplete
                   ? FilledButton.icon(
@@ -980,49 +982,37 @@ class _CompleteRoundButton extends StatelessWidget {
   /// True when every expected hole has a score — drives prominence + the
   /// "not all holes scored" warning in the confirm dialog.
   final bool allScored;
-  /// Count of expected-but-unscored holes (for the warning copy).
-  final int holesRemaining;
+  /// Holes with no score at all — named in the warning, not counted, so a
+  /// golfer can check it rather than take it on trust.
+  final List<int> unscoredHoles;
+  /// Holes waiting on one golfer. The server completes a round on hole
+  /// coverage, so these block nothing — but the group wants to know before
+  /// locking, and score entry has always warned about them. The hub did
+  /// not, which is how the two screens came to give opposite answers about
+  /// one round.
+  final List<int> awaitingHoles;
 
   const _CompleteRoundButton({
     required this.roundId,
     required this.submitting,
     this.allScored = true,
-    this.holesRemaining = 0,
+    this.unscoredHoles = const [],
+    this.awaitingHoles = const [],
   });
 
   Future<void> _confirm(BuildContext context) async {
-    final theme = Theme.of(context);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(allScored ? 'Complete Round?' : 'Finish early?'),
-        content: Text(
-          allScored
-              ? 'This will mark the round as finished and lock all scores. '
-                'You can still view the final results afterwards.'
-              : '${holesRemaining > 0 ? (holesRemaining == 1 ? '1 hole still has no score. ' : '$holesRemaining holes still have no score. ') : ''}'
-                'Completing now will lock the round with any blank holes left '
-                'blank. You can still view the results afterwards.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: allScored
-                ? null
-                : FilledButton.styleFrom(
-                    backgroundColor: theme.colorScheme.error,
-                    foregroundColor: theme.colorScheme.onError,
-                  ),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(allScored ? 'Complete Round' : 'Complete Anyway'),
-          ),
-        ],
-      ),
+    // **The SHARED dialog**, not a second copy of it. The hub had its own,
+    // which is how one round came to be described two ways: score entry
+    // warned about holes missing a golfer and the hub said nothing, because
+    // it read the server's hole-COVERAGE flag and that flag is deliberately
+    // lenient (an alt-shot hole only ever has one partner posting).
+    //
+    final ok = await confirmCompleteRound(
+      context,
+      unscoredHoles: unscoredHoles,
+      awaitingHoles: awaitingHoles,
     );
-    if (ok != true || !context.mounted) return;
+    if (!ok || !context.mounted) return;
 
     final rp = context.read<RoundProvider>();
     final lb = await rp.completeRound(roundId);

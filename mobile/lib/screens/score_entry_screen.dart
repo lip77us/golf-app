@@ -1181,15 +1181,27 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     return false;
   }
 
-  /// Number of holes (1–18) not yet fully scored — used by the soft-gate
-  /// "Finish early?" warning when completing before the 18th.
-  int _unscoredHoleCount(Scorecard sc, List<Membership> players) {
+  /// The two kinds of gap, kept APART — holes nobody has played, and holes
+  /// waiting on one golfer.
+  ///
+  /// They used to be one count, and the dialog called both "no score".
+  /// Reported from the course (26 Oct 2026): a Sixes round warned `1 hole
+  /// still has no score` about a hole with three of four. That is how a
+  /// golfer learns to disbelieve the warning, and he did — he completed
+  /// anyway, which was the right call and should not have needed guessing.
+  ({List<int> blank, List<int> awaiting}) _holeGaps(
+      Scorecard sc, List<Membership> players) {
     final rp = context.read<RoundProvider>();
-    int n = 0;
+    final blank = <int>[], awaiting = <int>[];
     for (final h in _playOrderFor(rp)) {
-      if (!_allScored(players, _effectiveScores(sc, h), h)) n++;
+      final scores = _effectiveScores(sc, h);
+      if (_allScored(players, scores, h)) continue;
+      // Nobody at all, or somebody missing: the server completes a round on
+      // hole COVERAGE, so only the first kind actually blocks anything —
+      // but a group still wants to know about the second before locking.
+      (scores.isEmpty ? blank : awaiting).add(h);
     }
-    return n;
+    return (blank: blank, awaiting: awaiting);
   }
 
   /// True once any score has been entered (saved or pending) — gates the
@@ -1544,12 +1556,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // Soft gate: if holes are still blank (finishing early — e.g. a match
     // decided before the 18th), warn but allow.  0 unscored → normal copy.
     final sc = rp.scorecard;
-    final unscored = sc == null ? 0 : _unscoredHoleCount(sc, players);
+    final gaps = sc == null
+        ? (blank: <int>[], awaiting: <int>[])
+        : _holeGaps(sc, players);
 
     if (!await confirmCompleteRound(
       ctx,
       isMultiGroup: isMultiGroup,
-      unscoredHoles: unscored,
+      unscoredHoles: gaps.blank,
+      awaitingHoles: gaps.awaiting,
     )) return;
     if (!mounted) return;
 

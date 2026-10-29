@@ -780,6 +780,8 @@ class RoundSerializer(serializers.ModelSerializer):
     # can warn before finishing a round that still has unscored holes.
     all_holes_scored = serializers.SerializerMethodField()
     holes_remaining  = serializers.SerializerMethodField()
+    holes_awaiting   = serializers.SerializerMethodField()
+    holes_unscored   = serializers.SerializerMethodField()
     # True only for the round's TD/organizer (round is in the viewer's account
     # AND they're an admin). A cross-account designated scorer gets False, so the
     # app hides TD config (set scorer, configure games, move players, the
@@ -879,6 +881,94 @@ class RoundSerializer(serializers.ModelSerializer):
         from .views import RoundCompleteView
         return RoundCompleteView._all_foursomes_done(obj)
 
+    def get_holes_unscored(self, obj) -> list:
+        """The holes with NO score at all — `holes_remaining` as a LIST.
+
+        The count alone cannot be named in a dialog, and a warning a golfer
+        can check beats one he has to take on trust. Same arithmetic as
+        `get_holes_remaining`, which is kept because the shipped client
+        reads it.
+        """
+        from .views import RoundCompleteView
+        from games.models import TeamHoleScore
+        from scoring.models import HoleScore
+        config = getattr(
+            getattr(obj, 'tournament', None), 'team_play_config', None)
+        one_ball = config is not None and config.plays_one_ball
+        out = set()
+        for fs in obj.foursomes.all():
+            expected = RoundCompleteView._expected_holes(fs)
+            if one_ball:
+                scored = set(
+                    TeamHoleScore.objects
+                    .filter(foursome=fs, team=None, gross_score__isnull=False)
+                    .values_list('hole_number', flat=True))
+            else:
+                scored = set(
+                    HoleScore.objects
+                    .filter(foursome=fs, gross_score__isnull=False)
+                    .values_list('hole_number', flat=True))
+            out |= (expected - scored)
+        return sorted(out)
+
+    def get_holes_awaiting(self, obj) -> list:
+        """Holes where SOME golfer still has no score, but not nobody.
+
+        Reported from the course (round 489, 26 Oct 2026): a Sixes round that
+        was fully scored showed `Finish early? — 1 hole still has no score`.
+        Two rules were answering one question and they disagreed:
+
+        * `all_holes_scored` counts hole COVERAGE — a hole is done when
+          ANYBODY has a score on it. That leniency is deliberate and has to
+          stay: an alt-shot hole only ever has one partner posting, so a
+          per-golfer rule would make every Triple Cup foursomes round
+          permanently unfinishable.
+        * Score entry counts per GOLFER, so three of four reads as a hole
+          with no score at all — which is what the copy then said, about a
+          hole that plainly had three.
+
+        So this is the third answer, and the only one that is about the gap:
+        the holes a group is still waiting on somebody for. It gates NOTHING
+        — the round completes on coverage exactly as before — and it exists
+        so the hub can warn in the same cases score entry does, and so the
+        message can name the holes rather than be disbelieved.
+
+        Empty for a one-ball format, where one score IS the hole.
+        """
+        from .views import RoundCompleteView
+        from scoring.models import HoleScore
+        config = getattr(
+            getattr(obj, 'tournament', None), 'team_play_config', None)
+        if config is not None and config.plays_one_ball:
+            return []
+        out = set()
+        for fs in obj.foursomes.all():
+            expected = RoundCompleteView._expected_holes(fs)
+            active = [
+                m for m in fs.memberships.all()
+                if not m.player.is_phantom
+            ]
+            if not active:
+                continue
+            scored = {}
+            for h, pid in (HoleScore.objects
+                           .filter(foursome=fs, gross_score__isnull=False)
+                           .values_list('hole_number', 'player_id')):
+                scored.setdefault(h, set()).add(pid)
+            for h in expected:
+                got = scored.get(h, set())
+                if not got:
+                    continue          # nobody has played it — not a gap
+                for m in active:
+                    # A golfer who withdrew before this hole is not awaited.
+                    if (m.withdrew_after_hole is not None
+                            and h > m.withdrew_after_hole):
+                        continue
+                    if m.player_id not in got:
+                        out.add(h)
+                        break
+        return sorted(out)
+
     def get_holes_remaining(self, obj) -> int:
         """Total count of expected-but-unscored holes across all foursomes
         (0 when the round is fully scored).  Drives the Complete Round warning."""
@@ -948,6 +1038,7 @@ class RoundSerializer(serializers.ModelSerializer):
             'is_team_play_round', 'team_play',
             'ir_balls_config', 'can_manage',
             'is_casual', 'all_holes_scored', 'holes_remaining',
+            'holes_awaiting', 'holes_unscored',
             # Public spectator URL token — used by mobile's "Share Watch
             # Link" button to construct /watch/<token>/.
             'watch_token',

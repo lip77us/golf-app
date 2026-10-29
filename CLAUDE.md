@@ -6608,3 +6608,69 @@ also used by the Stableford championship board, which this packet says
 nothing about.
 
 Tests: `mobile/test/stroke_play_board_test.dart` (25).
+
+## "Not all holes were scored" on a round that was — two rules, one question
+
+Reported from the course, 26 Oct 2026: a Sixes round (production round
+489) finished, Complete Round warned *"1 hole still has no score"*, and
+Paul completed anyway. He was right to; the warning was wrong.
+
+**The data was never the problem.** All four golfers had all eighteen
+holes, written in hole order, no phantom, no withdrawal, full 18 in play.
+`all_holes_scored` and `holes_remaining` both report done. What was wrong
+is that **three different rules were answering one question and two of them
+disagreed**:
+
+| | asks |
+|---|---|
+| `RoundCompleteView._all_foursomes_done` (the endpoint gate, and the flag the HUB reads) | does this hole have a score from **anybody** |
+| `score_entry._unscoredHoleCount` | does **every** golfer have a score on it |
+
+So a hole with three of four reads as DONE to the hub and the server, and
+as *"no score"* to score entry — which then says so about a hole that
+plainly has three. Proven against production by deleting one golfer's hole
+7 inside a rolled-back transaction: `all_holes_scored` stayed **True** and
+`holes_remaining` stayed **0**.
+
+**The leniency stays, and that is the important half.** It is not an
+oversight: an alt-shot hole only ever has one partner posting, so a
+per-golfer GATE would make every Triple Cup foursomes round permanently
+unfinishable. `one_ball` covers the team formats; Triple Cup foursomes
+posts per-golfer `HoleScore`s with one partner dimmed, and only the client
+knows which.
+
+So the fix is a third answer that gates NOTHING:
+
+- **`holes_awaiting`** — holes where some golfer has no score but not
+  nobody. Withdrawn golfers are not awaited (he went home, he is not
+  missing a score); phantoms never are; empty on a one-ball format, where
+  one score IS the hole.
+- **`holes_unscored`** — `holes_remaining` as a LIST, because a count
+  cannot be named in a dialog and a warning a golfer can check beats one he
+  has to take on trust. `holes_remaining` is kept: the shipped client reads
+  it.
+
+**The hub now warns in the same cases score entry does**, which it never
+did — it read the lenient flag and said nothing. And it uses the SHARED
+`confirmCompleteRound` rather than the second copy of that dialog it had
+been carrying, which is how the two came to describe one round differently
+in the first place.
+
+The copy distinguishes them and names the holes: `Hole 18 has no score` /
+`Hole 7 is missing one golfer's score` / `2 holes have no score (17 and
+18), and Hole 7 is missing one golfer's score`. A hole in both lists is
+reported once, as blank. Lists over four holes are capped — a dialog
+naming eleven is one nobody reads.
+
+Five dedicated play screens (Wolf, Rabbit, Survivor, Sequoya 3s, Triple
+Nassau) already counted only truly-blank holes and now pass the hole
+NUMBERS instead of a count.
+
+**Still open, and a design question rather than a defect:** the gate is
+hole coverage, so a round CAN be completed with a golfer missing a hole —
+in Sixes that hole then scores on fewer balls than the format says. The
+warning now says so; whether it should block is Paul's call.
+
+Tests: `api/test_complete_warning.py` (7 — including that the gate is
+unchanged, that a withdrawal is not a gap, and that the two kinds are never
+the same hole) and `mobile/test/complete_round_warning_test.dart` (8).

@@ -1253,6 +1253,16 @@ class Round {
   final bool allHolesScored;
   /// Count of expected-but-unscored holes across all foursomes (0 = done).
   final int holesRemaining;
+  /// Holes where SOME golfer still has no score, but not nobody.
+  ///
+  /// The server completes a round on hole COVERAGE — any score on a hole
+  /// counts, because an alt-shot hole only ever has one partner posting. So
+  /// this gates nothing; it is what lets the hub warn in the same cases
+  /// score entry does, instead of the two screens disagreeing.
+  final List<int> holesAwaiting;
+  /// Holes with NO score at all — `holesRemaining` as a list, so a
+  /// dialog can name them.
+  final List<int> holesUnscored;
   /// How many holes this round plays (9 or 18). See docs/hole-flexibility.md.
   final int numHoles;
   /// The hole the round starts on (1 = normal). For a shotgun each foursome
@@ -1286,6 +1296,8 @@ class Round {
     this.isCasual       = false,
     this.allHolesScored = false,
     this.holesRemaining = 0,
+    this.holesAwaiting = const [],
+    this.holesUnscored = const [],
     this.numHoles     = 18,
     this.startingHole = 1,
   });
@@ -1320,6 +1332,14 @@ class Round {
         isCasual:       j['is_casual']        as bool? ?? false,
         allHolesScored: j['all_holes_scored'] as bool? ?? false,
         holesRemaining: j['holes_remaining']  as int?  ?? 0,
+        holesAwaiting: [
+          for (final h in (j['holes_awaiting'] as List? ?? const []))
+            if (h is int) h,
+        ],
+        holesUnscored: [
+          for (final h in (j['holes_unscored'] as List? ?? const []))
+            if (h is int) h,
+        ],
         numHoles:     j['num_holes']     as int? ?? 18,
         startingHole: j['starting_hole'] as int? ?? 1,
         irBallsConfig: (j['ir_balls_config'] as List? ?? [])

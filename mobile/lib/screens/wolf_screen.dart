@@ -437,10 +437,10 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
     // Soft gate: warn if finishing early (holes still unscored), consistent
     // with the other score screens.
     final sc = rp.scorecard;
-    int unscored = 0;
+    final unscored = <int>[];
     if (sc != null) {
       for (final h in _playOrder(rp)) {
-        if (_effectiveScores(sc, h).isEmpty) unscored++;
+        if (_effectiveScores(sc, h).isEmpty) unscored.add(h);
       }
     }
     if (!await confirmCompleteRound(ctx, unscoredHoles: unscored)) return;
