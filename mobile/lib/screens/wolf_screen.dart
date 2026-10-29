@@ -15,6 +15,7 @@
 /// server summary (services.wolf.wolf_summary), which is refreshed after
 /// every score submission and decision.
 
+import '../utils/effective_scores.dart';
 import '../utils/handicap_rounding.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -178,16 +179,14 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
 
   // ── Score helpers ─────────────────────────────────────────────────────────
 
-  Map<int, int> _effectiveScores(Scorecard sc, int hole) {
-    final saved = <int, int>{};
-    final hd = sc.holeData(hole);
-    if (hd != null) {
-      for (final s in hd.scores) {
-        if (s.grossScore != null) saved[s.playerId] = s.grossScore!;
-      }
-    }
-    return {...saved, ...(_pending[hole] ?? {})};
-  }
+  /// See `utils/effective_scores.dart` — the SYNC QUEUE is the third place a
+  /// score lives, and every screen's own copy of this merge used to skip it.
+  Map<int, int> _effectiveScores(Scorecard sc, int hole) => effectiveScores(
+        sc,
+        hole,
+        queued: context.read<RoundProvider>().localPendingByHole,
+        pending: _pending,
+      );
 
   bool _anyScoreEntered(Scorecard sc, int hole) =>
       _effectiveScores(sc, hole).isNotEmpty;

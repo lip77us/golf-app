@@ -11,6 +11,7 @@
 ///   • Presses strip (active/completed presses)
 ///   • F9 / B9 / Overall match status chips + Call Press button
 
+import '../utils/effective_scores.dart';
 import '../utils/handicap_rounding.dart';
 import 'dart:async';
 
@@ -244,16 +245,14 @@ class _NassauScreenState extends State<NassauScreen> with SpotsCaptureMixin {
     setState(() => _selectedHole = 18);
   }
 
-  Map<int, int> _effectiveScores(Scorecard sc, int hole) {
-    final saved = <int, int>{};
-    final hd = sc.holeData(hole);
-    if (hd != null) {
-      for (final s in hd.scores) {
-        if (s.grossScore != null) saved[s.playerId] = s.grossScore!;
-      }
-    }
-    return {...saved, ...(_pending[hole] ?? {})};
-  }
+  /// See `utils/effective_scores.dart` — the SYNC QUEUE is the third place a
+  /// score lives, and every screen's own copy of this merge used to skip it.
+  Map<int, int> _effectiveScores(Scorecard sc, int hole) => effectiveScores(
+        sc,
+        hole,
+        queued: context.read<RoundProvider>().localPendingByHole,
+        pending: _pending,
+      );
 
   int _hotSpotIdx(List<Membership> players, Map<int, int> scores) {
     for (int i = 0; i < players.length; i++) {

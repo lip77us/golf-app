@@ -6666,10 +6666,43 @@ Five dedicated play screens (Wolf, Rabbit, Survivor, Sequoya 3s, Triple
 Nassau) already counted only truly-blank holes and now pass the hole
 NUMBERS instead of a count.
 
+### ...and then the actual cause: the SYNC QUEUE
+
+Paul settled it in one line: *"You can't get by the hole without completing
+all four scores, so it should never be a problem."* He is right — the
+per-hole gate is sound, so `holes_awaiting` should be empty in practice and
+the three-of-four story cannot be what he hit.
+
+**A score lives in three places between the tap and the server**, and the
+round-level check could only see two:
+
+1. the **scorecard** — what the server has;
+2. the **sync queue** (`RoundProvider.localPendingByHole`) — saved locally
+   and committed, waiting on a connection;
+3. the screen's own **pending** map — tapped but not yet saved.
+
+`submitHole` writes locally and refreshes the scorecard **only once the
+queue DRAINS**, so until a hole syncs it exists in (2) alone. Ten screens
+each had their own `_effectiveScores`, and **every one of them merged 1 and
+3 and skipped 2** — so on a course with poor signal every hole already
+finished and advanced past read as EMPTY to anything asking whether the
+round was complete.
+
+The grid still drew those holes (it overlays the queue) and
+`_jumpToFirstUnplayed` still let you on (it checks `localPendingByHole` by
+name), which is exactly why the warning looked absurd: the scores were on
+the screen.
+
+`utils/effective_scores.dart` is now the one merge, and all ten screens
+call it. Precedence is chronological — server, then queued, then unsaved —
+so a later edit always wins. Two source tests: no screen may grow its own
+copy back, and any screen that merges must read the queue.
+
 **Still open, and a design question rather than a defect:** the gate is
 hole coverage, so a round CAN be completed with a golfer missing a hole —
-in Sixes that hole then scores on fewer balls than the format says. The
-warning now says so; whether it should block is Paul's call.
+in Sixes that hole then scores on fewer balls than the format says. Given
+the per-hole gate, that should be unreachable in normal play; the warning
+now says so if it ever happens.
 
 Tests: `api/test_complete_warning.py` (7 — including that the gate is
 unchanged, that a withdrawal is not a gap, and that the two kinds are never

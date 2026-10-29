@@ -16,6 +16,7 @@
 ///       – Skins per-hole winner strip
 ///       – Hole ← Prev | Next → navigation / Done button
 
+import '../utils/effective_scores.dart';
 import '../utils/handicap_rounding.dart';
 import 'dart:async';
 import 'dart:math' show Random;
@@ -1065,18 +1066,18 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// and mapped to a null gross on save so the server deletes the row.
   static const int _kClearedScore = -1;
 
-  Map<int, int> _effectiveScores(Scorecard sc, int hole) {
-    final saved = <int, int>{};
-    final hd = sc.holeData(hole);
-    if (hd != null) {
-      for (final s in hd.scores) {
-        if (s.grossScore != null) saved[s.playerId] = s.grossScore!;
-      }
-    }
-    final merged = {...saved, ...(_pending[hole] ?? {})};
-    merged.removeWhere((_, v) => v == _kClearedScore);   // cleared → blank
-    return merged;
-  }
+  /// See `utils/effective_scores.dart`. The SYNC QUEUE is the third place a
+  /// score lives, and this merge used to skip it — so on a course with poor
+  /// signal every hole already finished and advanced past read as empty to
+  /// anything asking whether the round was complete, while the grid drew
+  /// them and the hole gate let you on.
+  Map<int, int> _effectiveScores(Scorecard sc, int hole) => effectiveScores(
+        sc,
+        hole,
+        queued: context.read<RoundProvider>().localPendingByHole,
+        pending: _pending,
+        clearedSentinel: _kClearedScore,
+      );
 
   int _hotSpotIdx(List<Membership> players, Map<int, int> scores) {
     for (int i = 0; i < players.length; i++) {

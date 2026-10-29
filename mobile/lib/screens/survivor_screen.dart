@@ -14,6 +14,7 @@
 /// State comes from the server summary (services.survivor.survivor_summary),
 /// refreshed after every score submission.
 
+import '../utils/effective_scores.dart';
 import '../utils/handicap_rounding.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -132,16 +133,14 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
     return members;
   }
 
-  Map<int, int> _effectiveScores(Scorecard sc, int hole) {
-    final saved = <int, int>{};
-    final hd = sc.holeData(hole);
-    if (hd != null) {
-      for (final s in hd.scores) {
-        if (s.grossScore != null) saved[s.playerId] = s.grossScore!;
-      }
-    }
-    return {...saved, ...(_pending[hole] ?? {})};
-  }
+  /// See `utils/effective_scores.dart` — the SYNC QUEUE is the third place a
+  /// score lives, and every screen's own copy of this merge used to skip it.
+  Map<int, int> _effectiveScores(Scorecard sc, int hole) => effectiveScores(
+        sc,
+        hole,
+        queued: context.read<RoundProvider>().localPendingByHole,
+        pending: _pending,
+      );
 
   /// True once any score has been entered (saved or pending) — gates the
   /// app-bar Exit (✕) on a single-foursome casual round.
