@@ -6349,6 +6349,85 @@ without failing the finder.
 Tests: `mobile/test/game_switcher_test.dart` (9), including that the
 leaderboard no longer contains a `TabBar(`.
 
+## Team Play was slow because the card paid for the whole field
+
+Reported from the course, 29 Oct 2026: *"The app was very slow today. First
+time playing 2 person scramble."* — TPSGC Fall Scramble 2026, fourteen groups
+of four paired into twenty-eight two-man teams.
+
+**Reproduced at that size and measured before touching anything**
+(`api/test_team_play_perf.py`):
+
+    groups  teams   card          board
+         1      2     55 -> 48      41 -> 10
+         2      4     66 -> 48      78 -> 12
+         4      8     88 -> 48     152 -> 16
+        14     28    198 -> 48     522 -> 36
+
+Two facts from the measurement decided the whole fix. **Neither call scaled
+with holes played** — 198 and 522 were flat from hole 1 to hole 18 — so it was
+never the round wearing on. And **posting a score was 18 queries and did not
+move with the field**, which is the 7 Oct offload work still holding; the cost
+was entirely in the reads.
+
+**The card was the one that hurt.** It belongs to one playing group, the score
+screen refetches it on every hole change and after every save, and it was
+paying ~11 queries for every OTHER group in the field — because it calls
+`field_standing` for the team's place, which ranks everybody through the same
+per-team builders the board uses. It is FLAT now, which is the real result.
+
+**Why this was the first round it showed.** Pairs double the row count for the
+same field: a 14-group fours event is 14 teams, this one was 28.
+
+### The cause was the SHAPE of the queries, not their number
+
+Every leaf is cheap for one team. `.filter(...)` and `.select_related(...)` on
+a related manager ALWAYS hit the database though, even when the caller has
+prefetched that relation, because they build a new queryset — **`.all()` is the
+only form that reads the prefetch cache.** So five leaves were unreachable by
+any amount of prefetching at the call site.
+
+`services/team_play_state.py` now has `all_memberships` / `all_drive_picks` /
+`all_team_hole_scores`, each returning the cached rows when the caller asked
+for them and otherwise running exactly the query it used to. That is what keeps
+the single-group paths — the card, a score POST — at the cost they already had,
+and it is why the fix is additive rather than a rewrite. `_real_memberships`,
+`team_slots`, `hole_data`, `drive_picks` and `team_hole_scores` all read
+through them, filtering and sorting in Python.
+
+`services/team_play_scoring.field_foursomes` is the one fetch for the field,
+used by both `leaderboard` and `field_standing`. **It prefetches exactly what
+those leaves read and nothing else** — a prefetch nobody reads is a query
+bought for nothing — so that list and those accessors move together.
+
+### What proves it did not change the money
+
+`api/test_team_play_scoring.py` asserts the design packet's whole drawn board:
+the finishing order, two ties behaving differently, a three-man team taking
+more each, and the odd cents landing on a named man. It passes untouched.
+
+What it does NOT reach is the ordering INSIDE a team, because its fixture never
+ties on handicap — and `_real_memberships` is exactly where SQL became Python.
+`PrefetchKeepsTheSameAnswersTests` covers that with a deliberate handicap tie
+whose names are out of alphabetical order, and asserts the prefetched and
+unprefetched paths return the identical list.
+
+**`course_handicap` is NOT NULL**, so the None arm of `_hcap_key` cannot be
+reached from the database; it is there because Python cannot compare None with
+an int at all. The first version of that comment claimed it was matching
+Postgres NULL ordering, which would have been describing a row the schema
+cannot hold.
+
+**All three guards were checked by making them fail**, with the prefetch
+removed: 522, 198 and 4 queries against ceilings of 45, 55 and 0.
+
+### Still open from the same family
+
+The memory note `live-activity-start-pushes-never-convert` records ~125
+queries per posted score on a cup round, with `triple_cup_summary` recomputed
+two or three times in one recalculation. That is a different format and
+untouched here.
+
 ## The Points 5-3-1 board — and the settings strip that could not see four games
 
 `~/Downloads/handoff-points-leaderboard`, the fifth packet with the same

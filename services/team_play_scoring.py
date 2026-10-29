@@ -79,12 +79,12 @@ def team_hole_scores(foursome, slot=1) -> dict:
 
     Keyed on the SLOT as well as the group: two pairs sharing a playing group
     both carry a null `team`, so the group alone does not identify a side."""
-    from games.models import TeamHoleScore
+    from services.team_play_state import all_team_hole_scores
     return {
         r.hole_number: r.gross_score
-        for r in TeamHoleScore.objects.filter(
-            foursome=foursome, team=None, team_play_slot=slot)
-        if r.gross_score is not None
+        for r in all_team_hole_scores(foursome)
+        if r.team_id is None and r.team_play_slot == slot
+        and r.gross_score is not None
     }
 
 
@@ -428,6 +428,38 @@ def rank_rows(rows) -> list:
     return scored
 
 
+def field_foursomes(round_obj):
+    """Every playing group in the round, with everything a team row reads.
+
+    **One fetch for the field, instead of one per team.** `leaderboard` and
+    `field_standing` both walk every team and call builders that are each
+    cheap on their own — and at the real size, fourteen groups paired into
+    twenty-eight teams, that came to 522 queries for the board and 198 for a
+    card belonging to one group (`api/test_team_play_perf.py`).
+
+    The relations below are exactly the ones the prefetch-aware accessors in
+    `services.team_play_state` read: memberships (with the player and the tee,
+    for `hole_data` and `_real_memberships`), the team states, the drive picks
+    and the team's hole scores. Prefetching anything the leaves do not read
+    would be a query bought for nothing, so this list and those accessors move
+    together.
+    """
+    from django.db.models import Prefetch
+    from tournament.models import FoursomeMembership
+    return (
+        round_obj.foursomes
+        .order_by('group_number')
+        .prefetch_related(
+            Prefetch('memberships',
+                     queryset=FoursomeMembership.objects
+                     .select_related('player', 'tee')),
+            'team_play_states',
+            'team_drive_picks',
+            'team_hole_scores',
+        )
+    )
+
+
 def field_standing(tournament, config=None) -> dict:
     """Every team's place in the field, keyed ``(foursome_id, slot)``.
 
@@ -455,7 +487,7 @@ def field_standing(tournament, config=None) -> dict:
         return {}
 
     rows = []
-    for foursome in round_obj.foursomes.order_by('group_number'):
+    for foursome in field_foursomes(round_obj):
         for slot in team_slots(foursome, config):
             rnd = team_round(foursome, config, slot)
             rows.append({
@@ -501,7 +533,7 @@ def leaderboard(tournament) -> dict:
 
     rows = []
     pairings = [(f, slot)
-                for f in round_obj.foursomes.order_by('group_number')
+                for f in field_foursomes(round_obj)
                 for slot in team_slots(f, config)]
     for foursome, slot in pairings:
         team = team_dict(foursome, config, slot)

@@ -92,6 +92,73 @@ def team_ordinal(foursome, config, slot: int) -> int:
 # 1. Provisioning
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Prefetch-aware accessors
+# ---------------------------------------------------------------------------
+#
+# Every leaf below is cheap for ONE team and was being called once per team by
+# `leaderboard` and `field_standing`, which rank the whole field. At the real
+# size — fourteen groups paired into twenty-eight teams — that was 522 queries
+# for the board and 198 for a card belonging to a single group, measured in
+# `api/test_team_play_perf.py`.
+#
+# The cause was not the queries themselves but their SHAPE: `.filter(...)` or
+# `.select_related(...)` on a related manager ALWAYS hits the database, even
+# when the caller has prefetched that relation, because it builds a new
+# queryset. `.all()` is the only form that reads the prefetch cache.
+#
+# So each leaf asks for the cached rows when they are there and falls back to
+# exactly the query it used to run when they are not. A caller that prefetches
+# (see `services.team_play_scoring.field_rounds`) pays once for the field; a
+# caller that does not is unchanged, which is what keeps the single-group
+# paths — the card, a score POST — at the cost they already had.
+def _prefetched(obj, name):
+    """The prefetched rows for `name`, or None if the caller did not ask."""
+    cache = getattr(obj, '_prefetched_objects_cache', None)
+    if cache is None:
+        return None
+    rows = cache.get(name)
+    return None if rows is None else list(rows)
+
+
+def all_memberships(foursome):
+    """Every membership on the group, with `player` and `tee` loaded.
+
+    One query when nothing is prefetched — the same one the callers used to
+    run for themselves — and none when the field was fetched in one go.
+    """
+    rows = _prefetched(foursome, 'memberships')
+    if rows is not None:
+        return rows
+    return list(foursome.memberships.select_related('player', 'tee'))
+
+
+def all_drive_picks(foursome):
+    rows = _prefetched(foursome, 'team_drive_picks')
+    if rows is not None:
+        return rows
+    return list(foursome.team_drive_picks.all())
+
+
+def all_team_hole_scores(foursome):
+    rows = _prefetched(foursome, 'team_hole_scores')
+    if rows is not None:
+        return rows
+    return list(foursome.team_hole_scores.all())
+
+
+def _hcap_key(m):
+    """Order a team low handicap first, then by name — the SQL it replaces.
+
+    `course_handicap` is a NOT NULL column, so the None arm can only be
+    reached by an unsaved instance; it is here because Python cannot compare
+    None with an int at all, and a sort that raises is a worse failure than
+    one that puts an impossible row last. It is not describing a shape the
+    database can hold.
+    """
+    return (m.course_handicap is None, m.course_handicap or 0, m.player.name)
+
+
 def _real_memberships(foursome, slot=None):
     """
     The real golfers on a team, low handicap first.
@@ -100,13 +167,10 @@ def _real_memberships(foursome, slot=None):
     four-golfer event, where the group is the team and there is nothing to narrow
     — and pass it for pairs, where a group of four holds two teams.
     """
-    qs = foursome.memberships.filter(player__is_phantom=False)
+    rows = [m for m in all_memberships(foursome) if not m.player.is_phantom]
     if slot is not None:
-        qs = qs.filter(team_play_slot=slot)
-    return list(
-        qs.select_related('player', 'tee')
-          .order_by('course_handicap', 'player__name')
-    )
+        rows = [m for m in rows if m.team_play_slot == slot]
+    return sorted(rows, key=_hcap_key)
 
 
 def _phantom_membership(foursome, slot=None):
@@ -134,8 +198,8 @@ def team_slots(foursome, config) -> list:
     """
     if not config.is_pairs:
         return [1]
-    slots = sorted({m.team_play_slot
-                    for m in foursome.memberships.filter(player__is_phantom=False)})
+    slots = sorted({m.team_play_slot for m in all_memberships(foursome)
+                    if not m.player.is_phantom})
     return slots or [1]
 
 
@@ -354,13 +418,15 @@ def hole_data(foursome):
     """
     from collections import Counter
 
-    members = [m for m in foursome.memberships.select_related('tee', 'player')
+    members = [m for m in all_memberships(foursome)
                if m.tee_id is not None and not m.player.is_phantom]
     if not members:
         # Nobody real has a tee yet; fall back to anyone who does, so a card
         # built before tees are assigned still has holes to draw.
-        m = foursome.memberships.select_related('tee').exclude(
-            tee__isnull=True).first()
+        # `FoursomeMembership.Meta.ordering` is ['id'], so the first row with
+        # a tee is the same one `.first()` returned.
+        m = next((x for x in all_memberships(foursome) if x.tee_id is not None),
+                 None)
         return (m.tee.holes if m and m.tee else []) or []
 
     votes = Counter(m.tee_id for m in members)
@@ -508,7 +574,7 @@ def drive_picks(foursome, slot=1) -> dict:
     on every hole."""
     return {
         p.hole_number: p.player_id
-        for p in foursome.team_drive_picks.filter(slot=slot)
+        for p in all_drive_picks(foursome) if p.slot == slot
     }
 
 

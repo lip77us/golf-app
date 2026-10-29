@@ -14,24 +14,24 @@ note on round 420 records `board_recipients` walking the whole round with no
 `select_related` for ~45 queries a score, and `triple_cup_summary` recomputed
 three times in one recalculation.
 
-**These are ceilings over TODAY's measured cost, not a target.** Measured
-29 Oct 2026 at the real size, and both of the reads are linear in the FIELD:
+**Ceilings, not targets.** Measured 29 Oct 2026 at the real size, before
+and after the prefetch in `services.team_play_scoring.field_foursomes`:
 
-    groups  teams   card   board
-         1      2     55      41
-         2      4     66      78
-         4      8     88     152
-        14     28    198     522
+    groups  teams   card          board
+         1      2     55 -> 48      41 -> 10
+         2      4     66 -> 48      78 -> 12
+         4      8     88 -> 48     152 -> 16
+        14     28    198 -> 48     522 -> 36
 
-The board is ~18.6 queries per team. The card is worse than it looks: it is
-a GROUP-scoped screen, fetched on every hole change and after every score,
-and it pays ~11 queries for every OTHER group in the field — because it calls
-`field_standing` for the team's place, which ranks everybody through the same
-unprefetched per-team builders the board uses.
+The card is now FLAT in the field, which is the real fix: it belongs to one
+playing group, the score screen refetches it on every hole change and after
+every save, and it was paying ~11 queries for every other group because
+`field_standing` ranks the whole field for the team's place.
 
-Neither scales with holes played; 198 and 522 are flat from hole 1 to 18.
+Neither call ever scaled with holes played — 198 and 522 were flat from hole
+1 to 18 — so the cost was always the twenty-eight teams.
 
-Beat these and tighten the numbers.
+Posting a score was never the problem and is unchanged at ~19.
 """
 from datetime import date
 from decimal import Decimal
@@ -123,7 +123,7 @@ class TeamPlayPairsCostTests(TestCase):
         with CaptureQueriesContext(connection) as q:
             r = self.client.get(url)
         self.assertEqual(r.status_code, 200)
-        self.assertLessEqual(len(q), 530, f'{len(q)} queries for 28 teams')
+        self.assertLessEqual(len(q), 45, f'{len(q)} queries for 28 teams')
 
     def test_posting_one_score_is_scoped_to_the_group(self):
         """A score in group 3 must not cost anything per OTHER group."""
@@ -139,11 +139,74 @@ class TeamPlayPairsCostTests(TestCase):
         self.assertLessEqual(len(q), 25, f'{len(q)} queries to post a score')
 
     def test_the_card_is_scoped_to_the_group(self):
-        """It is NOT, today — 198 of these are the rest of the field."""
         self._play(5)
         fs = self.groups[2]
         url = reverse('api-team-play-card', args=[fs.id])
         with CaptureQueriesContext(connection) as q:
             r = self.client.get(url, {'hole': 6})
         self.assertEqual(r.status_code, 200)
-        self.assertLessEqual(len(q), 210, f'{len(q)} queries for ONE group')
+        self.assertLessEqual(len(q), 55, f'{len(q)} queries for ONE group')
+
+
+class PrefetchKeepsTheSameAnswersTests(TestCase):
+    """The accessors replaced SQL with Python, so the Python has to agree.
+
+    The equivalence that matters is covered by `api/test_team_play_scoring.py`,
+    which asserts the design packet's whole drawn board — order, ties and the
+    odd cents — and still passes. What it does NOT reach is the ordering
+    inside a team, because its fixture never ties on handicap. `_real_memberships`
+    used `.order_by('course_handicap', 'player__name')` and now sorts in
+    Python, and that tie-break is what decides who a card calls first.
+    """
+
+    def setUp(self):
+        self.acct = Account.objects.create(name='Ordering')
+        course = Course.objects.create(account=self.acct, name='Tilden')
+        self.tee = Tee.objects.create(
+            course=course, tee_name='White', slope=113,
+            course_rating=Decimal('72.0'), par=72, holes=HOLES)
+        tourn = Tournament.objects.create(
+            account=self.acct, name='T', start_date=date(2026, 10, 27),
+            total_rounds=1, active_games=['team_play'])
+        rnd = Round.objects.create(
+            account=self.acct, course=course, tournament=tourn,
+            round_number=1, status='in_progress')
+        self.fs = Foursome.objects.create(round=rnd, group_number=1)
+        # Deliberately inserted worst-first, and with a handicap TIE whose
+        # two names are out of alphabetical order.
+        for name, hcp in [('Zeller', 20), ('Baxter', 8), ('Abbott', 8)]:
+            p = Player.objects.create(account=self.acct, name=name,
+                                      handicap_index=Decimal(hcp))
+            FoursomeMembership.objects.create(
+                foursome=self.fs, player=p, tee=self.tee,
+                course_handicap=hcp, playing_handicap=hcp)
+
+    def test_low_handicap_first_then_name(self):
+        from services.team_play_state import _real_memberships
+        got = [m.player.name for m in _real_memberships(self.fs)]
+        self.assertEqual(got, ['Abbott', 'Baxter', 'Zeller'])
+
+    def test_a_prefetched_group_gives_the_identical_order(self):
+        """The win is only safe if the two paths cannot disagree."""
+        from services.team_play_scoring import field_foursomes
+        from services.team_play_state import _real_memberships
+        plain = [m.player.name for m in _real_memberships(self.fs)]
+        fetched = field_foursomes(self.fs.round).get(pk=self.fs.pk)
+        self.assertEqual([m.player.name for m in _real_memberships(fetched)],
+                         plain)
+
+    def test_the_prefetched_path_runs_no_further_queries(self):
+        from services.team_play_scoring import field_foursomes
+        from services.team_play_state import (
+            _real_memberships, all_drive_picks, all_team_hole_scores,
+            hole_data,
+        )
+        # This fixture has no TeamPlayConfig — `team_slots` is the one leaf
+        # that needs one, so it is exercised by the cost tests above instead.
+        fs = list(field_foursomes(self.fs.round))[0]
+        with CaptureQueriesContext(connection) as q:
+            _real_memberships(fs)
+            hole_data(fs)
+            all_drive_picks(fs)
+            all_team_hole_scores(fs)
+        self.assertEqual(len(q), 0, f'{len(q)} queries despite the prefetch')
