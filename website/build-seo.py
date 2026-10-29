@@ -74,7 +74,14 @@ DESCRIPTIONS = {
 }
 
 # Pages to keep out of search and out of the sitemap, by file path.
-NOINDEX = set()
+NOINDEX = {
+    # Unlisted: a how-to for a game that is not in the app yet, sent to one
+    # golfer as a link. Out of search, out of the sitemap, linked from
+    # nowhere. NOTE it lives under /preview/ rather than /games/ on
+    # purpose — anything under /games/ is a 'guide' and gets fed into the
+    # hub's CollectionPage ItemList, which this set does NOT gate.
+    'preview/annandale-friday/index.html',
+}
 
 # **Search-tool ownership codes**, emitted on the homepage only (every service
 # checks the homepage). Paste the `content` value each tool gives you — the
