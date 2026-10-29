@@ -589,3 +589,55 @@ class RabbitTests(TestCase):
         by_pid = {s['player_id']: s for s in h5['scores']}
         assert by_pid[A]['gross'] == 3 and by_pid[C]['gross'] == 5, h5
         assert by_pid[C]['strokes'] == 1, h5      # hardest hole of the first six
+
+
+class SettingsChipsTests(TestCase):
+    """The board's settings strip, in the server's words.
+
+    `Carry` and `Rolls on` are deliberately absent — see `_settings_chips`.
+    """
+
+    def setUp(self):
+        self.tee = make_tee()
+        self.round = make_round(self.tee.course, active_games=['rabbit'])
+        self.fs = make_foursome(
+            self.round, [('A', 8), ('B', 12), ('C', 16)], tee=self.tee)
+
+    def _chips(self, **kw):
+        setup_rabbit(self.fs, **kw)
+        return rabbit_summary(self.fs)['settings']
+
+    def test_it_names_the_handicap_and_how_a_rabbit_is_caught(self):
+        chips = self._chips(handicap_mode='net', net_percent=90,
+                            accumulate=True, num_segments=3)
+        self.assertIn('Net 90%', chips)
+        self.assertIn('Accumulate', chips)
+
+    def test_stop_after_one_is_named_as_itself(self):
+        self.assertIn('Stop after one',
+                      self._chips(accumulate=False, num_segments=3))
+
+    def test_the_split_is_stated_as_n_by_holes(self):
+        self.assertIn('3 × 6', self._chips(num_segments=3))
+        self.assertIn('2 × 9', self._chips(num_segments=2))
+        self.assertIn('1 × 18', self._chips(num_segments=1))
+
+    def test_CARRY_and_ROLLS_ON_are_never_claimed(self):
+        """Design's packet lists both as setup options and neither exists.
+
+        `carry` appears nowhere in the engine — a loose rabbit pays nothing
+        and carries nothing — and rolling a decided rabbit forward is
+        unconditional rather than a switch. A chip for either would tell a
+        group it had chosen something it never did.
+        """
+        for kw in ({'accumulate': True}, {'accumulate': False}):
+            chips = self._chips(num_segments=3, **kw)
+            joined = ' '.join(chips).lower()
+            self.assertNotIn('carry', joined)
+            self.assertNotIn('roll', joined)
+
+    def test_extra_rabbits_is_named_because_it_IS_a_switch(self):
+        self.assertIn('Extra rabbits',
+                      self._chips(num_segments=3, extra_rabbits=True))
+        self.assertNotIn('Extra rabbits',
+                         self._chips(num_segments=3, extra_rabbits=False))

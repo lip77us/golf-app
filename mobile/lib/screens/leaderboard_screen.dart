@@ -43,6 +43,8 @@ import '../widgets/nassau_board.dart';
 import '../widgets/game_switcher.dart';
 import '../widgets/game_settings_strip.dart';
 import '../widgets/stroke_play_board.dart';
+import '../widgets/rabbit_board.dart';
+import '../utils/rabbit_board_model.dart';
 import '../utils/stroke_play_board_model.dart';
 
 class LeaderboardScreen extends StatefulWidget {
@@ -4066,270 +4068,46 @@ class _WolfGroupCard extends StatelessWidget {
   }
 }
 
-/// Leaderboard card for a Rabbit foursome.  Shows the standings (money +
-/// segments won) and a per-segment strip with each segment's holder.
+/// Leaderboard card for a Rabbit foursome.
+///
+/// **The board is `widgets/rabbit_board.dart`** — the rabbit in play, where
+/// every rabbit went hole by hole, and the ledger, per
+/// `~/Downloads/handoff-rabbit-leaderboard` (28 Oct 2026). What stays here
+/// is the group header, which belongs to the LIST of groups rather than to
+/// any one game's board.
+///
+/// It replaced a standings table and a per-segment strip that answered the
+/// same questions in another shape, and which this file was the only owner
+/// of.
 class _RabbitGroupCard extends StatelessWidget {
   final Map<String, dynamic> group;
   const _RabbitGroupCard({required this.group});
 
-  static String _hcapLabel(Map hcap) {
-    final mode = hcap['mode']?.toString() ?? 'net';
-    if (mode == 'gross') return 'Gross';
-    if (mode == 'strokes_off') return 'SO';
-    final pct = (hcap['net_percent'] as num?)?.toInt() ?? 100;
-    return pct == 100 ? 'Net' : 'Net ($pct%)';
-  }
-
-  static String _fmtMoney(double v) {
-    if (v == 0) return '—';
-    final sign = v > 0 ? '+' : '−';
-    return '$sign\$${v.abs().formatBet()}';
-  }
-
   @override
   Widget build(BuildContext context) {
-    final theme   = Theme.of(context);
-    final summary = group['summary'] as Map<String, dynamic>? ?? {};
-    final hcap    = summary['handicap'] as Map<String, dynamic>? ?? const {};
-    final status  = summary['status']?.toString() ?? 'pending';
-    final players = (summary['players']  as List? ?? const []);
-    final segs    = (summary['segments'] as List? ?? const []);
-    final holes   = (summary['holes']    as List? ?? const []);
-    final accumulate = summary['accumulate'] as bool? ?? true;
-    final money   = summary['money'] as Map<String, dynamic>? ?? const {};
-    final betUnit = (money['bet_unit'] as num?)?.toDouble() ?? 0.0;
-    final pot     = (money['pot'] as num?)?.toDouble() ?? (betUnit * 3);
-    final numSeg  = (summary['num_segments'] as num?)?.toInt() ?? 1;
-
-    // Sixes-style scorecard grid: gross per player per hole with the hole
-    // winner's cell tinted.  Absent from a server predating the block, in which
-    // case the compact by-hole initials strip below is still rendered.
-    final sc        = summary['scorecard'] as Map<String, dynamic>? ?? const {};
-    final scHoles   = (sc['holes'] as List? ?? const [])
-        .cast<Map<String, dynamic>>();
-    final scPlayers = (sc['players'] as List? ?? const [])
-        .cast<Map<String, dynamic>>();
-    final scHolesInPlay = (sc['holes_in_play'] as List? ?? const [])
-        .map((e) => e as int)
-        .toList();
-
-    final singleGroup = group['_single_group'] == true;
-    String statusLabel;
-    switch (status) {
-      case 'complete':    statusLabel = 'Final';       break;
-      case 'in_progress': statusLabel = 'In progress'; break;
-      default:            statusLabel = 'Pending';     break;
+    final raw = group['summary'] as Map<String, dynamic>?;
+    if (raw == null) {
+      return const Card(child: Padding(
+        padding: EdgeInsets.all(12),
+        child: Text('Rabbit not yet set up for this group.')));
+    }
+    final s = RabbitSummary.fromJson(raw);
+    if (s.players.isEmpty) {
+      return const Card(child: Padding(
+        padding: EdgeInsets.all(12),
+        child: Text('Rabbit not yet set up for this group.')));
     }
 
-    final fmt = numSeg == 1
-        ? '1×18' : numSeg == 2 ? '2×9' : '3×6';
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          if (!singleGroup) ...[
-            Text('Group ${group['group_number']}',
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            const Divider(height: 12),
-          ],
-          Row(children: [
-            Expanded(
-              child: Text(
-                  'Rabbit — ${_hcapLabel(hcap)} · $fmt'
-                  '${accumulate ? ' · accumulate' : ''}',
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(statusLabel,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant)),
-            ),
-          ]),
-          const SizedBox(height: 10),
-
-          if (players.isEmpty)
-            Text('No players yet.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant))
-          else
-            ...players.map((p) {
-              final r    = p as Map<String, dynamic>;
-              final name = r['name']?.toString() ?? '';
-              final mny  = (r['money'] as num?)?.toDouble() ?? 0.0;
-              final won  = (r['segments_won'] as num?)?.toInt() ?? 0;
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(children: [
-                  Expanded(
-                      child: Text(name,
-                          style: const TextStyle(fontWeight: FontWeight.w600))),
-                  Icon(Icons.directions_run, size: 14,
-                      color: theme.colorScheme.onSurfaceVariant),
-                  const SizedBox(width: 2),
-                  Text('$won',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant)),
-                  if (betUnit > 0) ...[
-                    const SizedBox(width: 12),
-                    SizedBox(
-                      width: 72,
-                      child: Text(_fmtMoney(mny),
-                          textAlign: TextAlign.right,
-                          style: TextStyle(
-                            color: mny > 0 ? Colors.green.shade700
-                                : mny < 0 ? Colors.red.shade700
-                                          : theme.colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600)),
-                    ),
-                  ],
-                ]),
-              );
-            }),
-
-          if (segs.isNotEmpty) ...[
-            const Divider(height: 20),
-            Text('Segments',
-                style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
-            const SizedBox(height: 4),
-            ...segs.map((s) {
-              final seg = s as Map<String, dynamic>;
-              final lo  = seg['start_hole']; final hi = seg['end_hole'];
-              final holder = seg['holder_short']?.toString();
-              final complete = seg['complete'] as bool? ?? false;
-              // Settled before its last hole: the leg still PLAYS out (extra
-              // rabbits off), so the range alone reads as though it's all live.
-              final decidedOn = seg['decided_on'] as int?;
-              final decidedEarly = decidedOn != null && decidedOn != hi;
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 1),
-                child: Row(children: [
-                  SizedBox(width: 92,
-                    child: Text('Holes $lo–$hi', style: theme.textTheme.bodySmall)),
-                  Expanded(
-                    child: Text(
-                      holder == null
-                          ? (complete ? 'Halved' : 'Loose')
-                          : 'Rabbit: $holder'
-                            '${decidedEarly ? ' · won on $decidedOn' : ''}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: holder == null
-                              ? theme.colorScheme.onSurfaceVariant
-                              : theme.colorScheme.primary)),
-                  ),
-                  if (!complete && !decidedEarly)
-                    Text('in play', style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-                ]),
-              );
-            }),
-          ],
-
-          // By-hole winner strip — who took the rabbit on each hole (an initial
-          // when they won the hole outright, a dash when it was halved and the
-          // rabbit carried); unplayed holes are faint and the segment-locking
-          // cell is outlined.  Read-only; entry lives on the play screen.
-          if (scHoles.isEmpty && holes.isNotEmpty && segs.isNotEmpty) ...[
-            const Divider(height: 20),
-            Text('By hole',
-                style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
-            const SizedBox(height: 4),
-            ...segs.map((s) {
-              final seg      = s as Map<String, dynamic>;
-              final segIdx   = seg['index'];
-              final endHole  = seg['end_hole'];
-              final complete = seg['complete'] as bool? ?? false;
-              final segHoles = holes
-                  .where((h) => (h as Map<String, dynamic>)['segment'] == segIdx)
-                  .toList();
-              if (segHoles.isEmpty) return const SizedBox.shrink();
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(children: [
-                  SizedBox(width: 40,
-                    child: Text('${seg['start_hole']}–$endHole',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant))),
-                  ...segHoles.map((hh) {
-                    final h       = hh as Map<String, dynamic>;
-                    final scored  = h['event'] != null;
-                    final winner  = h['winner_short'] as String?;
-                    final locked  = complete && h['hole'] == endHole;
-                    final label   = (scored && winner != null && winner.isNotEmpty)
-                        ? winner.substring(0, 1) : '–';
-                    return Expanded(
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 1.5),
-                        padding: const EdgeInsets.symmetric(vertical: 3),
-                        decoration: BoxDecoration(
-                          color: locked
-                              ? theme.colorScheme.primary.withOpacity(0.10)
-                              : scored
-                                  ? theme.colorScheme.surfaceContainerHighest
-                                      .withOpacity(0.5)
-                                  : Colors.transparent,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: locked
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.outlineVariant,
-                            width: locked ? 1.2 : 1,
-                          ),
-                        ),
-                        child: Column(mainAxisSize: MainAxisSize.min, children: [
-                          Text('${h['hole']}',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                  fontSize: 9,
-                                  color: theme.colorScheme.onSurfaceVariant)),
-                          Text(label,
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                  fontWeight: (scored && winner != null)
-                                      ? FontWeight.bold : FontWeight.w500,
-                                  color: (scored && winner != null)
-                                      ? theme.colorScheme.primary
-                                      : scored
-                                          ? theme.colorScheme.onSurfaceVariant
-                                          : theme.colorScheme.outlineVariant)),
-                        ]),
-                      ),
-                    );
-                  }),
-                ]),
-              );
-            }),
-          ],
-
-          if (scHoles.isNotEmpty) ...[
-            const Divider(height: 20),
-            HoleGridScorecard(
-              holes:        scHoles,
-              participants: scPlayers,
-              legend:       'green = won the hole (takes / keeps the rabbit)',
-              holesInPlay:  scHolesInPlay,
-            ),
-          ],
-
-          if (betUnit > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                  'Each segment worth \$${betUnit.formatBet()} — its holder '
-                  'wins that from every opponent'
-                  '${numSeg > 1 ? '  •  up to \$${pot.formatBet()} at risk' : ''}.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant)),
-            ),
-        ]),
-      ),
-    );
+    final single = group['_single_group'] == true;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (!single)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+          child: Text('Group ${group['group_number']}',
+              style: const TextStyle(fontWeight: FontWeight.bold)),
+        ),
+      RabbitBoard(data: RabbitBoardData.fromSummary(s)),
+    ]);
   }
 }
 

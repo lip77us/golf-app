@@ -600,6 +600,35 @@ def _phcp_in_play(mode, npct, phcp, low_phcp) -> int:
     return round_half_up(phcp * npct / 100)
 
 
+def _settings_chips(game, holes_in_play: int) -> list:
+    """The rules in force, in the server's words — see services/game_settings.
+
+    **`Carry` and `Rolls on` are NOT here**, and that is not an oversight:
+    the design packet lists both as setup options and neither exists.
+    `carry` appears nowhere in this module — a loose rabbit pays nothing and
+    carries nothing into the next — and rolling a rabbit forward when it is
+    decided early is unconditional rather than a switch. Drawing either chip
+    would be telling a group it had chosen something it never did.
+    """
+    from services.game_settings import handicap_chip
+
+    out = []
+    chip = handicap_chip(game.handicap_mode, game.net_percent)
+    if chip:
+        out.append(chip)
+    out.append('Accumulate' if game.accumulate else 'Stop after one')
+    # `3 x 6` — how the round is split. Read off the holes actually in play,
+    # so a nine-hole round says `3 x 3` rather than inventing eighteen.
+    n = game.num_segments or 1
+    if holes_in_play and n:
+        each = holes_in_play // n
+        if each:
+            out.append(f'{n} \u00d7 {each}')
+    if game.extra_rabbits:
+        out.append('Extra rabbits')
+    return out
+
+
 def rabbit_summary(foursome) -> dict:
     """JSON-serialisable summary for the mobile Rabbit screen + leaderboard."""
     bet_unit = float(foursome.round.bet_unit)
@@ -808,6 +837,11 @@ def rabbit_summary(foursome) -> dict:
         'accumulate'   : game.accumulate,
         'num_segments' : game.num_segments,
         'extra_rabbits': game.extra_rabbits,
+        # Stated HERE rather than left to `game_settings.attach`, which reads
+        # the keys the summaries SHARE. How a rabbit is caught and how the
+        # round is split are Rabbit's own rules, and the board's settings
+        # strip is where Design puts them. Same escape hatch Solo uses.
+        'settings'     : _settings_chips(game, len(holes_out)),
         'segments'     : seg_out,
         'players'      : players_out,
         'holes'        : holes_out,

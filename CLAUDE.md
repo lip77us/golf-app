@@ -6707,3 +6707,63 @@ now says so if it ever happens.
 Tests: `api/test_complete_warning.py` (7 — including that the gate is
 unchanged, that a withdrawal is not a gap, and that the two kinds are never
 the same hole) and `mobile/test/complete_round_warning_test.dart` (8).
+
+## The Rabbit board — `handoff-rabbit-leaderboard`
+
+`widgets/rabbit_board.dart` + `utils/rabbit_board_model.dart`. Three cards:
+the rabbit in play (or the round's summary once it is over), where every
+rabbit went hole by hole, and the ledger. It replaced a standings table and
+a per-segment strip in `leaderboard_screen.dart` — 266 lines down to 42.
+
+**The engine already decided everything the packet calls derived.** Its own
+line is *"holders, leads, locks, rabbit ranges after rolling, carries and
+money are all derived"*, which is true of the reference — a browser toy
+replaying the holes in a local array. `services/rabbit.py` emits each
+segment's real range AFTER rolling, who held it, the lead, the hole it was
+decided on, its stake and its payout. So the board reads. What it derives
+is layout: which rabbit is live, which hole is next, and a golfer's
+per-rabbit mark.
+
+- **A leg's win is the engine's `payout`**, never `stake × other golfers`.
+  A withdrawal changes who pays and the engine knows; multiplying it out
+  here would be a second opinion about money.
+- **The grid shares one column width across every row**, so the holes line
+  up down the card even though each rabbit covers a different stretch —
+  which is the whole point of it, and what rolling makes non-obvious.
+- A tile is filled in the colour of **whoever held it AFTER that hole**, so
+  a rabbit that ended loose still shows who held it on the way. Loose is
+  grey — the one state that is about nobody.
+- The ledger marks are `+` held, `−` another golfer held it, `=` loose,
+  `·` not started; **filled once the rabbit is settled, outlined while it
+  is live**. "Not started" is read off the HOLES, not the leg: a leg with
+  no holder yet has started the moment one of its holes is played.
+
+### Two setup options in the packet do not exist
+
+The settings strip is specified as `Strokes off · Accumulate · 3 × 6 ·
+Carry · Rolls on`. Two of those are not switches:
+
+- **`carry` appears nowhere in `services/rabbit.py`** — zero occurrences. A
+  loose rabbit pays nothing and carries nothing into the next, so the
+  packet's carry rule, its `$5 carried` footer line and the `Loose · carry`
+  status are all describing a feature that has never been built.
+- **Rolling a decided rabbit forward is UNCONDITIONAL**, not an option.
+  `setup_rabbit` takes `accumulate`, `num_segments`, `handicap_allocation`
+  and `extra_rabbits`, and nothing else; a rabbit won on the 4th always
+  ends there and the next always starts on the 5th. (The half-stake
+  one-hole extra the packet describes IS built, under `extra_rabbits`.)
+
+So the board draws neither chip. A chip for either would tell a group it
+had chosen something it never did, which is worse than the setting being
+missing. Adding them is engine work with money consequences — carry
+especially, since it changes what every later rabbit is worth.
+
+`rabbit_summary` states its own `settings` rather than leaving it to
+`game_settings.attach`, which reads the keys the summaries SHARE: how a
+rabbit is caught and how the round is split are Rabbit's own rules. Same
+escape hatch Solo uses. The split is read off the holes actually in play,
+so a nine-hole round says `3 × 3` rather than inventing eighteen.
+
+Tests: `mobile/test/rabbit_board_test.dart` (12) and `SettingsChipsTests`
+in `scoring/tests/test_rabbit.py` (5 — including that neither Carry nor
+Rolls on is ever claimed).
