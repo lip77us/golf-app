@@ -129,16 +129,34 @@ class _HeaderRow extends StatelessWidget {
     Widget h(String t, double w) => SizedBox(
         width: w,
         child: Text(t, style: style, textAlign: TextAlign.center));
+    // The column set is a question of how many rounds there are — see
+    // `StrokeLayout`. Thru moves AFTER Tot on a multi-round board: with
+    // several rounds the figure a reader wants first is the total, and thru
+    // is a qualifier on the live round rather than on the whole event.
+    final cols = <Widget>[
+      switch (data.layout) {
+        StrokeLayout.single => h('THRU', _numW),
+        StrokeLayout.twoRounds => h(data.rounds[0].label, _numW),
+        StrokeLayout.prevAndLive => h('PREV', _numW),
+      },
+      switch (data.layout) {
+        StrokeLayout.single => h('GROSS', _numW),
+        StrokeLayout.twoRounds => h(data.rounds[1].label, _numW),
+        StrokeLayout.prevAndLive =>
+          h(data.liveRound?.label ?? 'R', _numW),
+      },
+      h('TOT', _totW),
+      if (data.layout != StrokeLayout.single) h('THRU', _numW),
+      if (data.hasPot) h('PRIZE', _moneyW),
+    ];
+
     return Container(
       color: Halved.deepPine,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
       child: Row(children: [
         h('#', _rankW),
         const Expanded(child: Text('PLAYER', style: style)),
-        h('THRU', _numW),
-        h('GROSS', _numW),
-        h('TOT', _totW),
-        if (data.hasPot) h('PRIZE', _moneyW),
+        ...cols,
       ]),
     );
   }
@@ -204,9 +222,10 @@ class _Row extends StatelessWidget {
                 ],
               ]),
             ),
-            _plain(row.thruLabel, _numW),
-            _plain(row.grossTotal == null ? '—' : '${row.grossTotal}', _numW),
+            ..._scoreCols(),
             SizedBox(width: _totW, child: Center(child: _totBox())),
+            if (data.layout != StrokeLayout.single)
+              _plain(row.thruLabel, _numW),
             if (data.hasPot)
               SizedBox(
                 width: _moneyW,
@@ -224,6 +243,60 @@ class _Row extends StatelessWidget {
       ),
     );
   }
+
+  /// The two columns before Tot, per the layout.
+  List<Widget> _scoreCols() {
+    switch (data.layout) {
+      case StrokeLayout.single:
+        return [
+          _plain(row.thruLabel, _numW),
+          _plain(row.grossTotal == null ? '—' : '${row.grossTotal}', _numW),
+        ];
+      case StrokeLayout.twoRounds:
+        return [
+          _roundCell(0),
+          _roundCell(1),
+        ];
+      case StrokeLayout.prevAndLive:
+        final live = data.liveRound?.index ?? data.rounds.length - 1;
+        return [
+          // `Prev` is the best counted rounds SO FAR, which is what makes
+          // best-4-of-6 legible rather than a column of six.
+          _roundText(row.prevToPar(live), counts: true),
+          _roundCell(live),
+        ];
+    }
+  }
+
+  /// **Round columns are plain text**, not boxes: pine under, deep pine
+  /// level, muted over. Only Tot is filled, because only one figure on the
+  /// row should be findable without reading.
+  Widget _roundCell(int i) {
+    final v = i < row.roundToPar.length ? row.roundToPar[i] : null;
+    return _roundText(v, counts: row.countsRound(i));
+  }
+
+  Widget _roundText(int? v, {required bool counts}) => SizedBox(
+        width: _numW,
+        child: Text(strokeToPar(v),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                // A round that does not count is STRUCK THROUGH rather than
+                // hidden: the golfer played it, and hiding it invites the
+                // question of where it went.
+                decoration: counts ? null : TextDecoration.lineThrough,
+                color: v == null
+                    ? Halved.muted
+                    : !counts
+                        ? Halved.muted
+                        : v < 0
+                            ? Halved.pine
+                            : v == 0
+                                ? Halved.deepPine
+                                : Halved.muted)),
+      );
 
   /// A paid place gets a pine badge; everyone else reads as plain text.
   Widget _rank() {
@@ -287,14 +360,40 @@ String strokeToPar(int? v) {
 }
 
 /// One golfer's hole-by-hole card, in place.
-class _OpenCard extends StatelessWidget {
+///
+/// A tab per round, the live one selected, with a dot on it. One round
+/// draws no tabs at all — a single tab is a label pretending to be a
+/// control.
+class _OpenCard extends StatefulWidget {
   const _OpenCard({required this.data, required this.row});
   final StrokePlayBoardData data;
   final StrokePlayRow row;
 
   @override
+  State<_OpenCard> createState() => _OpenCardState();
+}
+
+class _OpenCardState extends State<_OpenCard> {
+  int? _tab;
+
+  StrokePlayBoardData get data => widget.data;
+  StrokePlayRow get row => widget.row;
+
+  @override
   Widget build(BuildContext context) {
-    final byHole = {for (final h in row.holes) (h['hole'] as int?) ?? 0: h};
+    final multi = data.rounds.length > 1;
+    final tab = _tab ?? data.liveRound?.index ?? 0;
+    final List<Map<String, dynamic>> holes = multi
+        ? (tab < row.roundHoles.length
+            ? row.roundHoles[tab]
+            : const <Map<String, dynamic>>[])
+        : row.holes;
+    final toPar = multi
+        ? (tab < row.roundToPar.length ? row.roundToPar[tab] : null)
+        : row.toPar;
+    final byHole = <int, Map<String, dynamic>>{
+      for (final h in holes) (h['hole'] as int?) ?? 0: h,
+    };
     final inPlay = data.holesInPlay.isNotEmpty
         ? data.holesInPlay
         : [for (var h = 1; h <= 18; h++) h];
@@ -306,23 +405,35 @@ class _OpenCard extends StatelessWidget {
       if (split.showIn) (holes: split.back, label: 'IN'),
     ];
 
-    var gross = 0, net = 0;
-    for (final h in row.holes) {
-      gross += (h['gross'] as int?) ?? 0;
+    var gross = 0, net = 0, played = 0;
+    for (final h in holes) {
+      final g = h['gross'] as int?;
+      if (g != null) { gross += g; played++; }
       net += (h['net_adj'] as int?) ?? (h['net'] as int?) ?? 0;
     }
+    final thru = multi
+        ? (played == 0 ? '—' : played >= 18 ? 'F' : '$played')
+        : row.thruLabel;
 
     return Container(
       color: Halved.card,
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (multi) ...[
+          _RoundTabs(
+            rounds: data.rounds,
+            selected: tab,
+            onPick: (i) => setState(() => _tab = i),
+          ),
+          const SizedBox(height: 8),
+        ],
         // `Gross 36 · Net 34 · To par −2 · Thru 9`.
         Text(
           [
             'Gross $gross',
             if (data.showNet) 'Net $net',
-            'To par ${strokeToPar(row.toPar)}',
-            'Thru ${row.thruLabel}',
+            'To par ${strokeToPar(toPar)}',
+            'Thru $thru',
           ].join('  ·  '),
           style: const TextStyle(fontSize: 12, color: Halved.muted),
         ),
@@ -342,6 +453,63 @@ class _OpenCard extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// A tab per round, the live one carrying a dot.
+class _RoundTabs extends StatelessWidget {
+  const _RoundTabs(
+      {required this.rounds, required this.selected, required this.onPick});
+  final List<StrokeRoundCol> rounds;
+  final int selected;
+  final ValueChanged<int> onPick;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          for (final r in rounds)
+            Material(
+              color: r.index == selected ? Halved.pine : Halved.card,
+              borderRadius: BorderRadius.circular(99),
+              child: InkWell(
+                onTap: () => onPick(r.index),
+                borderRadius: BorderRadius.circular(99),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(99),
+                    border: Border.all(
+                        color: r.index == selected
+                            ? Halved.pine
+                            : Halved.cardBorder,
+                        width: 1.2),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    if (r.live) ...[
+                      Container(
+                        width: 6, height: 6,
+                        decoration: BoxDecoration(
+                            color: r.index == selected
+                                ? Halved.brightMint
+                                : Halved.pine,
+                            shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 5),
+                    ],
+                    Text(r.tabLabel,
+                        style: TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w700,
+                            color: r.index == selected
+                                ? Colors.white
+                                : Halved.deepPine)),
+                  ]),
+                ),
+              ),
+            ),
+        ],
+      );
 }
 
 /// Hole / Par / Score / Net, with the nine's own total.

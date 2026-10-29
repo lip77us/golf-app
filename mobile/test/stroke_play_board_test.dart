@@ -249,4 +249,104 @@ void main() {
       }
     });
   });
+
+  group('multi-round columns', () {
+    StrokePlayBoardData board(int n, {int live = 0, List<bool>? counts}) {
+      return StrokePlayBoardData(
+        rows: [
+          StrokePlayRow(
+            playerId: 1, rank: 1, name: 'Tom', handicapLabel: '14',
+            toPar: -6, grossTotal: 150, thru: 9, holes: const [],
+            roundToPar: [for (var i = 0; i < n; i++) -(i + 1)],
+            roundCounts: counts ?? [for (var i = 0; i < n; i++) true],
+            roundHoles: [
+              for (var i = 0; i < n; i++)
+                [
+                  for (var h = 1; h <= 9; h++)
+                    {'hole': h, 'gross': 4, 'par': 4, 'net_adj': 4},
+                ],
+            ],
+          ),
+        ],
+        basisLabel: 'Net',
+        countingLabel: n == 1 ? 'single round' : 'best of $n rounds',
+        rounds: [
+          for (var i = 0; i < n; i++)
+            StrokeRoundCol(index: i, label: 'R${i + 1}', live: i == live),
+        ],
+        holePars: {for (var h = 1; h <= 18; h++) h: 4},
+        holesInPlay: [for (var h = 1; h <= 18; h++) h],
+      );
+    }
+
+    test('the layout follows the round count, and nothing else', () {
+      expect(board(1).layout, StrokeLayout.single);
+      expect(board(2).layout, StrokeLayout.twoRounds);
+      expect(board(3).layout, StrokeLayout.prevAndLive);
+      expect(board(6).layout, StrokeLayout.prevAndLive);
+    });
+
+    testWidgets('two rounds: R1 · R2 · Tot · Thru', (t) async {
+      await _pump(t, board(2, live: 1));
+      expect(find.text('R1'), findsOneWidget);
+      expect(find.text('R2'), findsOneWidget);
+      expect(find.text('TOT'), findsOneWidget);
+      expect(find.text('THRU'), findsOneWidget);
+      // Gross is a single-round column; with rounds it gives up its place.
+      expect(find.text('GROSS'), findsNothing);
+    });
+
+    testWidgets('three or more: PREV and the live round', (t) async {
+      await _pump(t, board(6, live: 4));
+      expect(find.text('PREV'), findsOneWidget);
+      expect(find.text('R5'), findsOneWidget);
+      // Not a column each — that is the whole point of collapsing them.
+      expect(find.text('R1'), findsNothing);
+      expect(find.text('R2'), findsNothing);
+    });
+
+    test('Prev is the best COUNTED rounds so far', () {
+      // Best 4 of 6, live round 5 (index 4): rounds 1 and 3 count, 2 does
+      // not, so Prev is -1 + -3 and the -2 is left out.
+      final d = board(6, live: 4,
+          counts: [true, false, true, false, false, false]);
+      expect(d.rows.first.prevToPar(4), -4);
+    });
+
+    test('Prev is NULL when nothing counts yet, which is not level par', () {
+      final d = board(3, live: 2, counts: [false, false, true]);
+      expect(d.rows.first.prevToPar(2), isNull);
+    });
+
+    testWidgets('a round that does not count is struck through, not hidden',
+        (t) async {
+      await _pump(t, board(2, live: 1, counts: [false, true]));
+      final struck = t.widgetList<Text>(find.byType(Text)).where((w) =>
+          w.style?.decoration == TextDecoration.lineThrough);
+      expect(struck, isNotEmpty,
+          reason: 'the golfer played it; hiding it invites the question '
+                  'of where it went');
+    });
+
+    testWidgets('the open card tabs the rounds, live one first', (t) async {
+      await _pump(t, board(2, live: 1));
+      await t.tap(find.text('Tom'));
+      await t.pumpAndSettle();
+      expect(find.text('Round 1'), findsOneWidget);
+      expect(find.text('Round 2'), findsOneWidget);
+    });
+
+    testWidgets('one round draws no tabs — a single tab is not a control',
+        (t) async {
+      await _pump(t, _board(rows: [
+        _row(rank: 1, name: 'Paul', toPar: -1, holes: [
+          for (var h = 1; h <= 9; h++)
+            {'hole': h, 'gross': 4, 'par': 4, 'net_adj': 4},
+        ]),
+      ]));
+      await t.tap(find.text('Paul'));
+      await t.pumpAndSettle();
+      expect(find.text('Round 1'), findsNothing);
+    });
+  });
 }

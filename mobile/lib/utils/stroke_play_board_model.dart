@@ -19,15 +19,42 @@
 /// and which nine a hole belongs to.
 library;
 
-/// A round column. One entry for a single-round board; several once the
-/// tournament half lands.
+/// A round column.
+///
+/// Empty on a one-round board, which shows `Thru · Gross · Tot` instead.
 class StrokeRoundCol {
-  const StrokeRoundCol({required this.label, required this.live});
+  const StrokeRoundCol({
+    required this.index,
+    required this.label,
+    this.live = false,
+    this.complete = false,
+  });
 
+  /// 0-based, matching the per-round lists on each row.
+  final int index;
+  /// `R1`, `R2` — and the tab's own `Round 1`.
   final String label;
-  /// The round being played now — its tab opens first and carries the dot.
+  /// The round being played now: its tab opens first and carries the dot.
   final bool live;
+  final bool complete;
+
+  String get tabLabel => 'Round ${index + 1}';
 }
+
+/// How the round columns are laid out, which is purely a question of how
+/// many there are (Design's table):
+///
+/// | Rounds | Columns |
+/// | --- | --- |
+/// | One | `# · Player · Thru · Gross · Tot · Prize` |
+/// | Two | `# · Player · R1 · R2 · Tot · Thru · Prize` |
+/// | Three or more | `# · Player · Prev · R(live) · Tot · Thru · Prize` |
+///
+/// Three or more collapses every earlier COUNTED round into `Prev`, which
+/// is what keeps the table readable at six rounds — and what makes best-4-
+/// of-6 legible, since `Prev` is the best counted rounds so far rather than
+/// all of them.
+enum StrokeLayout { single, twoRounds, prevAndLive }
 
 class StrokePlayBoardData {
   const StrokePlayBoardData({
@@ -67,6 +94,20 @@ class StrokePlayBoardData {
   final bool showNet;
 
   final List<StrokeRoundCol> rounds;
+
+  StrokeLayout get layout => rounds.length <= 1
+      ? StrokeLayout.single
+      : rounds.length == 2
+          ? StrokeLayout.twoRounds
+          : StrokeLayout.prevAndLive;
+
+  /// The live round, or the last one — a finished event has none in play.
+  StrokeRoundCol? get liveRound {
+    for (final r in rounds) {
+      if (r.live) return r;
+    }
+    return rounds.isEmpty ? null : rounds.last;
+  }
 
   /// The meta line's right half: the entry, or that there is no pot.
   String get potLabel {
@@ -110,6 +151,8 @@ class StrokePlayRow {
     this.excluded = false,
     this.strokePlan = const {},
     this.roundToPar = const [],
+    this.roundCounts = const [],
+    this.roundHoles = const [],
   });
 
   final int? playerId;
@@ -136,7 +179,40 @@ class StrokePlayRow {
   /// Per-round to-par, for the multi-round columns. Empty on one round.
   final List<int?> roundToPar;
 
-  bool get hasCard => holes.isNotEmpty || strokePlan.isNotEmpty;
+  /// Whether each round COUNTS toward the total, under best-N-of-M. A round
+  /// that does not is struck through rather than hidden — the golfer played
+  /// it, and hiding it invites the question of where it went.
+  final List<bool> roundCounts;
+
+  /// Each round's own holes, for that round's tab in the open card.
+  final List<List<Map<String, dynamic>>> roundHoles;
+
+  /// `Prev` — every earlier COUNTED round collapsed into one figure.
+  ///
+  /// Null when none of them counts yet, which is a different thing from
+  /// level par and has to read as one.
+  int? prevToPar(int liveIndex) {
+    var any = false, total = 0;
+    for (var i = 0; i < roundToPar.length && i < liveIndex; i++) {
+      final counts = i < roundCounts.length ? roundCounts[i] : true;
+      final v = roundToPar[i];
+      if (!counts || v == null) continue;
+      any = true;
+      total += v;
+    }
+    return any ? total : null;
+  }
+
+  bool countsRound(int i) =>
+      i < roundCounts.length ? roundCounts[i] : true;
+
+  /// Is there a card to open? Per-round holes count: on a multi-round board
+  /// the row's own `holes` is the aggregate and may be empty while each
+  /// round has its own.
+  bool get hasCard =>
+      holes.isNotEmpty ||
+      strokePlan.isNotEmpty ||
+      roundHoles.any((h) => h.isNotEmpty);
 
   /// `F` once the round is done, `—` before anybody tees off.
   String get thruLabel {

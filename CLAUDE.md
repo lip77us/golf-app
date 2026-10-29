@@ -6513,3 +6513,98 @@ it is dark.
 Tests: `mobile/test/triple_nassau_board_test.dart` (8) — including that the
 card renders `NassauBoard` and defines no `_matrix` or `_pressRows` of its
 own, which is the thing most likely to creep back.
+
+## The Stroke Play board — `handoff-stroke-play-leaderboard`
+
+The fourth packet with the same scope line, and the one that most needed
+it: *"one widget used by every stroke play leaderboard, casual and
+tournament. Do not draw a second stroke play table."*
+
+`widgets/stroke_play_board.dart` + `utils/stroke_play_board_model.dart`.
+**The casual board is wired; the tournament board is not** — see the
+conflict at the end, which is a design question rather than work left.
+
+### What the packet settled that prose could not
+
+Item 9 of `REPLY-design.md` described this board in five bullets and I
+built it from them. The packet then carried a good deal those could not: a
+dark header row, pine rank badges on the PAID places with `T2` for a tie,
+the leader row tinted, a meta line stating basis and counting rule against
+the entry, and an open card with a summary line, Out/In grids and score
+marks under a legend. Two things the prose actively got wrong:
+
+- **Gross is the raw total**, not gross-to-par. It is read against `Thru`
+  beside it — 48 thru 9 says as much as +3 does, and says a different
+  thing.
+- **The handicap beside a name is the INDEX.** `low_net_round` now sends
+  `handicap_index` on its rows; CH is what you play off today and the index
+  is who you are. The board falls back to `CH n` on an older payload.
+
+### The column set is a function of the round count, and nothing else
+
+| Rounds | Columns |
+|---|---|
+| One | `# · Player · Thru · Gross · Tot · Prize` |
+| Two | `# · Player · R1 · R2 · Tot · Thru · Prize` |
+| Three or more | `# · Player · Prev · R(live) · Tot · Thru · Prize` |
+
+`StrokeLayout` is that rule and the only thing that chooses between them.
+**Thru moves AFTER Tot** on a multi-round board: with several rounds the
+figure a reader wants first is the total, and thru qualifies the live round
+rather than the event.
+
+- **Only Tot is filled** (pine under, deep pine level, grey over). Round
+  columns are plain text in the same three colours. One figure per row
+  should be findable without reading, and two filled boxes is none.
+- **`Prev` is the best COUNTED rounds so far**, which is what makes
+  best-4-of-6 legible rather than a column of six. **Null when none of them
+  counts yet**, because that is a different thing from level par and has to
+  read as one.
+- A round that does not count is **struck through, not hidden**: the golfer
+  played it, and hiding it invites the question of where it went.
+- **Paid places are read off the ROWS, not the payout table.** A tie splits
+  the places it occupies, so two golfers sharing 2nd and 3rd are both paid
+  while the table has one entry for each place. The server has already
+  resolved it.
+- Tinting: the paid rows where there is a pot, the leader where there is
+  not. Both of Design's boards agree, and the rule falls out of the one
+  question (is anybody being paid) rather than being two rules.
+
+**Ranks, ties, payouts and net-to-par stay the server's.** The packet
+derives them in its reference implementation, which is a browser toy
+holding the whole field in a local array; we have an engine that decides
+all of it. A test forbids the board sorting, ranking or assigning a payout.
+
+233 lines of table came out of `leaderboard_screen.dart` — the chip strip,
+the header row, the player rows and the inline hole strip.
+
+### The conflict that stopped the tournament half
+
+The multi-round LAYOUTS are built and tested; what is not wired is
+`_LowNetChampView`. It is not missing data — `low_net_championship_summary`
+already emits `round_ntps`, `round_holes`, `round_labels`, `round_counts`
+and `round_complete`, which is everything the board needs. It is that the
+tournament board carries **three things this packet does not mention**:
+
+- **Flight headers**, interleaved in server order (`FlightHeader`). The
+  Flights work put them there deliberately, and re-grouping client-side was
+  rejected then as a second ordering authority.
+- **Projected money in muted italic** until every round closes — *"a golfer
+  thru 1 showing $48 in green was the single most misleading thing on the
+  live board"*.
+- **The index the cut was made on**, which is deliberately not today's
+  index and not CH.
+
+Wiring the board without them regresses three shipped decisions; wiring it
+WITH them means the shared board grows a flight-header slot, a projected
+flag and a second handicap field, none of which the casual board uses. That
+is a design call, not an implementation one.
+
+**Also superseded, and worth saying out loud:** this packet's `Prev ·
+R(live)` answers the same question as P8's `SyncedScrollGroup` round strip
+(four columns visible, scrolling, opening on the newest). Both are
+Design's. The newer one wins on the stroke play board, but the strip is
+also used by the Stableford championship board, which this packet says
+nothing about.
+
+Tests: `mobile/test/stroke_play_board_test.dart` (25).
