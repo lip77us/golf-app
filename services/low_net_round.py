@@ -175,6 +175,11 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
                 'par_played'   : 0,
                 'foursome_id'  : fs.pk,
                 'handicap'     : m.playing_handicap,
+                # The INDEX as well as the playing handicap: the board draws
+                # the index beside a name (Design's stroke play packet), and
+                # the two answer different questions — CH is what you play
+                # off today, the index is who you are.
+                'handicap_index': str(m.player.handicap_index or ''),
                 'holes'        : {},
                 'stroke_plan'  : plan,
                 'total_strokes': sum(plan.values()),
@@ -228,6 +233,7 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
             'par_played'  : 0,
             'foursome_id' : fid,
             'handicap'    : membership.playing_handicap,
+            'handicap_index': str(membership.player.handicap_index or ''),
             'holes'       : {},   # {hole_number: {par, gross, net_adj, capped}}
         })
         entry['total']        += capped
@@ -336,6 +342,7 @@ def _rank_standings(player_totals, payouts_cfg, excluded_ids) -> list:
             'excluded'    : is_excluded,
             'payout'      : payout,
             'handicap'    : data.get('handicap', 0),  # raw playing handicap
+            'handicap_index': data.get('handicap_index', ''),
             'holes'       : data.get('holes', {}),   # {hole_number: hole_data}
             # Prospective full-round stroke allocation (all holes in play) +
             # the total strokes this player receives — drives the scorecard
@@ -363,6 +370,7 @@ def _serialize_results(standings) -> list:
             'excluded'    : s.get('excluded', False),
             'payout'      : s['payout'],
             'handicap'    : s.get('handicap', 0),
+            'handicap_index': s.get('handicap_index', ''),
             'holes'       : [
                 {'hole': h, **v}
                 for h, v in sorted(s.get('holes', {}).items())

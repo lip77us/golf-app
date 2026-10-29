@@ -42,6 +42,8 @@ import '../utils/nassau_board_model.dart';
 import '../widgets/nassau_board.dart';
 import '../widgets/game_switcher.dart';
 import '../widgets/game_settings_strip.dart';
+import '../widgets/stroke_play_board.dart';
+import '../utils/stroke_play_board_model.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   final int roundId;
@@ -1371,14 +1373,14 @@ class _StablefordView extends StatelessWidget {
 // ---- Red Ball / Pink Ball ----
 
 class _RedBallView extends StatelessWidget {
-  final Map<String, dynamic> data;
-  const _RedBallView({required this.data});
-
   static String _ntpLabel(int? ntp) {
     if (ntp == null) return '—';
     if (ntp == 0)   return 'E';
     return ntp < 0 ? '$ntp' : '+$ntp';
   }
+
+  final Map<String, dynamic> data;
+  const _RedBallView({required this.data});
 
   @override
   Widget build(BuildContext context) {
@@ -1596,13 +1598,6 @@ class _LowNetView extends StatefulWidget {
 }
 
 class _LowNetViewState extends State<_LowNetView> {
-  /// The one player row open to its hole-by-hole strip, if any.
-  ///
-  /// **One at a time** (Design, 28 Oct 2026). Several open at once turned a
-  /// ranked table into a stack of scorecards, which is what the landscape
-  /// grid is for; the point of this board is comparing rows.
-  int? _expandedPid;
-
   /// 12A — the selected Stroke Play display mode ('gross' / 'net' /
   /// 'strokes_off'). Null until first build, where it's set to the computed
   /// default (§3). Because this State is recreated when the tab is (re)opened,
@@ -1640,12 +1635,6 @@ class _LowNetViewState extends State<_LowNetView> {
     'gross': 'Gross', 'net': 'Net', 'strokes_off': 'Strokes-off',
   };
 
-  static String _ntpLabel(int? ntp) {
-    if (ntp == null) return '—';
-    if (ntp == 0)   return 'E';
-    return ntp < 0 ? '$ntp' : '+$ntp';
-  }
-
   // Score colours (under par = red, par/over = default) live in
   // utils/golf_colors.dart — scoreColor() / toParColor() — so the convention is
   // shared and changed in one place. The per-hole strip lives in
@@ -1674,9 +1663,7 @@ class _LowNetViewState extends State<_LowNetView> {
       return ra.compareTo(rb);
     });
     final entryFee = (widget.data['entry_fee'] as num?)?.toDouble() ?? 0.0;
-    final payouts  = (widget.data['payouts'] as List? ?? []);
     final showNet  = _mode != 'gross';
-    final adjLabel = _mode == 'strokes_off' ? 'S-Off' : 'Net';
 
     // Gross · Net · [Strokes-off] — pine-filled selected segment (brand rule:
     // selected segments are pine, never mint).
@@ -1692,52 +1679,39 @@ class _LowNetViewState extends State<_LowNetView> {
       ),
     );
 
-    final chips = Wrap(spacing: 8, runSpacing: 4, children: [
-      if (entryFee > 0)
-        Chip(
-          label: Text('Entry \$${entryFee.formatBet()}',
-              style: const TextStyle(fontSize: 11)),
-          visualDensity: VisualDensity.compact,
-          padding: EdgeInsets.zero,
-        ),
-      if (payouts.isNotEmpty)
-        Chip(
-          label: Text(
-              payouts.length == 1
-                  ? 'Winner takes all'
-                  : '${payouts.length} places paid',
-              style: const TextStyle(fontSize: 11)),
-          visualDensity: VisualDensity.compact,
-          padding: EdgeInsets.zero,
-        ),
-    ]);
-
-    if (results.isEmpty) {
-      return ListView(padding: const EdgeInsets.all(16), children: [
-        selector,
-        chips,
-        const SizedBox(height: 24),
-        const Center(child: Text('No scores yet.')),
-      ]);
-    }
-
-    final anyPayout = results.any((r) => (r as Map)['payout'] != null);
-
-    // Ranked net-to-par table.  Tapping a row expands that player's own
-    // hole-by-hole strip inline (accordion); the full stacked grid lives in
-    // the rotate-to-landscape scorecard, so this table scales to a big field.
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-      children: [
-        selector,
-        chips,
-        const SizedBox(height: 10),
-        _headerRow(theme, showNet: showNet, showMoney: anyPayout,
-            adjLabel: adjLabel),
-        for (final r in results)
-          ..._playerBlock(theme, r as Map<String, dynamic>,
-              showNet: showNet, showMoney: anyPayout),
-        const SizedBox(height: 12),
+    // **The board** (`handoff-stroke-play-leaderboard`): one widget for
+    // every stroke play leaderboard, casual and tournament. It replaced a
+    // table built here — the chip strip, the header row, the player rows
+    // and the inline hole strip — which answered the same questions in
+    // another shape, and which this file was the only owner of.
+    //
+    // Ranks, ties, payouts and net-to-par stay the SERVER's. The packet
+    // derives them in its reference implementation, which is a browser toy
+    // with the whole field in a local array; we have an engine that already
+    // decides all of it, and a client that recomputes money is a second
+    // opinion about money.
+    return StrokePlayBoard(
+      selector: available.length > 1 ? selector : null,
+      data: StrokePlayBoardData(
+        rows: [
+          for (final r in results)
+            _strokeRow(r as Map<String, dynamic>, showNet: showNet),
+        ],
+        basisLabel: _basisLine(showNet),
+        // A casual round is one round; the counting rule is a tournament's
+        // fact and arrives with the tournament half of this board.
+        countingLabel: 'single round',
+        entryFee: entryFee,
+        hasPot: results.any((r) => ((r as Map)['payout'] as num?) != null),
+        holePars: _intMap(widget.data['hole_pars']),
+        holeStrokeIndex: _intMap(widget.data['hole_stroke_index']),
+        holesInPlay: [
+          for (final h in (widget.data['holes_in_play'] as List? ?? const []))
+            if (h is int) h,
+        ],
+        showNet: showNet,
+      ),
+      footer: Column(children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -1760,242 +1734,71 @@ class _LowNetViewState extends State<_LowNetView> {
           style: theme.textTheme.bodySmall
               ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
-      ],
-    );
-  }
-
-  static const double _rankW  = 26;
-  static const double _colW   = 44;
-  static const double _thruW  = 34;
-  static const double _moneyW = 52;
-
-  Widget _headerRow(ThemeData theme,
-      {required bool showNet, required bool showMoney,
-       String adjLabel = 'Net'}) {
-    final style = theme.textTheme.labelSmall?.copyWith(
-        fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant);
-    Widget h(String t, double w) =>
-        SizedBox(width: w, child: Text(t, style: style, textAlign: TextAlign.center));
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4, left: 4, right: 4),
-      child: Row(children: [
-        h('#', _rankW),
-        const SizedBox(width: 4),
-        Expanded(child: Text('Player', style: style)),
-        // **# · Player · Thru · Gross · Tot · Prize** (Design, 28 Oct 2026).
-        //
-        // `Tot` is the score the board RANKS on, to par — so in Strokes-off
-        // mode it is the strokes-off figure, which is why the old `S-Off`
-        // column went: it was the same number in a second place.
-        //
-        // No chevron gutter: the whole row is the control.
-        h('Thru', _thruW),
-        h('Gross', _colW),
-        h('Tot', _colW),
-        if (showMoney) h('Prize', _moneyW),
       ]),
     );
   }
 
-  /// Gross vs par over the holes played so far (in-progress friendly — no raw
-  /// total, which isn't meaningful until the round is done).
-  int _grossToPar(Map<String, dynamic> row) {
-    var d = 0;
-    for (final h in (row['holes'] as List? ?? [])) {
-      final m = h as Map;
-      final g = m['gross'] as int?;
-      final p = m['par'] as int?;
-      if (g != null && p != null) d += g - p;
-    }
-    return d;
+  /// `Net 90%` / `Gross` / `Strokes off` — the basis, with the allowance
+  /// only when it is not a full one.
+  String _basisLine(bool showNet) {
+    final label = _mode == 'gross'
+        ? 'Gross'
+        : _mode == 'strokes_off' ? 'Strokes off' : 'Net';
+    if (!showNet) return label;
+    final pct = (widget.data['net_percent'] as num?)?.toInt() ?? 100;
+    return pct == 100 ? label : '$label $pct%';
   }
 
-  List<Widget> _playerBlock(ThemeData theme, Map<String, dynamic> row,
-      {required bool showNet, required bool showMoney}) {
-    final pid      = row['player_id'] as int?;
-    final rank     = row['rank'] as int? ?? 0;
-    final name     = row['name']?.toString() ?? '—';
-    final ntp      = row['net_to_par'] as int?;
-    final payout   = (row['payout'] as num?)?.toDouble();
-    final ch       = row['handicap'] as int? ?? 0;
-    final holes    = (row['holes'] as List? ?? []);
-    final thru     = row['holes_played'] as int? ?? holes.length;
-    final grossTp  = _grossToPar(row);
-    final expanded = pid != null && _expandedPid == pid;
-    final showPay  = showMoney && payout != null;
-    // Total handicap strokes this player receives over the round (prospective),
-    // and whether there's a scorecard strip to expand — a not-yet-started
-    // player still has a strip (all holes blank + prospective stroke dots).
-    final totalStrokes = row['total_strokes'] as int? ?? 0;
-    final hasStrip = pid != null &&
-        (holes.isNotEmpty || (row['stroke_plan'] as Map? ?? const {}).isNotEmpty);
-
-    /// Gross-to-par, plain — the reference the Tot box is read against.
-    Widget grossCell(int? v) => SizedBox(
-          width: _colW,
-          child: Text(_ntpLabel(v),
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.onSurfaceVariant)),
-        );
-
-    /// **Tot is a filled box** (Design, 28 Oct 2026): pine under par, deep
-    /// pine level, grey over. It is the figure the board ranks on, so it is
-    /// the one thing on the row that should be findable without reading.
-    Widget totCell(int? v) {
-      final fill = v == null
-          ? Halved.cardBorder
-          : v < 0
-              ? Halved.pine
-              : v == 0
-                  ? Halved.deepPine
-                  : Halved.muted;
-      return SizedBox(
-        width: _colW,
-        child: Center(
-          child: Container(
-            constraints: const BoxConstraints(minWidth: 38),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-            decoration: BoxDecoration(
-                color: fill, borderRadius: BorderRadius.circular(6)),
-            child: Text(_ntpLabel(v),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w700,
-                    color: Colors.white)),
-          ),
-        ),
-      );
+  static Map<int, int> _intMap(Object? raw) {
+    final out = <int, int>{};
+    if (raw is Map) {
+      raw.forEach((k, v) {
+        final key = k is int ? k : int.tryParse('$k');
+        final val = v is int ? v : int.tryParse('$v');
+        if (key != null && val != null) out[key] = val;
+      });
     }
-    final thruLabel = holes.isEmpty ? '—' : (thru >= 18 ? 'F' : '$thru');
+    return out;
+  }
 
-    final rowWidget = InkWell(
-      onTap: !hasStrip
-          ? null
-          : () => setState(() => _expandedPid = expanded ? null : pid),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        decoration: BoxDecoration(
-          border: Border(
-              bottom: BorderSide(
-                  color: theme.colorScheme.outlineVariant, width: 0.5)),
-        ),
-        child: Row(children: [
-          SizedBox(
-              width: _rankW,
-              child: Text('$rank',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.bold))),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w600)),
-                if (showNet)
-                  Row(mainAxisSize: MainAxisSize.min, children: [
-                    if (showNet)
-                      Text('CH $ch',
-                          style: TextStyle(
-                              fontSize: 10,
-                              color: theme.colorScheme.onSurfaceVariant)),
-                    // Total handicap strokes over the round — the "gets N".
-                    if (showNet && totalStrokes > 0) ...[
-                      Text('  ·  ',
-                          style: TextStyle(
-                              fontSize: 10,
-                              color: theme.colorScheme.onSurfaceVariant)),
-                      Text('gets $totalStrokes',
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: theme.colorScheme.primary)),
-                    ],
-                  ]),
-              ],
-            ),
-          ),
-          SizedBox(
-            width: _thruW,
-            child: Text(thruLabel,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
-          ),
-          grossCell(grossTp),
-          // In a gross round the ranked figure IS gross to par, so the box
-          // carries that rather than repeating the plain column.
-          totCell(showNet ? ntp : grossTp),
-          if (showMoney)
-            SizedBox(
-              width: _moneyW,
-              child: Text(showPay ? '\$${payout.formatBet()}' : '',
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.onSurfaceVariant)),
-            ),
-        ]),
-      ),
-    );
-
-    return [
-      rowWidget,
-      if (expanded && hasStrip) _holeStrip(theme, row, showNet: showNet),
+  /// One payload row as a board row.
+  ///
+  /// **Gross is the raw total**, not gross-to-par: that is what Design's
+  /// board shows, and it is read against `Thru` beside it — 48 thru 9 says
+  /// as much as +3 does, and says a different thing.
+  StrokePlayRow _strokeRow(Map<String, dynamic> r, {required bool showNet}) {
+    final holes = [
+      for (final h in (r['holes'] as List? ?? const []))
+        if (h is Map) h.cast<String, dynamic>(),
     ];
-  }
-
-  /// One player's hole-by-hole strip, styled like the landscape scorecard: a
-  /// hole-number header row, a par row, then the player's scores (coloured
-  /// circle/square marks + stroke dots).  Subtotals appear only once a segment
-  /// is complete — Out after the front 9, In after the back 9, Tot/Net when the
-  /// round is done — matching the landscape grid.
-  Widget _holeStrip(ThemeData theme, Map<String, dynamic> row,
-      {required bool showNet}) {
-    // Round-level pars + holes-in-play let unplayed holes render as blanks.
-    final holePars = <int, int>{};
-    for (final e in (widget.data['hole_pars'] as Map? ?? const {}).entries) {
-      final k = e.key is int ? e.key as int : int.tryParse('${e.key}');
-      final v = e.value is int ? e.value as int : int.tryParse('${e.value}');
-      if (k != null && v != null) holePars[k] = v;
+    var gross = 0;
+    var anyGross = false;
+    var grossToPar = 0;
+    for (final h in holes) {
+      final g = h['gross'] as int?;
+      final par = h['par'] as int?;
+      if (g != null) { gross += g; anyGross = true; }
+      if (g != null && par != null) grossToPar += g - par;
     }
-    // Stroke index per hole for the scorecard's SI header row (12A).
-    final holeSi = <int, int>{};
-    for (final e
-        in (widget.data['hole_stroke_index'] as Map? ?? const {}).entries) {
-      final k = e.key is int ? e.key as int : int.tryParse('${e.key}');
-      final v = e.value is int ? e.value as int : int.tryParse('${e.value}');
-      if (k != null && v != null) holeSi[k] = v;
-    }
-    final inPlay = (widget.data['holes_in_play'] as List?)
-        ?.map((e) => e as int)
-        .toList();
-    // Prospective full-round stroke allocation ({hole: strokes}) — drives the
-    // dots so they show on every stroke hole, even before it's played.
-    final strokePlan = <int, int>{};
-    for (final e in (row['stroke_plan'] as Map? ?? const {}).entries) {
-      final k = e.key is int ? e.key as int : int.tryParse('${e.key}');
-      final v = e.value is int ? e.value as int : int.tryParse('${e.value}');
-      if (k != null && v != null && v > 0) strokePlan[k] = v;
-    }
-    return strokePlayHoleStrip(
-      context,
-      holes:          (row['holes'] as List? ?? const []),
-      holesInPlay:    inPlay,
-      holePars:       holePars,
-      holeStrokeIndex: holeSi,
-      showNet:        showNet,
-      netTotal:       row['total_net'] as int?,
-      netToPar:       row['net_to_par'] as int?,
-      strokePlan:     showNet ? strokePlan : null,
+    final index = (r['handicap_index'] ?? '').toString();
+    return StrokePlayRow(
+      playerId: r['player_id'] as int?,
+      rank: r['rank'] as int? ?? 0,
+      name: r['name']?.toString() ?? '—',
+      // The index where the server sends one, the playing handicap where it
+      // does not — an older payload has only the latter.
+      handicapLabel:
+          index.isNotEmpty ? index : 'CH ${r['handicap'] ?? 0}',
+      // In a gross round the ranked figure IS gross to par, which is why
+      // there is no separate strokes-off column either: in that mode the
+      // ranked figure is the strokes-off one.
+      toPar: showNet ? r['net_to_par'] as int? : (anyGross ? grossToPar : null),
+      grossTotal: anyGross ? gross : null,
+      thru: r['holes_played'] as int? ?? holes.length,
+      holes: holes,
+      payout: (r['payout'] as num?)?.toDouble(),
+      excluded: r['excluded'] == true,
+      strokePlan: _intMap(r['stroke_plan']),
     );
   }
 }
