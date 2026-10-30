@@ -40,12 +40,11 @@ finding courses near you means cutting something else, and that is a
 deliberate edit rather than a release-day one. Worth doing at 2.13 with the
 room measured first.
 
-**This release is bigger than its version number suggests.** 2.12.1 reads
-like a patch, but four user-visible things landed *after* build 53 was cut
-and have never shipped: courses near me, the handicap basis tee, the Golf
-Genius sync line, and the course-search fixes. The What's New covers all
-four — do not trim it on the assumption that a point release has little in
-it.
+**2.12.1 never reached the App Store, so this What's New carries it.** 2.12.0
+is the version live (confirmed by Paul, 30 Oct 2026), and courses near me, the
+handicap basis tee, the Golf Genius sync line and the course-search fixes were
+built after it. Golfers on 2.12.0 have seen none of them, so do not trim them
+as old news.
 
 **The listing's primary language is English (Australia).** English (U.S.) was
 deleted on 16 Oct 2026 so each field is filled once rather than twice; the
@@ -53,8 +52,8 @@ reason the flip could not simply be done, and the order to do it in at 2.13,
 are in `docs/go-live-checklist.md`. Nothing on a product page shows a
 customer which English it is.
 
-## Promotional text (170 max, editable without review) — 2.13.0, 142 chars
-New: Annandale Friday, a team Nassau for five or six on one card. Plus a new look for leaderboards and lock screens, rolling out game by game.
+## Promotional text (170 max, editable without review) — 2.13.0, 143 chars
+New: Annandale Friday for five or six on one card, Courses near me, and a new look for leaderboards and lock screens, rolling out game by game.
 
 ## What's New (v2.13.0)
 
@@ -66,6 +65,17 @@ top, so nobody has to ask. More games will follow.
 ANNANDALE FRIDAY. A new game for a group of five or six on one card. Split
 into teams and every team plays the others in its own Nassau, with presses,
 scored from one screen. Skins, Spots and Stroke Play can run alongside it.
+
+COURSES NEAR ME. Tap "Courses near me" under the search box and Halved lists
+the ten closest, nearest first, with the distance beside each. It reads your
+approximate location only when you tap that button, never in the background,
+and does not keep it. Say no and nothing else changes: type a name the way you
+always have.
+
+ONE HANDICAP BASIS FOR THE WHOLE FIELD. A tournament now declares the tee its
+handicaps are figured from, so every golfer's strokes come off one reference
+instead of shifting with whoever is in his group. You set it where you assign
+tees, and a course remembers its own, so casual rounds get it too.
 
 SKINS
 • Set what it takes to win a skin: a net par or better, a gross par or better,
@@ -81,8 +91,13 @@ ALSO
   round
 • A round no longer warns about missing scores that are only waiting to sync
 • A side game now keeps its own stake, separate from the main game's
+• My Golfers says when it last synced from Golf Genius and what changed
+• Course search reads better: "The Bridges" no longer hides as "Bridges (The)",
+  and if the course database cannot be reached, the list says so
+• The greenie's full rule now reads on the setup screens: on the green from the
+  tee, closest to the hole, and a par
 
-## Promotional text — previous (2.12.1, 161 chars)
+## Promotional text — previous (2.12.1, 161 chars; never public)
 New: Courses near me — tap once and the courses closest to you are listed nearest first. Halved asks for your location only on that tap, never in the background.
 
 ## Promotional text — previous (2.12.0, 164 chars)
@@ -91,7 +106,7 @@ New: name your spots. Tick greenie, sandy, chippy or your own before you tee off
 ## Promotional text — previous (2.11.2, 161 chars)
 New: play on your own against par — stroke play, a Nassau or a match, with presses par fights back in. Plus Six's teams the group picks and skins groups you set.
 
-## What's New (v2.12.1)
+## What's New (v2.12.1 — never reached the App Store; folded into 2.13.0)
 
 COURSES NEAR ME. Looking for somewhere you have not played? Tap "Courses near
 me" under the search box and Halved lists the ten closest, nearest first, with
