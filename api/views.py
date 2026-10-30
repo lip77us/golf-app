@@ -4316,6 +4316,11 @@ class SharedRoundsView(APIView):
         if not my_phone:
             return Response([])
 
+        # Rounds this user has taken off their own lists. Neither cross-account
+        # list ages a live follow off, so without this a round that was set up
+        # and abandoned sits on the Active tab for good.
+        hidden = set(request.user.hidden_rounds.values_list('round_id', flat=True))
+
         status = request.query_params.get('status')
         def _status_ok(s):
             return status not in ('in_progress', 'complete', 'pending') or s == status
@@ -4390,7 +4395,8 @@ class SharedRoundsView(APIView):
                 .order_by('-date', '-created_at')
             )
             for r in qs:
-                if (r.id in seen_rounds or not _status_ok(r.status)
+                if (r.id in seen_rounds or r.id in hidden
+                        or not _status_ok(r.status)
                         or not _recent_enough(r.status, r.date)):
                     continue
                 results.append(_round_row(r))
@@ -4739,6 +4745,9 @@ class PlayingRoundsView(APIView):
         if not my_phone:
             return Response([])
 
+        hidden = set(
+            request.user.hidden_rounds.values_list('round_id', flat=True))
+
         rows = (
             FoursomeMembership.objects
             .exclude(foursome__round__account=request.user.account)
@@ -4757,7 +4766,7 @@ class PlayingRoundsView(APIView):
             if normalize(m.player.phone) != my_phone:
                 continue
             r = m.foursome.round
-            if r.id in seen:
+            if r.id in seen or r.id in hidden:
                 continue
             # Any round I'm a player in — single foursome, multi-group, or
             # tournament — belongs in my active list (a player expects to see
@@ -4784,6 +4793,40 @@ class PlayingRoundsView(APIView):
                 'your_foursome_id': m.foursome_id,
             })
         return Response(results)
+
+
+class RoundHideView(APIView):
+    """
+    POST   /api/rounds/{id}/hide/   — take this round off MY lists
+    DELETE /api/rounds/{id}/hide/   — put it back
+
+    **It removes the round from your list, not you from their round.** A round
+    in somebody else's account is their data — their draw, and possibly scores
+    that `FoursomeMembership` PROTECTs — so "remove myself" cannot mean
+    editing it. What it changes is only what you are shown.
+
+    Reversible, and the `Watcher` row is left alone, so an invitation is never
+    half-destroyed by somebody tidying their own list.
+
+    Your OWN account's rounds are refused: hiding one would make it
+    unreachable rather than tidy. Complete or delete it instead.
+    """
+    def post(self, request, pk):
+        from tournament.models import HiddenRound
+        rnd = round_for_reader(request.user, pk)
+        if rnd.account_id == request.user.account_id:
+            return Response(
+                {'detail': "This is your own round — complete or delete it "
+                           "rather than hiding it."},
+                status=400)
+        HiddenRound.objects.get_or_create(user=request.user, round=rnd)
+        return Response({'hidden': True})
+
+    def delete(self, request, pk):
+        from tournament.models import HiddenRound
+        rnd = round_for_reader(request.user, pk)
+        HiddenRound.objects.filter(user=request.user, round=rnd).delete()
+        return Response({'hidden': False})
 
 
 class RoundJoinView(APIView):

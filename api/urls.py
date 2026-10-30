@@ -80,6 +80,7 @@ urlpatterns = [
     path('support/round/',               views.SupportRoundLookupView.as_view(), name='api-support-round'),
     path('rounds/<int:pk>/',             views.RoundDetailView.as_view(),     name='api-round-detail'),
     path('rounds/<int:pk>/join/',        views.RoundJoinView.as_view(),       name='api-round-join'),
+    path('rounds/<int:pk>/hide/',        views.RoundHideView.as_view(),       name='api-round-hide'),
     path('tournaments/<int:pk>/join/',   views.TournamentJoinView.as_view(),  name='api-tournament-join'),
     path('rounds/<int:pk>/setup/',       views.RoundSetupView.as_view(),    name='api-round-setup'),
     path('rounds/<int:pk>/side-games/',  views.RoundAddSideGameView.as_view(), name='api-round-add-side-game'),

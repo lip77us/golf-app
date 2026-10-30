@@ -7510,6 +7510,51 @@ killed it (Paul, 30 Oct 2026, *"just leave them all filled in"*):
 Nothing is lost: the hole in play is the bold column header, and the HOLES
 WON grid above says which of the rest have been played.
 
+## Taking a round off your own list — `HiddenRound`
+
+Reported 30 Oct 2026: *"I have a round I was invited to and it never happened
+and it is stuck on my open rounds list."* It was, permanently, and the
+companion question — *"did we add the ability to remove a watched round?"* —
+had the answer **no**: there was no unfollow, unwatch or leave endpoint
+anywhere in the codebase.
+
+**Neither cross-account list ages a live follow off.** `SharedRoundsView`
+drops a COMPLETED watch `SHARED_WATCH_RETENTION_DAYS` (7) after its date and
+nothing else — its own comment says live follows always stay — and
+`PlayingRoundsView` drops nothing at any status. So a round somebody set up,
+invited you to and abandoned sits on your Active tab for good.
+
+### It removes the round from your list, not you from their round
+
+That is the whole design decision. A round in somebody else's account is
+their data — their draw, and possibly scores `FoursomeMembership` PROTECTs —
+so "remove myself" cannot mean editing it. `tournament.HiddenRound(user,
+round)` (migration `tournament/0082`) is a per-USER view preference that both
+cross-account lists filter on.
+
+- **Per user, not per account.** Two members of one account are invited
+  separately and may feel differently; and this is not roster management.
+- **Reversible, and the `Watcher` row is left alone**, so one person tidying
+  their list never half-destroys an invitation. Undo is a `DELETE`.
+- **Your own rounds are refused (400).** Hiding one would make it unreachable
+  rather than tidy — complete or delete it instead.
+- `POST`/`DELETE /api/rounds/{id}/hide/`, gated by `round_for_reader`, so a
+  stranger gets the usual 404.
+
+Mobile: a `visibility_off_outlined` button on cross-account cards only —
+deliberately **not** the bin and not the danger colour, because it is not a
+delete — and **no confirmation, an Undo instead**: it is reversible and their
+round is untouched, so a dialog would be asking permission for something that
+cannot go wrong.
+
+**Not done: tournaments.** The Tournaments list has its own Observing section
+and would need the same thing keyed on a tournament. One model, one endpoint,
+same shape.
+
+**Worth checking next:** whether a hidden round still pushes. Nothing filters
+notifications on `HiddenRound` — if a watcher of a hidden round still gets
+"round complete", that is the obvious follow-up.
+
 ## Sixes score entry — `handoff-sixes-score-entry` (server done, bottom half wired)
 
 The 40 Balls keypad and dark tray carried to Sixes. **The first of the score

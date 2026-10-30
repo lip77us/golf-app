@@ -1721,6 +1721,46 @@ class LiveActivityStartPush(models.Model):
 # WATCHERS  (non-playing spectators invited to follow in-app, read-only)
 # ---------------------------------------------------------------------------
 
+class HiddenRound(models.Model):
+    """A round one USER has taken off their own lists.
+
+    **It removes the round from your list, not you from their round.** A round
+    you were added to in somebody else's account is their data — their
+    foursome, their draw, and possibly scores that `FoursomeMembership`
+    PROTECTs — so "remove myself" cannot mean editing it. What it means is
+    that you stop being shown something that never happened.
+
+    Why it is needed at all: neither cross-account list ages. A WATCHER follow
+    drops off seven days after a COMPLETED round and never otherwise
+    (`SHARED_WATCH_RETENTION_DAYS`), and a round you are a PLAYER in
+    (`PlayingRoundsView`) is never dropped at any status. So a round that was
+    set up and abandoned sits on your Active tab for good (Paul, 30 Oct 2026).
+
+    Per user rather than per account: two members of one account were invited
+    separately and may feel differently about it, and this is a view
+    preference rather than roster management.
+
+    Reversible on purpose — the `Watcher` row is left alone, so this is never
+    the destructive half of an invitation. Undo is a delete.
+    """
+    user       = models.ForeignKey(
+                   settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                   related_name='hidden_rounds')
+    round      = models.ForeignKey(
+                   'Round', on_delete=models.CASCADE,
+                   related_name='hidden_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'round'],
+                                    name='one_hide_per_user_per_round'),
+        ]
+
+    def __str__(self):
+        return f'{self.user_id} hid round {self.round_id}'
+
+
 class Watcher(models.Model):
     """
     A non-playing spectator invited to follow a round or tournament in the app

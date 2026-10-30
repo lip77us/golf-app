@@ -1974,6 +1974,20 @@ class ApiClient {
     return SixesSummary.fromJson(data as Map<String, dynamic>);
   }
 
+  /// POST/DELETE /api/rounds/{id}/hide/ — take a round off MY lists, or put
+  /// it back.
+  ///
+  /// It removes the round from your list, NOT you from their round: a round
+  /// in somebody else's account is their data. Reversible, which is why the
+  /// screen offers an Undo rather than a confirmation.
+  Future<void> setRoundHidden(int roundId, bool hidden) async {
+    if (hidden) {
+      await _post('/rounds/$roundId/hide/', const {});
+    } else {
+      await _delete('/rounds/$roundId/hide/');
+    }
+  }
+
   /// GET /api/foursomes/{id}/sixes/hole/{hole}/
   ///
   /// One hole's score-entry card. A save already returns this shape under

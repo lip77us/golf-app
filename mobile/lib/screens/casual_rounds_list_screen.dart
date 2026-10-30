@@ -561,6 +561,38 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
     );
   }
 
+  /// Take a cross-account round off my lists.
+  ///
+  /// **No confirmation, an Undo instead.** It is reversible and it changes
+  /// nothing about their round, so a dialog would be asking permission for
+  /// something that cannot go wrong — and the rounds this exists for are ones
+  /// the user has already decided are clutter.
+  Future<void> _removeFromMyList(int roundId, String courseName) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final client = context.read<AuthProvider>().client;
+    try {
+      await client.setRoundHidden(roundId, true);
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(e))));
+      return;
+    }
+    if (!mounted) return;
+    _load();
+    messenger.showSnackBar(SnackBar(
+      duration: const Duration(seconds: 6),
+      content: Text('$courseName removed from your rounds'),
+      action: SnackBarAction(
+        label: 'Undo',
+        onPressed: () async {
+          try {
+            await client.setRoundHidden(roundId, false);
+          } catch (_) {/* the round simply stays hidden */}
+          if (mounted) _load();
+        },
+      ),
+    ));
+  }
+
   /// A round in another account I was added to as a PLAYER. No per-round money
   /// is computed cross-account; the group label gives context.
   _RoundItem _sharedItem(ScoringRound r, String Function(String) fmtDate) {
@@ -576,6 +608,7 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
       currentHole:  r.currentHole,
       contextLabel: r.groupLabel,
       onTap:        () async { await openSharedRound(context, r.id); _load(); },
+      onRemove:     () => _removeFromMyList(r.id, r.courseName),
     );
   }
 
@@ -594,6 +627,7 @@ class _CasualRoundsListScreenState extends State<CasualRoundsListScreen>
       contextLabel: r.groupLabel,
       isWatched:    true,
       onTap:        () async { await openWatchedRound(context, r); _load(); },
+      onRemove:     () => _removeFromMyList(r.id, r.courseName),
     );
   }
 }
@@ -693,6 +727,11 @@ class _RoundItem {
   final VoidCallback onTap;
   final VoidCallback? onDelete;
 
+  /// Take this round off MY lists — offered on cross-account rounds only,
+  /// which are the ones that never age off. Not destructive: it changes what
+  /// I am shown, never their round.
+  final VoidCallback? onRemove;
+
   const _RoundItem({
     required this.sortDate,
     required this.dateLabel,
@@ -710,6 +749,7 @@ class _RoundItem {
     this.netAmount,
     required this.onTap,
     this.onDelete,
+    this.onRemove,
   });
 }
 
@@ -780,6 +820,21 @@ class _RoundCard extends StatelessWidget {
                   icon: const Icon(Icons.delete_outline, size: 19, color: _danger),
                   tooltip: 'Delete round',
                   onPressed: item.onDelete,
+                ),
+              ),
+            // Not the danger colour and not a bin: this removes the round
+            // from MY list, and their game is untouched.
+            if (item.onRemove != null)
+              SizedBox(
+                height: 26,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(),
+                  icon: const Icon(Icons.visibility_off_outlined,
+                      size: 19, color: Halved.muted),
+                  tooltip: 'Remove from my list',
+                  onPressed: item.onRemove,
                 ),
               ),
           ],
