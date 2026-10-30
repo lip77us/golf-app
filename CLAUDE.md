@@ -6986,7 +6986,7 @@ Tests: `mobile/test/rabbit_board_test.dart` (17), `CarryTests` (9) and
 `Rolls on` is never claimed, and that carry stays zero-sum and never moves
 the total at risk.
 
-## Annandale Friday (`annandale_friday`) — ENGINE + API done (mobile pending)
+## Annandale Friday (`annandale_friday`) — ENGINE + API + group size done (mobile screens pending)
 
 `~/Downloads/handoff-annandale-friday`. One group of **5 or 6** on one card;
 the teams make three better-ball Nassaus — three pairs each playing the other
@@ -7046,7 +7046,21 @@ cap reads `Loses at most $50` where the cap is per side PER NASSAU.
 
 Tests: `scoring/tests/test_annandale_friday.py` (32) and
 `api/test_annandale_friday.py` (24, six and five). Already built and not
-part of this: the two Skins options (`skin_minimum` / `birdie_steal`). Still
-to do: the 5–6 group-size validation (Groups & tees caps at 4 — a
-validation change, not a structural one), mobile, and moving the guide from
-`/preview/` to `/games/` LAST.
+part of this: the two Skins options (`skin_minimum` / `birdie_steal`).
+
+**Group size — `services.round_setup.max_group_size(round)`**, the one
+answer to how many golfers a card holds: 6 when `annandale_friday` is in the
+round's active games or is its `primary_game`, else 4. Read by
+`setup_round` (explicit groups, and the automatic split — which put six
+golfers into two THREES with no error, a different round), by add-player
+and by move-player. A group over the cap at setup was a ValueError that
+500ed; `RoundSetupView` now returns it as a 400. The game's own setup still
+insists on exactly 5 or 6; this only stops the round refusing the card
+first. Client mirror: `GameMeta.maxGroupSize` read through
+`maxGroupSizeFor(active)` (the largest wins, so a side game cannot shrink
+the card), used by the casual screen's `_nextAvailableGroup`. Tests:
+`api/test_group_size.py` (12), `mobile/test/group_size_test.dart` (5).
+
+The catalog entry is `enabled: false` until the create-round 5–6 option,
+the setup screen and score entry land. Still to do: those three, the
+leaderboard, and moving the guide from `/preview/` to `/games/` LAST.

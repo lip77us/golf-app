@@ -158,10 +158,12 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   bool get _multiGroup => _activeGames.contains(GameIds.multiSkins);
 
   /// The group a newly-added player should land in by default — the lowest
-  /// existing group that still has room (< 4 players), or a brand-new
-  /// group when every current group is full.  Keeps the user from having
-  /// to manually reassign every fifth player to group 2.
+  /// existing group that still has room, or a brand-new group when every
+  /// current group is full.  Keeps the user from having to manually reassign
+  /// every fifth player to group 2. Room is four, or six when the round plays
+  /// Annandale Friday ([maxGroupSizeFor]).
   int _nextAvailableGroup() {
+    final cap = maxGroupSizeFor(_activeGames);
     final counts = <int, int>{};
     for (final g in _playerGroups.values) {
       counts[g] = (counts[g] ?? 0) + 1;
@@ -169,7 +171,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     if (counts.isEmpty) return 1;
     final sortedGroups = counts.keys.toList()..sort();
     for (final g in sortedGroups) {
-      if (counts[g]! < 4) return g;
+      if (counts[g]! < cap) return g;
     }
     return sortedGroups.last + 1;
   }

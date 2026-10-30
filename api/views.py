@@ -5455,9 +5455,11 @@ class RoundSetupView(APIView):
                 handicap_allowance = d['handicap_allowance'],
                 randomise          = d['randomise'],
             )
-        except RoundRegroupLocked as exc:
+        except (RoundRegroupLocked, ValueError) as exc:
             # 400 rather than letting it 500: a TD redrawing a round that has
-            # started is making an ordinary mistake, not hitting a bug.
+            # started is making an ordinary mistake, not hitting a bug. A
+            # group over the size the round allows (ValueError) is the same
+            # kind of mistake and was a 500.
             return Response({'detail': str(exc)},
                             status=status.HTTP_400_BAD_REQUEST)
 
@@ -6981,10 +6983,14 @@ class RoundAddPlayerView(APIView):
             if foursome is not None:
                 reals = [m for m in foursome.memberships.all()
                          if not m.player.is_phantom]
-                if len(reals) >= 4:
+                from services.round_setup import FOURSOME, max_group_size
+                cap = max_group_size(round_obj)
+                if len(reals) >= cap:
                     return Response(
-                        {'detail': f'Group {group_number} is full — a group '
-                                   'is a foursome.'},
+                        {'detail': (f'Group {group_number} is full — a group '
+                                    'is a foursome.' if cap == FOURSOME else
+                                    f'Group {group_number} is full — this '
+                                    f'game is at most {cap} on a card.')},
                         status=status.HTTP_400_BAD_REQUEST)
                 if HoleScore.objects.filter(
                         foursome=foursome, gross_score__isnull=False,
@@ -7240,10 +7246,12 @@ class RoundMovePlayerView(APIView):
                            f'larger group first.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if to_real_count + 1 > 4:
+        from services.round_setup import max_group_size
+        _cap = max_group_size(to_fs.round)
+        if to_real_count + 1 > _cap:
             return Response(
                 {'detail': f'Cannot add to group {to_fs.group_number} — '
-                           f'it already has 4 players.'},
+                           f'it already has {_cap} players.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

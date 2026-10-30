@@ -48,6 +48,31 @@ def round_has_real_scores(round_obj) -> bool:
     ).exists()
 
 
+FOURSOME = 4
+
+
+def max_group_size(round_obj) -> int:
+    """The most golfers one group of this round may hold.
+
+    A group is a foursome — except in a round playing Annandale Friday, a
+    game for ONE group of 5 or 6 on one card. The size is a property of the
+    game being played, so it is asked of the round rather than assumed; and
+    it is asked in ONE place, because setup, add-player and move-player all
+    refuse a fifth golfer and three copies of the number would drift.
+
+    The game's own setup still insists on 5 or 6 exactly
+    (`services.annandale_friday.shape_problem`); this only stops the round
+    from refusing the card before the game gets to look at it.
+    """
+    games = set(round_obj.active_games or [])
+    if round_obj.primary_game:
+        games.add(round_obj.primary_game)
+    if 'annandale_friday' in games:
+        from services.annandale_friday import GROUP_SIZES
+        return max(GROUP_SIZES)
+    return FOURSOME
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -225,10 +250,11 @@ def setup_round(
         # 1..N in order; empty group numbers between filled ones are fine
         # (we just don't create them).
         groups = [group_map[k] for k in sorted(group_map.keys())]
+        cap = max_group_size(round_obj)
         for g in groups:
-            if not (1 <= len(g) <= 4):
+            if not (1 <= len(g) <= cap):
                 raise ValueError(
-                    f"Each group must have 1–4 players (got {len(g)})."
+                    f"Each group must have 1–{cap} players (got {len(g)})."
                 )
     else:
         if randomise:
@@ -240,7 +266,15 @@ def setup_round(
                 random.shuffle(rest)
                 player_objs = [first] + rest
 
-        groups = _group_players(player_objs, max_size=4)
+        # A five or six playing Annandale Friday is ONE card. Left to the
+        # foursome split it came back as two threes, which is a different
+        # round. Past the game's size it falls back to fours, and the game's
+        # own setup says what is wrong.
+        cap = max_group_size(round_obj)
+        if cap > FOURSOME and len(player_objs) <= cap:
+            groups = [player_objs]
+        else:
+            groups = _group_players(player_objs, max_size=FOURSOME)
 
     # **The guard that makes the wipe below safe.** `HoleScore.foursome` is
     # CASCADE: deleting the foursomes deletes every score hanging off them,

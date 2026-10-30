@@ -20,6 +20,10 @@ class GameIds {
   /// round-robin) from one setup.  Each pair is handicapped on its own two
   /// players; settlement nets each player's two matches.
   static const String tripleNassau = 'triple_nassau';
+  /// Annandale Friday — one group of 5 or 6 on one card, split into teams
+  /// that make three better-ball Nassaus. The only game a group that size
+  /// can play, and the only one that seats more than four on a card.
+  static const String annandaleFriday = 'annandale_friday';
   /// Las Vegas — 2v2 team game; each team's two net scores form a number
   /// (low=tens, high=ones), lower number wins by the difference.  Owns the
   /// 2-digit scoring model, so it's mutually exclusive with the other games.
@@ -267,6 +271,13 @@ class GameMeta {
   /// unlikely. Blocks the subset branch of [sideGamesFor].
   final bool isAltShot;
 
+  /// The most golfers one CARD may hold while this game is in the round. A
+  /// group is a foursome; Annandale Friday is the one game played by five or
+  /// six on one card. Read through [maxGroupSizeFor], never directly, and
+  /// mirrored by `services.round_setup.max_group_size` on the server — which
+  /// is what actually refuses a fifth golfer.
+  final int maxGroupSize;
+
   const GameMeta({
     required this.id,
     required this.displayName,
@@ -293,6 +304,7 @@ class GameMeta {
     this.cupOnly              = false,
     this.requiresFullRound    = false,
     this.hasLiveActivity      = false,
+    this.maxGroupSize         = 4,
   });
 
   /// True if this game can be played with exactly [n] real players.
@@ -422,6 +434,26 @@ const List<GameMeta> kGameCatalog = [
     // confusion: a golfer knows he is two up and cannot remember on whom.
     hasLiveActivity: true,
     excludes    : {GameIds.sixes, GameIds.nassau, GameIds.points531},
+  ),
+  GameMeta(
+    id          : GameIds.annandaleFriday,
+    displayName : 'Annandale Friday',
+    casual      : true,
+    canBePrimary: true,
+    blurb       : 'The only game for a group of 5 or 6: pairs Nassaus between '
+                  'the teams. Teams are set on the next screen.',
+    // Three F9/B9/Overall Nassaus — needs a full 18.
+    requiresFullRound: true,
+    sizes       : {5, 6},
+    maxGroupSize: 6,
+    // Owns score entry; every golfer plays his own ball, so the overlays
+    // that work at this size (Skins, Spots, Stroke Play) can ride on it.
+    allowsSideGames: false,
+    hostsOverlaySideGames: true,
+    // Not in the picker until the create-round 5–6 option, the setup screen
+    // and score entry land. The size rule above already applies: a round
+    // that has the game seats six on one card whatever the picker shows.
+    enabled     : false,
   ),
   GameMeta(
     id          : GameIds.match18,
@@ -891,6 +923,21 @@ const List<GameMeta> kGameCatalog = [
 
 /// Look up metadata by game ID.  Returns null for unknown IDs.
 GameMeta? gameMeta(String id) => _kGameById[id];
+
+/// The most golfers one card may hold in a round playing [active].
+///
+/// Four, unless a game in the round seats more. The largest wins, because a
+/// side game riding on an Annandale Friday must not shrink its card back to
+/// four. Disabled games count too: the answer is about the round that exists,
+/// not about what the picker offers today.
+int maxGroupSizeFor(Iterable<String> active) {
+  var cap = 4;
+  for (final id in active) {
+    final m = _kGameById[id];
+    if (m != null && m.maxGroupSize > cap) cap = m.maxGroupSize;
+  }
+  return cap;
+}
 
 final Map<String, GameMeta> _kGameById = {
   for (final g in kGameCatalog) g.id: g,
