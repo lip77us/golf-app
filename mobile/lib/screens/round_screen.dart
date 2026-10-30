@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../ui_labels.dart';
 import '../game_catalog.dart';
+import '../utils/round_leaderboard_route.dart';
 import '../utils/side_game_routes.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
@@ -85,24 +86,26 @@ class _RoundScreenState extends State<RoundScreen> {
     }
   }
 
-  @override
   /// The board this round actually has.
   ///
   /// A Foursome Play round carries no round-level games, so the generic board
   /// draws empty tabs over "No championship games configured" — its own
-  /// leaderboard is the one with the six team rows on it. Both entry points on
-  /// this hub go through here so they cannot disagree.
+  /// leaderboard is the one with the six team rows on it.
+  ///
+  /// The decision itself is `utils/round_leaderboard_route.dart`, NOT this
+  /// method: the third entry point is `_CompleteRoundButton`, a separate
+  /// widget that holds a round id and never had the round, so a helper
+  /// private to this State could not be the one place.
   void _openLeaderboard(BuildContext context, dynamic round) {
-    if (round.isTeamPlayRound == true && round.tournamentId != null) {
-      Navigator.of(context).pushNamed('/team-play-leaderboard', arguments: {
-        'tournamentId'  : round.tournamentId,
-        'tournamentName': '',
-      });
-      return;
-    }
-    Navigator.of(context).pushNamed('/leaderboard', arguments: round.id);
+    final r = roundLeaderboardRoute(
+      roundId        : round.id,
+      isTeamPlayRound: round.isTeamPlayRound == true,
+      tournamentId   : round.tournamentId,
+    );
+    Navigator.of(context).pushNamed(r.route, arguments: r.arguments);
   }
 
+  @override
   Widget build(BuildContext context) {
     final rp      = context.watch<RoundProvider>();
     final auth    = context.read<AuthProvider>();
@@ -157,6 +160,8 @@ class _RoundScreenState extends State<RoundScreen> {
                   ? _WaitingForTdNote()
                   : _CompleteRoundButton(
                       roundId: round.id,
+                      isTeamPlayRound: round.isTeamPlayRound == true,
+                      tournamentId: round.tournamentId,
                       submitting: rp.submitting,
                       allScored: round.allHolesScored,
                       unscoredHoles: round.holesUnscored,
@@ -984,6 +989,12 @@ class _WaitingForTdNote extends StatelessWidget {
 
 class _CompleteRoundButton extends StatelessWidget {
   final int roundId;
+  /// Where this round's board lives, for the push after it closes. Carried
+  /// rather than looked up because this widget never holds the round — which
+  /// is exactly why it used to push `/leaderboard` by hand and land a
+  /// finished Foursome Play round on "No championship games configured."
+  final bool isTeamPlayRound;
+  final int? tournamentId;
   final bool submitting;
   /// True when every expected hole has a score — drives prominence + the
   /// "not all holes scored" warning in the confirm dialog.
@@ -1000,6 +1011,8 @@ class _CompleteRoundButton extends StatelessWidget {
 
   const _CompleteRoundButton({
     required this.roundId,
+    required this.isTeamPlayRound,
+    required this.tournamentId,
     required this.submitting,
     this.allScored = true,
     this.unscoredHoles = const [],
@@ -1025,7 +1038,12 @@ class _CompleteRoundButton extends StatelessWidget {
     if (!context.mounted) return;
 
     if (lb != null) {
-      Navigator.of(context).pushNamed('/leaderboard', arguments: roundId);
+      final r = roundLeaderboardRoute(
+        roundId        : roundId,
+        isTeamPlayRound: isTeamPlayRound,
+        tournamentId   : tournamentId,
+      );
+      Navigator.of(context).pushNamed(r.route, arguments: r.arguments);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

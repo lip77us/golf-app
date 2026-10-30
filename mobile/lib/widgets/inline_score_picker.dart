@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/settings_provider.dart';
+import '../theme/halved_brand.dart';
 import 'net_score_button.dart';
 
 /// Inline horizontal score picker used on every game's score-entry screen.
@@ -62,6 +63,10 @@ class _InlineScorePickerState extends State<InlineScorePicker> {
   // par / bogey / double, against the anchor par) plus a third of the eagle &
   // triple cells peeking in on either side.
   static const double _itemWidth  = 50.0;
+  /// The notation chip inside a cell. Smaller than the cell so a
+  /// selected cell shows a real band of fill rather than a rim —
+  /// 7px each side, 6px top and bottom.
+  static const double _chipSize   = 36.0;
   static const double _itemMargin = 5.0;
   static const double _itemTotal  = _itemWidth + _itemMargin * 2;
 
@@ -262,29 +267,41 @@ class _InlineScorePickerState extends State<InlineScorePicker> {
                     width: _itemWidth,
                     height: 48,
                     alignment: Alignment.center,
-                    // Darker green tint marks the anchor — net par or gross
-                    // par, per the preference. No border (a dark ring reads
+                    // Light green marks the anchor — net par or gross par,
+                    // per the preference. No border (a dark ring reads
                     // bogey-like) and no glow (par has no golf shape of its
                     // own).
                     //
-                    // SELECTION is a DEEPER TINT, not an added outline. Par is
-                    // the one score with no shape of its own, so the 2.5px
-                    // rounded border NetScoreButton draws for a selected cell
-                    // had nothing to sit around except the bare digit — and a
-                    // box around a digit is exactly how this card draws a
-                    // bogey. Picking par made par look like a bogey.
+                    // SELECTION is a FILL, not an added outline, and that
+                    // half was right: the 2.5px rounded border NetScoreButton
+                    // draws for a selected cell had nothing to sit around
+                    // except the bare digit, and a box around a digit is
+                    // exactly how this card draws a bogey. Picking par made
+                    // par look like a bogey.
+                    //
+                    // **What was wrong is that the fill had no room to show.**
+                    // It went `green.shade400` -> `green.shade600`, which is
+                    // 1.40:1 — and the chip on top left it visible only as a
+                    // 5px rim. Reported from a scramble, 30 Oct 2026: on the
+                    // course, in sun, picking par looked like picking nothing,
+                    // and par is the score picked most.
+                    //
+                    // So the selected fill is deep pine (15.2:1 against the
+                    // picker's own background) and the chip steps in to 36 to
+                    // give it a 7px band all round. The chip itself does not
+                    // move or change, so the notation is untouched.
                     decoration: BoxDecoration(
-                      color: sel ? Colors.green.shade600 : Colors.green.shade400,
+                      color: sel ? Halved.deepPine : Colors.green.shade300,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: NetScoreButton(
                       score:    s,
                       par:      widget.par,
                       strokes:  widget.strokes,
-                      // The tint above carries the selection here.
+                      // The fill above carries the selection here.
                       selected: false,
-                      width:    40,
-                      height:   40,
+                      width:    _chipSize,
+                      height:   _chipSize,
                       // The anchor always renders as clean par (no bogey
                       // square). With the preference ON the button's own
                       // baseline is gross par, so force the net one; with it
@@ -294,14 +311,31 @@ class _InlineScorePickerState extends State<InlineScorePicker> {
                     ),
                   ),
                 )
-              : NetScoreButton(
-                  score:    s,
-                  par:      widget.par,
-                  strokes:  widget.strokes,
-                  selected: sel,
-                  width:    _itemWidth,
-                  height:   48,
-                  onTap:    () => widget.onScoreSelected(s),
+              : GestureDetector(
+                  onTap: () => widget.onScoreSelected(s),
+                  child: Container(
+                    width: _itemWidth,
+                    height: 48,
+                    alignment: Alignment.center,
+                    // The SAME mark as the anchor: a selected cell is filled.
+                    // It used to be a 2.5px ring here and a tint change there,
+                    // so one control had two ways of saying one thing and the
+                    // weaker one landed on the score picked most.
+                    decoration: BoxDecoration(
+                      color: sel ? Halved.deepPine : null,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: NetScoreButton(
+                      score:    s,
+                      par:      widget.par,
+                      strokes:  widget.strokes,
+                      // The fill carries it; the ring would sit around the
+                      // notation and read as a square.
+                      selected: false,
+                      width:    _chipSize,
+                      height:   _chipSize,
+                    ),
+                  ),
                 );
 
           // A light divider on the cell's right edge lands mid-gap between this

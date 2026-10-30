@@ -7263,6 +7263,73 @@ ceiling the packet puts it at 127.
 Still to do: the watch page, and moving the guide from `/preview/` to
 `/games/` LAST.
 
+## Two from a scramble on the course — the board and the selector
+
+Reported 30 Oct 2026 after TPSGC Fall Scramble 2026.
+
+### "The leaderboard went away when I completed the round"
+
+*"It says No Championship game configured."* A Foursome Play round carries no
+round-level games, so the generic board builds no tabs, falls through to
+`ChampionshipTabView` and says that about an event that is configured fine.
+Its board is the tournament's six-row team table.
+
+**The hub already routed around this**, in `_openLeaderboard`, whose own
+docstring said *"Both entry points on this hub go through here so they cannot
+disagree."* **There were three.** The third is inside `_CompleteRoundButton`,
+a separate widget that holds a round id and never had the round — so it could
+not call a helper private to the State and pushed `/leaderboard` by hand.
+
+`utils/round_leaderboard_route.dart` takes FACTS rather than a round object,
+which is what lets every caller use it including the one that never had the
+round. **A screen-private helper is only shared by the call sites that happen
+to live in that screen** — that is the whole lesson, and it is the same shape
+as the day bet's picker and Hot Seat's Road Trip sheet: one rule reachable
+from one place and not the other.
+
+`tournamentId` is required beside the flag: the team board is keyed on the
+tournament, so a team-play round carrying no tournament id falls back rather
+than trading one empty screen for another.
+
+Score entry's own completion shows snackbars and navigates nowhere, so it
+never had this bug. Also fixed in passing: a stray `@override` that sat above
+`_openLeaderboard` instead of `build`.
+
+### Picking par was invisible on the course
+
+*"When selecting par, which was often, the selector was a very subtle change
+in the green border highlight that was not visible on the course."*
+
+Measured: the anchor cell went `green.shade400` → `green.shade600`, **1.40:1**
+— and the 40pt notation chip sitting on top left that fill visible only as a
+**5px rim**. Par is the score picked most, and it was the one with the weakest
+mark.
+
+**The reason it was a fill at all was right and is kept.** The comment there
+records it: par is the one score with no golf shape of its own, so the 2.5px
+ring `NetScoreButton` draws for a selected cell had nothing to sit around
+except the bare digit — and a box around a digit is exactly how this card
+draws a bogey. Picking par made par look like a bogey. What was wrong is that
+the fill had no room to show.
+
+So the fill is `Halved.deepPine` (**10.4:1** against the unselected anchor,
+15.2:1 against the picker's background) and the chip steps 40 → 36 to give it
+a 7px band all round — 46% of the cell against 33%. The chip does not move or
+resize, so the notation is untouched.
+
+**Both cell kinds now carry the SAME mark.** A selected cell is filled,
+whether it is par or not; the 2.5px ring is gone. One control was saying one
+thing two ways, and the weaker way landed on the score picked most.
+
+Seen on a device before committing, which is the point: this is a visual fix
+for a visual complaint, and the 1.40:1 it replaces was itself shipped unseen.
+
+Tests: `mobile/test/round_leaderboard_route_test.dart` (6 — including a source
+guard that no leaderboard route is pushed by hand in the hub) and
+`mobile/test/inline_score_picker_test.dart` (5 — contrast and band area are
+measured, since "there is a decoration" passed on the old build too). Both
+guards were checked by making them fail against the original code.
+
 ## The Sequoya 3s board — `handoff-sequoya-leaderboard`
 
 `widgets/sequoya_board.dart` + `utils/sequoya_board_model.dart`, the sixth
