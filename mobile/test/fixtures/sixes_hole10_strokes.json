@@ -12,8 +12,8 @@
     "teams_set": true,
     "team1": {
       "player_ids": [
-        9,
-        10
+        13,
+        14
       ],
       "names": [
         "Paul",
@@ -23,21 +23,21 @@
     },
     "team2": {
       "player_ids": [
-        11,
-        12
+        16,
+        15
       ],
       "names": [
-        "Dave",
-        "Lee"
+        "Lee",
+        "Dave"
       ],
-      "short": "D & L"
+      "short": "L & D"
     },
     "up_before": 1,
     "to_play": 3
   },
   "players": [
     {
-      "player_id": 9,
+      "player_id": 13,
       "name": "Paul",
       "short": "P",
       "course_handicap": 6,
@@ -48,7 +48,7 @@
       "is_best": true
     },
     {
-      "player_id": 10,
+      "player_id": 14,
       "name": "Sam",
       "short": "S",
       "course_handicap": 14,
@@ -59,7 +59,7 @@
       "is_best": true
     },
     {
-      "player_id": 11,
+      "player_id": 15,
       "name": "Dave",
       "short": "D",
       "course_handicap": 9,
@@ -70,7 +70,7 @@
       "is_best": false
     },
     {
-      "player_id": 12,
+      "player_id": 16,
       "name": "Lee",
       "short": "L",
       "course_handicap": 18,

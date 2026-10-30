@@ -121,42 +121,58 @@ void main() {
       // takes the hole. Under gross the same scoreline HALVES, which is the
       // test below.
       final card = _card('sixes_hole10_strokes');
-      await _pump(t, SixesHoleTray(card: card, onEdit: () {}));
+      await _pump(t, SixesHoleTray(
+          card: card, nextHole: 11, onEdit: () {}));
       final text = _allText(t);
       // "Won hole 10" is worded so it cannot be read as the match score,
       // which is the line directly underneath.
       expect(text, contains('Won hole 10'));
       expect(text, contains('net ${card.result!.t1Net} v ${card.result!.t2Net}'));
       expect(text, contains('2 to play'));
+      expect(text, contains('Hole 11 ›'));
     });
 
     testWidgets('a closed match says so, and names the next pairing',
         (t) async {
       final card = _card('sixes_hole10_closed');
-      await _pump(t, SixesHoleTray(card: card, onEdit: () {}));
+      await _pump(t, SixesHoleTray(
+          card: card, nextHole: 11, onEdit: () {}));
       final text = _allText(t);
       expect(text, contains('win 3&2'));
       expect(text, contains('match 2 over'));
       expect(text, contains('\$5 each'));
       expect(text, contains('PARTNERS CHANGE'));
       expect(text, contains('Match 3 from 11'));
+      // The forward button names the MATCH as well as the hole — the thing
+      // that changes at 11 is who you are playing with, which the screen's
+      // generic pager has no way to know. That is what the tray's own pager
+      // buys, and why it covers the one underneath.
+      expect(text, contains('Match 3 · hole 11 ›'));
     });
 
-    testWidgets('it grows NO second pager', (t) async {
-      // Score entry has its own prev/next under this tray. Two sets of
-      // arrows at the bottom is what a phone showed (30 Oct 2026); the
-      // next-match card is what carries the new partners' first hole.
+    testWidgets('it drives the hole, and still can while the result is out',
+        (t) async {
+      // The screen's pager is hidden under this tray, so these are the only
+      // arrows on screen — and they have to work even when the result has
+      // not landed, or a bad signal strands the group on a hole.
+      var back = 0, fwd = 0;
       await _pump(t, SixesHoleTray(
-          card: _card('sixes_hole10_closed'), onEdit: () {}));
-      final text = _allText(t);
-      expect(text, isNot(contains('›')));
-      expect(text, isNot(contains('‹')));
-      expect(text, contains('Match 3 from 11'));
+          card: _card('sixes_hole10_closed'),
+          nextHole: 11,
+          onEdit: () {},
+          gettingResult: true,
+          onPrev: () => back++,
+          onNext: () => fwd++));
+      await t.tap(find.text('‹'));
+      await t.tap(find.text('Hole 11 ›'));
+      await t.pumpAndSettle();
+      expect(back, 1);
+      expect(fwd, 1);
     });
 
     testWidgets('a live match offers no next pairing', (t) async {
       await _pump(t, SixesHoleTray(
-          card: _card('sixes_hole10_live'), onEdit: () {}));
+          card: _card('sixes_hole10_live'), nextHole: 11, onEdit: () {}));
       expect(_allText(t), isNot(contains('PARTNERS CHANGE')));
     });
 
@@ -164,7 +180,8 @@ void main() {
       // Gross: Paul and Lee both make 4, so the sides tie on best ball.
       final card = _card('sixes_hole10_live');
       expect(card.result!.halved, isTrue, reason: 'the fixture is the subject');
-      await _pump(t, SixesHoleTray(card: card, onEdit: () {}));
+      await _pump(t, SixesHoleTray(
+          card: card, nextHole: 11, onEdit: () {}));
       final text = _allText(t);
       expect(text, contains('Hole 10 halved'));
       expect(text, isNot(contains('Won hole')));
@@ -177,6 +194,7 @@ void main() {
       // learnt this on a phone.
       await _pump(t, SixesHoleTray(
           card: _card('sixes_hole10_closed'),
+          nextHole: 11,
           onEdit: () {},
           gettingResult: true));
       final text = _allText(t);
@@ -276,11 +294,21 @@ void main() {
       expect(gate, contains('!_fortyBallsRound(rp)'));
     });
 
+    test('the screen hides its own pager under the tray', () {
+      // Two sets of arrows at the bottom is what a phone showed. The design
+      // has the tray overlaying that row, and the tray's forward button can
+      // name the next MATCH — so the generic one is the half that goes.
+      expect(src, contains('if (!sixTray)'));
+    });
+
     test('the Sixes tray waits for the SERVER, not just the local queue', () {
       // Without the hold it draws the card from before this score.
+      // Bounded by the CALL — a window of 400 broke the day the tray grew
+      // its pager back, which is the fourth time today a character count
+      // reported an edit as a regression.
       final at = src.indexOf('SixesHoleTray(');
       expect(at, greaterThan(0));
-      expect(src.substring(at, at + 400),
+      expect(src.substring(at, src.indexOf('onEdit:', at)),
           contains('trayResultPending'));
     });
 

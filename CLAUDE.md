@@ -7466,6 +7466,24 @@ has to be closed on the server (`Round.objects.get(pk=493)`, set
 skips `maybe_notify_round_complete` and `emit_round_complete`, so a field of
 fifty-six does not get a "round complete" push three days late.
 
+### The reel no longer appears by itself
+
+Reported from the 6th green: match 1 was decided and the spinner popped over
+the tray that was reporting the hole. `_maybeOpenSixesTeamPicker` had done
+that since the draw shipped, and it is wrong once there is somewhere to ask:
+*"I think the design showed that I get a choice of spinner or pick my teams"*.
+
+So the auto-open is **off whenever Sixes is the primary** — keyed on the
+primary rather than on the card, because a gate waiting for a fetch would pop
+before it landed. The choice is offered twice instead, which is not a
+duplicate because they are different moments: **two buttons on the tray's
+next-match card** when the match just closed, and the **band** on the first
+hole of the undrawn match. Both open the same sheet, which carries the reel
+AND the two legal pairings.
+
+The extras auto-open is untouched — a different gate, and out of this
+packet's scope.
+
 ### The Sixes strokes card: every dot is filled
 
 A spent stroke was drawn hollow and the ones still to come filled. Two things
@@ -7577,12 +7595,25 @@ read at arm's length, and short_name is account-editable), not a new one.
   Balls, which posts with its count. The Sixes tray also holds for the
   server's answer (`ResultHold`) rather than only the local queue, so it
   cannot draw the card from before the score just entered.
-- **Two sets of arrows at the bottom.** The tray grew its own ‹ / Hole 11 ›
-  over score entry's pager. The design draws them because the prototype has
-  no screen underneath; Annandale's tray had already made the call — *"the
-  second pager the tray deliberately does not grow either"*. Removed. Nothing
-  is lost on a close-out, because the next-match card names the hole the new
-  partners start on.
+- **Two sets of arrows at the bottom** — and the fix went the WRONG WAY
+  first. The tray's own ‹ / Hole 11 › were removed, on Annandale's precedent
+  that a tray *"does not grow a second pager"*. Paul, reading the design
+  again: *"the black match status box overlays the forward back arrows …
+  the status box should always have those controls"*, and *"they stay there
+  so if there is a delay the user can move on, but if the box appears it can
+  control the back/forward/edit scores."* So the duplication is fixed from
+  the other end — the tray carries the pager and score entry hides its own
+  under it (`if (!sixTray)`).
+  - **That is what buys `Match 3 · hole 11 ›`.** The thing that changes at 11
+    is who you are playing with, which a generic pager has no way to know.
+  - **The screen's pager is present exactly when the tray is not**, so a card
+    that never lands leaves the group able to move on — which is the half
+    Annandale's precedent would have got right and this one has to as well.
+    The tray's arrows work while `gettingResult` is true for the same reason.
+- **A match that goes the distance read `win 1&0`.** `closed = |up| > left`
+  is true on the last hole for any margin, so the bare close-out notation
+  came out with a zero in it. `margin_text` is `N UP` when nothing was left
+  to not play.
 
 - **The keypad read the ROUND's full-net strokes.** `_keypadStrokes` falls
   back to `HoleScore.handicap_strokes`, so a strokes-off Sixes match told the
@@ -7600,9 +7631,9 @@ Both guards are anchored on the GATE rather than on the comment above it —
 the Annandale one broke merely because that comment was reworded, and a guard
 that fails on a rewording is one that gets deleted.
 
-**Three fixed-window source guards broke in one session, none of them for a
-real reason** — `src.substring(at, at + 500 / 900 / 1400)`, each pushed past
-its window by a line inserted above the claim. A source guard is bounded by a
+**FOUR fixed-window source guards broke in one session, none of them for a
+real reason** — and the fourth was one written that same day — `src.substring(at, at + 400 / 500 / 900 / 1400)`, each pushed past its
+window by a line inserted above the claim. A source guard is bounded by a
 LANDMARK (the next `onScore`, the function's own last line) or it reports
 edits rather than regressions.
 

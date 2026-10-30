@@ -2388,6 +2388,16 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   Future<void> _maybeOpenSixesTeamPicker(
       RoundProvider rp, List<String> games) async {
     if (!games.contains('sixes')) return;
+    // **The Sixes entry mode ASKS instead of popping.** Reported from a phone
+    // (Paul, 30 Oct 2026): the reel appeared by itself the moment match 1 was
+    // decided on the 6th, over the tray that was reporting the hole. The
+    // group gets the choice now — two buttons on the tray's next-match card,
+    // and the band on the first hole of the undrawn match — so spinning is
+    // something they do rather than something that happens to them.
+    //
+    // Keyed on the PRIMARY rather than on the card, which is fetched: a gate
+    // that waited for a load would pop before it landed.
+    if (resolvePrimary(rp.round?.primaryGame, games) == GameIds.sixes) return;
     if (!shouldOpenSixesTeamPicker(rp.sixesSummary)) return;
     final number = sixesMatchNeedingTeams(rp.sixesSummary);
     if (number == null || _sixesPickerOpened.contains(number)) return;
@@ -3000,6 +3010,17 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           else if (sixTray)
             SixesHoleTray(
               card: six,
+              // While this tray is up it IS the bottom bar — the pager below
+              // is hidden, so these are the only arrows on screen.
+              nextHole: _nextHoleInOrder(rp),
+              onPrev: _prevHoleInOrder(rp) == null ? null : _retreat,
+              onNext: _nextHoleInOrder(rp) == null ? null : _advance,
+              // Both open the same sheet — it carries the reel AND the two
+              // legal pairings, so the buttons differ in what they promise
+              // rather than in where they land.
+              onSetTeams: six.nextMatch == null || six.nextMatch!.teamsSet
+                  ? null
+                  : () => _openSixesTeamPicker(rp, six.nextMatch!.number),
               gettingResult: rp.trayResultPending(_selectedHole) ||
                   (_pending[_selectedHole]?.isNotEmpty ?? false),
               notSynced: rp.trayHoleUnsynced(_selectedHole),
@@ -3111,6 +3132,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           // Hole navigation / completion.  (Finishing the round early lives in
           // the app-bar overflow menu — it's a rare action and doesn't earn a
           // permanent slot down here.)
+          //
+          // **Hidden under the Sixes tray**, which carries its own ‹ and a
+          // forward button that can name the next MATCH as well as the next
+          // hole. Two pagers at the bottom is what a phone showed; the design
+          // has the tray overlaying this row, so this is the half that goes
+          // (Paul, 30 Oct 2026).
+          if (!sixTray)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             child: Column(children: [

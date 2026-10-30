@@ -383,15 +383,26 @@ class SixesHoleTray extends StatelessWidget {
   final SixesHoleCard card;
   final VoidCallback onEdit;
 
-  /// **No prev/next here.** The design draws them because the prototype has
-  /// no screen under it; this tray sits above score entry's own pager, which
-  /// IS the navigation — and two sets of arrows at the bottom is what a
-  /// phone showed the day this shipped (Paul, 30 Oct 2026). Annandale's tray
-  /// made the same call: "the second pager the tray deliberately does not
-  /// grow either".
+  /// Offered when the NEXT match has no sides: the group chooses here rather
+  /// than having the reel appear over this tray by itself.
+  final VoidCallback? onSetTeams;
+
+  /// **The tray carries the pager, and COVERS the screen's own.**
   ///
-  /// Nothing is lost on a close-out: the next-match card already names the
-  /// hole the new partners start on.
+  /// This went the other way first — the tray drew no arrows, on Annandale's
+  /// precedent that a tray "does not grow a second pager" — and a phone then
+  /// showed two sets at the bottom. Paul, reading the design again (30 Oct
+  /// 2026): *"the black match status box overlays the forward back arrows …
+  /// the status box should always have those controls."* So the duplication
+  /// is fixed from the other end: while this tray is up it IS the bottom
+  /// bar, and score entry hides its pager underneath.
+  ///
+  /// That is what lets the forward button say `Match 3 · hole 11 ›` — the
+  /// thing that changes at 11 is who you are playing with, which a generic
+  /// pager has no way to know.
+  final VoidCallback? onPrev;
+  final VoidCallback? onNext;
+  final int? nextHole;
 
   /// The result is on its way — what we hold for this hole predates the score
   /// just entered, so it is not drawn. Annandale's tray learnt this: showing
@@ -405,6 +416,10 @@ class SixesHoleTray extends StatelessWidget {
     super.key,
     required this.card,
     required this.onEdit,
+    required this.nextHole,
+    this.onPrev,
+    this.onNext,
+    this.onSetTeams,
     this.gettingResult = false,
     this.notSynced = false,
   });
@@ -463,6 +478,8 @@ class SixesHoleTray extends StatelessWidget {
             const SizedBox(height: 4),
             _nextCard(card.nextMatch!),
           ],
+          const SizedBox(height: 12),
+          _buttons(r),
         ],
       ),
     );
@@ -637,12 +654,97 @@ class SixesHoleTray extends StatelessWidget {
                   : 'Set the sides before entering scores.',
               style: const TextStyle(color: _dim, fontSize: 12),
             ),
+            if (!n.teamsSet && onSetTeams != null) ...[
+              const SizedBox(height: 10),
+              Row(children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 40,
+                    child: OutlinedButton(
+                      onPressed: onSetTeams,
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0x66FFFFFF)),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20)),
+                      ),
+                      child: const Text('Pick the teams',
+                          style: TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: SizedBox(
+                    height: 40,
+                    child: FilledButton(
+                      onPressed: onSetTeams,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Halved.deepPine,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20)),
+                      ),
+                      child: const Text('Spin for partners',
+                          style: TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ),
+              ]),
+            ],
           ],
         ),
       ),
     );
   }
 
+
+  Widget _buttons(SixesHoleOutcome? r) {
+    final closed = r != null && r.closed && card.nextMatch != null;
+    final label = nextHole == null
+        ? 'Done'
+        : closed
+            ? 'Match ${card.nextMatch!.number} · hole $nextHole ›'
+            : 'Hole $nextHole ›';
+    return Row(children: [
+      SizedBox(
+        width: 48,
+        height: 48,
+        child: OutlinedButton(
+          onPressed: onPrev,
+          style: OutlinedButton.styleFrom(
+            padding: EdgeInsets.zero,
+            shape: const CircleBorder(),
+            side: const BorderSide(color: Color(0x4DFFFFFF)),
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('‹', style: TextStyle(fontSize: 20)),
+        ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: SizedBox(
+          height: 48,
+          child: FilledButton(
+            onPressed: onNext,
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Halved.deepPine,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24)),
+            ),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(label,
+                  maxLines: 1,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 16)),
+            ),
+          ),
+        ),
+      ),
+    ]);
+  }
 }
 
 // ── 4 · teams not set ────────────────────────────────────────────────────────

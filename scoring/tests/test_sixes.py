@@ -1328,6 +1328,26 @@ class SixesHoleCardTests(_SixesCardBase):
             'match 3 is forced by the other two',
         )
 
+    def test_a_match_that_goes_the_distance_is_won_N_UP(self):
+        # `closed = |up| > left`, and on the last hole `left` is 0 — so any
+        # margin closes it and the bare notation would read `1&0`.
+        self._setup()
+        for h in range(1, 7):
+            self._hole(h, 4, 4, 4, 4)            # match 1 halved throughout
+        # Match 2 must still be level going to the last, or it closes early
+        # and hole 12 belongs to match 3.
+        self._hole(7, 4, 5, 5, 5)                # T1
+        self._hole(8, 5, 5, 4, 5)                # T2
+        self._hole(9, 4, 5, 5, 5)                # T1
+        self._hole(10, 5, 5, 4, 5)               # T2
+        self._hole(11, 4, 4, 4, 4)               # halved → level
+        self._hole(12, 4, 5, 5, 5)               # T1 take the last
+        calculate_sixes(self.fs)
+        r = sixes_hole_card(self.fs, 12)['result']
+        self.assertTrue(r['closed'])
+        self.assertEqual(r['left_after'], 0)
+        self.assertEqual(r['margin_text'], '1 UP')
+
     def test_a_live_hole_offers_no_next_match(self):
         self._setup()
         self._match2_through_9()
@@ -1499,6 +1519,19 @@ class SixesFixtureRegenTests(_SixesCardBase):
         band = sixes_hole_card(self.fs, 7)
         self.assertFalse(band['match']['teams_set'])
         self._write('sixes_hole7_noteams.json', band)
+
+    def test_regenerate_next_match_undrawn(self):
+        """Match 1 closes and match 2 has no sides — the tray has to offer
+        the choice there, rather than the reel appearing by itself."""
+        setup_sixes(self.fs, self._td(teams_from=2), handicap_mode='gross')
+        for h in range(1, 5):                    # 4 UP with 2 to play
+            self._hole(h, 4, 5, 5, 5)
+        calculate_sixes(self.fs)
+        card = sixes_hole_card(self.fs, 4)
+        self.assertTrue(card['result']['closed'])
+        self.assertEqual(card['result']['margin_text'], '4&2')
+        self.assertFalse(card['next_match']['teams_set'])
+        self._write('sixes_hole4_next_undrawn.json', card)
 
     def test_regenerate_with_strokes(self):
         """A row with strokes — the dot cap, and a net below the gross.

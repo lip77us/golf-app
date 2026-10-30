@@ -1825,8 +1825,15 @@ def sixes_hole_card(foursome, hole: int) -> dict:
             'up_after'  : up_after,
             'left_after': left_after,
             'closed'    : closed,
-            # The close-out notation is a RULE, so the server writes it.
-            'margin_text': f"{abs(up_after)}&{left_after}" if closed else None,
+            # The close-out notation is a RULE, so the server writes it —
+            # and `N&M` only when there were holes left to not play. A match
+            # that goes the distance is won `1 UP`; `1&0` is not a thing
+            # anybody says, and it is what the bare formula produces on the
+            # last hole, where `left_after` is 0 and any margin "closes" it.
+            'margin_text': (
+                f"{abs(up_after)}&{left_after}" if left_after
+                else f"{abs(up_after)} UP"
+            ) if closed else None,
         }
 
     # Who plays whom next, and only once this match is actually decided: a
