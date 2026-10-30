@@ -1649,94 +1649,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     await context.read<SyncService>().waitUntilIdle();
     if (!mounted) return;
 
-    final lb = await rp.completeRound(roundId);
-    if (!mounted) return;
-
-    if (lb == null) {
-      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-        content: Text(rp.error ?? 'Could not complete round.'),
-        backgroundColor: Theme.of(ctx).colorScheme.error,
-      ));
-      return;
-    }
-
-    // Backend leaves status == 'in_progress' until every foursome has
-    // 18 holes scored.
-    if (isMultiGroup && lb.status != 'complete') {
-      // **The TD gets a way through, and the groups get NAMED.**
-      //
-      // The wait is right for a scorer — one group must not close the round
-      // on its eleven siblings. It is wrong for the TD, who is the one who
-      // knows that two groups went home, and who had no way to say so: the
-      // round silently stayed open and the only feedback was this snackbar.
-      // (TPSGC 2026 Ryder Cup: twelve groups, four short, closed by hand
-      // over SSH.) The server says whether this caller may force it.
-      if (lb.canForceComplete) {
-        final outstanding = lb.groupsOutstanding;
-        final confirmed = await showDialog<bool>(
-          context: ctx,
-          builder: (dctx) => AlertDialog(
-            title: const Text('Close the round anyway?'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(outstanding.length == 1
-                    ? 'One group has not finished:'
-                    : '${outstanding.length} groups have not finished:'),
-                const SizedBox(height: 8),
-                // Named and counted. "Some groups have not finished" is not
-                // something a TD can act on.
-                for (final g in outstanding)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 2),
-                    child: Text(
-                      '· ${g['name'] ?? 'Group ${g['group_number']}'} — '
-                      '${g['holes_scored']} of ${g['holes_expected']} holes',
-                      style: Theme.of(dctx).textTheme.bodySmall,
-                    ),
-                  ),
-                const SizedBox(height: 12),
-                Text(
-                  'Closing now scores their matches on what has been '
-                  'entered, and a group with no scores counts for nothing. '
-                  'You can reopen the round afterwards.',
-                  style: Theme.of(dctx).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(dctx).colorScheme.onSurfaceVariant),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dctx).pop(false),
-                child: const Text('Keep it open'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dctx).pop(true),
-                child: const Text('Close the round'),
-              ),
-            ],
-          ),
-        );
-        if (confirmed == true && mounted) {
-          final forced = await rp.completeRound(roundId, force: true);
-          if (!mounted) return;
-          if (forced?.status == 'complete') {
-            ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-              content: Text('Round closed.'),
-            ));
-          }
-        }
-      } else {
-        ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-          duration: Duration(seconds: 4),
-          content: Text(
-            'Your group is finished. The round will close once every '
-            'other group also completes.',
-          ),
-        ));
-      }
-    }
+    // The force flow lives in `utils/round_complete.dart`, because this
+    // screen was the only place that had it — and a Foursome Play round never
+    // opens this screen, so a fourteen-group scramble could not be closed
+    // from anywhere (30 Oct 2026).
+    final lb = await completeRoundOrOfferForce(ctx, roundId: roundId);
+    if (lb == null || !mounted) return;
 
     Navigator.of(ctx).pushNamed('/leaderboard', arguments: roundId);
   }

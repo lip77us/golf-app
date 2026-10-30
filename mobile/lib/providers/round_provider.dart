@@ -1580,7 +1580,12 @@ class RoundProvider extends ChangeNotifier {
           roundNumber: _round!.roundNumber,
           date:        _round!.date,
           course:      _round!.course,
-          status:      'complete',
+          // **The SERVER's status, not 'complete'.** A multi-group round
+          // stays `in_progress` until every group is in, and writing
+          // 'complete' here made the hub swap to Final Results over a round
+          // that was still open — which is half of why a fourteen-group
+          // scramble read as closed and stayed in the Active tab.
+          status:      lb.status,
           activeGames: _round!.activeGames,
           betUnit:     _round!.betUnit,
           foursomes:   _round!.foursomes,

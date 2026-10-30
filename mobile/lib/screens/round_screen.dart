@@ -1033,25 +1033,21 @@ class _CompleteRoundButton extends StatelessWidget {
     );
     if (!ok || !context.mounted) return;
 
-    final rp = context.read<RoundProvider>();
-    final lb = await rp.completeRound(roundId);
-    if (!context.mounted) return;
+    // **The SHARED completion**, which is what offers the TD the force when
+    // groups have not finished. This button used to post a plain complete and
+    // then navigate on any non-null response — so on a fourteen-group
+    // scramble the tap looked like it worked while the round stayed open.
+    // The force had been built in `score_entry_screen`, which a Foursome Play
+    // round never opens.
+    final lb = await completeRoundOrOfferForce(context, roundId: roundId);
+    if (lb == null || !context.mounted) return;
 
-    if (lb != null) {
-      final r = roundLeaderboardRoute(
-        roundId        : roundId,
-        isTeamPlayRound: isTeamPlayRound,
-        tournamentId   : tournamentId,
-      );
-      Navigator.of(context).pushNamed(r.route, arguments: r.arguments);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(rp.error ?? 'Could not complete round.'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
-    }
+    final r = roundLeaderboardRoute(
+      roundId        : roundId,
+      isTeamPlayRound: isTeamPlayRound,
+      tournamentId   : tournamentId,
+    );
+    Navigator.of(context).pushNamed(r.route, arguments: r.arguments);
   }
 
   @override

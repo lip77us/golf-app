@@ -7381,6 +7381,68 @@ guard that no leaderboard route is pushed by hand in the hub) and
 measured, since "there is a decoration" passed on the old build too). Both
 guards were checked by making them fail against the original code.
 
+### ...and a third: the round could not be closed at all
+
+*"I can not close the Fall scramble. It stays in my active tab no matter
+what."* (30 Oct 2026.) Round 493, fourteen groups — and **ten of them never
+entered a score** (eight on zero, two on one hole, one on thirteen), so the
+server was right to hold it open: `_all_foursomes_done` is False and the
+tournament list reads `rounds.every(status == 'complete')`.
+
+**The TD's force already existed** for exactly this (TPSGC 2026 Ryder Cup,
+closed by hand over SSH) — and it lived in `score_entry_screen._completeRound`
+alone. **A Foursome Play round never opens that screen**: the hub routes Enter
+Scores to `/team-play-score`, and neither `team_play_score_entry_screen` nor
+`team_play_leaderboard_screen` has a complete action at all. So the only
+button was the hub's `_CompleteRoundButton`, which posted a plain complete.
+
+**Worse than the bug it was meant to fix.** The hub navigated to the
+leaderboard on any non-null response, so the tap LOOKED like it worked — no
+snackbar, nothing to act on. And `RoundProvider.completeRound` wrote
+`status: 'complete'` onto the local round **whatever the server returned**, so
+the hub then swapped to Final Results over a round that was still
+`in_progress`. Two surfaces telling him it was done, and the tournament list —
+which refetches — still saying Active. Hence *no matter what*.
+
+- `utils/round_complete.dart` `completeRoundOrOfferForce()` is the one flow,
+  and `confirmForceComplete()` the dialog (its own function so it is testable
+  without a provider). Both the hub and score entry call it; score entry's
+  copy is deleted.
+- **Driven entirely off the server's answer.** A status that is not `complete`
+  with `canForceComplete` false means the caller is a group scorer — the one
+  case the wait is for. `isMultiGroup` is not passed at all: deriving it on
+  the phone would be a second copy of a rule the server states, and the client
+  must never offer a button the server will ignore.
+- The provider now takes `lb.status`.
+- **The nine dedicated play screens still call `completeRound` directly, and
+  that is deliberate**: Wolf, Points 5-3-1, Rabbit, Survivor, Skins, Nassau,
+  Triple Nassau, Quota Nassau and Sequoya 3s are casual games on one foursome,
+  which the server completes on the first call, so there is no force to offer.
+  Anything that can host a FIELD comes through the helper, and a source test
+  pins the two that can.
+
+Same shape as the day bet's picker, Hot Seat on the Road Trip sheet and the
+leaderboard route one commit earlier: **one rule reachable from one screen and
+not the other.** The force is the third thing built on `score_entry_screen`
+that a team-play round could not reach.
+
+**`round_leaderboard_route_test` had to be re-anchored.** Its guard searched
+for the literal `completeRound(roundId)`, which stopped existing the moment
+the hub moved to the helper — so it failed for a rewording rather than a
+regression. It anchors on `completeRoundOrOfferForce(` now. A guard that
+breaks when a line is renamed is a guard that gets deleted.
+
+Tests: `mobile/test/force_complete_test.dart` (10 — the dialog against round
+493's real ten groups, including that they fit a 375×667 phone without
+overflowing, plus the three source guards; all three were checked by making
+them fail against the original code).
+
+**Still open:** the fix is client-side, so it needs a build — round 493 itself
+has to be closed on the server (`Round.objects.get(pk=493)`, set
+`status='complete'`, save). Doing it through the ORM rather than the endpoint
+skips `maybe_notify_round_complete` and `emit_round_complete`, so a field of
+fifty-six does not get a "round complete" push three days late.
+
 ## The Sequoya 3s board — `handoff-sequoya-leaderboard`
 
 `widgets/sequoya_board.dart` + `utils/sequoya_board_model.dart`, the sixth

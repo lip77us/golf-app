@@ -59,8 +59,13 @@ void main() {
     });
 
     test('and the completion handler uses the shared decision', () {
-      final i = src.indexOf('completeRound(roundId)');
-      expect(i, greaterThan(0));
+      // Anchored on the COMPLETION CALL rather than on its spelling: this
+      // test first read `completeRound(roundId)`, which stopped existing the
+      // day the hub moved to the shared force flow — a guard that fails
+      // because the line was reworded is a guard nobody trusts.
+      final i = src.indexOf('completeRoundOrOfferForce(');
+      expect(i, greaterThan(0),
+          reason: 'the hub must complete through the shared helper');
       expect(src.substring(i, i + 600), contains('roundLeaderboardRoute('),
           reason: 'the push after a round closes must go through it');
     });
