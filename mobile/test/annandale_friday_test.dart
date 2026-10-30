@@ -200,8 +200,33 @@ void main() {
       expect(f.margin, 5);
       expect((f.decidedMargin, f.decidedRemaining), (4, 2));
       final src = _src('lib/screens/leaderboard_screen.dart');
-      expect(src, contains("'\${margin.abs()}&\${bet.decidedRemaining}'"));
+      expect(src, contains('annandaleNineAt(bet, bet.margin'));
       expect(src, contains("'\$nine · final'"));
+    });
+
+    test('the tray reads a closed nine and press as their result', () {
+      // Same round, the tray on the 8th: the front showed "5 UP" and P1
+      // "3 UP", though the front closed 4&2 on the 7th and P1 3&1 on the 8th.
+      final s = AnnandaleFridaySummary.fromJson(jsonDecode(
+          File('test/fixtures/annandale_friday_front_closed.json')
+              .readAsStringSync()) as Map<String, dynamic>);
+      final m = s.matches.first.summary;
+      String at(int hole) {
+        final pos = m.holes.indexWhere((x) => x.hole == hole);
+        final h = m.holes[pos];
+        final b = annandaleNineAt(m.front9, h.front9Margin ?? 0, pos,
+            front: true);
+        return b.closedWith != null
+            ? '${b.margin}&${b.closedWith}' : '${b.margin}';
+      }
+      expect(at(6), '3');      // before it closed: the running margin
+      expect(at(7), '4&2');    // the hole it closed on
+      expect(at(8), '4&2');    // not "5"
+      final p1 = m.presses.firstWhere((p) => p.startHole == 5);
+      final p2 = m.presses.firstWhere((p) => p.startHole == 8);
+      expect(annandalePressAt(p1, 7, front: true).closedWith, 1);  // 8th
+      expect(annandalePressAt(p1, 6, front: true).closedWith, isNull);
+      expect(annandalePressAt(p2, 7, front: true).closedWith, isNull);
     });
 
     test('a setup step opens at its top', () {

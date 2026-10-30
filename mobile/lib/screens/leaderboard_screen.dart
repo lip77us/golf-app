@@ -8268,10 +8268,13 @@ class _AfMatchPill extends StatelessWidget {
     // count.** The front won 4&2 on the 7th kept counting holes for the
     // presses, so the pill said "5 UP · thru 8" over a board saying
     // "4&2 Final" (Paul, 29 Oct 2026). Same rule the board itself uses.
-    final closed = bet.decidedMargin != null && (bet.decidedRemaining ?? 0) > 0;
-    final margin = closed ? bet.decidedMargin! : bet.margin;
-    final status = closed
-        ? '${margin.abs()}&${bet.decidedRemaining}'
+    // One rule with the score-entry tray (`annandaleNineAt`), read as of the
+    // last hole played.
+    final at = annandaleNineAt(bet, bet.margin, n.holes.length - 1,
+        front: !back);
+    final margin = at.margin;
+    final status = at.closedWith != null
+        ? '${margin.abs()}&${at.closedWith}'
         : margin == 0 ? 'AS' : '${margin.abs()} UP';
     final leadTeam = margin > 0 ? match.side1Team
         : margin < 0 ? match.side2Team : null;

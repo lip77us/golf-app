@@ -37,6 +37,42 @@ Color annandaleTeamTint(int? team) => team == null
     ? Colors.white70
     : kAnnandaleTeamOnDark[team % kAnnandaleTeamOnDark.length];
 
+/// A bet's standing as of one hole: its margin, and — once it has been
+/// closed out — how many holes were left when it was (the "2" in 4&2).
+typedef AnnandaleBetAt = ({int margin, int? closedWith});
+
+/// Last play-order position of a nine. Annandale Friday is always a full 18.
+int _nineLastPos(bool front) => front ? 8 : 17;
+
+/// The nine as of the hole at play-order position [pos].
+///
+/// **A nine closed out early reads as its result from the hole it closed
+/// on.** The holes after it are still played for the presses, so the running
+/// margin keeps counting: the front won 4&2 on the 7th read "5 UP" on the
+/// 8th (Paul, 29 Oct 2026). Before the hole it closed on, it is the running
+/// margin, so stepping back through the round reads true.
+AnnandaleBetAt annandaleNineAt(
+    NassauBetResult bet, int runningMargin, int pos, {required bool front}) {
+  final r = bet.decidedRemaining;
+  if (bet.decidedMargin != null && r != null && r > 0 &&
+      _nineLastPos(front) - r <= pos) {
+    return (margin: bet.decidedMargin!, closedWith: r);
+  }
+  return (margin: runningMargin, closedWith: null);
+}
+
+/// A press as of position [pos] — the same rule: a press closed 3&1 reads
+/// "3&1" from the hole it closed on. Its margin is the server's current one,
+/// which is the final one once closed.
+AnnandaleBetAt annandalePressAt(NassauPressResult p, int pos,
+    {required bool front}) {
+  final r = p.holesRemaining;
+  if (p.result != null && r > 0 && _nineLastPos(front) - r <= pos) {
+    return (margin: p.margin ?? 0, closedWith: r);
+  }
+  return (margin: p.margin ?? 0, closedWith: null);
+}
+
 /// "BILL & TOM" over a team's first golfer, in the team's colour.
 class AnnandaleTeamHeader extends StatelessWidget {
   const AnnandaleTeamHeader(
@@ -162,8 +198,9 @@ class AnnandaleHoleTray extends StatelessWidget {
     return ids.map(name).join(' & ');
   }
 
-  /// "2 UP" in the leader's team tint, "AS" in white.
-  Widget _status(String label, int margin, AnnandaleFridayMatch m) {
+  /// "2 UP" (or "4&2" once closed) in the leader's team tint, "AS" in white.
+  Widget _status(String label, AnnandaleBetAt bet, AnnandaleFridayMatch m) {
+    final margin = bet.margin;
     final lead = margin > 0 ? m.side1Team : margin < 0 ? m.side2Team : null;
     return Padding(
       padding: const EdgeInsets.only(right: 12),
@@ -171,7 +208,9 @@ class AnnandaleHoleTray extends StatelessWidget {
         TextSpan(text: '$label ',
             style: const TextStyle(color: _dim, fontSize: 12.5)),
         TextSpan(
-            text: margin == 0 ? 'AS' : '${margin.abs()} UP',
+            text: bet.closedWith != null
+                ? '${margin.abs()}&${bet.closedWith}'
+                : margin == 0 ? 'AS' : '${margin.abs()} UP',
             style: TextStyle(
                 fontWeight: FontWeight.w800, fontSize: 12.5,
                 color: margin == 0 ? Colors.white : annandaleTeamTint(lead))),
@@ -191,7 +230,11 @@ class AnnandaleHoleTray extends StatelessWidget {
         ? '2nd ball ${h.t12ndNet} v ${h.t22ndNet}'
         : 'net ${h.t1Net ?? '–'} v ${h.t2Net ?? '–'}';
     final front = h.back9Margin == null;
-    final nineMargin = front ? (h.front9Margin ?? 0) : (h.back9Margin ?? 0);
+    final pos = s.holes.indexWhere((x) => x.hole == hole);
+    final nineBet = annandaleNineAt(
+        front ? s.front9 : s.back9,
+        front ? (h.front9Margin ?? 0) : (h.back9Margin ?? 0),
+        pos, front: front);
     final nineKey = front ? 'front' : 'back';
     final live = [
       for (final p in s.presses)
@@ -247,9 +290,9 @@ class AnnandaleHoleTray extends StatelessWidget {
         ]),
         const SizedBox(height: 3),
         Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
-          _status(front ? 'Front' : 'Back', nineMargin, m),
+          _status(front ? 'Front' : 'Back', nineBet, m),
           for (final (i, p) in live.indexed)
-            _status('P${i + 1}', p.margin ?? 0, m),
+            _status('P${i + 1}', annandalePressAt(p, pos, front: front), m),
           for (final p in starting)
             Padding(
               padding: const EdgeInsets.only(right: 12),
