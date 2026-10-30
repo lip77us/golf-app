@@ -95,9 +95,13 @@ struct SixesActivityLiveActivity: Widget {
                 HalvedMark(size: 13)
             } compactTrailing: {
                 // What people actually see all round, beside the clock.
+                if s.kind == "annandale_friday", s.number.text.isEmpty {
+                    AnnandaleCompactView(strip: s.strip ?? [])
+                } else {
                 Text(s.number.text)
                     .font(Sixes.display(13, .bold))
                     .foregroundStyle(Sixes.side(s.number.colour))
+                }
             } minimal: {
                 Image(systemName: "circle.fill")
                     .font(.system(size: 8))
@@ -135,6 +139,10 @@ private struct LockScreenView: View {
                                      "stableford", "stroke_play", "points",
                                      "wolf", "triple_cup", "vegas",
                                      "triple_nassau",
+                                     // Three TEAM Nassaus on one card of five
+                                     // or six: Triple Nassau's board with a
+                                     // two-line label per column.
+                                     "annandale_friday",
                                      // Scramble, Shamble, Better Ball and
                                      // Irish Rumble — four games, one card.
                                      "foursome"]
@@ -168,7 +176,8 @@ private struct LockScreenView: View {
                 TripleCupBoardView(state: state, isStale: isStale)
             } else if state.kind == "vegas" {
                 VegasBoardView(state: state, isStale: isStale)
-            } else if state.kind == "triple_nassau" {
+            } else if state.kind == "triple_nassau"
+                        || state.kind == "annandale_friday" {
                 TripleNassauBoardView(state: state, isStale: isStale)
             } else if state.kind == "foursome" {
                 FoursomeBoardView(state: state, isStale: isStale)
@@ -1141,8 +1150,34 @@ private struct MatchColumn: View {
         return Sixes.side(c).opacity((col.dim ?? false) ? 0.62 : 1)
     }
 
+    private var labelOpacity: Double { (col.dim ?? false) ? 0.68 : 0.78 }
+
+    /// One team, one line — Annandale Friday's head. The second line sits at
+    /// .55 of the first: it names who the match is AGAINST, which is read
+    /// after the line that says whose it is.
+    private func teamLine(_ text: String, dot: String?, fade: Double) -> some View {
+        HStack(spacing: 3.5) {
+            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                .fill(Sixes.side(dot ?? "dim"))
+                .frame(width: 5, height: 5)
+            Text(text)
+                .font(Sixes.body(9.5, .bold))
+                .tracking(0.2)
+                .foregroundStyle(.white.opacity(labelOpacity * fade))
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .frame(height: 12, alignment: .leading)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if let second = col.label2, !second.isEmpty {
+                // Same two-line slot in every column, so the figures line up.
+                teamLine(col.label, dot: col.dots?.first, fade: 1)
+                teamLine(second, dot: (col.dots ?? []).dropFirst().first,
+                         fade: 0.55 / 0.78)
+            } else {
             HStack(spacing: 3.5) {
                 ForEach(Array((col.dots ?? []).enumerated()), id: \.offset) {
                     _, dot in
@@ -1153,12 +1188,13 @@ private struct MatchColumn: View {
                 Text(col.label)
                     .font(Sixes.body(9.5, .bold))
                     .tracking(0.2)
-                    .foregroundStyle(.white.opacity((col.dim ?? false) ? 0.68 : 0.78))
+                    .foregroundStyle(.white.opacity(labelOpacity))
                     .lineLimit(1)
                     // The label truncates and the figure never does.
                     .truncationMode(.tail)
             }
             .frame(height: 12, alignment: .leading)
+            }
 
             HStack(alignment: .top, spacing: 1) {
                 Text(col.figure)
@@ -1187,6 +1223,37 @@ private struct MatchColumn: View {
                 .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Annandale Friday in the compact island: **the reader's matches only** —
+/// two figures with six golfers, three for the pair with five — split by a
+/// hairline, a press as an orange `+N`, level as `AS` to save width.
+private struct AnnandaleCompactView: View {
+    let strip: [SixesActivityAttributes.ContentState.StripCol]
+
+    var body: some View {
+        let mine = strip.filter { $0.isReader ?? false }
+        HStack(spacing: 4) {
+            ForEach(Array(mine.enumerated()), id: \.offset) { i, c in
+                if i > 0 {
+                    Rectangle().fill(.white.opacity(0.25))
+                        .frame(width: 0.5, height: 10)
+                }
+                HStack(alignment: .top, spacing: 1) {
+                    Text(c.figure == "ALL SQ" ? "AS" : c.figure)
+                        .font(Sixes.display(13, .bold))
+                        .foregroundStyle(
+                            (c.colour ?? "").isEmpty || c.colour == "dim"
+                                ? .white.opacity(0.8) : Sixes.side(c.colour!))
+                    if let chip = c.chip, !chip.isEmpty {
+                        Text(chip)
+                            .font(Sixes.body(7, .bold))
+                            .foregroundStyle(Sixes.orange)
+                    }
+                }
+            }
+        }
     }
 }
 

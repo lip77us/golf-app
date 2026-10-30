@@ -401,9 +401,15 @@ struct SixesActivityAttributes: ActivityAttributes {
             var dim: Bool? = nil
             /// Ahead — mint, the same rule as every card in the set.
             var isLeader: Bool? = nil
+            /// Annandale Friday: the second team, `v DAVE·RAY`, under `label`.
+            /// A match there is between TEAMS, and a team is two names, so the
+            /// head is one line per side with `dots[0]` beside the first and
+            /// `dots[1]` beside the second. Absent everywhere else, where the
+            /// head stays one line.
+            var label2: String? = nil
 
             enum CodingKeys: String, CodingKey {
-                case label, name, figure, note, rule, dots, colour, chip, dim
+                case label, label2, name, figure, note, rule, dots, colour, chip, dim
                 case isReader = "is_reader"
                 case isLeader = "is_leader"
             }

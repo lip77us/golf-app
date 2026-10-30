@@ -627,6 +627,15 @@ def _triple_nassau(foursome, player_id, *, final):
                                         thru=holes_played(foursome))
 
 
+def _annandale_friday(foursome, player_id, *, final):
+    from services.live_activity_annandale_friday import (
+        annandale_friday_activity_state, annandale_friday_final_state)
+    if final:
+        return annandale_friday_final_state(foursome, player_id=player_id)
+    return annandale_friday_activity_state(foursome, player_id=player_id,
+                                           thru=holes_played(foursome))
+
+
 def _las_vegas(foursome, player_id, *, final):
     from services.live_activity_las_vegas import (las_vegas_activity_state,
                                                   las_vegas_final_state)
@@ -695,6 +704,9 @@ BUILDERS = {
     # What fits is ONE bet at a time across three columns — 122pt, second
     # clearest in the set.
     'triple_nassau': _triple_nassau,
+    # Annandale Friday. Three TEAM Nassaus on one card of five or six, so it
+    # takes the Triple Nassau card as it stands with two-line team labels.
+    'annandale_friday': _annandale_friday,
     # nassau_nine still rides the NassauGame model as one match but is a
     # PARTIAL round — its holes-remaining is not 18 minus played, so it does
     # not fit this card's state slot and is not drawn.
@@ -784,7 +796,9 @@ CARD_KIND = {'match_18': 'match', 'fourball': 'match',
 # all with a lock-screen nag pointing at an update that does not exist. It
 # comes out in the commit that bumps the build carrying `FoursomeBoardView`,
 # and not before.
-UNSHIPPED_KINDS: set = {'foursome'}
+# `annandale_friday` went in the day its builder was written (30 Oct 2026),
+# for the same reason: the game has no card on any shipped build.
+UNSHIPPED_KINDS: set = {'foursome', 'annandale_friday'}
 
 
 def card_kind(slug: str) -> str:

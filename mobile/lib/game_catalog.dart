@@ -452,6 +452,12 @@ const List<GameMeta> kGameCatalog = [
     hostsOverlaySideGames: true,
     // Scores through the shared score-entry screen, on the 40 Balls keypad,
     // with its own tray once the hole is in.
+    //
+    // The lock screen is Triple Nassau's card with two-line team labels. The
+    // server holds the kind in UNSHIPPED_KINDS until the build carrying the
+    // layout goes out, and answers {} meanwhile, so the app does not start
+    // a card it cannot have.
+    hasLiveActivity: true,
   ),
   GameMeta(
     id          : GameIds.match18,
