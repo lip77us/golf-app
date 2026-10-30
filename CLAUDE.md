@@ -6985,3 +6985,48 @@ Tests: `mobile/test/rabbit_board_test.dart` (17), `CarryTests` (9) and
 `SettingsChipsTests` (5) in `scoring/tests/test_rabbit.py` — including that
 `Rolls on` is never claimed, and that carry stays zero-sum and never moves
 the total at risk.
+
+## Annandale Friday (`annandale_friday`) — ENGINE done (API + mobile pending)
+
+`~/Downloads/handoff-annandale-friday`. One group of **5 or 6** on one card;
+the teams make three better-ball Nassaus — three pairs each playing the other
+two (6), or a pair against each pair of a three (5, the pair in all three).
+Four golfers is not offered: a foursome plays a standard Nassau.
+
+**Built like Triple Nassau**: `games.AnnandaleFridayGame` (OneToOne foursome,
+`teams` = player-id lists in display order) over three child `NassauGame`
+rows, `game_type` `af_1/2/3`, linked by `NassauGame.annandale_game`
+(`games/0100`, `tournament/0081` enum refresh). The whole Nassau engine is
+reused. Two differences from Triple Nassau, both free:
+- **Handicap is the FIELD's** (off the group's low man by default), so a
+  golfer takes the same strokes into every match. The `af_*` slugs are not
+  in `TRIPLE_CHILD_SLUGS`, so `_get_score_index` already routes them to the
+  field-wide index.
+- **The matches are 2v2**, so 2nd-ball tiebreak (default ON) and Claremont
+  apply. With both asked for, Claremont wins — its 2nd ball is already a bet.
+
+`services/annandale_friday.py`: `shape_problem` (pure; the sentence the setup
+screen's matches box shows), `matches_for` (pure), `setup_annandale_friday`,
+`calculate_annandale_friday`, `press_annandale`, `annandale_friday_summary`.
+A golfer's net is read off each match's `payouts.total`, never re-summed.
+
+- **Presses are the engine's rule — the NINE at 2/4/6/8 down.** Paul, 29 Oct
+  2026, over the packet's reference, which presses on the LATEST bet (its
+  "press 2 starts on 8" example is where the two differ). One press rule for
+  every Nassau in the app.
+- **Manual press: 1 down or level** (`press_allowed`), wider than a plain
+  Nassau's `can_press`, which needs a side to be down.
+- **Teams lock at the edit ceiling** (`AnnandaleLocked`); reordering inside a
+  team is not a redraw. A settings-only save updates the three matches IN
+  PLACE, because rebuilding them deletes the manual presses.
+
+**Fixed in the shared engine:** `add_manual_press` recalculated and read the
+loss cap off the foursome's PRIMARY Nassau rather than the `game_type` it was
+given. For a child match (Triple Nassau too) the cap lookup found nothing and
+was skipped, so a side past its cap could press for free.
+
+Tests: `scoring/tests/test_annandale_friday.py` (32). Already built and not
+part of this: the two Skins options (`skin_minimum` / `birdie_steal`). Still
+to do: API, the 5–6 group-size validation (Groups & tees caps at 4 — a
+validation change, not a structural one), mobile, and moving the guide from
+`/preview/` to `/games/` LAST.

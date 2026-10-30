@@ -1443,6 +1443,11 @@ class NassauGame(models.Model):
                                 ('triple_1',           'Triple Nassau — match 1'),
                                 ('triple_2',           'Triple Nassau — match 2'),
                                 ('triple_3',           'Triple Nassau — match 3'),
+                                # Annandale Friday's three better-ball
+                                # Nassaus, grouped by the annandale_game FK.
+                                ('af_1',               'Annandale Friday — match 1'),
+                                ('af_2',               'Annandale Friday — match 2'),
+                                ('af_3',               'Annandale Friday — match 3'),
                             ],
                             default=GameType.NASSAU,
                             help_text="Which Nassau-family match this row is; "
@@ -1453,6 +1458,12 @@ class NassauGame(models.Model):
     # their own pair.  Null for a standalone Nassau / Singles Match.
     triple_game         = models.ForeignKey(
                             'TripleNassauGame', on_delete=models.CASCADE,
+                            null=True, blank=True, related_name='matches',
+                        )
+    # Set only on the three child matches of an Annandale Friday. Null
+    # everywhere else.
+    annandale_game      = models.ForeignKey(
+                            'AnnandaleFridayGame', on_delete=models.CASCADE,
                             null=True, blank=True, related_name='matches',
                         )
     handicap_mode       = models.CharField(
@@ -1556,6 +1567,40 @@ class TripleNassauGame(models.Model):
 
     def __str__(self):
         return f"Triple Nassau — Group {self.foursome.group_number}"
+
+
+class AnnandaleFridayGame(models.Model):
+    """
+    Container for an Annandale Friday — one group of 5 or 6 on one card,
+    split into teams that make three better-ball Nassaus.
+
+    ``teams`` is the split in display order, a list of player-id lists:
+    three pairs for six golfers, or a pair and a three for five. The three
+    matches are derived from it (``services.annandale_friday.matches_for``)
+    and stored as ordinary child ``NassauGame`` rows (af_1/2/3), so the whole
+    Nassau engine — presses, close-out, Claremont, loss cap — is reused.
+
+    Unlike Triple Nassau the handicap is the FIELD's: off the low man of the
+    whole group, so a golfer takes the same strokes into every match.
+    Settlement nets each golfer's matches (two each, or all three for the
+    pair in a five).
+    """
+    foursome   = models.OneToOneField(
+                     Foursome, on_delete=models.CASCADE,
+                     related_name='annandale_friday_game',
+                 )
+    teams      = models.JSONField(
+                     default=list,
+                     help_text="Player PKs per team, in display order.",
+                 )
+    status     = models.CharField(
+                     max_length=20, choices=MatchStatus.choices,
+                     default=MatchStatus.PENDING,
+                 )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Annandale Friday — Group {self.foursome.group_number}"
 
 
 class NassauTeam(models.Model):

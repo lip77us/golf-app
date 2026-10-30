@@ -467,7 +467,7 @@ def add_manual_press(foursome, start_hole: int,
     # Cap gate (defends the API directly, mirroring nassau_summary.can_press):
     # a side that has hit the cap can't press — it would be a free option.
     if game.loss_cap is not None:
-        s = nassau_summary(foursome)
+        s = nassau_summary(foursome, game_type)
         if s is not None:
             nine_margin = (s['front9']['margin'] if nine == 'front'
                            else s['back9']['margin'])
@@ -490,7 +490,11 @@ def add_manual_press(foursome, start_hole: int,
     # hole has already been scored) or the untriggered press is re-persisted.
     # calculate_nassau() deletes and recreates ALL press rows, so the original
     # `press` PK no longer exists — re-fetch by business key instead.
-    calculate_nassau(foursome)
+    # Recalculate THIS match. A bare call resolves to the foursome's primary
+    # Nassau, so a press in a Triple Nassau or Annandale Friday child used to
+    # recalculate a different game (or none) and leave its own press unscored —
+    # and the cap check above read the wrong match the same way.
+    calculate_nassau(foursome, game_type)
     return NassauPress.objects.get(game=game, press_type='manual', start_hole=start_hole)
 
 

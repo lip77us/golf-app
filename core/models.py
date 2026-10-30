@@ -54,6 +54,14 @@ class GameType(models.TextChoices):
     # each handicapped on its own PAIR (not the field), settled per-player
     # across their two matches.  See games.TripleNassauGame / services.triple_nassau.
     TRIPLE_NASSAU   = 'triple_nassau',   'Triple Nassau'
+    # Annandale Friday: one group of FIVE or SIX on one card. The group splits
+    # into teams and the teams make three better-ball Nassaus — three pairs,
+    # each playing the other two (6), or a pair against each pair of a three
+    # (5). Implemented like Triple Nassau: an AnnandaleFridayGame container
+    # over three child NassauGame rows (game_type af_1/2/3), handicapped off
+    # the FIELD low so a golfer gets the same strokes in every match. See
+    # games.AnnandaleFridayGame / services.annandale_friday.
+    ANNANDALE_FRIDAY = 'annandale_friday', 'Annandale Friday'
     SIXES           = 'sixes',           'Sixes'
     PINK_BALL       = 'pink_ball',       'Pink Ball'
     # Dream Round: a MULTI-ROUND field-wide side game. Each golfer keeps his best
