@@ -1048,6 +1048,69 @@ class RabbitHoleCardTests(_RabbitCardBase):
         self.assertEqual(rabbit_hole_card(self.fs, 1), {})
 
 
+class ALegThatRanItsWindowDidNotEndEarlyTests(_RabbitCardBase):
+    """Reported from a phone, 30 Oct 2026: rabbit 1 ran holes 1–6, Larry took
+    the 6th, and the tray said *"Rabbit 1 ended early, so rabbit 2 starts on
+    7"*. It did not — it played its full six and rabbit 2 starts on 7 because
+    that is where it always started.
+
+    `decided_on` cannot tell the two apart: with rolls-on a leg that WAS cut
+    ends on the hole it was decided on, so both read as the last hole. What
+    separates them is whether the window was cut.
+    """
+
+    def test_a_leg_decided_on_its_last_hole_cut_nothing(self):
+        self._setup(extra_rabbits=True)
+        self._hole(1, 4, 4, 4)
+        self._hole(2, 4, 5, 5)                   # Paul +1
+        for h in (3, 4, 5):
+            self._hole(h, 4, 4, 4)
+        self._hole(6, 4, 5, 5)                   # +2, nothing left
+        card = self._card(6)
+        self.assertEqual(card['rabbit']['end_hole'], 6)
+        self.assertEqual(card['rabbit']['holes'], 6)
+        self.assertEqual(card['result']['holder_short'], 'P')
+        self.assertFalse(card['result']['ended_early'])
+        self.assertFalse(card['result']['decided'])
+        self.assertTrue(card['result']['held_to_end'])
+        # The next rabbit still follows, it just was not brought forward.
+        self.assertEqual(card['next']['start_hole'], 7)
+        self.assertEqual(card['next']['holes'], 6)
+
+    def test_a_leg_whose_tail_was_handed_on_DID_end_early(self):
+        self._setup(extra_rabbits=True)
+        for h in (1, 2, 3, 4):
+            self._hole(h, 4, 5, 5)               # Paul +4 with 2 to play
+        card = self._card(4)
+        self.assertEqual(card['rabbit']['end_hole'], 4)
+        self.assertEqual(card['rabbit']['holes'], 4)
+        self.assertTrue(card['result']['ended_early'])
+        self.assertTrue(card['result']['decided'])
+        self.assertFalse(card['result']['held_to_end'])
+        self.assertEqual(card['next']['start_hole'], 5)
+        self.assertEqual(card['next']['holes'], 6)
+
+    def test_without_rolls_on_a_settled_leg_never_cuts_its_window(self):
+        # The leg plays out, so the RESULT is settled early and the leg is
+        # not. Both sentences are needed and they are not the same one.
+        self._setup(extra_rabbits=False)
+        for h in (1, 2, 3, 4):
+            self._hole(h, 4, 5, 5)
+        card = self._card(4)
+        self.assertTrue(card['result']['decided'])
+        self.assertFalse(card['result']['ended_early'])
+        self.assertEqual(card['rabbit']['end_hole'], 6)
+
+    def test_the_summary_carries_it_on_every_leg(self):
+        self._setup(extra_rabbits=True)
+        for h in (1, 2, 3, 4):
+            self._hole(h, 4, 5, 5)
+        calculate_rabbit(self.fs)
+        segs = rabbit_summary(self.fs)['segments']
+        self.assertTrue(segs[0]['ended_early'])
+        self.assertFalse(segs[1]['ended_early'])      # still being played
+
+
 class RabbitFixtureRegenTests(_RabbitCardBase):
     """Writes the JSON the Flutter tests draw, from the REAL engine.
 
@@ -1103,6 +1166,20 @@ class RabbitFixtureRegenTests(_RabbitCardBase):
         self.assertTrue(card['result']['decided'])
         self.assertIsNotNone(card['next'])
         self._write('rabbit_hole10_won_early.json', card)
+
+    def test_regenerate_held_to_the_end(self):
+        # Paul's round, 30 Oct 2026: the leg ran all six holes and was taken
+        # on the sixth, so it is `Held to 6` and nothing was cut short.
+        self._setup(extra_rabbits=True, carry=True)
+        self._hole(1, 4, 4, 4)
+        self._hole(2, 4, 5, 5)
+        for h in (3, 4, 5):
+            self._hole(h, 4, 4, 4)
+        self._hole(6, 4, 5, 5)
+        card = self._card(6)
+        self.assertTrue(card['result']['held_to_end'])
+        self.assertFalse(card['result']['ended_early'])
+        self._write('rabbit_hole6_held_to_end.json', card)
 
     def test_regenerate_halved(self):
         # The hole Paul was looking at when the result chip ellipsised: three

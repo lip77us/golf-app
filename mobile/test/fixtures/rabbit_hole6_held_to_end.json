@@ -1,0 +1,93 @@
+{
+  "hole": 6,
+  "par": 4,
+  "stroke_index": 13,
+  "yards": 380,
+  "nine": "front nine",
+  "rabbit": {
+    "index": 1,
+    "of": 3,
+    "is_extra": false,
+    "start_hole": 1,
+    "end_hole": 6,
+    "holes": 6,
+    "holder_id": 7,
+    "holder_short": "P",
+    "lead": 1,
+    "loose": false,
+    "to_play": 1,
+    "stake": 5.0,
+    "carried_in": 0.0
+  },
+  "players": [
+    {
+      "player_id": 7,
+      "name": "Paul",
+      "short": "P",
+      "course_handicap": 0,
+      "colour_index": 0,
+      "strokes": 0,
+      "gross": 4,
+      "net": 4,
+      "is_holder": true,
+      "is_best": true
+    },
+    {
+      "player_id": 8,
+      "name": "Dave",
+      "short": "D",
+      "course_handicap": 0,
+      "colour_index": 1,
+      "strokes": 0,
+      "gross": 5,
+      "net": 5,
+      "is_holder": false,
+      "is_best": false
+    },
+    {
+      "player_id": 9,
+      "name": "Sam",
+      "short": "S",
+      "course_handicap": 0,
+      "colour_index": 2,
+      "strokes": 0,
+      "gross": 5,
+      "net": 5,
+      "is_holder": false,
+      "is_best": false
+    }
+  ],
+  "hole_complete": true,
+  "result": {
+    "leg_ended": true,
+    "leg_outcome": "won",
+    "held_to_end": true,
+    "winner_id": 7,
+    "winner_short": "P",
+    "best_net": 4,
+    "runner_net": 5,
+    "holder_id": 7,
+    "holder_short": "P",
+    "lead": 2,
+    "event": "extend",
+    "decided": false,
+    "ended_early": false,
+    "line": ""
+  },
+  "next": {
+    "index": 2,
+    "of": 3,
+    "is_extra": false,
+    "start_hole": 7,
+    "end_hole": 12,
+    "holes": 6,
+    "stake": 5.0,
+    "half_stake": false
+  },
+  "payout": 10.0,
+  "order_ids": [
+    7,
+    8,
+    9
+  ]
+}

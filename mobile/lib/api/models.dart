@@ -9529,6 +9529,8 @@ class RabbitLegInfo {
   /// What is riding: the leg's stake, including anything carried in.
   final double stake;
   final double carriedIn;
+  /// The leg's own hole COUNT, counted by the server.
+  final int holes;
 
   const RabbitLegInfo({
     required this.index,
@@ -9543,6 +9545,7 @@ class RabbitLegInfo {
     required this.toPlay,
     required this.stake,
     required this.carriedIn,
+    this.holes = 0,
   });
 
   factory RabbitLegInfo.fromJson(Map<String, dynamic> j) => RabbitLegInfo(
@@ -9558,6 +9561,7 @@ class RabbitLegInfo {
         toPlay: (j['to_play'] as num?)?.toInt() ?? 0,
         stake: (j['stake'] as num?)?.toDouble() ?? 0,
         carriedIn: (j['carried_in'] as num?)?.toDouble() ?? 0,
+        holes: (j['holes'] as num?)?.toInt() ?? 0,
       );
 }
 
@@ -9586,6 +9590,10 @@ class RabbitHoleOutcome {
   /// Carried to the end of its range rather than won early. A different
   /// sentence, and `decided` alone cannot tell them apart.
   final bool heldToEnd;
+  /// The leg's window was CUT, so the next rabbit starts earlier than the
+  /// schedule said. A leg settled on its own last hole is decided and cut
+  /// nothing, which is a different sentence.
+  final bool endedEarly;
 
   /// The rule clause under the rabbit — the server writes it, because every
   /// part of it is a rule.
@@ -9604,6 +9612,7 @@ class RabbitHoleOutcome {
     required this.legEnded,
     required this.legOutcome,
     required this.heldToEnd,
+    this.endedEarly = false,
     required this.line,
   });
 
@@ -9624,6 +9633,7 @@ class RabbitHoleOutcome {
         legEnded: j['leg_ended'] as bool? ?? false,
         legOutcome: j['leg_outcome'] as String?,
         heldToEnd: j['held_to_end'] as bool? ?? false,
+        endedEarly: j['ended_early'] as bool? ?? false,
         line: (j['line'] as String?) ?? '',
       );
 }
@@ -9637,6 +9647,9 @@ class RabbitNextLeg {
   final int? endHole;
   final double stake;
   final bool halfStake;
+  /// Counted by the server — a shotgun leg wraps the turn, so this is not
+  /// `endHole - startHole + 1`.
+  final int holes;
 
   const RabbitNextLeg({
     required this.index,
@@ -9646,6 +9659,7 @@ class RabbitNextLeg {
     required this.endHole,
     required this.stake,
     required this.halfStake,
+    this.holes = 0,
   });
 
   factory RabbitNextLeg.fromJson(Map<String, dynamic> j) => RabbitNextLeg(
@@ -9656,6 +9670,7 @@ class RabbitNextLeg {
         endHole: (j['end_hole'] as num?)?.toInt(),
         stake: (j['stake'] as num?)?.toDouble() ?? 0,
         halfStake: j['half_stake'] as bool? ?? false,
+        holes: (j['holes'] as num?)?.toInt() ?? 0,
       );
 }
 

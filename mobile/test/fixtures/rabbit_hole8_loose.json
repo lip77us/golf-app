@@ -10,7 +10,8 @@
     "is_extra": false,
     "start_hole": 7,
     "end_hole": 12,
-    "holder_id": 7,
+    "holes": 6,
+    "holder_id": 10,
     "holder_short": "P",
     "lead": 1,
     "loose": false,
@@ -20,7 +21,7 @@
   },
   "players": [
     {
-      "player_id": 7,
+      "player_id": 10,
       "name": "Paul",
       "short": "P",
       "course_handicap": 0,
@@ -32,7 +33,7 @@
       "is_best": false
     },
     {
-      "player_id": 8,
+      "player_id": 11,
       "name": "Dave",
       "short": "D",
       "course_handicap": 0,
@@ -44,7 +45,7 @@
       "is_best": false
     },
     {
-      "player_id": 9,
+      "player_id": 12,
       "name": "Sam",
       "short": "S",
       "course_handicap": 0,
@@ -61,7 +62,7 @@
     "leg_ended": false,
     "leg_outcome": null,
     "held_to_end": false,
-    "winner_id": 9,
+    "winner_id": 12,
     "winner_short": "S",
     "best_net": 3,
     "runner_net": 5,
@@ -70,13 +71,14 @@
     "lead": 0,
     "event": "freed",
     "decided": false,
+    "ended_early": false,
     "line": "S knocked it loose \u00b7 4 to play \u00b7 the next outright win catches it"
   },
   "next": null,
   "payout": 0.0,
   "order_ids": [
-    7,
-    8,
-    9
+    10,
+    11,
+    12
   ]
 }

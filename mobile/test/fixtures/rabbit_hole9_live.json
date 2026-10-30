@@ -10,6 +10,7 @@
     "is_extra": false,
     "start_hole": 7,
     "end_hole": 12,
+    "holes": 6,
     "holder_id": 1,
     "holder_short": "P",
     "lead": 2,

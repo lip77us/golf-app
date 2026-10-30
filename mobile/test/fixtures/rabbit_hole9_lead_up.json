@@ -10,6 +10,7 @@
     "is_extra": false,
     "start_hole": 7,
     "end_hole": 12,
+    "holes": 6,
     "holder_id": 1,
     "holder_short": "P",
     "lead": 2,
@@ -70,6 +71,7 @@
     "lead": 3,
     "event": "extend",
     "decided": false,
+    "ended_early": false,
     "line": "Lead up to +3 \u00b7 3 to play \u00b7 3 losses set it loose"
   },
   "next": null,

@@ -198,6 +198,19 @@ void main() {
       expect(text, contains('Rabbit 3 · hole 11 ›'));
     });
 
+    testWidgets('a rabbit that ran its window did not end early', (t) async {
+      // Reported from a phone, 30 Oct 2026: rabbit 1 ran holes 1–6, was taken
+      // on the 6th, and the card claimed it had ended early. It had not —
+      // rabbit 2 starts on 7 because that is where it always started.
+      final card = _card('rabbit_hole6_held_to_end');
+      await _pump(t, RabbitHoleTray(card: card, nextHole: 7, onEdit: () {}));
+      final text = _allText(t);
+      expect(text, contains('Held to 6'));
+      expect(text, isNot(contains('ended early')));
+      expect(text, contains('ran all 6 holes'));
+      expect(text, contains('Rabbit 2 from 7 · holes 7–12'));
+    });
+
     testWidgets('a live rabbit offers no next one', (t) async {
       await _pump(t, RabbitHoleTray(
           card: _card('rabbit_hole9_lead_up'), nextHole: 10, onEdit: () {}));

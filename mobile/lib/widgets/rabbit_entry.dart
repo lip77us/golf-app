@@ -470,7 +470,7 @@ class RabbitHoleTray extends StatelessWidget {
             const SizedBox(height: 8),
             _labelRow('NEXT', _nextRiding(card.next!)),
             const SizedBox(height: 4),
-            _nextCard(card.next!),
+            _nextCard(card.next!, r),
           ],
           const SizedBox(height: 12),
           _buttons(r),
@@ -655,17 +655,26 @@ class RabbitHoleTray extends StatelessWidget {
     );
   }
 
-  Widget _nextCard(RabbitNextLeg n) {
+  Widget _nextCard(RabbitNextLeg n, RabbitHoleOutcome r) {
     final title = n.isExtra
         ? 'Extra rabbit · holes ${n.startHole}–${n.endHole}'
         : 'Rabbit ${n.index} from ${n.startHole} · '
             'holes ${n.startHole}–${n.endHole}';
-    final len = (n.endHole ?? 0) - (n.startHole ?? 0) + 1;
+    // Counted, never `end − start + 1`: a shotgun leg wraps the turn, where
+    // the last hole has the smaller number.
+    final len = n.holes;
+    // **A rabbit decided on its own last hole did not end early** — it ran
+    // its full window and the next one starts where it always would have
+    // (Paul, 30 Oct 2026). Only a leg whose tail was handed on cut anything.
     final why = n.isExtra
         ? 'The holes left after the last rabbit play as an extra'
             '${n.halfStake ? ' — one hole, so half the stake.' : '.'}'
-        : 'Rabbit ${card.rabbit.index} ended early, so rabbit ${n.index} '
-            'starts on ${n.startHole} and runs $len holes.';
+        : r.endedEarly
+            ? 'Rabbit ${card.rabbit.index} ended early, so rabbit ${n.index} '
+                'starts on ${n.startHole} and runs $len holes.'
+            : 'Rabbit ${card.rabbit.index} ran all '
+                '${card.rabbit.holes} holes, so rabbit ${n.index} takes the '
+                'next $len.';
     return CustomPaint(
       painter: const DashedRRect(color: Color(0x4DFFFFFF), width: 1),
       child: Padding(

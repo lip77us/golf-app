@@ -10,6 +10,7 @@
     "is_extra": false,
     "start_hole": 7,
     "end_hole": 12,
+    "holes": 6,
     "holder_id": 4,
     "holder_short": "P",
     "lead": 1,
@@ -70,6 +71,7 @@
     "lead": 1,
     "event": "held",
     "decided": false,
+    "ended_early": false,
     "line": "Tie for low net, the rabbit stays put \u00b7 4 to play"
   },
   "next": null,

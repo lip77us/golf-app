@@ -384,6 +384,9 @@ def _run_rabbit(game, foursome, score_index, real_ids, bet_unit):
                 'index': idx, 'is_extra': False, 'holes': list(seg_holes),
                 'holder': holder, 'lead': lead, 'complete': complete,
                 'decided_on': decided_on, 'value': bet_unit,
+                # Without rolls-on a leg always plays its whole window, so a
+                # result settled early never SHORTENS it.
+                'ended_early': False,
             })
         seg_lists = segment_hole_lists(foursome, game.num_segments)
         return (rows, segments, fully_scored,
@@ -531,6 +534,11 @@ def _run_rabbit(game, foursome, score_index, real_ids, bet_unit):
                 'index': seg_idx, 'is_extra': is_extra, 'holes': list(leg_holes),
                 'holder': holder, 'lead': lead, 'complete': leg_complete,
                 'decided_on': decided_on, 'value': value,
+                # **Decided on the window's LAST hole is not an early finish.**
+                # The leg ran its full six and the next one starts where it
+                # always would have. Only a leg whose tail was handed on cut
+                # anything short (Paul, 30 Oct 2026).
+                'ended_early': end_pos < window_end,
             })
             pos = end_pos + 1
             if is_extra:
@@ -852,6 +860,10 @@ def rabbit_summary(foursome) -> dict:
             # equals end_hole; with them OFF the leg plays out and this is the
             # only signal the result is already settled.
             'decided_on'  : s.get('decided_on'),
+            # Whether the leg's own window was CUT — i.e. the next rabbit
+            # starts earlier than the schedule said. `decided_on` cannot
+            # answer it: with rolls-on it equals `end_hole` either way.
+            'ended_early' : bool(s.get('ended_early')),
             'holes'       : len(seg_holes),
             'holder_id'   : holder_id,
             'holder_short': short(holder_id) if holder_id else None,
@@ -1041,19 +1053,17 @@ def rabbit_hole_card(foursome, hole: int) -> dict:
         last_hole = (hole == leg_holes[-1])
         # **Winning early and holding on to the end are different sentences**,
         # and `decided_on` alone cannot tell them apart. `_is_decided` is true
-        # on the last hole too (a lead of one with nothing left cannot be
-        # caught either), and when the game ROLLS ON the leg is truncated to
-        # the hole it was decided on — so there an early finish always looks
-        # like the last hole.
+        # on the last hole too — a lead of one with nothing left cannot be
+        # caught either — and with rolls-on a leg that was CUT ends on the hole
+        # it was decided on, so a truncated leg's early finish also looks like
+        # its last hole.
         #
-        # The game's own flag settles it: rolling on means a leg ends exactly
-        # when it is decided, so `decided_on` IS an early finish. Without it
-        # the leg plays out, and an early finish is one decided before its
-        # final hole.
-        rolls_on = bool(summary.get('extra_rabbits')
-                        and summary.get('accumulate'))
-        decided = (leg['decided_on'] == hole
-                   and (rolls_on or not last_hole))
+        # `ended_early` is the only thing that separates them: it is the leg
+        # whose window was actually cut. A full six holes decided on the sixth
+        # is `held to 6`, whatever the rolls-on setting says — which is what
+        # this read wrong (Paul, 30 Oct 2026).
+        early   = bool(leg.get('ended_early'))
+        decided = leg['decided_on'] == hole and (early or not last_hole)
         if decided:
             outcome, held = 'won', False
         elif last_hole:
@@ -1074,6 +1084,10 @@ def rabbit_hole_card(foursome, hole: int) -> dict:
             'lead'        : here.get('lead', 0),
             'event'       : here.get('event'),
             'decided'     : decided,
+            # The leg's window was cut, so the NEXT one starts early. Not the
+            # same as `decided`: a leg settled on its own last hole is decided
+            # and cut nothing.
+            'ended_early' : early,
             'line'        : _rabbit_line(
                 here.get('event'), here.get('lead', 0), to_play - 1,
                 summary.get('accumulate', True), here.get('winner_short'),
@@ -1092,6 +1106,7 @@ def rabbit_hole_card(foursome, hole: int) -> dict:
                 'is_extra'  : follow['is_extra'],
                 'start_hole': follow['start_hole'],
                 'end_hole'  : follow['end_hole'],
+                'holes'     : follow['holes'],
                 'stake'     : follow['value'],
                 # A rabbit nobody had a chance to chase is worth half.
                 'half_stake': follow['is_extra'] and follow['holes'] == 1,
@@ -1112,6 +1127,9 @@ def rabbit_hole_card(foursome, hole: int) -> dict:
             'is_extra'    : leg['is_extra'],
             'start_hole'  : leg_holes[0],
             'end_hole'    : leg_holes[-1],
+            # Counted, never `end − start + 1`: a shotgun leg wraps the turn,
+            # where the last hole has the smaller number.
+            'holes'       : len(leg_holes),
             'holder_id'   : holder_before,
             'holder_short': short_of.get(holder_before),
             'lead'        : lead_before,

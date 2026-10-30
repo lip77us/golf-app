@@ -7907,3 +7907,25 @@ Tests: `mobile/test/sequoya_board_test.dart` (12),
   fed by `RabbitSummary.scorecard*` → `RabbitBoardData.card*`, so it travels
   with the board rather than being appended by one screen. It draws only
   when the server sends the block.
+
+#### "Rabbit 1 ended early" about a rabbit that ran all six
+Paul, 30 Oct 2026, from the 6th green: rabbit 1 played holes 1–6, Larry took
+the 6th, and the next-up card said it had ended early and *that* was why
+rabbit 2 started on 7. It starts on 7 because that is where it always started.
+
+**`decided_on` cannot answer it.** With rolls-on a leg that really WAS cut
+ends on the hole it was decided on, so a cut leg and a full one both read as
+"decided on my last hole" — and the card chose between them on the rolls-on
+SETTING, which is a fact about the game rather than about this leg. The walk
+is the only place the truth exists, so `ended_early` is recorded there
+(`end_pos < window_end`) and carried out through the summary. Without
+rolls-on it is always False: the leg plays out, so a result settled early
+never shortens anything — which is a second sentence worth having, not the
+same one.
+
+That also fixed `Won on 6` where the design says `held to 6`: a leg decided
+on its own last hole is held to the end, whatever the setting.
+
+**Two lengths were `end − start + 1`**, which a shotgun leg wrapping the turn
+makes wrong — the last hole has the smaller number. The server counts them
+(`rabbit.holes`, `next.holes`) and the card reads them.
