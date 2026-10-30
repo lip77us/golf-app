@@ -7175,6 +7175,16 @@ were prices sitting under winnings.
   team in database order, so the board said "Jim & Paul" under a pill
   saying "Paul & Jim".
 
+- **The board sits in a box that goes round exactly what the pick changes**
+  (`widgets/match_panel.dart`, Paul 29 Oct 2026): Front, Back and the 18,
+  opened by a line naming the match. The selected pill wears the box's own
+  outline (`MatchPanel.accent`), so pill and box read as one control. The
+  settings strip and the net-position ledger total EVERY match and stay
+  outside. **Deep pine, not pine**: pine is the first team's colour and a
+  settled card is bordered in its winner's, so a pine box read as "Paul &
+  Jim lead". Triple Nassau uses the same box. Tests:
+  `mobile/test/match_panel_test.dart` (7).
+
 **Not built from the packet:** the hole header's "2 skins · 1 carried from 6"
 (the tray carries the skin instead), and the Skins card's settings summary
 on setup step 3.

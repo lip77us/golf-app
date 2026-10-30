@@ -8,6 +8,7 @@ import '../game_catalog.dart';
 import '../game_colors.dart';
 import '../utils/match_notation.dart';
 import '../utils/nassau_team_style.dart';
+import '../widgets/match_panel.dart';
 import '../widgets/solo_board.dart';
 import '../widgets/forty_balls_board.dart';
 import '../widgets/sixes_board.dart';
@@ -7909,7 +7910,15 @@ class _TripleNassauGroupCardState extends State<_TripleNassauGroupCard> {
         onPick: (i) => setState(() => _picked = i),
       ),
       const SizedBox(height: 10),
-      NassauBoard(data: boards[picked]),
+      MatchPanel(
+        side1: MatchPanelSide(
+            nameOf[s.matches[picked].player1Id] ?? '—',
+            colourOf[s.matches[picked].player1Id] ?? Halved.muted),
+        side2: MatchPanelSide(
+            nameOf[s.matches[picked].player2Id] ?? '—',
+            colourOf[s.matches[picked].player2Id] ?? Halved.muted),
+        child: NassauBoard(data: boards[picked]),
+      ),
       const SizedBox(height: 10),
       _TripleNetPosition(
         players: s.players,
@@ -8012,8 +8021,8 @@ class _MatchButton extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: selected ? Halved.pine : Halved.cardBorder,
-              width: selected ? 2 : 1.2,
+              color: selected ? MatchPanel.accent : Halved.cardBorder,
+              width: selected ? MatchPanel.accentWidth : 1.2,
             ),
           ),
           // 44pt minimum, which is the packet's number and the touch target.
@@ -8205,7 +8214,13 @@ class _AnnandaleFridayGroupCardState extends State<_AnnandaleFridayGroupCard> {
           ),
         ),
       const SizedBox(height: 4),
-      NassauBoard(data: boards[picked]),
+      MatchPanel(
+        side1: MatchPanelSide(_afNames(s, s.matches[picked].side1Ids),
+            annandaleTeamColour(s.matches[picked].side1Team)),
+        side2: MatchPanelSide(_afNames(s, s.matches[picked].side2Ids),
+            annandaleTeamColour(s.matches[picked].side2Team)),
+        child: NassauBoard(data: boards[picked]),
+      ),
       const SizedBox(height: 10),
       _AfNetPosition(
         summary: s,
@@ -8223,6 +8238,13 @@ class _AnnandaleFridayGroupCardState extends State<_AnnandaleFridayGroupCard> {
     return i < 0 ? 0 : i;
   }
 }
+
+/// A side's golfers as the pills name them, so the panel's header reads
+/// exactly like the pill it belongs to.
+String _afNames(AnnandaleFridaySummary s, List<int> ids) => ids
+    .map((id) => s.players
+        .where((p) => p.playerId == id).map((p) => p.label).firstOrNull ?? '?')
+    .join(' & ');
 
 /// One match: both sides on two lines with their team swatches, and the
 /// nine in play's status in the leading team's colour.
@@ -8302,8 +8324,8 @@ class _AfMatchPill extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? Halved.deepPine : Halved.cardBorder,
-              width: selected ? 2 : 1.2,
+              color: selected ? MatchPanel.accent : Halved.cardBorder,
+              width: selected ? MatchPanel.accentWidth : 1.2,
             ),
           ),
           child: Padding(
