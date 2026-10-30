@@ -85,7 +85,8 @@ void main() {
 
   group('the tray', () {
     Future<void> mount(WidgetTester t, {int hole = 2, int? next = 3,
-        void Function(AnnandaleFridayMatch, int)? onPress}) async {
+        void Function(AnnandaleFridayMatch, int)? onPress,
+        bool gettingResult = false, bool notSynced = false}) async {
       t.view.physicalSize = const Size(1200, 2400);
       t.view.devicePixelRatio = 2;
       addTearDown(t.view.reset);
@@ -95,10 +96,28 @@ void main() {
             summary: _fixture(), hole: hole, nextHole: next,
             playerCount: 6, onEdit: () {},
             onPress: onPress ?? (_, __) {},
+            gettingResult: gettingResult,
+            notSynced: notSynced,
           ),
         )),
       ));
     }
+
+    testWidgets('an edit in flight does not draw the old result', (t) async {
+      // Hole 1 is in the summary, so without this the tray would state the
+      // result of the number that was just replaced.
+      await mount(t, hole: 1, next: 2, gettingResult: true);
+      expect(find.text('Getting result…'), findsOneWidget);
+      expect(find.text('2nd ball 5 v 6'), findsNothing);
+    });
+
+    testWidgets('an unsynced hole says so and does not draw the old result',
+        (t) async {
+      await mount(t, hole: 1, next: 2, notSynced: true);
+      expect(find.text('Saved. The result shows once this hole syncs.'),
+          findsOneWidget);
+      expect(find.text('2nd ball 5 v 6'), findsNothing);
+    });
 
     testWidgets('says why a tied best ball was won', (t) async {
       await mount(t, hole: 1, next: 2);
@@ -127,7 +146,8 @@ void main() {
     testWidgets('waits rather than invents a hole the server has not got',
         (t) async {
       await mount(t, hole: 7, next: 8);
-      expect(find.text('Waiting for this hole to sync…'), findsOneWidget);
+      expect(find.text('Saved. The result shows once this hole syncs.'),
+          findsOneWidget);
     });
 
     testWidgets('says nothing about the skin until the server has the hole',

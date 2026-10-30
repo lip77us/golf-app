@@ -7224,6 +7224,31 @@ were prices sitting under winnings.
 (the tray carries the skin instead), and the Skins card's settings summary
 on setup step 3.
 
+#### The result comes back with the save, and the button waits briefly
+Paul, 30 Oct 2026: a few seconds between `All 5 scores in` and the result. A
+six-golfer post ran **478 queries** and then the phone fetched the result in a
+second request (47 more). Now **223, with the result in the response**:
+- **`leaderboard` is gone from the score response** (137 queries, most of the
+  body). Both callers, in 2.12.0 and now, discard it.
+- **`emit_score_events` runs on commit, off the request** (168 queries), through
+  `run_off_request`, so `BACKGROUND_PUSH=0` also puts it back inline. It reloads
+  the foursome because it is on another thread.
+- **`_hole_tray_summaries` returns `annandale_friday` (and `skins`) with the
+  save**, inside a savepoint: a broken read-out must not 500 a saved score and
+  leave it retrying forever. A client getting no key falls back to the GET.
+  Delivered through `SyncService.onScorePosted`, because the queue owns the
+  response. A GET begun before the save is discarded if it lands after it
+  (`_afSummaryGeneration`).
+
+**The next-hole button waits, but only for 5 seconds and never offline**
+(`utils/result_hold.dart`). A hard disable until the result arrives was
+rejected: scores are saved on the phone first, and a group on a bad signal must
+not be stranded. The hold is per POST, so an edit in flight survives the earlier
+answer. While it runs the tray reads `Getting result…`, and it hides what the
+summary holds for that hole because after an edit that is the OLD result.
+
+Not yet timed in production: the query counts are local.
+
 ### The lock screen — `handoff-annandale-friday-lock`
 
 `services/live_activity_annandale_friday.py`, **in `UNSHIPPED_KINDS`** until

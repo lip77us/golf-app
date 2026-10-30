@@ -6011,6 +6011,37 @@ class PhantomInitView(APIView):
         })
 
 
+def _hole_tray_summaries(foursome: Foursome) -> dict:
+    """What Annandale Friday's tray draws, returned WITH the save.
+
+    The tray reports the hole just posted, so a second request for it only
+    made the golfer wait longer for a figure the server had just computed.
+
+    Never fails the save: a score that posted must not come back as a 500 and
+    sit in the phone's retry queue because a read-out broke. The savepoint is
+    what makes that true, since a failed query would otherwise abort the
+    scoring transaction whatever Python caught. The client falls back to
+    fetching when the key is missing.
+    """
+    active = set(foursome.round.active_games or []) | set(foursome.active_games or [])
+    if 'annandale_friday' not in active:
+        return {}
+    from services.annandale_friday import annandale_friday_summary
+    from services.skins import skins_summary
+    out = {}
+    try:
+        with transaction.atomic():
+            summary = annandale_friday_summary(foursome)
+            if summary:
+                out['annandale_friday'] = summary
+            if 'skins' in active:
+                out['skins'] = skins_summary(foursome)
+    except Exception:
+        logger.exception('hole tray summaries failed for foursome %s', foursome.id)
+        return {}
+    return out
+
+
 class ScoreSubmitView(APIView):
     """
     POST /api/foursomes/{id}/scores/
@@ -6025,8 +6056,8 @@ class ScoreSubmitView(APIView):
         "pink_ball_lost": false
     }
 
-    Saves HoleScores, recalculates all active games, and returns
-    the updated scorecard + leaderboard.
+    Saves HoleScores, recalculates all active games, and returns the updated
+    scorecard, plus the hole tray's summaries on an Annandale Friday round.
     """
 
     @transaction.atomic
@@ -6154,21 +6185,29 @@ class ScoreSubmitView(APIView):
 
         # Slice 3: emit server events (birdies now; skins/matches next) — runs
         # after recalc, fully best-effort (never blocks the score response).
+        #
+        # Off the request, like the board push: 168 of a six-golfer Annandale
+        # post's 478 queries were this, and the scorer was waiting on them to
+        # see the result of the hole. It reads the round again rather than
+        # sharing this request's objects, because it runs on another thread.
         from services.messaging_events import emit_score_events
-        emit_score_events(foursome, hole_number, scores)
+        from services.offload import run_off_request
+        foursome_id = foursome.id
 
-        round_obj  = foursome.round
-        lb_games   = _build_leaderboard(round_obj)
+        def _emit():
+            fresh = (Foursome.objects
+                     .select_related('round__course')
+                     .get(pk=foursome_id))
+            emit_score_events(fresh, hole_number, scores)
+
+        transaction.on_commit(lambda: run_off_request(
+            _emit, label=f'score events f{foursome_id} h{hole_number}'))
+
+        # **No leaderboard here.** It cost 137 queries and most of the response
+        # and no client has ever read it: both callers discard this body.
         return Response({
-            'scorecard'  : _build_scorecard(foursome),
-            'leaderboard': {
-                'round_id'   : round_obj.id,
-                'round_date' : str(round_obj.date),
-                'course'     : str(round_obj.course),
-                'status'     : round_obj.status,
-                'active_games': _leaderboard_active_games(round_obj, lb_games),
-                'games'      : lb_games,
-            },
+            'scorecard': _build_scorecard(foursome),
+            **_hole_tray_summaries(foursome),
         })
 
 

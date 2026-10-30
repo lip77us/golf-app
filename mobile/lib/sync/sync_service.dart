@@ -51,6 +51,12 @@ class SyncService extends ChangeNotifier {
   SyncState get state        => _state;
   bool      get hasPending   => _pendingCount > 0;
 
+  /// Called with the server's response to each score it accepts, before the
+  /// item leaves the queue, so a game that returns its result with the save
+  /// can show it without a second request. Never allowed to fail the drain.
+  void Function(int foursomeId, int holeNumber, Map<String, dynamic> response)?
+      onScorePosted;
+
   /// Outbound chat messages still queued locally (separate from the score
   /// queue so the score badge keeps its meaning).
   int  get pendingMessageCount => _pendingMessageCount;
@@ -223,12 +229,17 @@ class SyncService extends ChangeNotifier {
       // connectivity. A successful call proves we're online; a
       // NetworkException proves we're not. The platform flag can lag.
       try {
-        await _client.submitScores(
+        final response = await _client.submitScores(
           foursomeId:   item.foursomeId,
           holeNumber:   item.holeNumber,
           scores:       item.scores,
           pinkBallLost: item.pinkBallLost,
         );
+        try {
+          onScorePosted?.call(item.foursomeId, item.holeNumber, response);
+        } catch (e, st) {
+          debugPrint('SyncService: onScorePosted failed: $e\n$st');
+        }
         // Success — remove from queue and confirm we're online.
         await _db.deletePending(item.id);
         _isOnline = true;

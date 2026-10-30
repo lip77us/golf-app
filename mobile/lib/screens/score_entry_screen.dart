@@ -3024,6 +3024,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               nextHole : _nextHoleInOrder(rp),
               skins    : games.contains('skins') ? rp.skinsSummary : null,
               playerCount: players.length,
+              gettingResult: rp.annandaleResultPending(_selectedHole) ||
+                  (_pending[_selectedHole]?.isNotEmpty ?? false),
+              notSynced: rp.annandaleHoleUnsynced(_selectedHole),
               onEdit   : () => setState(() {
                 _afEditing = true;
                 _editHotPid = players.first.player.id;
@@ -3168,6 +3171,22 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 .pushNamed('/leaderboard', arguments: roundId),
         icon: const Icon(Icons.emoji_events, size: 20),
         label: const Text('View Leaderboard'),
+      );
+    }
+
+    // **Annandale Friday holds the button while the hole's result is coming**,
+    // so the group sees who won it. Only while it is coming: the provider lets
+    // go after a few seconds or when the phone is offline, because the scores
+    // are already saved and a bad signal must never strand a group on a hole.
+    if (_activeGames(rp.round).contains('annandale_friday') &&
+        rp.annandaleResultPending(_selectedHole)) {
+      return FilledButton.icon(
+        onPressed: null,
+        icon: const SizedBox(
+            width: 16, height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2)),
+        label: const Text('Getting result…'),
+        iconAlignment: IconAlignment.end,
       );
     }
 

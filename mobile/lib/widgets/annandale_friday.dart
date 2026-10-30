@@ -140,7 +140,16 @@ class AnnandaleHoleTray extends StatelessWidget {
     required this.onEdit,
     required this.onPress,
     this.skins,
+    this.gettingResult = false,
+    this.notSynced = false,
   });
+
+  /// The result is on its way. What the summary holds for this hole, if
+  /// anything, predates the score just entered, so it is not drawn.
+  final bool gettingResult;
+
+  /// The hole is saved on the phone and has not reached the server.
+  final bool notSynced;
 
   final AnnandaleFridaySummary summary;
   final int hole;
@@ -157,14 +166,17 @@ class AnnandaleHoleTray extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = [
-      for (final m in summary.matches)
-        if (m.summary.holes.any((h) => h.hole == hole)) m,
-    ];
+    final rows = gettingResult || notSynced
+        ? <AnnandaleFridayMatch>[]
+        : [
+            for (final m in summary.matches)
+              if (m.summary.holes.any((h) => h.hole == hole)) m,
+          ];
     final first = rows.isEmpty
         ? null
         : rows.first.summary.holes.firstWhere((h) => h.hole == hole);
-    final nine = first?.back9Margin != null ? 'back nine' : 'front nine';
+    final nine = (first != null ? first.back9Margin != null : hole > 9)
+        ? 'back nine' : 'front nine';
 
     return Container(
       width: double.infinity,
@@ -196,10 +208,13 @@ class AnnandaleHoleTray extends StatelessWidget {
                   letterSpacing: 0.5)),
           const SizedBox(height: 4),
           if (rows.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('Waiting for this hole to sync…',
-                  style: TextStyle(color: _dim)),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                  gettingResult
+                      ? 'Getting result…'
+                      : 'Saved. The result shows once this hole syncs.',
+                  style: const TextStyle(color: _dim)),
             )
           else
             for (final m in rows) _matchRow(m),

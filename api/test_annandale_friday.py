@@ -12,6 +12,7 @@ recalc dispatch names the slug — and a game that scores in the engine tests
 and never moves on a phone is the shipped-and-unreachable shape.
 """
 from decimal import Decimal
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -20,6 +21,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import Account
 from core.models import Course, Player, Tee
+from scoring.models import HoleScore
 from services.settlement import round_settlement
 from tournament.models import Round, Foursome, FoursomeMembership
 
@@ -144,6 +146,51 @@ class AnnandaleFridayEndpointTests(TestCase):
         assert r.status_code == 404
 
     # ── Reaching the game from the rest of the app ──────────────────────────
+
+    def test_the_save_returns_the_result_for_the_tray(self):
+        """The tray draws this, so a second request is not needed."""
+        assert self._setup().status_code == 201
+        body = self._post_hole(1, self._sweep()).json()
+        assert 'scorecard' in body
+        matches = body['annandale_friday']['matches']
+        assert [len(m['summary']['holes']) for m in matches] == [1, 1, 1]
+        assert matches[0]['summary']['front9']['margin'] == 1
+        assert 'skins' not in body
+
+    def test_the_save_returns_skins_when_they_run_beside_it(self):
+        assert self._setup().status_code == 201
+        self.round.active_games = ['annandale_friday', 'skins']
+        self.round.save(update_fields=['active_games'])
+        from services.skins import setup_skins
+        setup_skins(self.fs)
+        body = self._post_hole(1, self._sweep()).json()
+        assert body['skins']['holes'][0]['hole'] == 1
+
+    def test_the_save_no_longer_builds_a_leaderboard(self):
+        """137 queries nothing read: both clients discard this body."""
+        assert self._setup().status_code == 201
+        assert 'leaderboard' not in self._post_hole(1, self._sweep()).json()
+
+    def test_a_broken_tray_summary_does_not_fail_the_save(self):
+        """A 500 here would leave a saved score retrying forever."""
+        assert self._setup().status_code == 201
+        with mock.patch('services.annandale_friday.annandale_friday_summary',
+                        side_effect=RuntimeError('boom')):
+            body = self._post_hole(1, self._sweep()).json()
+        assert 'annandale_friday' not in body
+        assert HoleScore.objects.filter(foursome=self.fs).count() == self.SIZE
+
+    def test_score_events_run_after_the_commit_not_in_the_request(self):
+        assert self._setup().status_code == 201
+        with mock.patch('services.messaging_events.emit_score_events') as emit:
+            with self.captureOnCommitCallbacks(execute=False) as callbacks:
+                self._post_hole(1, self._sweep())
+            emit.assert_not_called()
+            for callback in callbacks:
+                callback()
+            emit.assert_called_once()
+        assert emit.call_args.args[0].id == self.fs.id
+        assert emit.call_args.args[1] == 1
 
     def test_a_posted_score_moves_the_matches(self):
         assert self._setup().status_code == 201

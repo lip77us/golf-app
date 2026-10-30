@@ -15,6 +15,7 @@
 ///                    scores without an extra async call.
 
 import 'dart:async';
+import '../utils/result_hold.dart';
 
 import 'package:flutter/foundation.dart';
 import '../api/client.dart';
@@ -40,6 +41,7 @@ class RoundProvider extends ChangeNotifier {
 
   RoundProvider(this._client, this._localDb, this._sync) {
     _sync.addListener(_onSyncChanged);
+    _sync.onScorePosted = _onScorePosted;
   }
 
   /// Called by ProxyProvider when the auth token changes.
@@ -82,6 +84,8 @@ class RoundProvider extends ChangeNotifier {
   @override
   void dispose() {
     _sync.removeListener(_onSyncChanged);
+    _sync.onScorePosted = null;
+    _annandaleResults.clear();
     super.dispose();
   }
 
@@ -393,6 +397,7 @@ class RoundProvider extends ChangeNotifier {
     // "keep this summary fresh" signal, which would otherwise trigger
     // 404s when the new foursome isn't configured for the same games.
     if (_activeFoursomeId != foursomeId) {
+      _annandaleResults.clear();
       _scorecard        = null;
       _nassauSummary    = null;
       _tripleNassauSummary = null;
@@ -459,6 +464,13 @@ class RoundProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Before the enqueue, because the enqueue starts the drain and a fast
+      // connection could answer before the next line runs.
+      if (foursomeId == _activeFoursomeId &&
+          _annandaleFridaySummary != null) {
+        _annandaleResults.hold(holeNumber);
+      }
+
       // 1. Write to local DB and queue for sync.
       await _sync.enqueue(
         foursomeId:   foursomeId,
@@ -846,7 +858,9 @@ class RoundProvider extends ChangeNotifier {
     _loadingSkins = true;
     notifyListeners();
     try {
-      _skinsSummary = await _client.getSkinsSummary(foursomeId);
+      final generation = _afSummaryGeneration;
+      final fresh = await _client.getSkinsSummary(foursomeId);
+      if (generation == _afSummaryGeneration) _skinsSummary = fresh;
     } on NetworkException {
       // Offline — keep the previous summary around if we had one.
     } catch (e) {
@@ -1277,10 +1291,55 @@ class RoundProvider extends ChangeNotifier {
 
   // ── Annandale Friday ───────────────────────────────────────────────────────
 
+  late final ResultHold _annandaleResults = ResultHold(
+      wait: const Duration(seconds: 5), onChanged: notifyListeners);
+  int _afSummaryGeneration = 0;
+
+  /// The tray is owed this hole's result, and there is a connection to answer
+  /// on. The screen holds the next-hole button on it.
+  bool annandaleResultPending(int hole) =>
+      _annandaleResults.pending(hole) && _sync.isOnline;
+
+  /// Saved on the phone and not yet on the server, so what the summary holds
+  /// for this hole predates it. An answered hole is excluded because the queue
+  /// clears a moment after the answer lands.
+  bool annandaleHoleUnsynced(int hole) =>
+      (_localPendingByHole[hole]?.isNotEmpty ?? false) &&
+      !_annandaleResults.answered(hole);
+
+  void _onScorePosted(
+      int foursomeId, int holeNumber, Map<String, dynamic> response) {
+    if (foursomeId != _activeFoursomeId ||
+        !_annandaleResults.pending(holeNumber)) {
+      return;
+    }
+    final af = response['annandale_friday'];
+    final skins = response['skins'];
+    if (af is Map<String, dynamic>) {
+      _afSummaryGeneration++;
+      _annandaleFridaySummary = AnnandaleFridaySummary.fromJson(af);
+      if (skins is Map<String, dynamic>) {
+        _skinsSummary = SkinsSummary.fromJson(skins);
+      }
+      _annandaleResults.answer(holeNumber);
+      notifyListeners();
+      return;
+    }
+    // A server that does not return it yet: fetch, and hold until that lands.
+    unawaited(loadAnnandaleFriday(foursomeId).whenComplete(() {
+      _annandaleResults.answer(holeNumber);
+      notifyListeners();
+    }));
+  }
+
   Future<void> loadAnnandaleFriday(int foursomeId) async {
+    // A fetch begun before a save can finish after it. Its figures predate the
+    // hole, so it must not replace the result the save returned.
+    final generation = _afSummaryGeneration;
     try {
-      _annandaleFridaySummary =
-          await _client.getAnnandaleFridaySummary(foursomeId);
+      final fresh = await _client.getAnnandaleFridaySummary(foursomeId);
+      if (generation != _afSummaryGeneration) return;
+      _annandaleFridaySummary = fresh;
       notifyListeners();
     } on NetworkException {
       // Offline — keep the previous summary around.
