@@ -6307,6 +6307,27 @@ and for rounds set up earlier. The summaries report the effective figure as
 `PATCH /rounds/{id}` still accepts it, because primaries set their stake that
 way. Tests: `api/test_side_game_stake.py` (4).
 
+**A pool share is whole dollars, and they still add up.** Reported from a
+phone, 30 Oct 2026: a $40 pool won in three skins paid `$26.67`, which broke
+across two lines inside the mint pill, clipped the `7`, and pushed the pill
+left over the skins ticks. Paul: *"rounding to nearest dollar is fine."*
+
+Rounding each share on its own is NOT fine — three $13s under a header
+promising $40 breaks the rule he has stated matters most elsewhere (*"I am
+more concerned that the numbers add up"*). `services.skins._whole_dollar_shares`
+floors every share and hands the dollars left over to the largest fractional
+parts, ties to the bigger share then the lower player id so two identical
+rounds settle identically. **Only when the pot is a whole number of dollars**:
+a $2.50 ante over three golfers is $7.50, which no set of whole dollars sums
+to, so that keeps its cents.
+
+**It is done in the ENGINE, not on the board** — the receipt and the
+settlement read these same figures, so a board that rounded on its own would
+disagree with the text somebody is handed. The layout was fixed as well
+rather than instead: the figure is one line that shrinks rather than wraps,
+because a non-whole pot still carries cents and a big pot is simply wider.
+Not swept to the cross-round pool, which has its own summary.
+
 **Golfer colours are shared now** — `Halved.golferColours` / `Halved.golfer(i)`,
 six wrapping. They were about to be a third private copy (the Sixes board
 declares its own clay). Six is the ceiling and it WRAPS: a foursome never

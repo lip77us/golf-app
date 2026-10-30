@@ -342,5 +342,34 @@ void main() {
       expect(src.contains('goes unwon'), isFalse);
     });
   });
-}
 
+  group('the money never wraps', () {
+    // Reported from a phone (30 Oct 2026): a $40 pool over three skins paid
+    // $26.67, which broke across two lines inside the pill and clipped — and
+    // pushed the pill left over the skins ticks.
+    testWidgets('a cents figure fits on one line', (t) async {
+      await t.binding.setSurfaceSize(const Size(390, 900));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      // A pot that is NOT a whole number of dollars keeps its cents, which
+      // is the case the layout still has to carry.
+      await _pump(t, SkinsBoardData.fromSkins(_skins(
+        payoutStyle: 'pool',
+        pool: 40.0,
+        betUnit: 10.0,
+        players: [
+          _p(1, 'Paul Lipkin', won: 2, payout: 26.67, net: 16.67),
+          _p(2, 'Jim Diederich', won: 1, payout: 13.33, net: 3.33),
+          _p(3, 'Gilbert Lee'),
+          _p(4, 'Larry Sanders'),
+        ],
+        holes: [_won(1, 1), _won(2, 1), _won(3, 2),
+                for (var h = 4; h <= 18; h++) _unplayed(h)],
+      )));
+      await t.pumpAndSettle();
+      expect(t.takeException(), isNull);
+      final money = t.widget<Text>(find.text('\$26.67'));
+      expect(money.maxLines, 1);
+      expect(money.softWrap, isFalse);
+    });
+  });
+}

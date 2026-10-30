@@ -461,7 +461,7 @@ class _LedgerRow extends StatelessWidget {
           // outlined. Junk is one share of the same pot, so leaving it out
           // would print a count that does not match the money beside it.
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 150),
+            constraints: const BoxConstraints(maxWidth: 118),
             child: golfer.totalSkins == 0
                 ? const Text('0',
                     style: TextStyle(
@@ -478,8 +478,15 @@ class _LedgerRow extends StatelessWidget {
                     ],
                   ),
           ),
+          // **The figure never wraps.** At 72 wide a pool share of `$26.67`
+          // broke across two lines inside the pill and the second line was
+          // clipped, which also pushed the pill left over the ticks (Paul,
+          // 30 Oct 2026). Pool shares are whole dollars now, but a pot that
+          // is not a whole number of dollars still carries cents and a big
+          // pot is simply wider — so this fits what it is given, and shrinks
+          // rather than breaking when it cannot.
           SizedBox(
-            width: 72,
+            width: 96,
             child: Align(
               alignment: Alignment.centerRight,
               child: up
@@ -490,14 +497,13 @@ class _LedgerRow extends StatelessWidget {
                       ),
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 3),
-                      child: Text(isPool ? _share(golfer.money) : _money(golfer.money),
-                          style: const TextStyle(
-                              fontSize: 19, fontWeight: FontWeight.w700,
-                              color: Halved.deepPine)),
+                      child: _moneyText(
+                          isPool ? _share(golfer.money) : _money(golfer.money),
+                          Halved.deepPine),
                     )
-                  : Text(isPool ? _share(golfer.money) : _money(golfer.money),
-                      style: const TextStyle(
-                          fontSize: 19, fontWeight: FontWeight.w700)),
+                  : _moneyText(
+                      isPool ? _share(golfer.money) : _money(golfer.money),
+                      null),
             ),
           ),
         ]),
@@ -505,6 +511,17 @@ class _LedgerRow extends StatelessWidget {
     );
   }
 }
+
+/// One line, right-aligned, shrinking only if it genuinely cannot fit.
+Widget _moneyText(String s, Color? colour) => FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerRight,
+      child: Text(s,
+          maxLines: 1,
+          softWrap: false,
+          style: TextStyle(
+              fontSize: 19, fontWeight: FontWeight.w700, color: colour)),
+    );
 
 class _Tick extends StatelessWidget {
   const _Tick({required this.colour, required this.filled});

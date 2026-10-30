@@ -674,3 +674,45 @@ class JunkBelongsToThePrimaryGameTests(TestCase):
         from services import skins as skins_service
         src = inspect.getsource(skins_service.setup_skins)
         self.assertIn('primary_game', src)
+
+
+class PoolSharesAreWholeDollarsTests(TestCase):
+    """`_whole_dollar_shares` — Paul, 30 Oct 2026: "rounding to nearest dollar
+    is fine." Rounding each share on its own is not: a $40 pool won in three
+    skins pays $13.33 three times, and three $13s under a header promising $40
+    breaks the rule he has stated matters most.
+    """
+
+    def _f(self, payout, target):
+        from services.skins import _whole_dollar_shares
+        return _whole_dollar_shares(payout, target)
+
+    def test_the_shares_still_sum_to_the_pot(self):
+        # The reported round: $40 pool, three skins, two to one golfer.
+        out = self._f({1: 26.666, 2: 13.333}, 40)
+        self.assertEqual(sum(out.values()), 40)
+        self.assertEqual(out, {1: 27.0, 2: 13.0})
+
+    def test_the_odd_dollar_goes_to_the_largest_remainder(self):
+        # Three equal shares of $40: 13.33 each, floors to 39, one dollar
+        # left — and it cannot be split, so somebody gets it.
+        out = self._f({1: 13.333, 2: 13.333, 3: 13.333}, 40)
+        self.assertEqual(sum(out.values()), 40)
+        self.assertEqual(sorted(out.values()), [13.0, 13.0, 14.0])
+
+    def test_it_is_deterministic(self):
+        a = self._f({7: 13.333, 3: 13.333, 5: 13.333}, 40)
+        b = self._f({3: 13.333, 5: 13.333, 7: 13.333}, 40)
+        self.assertEqual(a, b, 'two identical rounds must settle identically')
+
+    def test_a_pot_that_is_not_whole_dollars_keeps_its_cents(self):
+        # A $2.50 ante over three golfers is $7.50 — no set of whole dollars
+        # sums to it, so rounding would invent or lose money.
+        payout = {1: 5.0, 2: 2.5}
+        self.assertEqual(self._f(payout, 7.5), payout)
+
+    def test_an_exact_split_is_left_alone(self):
+        self.assertEqual(self._f({1: 20.0, 2: 20.0}, 40), {1: 20.0, 2: 20.0})
+
+    def test_nobody_won_is_not_a_rounding_problem(self):
+        self.assertEqual(self._f({}, 0), {})

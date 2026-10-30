@@ -626,6 +626,37 @@ def _junk_earned(foursome, game, real_members):
     return greenie_block, earned
 
 
+def _whole_dollar_shares(payout: dict, target: float) -> dict:
+    """Round each share to whole dollars so they still sum to `target`.
+
+    Paul, 30 Oct 2026: *"rounding to nearest dollar is fine."* Rounding each
+    share on its own is not — a $40 pool won in three skins pays $13.33 three
+    times, and three $13s under a header promising $40 is the thing he has
+    said matters most: **the numbers have to add up.**
+
+    So: floor every share, then hand the dollars that are left to the largest
+    fractional parts (largest remainder). Ties go to the bigger share, then to
+    the lower player id, so two identical rounds settle identically.
+
+    **Only when the pot is a whole number of dollars**, because otherwise no
+    set of whole dollars can sum to it — a $2.50 ante over three golfers is
+    $7.50, and that keeps its cents.
+    """
+    if not payout or abs(target - round(target)) > 0.005:
+        return payout
+    target = int(round(target))
+    floors = {pid: int(v // 1) for pid, v in payout.items()}
+    left = target - sum(floors.values())
+    if left <= 0:
+        return {pid: float(v) for pid, v in floors.items()}
+    order = sorted(
+        payout,
+        key=lambda pid: (-(payout[pid] % 1), -payout[pid], pid),
+    )
+    for pid in order[:left]:
+        floors[pid] += 1
+    return {pid: float(v) for pid, v in floors.items()}
+
 def skins_summary(foursome) -> dict:
     """
     JSON-serialisable summary of a Skins game.
@@ -849,6 +880,12 @@ def skins_summary(foursome) -> dict:
                       for pid, v in _wager_settle(dict(total_skins_by_pid), cfg).items()}
         payout_by_pid = {pid: net_by_pid.get(pid, 0.0) for pid in payout_by_pid}
     else:
+        # Whole dollars, and they still add up — see `_whole_dollar_shares`.
+        # Done HERE rather than on the board, because the receipt and the
+        # settlement read these same figures: a board rounding on its own
+        # would disagree with the text somebody is handed.
+        payout_by_pid = _whole_dollar_shares(
+            payout_by_pid, sum(contribution_by_pid.values()))
         net_by_pid = {pid: round(payout_by_pid[pid] - contribution_by_pid[pid], 2)
                       for pid in payout_by_pid}
 
