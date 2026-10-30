@@ -1,4 +1,4 @@
-# App Store listing copy — Halved (v2.12.1)
+# App Store listing copy — Halved (v2.13.0)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
@@ -10,9 +10,9 @@ offerable and must not be listed. Check `game_catalog.dart` rather than the
 services directory — this list had been missing 40 Balls and Better Ball since
 they were release headlines.
 
-## Submitting 2.12.1 — everything that changes
+## Submitting 2.13.0 — everything that changes
 
-| Field | 2.12.1 |
+| Field | 2.13.0 |
 | --- | --- |
 | What's New | NEW — below |
 | Promotional text | NEW — below (editable later without review) |
@@ -53,7 +53,36 @@ reason the flip could not simply be done, and the order to do it in at 2.13,
 are in `docs/go-live-checklist.md`. Nothing on a product page shows a
 customer which English it is.
 
-## Promotional text (170 max, editable without review) — 2.12.1, 161 chars
+## Promotional text (170 max, editable without review) — 2.13.0, 142 chars
+New: Annandale Friday, a team Nassau for five or six on one card. Plus a new look for leaderboards and lock screens, rolling out game by game.
+
+## What's New (v2.13.0)
+
+A NEW LOOK, GAME BY GAME. We are moving Halved to a new design, starting with
+leaderboards and lock screens. The new boards show where every hole went and
+end with one clear ledger of who is up, and the rules you agreed to sit at the
+top, so nobody has to ask. More games will follow.
+
+ANNANDALE FRIDAY. A new game for a group of five or six on one card. Split
+into teams and every team plays the others in its own Nassau, with presses,
+scored from one screen. Skins, Spots and Stroke Play can run alongside it.
+
+SKINS
+• Set what it takes to win a skin: a net par or better, a gross par or better,
+  or let a gross birdie steal the hole
+• A skin's value now reads the way you think of it: five golfers at $5 is a
+  $25 skin
+
+ALSO
+• Rabbit can carry: a rabbit nobody holds rolls into the next one, if you turn
+  it on
+• Team events with a big field load much faster
+• The leaderboard no longer goes missing after you complete a Foursome Play
+  round
+• A round no longer warns about missing scores that are only waiting to sync
+• A side game now keeps its own stake, separate from the main game's
+
+## Promotional text — previous (2.12.1, 161 chars)
 New: Courses near me — tap once and the courses closest to you are listed nearest first. Halved asks for your location only on that tap, never in the background.
 
 ## Promotional text — previous (2.12.0, 164 chars)
