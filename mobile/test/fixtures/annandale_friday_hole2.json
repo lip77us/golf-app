@@ -69,8 +69,10 @@
    "short_name": "B",
    "playing_handicap": 8,
    "team": 0,
+   "strokes_in_play": 0,
    "matches": 2,
-   "net": 0.0
+   "net": 0.0,
+   "live_net": 40.0
   },
   {
    "player_id": 2,
@@ -78,8 +80,10 @@
    "short_name": "T",
    "playing_handicap": 14,
    "team": 0,
+   "strokes_in_play": 0,
    "matches": 2,
-   "net": 0.0
+   "net": 0.0,
+   "live_net": 40.0
   },
   {
    "player_id": 3,
@@ -87,8 +91,10 @@
    "short_name": "D",
    "playing_handicap": 4,
    "team": 1,
+   "strokes_in_play": 0,
    "matches": 2,
-   "net": 0.0
+   "net": 0.0,
+   "live_net": 0.0
   },
   {
    "player_id": 4,
@@ -96,8 +102,10 @@
    "short_name": "R",
    "playing_handicap": 18,
    "team": 1,
+   "strokes_in_play": 0,
    "matches": 2,
-   "net": 0.0
+   "net": 0.0,
+   "live_net": 0.0
   },
   {
    "player_id": 5,
@@ -105,8 +113,10 @@
    "short_name": "J",
    "playing_handicap": 11,
    "team": 2,
+   "strokes_in_play": 0,
    "matches": 2,
-   "net": 0.0
+   "net": 0.0,
+   "live_net": -40.0
   },
   {
    "player_id": 6,
@@ -114,8 +124,10 @@
    "short_name": "S",
    "playing_handicap": 22,
    "team": 2,
+   "strokes_in_play": 0,
    "matches": 2,
-   "net": 0.0
+   "net": 0.0,
+   "live_net": -40.0
   }
  ],
  "matches": [

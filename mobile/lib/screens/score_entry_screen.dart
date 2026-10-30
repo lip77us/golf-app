@@ -168,8 +168,23 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// line. A thin read of the scorecard rather than a call into
   /// `_HoleScoreCard._strokesForHole`, which is that widget's own and takes
   /// its handicap mode from fields the screen does not hold.
-  int _keypadStrokes(Membership m, Scorecard sc) =>
-      sc.holeData(_selectedHole)?.scoreFor(m.player.id)?.handicapStrokes ?? 0;
+  int _keypadStrokes(Membership m, Scorecard sc) {
+    final entry = sc.holeData(_selectedHole)?.scoreFor(m.player.id);
+    // Annandale Friday plays off the group's low man, not full handicap, so
+    // the stored full-net strokes would say "1 stroke" to the low man himself
+    // while his row shows none. The server states each golfer's strokes in
+    // play; allocate that by stroke index, as its own engine does.
+    final af = context.read<RoundProvider>().annandaleFridaySummary;
+    final n = af?.players
+        .where((p) => p.playerId == m.player.id)
+        .map((p) => p.strokesInPlay).firstOrNull;
+    if (n != null) {
+      final si = entry?.strokeIndex
+          ?? sc.holeData(_selectedHole)?.strokeIndex ?? 18;
+      return strokesOnHole(n, si);
+    }
+    return entry?.handicapStrokes ?? 0;
+  }
 
   /// The Hot Spot order sheet is offered ONCE per visit to this screen.
   /// Dismissing it leaves the amber banner and its Set order button, so this
@@ -3018,7 +3033,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           else if (fbMember != null)
             FortyBallsKeypad(
               playerName: fbMember.player.name,
-              par       : par,
+              // HIS par, not the hole's: on mixed tees the hole is a 4 for
+              // one man and a 5 for the next, and the keys are coded against
+              // it — a par shaded as a bogey is a wrong number on the key.
+              par       : sc.holeData(_selectedHole)
+                      ?.scoreFor(fbMember.player.id)?.par ?? par,
               strokes   : _keypadStrokes(fbMember, sc),
               onScore   : (n) {
                 _selectScore(fbMember, n, _selectedHole);
@@ -3027,6 +3046,25 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 // scorer resumes.
                 if (_editHotPid != null || _afEditing) {
                   setState(() { _editHotPid = null; _afEditing = false; });
+                }
+                // **Annandale Friday posts the hole on its last score and
+                // stays**, the same as the inline picker does for 40 Balls.
+                // Its tray reports the server's result for the hole, so a hole
+                // left unsent raises a tray with nothing in it — which is
+                // exactly what the first run on a phone showed. 40 Balls is
+                // left alone: it posts when the group picks its count. An edit
+                // to a complete hole posts too, or the tray would describe the
+                // number that was just replaced.
+                if (n > 0 && af != null && !_fortyBallsRound(rp)) {
+                  final hole = _selectedHole;
+                  final now = _effectiveScores(sc, hole);
+                  if (_allScored(players, now, hole)) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!mounted || _selectedHole != hole) return;
+                      if (context.read<RoundProvider>().submitting) return;
+                      _saveCurrentHole(context, players, par);
+                    });
+                  }
                 }
               },
               // `-1` is this screen's clear, not a score of minus one.

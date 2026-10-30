@@ -25,9 +25,17 @@ Color annandaleTeamColour(int? team) => team == null
     : kAnnandaleTeamColours[team % kAnnandaleTeamColours.length];
 
 /// The same team on the dark tray, where the team colours themselves have
-/// too little contrast against deep pine to read.
-Color annandaleTeamTint(int? team) =>
-    team == null ? Colors.white70 : Halved.golferTint(team);
+/// too little contrast against deep pine to read. These are the reference's
+/// own dark variants (`--td`), not the light golfer tints: on the phone the
+/// tints made pine and slate nearly the same grey, and a team you cannot
+/// tell apart is the one thing this tray must not have.
+const List<Color> kAnnandaleTeamOnDark = [
+  Halved.brightMint, Color(0xFFF2A86E), Color(0xFFAFC0D8),
+];
+
+Color annandaleTeamTint(int? team) => team == null
+    ? Colors.white70
+    : kAnnandaleTeamOnDark[team % kAnnandaleTeamOnDark.length];
 
 /// "BILL & TOM" over a team's first golfer, in the team's colour.
 class AnnandaleTeamHeader extends StatelessWidget {
@@ -140,7 +148,9 @@ class AnnandaleHoleTray extends StatelessWidget {
             )
           else
             for (final m in rows) _matchRow(m),
-          if (skins != null) ..._skinLine(),
+          // The skin only once the server has the hole: an unplayed hole's
+          // skins row carries no winner, which would read as "No skin".
+          if (skins != null && rows.isNotEmpty) ..._skinLine(),
         ],
       ),
     );
@@ -210,10 +220,25 @@ class AnnandaleHoleTray extends StatelessWidget {
             ),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(won ? 'Won' : 'Halved',
-                style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: won ? annandaleTeamTint(winnerTeam) : Colors.white)),
+            // "Won" is a pill in the WINNER's colour, as the reference draws
+            // it — the word alone does not say whose side.
+            won
+                ? Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: annandaleTeamTint(winnerTeam),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text('Won',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: Halved.deepPine)),
+                  )
+                : const Text('Halved',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800, color: Colors.white)),
+            const SizedBox(height: 2),
             Text(why, style: const TextStyle(color: _dim, fontSize: 11)),
           ]),
         ]),

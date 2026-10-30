@@ -383,6 +383,15 @@ def annandale_friday_summary(foursome) -> dict | None:
 
     order = [pid for t in teams for pid in t]
     net_by_pid = {pid: 0.0 for pid in order}
+    # What every bet would pay if the round stopped now — the board's "now"
+    # figure. The ledger shows this until the round ends; a ledger reading
+    # $0 under a board reading +$20 "now" was the first thing the phone said.
+    live_by_pid = {pid: 0.0 for pid in order}
+    # Strokes in play, read off the matches' own teams — the same figure in
+    # every match because the allocation is the field's. Score entry's
+    # keypad states it; reading it here keeps that caption from carrying a
+    # second copy of the handicap rules.
+    strokes_by_pid: dict = {}
     matches_by_pid = {pid: 0 for pid in order}
     matches = []
     cfg = {}
@@ -395,12 +404,20 @@ def annandale_friday_summary(foursome) -> dict | None:
         s = nassau_summary(foursome, slug)
         if s is None:
             continue
-        total = float(s['payouts']['total'])
+        # CAPPED: the loss cap is per side per Nassau, and `total` is the
+        # uncapped sum — settling on it would pay out past the cap.
+        total = float(s['payouts']['total_capped'])
+        live = float(s['payouts'].get('live_total') or 0)
+        for side in ('team1', 'team2'):
+            for pl in s['teams'].get(side, []):
+                strokes_by_pid.setdefault(pl['player_id'], pl.get('phcp_in_play'))
         for pid in side1:
             net_by_pid[pid] = net_by_pid.get(pid, 0.0) + total
+            live_by_pid[pid] = live_by_pid.get(pid, 0.0) + live
             matches_by_pid[pid] = matches_by_pid.get(pid, 0) + 1
         for pid in side2:
             net_by_pid[pid] = net_by_pid.get(pid, 0.0) - total
+            live_by_pid[pid] = live_by_pid.get(pid, 0.0) - live
             matches_by_pid[pid] = matches_by_pid.get(pid, 0) + 1
         if not cfg:
             child = children[slug]
@@ -447,8 +464,10 @@ def annandale_friday_summary(foursome) -> dict | None:
         'teams'               : [[_pinfo(pid) for pid in t] for t in teams],
         'players'             : [
             {**_pinfo(pid),
+             'strokes_in_play': strokes_by_pid.get(pid),
              'matches': matches_by_pid.get(pid, 0),
-             'net'    : round(net_by_pid.get(pid, 0.0), 2)}
+             'net'    : round(net_by_pid.get(pid, 0.0), 2),
+             'live_net': round(live_by_pid.get(pid, 0.0), 2)}
             for pid in order
         ],
         'matches'             : matches,

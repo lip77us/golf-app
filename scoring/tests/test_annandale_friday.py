@@ -140,6 +140,9 @@ class SixTests(_Base):
         assert self.gets(s, 3, sam) == 18
         assert self.gets(s, 1, dave) == 0
         assert self.gets(s, 3, dave) == 0
+        # And the summary states it once per golfer, for score entry's keypad.
+        by_pid = {p['player_id']: p['strokes_in_play'] for p in s['players']}
+        assert by_pid[sam] == 18 and by_pid[dave] == 0
 
     def test_the_second_ball_breaks_a_tied_best_ball(self):
         setup_annandale_friday(self.fs, self.teams(), handicap_mode='gross')
@@ -185,6 +188,42 @@ class SixTests(_Base):
         assert net[self.pid['Jim']] == -60
         assert abs(sum(net.values())) < 0.005
         assert s['status'] == 'complete'
+
+
+class MoneyTests(_Base):
+    def teams(self):
+        return [self.ids('Bill', 'Tom'), self.ids('Dave', 'Ray'),
+                self.ids('Jim', 'Sam')]
+
+    def _sweep(self, holes):
+        for h in range(1, holes + 1):
+            self.score_all(h, {'Bill': 3, 'Tom': 5, 'Dave': 4, 'Ray': 6,
+                               'Jim': 5, 'Sam': 7})
+        calculate_annandale_friday(self.fs)
+
+    def test_the_loss_cap_holds_in_settlement(self):
+        # Uncapped, Jim loses $30 in each of his two matches. Capped at $20 a
+        # side per Nassau, he loses $20 in each — settling off the uncapped
+        # total would have charged him $60.
+        setup_annandale_friday(self.fs, self.teams(), handicap_mode='gross',
+                               auto_press=False, loss_cap=20)
+        self._sweep(18)
+        net = {p['player_id']: p['net']
+               for p in annandale_friday_summary(self.fs)['players']}
+        assert net[self.pid['Jim']] == -40
+        assert net[self.pid['Bill']] == 40
+        assert abs(sum(net.values())) < 0.005
+
+    def test_mid_round_the_live_figure_moves_and_the_settled_one_waits(self):
+        setup_annandale_friday(self.fs, self.teams(), handicap_mode='gross',
+                               auto_press=False)
+        self._sweep(1)
+        p = {x['player_id']: x
+             for x in annandale_friday_summary(self.fs)['players']}
+        bill = p[self.pid['Bill']]
+        assert bill['net'] == 0          # nothing has settled
+        assert bill['live_net'] > 0      # but he is up in both matches
+        assert abs(sum(x['live_net'] for x in p.values())) < 0.005
 
 
 class FiveTests(_Base):

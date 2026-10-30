@@ -8312,10 +8312,11 @@ class _AfMatchPill extends StatelessWidget {
   }
 }
 
-/// Every bet each golfer is in, netted — the server's per-golfer figure, so
-/// it is the same number settlement uses. The only line on the screen that
-/// answers what a man owes; each board above is one match of his two or
-/// three.
+/// Every bet each golfer is in, netted — the server's per-golfer figures.
+/// While the round is on it shows the LIVE figure, the same "now" the board
+/// above shows; once every bet has settled it shows the settled one, which is
+/// what settlement pays. Reading the settled figure mid-round put $0 under a
+/// board saying +$20 "now".
 class _AfNetPosition extends StatelessWidget {
   const _AfNetPosition({required this.summary, required this.done});
 
@@ -8362,13 +8363,16 @@ class _AfNetPosition extends StatelessWidget {
                 const SizedBox(width: 12),
                 SizedBox(
                   width: 72,
-                  child: Text(_tnMoney(p.net),
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w800,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                          color: p.net > 0 ? Halved.pine
-                              : p.net < 0 ? Halved.clayInk : Halved.muted)),
+                  child: Builder(builder: (_) {
+                    final v = done ? p.net : p.liveNet;
+                    return Text(_tnMoney(v),
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w800,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                            color: v > 0 ? Halved.pine
+                                : v < 0 ? Halved.clayInk : Halved.muted));
+                  }),
                 ),
               ]),
             ),

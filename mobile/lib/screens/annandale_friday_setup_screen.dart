@@ -68,6 +68,10 @@ class _AnnandaleFridaySetupScreenState
   final _pressCtrl = TextEditingController();
   final _capCtrl   = TextEditingController();
   bool _stakeOk = false;
+  /// The press stake follows the bet until somebody types in it: a press is
+  /// usually played for the bet, and a press field left at $0 when the bet
+  /// is $10 was the first thing the phone showed.
+  bool _pressEdited = false;
 
   bool    _loading = true;
   bool    _saving  = false;
@@ -134,6 +138,8 @@ class _AnnandaleFridaySetupScreenState
         if (bet > 0) { _betCtrl.text = _money(bet); _stakeOk = true; }
         final press = (cfg['press_unit'] as num?)?.toDouble() ?? 0;
         _pressCtrl.text = _money(press > 0 ? press : bet);
+        // A saved press stake that differs from the bet was chosen.
+        _pressEdited = configured && press > 0 && press != bet;
         final cap = (cfg['loss_cap'] as num?)?.toDouble();
         _capOn = cap != null;
         if (cap != null) _capCtrl.text = _money(cap);
@@ -205,6 +211,10 @@ class _AnnandaleFridaySetupScreenState
               : Column(children: [
                   Expanded(
                     child: ListView(
+                      // A step opens at its top: without the key the list
+                      // keeps the last step's scroll, and step 2 opened
+                      // halfway down its own page.
+                      key: ValueKey(_step),
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                       children: switch (_step) {
                         0 => _teamsStep(),
@@ -404,7 +414,10 @@ class _AnnandaleFridaySetupScreenState
               controller: _betCtrl,
               label: 'Per bet (\$)',
               helpText: 'Front, back and overall, each.',
-              onChanged: (ok) => setState(() => _stakeOk = ok),
+              onChanged: (ok) => setState(() {
+                _stakeOk = ok;
+                if (!_pressEdited) _pressCtrl.text = _betCtrl.text.trim();
+              }),
             ),
             if (_autoPress || _manualPress) ...[
               const SizedBox(height: 12),
@@ -416,6 +429,7 @@ class _AnnandaleFridaySetupScreenState
                   labelText: 'Per press (\$)', prefixText: '\$ ',
                   border: OutlineInputBorder(), isDense: true,
                 ),
+                onChanged: (_) => _pressEdited = true,
               ),
             ],
           ]),

@@ -5268,8 +5268,14 @@ class AnnandaleFridayPlayer {
   final String  shortName;
   final int?    playingHandicap;
   final int?    team;      // index into [AnnandaleFridaySummary.teams]
+  /// Strokes he takes in every match — the field's allocation, so one
+  /// number. Null on an older server.
+  final int?    strokesInPlay;
   final int     matches;
+  /// Settled: bets decided, loss cap applied. The figure settlement pays.
   final double  net;
+  /// What every bet would pay if the round stopped now — the board's "now".
+  final double  liveNet;
 
   const AnnandaleFridayPlayer({
     required this.playerId,
@@ -5277,8 +5283,10 @@ class AnnandaleFridayPlayer {
     required this.shortName,
     this.playingHandicap,
     this.team,
+    this.strokesInPlay,
     this.matches = 0,
     this.net = 0,
+    this.liveNet = 0,
   });
 
   factory AnnandaleFridayPlayer.fromJson(Map<String, dynamic> j) =>
@@ -5288,8 +5296,13 @@ class AnnandaleFridayPlayer {
         shortName      : j['short_name'] as String? ?? '',
         playingHandicap: j['playing_handicap'] as int?,
         team           : j['team'] as int?,
+        strokesInPlay  : j['strokes_in_play'] as int?,
         matches        : j['matches'] as int? ?? 0,
         net            : (j['net'] as num?)?.toDouble() ?? 0,
+        // An older server has no live figure; the settled one is the honest
+        // fallback rather than a zero that reads as a result.
+        liveNet        : (j['live_net'] as num?)?.toDouble()
+            ?? (j['net'] as num?)?.toDouble() ?? 0,
       );
 
   String get label => shortName.isNotEmpty ? shortName : name;

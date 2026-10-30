@@ -120,6 +120,72 @@ void main() {
       await mount(t, hole: 7, next: 8);
       expect(find.text('Waiting for this hole to sync…'), findsOneWidget);
     });
+
+    testWidgets('says nothing about the skin until the server has the hole',
+        (t) async {
+      // Found on the phone: an unplayed hole's skins row has no winner, and
+      // the tray read it as "No skin" while the hole was still unsent.
+      t.view.physicalSize = const Size(1200, 2400);
+      t.view.devicePixelRatio = 2;
+      addTearDown(t.view.reset);
+      final skins = SkinsSummary.fromJson({
+        'holes': [
+          {'hole': 7, 'winner_id': null, 'skins_value': 1, 'is_carry': false},
+        ],
+      });
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(body: AnnandaleHoleTray(
+          summary: _fixture(), hole: 7, nextHole: 8, playerCount: 6,
+          skins: skins, onEdit: () {}, onPress: (_, __) {},
+        )),
+      ));
+      expect(find.text('No skin'), findsNothing);
+    });
+  });
+
+  group('found on the phone', () {
+    test('the keypad posts the hole on its last score', () {
+      // It never did: 40 Balls posts with its count, and this game has no
+      // count, so the hole sat unsent under a tray with nothing in it.
+      final src = _src('lib/screens/score_entry_screen.dart');
+      final at = src.indexOf('Annandale Friday posts the hole on its last');
+      expect(at, greaterThan(0));
+      expect(src.substring(at, at + 1400), contains('_saveCurrentHole('));
+    });
+
+    test("the keypad's strokes are the game's, not full handicap", () {
+      // It said "1 stroke" to the low man, who plays off scratch.
+      expect(_fixture().players.every((p) => p.strokesInPlay == 0), isTrue,
+          reason: 'the fixture is gross, so nobody strokes');
+      final src = _src('lib/screens/score_entry_screen.dart');
+      final at = src.indexOf('int _keypadStrokes(');
+      expect(src.substring(at, at + 900), contains('strokesInPlay'));
+    });
+
+    test('the ledger shows the live figure until the round is final', () {
+      // Two holes in, nothing has settled, but Bill & Tom are up.
+      final s = _fixture();
+      final bill = s.players.first;
+      expect(bill.net, 0);
+      expect(bill.liveNet, greaterThan(0));
+      expect(s.players.fold<double>(0, (a, p) => a + p.liveNet).abs(),
+          lessThan(0.005));
+      expect(_src('lib/screens/leaderboard_screen.dart'),
+          contains('final v = done ? p.net : p.liveNet;'));
+    });
+
+    test("the keypad codes keys against the golfer's own par", () {
+      // Kim's tee plays hole 1 as a par 5; the keypad said "par 4".
+      final src = _src('lib/screens/score_entry_screen.dart');
+      final at = src.indexOf('FortyBallsKeypad(');
+      expect(src.substring(at, at + 500),
+          contains('?.scoreFor(fbMember.player.id)?.par'));
+    });
+
+    test('a setup step opens at its top', () {
+      expect(_src('lib/screens/annandale_friday_setup_screen.dart'),
+          contains('key: ValueKey(_step)'));
+    });
   });
 
   group('the game is reachable', () {

@@ -7095,9 +7095,41 @@ the card), used by the casual screen's `_nextAvailableGroup`. Tests:
   clay, slate; a five's three is clay) for all three screens, plus light
   tints for the dark tray.
 
-Tests: `mobile/test/annandale_friday_test.dart` (18), the tray against
+Tests: `mobile/test/annandale_friday_test.dart` (24), the tray against
 `test/fixtures/annandale_friday_hole2.json` — REAL engine output, not
-hand-written JSON.
+hand-written JSON. Regenerate it from the engine when the summary changes.
+
+#### Six things a phone found that 56 tests did not
+Played on an iPhone 13 mini against the local server (29 Oct 2026). Every
+one was invisible to the suites, and two of them are money:
+- **The keypad never posted the hole.** The inline picker posts on the last
+  score; the keypad was 40 Balls', and 40 Balls posts with its COUNT. This
+  game has no count, so the hole sat unsent and the tray rose over nothing.
+  The keypad now posts and stays when it completes (or edits) a hole.
+- **Settlement netted the UNCAPPED total.** `payouts.total` ignores the loss
+  cap; `total_capped` is the settled figure. With this game's per-side,
+  per-Nassau cap on, a golfer would have paid past it.
+  `test_the_loss_cap_holds_in_settlement` fails on the old line.
+  `services/triple_nassau.py` reads `total` the same way — not fixed here.
+- **The ledger read $0 under a board reading +$20 "now".** It showed the
+  settled figure mid-round; the summary now carries `live_net` (the board's
+  `live_total`, summed per golfer) and the ledger shows it until final.
+- **The keypad told the low man "1 stroke".** It read the scorecard's stored
+  full-handicap strokes. The summary now carries `strokes_in_play` per golfer
+  (the field allocation, read off the matches' own teams) and the keypad
+  allocates that by stroke index — no second copy of the handicap rules.
+- **The keypad coded keys against the hole's par**, so on mixed tees a
+  woman's par read as a bogey. It uses the golfer's own par (helps 40 Balls).
+- **The tray could not say who was up**: the light golfer tints made pine and
+  slate the same grey on the dark tray. It uses the reference's own dark
+  variants (`#3BD89A` / `#F2A86E` / `#AFC0D8`) and a "Won" pill in the
+  winner's colour.
+Also: each setup step opens at its top, and the press stake follows the bet
+until it is edited.
+
+**Not built from the packet:** the hole header's "2 skins · 1 carried from 6"
+(the tray carries the skin instead), and the Skins card's settings summary
+on setup step 3.
 
 Still to do: the watch page, the Live Activity card, and moving the guide
 from `/preview/` to `/games/` LAST.
