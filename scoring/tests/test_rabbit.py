@@ -862,6 +862,18 @@ class RabbitHoleCardTests(_RabbitCardBase):
         self.assertEqual(card['rabbit']['lead'], 2)
         self.assertIsNone(card['result'], 'the 9th is not played yet')
 
+    def test_the_hole_AFTER_a_catch_shows_the_holder(self):
+        # From a phone: the banner read "Larry has it" and the header chip
+        # beside it read "Loose" on the next hole. The two must not be able
+        # to disagree — the chip is this card's `holder_before`.
+        self._setup()
+        self._hole(1, 5, 5, 3)                   # Sam catches it
+        card = self._card(2)
+        self.assertEqual(card['rabbit']['holder_short'], 'S')
+        self.assertEqual(card['rabbit']['lead'], 1)
+        self.assertFalse(card['rabbit']['loose'])
+        self.assertTrue(any(p['is_holder'] for p in card['players']))
+
     def test_an_outright_low_lights_one_golfer_and_a_tie_lights_none(self):
         self._setup()
         self._hole(7, 3, 5, 5)

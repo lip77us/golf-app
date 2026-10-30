@@ -254,6 +254,34 @@ void main() {
           contains('scores: scores'));
     });
 
+    test('the by-hole grid is the board\'s, not the play screen\'s', () {
+      // It was drawn in both. Under the keypad it was a half-visible table
+      // nobody could read, and `RabbitBoard` already draws it across every
+      // rabbit with one shared column width.
+      expect(src.contains('_RabbitGrid('), isFalse);
+      final board = File('lib/widgets/rabbit_board.dart').readAsStringSync();
+      expect(board, contains('class RabbitBoard'));
+    });
+
+    test('a saved hole drops the cards held for every OTHER hole', () {
+      // The banner said one golfer had it and the header chip beside it said
+      // Loose, because that hole's card had been fetched before the hole
+      // before it was scored.
+      final prov =
+          File('lib/providers/round_provider.dart').readAsStringSync();
+      final at = prov.indexOf("response['rabbit_hole']");
+      expect(at, greaterThan(0));
+      expect(prov.substring(at, at + 600), contains('_rabbitHoles.clear()'));
+    });
+
+    test('nobody is told they have 0 strokes', () {
+      final pad =
+          File('lib/widgets/forty_balls_keypad.dart').readAsStringSync();
+      final at = pad.indexOf('String _strokeWord(');
+      expect(at, greaterThan(0));
+      expect(pad.substring(at, at + 220), contains("'no stroke'"));
+    });
+
     test('the tray covers the pager rather than sitting above it', () {
       final at = src.indexOf('RabbitHoleTray(');
       expect(at, greaterThan(0));

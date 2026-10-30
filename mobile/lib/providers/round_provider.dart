@@ -1380,6 +1380,13 @@ class RoundProvider extends ChangeNotifier {
     // early for every round that is not playing Annandale Friday.
     final six = response['sixes_hole'];
     if (six is Map<String, dynamic>) {
+      // **Every OTHER hole's card is stale now.** A posted hole moves the
+      // standing, and with an early close-out it moves the match RANGES, so
+      // a card held for a later hole can be describing the wrong match
+      // entirely. Reported on Rabbit (30 Oct 2026): the banner said one
+      // golfer had it and the header chip beside it said Loose, because that
+      // hole's card had been fetched before the hole before it was scored.
+      _sixesHoles.clear();
       _sixesHoles[holeNumber] = SixesHoleCard.fromJson(six);
       // The card IS the answer, so the hold ends here rather than running
       // its full wait — which is what made the result look slow.
@@ -1389,6 +1396,7 @@ class RoundProvider extends ChangeNotifier {
 
     final rab = response['rabbit_hole'];
     if (rab is Map<String, dynamic>) {
+      _rabbitHoles.clear();          // same staleness — see `sixes_hole`
       _rabbitHoles[holeNumber] = RabbitHoleCard.fromJson(rab);
       _annandaleResults.answer(holeNumber);
       notifyListeners();

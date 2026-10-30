@@ -253,8 +253,11 @@ class _FortyBallsKeypadState extends State<FortyBallsKeypad> {
         ),
       ]);
 
+  /// `no stroke` rather than `0 strokes`, which is what it used to say and
+  /// reads as a quantity of nothing. The packets for Sixes and Rabbit both
+  /// write it this way.
   static String _strokeWord(int n) =>
-      n == 1 ? '1 stroke' : '$n strokes';
+      n == 0 ? 'no stroke' : n == 1 ? '1 stroke' : '$n strokes';
 
   Widget _grid() {
     // 3 per row, 8pt gaps, keys 60 tall — the handoff's figures.

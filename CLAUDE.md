@@ -7649,6 +7649,27 @@ Tests: `RabbitHoleCardTests` (20) + `RabbitFixtureRegenTests` (3) in
   precedent for a game whose unit is plain), and rolls-on, which was there
   under the name of its by-product.
 
+### The by-hole grid is the BOARD's, and a card went stale
+
+Three more from the phone (30 Oct 2026).
+
+- **`_RabbitGrid` is deleted from the play screen.** `RabbitBoard` already
+  draws it, across every rabbit and with one shared column width so the holes
+  line up down the card — which is the whole point of it. Repeated under the
+  keypad it was a half-visible table crushed against the tray: *"I don't like
+  the look of Rabbit by hole... maybe it should be on the leaderboard?"* Two
+  drawings of one thing, and this was the one nobody could read.
+- **The banner said one golfer had it and the chip beside it said `Loose`.**
+  The engine was right — a test pins that the hole after a catch reports the
+  holder — so the card for that hole was STALE: fetched before the hole
+  before it had a result. A posted hole moves the standing (and with
+  rolls-on, the leg RANGES), so `_onScorePosted` now drops every other hole's
+  card and keeps only the one the save returned. **Sixes had the identical
+  hole**, for the identical reason, and got the identical fix.
+- **`0 strokes`** on the keypad header, which reads as a quantity of nothing.
+  Both packets write `no stroke`; the shared keypad says that now, so 40
+  Balls and Annandale get it too.
+
 ### `Rolls on`, in both places
 
 Paul asked what the option should be called. It is the RULE; the extra rabbit
