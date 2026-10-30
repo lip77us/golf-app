@@ -796,9 +796,11 @@ CARD_KIND = {'match_18': 'match', 'fourball': 'match',
 # all with a lock-screen nag pointing at an update that does not exist. It
 # comes out in the commit that bumps the build carrying `FoursomeBoardView`,
 # and not before.
-# `annandale_friday` went in the day its builder was written (30 Oct 2026),
-# for the same reason: the game has no card on any shipped build.
-UNSHIPPED_KINDS: set = {'foursome', 'annandale_friday'}
+# `annandale_friday` went in the day its builder was written (30 Oct 2026)
+# and came out in 2.13.0+58, the build carrying its layout. Safe the same day:
+# the game itself first ships in that build, so no installed phone can be
+# playing one without the layout.
+UNSHIPPED_KINDS: set = {'foursome'}
 
 
 def card_kind(slug: str) -> str:
