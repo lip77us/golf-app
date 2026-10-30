@@ -222,27 +222,15 @@ class _HolesCard extends StatelessWidget {
           ]),
           if (row != rows.last) const SizedBox(height: 4),
         ],
-        // The validation rules live here, under the grid, because they are a
-        // footnote ON the grid: they decide what it takes for one of these
-        // tiles to be won at all, which is why a hole can end up carried with
-        // nobody tied.
-        if (data.rulesLine.isNotEmpty) ...[
+        // The rules themselves are chips in the settings strip at the top of
+        // the tab. What stays here is their consequence, because it explains
+        // this grid: a minimum can leave a hole unwon with nobody tied, and a
+        // gross steal never can. It comes from `skinRuleNote` and not a const
+        // for that reason.
+        if (note.isNotEmpty) ...[
           const SizedBox(height: 10),
-          Text(skinRuleChips(data.rulesLine).join(' · '),
-              style: const TextStyle(
-                  fontSize: 11.5, fontWeight: FontWeight.w600,
-                  color: Halved.pine)),
-          // The consequence is per RULE, which is why it comes from
-          // `skinRuleNote` and not from a const: a minimum can leave a hole
-          // unwon with nobody tied, and a gross steal never can — it changes
-          // who wins, not whether anybody does. This was hardcoded to the
-          // minimum's sentence, so a round playing steal alone was told holes
-          // could go unwon over a qualification it had not switched on.
-          if (note.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(note,
-                style: const TextStyle(fontSize: 11.5, color: Halved.muted)),
-          ],
+          Text(note,
+              style: const TextStyle(fontSize: 11.5, color: Halved.muted)),
         ],
       ]),
     );

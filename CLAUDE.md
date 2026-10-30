@@ -6279,10 +6279,12 @@ this is the mistake the shotgun sweep found six times.
   about who still has holes to come. Null in a single foursome, where it would
   be the same number four times.
 
-**The validation rules sit under HOLES** (Paul's call), as a footnote on the
-grid: they decide what it takes for a tile to be won at all, which is why a
-hole can carry with nobody tied. That retired `_SkinRulesInPlay`, which had
-been its own chip on each card for a day.
+**The validation rules are chips in the settings strip** (Paul, 30 Oct 2026),
+beside the handicap and the carry. `settings_chips` splits the server's own
+`skin_rules` phrase, so it is not a second place that names them. Their
+consequence (`A hole where nobody qualifies goes unwon`) stays under HOLES,
+because it explains the grid. They had been a footnote there, and before that
+`_SkinRulesInPlay`, a chip on each card.
 
 **A per-skin price is the game's own `per_point_rate`, never `betUnit`.**
 Reported from an Annandale Friday, 30 Oct 2026: $5 skins beside a $10 Nassau

@@ -43,7 +43,6 @@ class SkinsBoardData {
     required this.carry,
     required this.basis,
     this.showNext = true,
-    this.rulesLine = '',
     this.rulesNote = '',
     this.payoutStyle = 'pool',
     this.pool = 0,
@@ -70,8 +69,6 @@ class SkinsBoardData {
   /// False where a carry cannot happen, so the card would say "No carry"
   /// eighteen times. The cross-round pool is that case.
   final bool showNext;
-  /// The validation rules in force, in the server's words. '' when none.
-  final String rulesLine;
   /// The server's consequence sentence — rendered, never derived.
   final String rulesNote;
 
@@ -86,9 +83,8 @@ class SkinsBoardData {
 
   bool get isPool => payoutStyle == 'pool';
 
-  /// The rule SLUGS, beside the phrase, because the two answer different
-  /// questions. [rulesLine] is what is in force and is the server's wording;
-  /// these say WHICH rule, which is what decides the consequence sentence —
+  /// The rule SLUGS. The phrase naming them is in the settings strip; these
+  /// say WHICH rule, which is what decides the consequence sentence —
   /// a minimum can leave a hole unwon with nobody tied, and a steal never
   /// can. Reading that off the phrase would be parsing prose for logic.
   final String skinMinimum;
@@ -203,7 +199,6 @@ class SkinsBoardData {
       perPointMode: s.perPointMode,
       carry:     s.carryover,
       basis:     _basisLabel[s.handicapMode] ?? 'Net',
-      rulesLine: s.skinRules,
       rulesNote: s.skinRulesNote,
       payoutStyle: s.payoutStyle,
       pool: s.pool,
@@ -247,7 +242,6 @@ class SkinsBoardData {
       carry:     false,
       basis:     _basisLabel[s.handicapMode] ?? 'Net',
       showNext:  false,
-      rulesLine: s.skinRules,
       rulesNote: s.skinRulesNote,
       // A cross-round pool is a pool by construction — there is no
       // per-skin price to choose, which is why the summary has no

@@ -108,6 +108,28 @@ class ChipsTests(SimpleTestCase):
         self.assertEqual(settings_chips('nonsense'), [])
 
 
+class SkinRulesAreChipsTests(SimpleTestCase):
+    """Paul, 30 Oct 2026: the rules belong in the bubbles at the top."""
+
+    def _chips(self, minimum, steal):
+        from services.skin_rules import rules_line
+        return settings_chips({'handicap_mode': 'net', 'net_percent': 100,
+                               'carryover': True,
+                               'skin_rules': rules_line(minimum, steal)})
+
+    def test_both_rules_are_a_chip_each_in_the_engines_words(self):
+        self.assertEqual(self._chips('net_par', True),
+                         ['Net', 'Carries on', 'Net par or better to win',
+                          'Gross birdies steal'])
+
+    def test_gross_par_names_itself(self):
+        self.assertIn('Gross par or better to win',
+                      self._chips('gross_par', False))
+
+    def test_plain_skins_claim_nothing(self):
+        self.assertEqual(self._chips('none', False), ['Net', 'Carries on'])
+
+
 class TheMoneyBlockIsReadTests(SimpleTestCase):
     """Four of the five games with a settlement mode nest it under `money`.
 

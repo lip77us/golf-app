@@ -12,22 +12,6 @@
 /// minimum — never for its wording.
 library;
 
-/// The rules in force, one chip each, in the server's own words.
-///
-/// `[]` when neither rule is on, which the caller draws as nothing rather
-/// than as "no minimum" at a group playing plain skins.
-List<String> skinRuleChips(String skinRules) {
-  if (skinRules.trim().isEmpty) return const [];
-  return skinRules
-      .split('·')
-      .map((p) => p.trim())
-      .where((p) => p.isNotEmpty)
-      // Sentence case for a pill: the server writes a phrase meant to sit in
-      // running text ("net par or better to win"), and a chip is a label.
-      .map((p) => p[0].toUpperCase() + p.substring(1))
-      .toList();
-}
-
 /// What the rules in force COST a golfer — the server's sentence, verbatim.
 ///
 /// With a minimum on, **a hole can go unwon with nobody tied** — plain skins

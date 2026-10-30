@@ -213,7 +213,7 @@ void main() {
   });
 
   group('the holes grid', () {
-    testWidgets('the rules sit under HOLES, as a footnote on the grid',
+    testWidgets('the consequence sits under HOLES; the rules are strip chips',
         (t) async {
       await _pump(t, SkinsBoardData.fromSkins(_skins(
         // The SLUGS as well as the phrase. This test used to name a minimum
@@ -227,7 +227,7 @@ void main() {
         holes: [for (var h = 1; h <= 18; h++) _unplayed(h)],
       )));
       expect(find.text('HOLES'), findsOneWidget);
-      expect(find.textContaining('Gross par or better to win'), findsOneWidget);
+      expect(find.textContaining('Gross par or better to win'), findsNothing);
       expect(find.text('A hole where nobody qualifies goes unwon.'),
              findsOneWidget);
     });
@@ -278,7 +278,7 @@ void main() {
     });
   });
 
-  group('the rules footnote', () {
+  group('the rules consequence under the grid', () {
     /// Reported from the board, 28 Oct 2026: *"The leaderboard says, a hole
     /// where no one qualifies goes unwon, when there is no qualification
     /// checked."*
@@ -305,7 +305,6 @@ void main() {
         players: four, holes: holes,
         rules: 'gross birdies steal', steal: true,
         note: 'A gross birdie beats a net birdie, not a net eagle.')));
-      expect(find.text('Gross birdies steal'), findsOneWidget);
       expect(find.textContaining('qualifies'), findsNothing);
       // Design's wording, and the ENGINE's rule: a net eagle still wins.
       expect(find.text('A gross birdie beats a net birdie, not a net eagle.'),
@@ -317,7 +316,6 @@ void main() {
         players: four, holes: holes,
         rules: 'net par or better to win', minimum: 'net_par',
         note: 'A hole where nobody qualifies goes unwon.')));
-      expect(find.text('Net par or better to win'), findsOneWidget);
       expect(find.text('A hole where nobody qualifies goes unwon.'),
           findsOneWidget);
     });
@@ -331,8 +329,6 @@ void main() {
         // because a natural clears any minimum and so can never be the
         // reason a hole goes unwon.
         note: 'A hole where nobody qualifies goes unwon.')));
-      expect(find.text('Net par or better to win · Gross birdies steal'),
-          findsOneWidget);
       expect(find.text('A hole where nobody qualifies goes unwon.'),
           findsOneWidget);
     });

@@ -157,6 +157,16 @@ def settings_chips(summary: dict) -> list[str]:
     if isinstance(carry, bool):
         out.append('Carries on' if carry else 'No carry')
 
+    # A skins game's validation rules, in `skin_rules.rules_line`'s own words:
+    # split, not re-derived from the slugs, so this is not a second place that
+    # names them. Empty on plain skins and absent from every other game.
+    rules = summary.get('skin_rules')
+    if isinstance(rules, str):
+        for phrase in rules.split('·'):
+            phrase = phrase.strip()
+            if phrase:
+                out.append(phrase[0].upper() + phrase[1:])
+
     # `payout_style` and `per_point_mode` are two halves of one answer: the
     # style says pool or per-point and the mode says WHICH per-point. Naming
     # `per_point` itself would tell a golfer nothing the mode does not.
