@@ -409,6 +409,13 @@ class SkinsGame(models.Model):
     per_point_rate = models.DecimalField(
                         max_digits=6, decimal_places=2, default=0.00,
                         help_text="$ per skin of margin (per_point style).")
+    # A SIDE game's own ante. The round's bet_unit belongs to the primary game,
+    # and writing a Skins ante into it re-priced a finished Nassau.
+    pool_ante      = models.DecimalField(
+                        max_digits=8, decimal_places=2, null=True, blank=True,
+                        help_text="Pool ante per player; null = the round's "
+                                  "bet_unit, which is right when Skins IS the "
+                                  "round's game.")
     loss_cap       = models.DecimalField(
                         max_digits=8, decimal_places=2, null=True, blank=True,
                         help_text="Optional per-player loss cap (per_point "
@@ -1153,6 +1160,11 @@ class HonorsGame(models.Model):
                             help_text="Percentage of playing handicap applied when "
                                       "handicap_mode='net'.",
                         )
+    # Honors is always a side game, so the round's bet_unit is never its own.
+    stake          = models.DecimalField(
+                        max_digits=8, decimal_places=2, null=True, blank=True,
+                        help_text="$ per point; null = the round's bet_unit "
+                                  "(rounds set up before this existed).")
     loss_cap            = models.DecimalField(
                             max_digits=8, decimal_places=2,
                             null=True, blank=True,

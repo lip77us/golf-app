@@ -141,7 +141,6 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
         return;
       }
 
-      final rp = context.read<RoundProvider>();
       if (!mounted) return;
 
       setState(() {
@@ -172,7 +171,7 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
           // empty field (no "0" to erase).
           final preset = _payoutStyle == 'per_point'
               ? _summary!.perPointRate
-              : (rp.round?.betUnit ?? 0);
+              : _summary!.betUnit;
           if (preset > 0) {
             _betCtrl.text = preset % 1 == 0
                 ? preset.toStringAsFixed(0)
@@ -288,12 +287,13 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
       final rp     = context.read<RoundProvider>();
       final client = context.read<AuthProvider>().client;
 
-      // The single value field means the pool ante (→ round stake) in pool
-      // mode, or the per-skin rate in per-skin mode.  Only pool writes back to
-      // the shared round stake; per-skin settles on its own rate and leaves the
-      // round stake untouched (it may belong to another game in the round).
+      // The single value field means the pool ante in pool mode, or the
+      // per-skin rate in per-skin mode. **Only a PRIMARY pool writes the
+      // round stake.** As a side game the stake is the primary's: a $5 ante
+      // written there turned a finished $10 Nassau into a $5 one. A side game
+      // keeps its ante on its own row, as per-skin keeps its rate.
       final value = double.tryParse(_betCtrl.text.trim());
-      if (_payoutStyle == 'pool' &&
+      if (_payoutStyle == 'pool' && !_isSideGame &&
           value != null && rp.round != null && value != rp.round!.betUnit) {
         await rp.updateRoundBetUnit(value);
       }
@@ -315,6 +315,7 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
         payoutStyle:  _payoutStyle,
         perPointMode: _perPointMode,
         perPointRate: _payoutStyle == 'per_point' ? (value ?? 0.0) : 0.0,
+        poolAnte: _payoutStyle == 'pool' && _isSideGame ? value : null,
         lossCap: (_payoutStyle == 'per_point' && _capEnabled)
             ? (double.tryParse(_capCtrl.text.trim()) ?? 0.0)
             : null,

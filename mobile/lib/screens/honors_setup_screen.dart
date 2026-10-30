@@ -107,6 +107,14 @@ class _HonorsSetupScreenState extends State<HonorsSetupScreen> {
           _mode         = _summary!.handicapMode;
           _netPercent   = _summary!.netPercent;
           _perPointMode = _summary!.perPointMode;
+          // Its own stake, which the round's may not match.
+          final b = _summary!.betUnit;
+          if (b > 0) {
+            _betCtrl.text =
+                b % 1 == 0 ? b.toStringAsFixed(0) : b.toStringAsFixed(2);
+            _stakeOk = true;
+          }
+          _betCtrlInitialized = true;
           _capEnabled   = _summary!.lossCap != null;
           if (_summary!.lossCap != null) {
             _capCtrl.text = _summary!.lossCap!
@@ -215,12 +223,12 @@ class _HonorsSetupScreenState extends State<HonorsSetupScreen> {
 
       final betText = _betCtrl.text.trim();
       final parsed  = double.tryParse(betText);
-      if (parsed != null && rp.round != null && parsed != rp.round!.betUnit) {
-        await rp.updateRoundBetUnit(parsed);
-      }
 
+      // Honors is always a side game, so its stake is its own. Writing it to
+      // the round re-priced the primary game, settled holes included.
       await client.postHonorsSetup(
         widget.foursomeId,
+        stake: parsed,
         handicapMode: _mode,
         netPercent:   _netPercent,
         payoutStyle:  'per_point',

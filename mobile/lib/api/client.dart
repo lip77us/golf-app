@@ -2106,8 +2106,10 @@ class ApiClient {
     String  payoutStyle   = 'per_point',
     String  perPointMode  = 'average',
     List<int> participantPlayerIds = const [],
+    double? stake,
   }) async {
     final data = await _post('/foursomes/$foursomeId/honors/setup/', {
+      if (stake != null) 'stake': stake,
       'handicap_mode' : handicapMode,
       'net_percent'   : netPercent,
       'loss_cap'      : lossCap,
@@ -2211,6 +2213,9 @@ class ApiClient {
     String  payoutStyle  = 'pool',
     String  perPointMode = 'first',
     double  perPointRate = 0.0,
+    /// A side game's own ante. Null means the round's stake, which is right
+    /// only when Skins IS the round's game.
+    double? poolAnte,
     double? lossCap,
     List<int> participantPlayerIds = const [], // [] = all
     /// 'none' | 'net_par' | 'gross_par' — the lowest score that can win a
@@ -2233,6 +2238,7 @@ class ApiClient {
       'payout_style'  : payoutStyle,
       'per_point_mode': perPointMode,
       'per_point_rate': perPointRate,
+      if (poolAnte != null) 'pool_ante': poolAnte,
       if (lossCap != null) 'loss_cap': lossCap,
       'participant_player_ids': participantPlayerIds,
       'skin_minimum'  : skinMinimum,

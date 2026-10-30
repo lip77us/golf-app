@@ -1569,6 +1569,9 @@ class HonorsSetupSerializer(serializers.Serializer):
     handicap policy and the settlement style, mirroring Points 5-3-1 so the
     mobile layer can reuse the same handicap + payout widgets.
     """
+    stake         = serializers.DecimalField(
+                        max_digits=8, decimal_places=2, required=False,
+                        allow_null=True, min_value=0)
     handicap_mode = serializers.ChoiceField(
                         choices=['net', 'gross', 'strokes_off'],
                         default='net',
@@ -1792,6 +1795,9 @@ class SkinsSetupSerializer(serializers.Serializer):
     per_point_rate = serializers.DecimalField(
                         max_digits=6, decimal_places=2, default=0,
                         min_value=0)
+    pool_ante      = serializers.DecimalField(
+                        max_digits=8, decimal_places=2, required=False,
+                        allow_null=True, min_value=0)
     loss_cap       = serializers.DecimalField(
                         max_digits=8, decimal_places=2, required=False,
                         allow_null=True, min_value=0)

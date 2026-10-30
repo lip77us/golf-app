@@ -66,6 +66,7 @@ def setup_honors(
     payout_style: str = 'per_point',
     per_point_mode: str = 'average',
     participant_player_ids=None,
+    stake=None,
 ) -> 'HonorsGame':
     """Create (or replace) the Honors game for a foursome.  Safe to call
     again — the prior game + its hole results are dropped first.
@@ -87,6 +88,7 @@ def setup_honors(
         per_point_mode = 'average'
 
     return HonorsGame.objects.create(
+        stake=Decimal(str(stake)) if stake not in (None, '') else None,
         foursome       = foursome,
         handicap_mode  = handicap_mode,
         net_percent    = net_percent,
@@ -313,6 +315,10 @@ def honors_summary(foursome) -> dict:
                          'payout_style': 'per_point', 'per_point_mode': 'average',
                          'loss_cap': None},
         }
+
+    # Honors' own stake; the round's belongs to the primary game.
+    if game.stake is not None:
+        bet_unit = float(game.stake)
 
     members  = _participant_members(game, foursome)
     by_pid   = {m.player_id: m.player for m in members}

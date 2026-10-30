@@ -8028,6 +8028,7 @@ class HonorsSetupView(APIView):
             payout_style   = data.get('payout_style', 'per_point'),
             per_point_mode = data.get('per_point_mode', 'average'),
             participant_player_ids = data.get('participant_player_ids', []),
+            stake          = data.get('stake'),
         )
         calculate_honors(foursome)
         return Response(
@@ -8184,6 +8185,7 @@ class SkinsSetupView(APIView):
                 payout_style   = d.get('payout_style', 'pool'),
                 per_point_mode = d.get('per_point_mode', 'first'),
                 per_point_rate = d.get('per_point_rate', 0),
+                pool_ante      = d.get('pool_ante'),
                 loss_cap       = d.get('loss_cap'),
                 participant_player_ids = d.get('participant_player_ids', []),
                 # Absent means plain skins, which is what the shipped app

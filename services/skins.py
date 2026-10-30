@@ -88,6 +88,7 @@ def setup_skins(
     payout_style:   str = 'pool',
     per_point_mode: str = 'first',
     per_point_rate      = 0,
+    pool_ante           = None,
     loss_cap            = None,
     participant_player_ids = None,
     skin_minimum:   str = skin_rules.MIN_NONE,
@@ -143,6 +144,8 @@ def setup_skins(
         payout_style   = payout_style if payout_style in ('pool', 'per_point') else 'pool',
         per_point_mode = per_point_mode if per_point_mode in ('average', 'all', 'first') else 'first',
         per_point_rate = Decimal(str(per_point_rate or 0)),
+        pool_ante      = (Decimal(str(pool_ante))
+                          if pool_ante not in (None, '') else None),
         loss_cap       = (Decimal(str(loss_cap)) if loss_cap not in (None, '') else None),
         participant_player_ids = list(participant_player_ids or []),
         status         = MatchStatus.PENDING,
@@ -725,7 +728,9 @@ def skins_summary(foursome) -> dict:
     _subset = set(game.participant_player_ids or [])
     if _subset:
         real_members = [m for m in real_members if m.player_id in _subset]
-    bet_unit    = float(foursome.round.bet_unit)
+    # The game's own ante when it has one; see SkinsGame.pool_ante.
+    bet_unit    = float(game.pool_ante if game.pool_ante is not None
+                        else foursome.round.bet_unit)
     num_players = len(real_members)
     pool        = num_players * bet_unit
 

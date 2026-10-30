@@ -58,16 +58,12 @@ class SkinsBoardData {
   /// `average`, `all` or `first`. Decides what winning one skin pays below.
   final String perPointMode;
 
-  /// What one more skin pays its winner, with the field level on skins:
-  /// `rate` from each other golfer, except against the average, where
-  /// `(pts − total/n) × rate` leaves him `(n − 1)/n` of a rate.
-  double get skinWorth {
-    final others = golfers.length - 1;
-    if (perPointMode == 'average' && golfers.isNotEmpty) {
-      return stake * others / golfers.length;
-    }
-    return stake * others;
-  }
+  /// What one skin is WORTH: everybody's stake, the winner's included. Five
+  /// golfers at $5 is a $25 skin, of which he nets $20 (Paul, 30 Oct 2026: he
+  /// knows the $5 is his entry). Against the average each golfer puts in
+  /// `rate / n`, so that skin is worth one rate.
+  double get skinWorth =>
+      perPointMode == 'average' ? stake : stake * golfers.length;
   final bool carry;
   /// 'Net' | 'Gross' | 'Strokes off' — a label, never a calculation.
   final String basis;

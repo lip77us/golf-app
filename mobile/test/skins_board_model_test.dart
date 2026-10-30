@@ -341,23 +341,23 @@ void main() {
       expect(d.stake, 5);
     });
 
-    test('one skin pays the rate from each of the other four', () {
+    test('a skin is worth everybody\'s stake, the winner\'s included', () {
       final d = SkinsBoardData.fromSkins(_skins(
           players: five, holes: holes, betUnit: 10, rate: 5));
-      expect(d.skinWorth, 20);
-      expect(2 * d.skinWorth, 40, reason: 'the screenshot read \$80');
+      expect(d.skinWorth, 25);
+      expect(2 * d.skinWorth, 50);
     });
 
     test('pay everyone above you is worth the same', () {
       final d = SkinsBoardData.fromSkins(_skins(
           players: five, holes: holes, rate: 5, perPointMode: 'all'));
-      expect(d.skinWorth, 20);
+      expect(d.skinWorth, 25);
     });
 
-    test('against the average a skin is worth four fifths of that', () {
+    test('against the average a skin is worth one rate', () {
       final d = SkinsBoardData.fromSkins(_skins(
           players: five, holes: holes, rate: 5, perPointMode: 'average'));
-      expect(d.skinWorth, 4);
+      expect(d.skinWorth, 5);
     });
 
     test('a pool still reads the round stake, which is its ante', () {

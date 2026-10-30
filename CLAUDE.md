@@ -6287,10 +6287,22 @@ been its own chip on each card for a day.
 **A per-skin price is the game's own `per_point_rate`, never `betUnit`.**
 Reported from an Annandale Friday, 30 Oct 2026: $5 skins beside a $10 Nassau
 read `$10 a skin` and `2 skins · $80` over correct money, because `betUnit` is
-the ROUND's stake and belongs to the primary game. `skinWorth` is what one
-skin pays its winner: rate × others, or × (n−1)/n against the average. Both
+the ROUND's stake and belongs to the primary game. `skinWorth` is everybody's
+stake including the winner's, so five at $5 is a **$25 skin** that nets him
+$20 (Paul: the golfer knows the $5 is his entry); against the average it is
+one rate. The lock card still quotes riding × rate. Both
 test helpers had put `payout_style` inside `money`, where the server does not
 send it, so every summary in them was a pool and none could have caught this.
+
+**A side game never writes the round's stake.** Reproduced 30 Oct 2026: on a
+finished $10 Annandale Friday, saving a $5 Skins pool ante cut a golfer's
+settled Nassau from +$60 to +$30, because `bet_unit` is what the primary reads
+live. `SkinsGame.pool_ante` and `HonorsGame.stake` (`games/0102`) hold a side
+game's own figure; null means the round's, which is right for Skins as primary
+and for rounds set up earlier. The summaries report the effective figure as
+`money.bet_unit`. **Builds before this still write the round**, and
+`PATCH /rounds/{id}` still accepts it, because primaries set their stake that
+way. Tests: `api/test_side_game_stake.py` (4).
 
 **Golfer colours are shared now** — `Halved.golferColours` / `Halved.golfer(i)`,
 six wrapping. They were about to be a third private copy (the Sixes board

@@ -75,7 +75,7 @@ void main() {
       expect(find.text('11 and 12 carried in'), findsOneWidget);
       expect(find.text('3'), findsWidgets);          // 3 riding
       // 3 skins x $1 x (4 golfers - 1).
-      expect(find.text('skins · \$9'), findsOneWidget);
+      expect(find.text('skins · \$12'), findsOneWidget);
     });
 
     testWidgets('one carried hole reads as a hole, not a list', (t) async {
@@ -92,7 +92,7 @@ void main() {
         holes: [_won(1, 1), for (var h = 2; h <= 18; h++) _unplayed(h)],
       )));
       expect(find.text('No carry'), findsOneWidget);
-      expect(find.text('skin · \$1'), findsOneWidget);   // singular
+      expect(find.text('skin · \$2'), findsOneWidget);   // singular
     });
 
     testWidgets('a finished round reports the total, not a 19th hole',
@@ -344,3 +344,4 @@ void main() {
     });
   });
 }
+
