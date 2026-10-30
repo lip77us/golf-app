@@ -46,9 +46,11 @@ import '../widgets/game_switcher.dart';
 import '../widgets/game_settings_strip.dart';
 import '../widgets/stroke_play_board.dart';
 import '../widgets/rabbit_board.dart';
+import '../widgets/sequoya_board.dart';
 import '../utils/rabbit_board_model.dart';
 import '../utils/stroke_play_board_model.dart';
 import '../widgets/points_board.dart';
+import '../utils/sequoya_board_model.dart';
 import '../utils/points_board_model.dart';
 
 class LeaderboardScreen extends StatefulWidget {
@@ -10164,88 +10166,15 @@ class _VegasHoleGridState extends State<_VegasHoleGrid> {
 
 
 // ===========================================================================
-// Sequoya 3s — six three-hole matches, and every bet inside them
+// Sequoya 3s — the one board, and the way to settle up
 // ===========================================================================
 
-/// Matches first, money one tap away — same split as Survivor, for the same
-/// reason: the rotation is the story and the nets are the consequence.
-enum _SeqPane { matches, standings }
-
-class _SequoyaThreesGroupCard extends StatefulWidget {
+class _SequoyaThreesGroupCard extends StatelessWidget {
   final Map<String, dynamic> group;
   const _SequoyaThreesGroupCard({required this.group});
 
   @override
-  State<_SequoyaThreesGroupCard> createState() =>
-      _SequoyaThreesGroupCardState();
-}
-
-class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
-  static const Color _blue   = Color(0xFF1976D2);
-  static const Color _orange = Color(0xFFEF6C00);
-
-  _SeqPane _pane = _SeqPane.matches;
-
-  Map<String, dynamic> get group => widget.group;
-
-  static String _hcapLabel(Map hcap) {
-    final mode = hcap['mode']?.toString() ?? 'net';
-    if (mode == 'gross') return 'Gross';
-    if (mode == 'strokes_off') return 'SO';
-    final pct = (hcap['net_percent'] as num?)?.toInt() ?? 100;
-    return pct == 100 ? 'Net' : 'Net ($pct%)';
-  }
-
-  static String _fmtMoney(double v) {
-    if (v == 0) return '—';
-    final sign = v > 0 ? '+' : '−';
-    return '$sign\$${v.abs().formatBet()}';
-  }
-
-  /// The state of ONE bet. Deliberately per bet and never rolled up: a press
-  /// can be halved while the match is won, or won by the side that lost it,
-  /// so a single figure for a match would be untrue about all three.
-  ///
-  /// A close-out is read off the hole it CLOSED ON, never off `to_play`: the
-  /// holes after a close-out are usually still played here (the press runs
-  /// over them), so the match bet's margin keeps moving and `to_play` falls to
-  /// zero. Either would turn a 2 & 1 into "1 up".
-  static String _betState(Map<String, dynamic> b) {
-    final result = b['result'] as int?;
-    final margin = (b['margin'] as num?)?.toInt() ?? 0;
-    final toPlay = (b['to_play'] as num?)?.toInt() ?? 0;
-    if (result == 0) return 'Halved';
-    if (result != null) {
-      final holes  = (b['holes'] as List? ?? const []).cast<int>();
-      final closed = b['closed_on'] as int?;
-      if (closed != null) {
-        final left = holes.length - holes.indexOf(closed) - 1;
-        // The margin crosses the holes left by exactly one, so the winning
-        // margin at the close-out is always `left + 1`.
-        if (left > 0) return '${left + 1} & $left';
-      }
-      return '${margin.abs()} up · final';
-    }
-    if (margin == 0) return 'All square';
-    // Dormie only when the lead EQUALS the holes left — 1 up with 2 to play
-    // is not it.
-    if (margin.abs() == toPlay) return 'Dormie';
-    return '${margin.abs()} up';
-  }
-
-  static String _holeRange(List holes) {
-    if (holes.isEmpty) return '';
-    if (holes.length == 1) return 'hole ${holes.first}';
-    return 'holes ${holes.first}–${holes.last}';
-  }
-
-  static String _names(List side) => side
-      .map((e) => (e as Map)['short_name']?.toString() ?? '?')
-      .join(' & ');
-
-  @override
   Widget build(BuildContext context) {
-    final theme   = Theme.of(context);
     final summary = group['summary'] as Map<String, dynamic>? ?? const {};
     if (summary.isEmpty) {
       return const Card(
@@ -10255,278 +10184,25 @@ class _SequoyaThreesGroupCardState extends State<_SequoyaThreesGroupCard> {
         ),
       );
     }
-    final hcap      = summary['handicap'] as Map<String, dynamic>? ?? const {};
-    final status    = summary['status']?.toString() ?? 'pending';
-    final matches   = (summary['matches'] as List? ?? const [])
-        .cast<Map<String, dynamic>>();
-    final players   = (summary['players'] as List? ?? const [])
-        .cast<Map<String, dynamic>>();
-    final transfers = (summary['transfers'] as List? ?? const [])
-        .cast<Map<String, dynamic>>();
-    final card      = summary['scorecard'] as Map<String, dynamic>? ?? const {};
-    final cardHoles = ((card['holes'] as List?) ?? const [])
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-    final cardPlayers = ((card['players'] as List?) ?? const [])
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-    final cardHolesInPlay =
-        ((card['holes_in_play'] as List?) ?? const []).cast<int>();
-    final bet       = (summary['bet_amount'] as num?)?.toDouble() ?? 0.0;
-    final liveBets  = (summary['live_bets'] as num?)?.toInt() ?? 0;
-
-    final singleGroup = group['_single_group'] == true;
-    final statusLabel = switch (status) {
-      'complete'    => 'Final',
-      'in_progress' => 'In progress',
-      _             => 'Pending',
-    };
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          if (!singleGroup) ...[
-            Text('Group ${group['group_number']}',
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            const Divider(height: 12),
-          ],
-          Row(children: [
-            Expanded(
-              child: Text(
-                  'Sequoya 3s — ${_hcapLabel(hcap)} · '
-                  '\$${bet.formatBet()} per golfer',
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-            ),
-            Text(statusLabel, style: theme.textTheme.labelSmall),
-          ]),
-          // The press MODE moved to the settings strip above the card, which
-          // states it for every game in one vocabulary — saying it here as
-          // well would be the same rule in two wordings. What stays is the
-          // thing the strip cannot know: how many bets are still live.
-          if (liveBets > 0) ...[
-            const SizedBox(height: 2),
-            Text(
-              '$liveBets bet${liveBets == 1 ? '' : 's'} still live',
-              style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant),
-            ),
-          ],
-
-          // **Who is who, once.** Everything below this line — the pairings,
-          // the scorecard rows, the by-hole tints — is short names, because
-          // four full names will not fit beside each other six times over.
-          // Naming the field once in full is what makes the initials safe to
-          // use everywhere else.
-          if (cardPlayers.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              cardPlayers.map((p) {
-                final name  = p['name']?.toString() ?? '';
-                final short = p['short_name']?.toString() ?? '';
-                return (short.isEmpty || short == name)
-                    ? name : '$name ($short)';
-              }).join('  ·  '),
-              style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant, height: 1.4),
-            ),
-          ],
-          const SizedBox(height: 10),
-
-          HalvedSegmented<_SeqPane>(
-            selected: _pane,
-            onChanged: (v) => setState(() => _pane = v),
-            segments: const [
-              (value: _SeqPane.matches,   label: 'Matches',   icon: null),
-              (value: _SeqPane.standings, label: 'Standings', icon: null),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          if (_pane == _SeqPane.matches)
-            ...matches.map((m) => _match(theme, m))
-          else ...[
-            if (players.isEmpty)
-              Text('No players yet.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant))
-            else ...[
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                    'won–lost–halved over every bet, presses included',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-              ),
-              ...players.map((p) => _standing(theme, p)),
-            ],
-            if (transfers.isNotEmpty) ...[
-              const Divider(height: 20),
-              Text('WHO PAYS WHO',
-                  style: TextStyle(
-                      fontSize: 10.5, fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5, color: theme.colorScheme.primary)),
-              const SizedBox(height: 4),
-              // Nothing in the format assigns a loser's money to a particular
-              // winner — only the four nets are real, so these are the fewest
-              // handovers that clear them, not a record of who beat whom.
-              ...transfers.map((t) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 1.5),
-                    child: Text(
-                      '${t['from_name']} pays ${t['to_name']} '
-                      '\$${((t['amount'] as num?)?.toDouble() ?? 0).formatBet()}',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  )),
-            ],
-          ],
-
-          if (_pane == _SeqPane.standings) ...[
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => Navigator.of(context).pushNamed(
-                    '/sequoya-threes-settlement',
-                    arguments: group['foursome_id']),
-                icon: const Icon(Icons.receipt_long_outlined, size: 18),
-                label: const Text('Settle up · receipts'),
-              ),
-            ),
-          ],
-
-          // The scorecard sits UNDER both panes rather than behind a third
-          // tab: it is the shared reference the other two argue about, and
-          // the same grid the play screen draws.
-          if (cardHoles.isNotEmpty) ...[
-            const Divider(height: 22),
-            HoleGridScorecard(
-              holes:        cardHoles,
-              participants: cardPlayers,
-              holesInPlay:  cardHolesInPlay,
-              legend: 'blue / orange = the side that won the hole',
-            ),
-          ],
-        ]),
-      ),
-    );
-  }
-
-  Widget _match(ThemeData theme, Map<String, dynamic> m) {
-    final bets  = (m['bets'] as List? ?? const []).cast<Map<String, dynamic>>();
-    final side1 = m['side1'] as List? ?? const [];
-    final side2 = m['side2'] as List? ?? const [];
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // The match label sits BETWEEN the two sides, where the "v" was: it
-        // separates them exactly as well and costs no row of its own.
-        //
-        // No money here. The stake is in the card's first line, and a
-        // per-match total was the wrong number anyway — a match carrying
-        // three bets can be a win, a loss and a half, which is $0.
-        Row(children: [
-          // **Always the side's colour, win or lose.** Tinting only the
-          // winner made blue mean "won here" in the match list and "side 1"
-          // in the scorecard below — one colour saying two things on one
-          // page. Who won is in the state column, which is where a result
-          // belongs.
-          Expanded(
-            child: Text(_names(side1),
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w600, fontSize: 13, color: _blue)),
-          ),
-          const SizedBox(width: 8),
-          Text(
-              'Match ${m['index']} · '
-              'holes ${m['start_hole']}–${m['end_hole']}',
-              style: TextStyle(
-                  fontSize: 11, fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(_names(side2),
-                textAlign: TextAlign.right,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w600, fontSize: 13, color: _orange)),
-          ),
-        ]),
-        const SizedBox(height: 5),
-        for (final b in bets)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 1.5),
-            child: Row(children: [
-              Expanded(
-                child: Text(
-                    (b['kind'] == 'match'
-                            ? '${b['label']}'
-                            : '${b['label']} · '
-                              '${_holeRange(b['holes'] as List? ?? const [])}')
-                        + (b['called_by'] != null
-                            ? '  (${b['called_by']})' : ''),
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontSize: 11.5,
-                        fontStyle: b['kind'] == 'match'
-                            ? FontStyle.normal : FontStyle.italic,
-                        color: theme.colorScheme.onSurfaceVariant)),
-              ),
-              const SizedBox(width: 8),
-              Text(_betState(b),
-                  style: TextStyle(
-                    fontSize: 11, fontWeight: FontWeight.bold,
-                    color: ((b['margin'] as num?)?.toInt() ?? 0) == 0
-                        ? theme.colorScheme.onSurfaceVariant
-                        : (((b['margin'] as num).toInt()) > 0
-                            ? _blue : _orange),
-                  )),
-            ]),
-          ),
-      ]),
-    );
-  }
-
-  Widget _standing(ThemeData theme, Map<String, dynamic> p) {
-    final money = (p['money'] as num?)?.toDouble() ?? 0.0;
-    // The record over EVERY bet, presses included — the one the money is
-    // made of. Matches alone left a golfer 2–1 up and $0 richer.
-    final record = p['bet_record_label']?.toString()
-        ?? p['record_label']?.toString() ?? '';
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(children: [
-        Expanded(
-          child: Text(p['name']?.toString() ?? '',
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w600)),
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (group['_single_group'] != true)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+          child: Text('Group ${group['group_number']}',
+              style: const TextStyle(fontWeight: FontWeight.bold)),
         ),
-        Text(record,
-            style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant)),
-        const SizedBox(width: 14),
-        SizedBox(
-          width: 76,
-          child: Text(_fmtMoney(money),
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: money > 0
-                    ? Colors.green.shade700
-                    : money < 0
-                        ? Colors.red.shade700
-                        : theme.colorScheme.onSurfaceVariant,
-              )),
-        ),
-      ]),
-    );
+      SequoyaBoard(data: SequoyaBoardData.fromSummary(summary)),
+      const SizedBox(height: 10),
+      // Not in the packet, and the board cannot lose it: this is the only
+      // way into the receipts, and who-pays-who lives behind it.
+      OutlinedButton.icon(
+        onPressed: () => Navigator.of(context).pushNamed(
+            '/sequoya-threes-settlement',
+            arguments: group['foursome_id']),
+        icon: const Icon(Icons.receipt_long_outlined, size: 18),
+        label: const Text('Settle up · receipts'),
+      ),
+    ]);
   }
 }
 

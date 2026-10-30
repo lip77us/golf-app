@@ -7262,3 +7262,44 @@ ceiling the packet puts it at 127.
 
 Still to do: the watch page, and moving the guide from `/preview/` to
 `/games/` LAST.
+
+## The Sequoya 3s board — `handoff-sequoya-leaderboard`
+
+`widgets/sequoya_board.dart` + `utils/sequoya_board_model.dart`, the sixth
+packet with the scope line *"one widget… do not draw a second board"*. Four
+cards: the match in play (or `ROUND OVER`), all six matches with presses as
+bars under the holes they cover, strokes in the live match, and the ledger.
+It replaced `_SequoyaThreesGroupCard`'s Matches/Standings panes.
+
+**It reads the engine; the packet's `bet()` does not get ported.** What the
+server lacked it now sends (`services/sequoya_threes.py`): `live_money` and
+`by_match` per golfer (`{match, net, started, settled}`), `played` on each
+scorecard hole, because `winner_team` is None for both halved and unplayed,
+and `called_by_short` on a hand press. `money` stays settled-only: settlement
+and the receipts read it.
+
+**`ThePacketsWorkedExampleTests` plays the packet's example through the
+engine** and lands on its figures: thru 13 ±$5 with 10 bets; final +15, +5,
+−5, −15 with 13 bets. `REGEN_SEQUOYA_FIXTURES=1` rewrites the two JSON files
+`mobile/test/sequoya_board_test.dart` draws, so the board is tested against
+what the server really sends.
+
+Three departures:
+- **`press still live` only when one is.** The packet writes it for every
+  closed match, which is false with presses off or a press already settled;
+  those read `N to play`.
+- **`Settle up · receipts` stays under the board.** The packet has no such
+  button and it is the only way into the receipts.
+- **Gross rounds draw no strokes card**, and a net round's label reads
+  `NET n%` rather than `OFF THE LOW`.
+
+**Dropped with the old card, on the packet's say-so:** the gross scorecard
+grid under the panes (rotating to landscape still gives the full card, and the
+Stroke Play tab carries gross), the won–lost–halved record, and who-pays-who
+(still on the settlement screen). The strip keeps the shared vocabulary:
+`Strokes off · Auto + one by hand`, where the packet draws
+`Strokes off low · Best ball net · Manual + auto presses`.
+
+Tests: `mobile/test/sequoya_board_test.dart` (12),
+`LiveMoneyForTheBoardTests` (4) and `ThePacketsWorkedExampleTests` (2) in
+`scoring/tests/test_sequoya_threes.py`. Seen on an iPhone 13 mini.

@@ -1,0 +1,1350 @@
+{
+ "status": "in_progress",
+ "handicap": {
+  "mode": "gross",
+  "net_percent": 100
+ },
+ "press_mode": "manual_auto",
+ "bet_amount": 5.0,
+ "matches": [
+  {
+   "index": 1,
+   "start_hole": 1,
+   "end_hole": 3,
+   "side1": [
+    {
+     "player_id": 5,
+     "name": "Paul Kelly",
+     "short_name": "PK"
+    },
+    {
+     "player_id": 6,
+     "name": "Dave Moran",
+     "short_name": "DM"
+    }
+   ],
+   "side2": [
+    {
+     "player_id": 7,
+     "name": "Sam Reid",
+     "short_name": "SR"
+    },
+    {
+     "player_id": 8,
+     "name": "Lee Naylor",
+     "short_name": "LN"
+    }
+   ],
+   "bets": [
+    {
+     "kind": "match",
+     "label": "Match 1",
+     "holes": [
+      1,
+      2,
+      3
+     ],
+     "amount": 5.0,
+     "result": 1,
+     "margin": 2,
+     "closed_on": 2,
+     "played": 3,
+     "to_play": 0
+    },
+    {
+     "kind": "auto_press",
+     "label": "Auto press",
+     "holes": [
+      2,
+      3
+     ],
+     "amount": 5.0,
+     "opened_by_side": 1,
+     "result": 1,
+     "margin": 1,
+     "closed_on": 3,
+     "played": 2,
+     "to_play": 0
+    }
+   ],
+   "bet_count": 2,
+   "at_risk": 10.0
+  },
+  {
+   "index": 2,
+   "start_hole": 4,
+   "end_hole": 6,
+   "side1": [
+    {
+     "player_id": 5,
+     "name": "Paul Kelly",
+     "short_name": "PK"
+    },
+    {
+     "player_id": 7,
+     "name": "Sam Reid",
+     "short_name": "SR"
+    }
+   ],
+   "side2": [
+    {
+     "player_id": 6,
+     "name": "Dave Moran",
+     "short_name": "DM"
+    },
+    {
+     "player_id": 8,
+     "name": "Lee Naylor",
+     "short_name": "LN"
+    }
+   ],
+   "bets": [
+    {
+     "kind": "match",
+     "label": "Match 2",
+     "holes": [
+      4,
+      5,
+      6
+     ],
+     "amount": 5.0,
+     "result": 2,
+     "margin": -1,
+     "closed_on": 5,
+     "played": 3,
+     "to_play": 0
+    },
+    {
+     "kind": "auto_press",
+     "label": "Auto press",
+     "holes": [
+      5,
+      6
+     ],
+     "amount": 5.0,
+     "opened_by_side": 2,
+     "result": 0,
+     "margin": 0,
+     "closed_on": null,
+     "played": 2,
+     "to_play": 0
+    },
+    {
+     "kind": "manual_press",
+     "label": "Press",
+     "holes": [
+      6
+     ],
+     "amount": 5.0,
+     "called_by": "Paul Kelly",
+     "called_by_short": "PK",
+     "called_side": 1,
+     "result": 1,
+     "margin": 1,
+     "closed_on": 6,
+     "played": 1,
+     "to_play": 0
+    }
+   ],
+   "bet_count": 3,
+   "at_risk": 15.0
+  },
+  {
+   "index": 3,
+   "start_hole": 7,
+   "end_hole": 9,
+   "side1": [
+    {
+     "player_id": 5,
+     "name": "Paul Kelly",
+     "short_name": "PK"
+    },
+    {
+     "player_id": 8,
+     "name": "Lee Naylor",
+     "short_name": "LN"
+    }
+   ],
+   "side2": [
+    {
+     "player_id": 6,
+     "name": "Dave Moran",
+     "short_name": "DM"
+    },
+    {
+     "player_id": 7,
+     "name": "Sam Reid",
+     "short_name": "SR"
+    }
+   ],
+   "bets": [
+    {
+     "kind": "match",
+     "label": "Match 3",
+     "holes": [
+      7,
+      8,
+      9
+     ],
+     "amount": 5.0,
+     "result": 0,
+     "margin": 0,
+     "closed_on": null,
+     "played": 3,
+     "to_play": 0
+    }
+   ],
+   "bet_count": 1,
+   "at_risk": 5.0
+  },
+  {
+   "index": 4,
+   "start_hole": 10,
+   "end_hole": 12,
+   "side1": [
+    {
+     "player_id": 5,
+     "name": "Paul Kelly",
+     "short_name": "PK"
+    },
+    {
+     "player_id": 6,
+     "name": "Dave Moran",
+     "short_name": "DM"
+    }
+   ],
+   "side2": [
+    {
+     "player_id": 7,
+     "name": "Sam Reid",
+     "short_name": "SR"
+    },
+    {
+     "player_id": 8,
+     "name": "Lee Naylor",
+     "short_name": "LN"
+    }
+   ],
+   "bets": [
+    {
+     "kind": "match",
+     "label": "Match 4",
+     "holes": [
+      10,
+      11,
+      12
+     ],
+     "amount": 5.0,
+     "result": 2,
+     "margin": -2,
+     "closed_on": 11,
+     "played": 3,
+     "to_play": 0
+    },
+    {
+     "kind": "auto_press",
+     "label": "Auto press",
+     "holes": [
+      11,
+      12
+     ],
+     "amount": 5.0,
+     "opened_by_side": 2,
+     "result": 2,
+     "margin": -1,
+     "closed_on": 12,
+     "played": 2,
+     "to_play": 0
+    }
+   ],
+   "bet_count": 2,
+   "at_risk": 10.0
+  },
+  {
+   "index": 5,
+   "start_hole": 13,
+   "end_hole": 15,
+   "side1": [
+    {
+     "player_id": 5,
+     "name": "Paul Kelly",
+     "short_name": "PK"
+    },
+    {
+     "player_id": 7,
+     "name": "Sam Reid",
+     "short_name": "SR"
+    }
+   ],
+   "side2": [
+    {
+     "player_id": 6,
+     "name": "Dave Moran",
+     "short_name": "DM"
+    },
+    {
+     "player_id": 8,
+     "name": "Lee Naylor",
+     "short_name": "LN"
+    }
+   ],
+   "bets": [
+    {
+     "kind": "match",
+     "label": "Match 5",
+     "holes": [
+      13,
+      14,
+      15
+     ],
+     "amount": 5.0,
+     "result": null,
+     "margin": 1,
+     "closed_on": null,
+     "played": 1,
+     "to_play": 2
+    },
+    {
+     "kind": "auto_press",
+     "label": "Auto press",
+     "holes": [
+      14,
+      15
+     ],
+     "amount": 5.0,
+     "opened_by_side": 1,
+     "result": null,
+     "margin": 0,
+     "closed_on": null,
+     "played": 0,
+     "to_play": 2
+    }
+   ],
+   "bet_count": 2,
+   "at_risk": 10.0
+  },
+  {
+   "index": 6,
+   "start_hole": 16,
+   "end_hole": 18,
+   "side1": [
+    {
+     "player_id": 5,
+     "name": "Paul Kelly",
+     "short_name": "PK"
+    },
+    {
+     "player_id": 8,
+     "name": "Lee Naylor",
+     "short_name": "LN"
+    }
+   ],
+   "side2": [
+    {
+     "player_id": 6,
+     "name": "Dave Moran",
+     "short_name": "DM"
+    },
+    {
+     "player_id": 7,
+     "name": "Sam Reid",
+     "short_name": "SR"
+    }
+   ],
+   "bets": [
+    {
+     "kind": "match",
+     "label": "Match 6",
+     "holes": [
+      16,
+      17,
+      18
+     ],
+     "amount": 5.0,
+     "result": null,
+     "margin": 0,
+     "closed_on": null,
+     "played": 0,
+     "to_play": 3
+    }
+   ],
+   "bet_count": 1,
+   "at_risk": 5.0
+  }
+ ],
+ "players": [
+  {
+   "player_id": 6,
+   "name": "Dave Moran",
+   "short_name": "DM",
+   "money": 0.0,
+   "live_money": -5.0,
+   "by_match": [
+    {
+     "match": 1,
+     "net": 10.0,
+     "started": true,
+     "settled": true
+    },
+    {
+     "match": 2,
+     "net": 0.0,
+     "started": true,
+     "settled": true
+    },
+    {
+     "match": 3,
+     "net": 0.0,
+     "started": true,
+     "settled": true
+    },
+    {
+     "match": 4,
+     "net": -10.0,
+     "started": true,
+     "settled": true
+    },
+    {
+     "match": 5,
+     "net": -5.0,
+     "started": true,
+     "settled": false
+    },
+    {
+     "match": 6,
+     "net": 0.0,
+     "started": false,
+     "settled": false
+    }
+   ],
+   "record": {
+    "won": 2,
+    "lost": 1,
+    "halved": 1
+   },
+   "record_label": "2\u20131\u20131",
+   "bet_record": {
+    "won": 3,
+    "lost": 3,
+    "halved": 2
+   },
+   "bet_record_label": "3\u20133\u20132",
+   "partners": [
+    {
+     "player_id": 5,
+     "name": "Paul Kelly",
+     "with": 2,
+     "money": 0.0
+    },
+    {
+     "player_id": 8,
+     "name": "Lee Naylor",
+     "with": 2,
+     "money": 0.0
+    },
+    {
+     "player_id": 7,
+     "name": "Sam Reid",
+     "with": 2,
+     "money": 0.0
+    }
+   ]
+  },
+  {
+   "player_id": 8,
+   "name": "Lee Naylor",
+   "short_name": "LN",
+   "money": 0.0,
+   "live_money": -5.0,
+   "by_match": [
+    {
+     "match": 1,
+     "net": -10.0,
+     "started": true,
+     "settled": true
+    },
+    {
+     "match": 2,
+     "net": 0.0,
+     "started": true,
+     "settled": true
+    },
+    {
+     "match": 3,
+     "net": 0.0,
+     "started": true,
+     "settled": true
+    },
+    {
+     "match": 4,
+     "net": 10.0,
+     "started": true,
+     "settled": true
+    },
+    {
+     "match": 5,
+     "net": -5.0,
+     "started": true,
+     "settled": false
+    },
+    {
+     "match": 6,
+     "net": 0.0,
+     "started": false,
+     "settled": false
+    }
+   ],
+   "record": {
+    "won": 2,
+    "lost": 1,
+    "halved": 1
+   },
+   "record_label": "2\u20131\u20131",
+   "bet_record": {
+    "won": 3,
+    "lost": 3,
+    "halved": 2
+   },
+   "bet_record_label": "3\u20133\u20132",
+   "partners": [
+    {
+     "player_id": 7,
+     "name": "Sam Reid",
+     "with": 2,
+     "money": 0.0
+    },
+    {
+     "player_id": 6,
+     "name": "Dave Moran",
+     "with": 2,
+     "money": 0.0
+    },
+    {
+     "player_id": 5,
+     "name": "Paul Kelly",
+     "with": 2,
+     "money": 0.0
+    }
+   ]
+  },
+  {
+   "player_id": 5,
+   "name": "Paul Kelly",
+   "short_name": "PK",
+   "money": 0.0,
+   "live_money": 5.0,
+   "by_match": [
+    {
+     "match": 1,
+     "net": 10.0,
+     "started": true,
+     "settled": true
+    },
+    {
+     "match": 2,
+     "net": 0.0,
+     "started": true,
+     "settled": true
+    },
+    {
+     "match": 3,
+     "net": 0.0,
+     "started": true,
+     "settled": true
+    },
+    {
+     "match": 4,
+     "net": -10.0,
+     "started": true,
+     "settled": true
+    },
+    {
+     "match": 5,
+     "net": 5.0,
+     "started": true,
+     "settled": false
+    },
+    {
+     "match": 6,
+     "net": 0.0,
+     "started": false,
+     "settled": false
+    }
+   ],
+   "record": {
+    "won": 1,
+    "lost": 2,
+    "halved": 1
+   },
+   "record_label": "1\u20132\u20131",
+   "bet_record": {
+    "won": 3,
+    "lost": 3,
+    "halved": 2
+   },
+   "bet_record_label": "3\u20133\u20132",
+   "partners": [
+    {
+     "player_id": 6,
+     "name": "Dave Moran",
+     "with": 2,
+     "money": 0.0
+    },
+    {
+     "player_id": 7,
+     "name": "Sam Reid",
+     "with": 2,
+     "money": 0.0
+    },
+    {
+     "player_id": 8,
+     "name": "Lee Naylor",
+     "with": 2,
+     "money": 0.0
+    }
+   ]
+  },
+  {
+   "player_id": 7,
+   "name": "Sam Reid",
+   "short_name": "SR",
+   "money": 0.0,
+   "live_money": 5.0,
+   "by_match": [
+    {
+     "match": 1,
+     "net": -10.0,
+     "started": true,
+     "settled": true
+    },
+    {
+     "match": 2,
+     "net": 0.0,
+     "started": true,
+     "settled": true
+    },
+    {
+     "match": 3,
+     "net": 0.0,
+     "started": true,
+     "settled": true
+    },
+    {
+     "match": 4,
+     "net": 10.0,
+     "started": true,
+     "settled": true
+    },
+    {
+     "match": 5,
+     "net": 5.0,
+     "started": true,
+     "settled": false
+    },
+    {
+     "match": 6,
+     "net": 0.0,
+     "started": false,
+     "settled": false
+    }
+   ],
+   "record": {
+    "won": 1,
+    "lost": 2,
+    "halved": 1
+   },
+   "record_label": "1\u20132\u20131",
+   "bet_record": {
+    "won": 3,
+    "lost": 3,
+    "halved": 2
+   },
+   "bet_record_label": "3\u20133\u20132",
+   "partners": [
+    {
+     "player_id": 8,
+     "name": "Lee Naylor",
+     "with": 2,
+     "money": 0.0
+    },
+    {
+     "player_id": 5,
+     "name": "Paul Kelly",
+     "with": 2,
+     "money": 0.0
+    },
+    {
+     "player_id": 6,
+     "name": "Dave Moran",
+     "with": 2,
+     "money": 0.0
+    }
+   ]
+  }
+ ],
+ "scorecard": {
+  "players": [
+   {
+    "player_id": 5,
+    "name": "Paul Kelly",
+    "short_name": "PK"
+   },
+   {
+    "player_id": 6,
+    "name": "Dave Moran",
+    "short_name": "DM"
+   },
+   {
+    "player_id": 7,
+    "name": "Sam Reid",
+    "short_name": "SR"
+   },
+   {
+    "player_id": 8,
+    "name": "Lee Naylor",
+    "short_name": "LN"
+   }
+  ],
+  "holes": [
+   {
+    "hole": 1,
+    "match": 1,
+    "par": 4,
+    "stroke_index": 7,
+    "winner_team": 1,
+    "played": true,
+    "scores": [
+     {
+      "player_id": 5,
+      "gross": 4,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 6,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 7,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 8,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     }
+    ]
+   },
+   {
+    "hole": 2,
+    "match": 1,
+    "par": 4,
+    "stroke_index": 3,
+    "winner_team": 1,
+    "played": true,
+    "scores": [
+     {
+      "player_id": 5,
+      "gross": 4,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 6,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 7,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 8,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     }
+    ]
+   },
+   {
+    "hole": 3,
+    "match": 1,
+    "par": 3,
+    "stroke_index": 15,
+    "winner_team": null,
+    "played": true,
+    "scores": [
+     {
+      "player_id": 5,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 6,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 7,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 8,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     }
+    ]
+   },
+   {
+    "hole": 4,
+    "match": 2,
+    "par": 5,
+    "stroke_index": 9,
+    "winner_team": 2,
+    "played": true,
+    "scores": [
+     {
+      "player_id": 5,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 6,
+      "gross": 4,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 7,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 8,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     }
+    ]
+   },
+   {
+    "hole": 5,
+    "match": 2,
+    "par": 4,
+    "stroke_index": 1,
+    "winner_team": 2,
+    "played": true,
+    "scores": [
+     {
+      "player_id": 5,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 6,
+      "gross": 4,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 7,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 8,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     }
+    ]
+   },
+   {
+    "hole": 6,
+    "match": 2,
+    "par": 4,
+    "stroke_index": 13,
+    "winner_team": 1,
+    "played": true,
+    "scores": [
+     {
+      "player_id": 5,
+      "gross": 4,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 6,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 7,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 8,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     }
+    ]
+   },
+   {
+    "hole": 7,
+    "match": 3,
+    "par": 3,
+    "stroke_index": 17,
+    "winner_team": null,
+    "played": true,
+    "scores": [
+     {
+      "player_id": 5,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 6,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 7,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 8,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     }
+    ]
+   },
+   {
+    "hole": 8,
+    "match": 3,
+    "par": 5,
+    "stroke_index": 11,
+    "winner_team": 1,
+    "played": true,
+    "scores": [
+     {
+      "player_id": 5,
+      "gross": 4,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 6,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 7,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 8,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     }
+    ]
+   },
+   {
+    "hole": 9,
+    "match": 3,
+    "par": 4,
+    "stroke_index": 5,
+    "winner_team": 2,
+    "played": true,
+    "scores": [
+     {
+      "player_id": 5,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 6,
+      "gross": 4,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 7,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 8,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     }
+    ]
+   },
+   {
+    "hole": 10,
+    "match": 4,
+    "par": 4,
+    "stroke_index": 8,
+    "winner_team": 2,
+    "played": true,
+    "scores": [
+     {
+      "player_id": 5,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 6,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 7,
+      "gross": 4,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 8,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     }
+    ]
+   },
+   {
+    "hole": 11,
+    "match": 4,
+    "par": 4,
+    "stroke_index": 4,
+    "winner_team": 2,
+    "played": true,
+    "scores": [
+     {
+      "player_id": 5,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 6,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 7,
+      "gross": 4,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 8,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     }
+    ]
+   },
+   {
+    "hole": 12,
+    "match": 4,
+    "par": 3,
+    "stroke_index": 16,
+    "winner_team": null,
+    "played": true,
+    "scores": [
+     {
+      "player_id": 5,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 6,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 7,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 8,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     }
+    ]
+   },
+   {
+    "hole": 13,
+    "match": 5,
+    "par": 5,
+    "stroke_index": 10,
+    "winner_team": 1,
+    "played": true,
+    "scores": [
+     {
+      "player_id": 5,
+      "gross": 4,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 6,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 7,
+      "gross": 5,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 8,
+      "gross": 5,
+      "strokes": 0,
+      "team": 2
+     }
+    ]
+   },
+   {
+    "hole": 14,
+    "match": 5,
+    "par": 4,
+    "stroke_index": 2,
+    "winner_team": null,
+    "played": false,
+    "scores": [
+     {
+      "player_id": 5,
+      "gross": null,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 6,
+      "gross": null,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 7,
+      "gross": null,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 8,
+      "gross": null,
+      "strokes": 0,
+      "team": 2
+     }
+    ]
+   },
+   {
+    "hole": 15,
+    "match": 5,
+    "par": 4,
+    "stroke_index": 14,
+    "winner_team": null,
+    "played": false,
+    "scores": [
+     {
+      "player_id": 5,
+      "gross": null,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 6,
+      "gross": null,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 7,
+      "gross": null,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 8,
+      "gross": null,
+      "strokes": 0,
+      "team": 2
+     }
+    ]
+   },
+   {
+    "hole": 16,
+    "match": 6,
+    "par": 3,
+    "stroke_index": 18,
+    "winner_team": null,
+    "played": false,
+    "scores": [
+     {
+      "player_id": 5,
+      "gross": null,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 6,
+      "gross": null,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 7,
+      "gross": null,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 8,
+      "gross": null,
+      "strokes": 0,
+      "team": 1
+     }
+    ]
+   },
+   {
+    "hole": 17,
+    "match": 6,
+    "par": 5,
+    "stroke_index": 12,
+    "winner_team": null,
+    "played": false,
+    "scores": [
+     {
+      "player_id": 5,
+      "gross": null,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 6,
+      "gross": null,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 7,
+      "gross": null,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 8,
+      "gross": null,
+      "strokes": 0,
+      "team": 1
+     }
+    ]
+   },
+   {
+    "hole": 18,
+    "match": 6,
+    "par": 4,
+    "stroke_index": 6,
+    "winner_team": null,
+    "played": false,
+    "scores": [
+     {
+      "player_id": 5,
+      "gross": null,
+      "strokes": 0,
+      "team": 1
+     },
+     {
+      "player_id": 6,
+      "gross": null,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 7,
+      "gross": null,
+      "strokes": 0,
+      "team": 2
+     },
+     {
+      "player_id": 8,
+      "gross": null,
+      "strokes": 0,
+      "team": 1
+     }
+    ]
+   }
+  ],
+  "holes_in_play": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16,
+   17,
+   18
+  ]
+ },
+ "transfers": [],
+ "live_bets": 3,
+ "exposure": {
+  "no_presses": 30.0,
+  "with_auto": 60.0,
+  "ceiling": 90.0
+ }
+}

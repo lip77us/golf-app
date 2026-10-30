@@ -564,3 +564,131 @@ class SettlementTests(TestCase):
         h = sequoya_threes_settlement(self.fs)['headline']
         self.assertIn('bets', h)
         self.assertIn('auto press', h)
+
+
+class LiveMoneyForTheBoardTests(TestCase):
+    """The ledger's `Each · now`: a live bet counts for whoever is up, and
+    the per-match figures are what the total is made of."""
+
+    def setUp(self):
+        self.tee = make_tee()
+        self.round = make_round(self.tee.course, active_games=['sequoya_threes'])
+        self.fs = make_foursome(
+            self.round, [('Ann', 0), ('Ben', 0), ('Cal', 0), ('Dee', 0)],
+            tee=self.tee)
+        self.p = {m.player.name: m.player_id
+                  for m in self.fs.memberships.select_related('player')}
+        setup_sequoya_threes(self.fs, [self.p['Ann'], self.p['Ben']],
+                             bet_amount=5, handicap_mode='gross')
+
+    def _play(self, hole, ann, ben, cal, dee):
+        submit_hole(self.fs, hole, [(self.p['Ann'], ann), (self.p['Ben'], ben),
+                                    (self.p['Cal'], cal), (self.p['Dee'], dee)])
+
+    def _rows(self):
+        s = sequoya_threes_summary(self.fs)
+        return s, {r['name']: r for r in s['players']}
+
+    def test_a_live_lead_counts_before_anything_settles(self):
+        self._play(1, 4, 5, 5, 5)
+        _, rows = self._rows()
+        self.assertEqual(rows['Ann']['money'], 0)
+        self.assertGreater(rows['Ann']['live_money'], 0)
+        self.assertEqual(sum(r['live_money'] for r in rows.values()), 0)
+
+    def test_the_total_is_the_sum_of_the_matches(self):
+        for h in range(1, 8):
+            self._play(h, 4, 5, 5, 5)
+        _, rows = self._rows()
+        for r in rows.values():
+            self.assertEqual(sum(m['net'] for m in r['by_match']),
+                             r['live_money'])
+
+    def test_a_finished_round_live_equals_settled(self):
+        for h in range(1, 19):
+            self._play(h, 4, 5, 5, 5)
+        _, rows = self._rows()
+        for r in rows.values():
+            self.assertEqual(r['live_money'], r['money'])
+
+    def test_halved_is_played_and_unplayed_is_not(self):
+        self._play(1, 4, 4, 4, 4)
+        s, _ = self._rows()
+        by_hole = {h['hole']: h for h in s['scorecard']['holes']}
+        self.assertTrue(by_hole[1]['played'])
+        self.assertIsNone(by_hole[1]['winner_team'])
+        self.assertFalse(by_hole[2]['played'])
+
+
+class ThePacketsWorkedExampleTests(TestCase):
+    """`handoff-sequoya-leaderboard`: Paul, Dave, Sam, Lee at $5, manual + auto.
+
+    Played through the engine rather than asserted about it. Set
+    REGEN_SEQUOYA_FIXTURES=1 to rewrite the JSON `mobile/test` reads, so the
+    board's tests draw what the server really sends.
+    """
+    HOLES = ['A', 'A', 'h', 'B', 'B', 'A', 'h', 'A', 'B',
+             'B', 'B', 'h', 'A', 'A', 'h', 'A', 'h', 'h']
+    CALLED = {6: ('Paul', 1), 15: ('Dave', 2)}
+
+    def setUp(self):
+        self.tee = make_tee()
+        self.round = make_round(self.tee.course, active_games=['sequoya_threes'])
+        self.fs = make_foursome(
+            self.round,
+            [('Paul Kelly', 0), ('Dave Moran', 0), ('Sam Reid', 0),
+             ('Lee Naylor', 0)], tee=self.tee)
+        self.p = {m.player.name.split()[0]: m.player_id
+                  for m in self.fs.memberships.select_related('player')}
+        setup_sequoya_threes(
+            self.fs, [self.p['Paul'], self.p['Dave']], bet_amount=5,
+            handicap_mode='gross',
+            press_mode=SequoyaThreesGame.PRESS_MANUAL_AUTO)
+        self.ids = [self.p[n] for n in ('Paul', 'Dave', 'Sam', 'Lee')]
+
+    def _play_to(self, last):
+        for hole in range(1, last + 1):
+            idx = (hole - 1) // 3 + 1
+            side1, side2 = pairing_for_match(self.ids, self.ids[:2], idx)
+            if hole in self.CALLED:
+                who, side = self.CALLED[hole]
+                call_press(self.fs, match_index=idx, side=side,
+                           called_by_id=self.p[who], current_hole=hole)
+            win = self.HOLES[hole - 1]
+            scores = {p: 5 for p in self.ids}
+            if win == 'A':
+                scores[side1[0]] = 4
+            elif win == 'B':
+                scores[side2[0]] = 4
+            submit_hole(self.fs, hole, list(scores.items()))
+
+    def _state(self):
+        s = sequoya_threes_summary(self.fs)
+        return s, {r['name'].split()[0]: r for r in s['players']}
+
+    def _bets(self, s):
+        return sum(len(m['bets']) for m in s['matches']
+                   if m['bets'][0]['played'] > 0)
+
+    def _dump(self, s, name):
+        import json
+        import os
+        if os.environ.get('REGEN_SEQUOYA_FIXTURES'):
+            with open(f'mobile/test/fixtures/{name}.json', 'w') as fh:
+                json.dump(s, fh, indent=1)
+
+    def test_thru_13(self):
+        self._play_to(13)
+        s, r = self._state()
+        self._dump(s, 'sequoya_thru_13')
+        self.assertEqual(self._bets(s), 10)
+        self.assertEqual({n: e['live_money'] for n, e in r.items()},
+                         {'Paul': 5, 'Sam': 5, 'Dave': -5, 'Lee': -5})
+
+    def test_final(self):
+        self._play_to(18)
+        s, r = self._state()
+        self._dump(s, 'sequoya_final')
+        self.assertEqual(self._bets(s), 13)
+        self.assertEqual({n: e['money'] for n, e in r.items()},
+                         {'Paul': 15, 'Sam': 5, 'Lee': -5, 'Dave': -15})

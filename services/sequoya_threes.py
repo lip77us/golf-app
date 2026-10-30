@@ -456,6 +456,7 @@ def _bets_for_match(game, net, side1, side2, match_index, manual):
             'holes'     : rest,
             'amount'    : amount,
             'called_by' : pr.called_by.name if pr.called_by else None,
+            'called_by_short': pr.called_by.short_name if pr.called_by else None,
             'called_side': pr.side,
             **_settle_bet(net, side1, side2, rest),
         })
@@ -520,6 +521,9 @@ def _scorecard(foursome, game, net, ids, members, match1_side1):
             'stroke_index': si_by_hole.get(hole),
             # 0 (halved) and None (unplayed) both mean nobody is tinted.
             'winner_team' : winner if winner in (1, 2) else None,
+            # The collapse above loses halved v. unplayed, which the board
+            # draws differently: a grey tile against a dashed one.
+            'played'      : winner is not None,
             'scores'      : scores,
         })
 
@@ -590,6 +594,13 @@ def sequoya_threes_summary(foursome) -> dict | None:
     # 2-1 up and $0 richer, which reads as an arithmetic error.
     bet_record = {p: {'won': 0, 'lost': 0, 'halved': 0} for p in ids}
     partners = {p: {} for p in ids}
+    # "If it ended here": a settled bet as settled, a live one for whoever is
+    # up. `nets` is settled money only, which reads $0 for the first holes of
+    # every match while the board shows a side ahead — the ledger's `Each ·
+    # now` needs this, per match and in total, and one writer keeps the two
+    # adding up.
+    live_nets = {p: 0.0 for p in ids}
+    by_match  = {p: [] for p in ids}
 
     for idx in range(1, MATCH_COUNT + 1):
         side1, side2 = pairing_for_match(ids, game.match1_side1, idx)
@@ -609,6 +620,27 @@ def sequoya_threes_summary(foursome) -> dict | None:
             elif b['result'] == 0:
                 for p in ids:
                     bet_record[p]['halved'] += 1
+
+        match_live = {p: 0.0 for p in ids}
+        for b in bets:
+            if b['result'] in (1, 2):
+                side1_up = b['result'] == 1
+            elif b['result'] is None and b['played'] and b['margin']:
+                side1_up = b['margin'] > 0
+            else:
+                continue                   # halved, or nothing to lead yet
+            for p in side1:
+                match_live[p] += amount if side1_up else -amount
+            for p in side2:
+                match_live[p] += -amount if side1_up else amount
+        for p in ids:
+            live_nets[p] += match_live[p]
+            by_match[p].append({
+                'match'  : idx,
+                'net'    : round(match_live[p], 2),
+                'started': bets[0]['played'] > 0,
+                'settled': all(b['result'] is not None for b in bets),
+            })
 
         head = bets[0]
         if head['result'] in (1, 2):
@@ -645,7 +677,8 @@ def sequoya_threes_summary(foursome) -> dict | None:
     nets = {p: round(v, 2) for p, v in nets.items()}
     players = sorted(
         ({'player_id': p, 'name': names[p], 'short_name': short[p],
-          'money': nets[p], 'record': record[p],
+          'money': nets[p], 'live_money': round(live_nets[p], 2),
+          'by_match': by_match[p], 'record': record[p],
           'record_label': f"{record[p]['won']}–{record[p]['lost']}–"
                           f"{record[p]['halved']}",
           'bet_record': bet_record[p],
