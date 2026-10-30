@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
+import 'package:golf_mobile/theme/halved_brand.dart';
 import 'package:golf_mobile/utils/nassau_board_model.dart';
 import 'package:golf_mobile/widgets/dashed_border.dart';
 import 'package:golf_mobile/widgets/nassau_board.dart';
@@ -174,6 +175,32 @@ void main() {
       ])));
       expect(find.text('Press 3–9'), findsOneWidget);
       expect(find.text('2&1 · Final'), findsOneWidget);
+    });
+
+    // Reported from an Annandale Friday: an all-square press and a press led
+    // by the first side were nearly the same dark bar.
+    Set<Color> barColours(WidgetTester t) => t
+        .widgetList<Container>(find.byWidgetPredicate((w) =>
+            w is Container && w.constraints?.maxHeight == 3))
+        .map((c) => (c.decoration as BoxDecoration).color!)
+        .where((c) => c != Colors.transparent)
+        .toSet();
+
+    Map<String, dynamic> press(int margin) => {
+          'nine': 'front', 'press_type': 'auto', 'start_hole': 3,
+          'end_hole': 9, 'result': null, 'margin': margin,
+          'holes_played': 2,
+        };
+
+    testWidgets('a level press is pale, never a side colour', (t) async {
+      await _pump(t, NassauBoardData.fromSummary(_nassau(presses: [press(0)])));
+      expect(barColours(t), {Halved.cardBorder});
+    });
+
+    testWidgets('a leading press wears the leader', (t) async {
+      await _pump(t, NassauBoardData.fromSummary(_nassau(presses: [press(1)])));
+      expect(barColours(t), isNot(contains(Halved.cardBorder)));
+      expect(barColours(t), hasLength(1));
     });
 
     testWidgets('a back-nine press draws on the BACK card only', (t) async {

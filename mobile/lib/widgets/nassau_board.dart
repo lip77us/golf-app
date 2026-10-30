@@ -485,7 +485,12 @@ class _PressRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colour = _sideColour(data, press.view.leader);
+    final level = press.view.leader == null;
+    // **Pale when level, so colour only ever means somebody leads.** A level
+    // bar in the muted grey read as a lead in dark pine at 3pt tall, and the
+    // bar is the first thing the eye takes off a press.
+    final colour =
+        level ? Halved.cardBorder : _sideColour(data, press.view.leader);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         for (var i = startIndex; i < startIndex + 9; i++)
@@ -511,8 +516,9 @@ class _PressRow extends StatelessWidget {
         const Spacer(),
         Text('${press.view.headline} · ${press.view.sub}',
             style: TextStyle(
-                fontSize: 11.5, fontWeight: FontWeight.w700,
-                color: press.view.leader == null ? Halved.muted : colour)),
+                fontSize: 11.5,
+                fontWeight: level ? FontWeight.w500 : FontWeight.w700,
+                color: level ? Halved.muted : colour)),
       ]),
     ]);
   }
