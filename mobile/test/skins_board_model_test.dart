@@ -13,6 +13,8 @@ SkinsSummary _skins({
   String rules = '',
   String payoutStyle = 'per_point',
   double pool = 4.0,
+  double? rate,
+  String perPointMode = 'first',
 }) =>
     SkinsSummary.fromJson({
       'status': 'in_progress',
@@ -23,10 +25,14 @@ SkinsSummary _skins({
       'carryover': carryover,
       'allow_junk': true,
       'skin_rules': rules,
+      'per_point_rate': rate ?? betUnit,
+      // Top level, as the server sends it. This helper had it inside `money`,
+      // so every summary here was silently parsed as a pool.
+      'payout_style': payoutStyle,
+      'per_point_mode': perPointMode,
       'players': players,
       'holes': holes,
-      'money': {'bet_unit': betUnit, 'pool': pool, 'total_skins': 0,
-                'payout_style': payoutStyle},
+      'money': {'bet_unit': betUnit, 'pool': pool, 'total_skins': 0},
     });
 
 /// `payout` defaults to `net`, which is what the server sends PER SKIN. In a
@@ -316,6 +322,49 @@ void main() {
         ));
         expect(d.basis, label);
       }
+    });
+  });
+
+  group('a per-skin price is the game\'s own, not the round\'s', () {
+    // Reported from Annandale Friday: $5 skins beside a $10 Nassau read
+    // `$10 a skin` and `2 skins · $80`, while the money was rightly -$15 for
+    // three skins. `betUnit` is the round's stake; a skin has its own rate.
+    final five = [
+      for (final (i, n) in ['Gil', 'Glenn', 'Jack', 'Jean', 'Paul'].indexed)
+        _p(i + 1, n),
+    ];
+    final holes = [for (var h = 1; h <= 18; h++) _unplayed(h)];
+
+    test('the stake is the rate, whatever the round is playing for', () {
+      final d = SkinsBoardData.fromSkins(_skins(
+          players: five, holes: holes, betUnit: 10, rate: 5));
+      expect(d.stake, 5);
+    });
+
+    test('one skin pays the rate from each of the other four', () {
+      final d = SkinsBoardData.fromSkins(_skins(
+          players: five, holes: holes, betUnit: 10, rate: 5));
+      expect(d.skinWorth, 20);
+      expect(2 * d.skinWorth, 40, reason: 'the screenshot read \$80');
+    });
+
+    test('pay everyone above you is worth the same', () {
+      final d = SkinsBoardData.fromSkins(_skins(
+          players: five, holes: holes, rate: 5, perPointMode: 'all'));
+      expect(d.skinWorth, 20);
+    });
+
+    test('against the average a skin is worth four fifths of that', () {
+      final d = SkinsBoardData.fromSkins(_skins(
+          players: five, holes: holes, rate: 5, perPointMode: 'average'));
+      expect(d.skinWorth, 4);
+    });
+
+    test('a pool still reads the round stake, which is its ante', () {
+      final d = SkinsBoardData.fromSkins(_skins(
+          players: five, holes: holes, betUnit: 10, rate: 0,
+          payoutStyle: 'pool'));
+      expect(d.stake, 10);
     });
   });
 }

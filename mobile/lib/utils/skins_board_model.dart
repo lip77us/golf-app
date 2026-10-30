@@ -39,6 +39,7 @@ class SkinsBoardData {
     required this.golfers,
     required this.holes,
     required this.stake,
+    this.perPointMode = 'first',
     required this.carry,
     required this.basis,
     this.showNext = true,
@@ -54,6 +55,19 @@ class SkinsBoardData {
   /// In PLAY order.
   final List<SkinsBoardHole> holes;
   final double stake;
+  /// `average`, `all` or `first`. Decides what winning one skin pays below.
+  final String perPointMode;
+
+  /// What one more skin pays its winner, with the field level on skins:
+  /// `rate` from each other golfer, except against the average, where
+  /// `(pts − total/n) × rate` leaves him `(n − 1)/n` of a rate.
+  double get skinWorth {
+    final others = golfers.length - 1;
+    if (perPointMode == 'average' && golfers.isNotEmpty) {
+      return stake * others / golfers.length;
+    }
+    return stake * others;
+  }
   final bool carry;
   /// 'Net' | 'Gross' | 'Strokes off' — a label, never a calculation.
   final String basis;
@@ -186,7 +200,11 @@ class SkinsBoardData {
             colourOf: h.winnerId == null ? null : ids.indexOf(h.winnerId!),
           ),
       ],
-      stake:     s.betUnit,
+      // A per-skin game has its OWN rate. `betUnit` is the ROUND's stake,
+      // which belongs to the primary game: on an Annandale Friday with $5
+      // skins the board read `$10 a skin` off the $10 Nassau.
+      stake:     s.payoutStyle == 'per_point' ? s.perPointRate : s.betUnit,
+      perPointMode: s.perPointMode,
       carry:     s.carryover,
       basis:     _basisLabel[s.handicapMode] ?? 'Net',
       rulesLine: s.skinRules,

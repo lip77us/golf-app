@@ -97,7 +97,7 @@ class _UpNext extends StatelessWidget {
         : data.isPool
             ? 'skin${riding == 1 ? '' : 's'} riding'
             : 'skin${riding == 1 ? '' : 's'} · '
-              '\$${_plain(riding * data.stake * (data.golfers.length - 1))}';
+              '\$${_plain(riding * data.skinWorth)}';
 
     return Container(
       decoration: BoxDecoration(

@@ -30,11 +30,10 @@ SkinsSummary _skins({
       'skin_minimum': minimum,
       'birdie_steal': steal,
       'payout_style': payoutStyle,
+      'per_point_rate': betUnit,
       'players': players,
       'holes': holes,
-      // The server sends the style INSIDE money; that is where it is read.
-      'money': {'bet_unit': betUnit, 'pool': pool, 'total_skins': 0,
-                'payout_style': payoutStyle},
+      'money': {'bet_unit': betUnit, 'pool': pool, 'total_skins': 0},
     });
 
 Map<String, dynamic> _p(int id, String name,

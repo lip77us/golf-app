@@ -6284,6 +6284,14 @@ grid: they decide what it takes for a tile to be won at all, which is why a
 hole can carry with nobody tied. That retired `_SkinRulesInPlay`, which had
 been its own chip on each card for a day.
 
+**A per-skin price is the game's own `per_point_rate`, never `betUnit`.**
+Reported from an Annandale Friday, 30 Oct 2026: $5 skins beside a $10 Nassau
+read `$10 a skin` and `2 skins · $80` over correct money, because `betUnit` is
+the ROUND's stake and belongs to the primary game. `skinWorth` is what one
+skin pays its winner: rate × others, or × (n−1)/n against the average. Both
+test helpers had put `payout_style` inside `money`, where the server does not
+send it, so every summary in them was a pool and none could have caught this.
+
 **Golfer colours are shared now** — `Halved.golferColours` / `Halved.golfer(i)`,
 six wrapping. They were about to be a third private copy (the Sixes board
 declares its own clay). Six is the ceiling and it WRAPS: a foursome never
