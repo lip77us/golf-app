@@ -382,9 +382,16 @@ class SixesPlayersCard extends StatelessWidget {
 class SixesHoleTray extends StatelessWidget {
   final SixesHoleCard card;
   final VoidCallback onEdit;
-  final VoidCallback? onPrev;
-  final VoidCallback? onNext;
-  final int? nextHole;
+
+  /// **No prev/next here.** The design draws them because the prototype has
+  /// no screen under it; this tray sits above score entry's own pager, which
+  /// IS the navigation — and two sets of arrows at the bottom is what a
+  /// phone showed the day this shipped (Paul, 30 Oct 2026). Annandale's tray
+  /// made the same call: "the second pager the tray deliberately does not
+  /// grow either".
+  ///
+  /// Nothing is lost on a close-out: the next-match card already names the
+  /// hole the new partners start on.
 
   /// The result is on its way — what we hold for this hole predates the score
   /// just entered, so it is not drawn. Annandale's tray learnt this: showing
@@ -398,9 +405,6 @@ class SixesHoleTray extends StatelessWidget {
     super.key,
     required this.card,
     required this.onEdit,
-    required this.nextHole,
-    this.onPrev,
-    this.onNext,
     this.gettingResult = false,
     this.notSynced = false,
   });
@@ -459,8 +463,6 @@ class SixesHoleTray extends StatelessWidget {
             const SizedBox(height: 4),
             _nextCard(card.nextMatch!),
           ],
-          const SizedBox(height: 12),
-          _buttons(r),
         ],
       ),
     );
@@ -641,48 +643,6 @@ class SixesHoleTray extends StatelessWidget {
     );
   }
 
-  Widget _buttons(SixesHoleOutcome? r) {
-    final closed = r != null && r.closed && card.nextMatch != null;
-    final label = nextHole == null
-        ? 'Done'
-        : closed
-            ? 'Match ${card.nextMatch!.number} · hole $nextHole ›'
-            : 'Hole $nextHole ›';
-    return Row(children: [
-      SizedBox(
-        width: 48,
-        height: 48,
-        child: OutlinedButton(
-          onPressed: onPrev,
-          style: OutlinedButton.styleFrom(
-            padding: EdgeInsets.zero,
-            shape: const CircleBorder(),
-            side: const BorderSide(color: Color(0x4DFFFFFF)),
-            foregroundColor: Colors.white,
-          ),
-          child: const Text('‹', style: TextStyle(fontSize: 20)),
-        ),
-      ),
-      const SizedBox(width: 12),
-      Expanded(
-        child: SizedBox(
-          height: 48,
-          child: FilledButton(
-            onPressed: onNext,
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Halved.deepPine,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24)),
-            ),
-            child: Text(label,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w700, fontSize: 16)),
-          ),
-        ),
-      ),
-    ]);
-  }
 }
 
 // ── 4 · teams not set ────────────────────────────────────────────────────────

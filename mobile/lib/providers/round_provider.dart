@@ -472,8 +472,11 @@ class RoundProvider extends ChangeNotifier {
     try {
       // Before the enqueue, because the enqueue starts the drain and a fast
       // connection could answer before the next line runs.
+      // Every game whose TRAY reports the server's result for the hole —
+      // Annandale Friday and Sixes. A hold that only knew about Annandale
+      // left the Sixes tray free to draw the card from before this score.
       if (foursomeId == _activeFoursomeId &&
-          _annandaleFridaySummary != null) {
+          (_annandaleFridaySummary != null || _sixesHoles.isNotEmpty)) {
         _annandaleResults.hold(holeNumber);
       }
 
@@ -1326,6 +1329,11 @@ class RoundProvider extends ChangeNotifier {
   bool annandaleResultPending(int hole) =>
       _annandaleResults.pending(hole) && _sync.isOnline;
 
+  /// The same two questions for any tray game. `annandaleResultPending` and
+  /// `annandaleHoleUnsynced` are kept as the names the Annandale tray calls.
+  bool trayResultPending(int hole) => annandaleResultPending(hole);
+  bool trayHoleUnsynced(int hole) => annandaleHoleUnsynced(hole);
+
   /// Saved on the phone and not yet on the server, so what the summary holds
   /// for this hole predates it. An answered hole is excluded because the queue
   /// clears a moment after the answer lands.
@@ -1343,6 +1351,9 @@ class RoundProvider extends ChangeNotifier {
     final six = response['sixes_hole'];
     if (six is Map<String, dynamic>) {
       _sixesHoles[holeNumber] = SixesHoleCard.fromJson(six);
+      // The card IS the answer, so the hold ends here rather than running
+      // its full wait — which is what made the result look slow.
+      _annandaleResults.answer(holeNumber);
       notifyListeners();
     }
 

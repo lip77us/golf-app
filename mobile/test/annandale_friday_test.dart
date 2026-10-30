@@ -176,10 +176,15 @@ void main() {
     test('the keypad posts the hole on its last score', () {
       // It never did: 40 Balls posts with its count, and this game has no
       // count, so the hole sat unsent under a tray with nothing in it.
+      // Anchored on the GATE, not on the comment above it: that comment was
+      // reworded the day Sixes joined the keypad and needed the same post,
+      // and a guard that breaks on a rewording is one that gets deleted.
       final src = _src('lib/screens/score_entry_screen.dart');
-      final at = src.indexOf('Annandale Friday posts the hole on its last');
+      final at = src.indexOf('if (n > 0 && ');
       expect(at, greaterThan(0));
-      expect(src.substring(at, at + 1400), contains('_saveCurrentHole('));
+      final block = src.substring(at, at + 600);
+      expect(block, contains('af != null'));
+      expect(block, contains('_saveCurrentHole('));
     });
 
     test("the keypad's strokes are the game's, not full handicap", () {

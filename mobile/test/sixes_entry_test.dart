@@ -121,36 +121,42 @@ void main() {
       // takes the hole. Under gross the same scoreline HALVES, which is the
       // test below.
       final card = _card('sixes_hole10_strokes');
-      await _pump(t, SixesHoleTray(
-          card: card, nextHole: 11, onEdit: () {}));
+      await _pump(t, SixesHoleTray(card: card, onEdit: () {}));
       final text = _allText(t);
       // "Won hole 10" is worded so it cannot be read as the match score,
       // which is the line directly underneath.
       expect(text, contains('Won hole 10'));
       expect(text, contains('net ${card.result!.t1Net} v ${card.result!.t2Net}'));
       expect(text, contains('2 to play'));
-      expect(text, contains('Hole 11 ›'));
     });
 
     testWidgets('a closed match says so, and names the next pairing',
         (t) async {
       final card = _card('sixes_hole10_closed');
-      await _pump(t, SixesHoleTray(
-          card: card, nextHole: 11, onEdit: () {}));
+      await _pump(t, SixesHoleTray(card: card, onEdit: () {}));
       final text = _allText(t);
       expect(text, contains('win 3&2'));
       expect(text, contains('match 2 over'));
       expect(text, contains('\$5 each'));
       expect(text, contains('PARTNERS CHANGE'));
       expect(text, contains('Match 3 from 11'));
-      // The button carries the match as well as the hole, because the thing
-      // that changes at 11 is who you are playing with.
-      expect(text, contains('Match 3 · hole 11 ›'));
+    });
+
+    testWidgets('it grows NO second pager', (t) async {
+      // Score entry has its own prev/next under this tray. Two sets of
+      // arrows at the bottom is what a phone showed (30 Oct 2026); the
+      // next-match card is what carries the new partners' first hole.
+      await _pump(t, SixesHoleTray(
+          card: _card('sixes_hole10_closed'), onEdit: () {}));
+      final text = _allText(t);
+      expect(text, isNot(contains('›')));
+      expect(text, isNot(contains('‹')));
+      expect(text, contains('Match 3 from 11'));
     });
 
     testWidgets('a live match offers no next pairing', (t) async {
       await _pump(t, SixesHoleTray(
-          card: _card('sixes_hole10_live'), nextHole: 11, onEdit: () {}));
+          card: _card('sixes_hole10_live'), onEdit: () {}));
       expect(_allText(t), isNot(contains('PARTNERS CHANGE')));
     });
 
@@ -158,7 +164,7 @@ void main() {
       // Gross: Paul and Lee both make 4, so the sides tie on best ball.
       final card = _card('sixes_hole10_live');
       expect(card.result!.halved, isTrue, reason: 'the fixture is the subject');
-      await _pump(t, SixesHoleTray(card: card, nextHole: 11, onEdit: () {}));
+      await _pump(t, SixesHoleTray(card: card, onEdit: () {}));
       final text = _allText(t);
       expect(text, contains('Hole 10 halved'));
       expect(text, isNot(contains('Won hole')));
@@ -171,7 +177,6 @@ void main() {
       // learnt this on a phone.
       await _pump(t, SixesHoleTray(
           card: _card('sixes_hole10_closed'),
-          nextHole: 11,
           onEdit: () {},
           gettingResult: true));
       final text = _allText(t);
@@ -254,6 +259,29 @@ void main() {
     test('the shared screen draws the band and the tray', () {
       expect(src, contains('SixesTeamsBand('));
       expect(src, contains('SixesHoleTray('));
+    });
+
+    test('the keypad POSTS a tray game\'s hole on its last score', () {
+      // Reported from a phone, 30 Oct 2026: "getting results is taking many
+      // seconds". The gate read `af != null`, so a Sixes hole entered on the
+      // keypad was never posted — the tray waited for a result from a save
+      // that had not happened. Annandale hit exactly this when IT joined the
+      // keypad; the gate has to name every tray game, not one of them.
+      final at = src.indexOf('if (n > 0 && ');
+      expect(at, greaterThan(0));
+      final gate = src.substring(at, at + 120);
+      expect(gate, contains('af != null'));
+      expect(gate, contains('six != null'));
+      // 40 Balls still posts with its count, not with the last score.
+      expect(gate, contains('!_fortyBallsRound(rp)'));
+    });
+
+    test('the Sixes tray waits for the SERVER, not just the local queue', () {
+      // Without the hold it draws the card from before this score.
+      final at = src.indexOf('SixesHoleTray(');
+      expect(at, greaterThan(0));
+      expect(src.substring(at, at + 400),
+          contains('trayResultPending'));
     });
 
     test('there is no dedicated Sixes score screen', () {

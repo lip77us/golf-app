@@ -7530,6 +7530,27 @@ sides read `P & S` in tests where the design draws `Paul & Sam`. That is the
 existing Sixes choice (the summary's own comment explains it: match lines are
 read at arm's length, and short_name is account-editable), not a new one.
 
+### Two found on a phone, both already written down here
+
+- **The keypad never posted the hole.** Exactly the bug Annandale Friday hit
+  when IT joined the keypad, reintroduced by the gate it left behind: the
+  auto-post read `af != null`, so a Sixes hole sat unsent and the tray waited
+  for a result from a save that had not happened — *"getting results is taking
+  many seconds"*. The gate now names every TRAY game and still exempts 40
+  Balls, which posts with its count. The Sixes tray also holds for the
+  server's answer (`ResultHold`) rather than only the local queue, so it
+  cannot draw the card from before the score just entered.
+- **Two sets of arrows at the bottom.** The tray grew its own ‹ / Hole 11 ›
+  over score entry's pager. The design draws them because the prototype has
+  no screen underneath; Annandale's tray had already made the call — *"the
+  second pager the tray deliberately does not grow either"*. Removed. Nothing
+  is lost on a close-out, because the next-match card names the hole the new
+  partners start on.
+
+Both guards are anchored on the GATE rather than on the comment above it —
+the Annandale one broke merely because that comment was reworded, and a guard
+that fails on a rewording is one that gets deleted.
+
 ### Two layout bugs the tests found
 Both tray rows could overflow — the sides line beside the result chip, and
 the header beside `Edit scores`. Real on a device with a long pairing, not

@@ -2983,14 +2983,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           else if (sixTray)
             SixesHoleTray(
               card: six,
-              nextHole: _nextHoleInOrder(rp),
-              gettingResult: (_pending[_selectedHole]?.isNotEmpty ?? false),
+              gettingResult: rp.trayResultPending(_selectedHole) ||
+                  (_pending[_selectedHole]?.isNotEmpty ?? false),
+              notSynced: rp.trayHoleUnsynced(_selectedHole),
               onEdit: () => setState(() {
                 _trayEditing = true;
                 _editHotPid = players.first.player.id;
               }),
-              onPrev: _prevHoleInOrder(rp) == null ? null : _retreat,
-              onNext: _nextHoleInOrder(rp) == null ? null : _advance,
             )
           else if (afTray)
             AnnandaleHoleTray(
@@ -3029,15 +3028,20 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 if (_editHotPid != null || _trayEditing) {
                   setState(() { _editHotPid = null; _trayEditing = false; });
                 }
-                // **Annandale Friday posts the hole on its last score and
-                // stays**, the same as the inline picker does for 40 Balls.
-                // Its tray reports the server's result for the hole, so a hole
-                // left unsent raises a tray with nothing in it — which is
-                // exactly what the first run on a phone showed. 40 Balls is
-                // left alone: it posts when the group picks its count. An edit
-                // to a complete hole posts too, or the tray would describe the
-                // number that was just replaced.
-                if (n > 0 && af != null && !_fortyBallsRound(rp)) {
+                // **A tray game posts the hole on its last score and
+                // stays**, the same as the inline picker does. The tray
+                // reports the SERVER's result, so a hole left unsent raises a
+                // tray with nothing in it — which is exactly what Annandale's
+                // first run on a phone showed, and what Sixes did again the
+                // day it joined the keypad: the gate read `af != null`, so a
+                // Sixes hole was never posted and the result arrived only
+                // when something else flushed the queue.
+                //
+                // 40 Balls is still left alone: it posts when the group picks
+                // its count. An edit to a complete hole posts too, or the
+                // tray would describe the number that was just replaced.
+                if (n > 0 && !_fortyBallsRound(rp) &&
+                    (af != null || six != null)) {
                   final hole = _selectedHole;
                   final now = _effectiveScores(sc, hole);
                   if (_allScored(players, now, hole)) {
