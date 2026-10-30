@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../ui_labels.dart';
 import '../game_catalog.dart';
+import '../utils/side_game_routes.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import 'tee_times_screen.dart';
@@ -527,6 +528,11 @@ class _RoundScreenState extends State<RoundScreen> {
                         !fs.configuredGames.contains('vegas')) {
                       // Vegas needs team assignment + options.
                       route = '/vegas-setup';
+                    } else if (fsGames.contains('annandale_friday') &&
+                        !fs.configuredGames.contains('annandale_friday')) {
+                      // Annandale Friday needs its teams before a score can
+                      // mean anything; once set it scores on the shared screen.
+                      route = '/annandale-friday-setup';
                     } else if (fsGames.contains('fourball') &&
                         !fs.configuredGames.contains('fourball')) {
                       // Fourball needs team assignment + handicap + stake.
@@ -1110,31 +1116,6 @@ List<(String, String)> _roundLevelEditTargets(
   return out;
 }
 
-/// Setup route + args for a side game added from the hub.  Per-foursome games
-/// take the foursome id; round-level games (Stroke Play / Stableford) take the
-/// round id.  match_18 is configured through the Nassau setup (overall-only).
-(String, Map<String, dynamic>)? _sideGameSetupRoute(
-    String game, int foursomeId, int roundId) {
-  switch (game) {
-    case GameIds.skins:
-      return ('/skins-setup', {'id': foursomeId, 'returnToHub': true});
-    case GameIds.nassau:
-      return ('/nassau-setup', {'id': foursomeId, 'returnToHub': true});
-    case GameIds.match18:
-      // Singles Match = Overall-only Nassau; its own route sets game_type.
-      return ('/nassau-setup-18', {'id': foursomeId, 'returnToHub': true});
-    case GameIds.spots:
-      return ('/spots-setup', {'id': foursomeId, 'returnToHub': true});
-    case GameIds.honors:
-      return ('/honors-setup', {'id': foursomeId, 'returnToHub': true});
-    case GameIds.stableford:
-      return ('/stableford-setup', {'id': roundId, 'returnToHub': true});
-    case GameIds.strokePlay:
-      return ('/low-net-setup', {'id': roundId, 'returnToHub': true});
-  }
-  return null;
-}
-
 /// Hub "Add side game" flow: pick an eligible side game, append it to the
 /// round's active_games, then open its setup (returnToHub) to configure it.
 Future<void> _showAddSideGameSheet(
@@ -1190,7 +1171,7 @@ Future<void> _showAddSideGameSheet(
   }
   onGamesChanged();
   if (!context.mounted) return;
-  final target = _sideGameSetupRoute(pick, foursomeId, roundId);
+  final target = sideGameSetupRoute(pick, foursomeId, roundId);
   if (target != null) {
     Navigator.of(context)
         .pushNamed(target.$1, arguments: target.$2)
@@ -1224,6 +1205,7 @@ Future<void> _showAddSideGameSheet(
     'points_531': '/points-531-setup',
     'vegas':      '/vegas-setup',
     'fourball':   '/fourball-setup',
+    'annandale_friday': '/annandale-friday-setup',
     'wolf':       '/wolf-setup',
     'rabbit':     '/rabbit-setup',
     'survivor':   '/survivor-setup',

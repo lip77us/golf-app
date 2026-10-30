@@ -43,6 +43,7 @@ import '../widgets/standing_ribbon.dart';
 import '../widgets/stroke_play_progress_grid.dart';
 import '../utils/play_order.dart';
 import '../api/client.dart' show NetworkException;
+import '../widgets/annandale_friday.dart';
 import '../widgets/error_view.dart' show friendlyError;
 import '../widgets/forty_balls_keypad.dart';
 import '../widgets/forty_balls_picker.dart';
@@ -413,6 +414,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         rp.tripleNassauSummary != null) {
       futures.add(rp.loadTripleNassau(widget.foursomeId));
     }
+    if (games.contains('annandale_friday') ||
+        configured.contains('annandale_friday')) {
+      futures.add(rp.loadAnnandaleFriday(widget.foursomeId));
+    }
     // Stableford is round-scoped; refresh the authoritative per-hole points.
     if (games.contains('stableford') && rp.round != null) {
       futures.add(rp.loadStableford(rp.round!.id));
@@ -589,6 +594,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     if (games.contains('fourball') && rp.fourballSummary != null) {
       return (rp.fourballSummary!.handicapMode, rp.fourballSummary!.netPercent);
     }
+    // Annandale Friday allocates off the FIELD's low man, one allocation for
+    // every match — so the single-allocation stroke dots are exactly right.
+    if (games.contains('annandale_friday') &&
+        rp.annandaleFridaySummary != null) {
+      return (rp.annandaleFridaySummary!.handicapMode,
+              rp.annandaleFridaySummary!.netPercent);
+    }
     // Triple Nassau's true allocation is PAIRWISE (a different low per match),
     // which the single-allocation stroke dots can't express.  Until the
     // dedicated play screen draws per-match dots, follow the game's own mode so
@@ -755,6 +767,22 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         for (final m in members) {
           if (teamOf[m.player.id] == t) ordered.add(m);
         }
+      }
+      for (final m in members) {
+        if (!ordered.any((o) => o.player.id == m.player.id)) ordered.add(m);
+      }
+      return ordered;
+    }
+
+    // Annandale Friday: golfers under their team, teams in order — the card
+    // reads as the teams that make the matches.
+    final af = context.read<RoundProvider>().annandaleFridaySummary;
+    if (af != null && af.teams.isNotEmpty &&
+        _activeGames(round).contains('annandale_friday')) {
+      final ordered = <Membership>[];
+      for (final id in af.orderedIds) {
+        final m = members.where((m) => m.player.id == id).firstOrNull;
+        if (m != null) ordered.add(m);
       }
       for (final m in members) {
         if (!ordered.any((o) => o.player.id == m.player.id)) ordered.add(m);
@@ -1386,6 +1414,36 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// does.
   bool _fortyBallsRound(RoundProvider rp) =>
       _activeGames(rp.round).contains('forty_balls');
+
+  /// Rounds that enter scores on the keypad rather than the inline picker:
+  /// 40 Balls, where it began, and Annandale Friday, whose packet asks for
+  /// the same entry (E2+3) because five or six golfers is a lot of inline
+  /// pickers. The keypad is the same widget in both, so a `4` means the same
+  /// thing on either card.
+  bool _keypadRound(RoundProvider rp) {
+    final games = _activeGames(rp.round);
+    return games.contains('forty_balls') ||
+        resolvePrimary(rp.round?.primaryGame, games) ==
+            GameIds.annandaleFriday;
+  }
+
+  /// Annandale Friday's tray stays down while the scorer has asked to edit —
+  /// "Edit scores" reopens the keypad on the hole's first golfer.
+  bool _afEditing = false;
+
+  Future<void> _afPress(RoundProvider rp, AnnandaleFridayMatch m,
+      int startHole) async {
+    try {
+      final s = await context.read<AuthProvider>().client
+          .postAnnandaleFridayPress(widget.foursomeId,
+              match: m.number, startHole: startHole);
+      rp.setAnnandaleFridaySummary(s);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyError(e))));
+    }
+  }
 
   /// The current hole's picker state, reported up by the card. Null until it
   /// loads, or when the round does not play 40 Balls.
@@ -2919,8 +2977,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // the pager below it is how this screen changes hole, and a sheet that
     // covered it would need its own Next — which is the second pager the
     // tray deliberately does not grow either.
-    final fbActive = games.contains('forty_balls') &&
+    final fbActive = _keypadRound(rp) &&
                      rp.round?.status != 'complete';
+    final af = games.contains('annandale_friday')
+        ? rp.annandaleFridaySummary : null;
+    // The tray rises after the last score — and only then. Editing (the
+    // button, or tapping a golfer) puts the keypad back over it.
+    final afTray = af != null && fbActive && allDone &&
+        _editHotPid == null && !_afEditing;
     var fbIdx = fbActive ? _hotSpotIdx(players, scores) : -1;
     if (fbActive && _editHotPid != null) {
       // The same override the inline picker uses when a scorer taps back to
@@ -2938,7 +3002,20 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (fbMember != null)
+          if (afTray)
+            AnnandaleHoleTray(
+              summary  : af,
+              hole     : _selectedHole,
+              nextHole : _nextHoleInOrder(rp),
+              skins    : games.contains('skins') ? rp.skinsSummary : null,
+              playerCount: players.length,
+              onEdit   : () => setState(() {
+                _afEditing = true;
+                _editHotPid = players.first.player.id;
+              }),
+              onPress  : (m, start) => _afPress(rp, m, start),
+            )
+          else if (fbMember != null)
             FortyBallsKeypad(
               playerName: fbMember.player.name,
               par       : par,
@@ -2948,8 +3025,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 // Editing a tapped golfer is a one-shot, exactly as it is for
                 // the inline picker: once a value lands, the natural next
                 // scorer resumes.
-                if (_editHotPid != null) {
-                  setState(() => _editHotPid = null);
+                if (_editHotPid != null || _afEditing) {
+                  setState(() { _editHotPid = null; _afEditing = false; });
                 }
               },
               // `-1` is this screen's clear, not a score of minus one.
@@ -3278,8 +3355,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                     summary: rp.tripleCupSummary!, hole: _selectedHole),
               // Active hole score card
               _HoleScoreCard(
-                useKeypad: _activeGames(rp.round).contains('forty_balls') &&
+                useKeypad: _keypadRound(rp) &&
                            rp.round?.status != 'complete',
+                annandaleSummary:
+                    _activeGames(rp.round).contains('annandale_friday')
+                        ? rp.annandaleFridaySummary : null,
                 fortyBallsNet: _activeGames(rp.round).contains('forty_balls')
                                && _fbState?.hole == _selectedHole
                     ? _fbState?.net
@@ -3660,6 +3740,8 @@ class _HoleScoreCard extends StatelessWidget {
   final SixesSummary?           sixesSummary;
   final VegasSummary?           vegasSummary;
   final FourballSummary?        fourballSummary;
+  /// Annandale Friday: colours each golfer by his TEAM and heads each team.
+  final AnnandaleFridaySummary? annandaleSummary;
   final TripleCupSummary?       tripleCupSummary;
   final Points531Summary?       points531Summary;
   /// Banker's strokes are PAIRWISE — each opponent has one relationship, with
@@ -3749,6 +3831,7 @@ class _HoleScoreCard extends StatelessWidget {
     this.sixesSummary,
     this.vegasSummary,
     this.fourballSummary,
+    this.annandaleSummary,
     this.tripleCupSummary,
     this.points531Summary,
     this.matchPlayData,
@@ -3875,6 +3958,13 @@ class _HoleScoreCard extends StatelessWidget {
       final t = vg.teamOf(m.player.id);
       if (t == 1) return GameColors.team1;
       if (t == 2) return GameColors.team2;
+    }
+    // Annandale Friday: three teams (or a pair and a three), each its own
+    // colour — the same colours the setup screen and the board use.
+    final af = annandaleSummary;
+    if (af != null) {
+      final t = af.teamOf(m.player.id);
+      if (t != null) return annandaleTeamColour(t);
     }
     // Fourball: fixed 2v2 teams → blue (team 1) / orange (team 2).
     final fb = fourballSummary;
@@ -4399,6 +4489,15 @@ class _HoleScoreCard extends StatelessWidget {
           ...players.asMap().entries.expand((entry) {
             final idx        = entry.key;
             final m          = entry.value;
+            // A team header over the first golfer of each team.
+            final teamHead = <Widget>[
+              if (annandaleSummary != null &&
+                  (idx == 0 ||
+                   annandaleSummary!.teamOf(players[idx - 1].player.id) !=
+                       annandaleSummary!.teamOf(m.player.id)))
+                AnnandaleTeamHeader(
+                    summary: annandaleSummary!, playerId: m.player.id),
+            ];
             final gross      = scores[m.player.id];
             final isHot      = idx == hotSpotIdx;
             final matchStrok = _strokesForHole(m, holeData);
@@ -4455,7 +4554,7 @@ class _HoleScoreCard extends StatelessWidget {
                 spotsSheetOpen: spotsActive && spotsSheetOpen(m.player.id),
               ),
             );
-            if (!isHot) return [rowWidget];
+            if (!isHot) return [...teamHead, rowWidget];
 
             // Active player: wrap the name row AND the entry control in ONE
             // "entry section" box.  Border + wash take the player's TEAM colour
@@ -4489,6 +4588,7 @@ class _HoleScoreCard extends StatelessWidget {
                     onTap: onOpenExtraTeamsPicker,
                   );
             return [
+              ...teamHead,
               Container(
                 // Flush on the LEFT so the bold accent bar lines up with the
                 // inactive rows' left bars; inset on the RIGHT so the right line

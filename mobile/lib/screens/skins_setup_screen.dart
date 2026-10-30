@@ -204,9 +204,15 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
     return fs.memberships.where((m) => !m.player.isPhantom).toList();
   }
 
+  /// Two to a card's size: four, or the whole card of a game that seats
+  /// more (Annandale Friday's 5 or 6) — `maxGroupSizeFor`, the same rule the
+  /// server's round setup uses, so this cannot refuse a golfer it seated.
+  int get _cardSize => maxGroupSizeFor(
+      context.read<RoundProvider>().round?.activeGames ?? const []);
+
   bool get _rosterValid {
     final n = _realMembers.length;
-    return n >= 2 && n <= 4;
+    return n >= 2 && n <= _cardSize;
   }
 
   /// Players IN the game. null = all real players; a set = a SUBSET side game
@@ -392,7 +398,7 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _RosterBanner(members: _realMembers),
+          _RosterBanner(members: _realMembers, cardSize: _cardSize),
 
           const SizedBox(height: 16),
 
@@ -755,13 +761,15 @@ class _SkinsSetupScreenState extends State<SkinsSetupScreen> {
 class _RosterBanner extends StatelessWidget {
   final List<Membership> members;
 
-  const _RosterBanner({required this.members});
+  final int cardSize;
+
+  const _RosterBanner({required this.members, this.cardSize = 4});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final n     = members.length;
-    final ok    = n >= 2 && n <= 4;
+    final ok    = n >= 2 && n <= cardSize;
     final color = ok ? theme.colorScheme.primary : theme.colorScheme.error;
 
     String message;
@@ -770,7 +778,8 @@ class _RosterBanner extends StatelessWidget {
     } else if (n < 2) {
       message = 'Skins needs at least 2 players — add ${2 - n} more.';
     } else {
-      message = 'Skins supports at most 4 players — remove ${n - 4}.';
+      message = 'Skins supports at most $cardSize players — remove '
+          '${n - cardSize}.';
     }
 
     return Card(

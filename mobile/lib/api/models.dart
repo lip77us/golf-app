@@ -5256,6 +5256,164 @@ class TripleNassauSummary {
 }
 
 // ---------------------------------------------------------------------------
+// Annandale Friday — a group of 5 or 6, teams that make three Nassaus
+// ---------------------------------------------------------------------------
+
+/// One golfer: which team he is on, how many of the three matches he is in
+/// (two, or all three for the pair in a five), and his net across them —
+/// the server's figure, never re-summed here.
+class AnnandaleFridayPlayer {
+  final int     playerId;
+  final String  name;
+  final String  shortName;
+  final int?    playingHandicap;
+  final int?    team;      // index into [AnnandaleFridaySummary.teams]
+  final int     matches;
+  final double  net;
+
+  const AnnandaleFridayPlayer({
+    required this.playerId,
+    required this.name,
+    required this.shortName,
+    this.playingHandicap,
+    this.team,
+    this.matches = 0,
+    this.net = 0,
+  });
+
+  factory AnnandaleFridayPlayer.fromJson(Map<String, dynamic> j) =>
+      AnnandaleFridayPlayer(
+        playerId       : j['player_id'] as int,
+        name           : j['name'] as String? ?? '',
+        shortName      : j['short_name'] as String? ?? '',
+        playingHandicap: j['playing_handicap'] as int?,
+        team           : j['team'] as int?,
+        matches        : j['matches'] as int? ?? 0,
+        net            : (j['net'] as num?)?.toDouble() ?? 0,
+      );
+
+  String get label => shortName.isNotEmpty ? shortName : name;
+}
+
+/// One of the three Nassaus: the two sides, which TEAM each side is (so a
+/// side is coloured by its team — in a five, all three of the pair's
+/// opponents wear one colour), and the full [NassauSummary].
+class AnnandaleFridayMatch {
+  final int           number;      // 1, 2 or 3
+  final String        gameType;    // af_1 | af_2 | af_3
+  final List<int>     side1Ids;
+  final List<int>     side2Ids;
+  final int?          side1Team;
+  final int?          side2Team;
+  final bool          canPress;    // 1 down or level, manual presses on
+  final NassauSummary summary;
+
+  const AnnandaleFridayMatch({
+    required this.number,
+    required this.gameType,
+    required this.side1Ids,
+    required this.side2Ids,
+    this.side1Team,
+    this.side2Team,
+    this.canPress = false,
+    required this.summary,
+  });
+
+  factory AnnandaleFridayMatch.fromJson(Map<String, dynamic> j) =>
+      AnnandaleFridayMatch(
+        number   : j['match'] as int? ?? 0,
+        gameType : j['game_type'] as String? ?? '',
+        side1Ids : [for (final x in (j['side1_ids'] as List? ?? [])) x as int],
+        side2Ids : [for (final x in (j['side2_ids'] as List? ?? [])) x as int],
+        side1Team: j['side1_team'] as int?,
+        side2Team: j['side2_team'] as int?,
+        canPress : j['can_press'] as bool? ?? false,
+        summary  : NassauSummary.fromJson(
+            j['summary'] as Map<String, dynamic>),
+      );
+
+  bool involves(int playerId) =>
+      side1Ids.contains(playerId) || side2Ids.contains(playerId);
+}
+
+/// Mirrors `services.annandale_friday.annandale_friday_summary`.
+class AnnandaleFridaySummary {
+  final String status;
+  final int    groupSize;
+  final String handicapMode;
+  final int    netPercent;
+  final bool   secondBallTiebreak;
+  final bool   claremont;
+  final bool   autoPress;
+  final bool   manualPress;
+  final double betUnit;
+  final double pressUnit;
+  final double? lossCap;
+  /// Teams in display order; team index = colour slot.
+  final List<List<AnnandaleFridayPlayer>> teams;
+  final List<AnnandaleFridayPlayer>       players;
+  final List<AnnandaleFridayMatch>        matches;
+
+  const AnnandaleFridaySummary({
+    required this.status,
+    required this.groupSize,
+    required this.handicapMode,
+    required this.netPercent,
+    required this.secondBallTiebreak,
+    required this.claremont,
+    required this.autoPress,
+    required this.manualPress,
+    required this.betUnit,
+    required this.pressUnit,
+    this.lossCap,
+    required this.teams,
+    required this.players,
+    required this.matches,
+  });
+
+  factory AnnandaleFridaySummary.fromJson(Map<String, dynamic> j) =>
+      AnnandaleFridaySummary(
+        status            : j['status'] as String? ?? 'pending',
+        groupSize         : j['group_size'] as int? ?? 0,
+        handicapMode      : j['handicap_mode'] as String? ?? 'strokes_off',
+        netPercent        : j['net_percent'] as int? ?? 100,
+        secondBallTiebreak: j['second_ball_tiebreak'] as bool? ?? true,
+        claremont         : j['claremont'] as bool? ?? false,
+        autoPress         : j['auto_press'] as bool? ?? true,
+        manualPress       : j['manual_press'] as bool? ?? false,
+        betUnit           : (j['bet_unit'] as num?)?.toDouble() ?? 0,
+        pressUnit         : (j['press_unit'] as num?)?.toDouble() ?? 0,
+        lossCap           : (j['loss_cap'] as num?)?.toDouble(),
+        teams: [
+          for (final t in (j['teams'] as List? ?? []))
+            [
+              for (final p in (t as List))
+                AnnandaleFridayPlayer.fromJson(p as Map<String, dynamic>)
+            ]
+        ],
+        players: [
+          for (final p in (j['players'] as List? ?? []))
+            AnnandaleFridayPlayer.fromJson(p as Map<String, dynamic>)
+        ],
+        matches: [
+          for (final m in (j['matches'] as List? ?? []))
+            AnnandaleFridayMatch.fromJson(m as Map<String, dynamic>)
+        ],
+      );
+
+  /// Team index for a golfer, or null when he is on none.
+  int? teamOf(int playerId) {
+    for (var i = 0; i < teams.length; i++) {
+      if (teams[i].any((p) => p.playerId == playerId)) return i;
+    }
+    return null;
+  }
+
+  /// Golfer ids in team order — the order the card lists them in.
+  List<int> get orderedIds => [for (final t in teams) for (final p in t) p.playerId];
+}
+
+// ---------------------------------------------------------------------------
 // Nassau phantom info (Four Ball cross-foursome phantom)
 // ---------------------------------------------------------------------------
 

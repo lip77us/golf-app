@@ -150,6 +150,7 @@ class RoundProvider extends ChangeNotifier {
   final Map<String, NassauSummary> _nassauByType = {};
   QuotaNassauSummary?    _quotaNassauSummary;
   TripleNassauSummary?   _tripleNassauSummary;
+  AnnandaleFridaySummary? _annandaleFridaySummary;
   bool                   _loadingTripleNassau = false;
   Map<String, dynamic>? _matchPlayData;
   ThreePersonMatchSummary? _threePersonMatchSummary;
@@ -225,6 +226,7 @@ class RoundProvider extends ChangeNotifier {
   }
   QuotaNassauSummary?   get quotaNassauSummary => _quotaNassauSummary;
   TripleNassauSummary?  get tripleNassauSummary => _tripleNassauSummary;
+  AnnandaleFridaySummary? get annandaleFridaySummary => _annandaleFridaySummary;
   bool                  get loadingTripleNassau => _loadingTripleNassau;
   bool                  get loadingQuotaNassau => _loadingQuotaNassau;
   Map<String, dynamic>?       get matchPlayData            => _matchPlayData;
@@ -278,6 +280,7 @@ class RoundProvider extends ChangeNotifier {
     _multiSkinsSummary       = null;
     _nassauSummary           = null;
     _tripleNassauSummary     = null;
+    _annandaleFridaySummary  = null;
     _quotaNassauSummary      = null;
     _matchPlayData           = null;
     _threePersonMatchSummary = null;
@@ -393,6 +396,7 @@ class RoundProvider extends ChangeNotifier {
       _scorecard        = null;
       _nassauSummary    = null;
       _tripleNassauSummary = null;
+      _annandaleFridaySummary = null;
       _skinsSummary     = null;
       _spotsSummary     = null;
       _stablefordResult = null;
@@ -1268,6 +1272,25 @@ class RoundProvider extends ChangeNotifier {
 
   void setTripleNassauSummary(TripleNassauSummary s) {
     _tripleNassauSummary = s;
+    notifyListeners();
+  }
+
+  // ── Annandale Friday ───────────────────────────────────────────────────────
+
+  Future<void> loadAnnandaleFriday(int foursomeId) async {
+    try {
+      _annandaleFridaySummary =
+          await _client.getAnnandaleFridaySummary(foursomeId);
+      notifyListeners();
+    } on NetworkException {
+      // Offline — keep the previous summary around.
+    } catch (e, st) {
+      debugPrint('loadAnnandaleFriday($foursomeId) ERROR: $e\n$st');
+    }
+  }
+
+  void setAnnandaleFridaySummary(AnnandaleFridaySummary s) {
+    _annandaleFridaySummary = s;
     notifyListeners();
   }
 

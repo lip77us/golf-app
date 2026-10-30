@@ -1,0 +1,2499 @@
+{
+ "status": "in_progress",
+ "group_size": 6,
+ "handicap_mode": "gross",
+ "net_percent": 100,
+ "variant": "tiebreak_2nd",
+ "press_mode": "both",
+ "second_ball_tiebreak": true,
+ "claremont": false,
+ "auto_press": true,
+ "manual_press": true,
+ "bet_unit": 10.0,
+ "press_unit": 0.0,
+ "loss_cap": null,
+ "teams": [
+  [
+   {
+    "player_id": 1,
+    "name": "Bill",
+    "short_name": "B",
+    "playing_handicap": 8,
+    "team": 0
+   },
+   {
+    "player_id": 2,
+    "name": "Tom",
+    "short_name": "T",
+    "playing_handicap": 14,
+    "team": 0
+   }
+  ],
+  [
+   {
+    "player_id": 3,
+    "name": "Dave",
+    "short_name": "D",
+    "playing_handicap": 4,
+    "team": 1
+   },
+   {
+    "player_id": 4,
+    "name": "Ray",
+    "short_name": "R",
+    "playing_handicap": 18,
+    "team": 1
+   }
+  ],
+  [
+   {
+    "player_id": 5,
+    "name": "Jim",
+    "short_name": "J",
+    "playing_handicap": 11,
+    "team": 2
+   },
+   {
+    "player_id": 6,
+    "name": "Sam",
+    "short_name": "S",
+    "playing_handicap": 22,
+    "team": 2
+   }
+  ]
+ ],
+ "players": [
+  {
+   "player_id": 1,
+   "name": "Bill",
+   "short_name": "B",
+   "playing_handicap": 8,
+   "team": 0,
+   "matches": 2,
+   "net": 0.0
+  },
+  {
+   "player_id": 2,
+   "name": "Tom",
+   "short_name": "T",
+   "playing_handicap": 14,
+   "team": 0,
+   "matches": 2,
+   "net": 0.0
+  },
+  {
+   "player_id": 3,
+   "name": "Dave",
+   "short_name": "D",
+   "playing_handicap": 4,
+   "team": 1,
+   "matches": 2,
+   "net": 0.0
+  },
+  {
+   "player_id": 4,
+   "name": "Ray",
+   "short_name": "R",
+   "playing_handicap": 18,
+   "team": 1,
+   "matches": 2,
+   "net": 0.0
+  },
+  {
+   "player_id": 5,
+   "name": "Jim",
+   "short_name": "J",
+   "playing_handicap": 11,
+   "team": 2,
+   "matches": 2,
+   "net": 0.0
+  },
+  {
+   "player_id": 6,
+   "name": "Sam",
+   "short_name": "S",
+   "playing_handicap": 22,
+   "team": 2,
+   "matches": 2,
+   "net": 0.0
+  }
+ ],
+ "matches": [
+  {
+   "match": 1,
+   "game_type": "af_1",
+   "side1_ids": [
+    1,
+    2
+   ],
+   "side2_ids": [
+    3,
+    4
+   ],
+   "side1_team": 0,
+   "side2_team": 1,
+   "can_press": false,
+   "summary": {
+    "scorecard": {
+     "players": [
+      {
+       "player_id": 1,
+       "name": "Bill",
+       "short_name": "B",
+       "phcp_in_play": 0,
+       "team": 1
+      },
+      {
+       "player_id": 2,
+       "name": "Tom",
+       "short_name": "T",
+       "phcp_in_play": 0,
+       "team": 1
+      },
+      {
+       "player_id": 3,
+       "name": "Dave",
+       "short_name": "D",
+       "phcp_in_play": 0,
+       "team": 2
+      },
+      {
+       "player_id": 4,
+       "name": "Ray",
+       "short_name": "R",
+       "phcp_in_play": 0,
+       "team": 2
+      }
+     ],
+     "holes": [
+      {
+       "hole": 1,
+       "par": 4,
+       "stroke_index": 7,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": 4,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": 5,
+         "strokes": 0
+        },
+        {
+         "player_id": 3,
+         "gross": 4,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": 6,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 2,
+       "par": 4,
+       "stroke_index": 3,
+       "winner_id": null,
+       "winner_team": 1,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": 3,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": 5,
+         "strokes": 0
+        },
+        {
+         "player_id": 3,
+         "gross": 4,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": 6,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 3,
+       "par": 3,
+       "stroke_index": 15,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 4,
+       "par": 5,
+       "stroke_index": 9,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 5,
+       "par": 4,
+       "stroke_index": 1,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 6,
+       "par": 4,
+       "stroke_index": 13,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 7,
+       "par": 3,
+       "stroke_index": 17,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 8,
+       "par": 5,
+       "stroke_index": 11,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 9,
+       "par": 4,
+       "stroke_index": 5,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 10,
+       "par": 4,
+       "stroke_index": 8,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 11,
+       "par": 4,
+       "stroke_index": 4,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 12,
+       "par": 3,
+       "stroke_index": 16,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 13,
+       "par": 5,
+       "stroke_index": 10,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 14,
+       "par": 4,
+       "stroke_index": 2,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 15,
+       "par": 4,
+       "stroke_index": 14,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 16,
+       "par": 3,
+       "stroke_index": 18,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 17,
+       "par": 5,
+       "stroke_index": 12,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 18,
+       "par": 4,
+       "stroke_index": 6,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      }
+     ],
+     "holes_in_play": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+     ]
+    },
+    "status": "in_progress",
+    "game_type": "af_1",
+    "variant": "tiebreak_2nd",
+    "handicap_mode": "gross",
+    "net_percent": 100,
+    "press_mode": "both",
+    "bet_unit": 10.0,
+    "press_unit": 0.0,
+    "play_front": true,
+    "play_back": true,
+    "play_overall": true,
+    "single_match": false,
+    "teams": {
+     "team1": [
+      {
+       "player_id": 1,
+       "name": "Bill",
+       "short_name": "B",
+       "phcp_in_play": 0
+      },
+      {
+       "player_id": 2,
+       "name": "Tom",
+       "short_name": "T",
+       "phcp_in_play": 0
+      }
+     ],
+     "team2": [
+      {
+       "player_id": 3,
+       "name": "Dave",
+       "short_name": "D",
+       "phcp_in_play": 0
+      },
+      {
+       "player_id": 4,
+       "name": "Ray",
+       "short_name": "R",
+       "phcp_in_play": 0
+      }
+     ]
+    },
+    "front9": {
+     "result": null,
+     "margin": 2,
+     "holes_played": 2,
+     "decided_margin": null,
+     "decided_remaining": null
+    },
+    "back9": {
+     "result": null,
+     "margin": 0,
+     "holes_played": 0,
+     "decided_margin": null,
+     "decided_remaining": null
+    },
+    "overall": {
+     "result": null,
+     "margin": 2,
+     "holes_played": 2,
+     "decided_margin": null,
+     "decided_remaining": null
+    },
+    "bottom_front9": null,
+    "bottom_back9": null,
+    "bottom_overall": null,
+    "presses": [
+     {
+      "nine": "front",
+      "press_type": "auto",
+      "start_hole": 3,
+      "end_hole": 9,
+      "result": null,
+      "margin": 0,
+      "holes_remaining": 0
+     }
+    ],
+    "bottom_presses": [],
+    "payouts": {
+     "front9": 0.0,
+     "back9": 0.0,
+     "overall": 0.0,
+     "presses": 0.0,
+     "top_total": 0.0,
+     "bottom_front9": 0.0,
+     "bottom_back9": 0.0,
+     "bottom_overall": 0.0,
+     "bottom_presses": 0,
+     "bottom_total": 0.0,
+     "total": 0.0,
+     "live_total": 20.0,
+     "loss_cap": null,
+     "total_capped": 0.0
+    },
+    "holes": [
+     {
+      "hole": 1,
+      "par": 4,
+      "stroke_index": 7,
+      "scores": [
+       {
+        "player_id": 1,
+        "gross": 4,
+        "strokes": 0
+       },
+       {
+        "player_id": 2,
+        "gross": 5,
+        "strokes": 0
+       },
+       {
+        "player_id": 3,
+        "gross": 4,
+        "strokes": 0
+       },
+       {
+        "player_id": 4,
+        "gross": 6,
+        "strokes": 0
+       },
+       {
+        "player_id": 5,
+        "gross": 5,
+        "strokes": 0
+       },
+       {
+        "player_id": 6,
+        "gross": 5,
+        "strokes": 0
+       }
+      ],
+      "winner": "team1",
+      "t1_net": 4,
+      "t2_net": 4,
+      "t1_2nd_net": 5,
+      "t2_2nd_net": 6,
+      "front9_margin": 1,
+      "back9_margin": null,
+      "overall_margin": 1,
+      "bottom_delta": null,
+      "bottom_front9_margin": null,
+      "bottom_back9_margin": null,
+      "bottom_overall_margin": null
+     },
+     {
+      "hole": 2,
+      "par": 4,
+      "stroke_index": 3,
+      "scores": [
+       {
+        "player_id": 1,
+        "gross": 3,
+        "strokes": 0
+       },
+       {
+        "player_id": 2,
+        "gross": 5,
+        "strokes": 0
+       },
+       {
+        "player_id": 3,
+        "gross": 4,
+        "strokes": 0
+       },
+       {
+        "player_id": 4,
+        "gross": 6,
+        "strokes": 0
+       },
+       {
+        "player_id": 5,
+        "gross": 5,
+        "strokes": 0
+       },
+       {
+        "player_id": 6,
+        "gross": 5,
+        "strokes": 0
+       }
+      ],
+      "winner": "team1",
+      "t1_net": 3,
+      "t2_net": 4,
+      "t1_2nd_net": 5,
+      "t2_2nd_net": 6,
+      "front9_margin": 2,
+      "back9_margin": null,
+      "overall_margin": 2,
+      "bottom_delta": null,
+      "bottom_front9_margin": null,
+      "bottom_back9_margin": null,
+      "bottom_overall_margin": null
+     }
+    ],
+    "can_press": true,
+    "press_available_nine": "front",
+    "phantom": null,
+    "team1_colour": "Red",
+    "team2_colour": "Blue"
+   }
+  },
+  {
+   "match": 2,
+   "game_type": "af_2",
+   "side1_ids": [
+    1,
+    2
+   ],
+   "side2_ids": [
+    5,
+    6
+   ],
+   "side1_team": 0,
+   "side2_team": 2,
+   "can_press": false,
+   "summary": {
+    "scorecard": {
+     "players": [
+      {
+       "player_id": 1,
+       "name": "Bill",
+       "short_name": "B",
+       "phcp_in_play": 0,
+       "team": 1
+      },
+      {
+       "player_id": 2,
+       "name": "Tom",
+       "short_name": "T",
+       "phcp_in_play": 0,
+       "team": 1
+      },
+      {
+       "player_id": 5,
+       "name": "Jim",
+       "short_name": "J",
+       "phcp_in_play": 0,
+       "team": 2
+      },
+      {
+       "player_id": 6,
+       "name": "Sam",
+       "short_name": "S",
+       "phcp_in_play": 0,
+       "team": 2
+      }
+     ],
+     "holes": [
+      {
+       "hole": 1,
+       "par": 4,
+       "stroke_index": 7,
+       "winner_id": null,
+       "winner_team": 1,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": 4,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": 5,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": 5,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": 5,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 2,
+       "par": 4,
+       "stroke_index": 3,
+       "winner_id": null,
+       "winner_team": 1,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": 3,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": 5,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": 5,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": 5,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 3,
+       "par": 3,
+       "stroke_index": 15,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 4,
+       "par": 5,
+       "stroke_index": 9,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 5,
+       "par": 4,
+       "stroke_index": 1,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 6,
+       "par": 4,
+       "stroke_index": 13,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 7,
+       "par": 3,
+       "stroke_index": 17,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 8,
+       "par": 5,
+       "stroke_index": 11,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 9,
+       "par": 4,
+       "stroke_index": 5,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 10,
+       "par": 4,
+       "stroke_index": 8,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 11,
+       "par": 4,
+       "stroke_index": 4,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 12,
+       "par": 3,
+       "stroke_index": 16,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 13,
+       "par": 5,
+       "stroke_index": 10,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 14,
+       "par": 4,
+       "stroke_index": 2,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 15,
+       "par": 4,
+       "stroke_index": 14,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 16,
+       "par": 3,
+       "stroke_index": 18,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 17,
+       "par": 5,
+       "stroke_index": 12,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 18,
+       "par": 4,
+       "stroke_index": 6,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 1,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 2,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      }
+     ],
+     "holes_in_play": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+     ]
+    },
+    "status": "in_progress",
+    "game_type": "af_2",
+    "variant": "tiebreak_2nd",
+    "handicap_mode": "gross",
+    "net_percent": 100,
+    "press_mode": "both",
+    "bet_unit": 10.0,
+    "press_unit": 0.0,
+    "play_front": true,
+    "play_back": true,
+    "play_overall": true,
+    "single_match": false,
+    "teams": {
+     "team1": [
+      {
+       "player_id": 1,
+       "name": "Bill",
+       "short_name": "B",
+       "phcp_in_play": 0
+      },
+      {
+       "player_id": 2,
+       "name": "Tom",
+       "short_name": "T",
+       "phcp_in_play": 0
+      }
+     ],
+     "team2": [
+      {
+       "player_id": 5,
+       "name": "Jim",
+       "short_name": "J",
+       "phcp_in_play": 0
+      },
+      {
+       "player_id": 6,
+       "name": "Sam",
+       "short_name": "S",
+       "phcp_in_play": 0
+      }
+     ]
+    },
+    "front9": {
+     "result": null,
+     "margin": 2,
+     "holes_played": 2,
+     "decided_margin": null,
+     "decided_remaining": null
+    },
+    "back9": {
+     "result": null,
+     "margin": 0,
+     "holes_played": 0,
+     "decided_margin": null,
+     "decided_remaining": null
+    },
+    "overall": {
+     "result": null,
+     "margin": 2,
+     "holes_played": 2,
+     "decided_margin": null,
+     "decided_remaining": null
+    },
+    "bottom_front9": null,
+    "bottom_back9": null,
+    "bottom_overall": null,
+    "presses": [
+     {
+      "nine": "front",
+      "press_type": "auto",
+      "start_hole": 3,
+      "end_hole": 9,
+      "result": null,
+      "margin": 0,
+      "holes_remaining": 0
+     }
+    ],
+    "bottom_presses": [],
+    "payouts": {
+     "front9": 0.0,
+     "back9": 0.0,
+     "overall": 0.0,
+     "presses": 0.0,
+     "top_total": 0.0,
+     "bottom_front9": 0.0,
+     "bottom_back9": 0.0,
+     "bottom_overall": 0.0,
+     "bottom_presses": 0,
+     "bottom_total": 0.0,
+     "total": 0.0,
+     "live_total": 20.0,
+     "loss_cap": null,
+     "total_capped": 0.0
+    },
+    "holes": [
+     {
+      "hole": 1,
+      "par": 4,
+      "stroke_index": 7,
+      "scores": [
+       {
+        "player_id": 1,
+        "gross": 4,
+        "strokes": 0
+       },
+       {
+        "player_id": 2,
+        "gross": 5,
+        "strokes": 0
+       },
+       {
+        "player_id": 3,
+        "gross": 4,
+        "strokes": 0
+       },
+       {
+        "player_id": 4,
+        "gross": 6,
+        "strokes": 0
+       },
+       {
+        "player_id": 5,
+        "gross": 5,
+        "strokes": 0
+       },
+       {
+        "player_id": 6,
+        "gross": 5,
+        "strokes": 0
+       }
+      ],
+      "winner": "team1",
+      "t1_net": 4,
+      "t2_net": 5,
+      "t1_2nd_net": 5,
+      "t2_2nd_net": 5,
+      "front9_margin": 1,
+      "back9_margin": null,
+      "overall_margin": 1,
+      "bottom_delta": null,
+      "bottom_front9_margin": null,
+      "bottom_back9_margin": null,
+      "bottom_overall_margin": null
+     },
+     {
+      "hole": 2,
+      "par": 4,
+      "stroke_index": 3,
+      "scores": [
+       {
+        "player_id": 1,
+        "gross": 3,
+        "strokes": 0
+       },
+       {
+        "player_id": 2,
+        "gross": 5,
+        "strokes": 0
+       },
+       {
+        "player_id": 3,
+        "gross": 4,
+        "strokes": 0
+       },
+       {
+        "player_id": 4,
+        "gross": 6,
+        "strokes": 0
+       },
+       {
+        "player_id": 5,
+        "gross": 5,
+        "strokes": 0
+       },
+       {
+        "player_id": 6,
+        "gross": 5,
+        "strokes": 0
+       }
+      ],
+      "winner": "team1",
+      "t1_net": 3,
+      "t2_net": 5,
+      "t1_2nd_net": 5,
+      "t2_2nd_net": 5,
+      "front9_margin": 2,
+      "back9_margin": null,
+      "overall_margin": 2,
+      "bottom_delta": null,
+      "bottom_front9_margin": null,
+      "bottom_back9_margin": null,
+      "bottom_overall_margin": null
+     }
+    ],
+    "can_press": true,
+    "press_available_nine": "front",
+    "phantom": null,
+    "team1_colour": "Red",
+    "team2_colour": "Blue"
+   }
+  },
+  {
+   "match": 3,
+   "game_type": "af_3",
+   "side1_ids": [
+    3,
+    4
+   ],
+   "side2_ids": [
+    5,
+    6
+   ],
+   "side1_team": 1,
+   "side2_team": 2,
+   "can_press": false,
+   "summary": {
+    "scorecard": {
+     "players": [
+      {
+       "player_id": 3,
+       "name": "Dave",
+       "short_name": "D",
+       "phcp_in_play": 0,
+       "team": 1
+      },
+      {
+       "player_id": 4,
+       "name": "Ray",
+       "short_name": "R",
+       "phcp_in_play": 0,
+       "team": 1
+      },
+      {
+       "player_id": 5,
+       "name": "Jim",
+       "short_name": "J",
+       "phcp_in_play": 0,
+       "team": 2
+      },
+      {
+       "player_id": 6,
+       "name": "Sam",
+       "short_name": "S",
+       "phcp_in_play": 0,
+       "team": 2
+      }
+     ],
+     "holes": [
+      {
+       "hole": 1,
+       "par": 4,
+       "stroke_index": 7,
+       "winner_id": null,
+       "winner_team": 1,
+       "scores": [
+        {
+         "player_id": 3,
+         "gross": 4,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": 6,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": 5,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": 5,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 2,
+       "par": 4,
+       "stroke_index": 3,
+       "winner_id": null,
+       "winner_team": 1,
+       "scores": [
+        {
+         "player_id": 3,
+         "gross": 4,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": 6,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": 5,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": 5,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 3,
+       "par": 3,
+       "stroke_index": 15,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 4,
+       "par": 5,
+       "stroke_index": 9,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 5,
+       "par": 4,
+       "stroke_index": 1,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 6,
+       "par": 4,
+       "stroke_index": 13,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 7,
+       "par": 3,
+       "stroke_index": 17,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 8,
+       "par": 5,
+       "stroke_index": 11,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 9,
+       "par": 4,
+       "stroke_index": 5,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 10,
+       "par": 4,
+       "stroke_index": 8,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 11,
+       "par": 4,
+       "stroke_index": 4,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 12,
+       "par": 3,
+       "stroke_index": 16,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 13,
+       "par": 5,
+       "stroke_index": 10,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 14,
+       "par": 4,
+       "stroke_index": 2,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 15,
+       "par": 4,
+       "stroke_index": 14,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 16,
+       "par": 3,
+       "stroke_index": 18,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 17,
+       "par": 5,
+       "stroke_index": 12,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      },
+      {
+       "hole": 18,
+       "par": 4,
+       "stroke_index": 6,
+       "winner_id": null,
+       "winner_team": null,
+       "scores": [
+        {
+         "player_id": 3,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 4,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 5,
+         "gross": null,
+         "strokes": 0
+        },
+        {
+         "player_id": 6,
+         "gross": null,
+         "strokes": 0
+        }
+       ]
+      }
+     ],
+     "holes_in_play": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+     ]
+    },
+    "status": "in_progress",
+    "game_type": "af_3",
+    "variant": "tiebreak_2nd",
+    "handicap_mode": "gross",
+    "net_percent": 100,
+    "press_mode": "both",
+    "bet_unit": 10.0,
+    "press_unit": 0.0,
+    "play_front": true,
+    "play_back": true,
+    "play_overall": true,
+    "single_match": false,
+    "teams": {
+     "team1": [
+      {
+       "player_id": 3,
+       "name": "Dave",
+       "short_name": "D",
+       "phcp_in_play": 0
+      },
+      {
+       "player_id": 4,
+       "name": "Ray",
+       "short_name": "R",
+       "phcp_in_play": 0
+      }
+     ],
+     "team2": [
+      {
+       "player_id": 5,
+       "name": "Jim",
+       "short_name": "J",
+       "phcp_in_play": 0
+      },
+      {
+       "player_id": 6,
+       "name": "Sam",
+       "short_name": "S",
+       "phcp_in_play": 0
+      }
+     ]
+    },
+    "front9": {
+     "result": null,
+     "margin": 2,
+     "holes_played": 2,
+     "decided_margin": null,
+     "decided_remaining": null
+    },
+    "back9": {
+     "result": null,
+     "margin": 0,
+     "holes_played": 0,
+     "decided_margin": null,
+     "decided_remaining": null
+    },
+    "overall": {
+     "result": null,
+     "margin": 2,
+     "holes_played": 2,
+     "decided_margin": null,
+     "decided_remaining": null
+    },
+    "bottom_front9": null,
+    "bottom_back9": null,
+    "bottom_overall": null,
+    "presses": [
+     {
+      "nine": "front",
+      "press_type": "auto",
+      "start_hole": 3,
+      "end_hole": 9,
+      "result": null,
+      "margin": 0,
+      "holes_remaining": 0
+     }
+    ],
+    "bottom_presses": [],
+    "payouts": {
+     "front9": 0.0,
+     "back9": 0.0,
+     "overall": 0.0,
+     "presses": 0.0,
+     "top_total": 0.0,
+     "bottom_front9": 0.0,
+     "bottom_back9": 0.0,
+     "bottom_overall": 0.0,
+     "bottom_presses": 0,
+     "bottom_total": 0.0,
+     "total": 0.0,
+     "live_total": 20.0,
+     "loss_cap": null,
+     "total_capped": 0.0
+    },
+    "holes": [
+     {
+      "hole": 1,
+      "par": 4,
+      "stroke_index": 7,
+      "scores": [
+       {
+        "player_id": 1,
+        "gross": 4,
+        "strokes": 0
+       },
+       {
+        "player_id": 2,
+        "gross": 5,
+        "strokes": 0
+       },
+       {
+        "player_id": 3,
+        "gross": 4,
+        "strokes": 0
+       },
+       {
+        "player_id": 4,
+        "gross": 6,
+        "strokes": 0
+       },
+       {
+        "player_id": 5,
+        "gross": 5,
+        "strokes": 0
+       },
+       {
+        "player_id": 6,
+        "gross": 5,
+        "strokes": 0
+       }
+      ],
+      "winner": "team1",
+      "t1_net": 4,
+      "t2_net": 5,
+      "t1_2nd_net": 6,
+      "t2_2nd_net": 5,
+      "front9_margin": 1,
+      "back9_margin": null,
+      "overall_margin": 1,
+      "bottom_delta": null,
+      "bottom_front9_margin": null,
+      "bottom_back9_margin": null,
+      "bottom_overall_margin": null
+     },
+     {
+      "hole": 2,
+      "par": 4,
+      "stroke_index": 3,
+      "scores": [
+       {
+        "player_id": 1,
+        "gross": 3,
+        "strokes": 0
+       },
+       {
+        "player_id": 2,
+        "gross": 5,
+        "strokes": 0
+       },
+       {
+        "player_id": 3,
+        "gross": 4,
+        "strokes": 0
+       },
+       {
+        "player_id": 4,
+        "gross": 6,
+        "strokes": 0
+       },
+       {
+        "player_id": 5,
+        "gross": 5,
+        "strokes": 0
+       },
+       {
+        "player_id": 6,
+        "gross": 5,
+        "strokes": 0
+       }
+      ],
+      "winner": "team1",
+      "t1_net": 4,
+      "t2_net": 5,
+      "t1_2nd_net": 6,
+      "t2_2nd_net": 5,
+      "front9_margin": 2,
+      "back9_margin": null,
+      "overall_margin": 2,
+      "bottom_delta": null,
+      "bottom_front9_margin": null,
+      "bottom_back9_margin": null,
+      "bottom_overall_margin": null
+     }
+    ],
+    "can_press": true,
+    "press_available_nine": "front",
+    "phantom": null,
+    "team1_colour": "Red",
+    "team2_colour": "Blue"
+   }
+  }
+ ]
+}

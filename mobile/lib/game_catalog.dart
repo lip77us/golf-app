@@ -450,10 +450,8 @@ const List<GameMeta> kGameCatalog = [
     // that work at this size (Skins, Spots, Stroke Play) can ride on it.
     allowsSideGames: false,
     hostsOverlaySideGames: true,
-    // Not in the picker until the create-round 5–6 option, the setup screen
-    // and score entry land. The size rule above already applies: a round
-    // that has the game seats six on one card whatever the picker shows.
-    enabled     : false,
+    // Scores through the shared score-entry screen, on the 40 Balls keypad,
+    // with its own tray once the hole is in.
   ),
   GameMeta(
     id          : GameIds.match18,
@@ -924,6 +922,18 @@ const List<GameMeta> kGameCatalog = [
 /// Look up metadata by game ID.  Returns null for unknown IDs.
 GameMeta? gameMeta(String id) => _kGameById[id];
 
+/// The "Who's playing?" value for a group of five or six — one segment, not
+/// two, because one game is played at either size and the teams step is
+/// where the difference shows.
+const String kFiveOrSix = '5-6';
+
+/// Whether [m] is offered under "5–6": it plays at five or six AND seats
+/// that many on one card. A game with no player cap still plays on a
+/// foursome's card, so it does not qualify.
+bool fitsFiveOrSix(GameMeta m) =>
+    !m.acrossGroups && m.maxGroupSize > 4 &&
+    (m.supportsSize(5) || m.supportsSize(6));
+
 /// The most golfers one card may hold in a round playing [active].
 ///
 /// Four, unless a game in the round seats more. The largest wins, because a
@@ -1131,7 +1141,9 @@ List<GameMeta> sideGamesForFilter(String? primaryId, String sizeFilter,
     {String? handicapMode}) {
   if (primaryId == null || sizeFilter == 'solo') return const [];
   final multiGroup = sizeFilter == 'groups';
-  final size = multiGroup ? 4 : (int.tryParse(sizeFilter) ?? 4);
+  final size = multiGroup ? 4
+      : sizeFilter == kFiveOrSix ? 6
+      : (int.tryParse(sizeFilter) ?? 4);
   return sideGamesFor(primaryId,
       size: size, multiGroup: multiGroup, handicapMode: handicapMode);
 }
@@ -1172,6 +1184,16 @@ List<GameMeta> sideGamesFor(String primaryId,
           (handicapMode == null || handicapMode == 'strokes_off')) {
         return false;
       }
+    }
+
+    // Annandale Friday is a group of 5 or 6, and only three side games work
+    // at that size for the whole group: Skins, Spots and Stroke Play. Their
+    // catalog sizes say 2–4 because that is a FOURSOME's range; under this
+    // primary the card is the game's, so the size check is the game's too.
+    // Subset matches are off — the three Nassaus already pair everybody up.
+    if (primaryId == GameIds.annandaleFriday) {
+      return const {GameIds.skins, GameIds.spots, GameIds.strokePlay}
+          .contains(g.id);
     }
 
     // SUBSET side games (docs/parallel-games.md): an independent bet over a

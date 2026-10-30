@@ -129,6 +129,13 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
     // solo games off every other picker — and keeps the multi-player Stroke
     // Play and Nassau, which share their names, out of this one.
     if (_isSolo) return !m.acrossGroups && m.supportsSize(1);
+    // Five or six is one segment: a game fits if it plays at either size
+    // AND seats that many on one card. Stroke Play and Stableford take any
+    // count, but on a foursome's card — six of them is two groups, which is
+    // not what "5–6" offers. So Annandale Friday is the one primary here.
+    if (_sizeFilter == kFiveOrSix) {
+      return fitsFiveOrSix(m);
+    }
     return !m.acrossGroups && m.supportsSize(int.parse(_sizeFilter));
   }
 
@@ -820,9 +827,15 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       }
     }
     // Validate each active game's player-count requirement from the catalog.
+    // A side game riding on a game that seats more than a foursome is played
+    // by the whole card, so the PRIMARY's size is the one that counts —
+    // otherwise Skins' foursome range refuses a sixth man in Annandale
+    // Friday's own group.
+    final primaryCard = gameMeta(_primaryGame ?? '')?.maxGroupSize ?? 4;
     for (final gameId in _activeGames) {
       final meta = gameMeta(gameId);
       if (meta == null) continue;
+      if (gameId != _primaryGame && primaryCard > 4) continue;
       final n = _playerTees.length;
       if (meta.exactPlayers != null && n != meta.exactPlayers) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1194,13 +1207,15 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
               (value: '2',      label: '2',             icon: null),
               (value: '3',      label: '3',             icon: null),
               (value: '4',      label: '4',             icon: null),
+              (value: kFiveOrSix, label: '5–6',         icon: null),
               (value: 'groups', label: 'Across groups', icon: null),
             ],
             // The handoff's widths: the digits pinned narrow, the two words
             // sharing what is left, with "Across groups" at 1.6x so it stays
             // on ONE line. Five equal segments wrapped it onto two.
             segmentWidth: (v) =>
-                (v == '2' || v == '3' || v == '4') ? 46.0 : null,
+                (v == '2' || v == '3' || v == '4') ? 46.0
+                    : v == kFiveOrSix ? 58.0 : null,
             segmentFlex: (v) => v == 'groups' ? 16 : 10,
             onChanged: (v) => setState(() {
               _sizeFilter = v;
@@ -1251,6 +1266,18 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
             const SizedBox(height: 6),
             Text(
               'Solo games are played against par.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          ],
+          // The 5–6 segment offers one game, so the line says why rather
+          // than leaving a single chip to look like a filter gone wrong.
+          if (_sizeFilter == kFiveOrSix &&
+              _filteredCasualGames.length == 1 &&
+              _filteredCasualGames.first.blurb != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              _filteredCasualGames.first.blurb!,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),

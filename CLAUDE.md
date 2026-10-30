@@ -6986,7 +6986,7 @@ Tests: `mobile/test/rabbit_board_test.dart` (17), `CarryTests` (9) and
 `Rolls on` is never claimed, and that carry stays zero-sum and never moves
 the total at risk.
 
-## Annandale Friday (`annandale_friday`) — ENGINE + API + group size done (mobile screens pending)
+## Annandale Friday (`annandale_friday`) — built (engine, API, group size, mobile)
 
 `~/Downloads/handoff-annandale-friday`. One group of **5 or 6** on one card;
 the teams make three better-ball Nassaus — three pairs each playing the other
@@ -7061,6 +7061,43 @@ first. Client mirror: `GameMeta.maxGroupSize` read through
 the card), used by the casual screen's `_nextAvailableGroup`. Tests:
 `api/test_group_size.py` (12), `mobile/test/group_size_test.dart` (5).
 
-The catalog entry is `enabled: false` until the create-round 5–6 option,
-the setup screen and score entry land. Still to do: those three, the
-leaderboard, and moving the guide from `/preview/` to `/games/` LAST.
+**Mobile.**
+- **Create round:** a `5–6` segment (`kFiveOrSix`) on Who's playing.
+  `fitsFiveOrSix` requires the game to seat more than four on ONE card, not
+  just accept the count — Stroke Play and Stableford take any number, and
+  under the plain size check they appeared here as primaries that would have
+  split six golfers into two groups. Annandale Friday is the one primary, with
+  its blurb under the chip. Side games under it are exactly Skins, Spots and
+  Stroke Play (`sideGamesFor`), and their foursome-sized `maxPlayers` is not
+  applied to a side game riding a primary that seats more.
+- **Setup** (`annandale_friday_setup_screen.dart`, `/annandale-friday-setup`):
+  Teams (team buttons per golfer, the matches box shows the three Nassaus or
+  the refusal sentence and gates Next), Nassau, Side games. Step 3 adds side
+  games through `client.addSideGame` and opens their setup via
+  `utils/side_game_routes.dart` — lifted out of `round_screen.dart` so the
+  hub and this step share one table. The team rules are
+  `utils/annandale_teams.dart`, the server's `shape_problem` /
+  `matches_for` word for word.
+- **Score entry** is the SHARED screen, not a dedicated one — so the sync
+  queue, combo-tee chip and Spots capture come for free (the dedicated
+  screens are where those get missed). `_keypadRound(rp)` is the one gate for
+  the 40 Balls keypad (40 Balls, or Annandale Friday as primary). Golfers are
+  ordered and headed by team; the stroke dots read the game's own handicap.
+  Once the hole's last score is in, `AnnandaleHoleTray` replaces the keypad:
+  each match's result and why (`net 4 v 5`, or `2nd ball 5 v 6`), the bets
+  after it, any press starting next hole, a Press button when the match's
+  `can_press`, and the skin. "Edit scores" or tapping a golfer brings the
+  keypad back for one score.
+- **Board:** `_AnnandaleFridayGroupCard` — match pills, the shared
+  `NassauBoard` with `showSides: false`, and a light net-position ledger off
+  the server's per-golfer `net`. The tab reads "Nassau".
+- Colours: `widgets/annandale_friday.dart` holds the team colours (pine,
+  clay, slate; a five's three is clay) for all three screens, plus light
+  tints for the dark tray.
+
+Tests: `mobile/test/annandale_friday_test.dart` (18), the tray against
+`test/fixtures/annandale_friday_hole2.json` — REAL engine output, not
+hand-written JSON.
+
+Still to do: the watch page, the Live Activity card, and moving the guide
+from `/preview/` to `/games/` LAST.

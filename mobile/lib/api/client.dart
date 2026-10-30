@@ -1906,6 +1906,64 @@ class ApiClient {
     return TripleNassauSummary.fromJson(data as Map<String, dynamic>);
   }
 
+  // ---- Annandale Friday (a group of 5 or 6, three better-ball Nassaus) ----
+
+  Future<AnnandaleFridaySummary> getAnnandaleFridaySummary(int foursomeId) async {
+    final data = await _get('/foursomes/$foursomeId/annandale-friday/');
+    return AnnandaleFridaySummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// GET …/annandale-friday/setup/ — the saved config, or the defaults with
+  /// `configured: false`, so the setup screen opens on what the round gets.
+  Future<Map<String, dynamic>> getAnnandaleFridaySetup(int foursomeId) async {
+    final data = await _get('/foursomes/$foursomeId/annandale-friday/setup/');
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  /// POST …/annandale-friday/setup/ — one set of options for all three
+  /// Nassaus. A split that does not fit 5 or 6 comes back as an
+  /// [ApiException] whose message is the setup screen's own sentence.
+  Future<AnnandaleFridaySummary> postAnnandaleFridaySetup(
+    int foursomeId, {
+    required List<List<int>> teams,
+    String  handicapMode       = 'strokes_off',
+    int     netPercent         = 100,
+    bool    secondBallTiebreak = true,
+    bool    claremont          = false,
+    bool    autoPress          = true,
+    bool    manualPress        = false,
+    double  pressUnit          = 0.0,
+    double? lossCap,
+    double? betUnit,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/annandale-friday/setup/', {
+      'teams'               : teams,
+      'handicap_mode'       : handicapMode,
+      'net_percent'         : netPercent,
+      'second_ball_tiebreak': secondBallTiebreak,
+      'claremont'           : claremont,
+      'auto_press'          : autoPress,
+      'manual_press'        : manualPress,
+      'press_unit'          : pressUnit.toStringAsFixed(2),
+      'loss_cap'            : lossCap?.toStringAsFixed(2),
+      if (betUnit != null) 'bet_unit': betUnit.toStringAsFixed(2),
+    });
+    return AnnandaleFridaySummary.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// POST …/annandale-friday/press/ — a manual press in ONE match (1–3).
+  Future<AnnandaleFridaySummary> postAnnandaleFridayPress(
+    int foursomeId, {
+    required int match,
+    required int startHole,
+  }) async {
+    final data = await _post('/foursomes/$foursomeId/annandale-friday/press/', {
+      'match'     : match,
+      'start_hole': startHole,
+    });
+    return AnnandaleFridaySummary.fromJson(data as Map<String, dynamic>);
+  }
+
   // ---- Sixes ----
 
   Future<Map<String, dynamic>> getSixes(int foursomeId) async {

@@ -104,6 +104,8 @@ class CasualRoundLaunch {
       return ('/multi-skins-setup', roundArg());
     case GameIds.tripleNassau:
       return ('/triple-nassau-setup', fsArg());
+    case GameIds.annandaleFriday:
+      return ('/annandale-friday-setup', fsArg());
     case GameIds.nassau:
       return ('/nassau-setup', fsArg());
     case GameIds.match18:

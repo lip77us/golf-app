@@ -39,6 +39,7 @@ import '../utils/nine_totals.dart';
 import '../utils/skins_board_model.dart';
 import '../widgets/skins_board.dart';
 import '../utils/nassau_board_model.dart';
+import '../widgets/annandale_friday.dart';
 import '../widgets/nassau_board.dart';
 import '../widgets/game_switcher.dart';
 import '../widgets/game_settings_strip.dart';
@@ -753,6 +754,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
     // viewer's own group first.
     if (g == 'triple_cup') return 'Cup Detail';
     if (g == 'match_18') return 'Singles Match';
+    // The packet's switcher reads "Nassau · Skins": the game's matches ARE
+    // Nassaus, and its side games never include a plain Nassau to collide
+    // with (`sideGamesFor` offers Skins, Spots and Stroke Play only).
+    if (g == 'annandale_friday') return 'Nassau';
     // A heads-up, Overall-only Nassau is a Singles Match — label it as such.
     // (2-v-2 Overall-only is Fourball, not a Singles Match, so require one
     // player per side.)  Skipped when a real match_18 tab is present, so the
@@ -828,7 +833,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
 
   bool _viewerIsInAnyFoursome(Leaderboard lb, int playerId) {
     for (final key in const ['triple_cup', 'nassau', 'match_18', 'quota_nassau',
-                              'triple_nassau', 'skins', 'sixes']) {
+                              'triple_nassau', 'annandale_friday', 'skins',
+                              'sixes']) {
       final g = lb.games[key];
       if (g == null) continue;
       final groups = ((g.data as Map?)?['by_group'] as List? ?? []);
@@ -979,6 +985,8 @@ class _GameView extends StatelessWidget {
         return _ByGroupView(data: data, builder: _QuotaNassauGroupCard.new);
       case 'triple_nassau':
         return _ByGroupView(data: data, builder: _TripleNassauGroupCard.new);
+      case 'annandale_friday':
+        return _ByGroupView(data: data, builder: _AnnandaleFridayGroupCard.new);
       case 'sixes':
         return _ByGroupView(data: data, builder: _SixesGroupCard.new);
       case 'points_531':
@@ -8116,6 +8124,257 @@ String _tnMoney(double v) {
   final n = a % 1 == 0 ? a.toStringAsFixed(0) : a.toStringAsFixed(2);
   if (v == 0) return '\$0';
   return '${v > 0 ? '+' : '−'}\$$n';
+}
+
+// ---------------------------------------------------------------------------
+// _AnnandaleFridayGroupCard — match pills, the shared board, net position
+// ---------------------------------------------------------------------------
+
+/// A group of 5 or 6 whose teams make three Nassaus. Built the way Triple
+/// Nassau's card is, and for the same reason: each match is already a full
+/// [NassauSummary], so a pill picks one and the shared [NassauBoard] draws
+/// it. There is no Annandale Friday board.
+///
+/// Colour is the TEAM's, not the golfer's — a side is a team, and in a five
+/// all three of the pair's opponents are clay. Same colours as setup and
+/// score entry (`widgets/annandale_friday.dart`).
+class _AnnandaleFridayGroupCard extends StatefulWidget {
+  final Map<String, dynamic> group;
+  const _AnnandaleFridayGroupCard({required this.group});
+
+  @override
+  State<_AnnandaleFridayGroupCard> createState() =>
+      _AnnandaleFridayGroupCardState();
+}
+
+class _AnnandaleFridayGroupCardState extends State<_AnnandaleFridayGroupCard> {
+  int? _picked;
+
+  @override
+  Widget build(BuildContext context) {
+    final raw = widget.group['summary'] as Map<String, dynamic>?;
+    final s = raw == null ? null : AnnandaleFridaySummary.fromJson(raw);
+    if (s == null || s.matches.isEmpty) {
+      return const Card(child: Padding(
+        padding: EdgeInsets.all(12),
+        child: Text('Annandale Friday not yet set up for this group.')));
+    }
+
+    final myPid = context.read<AuthProvider>().player?.id;
+    final picked = (_picked ?? _defaultMatch(s, myPid))
+        .clamp(0, s.matches.length - 1);
+    final boards = [
+      for (final m in s.matches)
+        NassauBoardData.fromSummary(
+          m.summary,
+          // The pill above already names the match.
+          showSides: false,
+          side0Colour: annandaleTeamColour(m.side1Team),
+          side1Colour: annandaleTeamColour(m.side2Team),
+        ),
+    ];
+    final single = widget.group['_single_group'] == true;
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (!single)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text('Group ${widget.group['group_number'] ?? ''}',
+              style: const TextStyle(fontWeight: FontWeight.bold)),
+        ),
+      const Padding(
+        padding: EdgeInsets.only(bottom: 6),
+        child: Text('MATCHES · TAP TO SEE ONE',
+            style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w800,
+                letterSpacing: 0.5, color: Halved.muted)),
+      ),
+      for (var i = 0; i < s.matches.length; i++)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: _AfMatchPill(
+            summary: s,
+            match: s.matches[i],
+            selected: i == picked,
+            onTap: () => setState(() => _picked = i),
+          ),
+        ),
+      const SizedBox(height: 4),
+      NassauBoard(data: boards[picked]),
+      const SizedBox(height: 10),
+      _AfNetPosition(
+        summary: s,
+        // Final only once every bet in all three matches has settled — the
+        // ledger totals all of them.
+        done: boards.every((b) => b.allDone),
+      ),
+    ]);
+  }
+
+  /// The reader's first match, else match 1 — a watcher is in none.
+  static int _defaultMatch(AnnandaleFridaySummary s, int? myPid) {
+    if (myPid == null) return 0;
+    final i = s.matches.indexWhere((m) => m.involves(myPid));
+    return i < 0 ? 0 : i;
+  }
+}
+
+/// One match: both sides on two lines with their team swatches, and the
+/// nine in play's status in the leading team's colour.
+class _AfMatchPill extends StatelessWidget {
+  const _AfMatchPill({
+    required this.summary,
+    required this.match,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AnnandaleFridaySummary summary;
+  final AnnandaleFridayMatch match;
+  final bool selected;
+  final VoidCallback onTap;
+
+  String _names(List<int> ids) => ids
+      .map((id) => summary.players
+          .where((p) => p.playerId == id).map((p) => p.label).firstOrNull ?? '?')
+      .join(' & ');
+
+  Widget _side(List<int> ids, int? team, bool leading) => Row(children: [
+        Container(
+          width: 9, height: 9,
+          decoration: BoxDecoration(
+              color: annandaleTeamColour(team),
+              borderRadius: BorderRadius.circular(2)),
+        ),
+        const SizedBox(width: 7),
+        Flexible(
+          child: Text(_names(ids),
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: leading ? FontWeight.w800 : FontWeight.w600,
+                  color: leading ? Halved.deepPine : Halved.muted)),
+        ),
+      ]);
+
+  @override
+  Widget build(BuildContext context) {
+    final n = match.summary;
+    // The nine being played: the back once a hole of it is in.
+    final back = n.back9.holesPlayed > 0;
+    final margin = back ? n.back9.margin : n.front9.margin;
+    final leadTeam = margin > 0 ? match.side1Team
+        : margin < 0 ? match.side2Team : null;
+    final thru = n.holes.length;
+    return Material(
+      color: Halved.card,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? Halved.deepPine : Halved.cardBorder,
+              width: selected ? 2 : 1.2,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
+            child: Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  _side(match.side1Ids, match.side1Team, margin > 0),
+                  const SizedBox(height: 3),
+                  _side(match.side2Ids, match.side2Team, margin < 0),
+                ]),
+              ),
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text(margin == 0 ? 'AS' : '${margin.abs()} UP',
+                    style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w800,
+                        color: leadTeam == null
+                            ? Halved.muted
+                            : annandaleTeamColour(leadTeam))),
+                Text(thru == 0
+                        ? 'not started'
+                        : '${back ? 'back' : 'front'} · thru $thru',
+                    style: const TextStyle(
+                        fontSize: 11.5, color: Halved.muted)),
+              ]),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Every bet each golfer is in, netted — the server's per-golfer figure, so
+/// it is the same number settlement uses. The only line on the screen that
+/// answers what a man owes; each board above is one match of his two or
+/// three.
+class _AfNetPosition extends StatelessWidget {
+  const _AfNetPosition({required this.summary, required this.done});
+
+  final AnnandaleFridaySummary summary;
+  final bool done;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        decoration: BoxDecoration(
+          color: Halved.card,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Halved.cardBorder),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 9, 14, 9),
+            decoration: const BoxDecoration(
+              color: Halved.pine,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(13)),
+            ),
+            child: Text('Net position · ${done ? 'Final' : 'now'}',
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+          for (final p in summary.players)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+              child: Row(children: [
+                Container(
+                  width: 9, height: 9,
+                  decoration: BoxDecoration(
+                      color: annandaleTeamColour(p.team),
+                      borderRadius: BorderRadius.circular(2)),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(p.label,
+                      style: const TextStyle(
+                          fontSize: 14.5, fontWeight: FontWeight.w700,
+                          color: Halved.deepPine)),
+                ),
+                Text('in ${p.matches}',
+                    style: const TextStyle(fontSize: 12, color: Halved.muted)),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 72,
+                  child: Text(_tnMoney(p.net),
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w800,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                          color: p.net > 0 ? Halved.pine
+                              : p.net < 0 ? Halved.clayInk : Halved.muted)),
+                ),
+              ]),
+            ),
+          const SizedBox(height: 4),
+        ]),
+      );
 }
 
 class _QuotaNassauGroupCard extends StatelessWidget {

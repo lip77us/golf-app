@@ -39,6 +39,9 @@ import 'package:golf_mobile/api/models.dart';
 /// silently skipped, which is the failure mode a hand-written list has.
 final Map<String, Object Function(Map<String, dynamic>)> _models = {
   'AccountInfo': (j) => AccountInfo.fromJson(j),
+  'AnnandaleFridayMatch': (j) => AnnandaleFridayMatch.fromJson(j),
+  'AnnandaleFridayPlayer': (j) => AnnandaleFridayPlayer.fromJson(j),
+  'AnnandaleFridaySummary': (j) => AnnandaleFridaySummary.fromJson(j),
   'AuthResult': (j) => AuthResult.fromJson(j),
   'BankerBankedHole': (j) => BankerBankedHole.fromJson(j),
   'BankerBetLine': (j) => BankerBetLine.fromJson(j),

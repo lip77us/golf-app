@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../game_catalog.dart';
+
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
@@ -124,9 +126,15 @@ class _SpotsSetupScreenState extends State<SpotsSetupScreen> {
     return fs.memberships.where((m) => !m.player.isPhantom).toList();
   }
 
+  /// Two to a card's size: four, or the whole card of a game that seats
+  /// more (Annandale Friday's 5 or 6) — `maxGroupSizeFor`, the same rule the
+  /// server's round setup uses, so this cannot refuse a golfer it seated.
+  int get _cardSize => maxGroupSizeFor(
+      context.read<RoundProvider>().round?.activeGames ?? const []);
+
   bool get _rosterValid {
     final n = _realMembers.length;
-    return n >= 2 && n <= 4;
+    return n >= 2 && n <= _cardSize;
   }
 
   /// At least one spot has to be in play, so Save is dead until there is one.
