@@ -1,0 +1,63 @@
+{
+  "pushed_by": "Paul (one-time bulk push)",
+  "date": "2026-10-30",
+  "base": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/",
+  "drafts": {
+    "2026-10-15-stableford-explainer-course": {
+      "media/stableford-explainer-course.mp4": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/video/stableford-explainer-2026-10-30.mp4",
+      "media/stableford-cover.jpg": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/stableford-cover-2026-10-30.jpg"
+    },
+    "2026-10-14-skins-explainer-course": {
+      "media/skins-explainer-course-v2.mp4": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/video/skins-explainer-2026-10-30.mp4",
+      "media/skins-cover.jpg": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/skins-cover-2026-10-30.jpg"
+    },
+    "2026-10-14-nassau-30-day": {
+      "media/nassau-30-day-v2.mp4": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/video/nassau-10-explainer-2026-10-30.mp4",
+      "media/nassau-cover.jpg": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/nassau-10-cover-2026-10-30.jpg"
+    },
+    "2026-10-27-team-cup-image-v2": {
+      "media/team-cup-v2-1080x1350.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/team-cup-v2-1080x1350-2026-10-30.png"
+    },
+    "2026-10-21-rabbit-explainer": {
+      "media/rabbit-explainer.mp4": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/video/rabbit-explainer-2026-10-30.mp4",
+      "media/rabbit-cover.jpg": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/rabbit-cover-2026-10-30.jpg"
+    },
+    "2026-10-14-skins-rules-card": {
+      "media/skins-rules-card-1080x1350.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/skins-rules-card-1080x1350-2026-10-30.png",
+      "media/skins-rules-card-1000x1500.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/skins-rules-card-1000x1500-2026-10-30.png"
+    },
+    "2026-10-21-nassau-press": {
+      "media/nassau-press.mp4": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/video/nassau-press-explainer-2026-10-30.mp4",
+      "media/nassau-press-cover.jpg": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/nassau-press-cover-2026-10-30.jpg"
+    },
+    "2026-10-21-rabbit-rules-card": {
+      "media/rabbit-rules-card-1080x1350.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/rabbit-rules-card-1080x1350-2026-10-30.png",
+      "media/rabbit-rules-card-1000x1500.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/rabbit-rules-card-1000x1500-2026-10-30.png"
+    },
+    "2026-10-08-carousel-first-tee": {
+      "media/a-01.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/carousel-first-tee-1-2026-10-30.png",
+      "media/a-02.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/carousel-first-tee-2-2026-10-30.png",
+      "media/a-03.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/carousel-first-tee-3-2026-10-30.png",
+      "media/a-04.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/carousel-first-tee-4-2026-10-30.png",
+      "media/a-05.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/carousel-first-tee-5-2026-10-30.png",
+      "media/a-06.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/carousel-first-tee-6-2026-10-30.png",
+      "media/a-07.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/carousel-first-tee-7-2026-10-30.png"
+    },
+    "2026-10-08-poll-wolf-17-18": {
+      "media/poll-wolf-feed.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/poll-wolf-feed-2026-10-30.png",
+      "media/poll-wolf-story.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/poll-wolf-story-2026-10-30.png"
+    },
+    "2026-10-07-wolf-rules-card": {
+      "media/wolf-rules-card-1080x1350.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/wolf-rules-card-1080x1350-2026-10-30.png",
+      "media/wolf-rules-card-1000x1500.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/wolf-rules-card-1000x1500-2026-10-30.png"
+    },
+    "2026-10-08-carousel-odd-number": {
+      "media/b-01.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/carousel-odd-number-1-2026-10-30.png",
+      "media/b-02.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/carousel-odd-number-2-2026-10-30.png",
+      "media/b-03.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/carousel-odd-number-3-2026-10-30.png",
+      "media/b-04.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/carousel-odd-number-4-2026-10-30.png",
+      "media/b-05.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/carousel-odd-number-5-2026-10-30.png",
+      "media/b-06.png": "https://cdn.jsdelivr.net/gh/lip77us/golf-app@social-media/image/carousel-odd-number-6-2026-10-30.png"
+    }
+  }
+}
