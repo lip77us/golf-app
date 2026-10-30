@@ -49,6 +49,11 @@ String _money(double v) {
   return '${v > 0 ? '+' : '−'}\$$n';
 }
 
+/// A share of a pool: `$20`, never `+$20`. The sign says won or lost against
+/// what you put in, and a share is not that — a winner paid $20 of a $60
+/// pool he put $10 into is up $10, and "+$20" claims twice that.
+String _share(double v) => '\$${_plain(v)}';
+
 String _plain(double v) {
   final a = v.abs();
   return a % 1 == 0 ? a.toStringAsFixed(0) : a.toStringAsFixed(2);
@@ -383,7 +388,8 @@ class _Ledger extends StatelessWidget {
                 alignment: Alignment.centerRight, child: _Label('\$'))),
           ]),
         ),
-        for (final g in data.ledger) _LedgerRow(golfer: g),
+        for (final g in data.ledger)
+          _LedgerRow(golfer: g, isPool: data.isPool),
         const SizedBox(height: 6),
         Container(
           width: double.infinity,
@@ -419,13 +425,15 @@ class _Ledger extends StatelessWidget {
 }
 
 class _LedgerRow extends StatelessWidget {
-  const _LedgerRow({required this.golfer});
+  const _LedgerRow({required this.golfer, this.isPool = false});
   final SkinsBoardGolfer golfer;
+  /// A pool shows each share, unsigned; per skin, the signed net.
+  final bool isPool;
 
   @override
   Widget build(BuildContext context) {
     final colour = Halved.golfer(golfer.colourIndex);
-    final up = golfer.net > 0;
+    final up = golfer.money > 0;
 
     return SizedBox(
       height: 44,
@@ -494,12 +502,12 @@ class _LedgerRow extends StatelessWidget {
                       ),
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 3),
-                      child: Text(_money(golfer.net),
+                      child: Text(isPool ? _share(golfer.money) : _money(golfer.money),
                           style: const TextStyle(
                               fontSize: 19, fontWeight: FontWeight.w700,
                               color: Halved.deepPine)),
                     )
-                  : Text(_money(golfer.net),
+                  : Text(isPool ? _share(golfer.money) : _money(golfer.money),
                       style: const TextStyle(
                           fontSize: 19, fontWeight: FontWeight.w700)),
             ),

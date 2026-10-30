@@ -17,6 +17,7 @@ SkinsSummary _skins({
   String minimum = 'none',
   bool steal = false,
   String payoutStyle = 'per_point',
+  double pool = 4.0,
 }) =>
     SkinsSummary.fromJson({
       'status': 'in_progress',
@@ -31,14 +32,16 @@ SkinsSummary _skins({
       'payout_style': payoutStyle,
       'players': players,
       'holes': holes,
-      'money': {'bet_unit': betUnit, 'pool': 4.0, 'total_skins': 0},
+      // The server sends the style INSIDE money; that is where it is read.
+      'money': {'bet_unit': betUnit, 'pool': pool, 'total_skins': 0,
+                'payout_style': payoutStyle},
     });
 
 Map<String, dynamic> _p(int id, String name,
-        {int won = 0, int junk = 0, double net = 0}) =>
+        {int won = 0, int junk = 0, double net = 0, double? payout}) =>
     {'player_id': id, 'name': name, 'short_name': name,
      'skins_won': won, 'junk_skins': junk, 'total_skins': won + junk,
-     'payout': net, 'net': net};
+     'payout': payout ?? net, 'net': net};
 
 Map<String, dynamic> _won(int h, int w, {int value = 1}) =>
     {'hole': h, 'par': 4, 'winner_id': w, 'skins_value': value,
@@ -128,6 +131,31 @@ void main() {
       expect(find.text('+\$1.50'), findsOneWidget);
       expect(find.text('−\$1.50'), findsOneWidget);   // U+2212, not a hyphen
       expect(find.text('+\$3'), findsNothing);
+    });
+
+    testWidgets('a pool shows each share, unsigned, adding up to the pool',
+        (t) async {
+      // Paul's round, 29 Oct 2026: $10 each, six golfers, three skins won.
+      // The board read +$10 / −$10 under "$60 pool".
+      await _pump(t, SkinsBoardData.fromSkins(_skins(
+        betUnit: 10, payoutStyle: 'pool', pool: 60,
+        players: [
+          _p(1, 'Larry', won: 1, payout: 20, net: 10),
+          _p(2, 'Paul',  won: 1, payout: 20, net: 10),
+          _p(3, 'Sean',  won: 1, payout: 20, net: 10),
+          _p(4, 'Jim',   payout: 0, net: -10),
+          _p(5, 'Ryan',  payout: 0, net: -10),
+          _p(6, 'Tyler', payout: 0, net: -10),
+        ],
+        holes: [_won(1, 1), _won(2, 2), _won(3, 3),
+                for (var h = 4; h <= 18; h++) _unplayed(h)],
+      )));
+      expect(find.text('\$60 pool'), findsOneWidget);
+      expect(find.text('\$20'), findsNWidgets(3));
+      expect(find.text('\$0'), findsNWidgets(3));
+      expect(find.text('+\$20'), findsNothing);
+      expect(find.text('+\$10'), findsNothing);
+      expect(find.text('−\$10'), findsNothing);
     });
 
     testWidgets('a golfer with nothing shows 0, not an empty cell',

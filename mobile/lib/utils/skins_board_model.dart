@@ -16,10 +16,18 @@ import '../api/models.dart';
 /// The design reference derives the money as
 /// `stake × (golfers × won − total)`. That is correct for per-point/all with
 /// no junk, no withdrawal and no loss cap, and wrong for pool mode — which we
-/// also support. `skins_summary` already emits a signed, zero-sum `net` that
-/// accounts for all of it, so a board that recomputed would be a second
-/// opinion about money. Same rule as `gross_to_par` and the skin-rules chip:
-/// one place decides, everywhere else renders.
+/// also support. The server's figures account for all of it, so a board that
+/// recomputed would be a second opinion about money. Same rule as
+/// `gross_to_par` and the skin-rules chip: one place decides, everywhere else
+/// renders.
+///
+/// **Which figure depends on the style, and that is the whole point of it.**
+/// In a POOL the column is each golfer's share of the pot, so it adds up to
+/// the pool printed above it: three winners of a $60 pool read $20 each, the
+/// rest $0. Per skin there is no pot, and the column is the signed net, which
+/// adds up to zero. The per-group board used to show the net in a pool too —
+/// +$10 / −$10 under "$60 pool", which sums to nothing anybody can check
+/// (Paul, 29 Oct 2026). The cross-group pool was already showing shares.
 ///
 /// ### Order
 ///
@@ -159,7 +167,8 @@ class SkinsBoardData {
             colourIndex: i,
             skinsWon:  s.players[i].skinsWon,
             junkSkins: s.players[i].junkSkins,
-            net:       s.players[i].net,
+            money:     s.payoutStyle == 'pool'
+                ? s.players[i].payout : s.players[i].net,
           ),
       ],
       holes: [
@@ -204,7 +213,7 @@ class SkinsBoardData {
             colourIndex: i,
             skinsWon:  s.players[i].skinsWon,
             junkSkins: 0,          // the pool has no junk
-            net:       s.players[i].payout,
+            money:     s.players[i].payout,   // a share of the pool
             thru:      s.players[i].thru,
           ),
       ],
@@ -244,7 +253,7 @@ class SkinsBoardGolfer {
     required this.colourIndex,
     required this.skinsWon,
     required this.junkSkins,
-    required this.net,
+    required this.money,
     this.thru,
   });
 
@@ -259,8 +268,10 @@ class SkinsBoardGolfer {
   /// is drawn differently rather than left out — a ledger whose ticks do not
   /// add up to what a golfer is paid on is worse than no ticks.
   final int junkSkins;
-  /// The SERVER's signed, zero-sum net. Never recomputed.
-  final double net;
+  /// The money column, verbatim from the server, never recomputed: his SHARE
+  /// of the pot in a pool (the column sums to the pool), his signed net per
+  /// skin (the column sums to zero).
+  final double money;
   /// How far round this golfer is — pool only, null in a single foursome.
   ///
   /// A cross-round pool spans groups playing at different paces, so a board

@@ -11,6 +11,8 @@ SkinsSummary _skins({
   String mode = 'net',
   double betUnit = 1.0,
   String rules = '',
+  String payoutStyle = 'per_point',
+  double pool = 4.0,
 }) =>
     SkinsSummary.fromJson({
       'status': 'in_progress',
@@ -23,15 +25,20 @@ SkinsSummary _skins({
       'skin_rules': rules,
       'players': players,
       'holes': holes,
-      'money': {'bet_unit': betUnit, 'pool': 4.0, 'total_skins': 0},
+      'money': {'bet_unit': betUnit, 'pool': pool, 'total_skins': 0,
+                'payout_style': payoutStyle},
     });
 
+/// `payout` defaults to `net`, which is what the server sends PER SKIN. In a
+/// pool they differ — payout is the share, net is share minus ante — and a
+/// helper that always made them equal is how the board came to show the
+/// wrong one for a pool with no test noticing.
 Map<String, dynamic> _p(int id, String name,
-        {int won = 0, int junk = 0, double net = 0}) =>
+        {int won = 0, int junk = 0, double net = 0, double? payout}) =>
     {
       'player_id': id, 'name': name, 'short_name': name,
       'skins_won': won, 'junk_skins': junk, 'total_skins': won + junk,
-      'payout': net, 'net': net,
+      'payout': payout ?? net, 'net': net,
     };
 
 /// `value` follows the engine: a carried hole stores the pot INCLUDING itself.
@@ -200,6 +207,40 @@ void main() {
       expect(d.golfers.first.colourIndex, 0);
     });
 
+    test('in a pool the column is each share, and adds up to the pool', () {
+      // The round from Paul's screenshot, 29 Oct 2026: six golfers ante $10,
+      // three skins won, one each. Each winner is paid $20 of the $60; the
+      // board showed his NET (+$10) and the losers' −$10, under "$60 pool".
+      final d = SkinsBoardData.fromSkins(_skins(
+        betUnit: 10, payoutStyle: 'pool', pool: 60,
+        players: [
+          _p(1, 'Larry', won: 1, payout: 20, net: 10),
+          _p(2, 'Paul',  won: 1, payout: 20, net: 10),
+          _p(3, 'Sean',  won: 1, payout: 20, net: 10),
+          _p(4, 'Jim',   payout: 0, net: -10),
+          _p(5, 'Ryan',  payout: 0, net: -10),
+          _p(6, 'Tyler', payout: 0, net: -10),
+        ],
+        holes: [
+          _unplayed(1), _won(2, 1), _won(3, 2), _won(4, 3),
+          for (var h = 5; h <= 18; h++) _unplayed(h),
+        ],
+      ));
+      expect(d.isPool, isTrue);
+      expect(d.ledger.map((g) => g.money), [20, 20, 20, 0, 0, 0]);
+      expect(d.ledger.fold<double>(0, (a, g) => a + g.money), d.pool);
+    });
+
+    test('per skin the column is the signed net, and adds up to zero', () {
+      final d = SkinsBoardData.fromSkins(_skins(
+        betUnit: 1, payoutStyle: 'per_point',
+        players: [_p(1, 'Paul', won: 2, net: 2), _p(2, 'Dave', net: -2)],
+        holes: [_won(1, 1), _won(2, 1),
+                for (var h = 3; h <= 18; h++) _unplayed(h)],
+      ));
+      expect(d.ledger.map((g) => g.money), [2, -2]);
+    });
+
     test('the money is the SERVER\'s net, not the design\'s formula', () {
       // stake 1, 2 golfers, Paul 3 of 3 skins: the reference formula would
       // say +$3.  Pool mode (or junk, or a withdrawal) makes it something
@@ -210,8 +251,8 @@ void main() {
                   _p(2, 'Dave', net: -1.5)],
         holes: [for (var h = 1; h <= 3; h++) _won(h, 1)],
       ));
-      expect(d.ledger.first.net, 1.5);
-      expect(d.ledger.last.net, -1.5);
+      expect(d.ledger.first.money, 1.5);
+      expect(d.ledger.last.money, -1.5);
     });
   });
 

@@ -6294,6 +6294,27 @@ Tests: `mobile/test/skins_board_model_test.dart` (18 — the walk, both shotgun
 cases, the pool, and the money) and `mobile/test/skins_board_test.dart` (16,
 including that both cards render the one board).
 
+#### In a pool, the column adds up to the pool
+Paul, 29 Oct 2026, on a six-man $10 pool with three skins won: the board
+read **+$10 / −$10** under **"$60 pool"** — numbers that sum to zero under a
+header promising sixty. The server was right (each winner's `payout` was
+$20, three of them, $60); the per-group board was showing each golfer's
+`net` (share minus his ante) instead.
+
+The board was designed for the share — the header comment already said the
+column "is already each golfer's share" — and the CROSS-GROUP pool path was
+feeding `payout`. Only `fromSkins` fed `net`, so one widget meant two things
+by "pool". Now:
+- **Pool:** `payout`, the share, shown UNSIGNED (`$20`, `$0`) — a "+$20"
+  claims twice what a winner gained on a $10 ante.
+- **Per skin:** the signed, zero-sum `net`, as before.
+
+The field is `SkinsBoardGolfer.money` (was `net`, which it no longer always
+is). **Why no test saw it:** both test helpers set `payout` and `net` to the
+same value, so nothing could tell them apart; the helpers take them
+separately now, and the pool test is the screenshot's round — verified to
+fail on the old line.
+
 ## The game switcher — four packets asked, none had built it
 
 `widgets/game_switcher.dart`. 40 Balls, Sixes, skins and Nassau all open with
