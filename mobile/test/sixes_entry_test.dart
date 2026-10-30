@@ -328,6 +328,27 @@ void main() {
           reason: 'and before the fallbacks, not after them');
     });
 
+    test('a card cannot survive the sides being set', () {
+      // Reported after a spin (30 Oct 2026): the group came back to hole 7
+      // and the teams-not-set band was still over it, because that hole's
+      // card had been fetched while the sides were unset. Setting them also
+      // REPOSITIONS the matches, so every held card can be describing a
+      // match that no longer exists.
+      final prov =
+          File('lib/providers/round_provider.dart').readAsStringSync();
+      final at = prov.indexOf('postSixesSegmentTeams(');
+      expect(at, greaterThan(0));
+      expect(prov.substring(at, prov.indexOf('return true;', at)),
+          contains('_sixesHoles.clear()'));
+    });
+
+    test('and the hole it lands on is fetched before you get there', () {
+      final at = src.indexOf('Start the group on the match they have just');
+      expect(at, greaterThan(0));
+      expect(src.substring(at, src.indexOf('\n  }', at)),
+          contains('loadSixesHole('));
+    });
+
     test('there is no dedicated Sixes score screen', () {
       final screens = Directory('lib/screens')
           .listSync()

@@ -710,6 +710,13 @@ class RoundProvider extends ChangeNotifier {
         team2Ids: team2Ids,
         teamSelectMethod: teamSelectMethod,
       );
+      // **Every hole card is stale now.** Setting the sides changes who is on
+      // them AND can reposition the matches, so a card held for any hole can
+      // be describing a match that no longer exists. Reported after a spin:
+      // the group came back to hole 7 and the teams-not-set band was still
+      // over it, because that hole's card had been fetched while the sides
+      // were unset (Paul, 30 Oct 2026).
+      _sixesHoles.clear();
       return true;
     } on NetworkException {
       _error = 'No connection — cannot set the teams while offline.';
@@ -734,6 +741,7 @@ class RoundProvider extends ChangeNotifier {
     try {
       _sixesSummary =
           await _client.postSixesExtraTeams(foursomeId, team1Ids, team2Ids);
+      _sixesHoles.clear();          // same staleness as a standard match
       return true;
     } on NetworkException {
       _error = 'No connection — cannot save extra match teams while offline.';

@@ -7484,6 +7484,16 @@ AND the two legal pairings.
 The extras auto-open is untouched — a different gate, and out of this
 packet's scope.
 
+**A hole card does not survive the sides being set.** Reported straight
+after: the group spun, came back to hole 7, and the band was still over it.
+The card for that hole had been fetched while the sides were unset, and
+nothing dropped it — so `setSixesSegmentTeams` (and `setExtraTeams`) clear
+`_sixesHoles` wholesale. Wholesale rather than just that match's holes,
+because setting the sides also REPOSITIONS the matches: any held card can be
+describing a match that no longer exists. The screen then fetches the hole it
+lands on before the group gets there, so the band does not flash back for a
+frame.
+
 ### The Sixes strokes card: every dot is filled
 
 A spent stroke was drawn hollow and the ones still to come filled. Two things

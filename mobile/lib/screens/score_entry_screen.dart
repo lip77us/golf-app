@@ -2495,8 +2495,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       ));
       return;
     }
-    // Start the group on the match they have just drawn.
+    // Start the group on the match they have just drawn, and fetch that
+    // hole's card before they get there — the provider has just dropped every
+    // card as stale, and without this the band comes back for a frame on a
+    // match that now has its sides.
     setState(() => _selectedHole = seg.startHole);
+    await rp.loadSixesHole(widget.foursomeId, seg.startHole);
   }
 
   Widget build(BuildContext context) {
