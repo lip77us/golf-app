@@ -152,6 +152,15 @@ class RabbitPlayersCard extends StatelessWidget {
   /// live on this row too, and they belong to the screen rather than here.
   final Widget Function(RabbitHolePlayer p)? rowExtras;
 
+  /// **What the group has actually typed**, which is not what the card says.
+  ///
+  /// The card is SERVER state and only moves when a hole is posted — so with
+  /// three of four scores in, nothing had been sent and the rows stayed empty
+  /// while the scorer was looking at the numbers he had just entered (Paul,
+  /// 30 Oct 2026). This is the screen's effective map: saved, queued and
+  /// unsaved merged, which is the same thing every other entry screen draws.
+  final Map<int, int>? scores;
+
   const RabbitPlayersCard({
     super.key,
     required this.card,
@@ -159,6 +168,7 @@ class RabbitPlayersCard extends StatelessWidget {
     this.activePlayerId,
     this.onTapPlayer,
     this.rowExtras,
+    this.scores,
   });
 
   @override
@@ -202,6 +212,22 @@ class RabbitPlayersCard extends StatelessWidget {
         for (final p in card.players) _row(p),
       ]),
     );
+  }
+
+  /// The gross on screen: what has been typed, falling back to the card.
+  int? _gross(RabbitHolePlayer p) {
+    final typed = scores?[p.playerId];
+    if (typed != null && typed > 0) return typed;
+    // A 0 in the map is a CLEARED score, not a missing one.
+    if (typed == 0) return null;
+    return p.gross;
+  }
+
+  /// His net follows the gross on screen rather than the card's, or a typed
+  /// score would sit above a stale net.
+  int? _net(RabbitHolePlayer p) {
+    final g = _gross(p);
+    return g == null ? null : g - p.strokes;
   }
 
   Widget _row(RabbitHolePlayer p) {
@@ -304,7 +330,7 @@ class RabbitPlayersCard extends StatelessWidget {
                 color: filled ? Colors.white70 : Halved.muted),
           ),
           TextSpan(
-            text: p.net?.toString() ?? '–',
+            text: _net(p)?.toString() ?? '–',
             style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
@@ -317,8 +343,8 @@ class RabbitPlayersCard extends StatelessWidget {
 
   Widget _scoreBox(RabbitHolePlayer p) {
     const w = 52.0, h = 52.0;
-    final empty = p.gross == null;
-    final body = empty
+    final gross = _gross(p);
+    final body = gross == null
         ? Container(
             width: w,
             height: h,
@@ -334,7 +360,7 @@ class RabbitPlayersCard extends StatelessWidget {
             ),
           )
         : ScoreNotation(
-            score: p.gross!,
+            score: gross,
             par: card.par ?? 4,
             strokes: netStyle ? p.strokes : 0,
             width: w,

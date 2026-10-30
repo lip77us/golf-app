@@ -294,6 +294,16 @@ void main() {
       expect(gate, contains('!_fortyBallsRound(rp)'));
     });
 
+    test('auto-advance does not carry the scorer past the tray', () {
+      // Sixes had the same defect Rabbit reported: the hole completes, the
+      // screen jumps to the next one, and the tray that reports the hole is
+      // never seen. 40 Balls already had this carve-out; it is widened to
+      // every game that ends its hole in a tray.
+      final at = src.indexOf('_saveAndAdvance(ctx, players, par);');
+      expect(at, greaterThan(0));
+      expect(src.substring(at - 400, at), contains('!_raisesTray(rp)'));
+    });
+
     test('the screen hides its own pager under the tray', () {
       // Two sets of arrows at the bottom is what a phone showed. The design
       // has the tray overlaying that row, and the tray's forward button can

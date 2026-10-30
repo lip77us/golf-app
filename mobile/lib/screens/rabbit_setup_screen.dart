@@ -373,20 +373,26 @@ class _RabbitSetupScreenState extends State<RabbitSetupScreen> {
           ),
           const SizedBox(height: 16),
 
-          // ── Extra rabbit (accumulate only) ──
+          // ── Rolls on (accumulate only) ──
+          //
+          // **Named for the RULE, not its by-product.** It was "Extra
+          // rabbit", which is what FALLS OUT of rolling on rather than the
+          // thing a group chooses — so anyone who wanted rolls-on had to find
+          // a switch named after the leftovers, with the actual rule buried
+          // in the subtitle. The board's chip says `Rolls on` too.
           if (_accumulate) ...[
             _Card(
-              title: 'Extra rabbit',
+              title: 'Rolls on',
               child: SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 value: _extraRabbits,
                 onChanged: (v) => setState(() => _extraRabbits = v),
-                title: const Text('Play the leftover holes for another rabbit'),
+                title: const Text('A rabbit that cannot be caught ends there'),
                 subtitle: const Text(
-                    'When a leg is decided early (the leader can’t be caught) the '
-                    'next leg starts on the very next hole, and any leftover holes '
-                    'start a fresh rabbit — up to two. A rabbit that runs a single '
-                    'hole is worth half the stake.'),
+                    'The next rabbit starts on the following hole and keeps its '
+                    'length. Any holes left at the end run as an extra rabbit — '
+                    'up to two, and half the stake if it is only one hole. '
+                    'Off, every rabbit plays its full range whatever the lead.'),
               ),
             ),
             const SizedBox(height: 16),

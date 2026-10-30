@@ -595,7 +595,9 @@ class RabbitTests(TestCase):
 class SettingsChipsTests(TestCase):
     """The board's settings strip, in the server's words.
 
-    `Carry` and `Rolls on` are deliberately absent — see `_settings_chips`.
+    *"Rabbit has lots of options not listed in the leaderboard bubbles"*
+    (Paul, 30 Oct 2026) — the strip has to carry every setting a group chose,
+    and a switch appears only when it is ON.
     """
 
     def setUp(self):
@@ -623,25 +625,49 @@ class SettingsChipsTests(TestCase):
         self.assertIn('2 × 9', self._chips(num_segments=2))
         self.assertIn('1 × 18', self._chips(num_segments=1))
 
-    def test_CARRY_and_ROLLS_ON_are_never_claimed(self):
-        """Design's packet lists both as setup options and neither exists.
-
-        `carry` appears nowhere in the engine — a loose rabbit pays nothing
-        and carries nothing — and rolling a decided rabbit forward is
-        unconditional rather than a switch. A chip for either would tell a
-        group it had chosen something it never did.
-        """
+    def test_a_switch_that_is_OFF_is_not_claimed(self):
+        """A group playing without carry or without rolls-on has not chosen
+        anything to report — and both default off."""
         for kw in ({'accumulate': True}, {'accumulate': False}):
-            chips = self._chips(num_segments=3, **kw)
-            joined = ' '.join(chips).lower()
+            joined = ' '.join(self._chips(num_segments=3, **kw)).lower()
             self.assertNotIn('carry', joined)
             self.assertNotIn('roll', joined)
 
-    def test_extra_rabbits_is_named_because_it_IS_a_switch(self):
-        self.assertIn('Extra rabbits',
-                      self._chips(num_segments=3, extra_rabbits=True))
-        self.assertNotIn('Extra rabbits',
-                         self._chips(num_segments=3, extra_rabbits=False))
+    def test_rolling_on_is_named_for_the_RULE(self):
+        """It was `Extra rabbits` — named for the by-product. The extra
+        rabbit is what falls out of rolling on, not the thing anybody
+        chose."""
+        on = self._chips(num_segments=3, extra_rabbits=True)
+        self.assertIn('Rolls on', on)
+        self.assertNotIn('Extra rabbits', on)
+        self.assertNotIn('Rolls on', self._chips(num_segments=3,
+                                                 extra_rabbits=False))
+
+    def test_carry_is_named_when_it_is_on(self):
+        self.assertIn('Carry', self._chips(num_segments=3, carry=True))
+
+    def test_where_the_strokes_FALL_is_a_choice_and_it_is_named(self):
+        """The guide calls it "a genuine choice, not a technicality":
+        spreading a seven-handicapper's strokes across the three rabbits
+        rather than onto the course's hardest holes is what keeps every
+        rabbit contested. It was missing from the strip entirely."""
+        self.assertIn('Strokes per rabbit',
+                      self._chips(num_segments=3, handicap_mode='net',
+                                  handicap_allocation='per_segment'))
+        self.assertIn('Strokes over the round',
+                      self._chips(num_segments=3, handicap_mode='net',
+                                  handicap_allocation='full_round'))
+
+    def test_a_gross_game_has_no_allocation_to_report(self):
+        # No strokes, so where they fall describes a choice with no effect.
+        joined = ' '.join(self._chips(num_segments=3, handicap_mode='gross'))
+        self.assertNotIn('Strokes per rabbit', joined)
+        self.assertNotIn('Strokes over the round', joined)
+
+    def test_the_stake_is_named_because_this_game_s_unit_is_plain(self):
+        self.round.bet_unit = 5
+        self.round.save(update_fields=['bet_unit'])
+        self.assertIn('$5 a rabbit', self._chips(num_segments=3))
 
 
 class CarryTests(TestCase):

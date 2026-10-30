@@ -95,6 +95,28 @@ void main() {
       expect(_allText(t), contains('net 4'));
     });
 
+    testWidgets('a typed score shows BEFORE the hole is posted', (t) async {
+      // The card is server state and only moves when a hole is posted, so
+      // with three of four in, the rows stayed empty while the scorer was
+      // looking at the numbers he had just entered (30 Oct 2026).
+      final card = _card('rabbit_hole9_live');
+      final out = card.players.firstWhere((p) => p.gross == null);
+      await _pump(t, RabbitPlayersCard(
+          card: card, netStyle: true, scores: {out.playerId: 7}));
+      final text = _allText(t);
+      expect(text, contains('7'));
+      // ...and his net follows it, rather than sitting stale beside it.
+      expect(text, contains('net ${7 - out.strokes}'));
+    });
+
+    testWidgets('a cleared score empties the box again', (t) async {
+      final card = _card('rabbit_hole9_lead_up');
+      final scored = card.players.firstWhere((p) => p.gross != null);
+      await _pump(t, RabbitPlayersCard(
+          card: card, netStyle: true, scores: {scored.playerId: 0}));
+      expect(_allText(t), contains('net –'));
+    });
+
     testWidgets('a hole still missing a score lights nothing', (t) async {
       final card = _card('rabbit_hole9_live');
       expect(card.holeComplete, isFalse);
@@ -218,6 +240,20 @@ void main() {
       expect(body.contains('handicapStrokes'), isFalse);
     });
 
+    test('auto-advance does not carry the scorer past the tray', () {
+      // The tray IS the end of the hole; its forward button is the advance.
+      final at = src.indexOf('autoAdvanceHole');
+      expect(at, greaterThan(0));
+      expect(src.substring(at - 700, at), contains('_card(context.read'));
+    });
+
+    test('and the rows draw what has been TYPED, not just what is saved', () {
+      final at = src.indexOf('RabbitPlayersCard(');
+      expect(at, greaterThan(0));
+      expect(src.substring(at, src.indexOf('netStyle:', at)),
+          contains('scores: scores'));
+    });
+
     test('the tray covers the pager rather than sitting above it', () {
       final at = src.indexOf('RabbitHoleTray(');
       expect(at, greaterThan(0));
@@ -230,6 +266,18 @@ void main() {
       // flight.
       expect(src, contains('if (card != null) ...['));
       expect(src, contains('_HoleScoreCard('));
+    });
+  });
+
+  group('the option is named for the rule', () {
+    test('the setup switch and the board chip both say Rolls on', () {
+      // It was "Extra rabbit" in both places — named after what falls out of
+      // the rule rather than the rule, so a group that wanted rolls-on had to
+      // find a switch named after the leftovers.
+      final setup =
+          File('lib/screens/rabbit_setup_screen.dart').readAsStringSync();
+      expect(setup, contains("title: 'Rolls on'"));
+      expect(setup.contains("title: 'Extra rabbit'"), isFalse);
     });
   });
 

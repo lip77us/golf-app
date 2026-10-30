@@ -602,16 +602,25 @@ def _phcp_in_play(mode, npct, phcp, low_phcp) -> int:
     return round_half_up(phcp * npct / 100)
 
 
-def _settings_chips(game, holes_in_play: int) -> list:
+def _settings_chips(game, holes_in_play: int, bet_unit=None) -> list:
     """The rules in force, in the server's words — see services/game_settings.
 
-    **`Rolls on` is NOT here**, and that is not an oversight: the design
-    packet lists it as a setup option and it is not one — rolling a rabbit
-    forward when it is decided early is unconditional. A chip for it would
-    tell a group it had chosen something it never did.
+    **Every setting a group chose is here.** Reported 30 Oct 2026: *"rabbit
+    has lots of options not listed in the leaderboard bubbles."* Three were
+    missing, and the biggest was the stroke ALLOCATION — which the game's own
+    guide calls "a genuine choice, not a technicality", because spreading a
+    seven-handicapper's strokes across the three rabbits rather than onto the
+    course's hardest holes is what keeps every rabbit contested.
 
-    `Carry` IS a switch now, and appears only when it is on: a group playing
-    without it has not chosen anything to report.
+    **`Rolls on` was absent on a false premise.** This docstring used to say
+    rolling a decided rabbit forward was unconditional and therefore nothing
+    a group had chosen. It is not: it is `extra_rabbits`, a switch that
+    defaults OFF, and with it off nothing rolls at all. The chip was there all
+    along under the name of its by-product — `Extra rabbits` — which is the
+    same mistake the setup switch makes.
+
+    A switch appears only when it is ON: a group playing without carry has not
+    chosen anything to report.
     """
     from services.game_settings import handicap_chip
 
@@ -619,6 +628,13 @@ def _settings_chips(game, holes_in_play: int) -> list:
     chip = handicap_chip(game.handicap_mode, game.net_percent)
     if chip:
         out.append(chip)
+    # Where those strokes FALL. Only when there are strokes to place — a
+    # gross game has no allocation to report, and a chip for one would be
+    # describing a choice with no effect.
+    if chip and game.handicap_mode != HandicapMode.GROSS:
+        out.append('Strokes per rabbit'
+                   if game.handicap_allocation == RabbitGame.ALLOC_PER_SEGMENT
+                   else 'Strokes over the round')
     out.append('Accumulate' if game.accumulate else 'Stop after one')
     # `3 x 6` — how the round is split. Read off the holes actually in play,
     # so a nine-hole round says `3 x 3` rather than inventing eighteen.
@@ -628,9 +644,19 @@ def _settings_chips(game, holes_in_play: int) -> list:
         if each:
             out.append(f'{n} \u00d7 {each}')
     if game.extra_rabbits:
-        out.append('Extra rabbits')
+        # Named for the RULE rather than its by-product. The extra rabbit is
+        # what falls out of rolling on, not the thing anybody chose.
+        out.append('Rolls on')
     if game.carry:
         out.append('Carry')
+    # The stake, because this game's unit is plain — a rabbit. `game_settings`
+    # leaves stakes out generically for the games whose unit is not (a hole, a
+    # skin, a point, a ball); Annandale Friday states its own for the same
+    # reason.
+    if bet_unit:
+        amount = float(bet_unit)
+        text = (f'{amount:.0f}' if amount == int(amount) else f'{amount:.2f}')
+        out.append(f'${text} a rabbit')
     return out
 
 
@@ -873,7 +899,7 @@ def rabbit_summary(foursome) -> dict:
         # the keys the summaries SHARE. How a rabbit is caught and how the
         # round is split are Rabbit's own rules, and the board's settings
         # strip is where Design puts them. Same escape hatch Solo uses.
-        'settings'     : _settings_chips(game, len(holes_out)),
+        'settings'     : _settings_chips(game, len(holes_out), entry),
         'segments'     : seg_out,
         'players'      : players_out,
         'holes'        : holes_out,

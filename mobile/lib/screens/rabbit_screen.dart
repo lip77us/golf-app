@@ -222,6 +222,14 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
       _saveHole(ctx, hole, players);
       return;
     }
+    // **A tray game saves and STAYS.** The tray IS the end of the hole —
+    // what it did to the rabbit, and what takes over — and its forward button
+    // is the advance. Auto-advance would carry the scorer straight past it,
+    // which is exactly what a phone showed (Paul, 30 Oct 2026): "there was no
+    // hole summary showing when I completed score entry. I have auto-advance
+    // on. That is no longer relevant when there is a score summary box."
+    // The keypad posts the hole itself, so nothing is left unsent.
+    if (_card(context.read<RoundProvider>()) != null) return;
     if (!context.read<SettingsProvider>().autoAdvanceHole) return;
     if (!_allScored(players, _effectiveScores(sc, hole))) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -637,6 +645,10 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
               const SizedBox(height: 12),
               RabbitPlayersCard(
                 card: card,
+                // Saved, queued and unsaved — the card alone is server state
+                // and would leave a typed score invisible until the hole is
+                // posted.
+                scores: scores,
                 netStyle: ctx.watch<SettingsProvider>().netStyleEntry,
                 activePlayerId: isComplete
                     ? null

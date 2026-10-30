@@ -1471,6 +1471,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         primary == GameIds.sixes;
   }
 
+  /// This hole ends in a TRAY — Annandale Friday's or Sixes'. Those read the
+  /// server's result for the hole, so the scorer stays on it to see one.
+  bool _raisesTray(RoundProvider rp) =>
+      rp.annandaleFridaySummary != null || _sixesCard(rp) != null;
+
   /// The Sixes card for the hole on screen, when this round is playing it.
   SixesHoleCard? _sixesCard(RoundProvider rp) {
     final games = _activeGames(rp.round);
@@ -3551,7 +3556,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                         // **40 Balls posts and STAYS.** Auto-advance would
                         // carry the scorer past the one thing this game asks
                         // him for; the pager then says what is missing.
-                        if (hole < 18 && !_fortyBallsRound(rp)) {
+                        // **A tray game posts and STAYS**, like 40 Balls.
+                        // The tray reports what the hole did and what takes
+                        // over; advancing past it is advancing past the
+                        // answer. Its own forward button is the advance.
+                        if (hole < 18 &&
+                            !_fortyBallsRound(rp) &&
+                            !_raisesTray(rp)) {
                           _saveAndAdvance(ctx, players, par);
                         } else {
                           _saveCurrentHole(ctx, players, par);

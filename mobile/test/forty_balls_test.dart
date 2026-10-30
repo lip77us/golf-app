@@ -810,7 +810,13 @@ void main() {
           reason: 'the pick only blocks once every net on the hole is in');
       expect(src.contains('allDone && !needsPick && !rp.submitting'), isTrue,
           reason: 'an outstanding pick disables `Hole N`, it does not rename it');
-      expect(src.contains("hole < 18 && !_fortyBallsRound(rp)"), isTrue,
+      // Bounded by the BRANCH rather than matched as a literal: the
+      // condition grew a third clause when the tray games needed the same
+      // carve-out, which says nothing about whether 40 Balls still has it.
+      final at = src.indexOf('if (hole < 18 &&');
+      expect(at, greaterThan(0));
+      expect(src.substring(at, src.indexOf('_saveAndAdvance', at)),
+          contains('!_fortyBallsRound(rp)'),
           reason: 'auto-advance must not carry the scorer past the pick');
     });
 

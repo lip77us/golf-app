@@ -7626,9 +7626,43 @@ Tests: `RabbitHoleCardTests` (20) + `RabbitFixtureRegenTests` (3) in
 `mobile/test/rabbit_entry_test.dart` (20) against four fixtures written by
 `REGEN_RABBIT_FIXTURES=1`.
 
+### Three from the phone, and two of them reach Sixes too
+
+- **A typed score was invisible.** The players card drew `p.gross` off the
+  CARD, which is SERVER state and only moves when a hole is posted — so with
+  three of four in, the rows stayed empty while the scorer looked at the
+  numbers he had just entered. It takes the screen's effective map now
+  (saved + queued + unsaved), and the net follows the gross on screen rather
+  than sitting stale beside it. A `0` in that map is a CLEARED score, not a
+  missing one.
+- **Auto-advance carried the scorer straight past the tray**, so no hole
+  summary ever appeared. Paul: *"that is no longer relevant when there is a
+  score summary box displayed after score entry."* **A tray game posts and
+  STAYS**, which is the carve-out 40 Balls already had, widened: the tray IS
+  the end of the hole and its forward button is the advance. Fixed in
+  `rabbit_screen` AND in `score_entry_screen`, where Sixes had the same
+  defect and nobody had got far enough to see it.
+- **The settings strip was missing options** — *"rabbit has lots of options
+  not listed in the leaderboard bubbles."* Three: the stroke **allocation**
+  (which the guide itself calls "a genuine choice, not a technicality", and
+  which was absent entirely), the **stake** (`$5 a rabbit`, the Annandale
+  precedent for a game whose unit is plain), and rolls-on, which was there
+  under the name of its by-product.
+
+### `Rolls on`, in both places
+
+Paul asked what the option should be called. It is the RULE; the extra rabbit
+is what falls out of it, and naming the switch after the leftovers is why the
+roll-on rule was buried in a subtitle. The setup card and the board chip both
+say `Rolls on` now, and a test holds them together.
+
+`_settings_chips`'s docstring claimed a chip for it would "tell a group it had
+chosen something it never did", on the same false premise this file carried —
+it is a switch, and it defaults off.
+
 **Not done:** the guide's extra-rabbit card already explained early finishes,
 so only the missing "holes 13–18" column needed fixing (separate commit). Not
-seen on a device.
+seen on a device since these three.
 
 ## Sixes score entry — `handoff-sixes-score-entry` (server done, bottom half wired)
 
@@ -7761,7 +7795,7 @@ Both guards are anchored on the GATE rather than on the comment above it —
 the Annandale one broke merely because that comment was reworded, and a guard
 that fails on a rewording is one that gets deleted.
 
-**FOUR fixed-window source guards broke in one session, none of them for a
+**FIVE fixed-string source guards broke in one session, none of them for a
 real reason** — and the fourth was one written that same day — `src.substring(at, at + 400 / 500 / 900 / 1400)`, each pushed past its
 window by a line inserted above the claim. A source guard is bounded by a
 LANDMARK (the next `onScore`, the function's own last line) or it reports
