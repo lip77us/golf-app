@@ -103,6 +103,13 @@ void main() {
       expect(find.text('2nd ball 5 v 6'), findsOneWidget);
     });
 
+    testWidgets('says the HOLE was won, not the match', (t) async {
+      // A bare "Won" read as though the match were over.
+      await mount(t, hole: 1, next: 2);
+      expect(find.text('Won'), findsNothing);
+      expect(find.text('Wins hole'), findsWidgets);
+    });
+
     testWidgets('announces the press that starts on the next hole',
         (t) async {
       await mount(t);

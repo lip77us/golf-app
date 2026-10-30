@@ -220,8 +220,11 @@ class AnnandaleHoleTray extends StatelessWidget {
             ),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            // "Won" is a pill in the WINNER's colour, as the reference draws
-            // it — the word alone does not say whose side.
+            // A pill in the WINNER's colour, as the reference draws it — the
+            // word alone does not say whose side. It names the HOLE: the
+            // reference's bare "Won" read as though the match were over
+            // (Paul, 29 Oct 2026). Same phrasing as the screen's own
+            // "Skins: Paul wins hole" banner.
             won
                 ? Container(
                     padding: const EdgeInsets.symmetric(
@@ -230,12 +233,12 @@ class AnnandaleHoleTray extends StatelessWidget {
                       color: annandaleTeamTint(winnerTeam),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: const Text('Won',
+                    child: const Text('Wins hole',
                         style: TextStyle(
                             fontWeight: FontWeight.w800,
                             color: Halved.deepPine)),
                   )
-                : const Text('Halved',
+                : const Text('Hole halved',
                     style: TextStyle(
                         fontWeight: FontWeight.w800, color: Colors.white)),
             const SizedBox(height: 2),
