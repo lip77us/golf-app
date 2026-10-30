@@ -131,6 +131,9 @@ class RoundProvider extends ChangeNotifier {
   Scorecard?       _scorecard;
   Leaderboard?     _leaderboard;
   SixesSummary?    _sixesSummary;
+  /// One entry per hole — the Sixes score-entry card. Keyed by hole because
+  /// the card IS one hole, unlike every other summary here.
+  final Map<int, SixesHoleCard> _sixesHoles = {};
   Points531Summary? _points531Summary;
   VegasSummary?    _vegasSummary;
   FourballSummary? _fourballSummary;
@@ -198,6 +201,7 @@ class RoundProvider extends ChangeNotifier {
   Scorecard?        get scorecard          => _scorecard;
   Leaderboard?      get leaderboard        => _leaderboard;
   SixesSummary?     get sixesSummary       => _sixesSummary;
+  SixesHoleCard?    sixesHole(int hole)    => _sixesHoles[hole];
   Points531Summary? get points531Summary   => _points531Summary;
   VegasSummary?     get vegasSummary        => _vegasSummary;
   FourballSummary?  get fourballSummary     => _fourballSummary;
@@ -271,6 +275,7 @@ class RoundProvider extends ChangeNotifier {
     _round                   = null;
     _scorecard               = null;
     _sixesSummary            = null;
+    _sixesHoles.clear();
     _points531Summary        = null;
     _skinsSummary            = null;
     _spotsSummary            = null;
@@ -407,6 +412,7 @@ class RoundProvider extends ChangeNotifier {
       _stablefordResult = null;
       _tripleCupSummary = null;
       _sixesSummary     = null;
+      _sixesHoles.clear();
       _points531Summary = null;
       _honorsSummary    = null;
       _wolfSummary      = null;
@@ -771,6 +777,26 @@ class RoundProvider extends ChangeNotifier {
     } finally {
       _loadingFourball = false;
       notifyListeners();
+    }
+  }
+
+  /// Fetch one hole's Sixes card.
+  ///
+  /// A save already brings the card back with it, so this is for a hole the
+  /// screen opens without posting. Silent on failure: the screen falls back
+  /// to drawing what it has, and a card that cannot be fetched must not stop
+  /// a group entering scores.
+  Future<void> loadSixesHole(int foursomeId, int hole) async {
+    try {
+      final card = await _client.getSixesHoleCard(foursomeId, hole);
+      if (card != null) {
+        _sixesHoles[hole] = card;
+        notifyListeners();
+      }
+    } on NetworkException {
+      // Offline — keep whatever is on screen.
+    } catch (e) {
+      debugPrint('loadSixesHole error: $e');
     }
   }
 
@@ -1309,10 +1335,18 @@ class RoundProvider extends ChangeNotifier {
 
   void _onScorePosted(
       int foursomeId, int holeNumber, Map<String, dynamic> response) {
-    if (foursomeId != _activeFoursomeId ||
-        !_annandaleResults.pending(holeNumber)) {
-      return;
+    if (foursomeId != _activeFoursomeId) return;
+
+    // Sixes' card comes back WITH the save, so the tray does not cost a
+    // second request. Read before the Annandale gate below, which returns
+    // early for every round that is not playing Annandale Friday.
+    final six = response['sixes_hole'];
+    if (six is Map<String, dynamic>) {
+      _sixesHoles[holeNumber] = SixesHoleCard.fromJson(six);
+      notifyListeners();
     }
+
+    if (!_annandaleResults.pending(holeNumber)) return;
     final af = response['annandale_friday'];
     final skins = response['skins'];
     if (af is Map<String, dynamic>) {

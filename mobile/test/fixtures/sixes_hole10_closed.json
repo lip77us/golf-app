@@ -1,0 +1,124 @@
+{
+  "hole": 10,
+  "par": 4,
+  "stroke_index": 8,
+  "yards": 395,
+  "nine": "back nine",
+  "match": {
+    "number": 2,
+    "start_hole": 7,
+    "end_hole": 12,
+    "is_extra": false,
+    "teams_set": true,
+    "team1": {
+      "player_ids": [
+        1,
+        2
+      ],
+      "names": [
+        "Paul",
+        "Sam"
+      ],
+      "short": "P & S"
+    },
+    "team2": {
+      "player_ids": [
+        3,
+        4
+      ],
+      "names": [
+        "Dave",
+        "Lee"
+      ],
+      "short": "D & L"
+    },
+    "up_before": 2,
+    "to_play": 3
+  },
+  "players": [
+    {
+      "player_id": 1,
+      "name": "Paul",
+      "short": "P",
+      "course_handicap": 6,
+      "team": 1,
+      "strokes": 0,
+      "gross": 4,
+      "net": 4,
+      "is_best": true
+    },
+    {
+      "player_id": 2,
+      "name": "Sam",
+      "short": "S",
+      "course_handicap": 14,
+      "team": 1,
+      "strokes": 0,
+      "gross": 5,
+      "net": 5,
+      "is_best": false
+    },
+    {
+      "player_id": 3,
+      "name": "Dave",
+      "short": "D",
+      "course_handicap": 9,
+      "team": 2,
+      "strokes": 0,
+      "gross": 5,
+      "net": 5,
+      "is_best": true
+    },
+    {
+      "player_id": 4,
+      "name": "Lee",
+      "short": "L",
+      "course_handicap": 18,
+      "team": 2,
+      "strokes": 0,
+      "gross": 6,
+      "net": 6,
+      "is_best": false
+    }
+  ],
+  "hole_complete": true,
+  "result": {
+    "winner": "T1",
+    "t1_net": 4,
+    "t2_net": 5,
+    "up_after": 3,
+    "left_after": 2,
+    "closed": true,
+    "margin_text": "3&2"
+  },
+  "next_match": {
+    "number": 3,
+    "start_hole": 11,
+    "teams_set": true,
+    "team1": {
+      "player_ids": [
+        1,
+        4
+      ],
+      "names": [
+        "Paul",
+        "Lee"
+      ],
+      "short": "P & L"
+    },
+    "team2": {
+      "player_ids": [
+        2,
+        3
+      ],
+      "names": [
+        "Sam",
+        "Dave"
+      ],
+      "short": "S & D"
+    },
+    "is_extra": false
+  },
+  "previous_match": null,
+  "bet_unit": 5.0
+}

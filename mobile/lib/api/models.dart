@@ -9155,3 +9155,285 @@ class CourseSearchResult {
 
   const CourseSearchResult({this.hits = const [], this.localOnly = false});
 }
+
+// ---------------------------------------------------------------------------
+// Sixes — one hole's score-entry card
+// ---------------------------------------------------------------------------
+
+/// A side of the match being played, as the hole card names it.
+class SixesSide {
+  final List<int> playerIds;
+  final List<String> names;
+
+  /// `Paul & Sam` — the server joins it, so the two surfaces that draw a side
+  /// cannot punctuate it differently.
+  final String short;
+
+  const SixesSide({
+    required this.playerIds,
+    required this.names,
+    required this.short,
+  });
+
+  bool get isSet => playerIds.isNotEmpty;
+
+  factory SixesSide.fromJson(Map<String, dynamic> j) => SixesSide(
+        playerIds: ((j['player_ids'] as List?) ?? const [])
+            .map((e) => e as int)
+            .toList(),
+        names: ((j['names'] as List?) ?? const [])
+            .map((e) => '$e')
+            .toList(),
+        short: (j['short'] as String?) ?? '',
+      );
+}
+
+/// One golfer's row on the hole.
+class SixesHolePlayer {
+  final int playerId;
+  final String name;
+  final String short;
+  final int courseHandicap;
+
+  /// 1, 2, or null while the match has no sides.
+  final int? team;
+  final int strokes;
+  final int? gross;
+  final int? net;
+
+  /// His net is his side's counting ball. Set on BOTH when they tie, and only
+  /// once every golfer is in — see the server.
+  final bool isBest;
+
+  const SixesHolePlayer({
+    required this.playerId,
+    required this.name,
+    required this.short,
+    required this.courseHandicap,
+    required this.team,
+    required this.strokes,
+    required this.gross,
+    required this.net,
+    required this.isBest,
+  });
+
+  factory SixesHolePlayer.fromJson(Map<String, dynamic> j) => SixesHolePlayer(
+        playerId: j['player_id'] as int,
+        name: (j['name'] as String?) ?? '',
+        short: (j['short'] as String?) ?? '',
+        courseHandicap: (j['course_handicap'] as num?)?.toInt() ?? 0,
+        team: (j['team'] as num?)?.toInt(),
+        strokes: (j['strokes'] as num?)?.toInt() ?? 0,
+        gross: (j['gross'] as num?)?.toInt(),
+        net: (j['net'] as num?)?.toInt(),
+        isBest: j['is_best'] as bool? ?? false,
+      );
+}
+
+/// What the hole did to the match.
+class SixesHoleOutcome {
+  /// `T1`, `T2` or `Halved`.
+  final String winner;
+  final int? t1Net;
+  final int? t2Net;
+
+  /// The match standing after this hole, from the side-1 point of view.
+  final int upAfter;
+  final int leftAfter;
+  final bool closed;
+
+  /// `3&2`, written by the server because a close-out notation is a rule.
+  final String? marginText;
+
+  const SixesHoleOutcome({
+    required this.winner,
+    required this.t1Net,
+    required this.t2Net,
+    required this.upAfter,
+    required this.leftAfter,
+    required this.closed,
+    required this.marginText,
+  });
+
+  bool get halved => winner == 'Halved';
+  /// The side that won the hole: 1, 2, or null when it was halved.
+  int? get winningSide => winner == 'T1' ? 1 : winner == 'T2' ? 2 : null;
+  /// The side that leads the match after it: 1, 2, or null at all square.
+  int? get leadingSide => upAfter > 0 ? 1 : upAfter < 0 ? 2 : null;
+
+  factory SixesHoleOutcome.fromJson(Map<String, dynamic> j) => SixesHoleOutcome(
+        winner: (j['winner'] as String?) ?? 'Halved',
+        t1Net: (j['t1_net'] as num?)?.toInt(),
+        t2Net: (j['t2_net'] as num?)?.toInt(),
+        upAfter: (j['up_after'] as num?)?.toInt() ?? 0,
+        leftAfter: (j['left_after'] as num?)?.toInt() ?? 0,
+        closed: j['closed'] as bool? ?? false,
+        marginText: j['margin_text'] as String?,
+      );
+}
+
+/// The pairing that takes over, offered only once this match is decided.
+class SixesNextMatch {
+  final int number;
+  final int? startHole;
+  final bool teamsSet;
+  final bool isExtra;
+  final SixesSide team1;
+  final SixesSide team2;
+
+  const SixesNextMatch({
+    required this.number,
+    required this.startHole,
+    required this.teamsSet,
+    required this.isExtra,
+    required this.team1,
+    required this.team2,
+  });
+
+  factory SixesNextMatch.fromJson(Map<String, dynamic> j) => SixesNextMatch(
+        number: (j['number'] as num?)?.toInt() ?? 0,
+        startHole: (j['start_hole'] as num?)?.toInt(),
+        teamsSet: j['teams_set'] as bool? ?? false,
+        isExtra: j['is_extra'] as bool? ?? false,
+        team1: SixesSide.fromJson(
+            (j['team1'] as Map?)?.cast<String, dynamic>() ?? const {}),
+        team2: SixesSide.fromJson(
+            (j['team2'] as Map?)?.cast<String, dynamic>() ?? const {}),
+      );
+}
+
+/// The match this hole belongs to.
+class SixesMatchInfo {
+  final int number;
+  final int startHole;
+  final int endHole;
+  final bool isExtra;
+  final bool teamsSet;
+  final SixesSide team1;
+  final SixesSide team2;
+
+  /// Standing BEFORE this hole, side 1's point of view.
+  final int upBefore;
+
+  /// Holes of this match still to play, including the one in front of you.
+  final int toPlay;
+
+  const SixesMatchInfo({
+    required this.number,
+    required this.startHole,
+    required this.endHole,
+    required this.isExtra,
+    required this.teamsSet,
+    required this.team1,
+    required this.team2,
+    required this.upBefore,
+    required this.toPlay,
+  });
+
+  int? get leadingSide => upBefore > 0 ? 1 : upBefore < 0 ? 2 : null;
+
+  factory SixesMatchInfo.fromJson(Map<String, dynamic> j) => SixesMatchInfo(
+        number: (j['number'] as num?)?.toInt() ?? 0,
+        startHole: (j['start_hole'] as num?)?.toInt() ?? 0,
+        endHole: (j['end_hole'] as num?)?.toInt() ?? 0,
+        isExtra: j['is_extra'] as bool? ?? false,
+        teamsSet: j['teams_set'] as bool? ?? false,
+        team1: SixesSide.fromJson(
+            (j['team1'] as Map?)?.cast<String, dynamic>() ?? const {}),
+        team2: SixesSide.fromJson(
+            (j['team2'] as Map?)?.cast<String, dynamic>() ?? const {}),
+        upBefore: (j['up_before'] as num?)?.toInt() ?? 0,
+        toPlay: (j['to_play'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// The match before this one, and how it finished — the sentence above the
+/// lock when this match has no sides yet. Null at every other moment.
+class SixesPreviousMatch {
+  final int number;
+  final int? startHole;
+  final int? endHole;
+
+  /// `Paul & Dave won 1 UP`, or `halved`. The server writes it, because the
+  /// close-out notation in `won 4&2` is a rule.
+  final String? result;
+
+  const SixesPreviousMatch({
+    required this.number,
+    required this.startHole,
+    required this.endHole,
+    required this.result,
+  });
+
+  factory SixesPreviousMatch.fromJson(Map<String, dynamic> j) =>
+      SixesPreviousMatch(
+        number: (j['number'] as num?)?.toInt() ?? 0,
+        startHole: (j['start_hole'] as num?)?.toInt(),
+        endHole: (j['end_hole'] as num?)?.toInt(),
+        result: j['result'] as String?,
+      );
+}
+
+/// Everything the Sixes score-entry screen draws for one hole.
+class SixesHoleCard {
+  final int hole;
+  final int? par;
+  final int? strokeIndex;
+  final int? yards;
+  final String nine;
+  final SixesMatchInfo match;
+  final List<SixesHolePlayer> players;
+  final bool holeComplete;
+  final SixesHoleOutcome? result;
+  final SixesNextMatch? nextMatch;
+  final SixesPreviousMatch? previousMatch;
+  final double? betUnit;
+
+  const SixesHoleCard({
+    required this.hole,
+    required this.par,
+    required this.strokeIndex,
+    required this.yards,
+    required this.nine,
+    required this.match,
+    required this.players,
+    required this.holeComplete,
+    required this.result,
+    required this.nextMatch,
+    required this.previousMatch,
+    required this.betUnit,
+  });
+
+  /// Golfers on a side, in roster order. Empty while the sides are unset,
+  /// which is what the screen tests before it tries to group them.
+  List<SixesHolePlayer> side(int n) =>
+      players.where((p) => p.team == n).toList();
+
+  factory SixesHoleCard.fromJson(Map<String, dynamic> j) => SixesHoleCard(
+        hole: (j['hole'] as num?)?.toInt() ?? 0,
+        par: (j['par'] as num?)?.toInt(),
+        strokeIndex: (j['stroke_index'] as num?)?.toInt(),
+        yards: (j['yards'] as num?)?.toInt(),
+        nine: (j['nine'] as String?) ?? '',
+        match: SixesMatchInfo.fromJson(
+            (j['match'] as Map?)?.cast<String, dynamic>() ?? const {}),
+        players: ((j['players'] as List?) ?? const [])
+            .map((e) => SixesHolePlayer.fromJson(
+                (e as Map).cast<String, dynamic>()))
+            .toList(),
+        holeComplete: j['hole_complete'] as bool? ?? false,
+        result: j['result'] == null
+            ? null
+            : SixesHoleOutcome.fromJson(
+                (j['result'] as Map).cast<String, dynamic>()),
+        nextMatch: j['next_match'] == null
+            ? null
+            : SixesNextMatch.fromJson(
+                (j['next_match'] as Map).cast<String, dynamic>()),
+        previousMatch: j['previous_match'] == null
+            ? null
+            : SixesPreviousMatch.fromJson(
+                (j['previous_match'] as Map).cast<String, dynamic>()),
+        betUnit: (j['bet_unit'] as num?)?.toDouble(),
+      );
+}

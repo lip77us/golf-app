@@ -23,8 +23,16 @@ import '../theme/halved_brand.dart';
 /// How a stroke count sits against par.
 enum ScoreShape { eagle, birdie, par, bogey, double }
 
-ScoreShape shapeForScore(int score, int par) {
-  final d = score - par;
+/// [strokes] is the handicap the golfer gets on this hole, and it moves the
+/// BASELINE rather than the score: a golfer with one stroke who makes 5 on a
+/// par 4 is drawn as a par. That is Net Style Entry, which `net_score_button`
+/// and `inline_score_picker` have always honoured — the keypad was the one
+/// surface left coding against bare par, so one golfer saw a par box in the
+/// picker and a bogey square on the keys for the same number.
+///
+/// Callers that do not pass it are unchanged.
+ScoreShape shapeForScore(int score, int par, {int strokes = 0}) {
+  final d = score - par - strokes;
   if (d <= -2) return ScoreShape.eagle;
   if (d == -1) return ScoreShape.birdie;
   if (d == 0) return ScoreShape.par;
@@ -54,6 +62,10 @@ class _Clay {
 class ScoreNotation extends StatelessWidget {
   final int score;
   final int par;
+
+  /// Strokes this golfer gets here; see [shapeForScore]. The caller decides
+  /// whether Net Style Entry is on, so a gross game passes 0.
+  final int strokes;
   final double width;
   final double height;
   final double fontSize;
@@ -63,6 +75,7 @@ class ScoreNotation extends StatelessWidget {
     super.key,
     required this.score,
     required this.par,
+    this.strokes = 0,
     this.width = double.infinity,
     this.height = 60,
     this.fontSize = 25,
@@ -71,7 +84,7 @@ class ScoreNotation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shape = shapeForScore(score, par);
+    final shape = shapeForScore(score, par, strokes: strokes);
     final rounded = shape == ScoreShape.eagle || shape == ScoreShape.birdie ||
         shape == ScoreShape.par;
 
@@ -165,6 +178,12 @@ class FortyBallsKeypad extends StatefulWidget {
   /// Strokes this golfer gets on this hole, for the `1 stroke · par 3` line.
   final int strokes;
 
+  /// When true the keys are coded against par PLUS this golfer's strokes, so
+  /// they recode as focus moves down the card. Read from Net Style Entry by
+  /// the caller rather than here, because the widget has no business knowing
+  /// which games offer strokes at all.
+  final bool netStyle;
+
   final ValueChanged<int> onScore;
   final VoidCallback onClear;
 
@@ -175,6 +194,7 @@ class FortyBallsKeypad extends StatefulWidget {
     required this.strokes,
     required this.onScore,
     required this.onClear,
+    this.netStyle = false,
   });
 
   @override
@@ -242,6 +262,7 @@ class _FortyBallsKeypadState extends State<FortyBallsKeypad> {
           child: ScoreNotation(
             score: n,
             par: widget.par,
+            strokes: widget.netStyle ? widget.strokes : 0,
             height: 60,
             onTap: () => widget.onScore(n),
           ),

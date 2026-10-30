@@ -1974,6 +1974,19 @@ class ApiClient {
     return SixesSummary.fromJson(data as Map<String, dynamic>);
   }
 
+  /// GET /api/foursomes/{id}/sixes/hole/{hole}/
+  ///
+  /// One hole's score-entry card. A save already returns this shape under
+  /// `sixes_hole`, so this is for a hole the screen opens without posting —
+  /// scrolling back, or picking up a round somebody else is scoring.
+  /// Returns null when Sixes is not set up on this foursome.
+  Future<SixesHoleCard?> getSixesHoleCard(int foursomeId, int hole) async {
+    final data = await _get('/foursomes/$foursomeId/sixes/hole/$hole/');
+    final map = (data as Map).cast<String, dynamic>();
+    if (map.isEmpty) return null;
+    return SixesHoleCard.fromJson(map);
+  }
+
   /// POST /api/foursomes/{id}/sixes/setup/
   ///
   /// [segments] is a list of segment dicts, each with:

@@ -44,6 +44,7 @@ import '../widgets/stroke_play_progress_grid.dart';
 import '../utils/play_order.dart';
 import '../api/client.dart' show NetworkException;
 import '../widgets/annandale_friday.dart';
+import '../widgets/sixes_entry.dart';
 import '../widgets/reveal_on_mount.dart';
 import '../widgets/error_view.dart' show friendlyError;
 import '../widgets/forty_balls_keypad.dart';
@@ -361,6 +362,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         _nassauActive(configured) ||
         rp.nassauSummary != null) {
       futures.add(rp.loadNassau(widget.foursomeId));
+    }
+    // Sixes' card is per HOLE, so it is fetched for the hole on screen. A
+    // save brings the next one back with it; this covers the hole somebody
+    // opens without posting.
+    if (games.contains(GameIds.sixes) || configured.contains(GameIds.sixes)) {
+      futures.add(rp.loadSixesHole(widget.foursomeId, _selectedHole));
     }
     // Banker's strip sits under the entry card and has to be there on first
     // paint — the hole's three bets were agreed on the tee, and a screen that
@@ -1438,14 +1445,31 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// thing on either card.
   bool _keypadRound(RoundProvider rp) {
     final games = _activeGames(rp.round);
+    final primary = resolvePrimary(rp.round?.primaryGame, games);
     return games.contains('forty_balls') ||
-        resolvePrimary(rp.round?.primaryGame, games) ==
-            GameIds.annandaleFriday;
+        primary == GameIds.annandaleFriday ||
+        // Sixes enters on the keypad as of `handoff-sixes-score-entry`. It
+        // is the primary test rather than membership of `games`, because a
+        // round can carry Sixes as a side game without its screen.
+        primary == GameIds.sixes;
   }
 
-  /// Annandale Friday's tray stays down while the scorer has asked to edit —
-  /// "Edit scores" reopens the keypad on the hole's first golfer.
-  bool _afEditing = false;
+  /// The Sixes card for the hole on screen, when this round is playing it.
+  SixesHoleCard? _sixesCard(RoundProvider rp) {
+    final games = _activeGames(rp.round);
+    if (resolvePrimary(rp.round?.primaryGame, games) != GameIds.sixes) {
+      return null;
+    }
+    return rp.sixesHole(_selectedHole);
+  }
+
+  /// A hole tray stays down while the scorer has asked to edit — "Edit
+  /// scores" reopens the keypad on the hole's first golfer.
+  ///
+  /// One flag for Annandale Friday's tray and Sixes', because it is one
+  /// fact: two would be two names for the same state, and the second would
+  /// eventually be the one somebody forgot to clear.
+  bool _trayEditing = false;
 
   Future<void> _afPress(RoundProvider rp, AnnandaleFridayMatch m,
       int startHole) async {
@@ -2918,7 +2942,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // The tray rises after the last score — and only then. Editing (the
     // button, or tapping a golfer) puts the keypad back over it.
     final afTray = af != null && fbActive && allDone &&
-        _editHotPid == null && !_afEditing;
+        _editHotPid == null && !_trayEditing;
     var fbIdx = fbActive ? _hotSpotIdx(players, scores) : -1;
     if (fbActive && _editHotPid != null) {
       // The same override the inline picker uses when a scorer taps back to
@@ -2932,11 +2956,43 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final fbMember = (fbIdx >= 0 && fbIdx < players.length)
         ? players[fbIdx] : null;
 
+    // **Sixes.** The band replaces the keypad when the live match has no
+    // sides — nothing can be entered yet, and a keypad under an explanation
+    // of why you cannot use it is an invitation to try. The tray rises after
+    // the last score, exactly as Annandale's does.
+    final six = _sixesCard(rp);
+    final sixBand = six != null && fbActive && !six.match.teamsSet;
+    final sixTray = six != null && fbActive && allDone && !sixBand &&
+        _editHotPid == null && !_trayEditing;
+
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (afTray)
+          if (sixBand)
+            SixesTeamsBand(
+              card: six,
+              backHole: _prevHoleInOrder(rp),
+              onBack: _prevHoleInOrder(rp) == null ? null : _retreat,
+              // Both open the same sheet: it carries the reel AND the two
+              // legal pairings, so the buttons differ in what they promise
+              // rather than in where they land.
+              onPick: () => _openSixesTeamPicker(rp, six.match.number),
+              onSpin: () => _openSixesTeamPicker(rp, six.match.number),
+            )
+          else if (sixTray)
+            SixesHoleTray(
+              card: six,
+              nextHole: _nextHoleInOrder(rp),
+              gettingResult: (_pending[_selectedHole]?.isNotEmpty ?? false),
+              onEdit: () => setState(() {
+                _trayEditing = true;
+                _editHotPid = players.first.player.id;
+              }),
+              onPrev: _prevHoleInOrder(rp) == null ? null : _retreat,
+              onNext: _nextHoleInOrder(rp) == null ? null : _advance,
+            )
+          else if (afTray)
             AnnandaleHoleTray(
               summary  : af,
               hole     : _selectedHole,
@@ -2947,7 +3003,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                   (_pending[_selectedHole]?.isNotEmpty ?? false),
               notSynced: rp.annandaleHoleUnsynced(_selectedHole),
               onEdit   : () => setState(() {
-                _afEditing = true;
+                _trayEditing = true;
                 _editHotPid = players.first.player.id;
               }),
               onPress  : (m, start) => _afPress(rp, m, start),
@@ -2955,6 +3011,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           else if (fbMember != null)
             FortyBallsKeypad(
               playerName: fbMember.player.name,
+              // The keys are coded against par PLUS his strokes when Net
+              // Style Entry is on — the setting the inline picker and the
+              // score box have always honoured, which the keypad did not.
+              netStyle  : context.watch<SettingsProvider>().netStyleEntry,
               // HIS par, not the hole's: on mixed tees the hole is a 4 for
               // one man and a 5 for the next, and the keys are coded against
               // it — a par shaded as a bogey is a wrong number on the key.
@@ -2966,8 +3026,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 // Editing a tapped golfer is a one-shot, exactly as it is for
                 // the inline picker: once a value lands, the natural next
                 // scorer resumes.
-                if (_editHotPid != null || _afEditing) {
-                  setState(() { _editHotPid = null; _afEditing = false; });
+                if (_editHotPid != null || _trayEditing) {
+                  setState(() { _editHotPid = null; _trayEditing = false; });
                 }
                 // **Annandale Friday posts the hole on its last score and
                 // stays**, the same as the inline picker does for 40 Balls.

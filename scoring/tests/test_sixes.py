@@ -15,6 +15,7 @@ from services.sixes import (
     apply_withdrawal_to_sixes,
     calculate_sixes,
     setup_sixes,
+    sixes_hole_card,
     sixes_player_hole_strokes,
     sixes_summary,
 )
@@ -1196,3 +1197,323 @@ class MatchTwoPickerTests(TestCase):
             set_segment_teams(self.fs, segment_number=2,
                               team1_player_ids=[self.pid['Ann'], self.pid['Ben']],
                               team2_player_ids=[self.pid['Ann'], self.pid['Cal']])
+
+
+class _SixesCardBase(TestCase):
+    """Fixture only. A sibling class that INHERITED the tests would re-run
+    them against a fixture they were not written for — the `_DayBetBase`
+    lesson."""
+
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course)
+        self.fs = make_foursome(
+            self.round,
+            [('Paul', 6), ('Sam', 14), ('Dave', 9), ('Lee', 18)],
+            tee=self.tee,
+        )
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+
+    def _td(self, *, teams_from=1):
+        """Three matches; `teams_from` is the first match WITHOUT sides, so
+        `teams_from=2` leaves match 2 and 3 unset (the real setup path)."""
+        pairs = [
+            ([self.pid['Paul'], self.pid['Dave']], [self.pid['Sam'], self.pid['Lee']]),
+            ([self.pid['Paul'], self.pid['Sam']], [self.pid['Dave'], self.pid['Lee']]),
+            ([self.pid['Paul'], self.pid['Lee']], [self.pid['Dave'], self.pid['Sam']]),
+        ]
+        out = []
+        for i, (a, b) in enumerate(pairs, start=1):
+            seg = {'team_select_method': 'long_drive',
+                   'start_hole': 1 + (i - 1) * 6, 'end_hole': i * 6}
+            if i < teams_from:
+                seg['team1_player_ids'] = a
+                seg['team2_player_ids'] = b
+            out.append(seg)
+        return out
+
+    def _setup(self, **kw):
+        setup_sixes(self.fs, self._td(teams_from=4), handicap_mode='gross', **kw)
+
+    def _hole(self, h, paul, sam, dave, lee):
+        submit_hole(self.fs, h, [
+            (self.pid['Paul'], paul), (self.pid['Sam'], sam),
+            (self.pid['Dave'], dave), (self.pid['Lee'], lee)])
+
+    def _match2_through_9(self):
+        """Match 2 at 2 UP to Paul & Sam, standing on the 10th."""
+        for h in range(1, 7):
+            self._hole(h, 4, 4, 4, 4)            # match 1 all halved
+        self._hole(7, 4, 5, 5, 5)                # Paul & Sam
+        self._hole(8, 4, 4, 4, 4)                # halved
+        self._hole(9, 4, 5, 5, 5)                # Paul & Sam
+        calculate_sixes(self.fs)
+
+
+
+class SixesHoleCardTests(_SixesCardBase):
+    """`sixes_hole_card` — what the score-entry screen draws for one hole
+    (`~/Downloads/handoff-sixes-score-entry`).
+
+    The packet's own example: match 2 is holes 7–12, Paul & Sam v Dave & Lee,
+    7 won by Paul & Sam, 8 halved, 9 won by Paul & Sam → 2 UP standing on
+    hole 10.
+    """
+
+    # ── which match, and how much of it is left ──────────────────────────
+
+    def test_the_card_names_the_match_the_hole_belongs_to(self):
+        self._setup()
+        self._match2_through_9()
+        card = sixes_hole_card(self.fs, 10)
+        m = card['match']
+        self.assertEqual(m['number'], 2)
+        self.assertEqual((m['start_hole'], m['end_hole']), (7, 12))
+        # Including the hole in front of you: 10, 11, 12.
+        self.assertEqual(m['to_play'], 3)
+
+    def test_the_standing_before_the_hole_is_the_engine_s_running_margin(self):
+        self._setup()
+        self._match2_through_9()
+        self.assertEqual(sixes_hole_card(self.fs, 10)['match']['up_before'], 2)
+        # ...and the first hole of a match opens level, never carrying the
+        # previous match's margin.
+        self.assertEqual(sixes_hole_card(self.fs, 7)['match']['up_before'], 0)
+
+    def test_the_match_is_found_by_play_order_on_a_shotgun(self):
+        # From the 8th: thirds are 8–13, 14–1, 2–7. Hole 14 is match 2 even
+        # though it is a bigger number than match 3's holes.
+        self.round.starting_hole = 8
+        self.round.save(update_fields=['starting_hole'])
+        self._setup()
+        calculate_sixes(self.fs)        # repositioning happens here
+        card = sixes_hole_card(self.fs, 14)
+        self.assertEqual(card['match']['number'], 2)
+        self.assertEqual((card['match']['start_hole'],
+                          card['match']['end_hole']), (14, 1))
+
+    # ── the hole's own result ─────────────────────────────────────────────
+
+    def test_a_scored_hole_reports_its_winner_and_the_two_best_nets(self):
+        self._setup()
+        self._match2_through_9()
+        self._hole(10, 4, 5, 5, 6)
+        calculate_sixes(self.fs)
+        r = sixes_hole_card(self.fs, 10)['result']
+        self.assertEqual(r['winner'], 'T1')
+        self.assertEqual((r['t1_net'], r['t2_net']), (4, 5))
+
+    def test_an_unplayed_hole_has_no_result(self):
+        self._setup()
+        self._match2_through_9()
+        self.assertIsNone(sixes_hole_card(self.fs, 10)['result'])
+
+    def test_a_hole_that_closes_the_match_says_so_and_names_the_next_pairing(self):
+        self._setup()
+        self._match2_through_9()
+        self._hole(10, 4, 5, 5, 6)               # 3 UP with 2 to play
+        calculate_sixes(self.fs)
+        card = sixes_hole_card(self.fs, 10)
+        self.assertTrue(card['result']['closed'])
+        self.assertEqual(card['result']['margin_text'], '3&2')
+        nxt = card['next_match']
+        self.assertIsNotNone(nxt)
+        self.assertEqual(nxt['number'], 3)
+        self.assertEqual(nxt['start_hole'], 11)
+        self.assertEqual(
+            {frozenset(nxt['team1']['names']), frozenset(nxt['team2']['names'])},
+            {frozenset({'Paul', 'Lee'}), frozenset({'Dave', 'Sam'})},
+            'match 3 is forced by the other two',
+        )
+
+    def test_a_live_hole_offers_no_next_match(self):
+        self._setup()
+        self._match2_through_9()
+        self._hole(10, 5, 5, 4, 5)               # Dave & Lee win it back
+        calculate_sixes(self.fs)
+        card = sixes_hole_card(self.fs, 10)
+        self.assertFalse(card['result']['closed'])
+        self.assertIsNone(card['result']['margin_text'])
+        self.assertIsNone(card['next_match'],
+                          'a pairing offered early reads as settled')
+
+    # ── the rows ──────────────────────────────────────────────────────────
+
+    def test_the_best_ball_is_marked_only_once_the_hole_is_complete(self):
+        self._setup()
+        self._match2_through_9()
+        submit_hole(self.fs, 10, [(self.pid['Paul'], 4)])
+        card = sixes_hole_card(self.fs, 10)
+        self.assertFalse(card['hole_complete'])
+        self.assertTrue(all(not p['is_best'] for p in card['players']),
+                        'a side has no best ball while a golfer is still out')
+
+        self._hole(10, 4, 5, 5, 5)
+        calculate_sixes(self.fs)
+        card = sixes_hole_card(self.fs, 10)
+        best = {p['name'] for p in card['players'] if p['is_best']}
+        # Dave and Lee both make 5, so BOTH carry the mark — the chip has to
+        # reconcile with the net beside it.
+        self.assertEqual(best, {'Paul', 'Dave', 'Lee'})
+
+    def test_strokes_are_the_SIXES_allocation_not_the_round_s(self):
+        # The round is net and Lee is off 18, so his HoleScore carries
+        # handicap strokes — but this Sixes game is GROSS, and the dots have
+        # to follow the game being played.
+        self._setup()
+        self._match2_through_9()
+        self._hole(10, 4, 5, 5, 6)
+        calculate_sixes(self.fs)
+        rows = {p['name']: p for p in sixes_hole_card(self.fs, 10)['players']}
+        self.assertEqual(rows['Lee']['strokes'], 0)
+        self.assertEqual(rows['Lee']['net'], rows['Lee']['gross'])
+        from scoring.models import HoleScore
+        self.assertGreater(
+            HoleScore.objects.get(foursome=self.fs, hole_number=10,
+                                  player_id=self.pid['Lee']).handicap_strokes,
+            0,
+            'the generic round allocation differs — that is the point')
+
+    def test_the_rows_carry_the_side_and_the_course_handicap(self):
+        self._setup()
+        self._match2_through_9()
+        rows = {p['name']: p for p in sixes_hole_card(self.fs, 10)['players']}
+        self.assertEqual(rows['Paul']['team'], 1)
+        self.assertEqual(rows['Lee']['team'], 2)
+        self.assertEqual(rows['Lee']['course_handicap'], 18)
+
+    # ── teams not set ─────────────────────────────────────────────────────
+
+    def test_a_match_with_no_sides_says_so(self):
+        setup_sixes(self.fs, self._td(teams_from=2), handicap_mode='gross')
+        for h in range(1, 7):
+            self._hole(h, 4, 4, 4, 4)
+        calculate_sixes(self.fs)
+        card = sixes_hole_card(self.fs, 7)
+        self.assertFalse(card['match']['teams_set'])
+        self.assertEqual(card['match']['team1']['player_ids'], [])
+        # ...and every golfer is sideless, so the screen cannot group them.
+        self.assertTrue(all(p['team'] is None for p in card['players']))
+
+    def test_no_game_returns_nothing_rather_than_an_empty_card(self):
+        self.assertEqual(sixes_hole_card(self.fs, 1), {})
+
+    def test_the_hole_carries_its_par_index_and_yardage(self):
+        self._setup()
+        card = sixes_hole_card(self.fs, 10)
+        self.assertEqual(card['par'], self.tee.hole(10)['par'])
+        self.assertEqual(card['stroke_index'], self.tee.hole(10)['stroke_index'])
+        self.assertEqual(card['nine'], 'back nine')
+        self.assertEqual(sixes_hole_card(self.fs, 7)['nine'], 'front nine')
+
+
+class SixesBandTests(_SixesCardBase):
+    """The band above the lock, when a match has no sides yet."""
+
+    def test_it_names_the_match_before_and_how_it_finished(self):
+        setup_sixes(self.fs, self._td(teams_from=2), handicap_mode='gross')
+        for h in range(1, 6):
+            self._hole(h, 4, 4, 4, 4)            # halved
+        self._hole(6, 4, 5, 5, 5)                # Paul & Dave take the last
+        calculate_sixes(self.fs)
+        prev = sixes_hole_card(self.fs, 7)['previous_match']
+        self.assertEqual(prev['number'], 1)
+        self.assertEqual((prev['start_hole'], prev['end_hole']), (1, 6))
+        self.assertTrue(prev['result'].endswith('won 1 UP'), prev['result'])
+
+    def test_a_match_closed_early_keeps_its_closeout_notation(self):
+        setup_sixes(self.fs, self._td(teams_from=2), handicap_mode='gross')
+        for h in range(1, 5):                    # 4 straight → 4 UP with 2 left
+            self._hole(h, 4, 5, 5, 5)
+        calculate_sixes(self.fs)
+        prev = sixes_hole_card(self.fs, 7)['previous_match']
+        self.assertTrue(prev['result'].endswith('won 4&2'), prev['result'])
+
+    def test_there_is_no_band_once_the_sides_are_set(self):
+        self._setup()
+        self._match2_through_9()
+        self.assertIsNone(sixes_hole_card(self.fs, 10)['previous_match'],
+                          'the band explains a lock; there is none here')
+
+    def test_the_first_match_never_asks(self):
+        setup_sixes(self.fs, self._td(teams_from=1), handicap_mode='gross')
+        self.assertIsNone(sixes_hole_card(self.fs, 1)['previous_match'])
+
+
+class SixesFixtureRegenTests(_SixesCardBase):
+    """Writes the JSON the Flutter tests draw, from the REAL engine.
+
+    `REGEN_SIXES_FIXTURES=1 manage.py test scoring.tests.test_sixes` rewrites
+    them — the same arrangement Sequoya's board uses. A board tested against
+    hand-written JSON is tested against what somebody THOUGHT the server
+    sends.
+
+    The three states are the packet's own three phones.
+    """
+
+    def _write(self, name, card):
+        import json, os, pathlib
+        if os.environ.get('REGEN_SIXES_FIXTURES') != '1':
+            return
+        path = (pathlib.Path(__file__).resolve().parents[2]
+                / 'mobile' / 'test' / 'fixtures' / name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(card, indent=2, default=str) + '\n')
+
+    def _through_9(self):
+        for h in range(1, 7):
+            self._hole(h, 4, 4, 4, 4)
+        self._hole(7, 4, 5, 5, 5)
+        self._hole(8, 4, 4, 4, 4)
+        self._hole(9, 4, 5, 5, 5)
+
+    def test_regenerate(self):
+        # GROSS, so the match states are the packet's exactly — 2 UP standing
+        # on the 10th, then 3&2. Strokes get their own fixture below, because
+        # under strokes-off the same scores produce a different match.
+        self._setup()
+        # 1 · hole 10 live: Dave & Lee take the hole back.
+        self._through_9()
+        self._hole(10, 4, 5, 5, 4)
+        calculate_sixes(self.fs)
+        live = sixes_hole_card(self.fs, 10)
+        self.assertFalse(live['result']['closed'])
+        self._write('sixes_hole10_live.json', live)
+
+        # 2 · hole 10 closing: Lee makes 6, Paul & Sam win 3&2.
+        self._hole(10, 4, 5, 5, 6)
+        calculate_sixes(self.fs)
+        closed = sixes_hole_card(self.fs, 10)
+        self.assertEqual(closed['result']['margin_text'], '3&2')
+        self._write('sixes_hole10_closed.json', closed)
+
+    def test_regenerate_the_band(self):
+        # 3 · hole 7 with match 2's sides unset.
+        setup_sixes(self.fs, self._td(teams_from=2), handicap_mode='gross')
+        for h in range(1, 6):
+            self._hole(h, 4, 4, 4, 4)
+        self._hole(6, 4, 5, 5, 5)
+        calculate_sixes(self.fs)
+        band = sixes_hole_card(self.fs, 7)
+        self.assertFalse(band['match']['teams_set'])
+        self._write('sixes_hole7_noteams.json', band)
+
+    def test_regenerate_with_strokes(self):
+        """A row with strokes — the dot cap, and a net below the gross.
+
+        Strokes off the low man, as the packet plays it: Paul is the low man,
+        so Sam, Dave and Lee stroke on this match's hardest holes.
+        """
+        setup_sixes(self.fs, self._td(teams_from=4),
+                    handicap_mode='strokes_off')
+        for h in range(1, 10):
+            self._hole(h, 4, 5, 5, 5)
+        self._hole(10, 4, 5, 5, 4)
+        calculate_sixes(self.fs)
+        card = sixes_hole_card(self.fs, 10)
+        self.assertTrue(any(p['strokes'] > 0 for p in card['players']),
+                        'the point of this fixture is a stroke')
+        self.assertTrue(any(p['net'] != p['gross'] for p in card['players']))
+        self._write('sixes_hole10_strokes.json', card)

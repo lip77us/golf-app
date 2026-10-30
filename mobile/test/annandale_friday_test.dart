@@ -205,9 +205,15 @@ void main() {
 
     test("the keypad codes keys against the golfer's own par", () {
       // Kim's tee plays hole 1 as a par 5; the keypad said "par 4".
+      // Bounded by the CALL, not by a character count: a window of 500 broke
+      // the day a parameter was added above `par`, which says nothing about
+      // whether the par is still his.
       final src = _src('lib/screens/score_entry_screen.dart');
       final at = src.indexOf('FortyBallsKeypad(');
-      expect(src.substring(at, at + 500),
+      final end = src.indexOf('onScore', at);
+      expect(at, greaterThan(0));
+      expect(end, greaterThan(at));
+      expect(src.substring(at, end),
           contains('?.scoreFor(fbMember.player.id)?.par'));
     });
 

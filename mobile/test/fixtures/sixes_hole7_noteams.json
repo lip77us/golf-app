@@ -1,0 +1,82 @@
+{
+  "hole": 7,
+  "par": 3,
+  "stroke_index": 17,
+  "yards": 165,
+  "nine": "front nine",
+  "match": {
+    "number": 2,
+    "start_hole": 7,
+    "end_hole": 12,
+    "is_extra": false,
+    "teams_set": false,
+    "team1": {
+      "player_ids": [],
+      "names": [],
+      "short": ""
+    },
+    "team2": {
+      "player_ids": [],
+      "names": [],
+      "short": ""
+    },
+    "up_before": 0,
+    "to_play": 6
+  },
+  "players": [
+    {
+      "player_id": 5,
+      "name": "Paul",
+      "short": "P",
+      "course_handicap": 6,
+      "team": null,
+      "strokes": 0,
+      "gross": null,
+      "net": null,
+      "is_best": false
+    },
+    {
+      "player_id": 6,
+      "name": "Sam",
+      "short": "S",
+      "course_handicap": 14,
+      "team": null,
+      "strokes": 0,
+      "gross": null,
+      "net": null,
+      "is_best": false
+    },
+    {
+      "player_id": 7,
+      "name": "Dave",
+      "short": "D",
+      "course_handicap": 9,
+      "team": null,
+      "strokes": 0,
+      "gross": null,
+      "net": null,
+      "is_best": false
+    },
+    {
+      "player_id": 8,
+      "name": "Lee",
+      "short": "L",
+      "course_handicap": 18,
+      "team": null,
+      "strokes": 0,
+      "gross": null,
+      "net": null,
+      "is_best": false
+    }
+  ],
+  "hole_complete": false,
+  "result": null,
+  "next_match": null,
+  "previous_match": {
+    "number": 1,
+    "start_hole": 1,
+    "end_hole": 6,
+    "result": "P & D won 1 UP"
+  },
+  "bet_unit": 5.0
+}

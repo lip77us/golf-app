@@ -30,9 +30,18 @@
 /// three-stroke case that, in strokes-off, is extreme. One stroke now looks
 /// identical in the grid and in the score box.
 ///
-/// Dot size, gap and colour are identical in both. Only the axis differs,
-/// which is what keeps it one vocabulary rather than two marks meaning the
-/// same thing.
+/// * [StrokeDotCap] — the Sixes entry card, where the box is a `ScoreNotation`
+///   that can be FILLED deep pine (a net birdie) or outlined. A 4px dot inside
+///   the corner disappears against the filled state, so this one straddles the
+///   top edge in bright mint with a deep-pine ring — readable on either fill,
+///   and outside the box rather than competing with the digit
+///   (`handoff-sixes-score-entry` §1: "stroke dots sit on top of the box").
+///
+/// Dot size, gap and colour are identical in the first two. Only the axis
+/// differs, which is what keeps it one vocabulary rather than two marks
+/// meaning the same thing. The cap is a third because its surface is a third
+/// thing — but it lives HERE, so a change to how a stroke is drawn is still
+/// one file.
 library;
 
 import 'package:flutter/material.dart';
@@ -124,6 +133,56 @@ class StrokeDotColumn extends StatelessWidget {
               margin: EdgeInsets.only(top: i == 0 ? 0 : kStrokeDotGap),
               decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+
+/// Dots straddling the TOP EDGE of a score box, centred — the Sixes card.
+///
+/// Returns a `Positioned`, so it belongs directly inside a `Stack` whose
+/// `clipBehavior` is `Clip.none`: half the dot sits outside the box.
+class StrokeDotCap extends StatelessWidget {
+  final int strokes;
+
+  /// Fill and ring. The ring is what keeps the dot visible when the box
+  /// underneath is filled in the same family of greens.
+  final Color color;
+  final Color ring;
+  final double size;
+
+  const StrokeDotCap({
+    super.key,
+    required this.strokes,
+    this.color = const Color(0xFF3BD89A),
+    this.ring = const Color(0xFF0B1F1A),
+    this.size = 9,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (strokes <= 0) return const SizedBox.shrink();
+    return Positioned(
+      top: -size / 2,
+      left: 0,
+      right: 0,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (var i = 0; i < strokes; i++) ...[
+            if (i > 0) SizedBox(width: size * 0.4),
+            Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                border: Border.all(color: ring, width: 1.5),
+              ),
+            ),
+          ],
         ],
       ),
     );

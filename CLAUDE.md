@@ -7445,6 +7445,103 @@ has to be closed on the server (`Round.objects.get(pk=493)`, set
 skips `maybe_notify_round_complete` and `emit_round_complete`, so a field of
 fifty-six does not get a "round complete" push three days late.
 
+## Sixes score entry — `handoff-sixes-score-entry` (server done, bottom half wired)
+
+The 40 Balls keypad and dark tray carried to Sixes. **The first of the score
+entry rework**, so what it settles about SHAPE matters more than the one game.
+
+### It is the SHARED screen, and that was not a free choice
+
+The packet draws an app bar (`✕ · Sixes · ☰`) that reads like a dedicated
+screen. It is built as a MODE of `score_entry_screen` instead, because that
+is where the sync queue, the combo-tee chip, Spots capture, mid-round
+withdrawal and the landscape scorecard live. This file records the same
+lesson three times — *"the games with their OWN play screen are the ones
+that get missed"* — and the Annandale Friday build settled it in as many
+words. A test asserts no `sixes_*_screen.dart` play screen exists.
+
+### `services.sixes.sixes_hole_card(foursome, hole)`
+
+Everything the screen draws for ONE hole, built from `sixes_summary` and
+`sixes_player_hole_strokes` rather than a second walk. The standing, the
+hole's winner and the running margin are the ENGINE's — `holes_up_after` is
+a stored result, so the tray and the leaderboard cannot disagree about
+whether a match is 2 UP. The prototype derives all of it in the browser
+because it has no engine; we have one.
+
+Derived here, because the engine has no reason to answer them: which match
+owns the hole (**by play order** — a shotgun third wraps the turn, where the
+last hole has the smallest number), how many of its holes are left, and who
+partners whom next.
+
+- **The close-out notation ships from the server** (`3&2`), like every other
+  `&M` in the app.
+- **A next pairing is offered only once the match is decided.** One offered
+  early reads as settled.
+- **The best ball is marked only once the hole is complete**, and on BOTH of
+  a tied side — the chip has to reconcile with the net beside it.
+- **`previous_match`** carries `Paul & Dave won 1 UP` for the band, and only
+  while this match has no sides: it is the sentence that explains why entry
+  is locked, not a running history.
+- Strokes are the SIXES allocation, never `HoleScore.handicap_strokes` — the
+  round can be net while the game is gross.
+
+Returned WITH the save as `sixes_hole` (the tray must not cost a second
+request — Annandale's lesson), plus
+`GET /api/foursomes/{id}/sixes/hole/{hole}/` for a hole opened without
+posting.
+
+### Net Style Entry was already the app's rule — the keypad was the exception
+
+`net_score_button` and `inline_score_picker` have honoured the setting since
+it shipped: the baseline is `par + strokes`. The 40 Balls keypad coded
+against bare par, so one golfer saw a par box in the picker and a bogey
+square on the keys for the same number. `shapeForScore(score, par, {strokes})`
+and `FortyBallsKeypad.netStyle` close that. **This changes 40 Balls and
+Annandale too**, and deliberately — it brings them into line rather than
+giving Sixes a private rule.
+
+### Built and tested, NOT yet swapped in: the player card
+
+The tray, the teams-not-set band and the keypad are wired. `SixesHoleHeader`
+and `SixesPlayersCard` are built and tested but the screen still draws the
+generic `_HoleScoreCard`, because **the design's card is not a drop-in**:
+that card carries the Spots button, the combo-tee chip, the withdrawal
+long-press and the `Out` marker, and a straight swap drops all four — the
+exact failure the architecture note above is about. The header is the same
+story one level down: `_HoleScoreCard` already draws the shared `HoleHeader`
+(par / yardage / index), so the packet's header is a RESTYLE of a widget many
+screens share, not an addition.
+
+That is the next piece, and it is a decision about the shared card rather
+than about Sixes.
+
+### Fixtures are real engine output
+
+`REGEN_SIXES_FIXTURES=1 manage.py test scoring.tests.test_sixes` writes the
+four JSON files `mobile/test/sixes_entry_test.dart` draws — the Sequoya
+arrangement. Worth knowing why there are four: under GROSS the packet's
+scoreline HALVES the 10th, and under strokes-off the same scores produce a
+different match, so the packet-exact match states (2 UP, then 3&2) and the
+stroke rendering (Lee's net birdie) cannot be one fixture.
+
+**`short` is `Player.short_name`**, which auto-fills to initials — so the
+sides read `P & S` in tests where the design draws `Paul & Sam`. That is the
+existing Sixes choice (the summary's own comment explains it: match lines are
+read at arm's length, and short_name is account-editable), not a new one.
+
+### Two layout bugs the tests found
+Both tray rows could overflow — the sides line beside the result chip, and
+the header beside `Edit scores`. Real on a device with a long pairing, not
+just in the test font.
+
+Tests: `SixesHoleCardTests` (13) + `SixesBandTests` (4) +
+`SixesFixtureRegenTests` (3) in `scoring/tests/test_sixes.py`,
+`api/test_sixes_hole_card.py` (6), `mobile/test/sixes_entry_test.dart` (17).
+
+**Open from the packet:** the High-Low variant (two result lines on the
+tray), which the packet itself defers.
+
 ## The Sequoya 3s board — `handoff-sequoya-leaderboard`
 
 `widgets/sequoya_board.dart` + `utils/sequoya_board_model.dart`, the sixth

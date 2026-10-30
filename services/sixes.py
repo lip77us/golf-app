@@ -1702,3 +1702,208 @@ def sixes_summary(foursome) -> dict:
             'by_player' : money_out,
         },
     }
+
+
+def _nine_of(hole: int) -> str:
+    return 'front nine' if hole <= 9 else 'back nine'
+
+
+def sixes_hole_card(foursome, hole: int) -> dict:
+    """Everything the Sixes score-entry screen draws for ONE hole.
+
+    Built from `sixes_summary` and `sixes_player_hole_strokes` rather than a
+    second walk over the segments. The standing, the per-hole winner and the
+    running margin are the ENGINE's — `holes_up_after` is a stored result, so
+    the tray and the leaderboard can never disagree about whether a match is
+    2 UP. The only things derived here are the ones the engine has no reason
+    to answer: which match a hole belongs to, how many of its holes are left,
+    and who partners whom next.
+
+    Returns `{}` when Sixes is not set up, so a caller can test the key.
+    """
+    summary = sixes_summary(foursome)
+    segments = summary.get('segments') or []
+    if not segments:
+        return {}
+
+    from services.hole_plan import play_order as _play_order
+    order  = _play_order(foursome.round, foursome) or list(range(1, 19))
+    pos_of = {h: i for i, h in enumerate(order)}
+
+    seg_rows = list(
+        SixesSegment.objects.filter(foursome=foursome)
+        .order_by('segment_number', 'start_hole')
+    )
+
+    # Which match owns this hole, by PLAY ORDER — a shotgun third can wrap the
+    # turn, where the last hole has the smallest number.
+    idx = seg = None
+    for i, row in enumerate(seg_rows):
+        if hole in segment_holes(foursome, row):
+            idx, seg = i, row
+            break
+    if seg is None:
+        return {}
+
+    holes     = segment_holes(foursome, seg)
+    here      = holes.index(hole)
+    to_play   = len(holes) - here          # including this one
+    left_after = len(holes) - here - 1
+
+    s         = segments[idx]
+    played    = {h['hole']: h for h in (s.get('holes') or [])}
+    teams_set = bool(s['team1']['player_ids']) and bool(s['team2']['player_ids'])
+
+    def _side(team: dict) -> dict:
+        return {
+            'player_ids': team['player_ids'],
+            'names'     : team['players'],
+            'short'     : ' & '.join(team['players_short']),
+        }
+
+    # The standing BEFORE this hole is the engine's running margin on the last
+    # of this match's holes played before it — never a re-tally of winners.
+    up_before = 0
+    for h in holes[:here]:
+        if h in played:
+            up_before = played[h]['margin']
+
+    strokes_by = sixes_player_hole_strokes(foursome)
+    members = [m for m in foursome.memberships.all() if not m.player.is_phantom]
+    t1_ids  = set(s['team1']['player_ids'])
+    t2_ids  = set(s['team2']['player_ids'])
+
+    from scoring.models import HoleScore
+    gross_by = dict(
+        HoleScore.objects
+        .filter(foursome=foursome, hole_number=hole, gross_score__isnull=False)
+        .values_list('player_id', 'gross_score')
+    )
+
+    players = []
+    for m in members:
+        st    = (strokes_by.get(m.player_id) or {}).get(hole, 0)
+        gross = gross_by.get(m.player_id)
+        players.append({
+            'player_id': m.player_id,
+            'name'     : m.player.name,
+            'short'    : _short(m.player),
+            'course_handicap': m.course_handicap,
+            'team'     : 1 if m.player_id in t1_ids else 2 if m.player_id in t2_ids else None,
+            'strokes'  : st,
+            'gross'    : gross,
+            'net'      : None if gross is None else gross - st,
+        })
+
+    # The best ball marks a side's counting score, and marks BOTH on a tie —
+    # the chip has to reconcile with the net sitting beside it. Only once the
+    # hole is COMPLETE: a side's best ball is not known while a golfer is
+    # still to putt, and marking the leader early would move the mark.
+    for p in players:
+        p['is_best'] = False
+    hole_complete = all(p['gross'] is not None for p in players)
+    if hole_complete:
+        for side in (1, 2):
+            nets = [p['net'] for p in players
+                    if p['team'] == side and p['net'] is not None]
+            if not nets:
+                continue
+            low = min(nets)
+            for p in players:
+                if p['team'] == side and p['net'] == low:
+                    p['is_best'] = True
+
+    hr = played.get(hole)
+    result = None
+    if hr is not None:
+        up_after = hr['margin']
+        closed   = abs(up_after) > left_after
+        result = {
+            'winner'    : hr['winner'],          # 'T1' | 'T2' | 'Halved'
+            't1_net'    : hr['t1_net'],
+            't2_net'    : hr['t2_net'],
+            'up_after'  : up_after,
+            'left_after': left_after,
+            'closed'    : closed,
+            # The close-out notation is a RULE, so the server writes it.
+            'margin_text': f"{abs(up_after)}&{left_after}" if closed else None,
+        }
+
+    # Who plays whom next, and only once this match is actually decided: a
+    # pairing offered before then would be read as settled.
+    next_match = None
+    if result and result['closed'] and idx + 1 < len(seg_rows):
+        nxt     = seg_rows[idx + 1]
+        nxt_sum = segments[idx + 1]
+        start   = holes[here + 1] if here + 1 < len(holes) else None
+        if start is None and idx + 1 < len(seg_rows):
+            nxt_holes = segment_holes(foursome, nxt)
+            start = nxt_holes[0] if nxt_holes else None
+        next_match = {
+            'number'    : idx + 2,
+            'start_hole': start,
+            'teams_set' : bool(nxt_sum['team1']['player_ids'])
+                          and bool(nxt_sum['team2']['player_ids']),
+            'team1'     : _side(nxt_sum['team1']),
+            'team2'     : _side(nxt_sum['team2']),
+            'is_extra'  : nxt_sum['is_extra'],
+        }
+
+    # What the band says above the lock when this match has no sides yet: the
+    # match before it, and how it finished. Only then — it is the sentence
+    # that explains why entry is closed, not a running history.
+    previous = None
+    if not teams_set and idx > 0:
+        prev_sum   = segments[idx - 1]
+        prev_holes = segment_holes(foursome, seg_rows[idx - 1])
+        entries    = {h['hole']: h for h in (prev_sum.get('holes') or [])}
+        played     = [h for h in prev_holes if h in entries]
+        last       = entries[played[-1]] if played else None
+        text = None
+        if last is not None and prev_sum['winner'] in ('Team 1', 'Team 2'):
+            side   = prev_sum['team1'] if prev_sum['winner'] == 'Team 1' \
+                     else prev_sum['team2']
+            margin = abs(last['margin'])
+            left   = len(prev_holes) - len(played)
+            # A match that ran to its last hole is "won 1 UP"; one that closed
+            # early keeps the close-out notation it was won by.
+            text = (f"{' & '.join(side['players_short'])} won "
+                    f"{margin}&{left}" if left else
+                    f"{' & '.join(side['players_short'])} won {margin} UP")
+        elif prev_sum['winner'] == 'Halved':
+            text = 'halved'
+        previous = {
+            'number'    : idx,
+            'start_hole': prev_holes[0] if prev_holes else None,
+            'end_hole'  : played[-1] if played else (
+                prev_holes[-1] if prev_holes else None),
+            'result'    : text,
+        }
+
+    tee = next((m.tee for m in members if m.tee_id), None)
+    h   = tee.hole(hole) if tee else {}
+
+    return {
+        'hole'  : hole,
+        'par'   : h.get('par'),
+        'stroke_index': h.get('stroke_index'),
+        'yards' : h.get('yards'),
+        'nine'  : _nine_of(hole),
+        'match' : {
+            'number'    : idx + 1,
+            'start_hole': holes[0],
+            'end_hole'  : holes[-1],
+            'is_extra'  : s['is_extra'],
+            'teams_set' : teams_set,
+            'team1'     : _side(s['team1']),
+            'team2'     : _side(s['team2']),
+            'up_before' : up_before,
+            'to_play'   : to_play,
+        },
+        'players'    : players,
+        'hole_complete': hole_complete,
+        'result'     : result,
+        'next_match' : next_match,
+        'previous_match': previous,
+        'bet_unit'   : summary.get('money', {}).get('bet_unit'),
+    }

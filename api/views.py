@@ -6011,8 +6011,8 @@ class PhantomInitView(APIView):
         })
 
 
-def _hole_tray_summaries(foursome: Foursome) -> dict:
-    """What Annandale Friday's tray draws, returned WITH the save.
+def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
+    """What a hole tray draws, returned WITH the save.
 
     The tray reports the hole just posted, so a second request for it only
     made the golfer wait longer for a figure the server had just computed.
@@ -6024,16 +6024,25 @@ def _hole_tray_summaries(foursome: Foursome) -> dict:
     fetching when the key is missing.
     """
     active = set(foursome.round.active_games or []) | set(foursome.active_games or [])
-    if 'annandale_friday' not in active:
+    wants = {'annandale_friday', 'sixes'} & active
+    if not wants:
         return {}
-    from services.annandale_friday import annandale_friday_summary
     from services.skins import skins_summary
     out = {}
     try:
         with transaction.atomic():
-            summary = annandale_friday_summary(foursome)
-            if summary:
-                out['annandale_friday'] = summary
+            if 'annandale_friday' in wants:
+                from services.annandale_friday import annandale_friday_summary
+                summary = annandale_friday_summary(foursome)
+                if summary:
+                    out['annandale_friday'] = summary
+            # Sixes' tray reports ONE hole, so it is the card for the hole
+            # just posted rather than the whole summary.
+            if 'sixes' in wants and hole_number:
+                from services.sixes import sixes_hole_card
+                card = sixes_hole_card(foursome, hole_number)
+                if card:
+                    out['sixes_hole'] = card
             if 'skins' in active:
                 out['skins'] = skins_summary(foursome)
     except Exception:
@@ -6207,7 +6216,7 @@ class ScoreSubmitView(APIView):
         # and no client has ever read it: both callers discard this body.
         return Response({
             'scorecard': _build_scorecard(foursome),
-            **_hole_tray_summaries(foursome),
+            **_hole_tray_summaries(foursome, hole_number),
         })
 
 
@@ -7981,6 +7990,20 @@ class SixesResultView(APIView):
         foursome = foursome_for_scorer(request.user, pk)
         from services.sixes import sixes_summary
         return Response(sixes_summary(foursome))
+
+
+class SixesHoleCardView(APIView):
+    """GET /api/foursomes/{id}/sixes/hole/{hole}/
+
+    One hole's score-entry card. The POST that saves a score returns the same
+    shape under `sixes_hole`, so this is only for a hole the screen opens
+    without posting — scrolling back, or picking up a round somebody else is
+    scoring.
+    """
+    def get(self, request, pk, hole):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.sixes import sixes_hole_card
+        return Response(sixes_hole_card(foursome, int(hole)))
 
 
 # ---------------------------------------------------------------------------
