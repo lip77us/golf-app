@@ -6067,7 +6067,7 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
     fetching when the key is missing.
     """
     active = set(foursome.round.active_games or []) | set(foursome.active_games or [])
-    wants = {'annandale_friday', 'sixes'} & active
+    wants = {'annandale_friday', 'sixes', 'rabbit'} & active
     if not wants:
         return {}
     from services.skins import skins_summary
@@ -6086,6 +6086,12 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
                 card = sixes_hole_card(foursome, hole_number)
                 if card:
                     out['sixes_hole'] = card
+            # Rabbit's tray reports ONE hole too.
+            if 'rabbit' in wants and hole_number:
+                from services.rabbit import rabbit_hole_card
+                card = rabbit_hole_card(foursome, hole_number)
+                if card:
+                    out['rabbit_hole'] = card
             if 'skins' in active:
                 out['skins'] = skins_summary(foursome)
     except Exception:
@@ -8033,6 +8039,19 @@ class SixesResultView(APIView):
         foursome = foursome_for_scorer(request.user, pk)
         from services.sixes import sixes_summary
         return Response(sixes_summary(foursome))
+
+
+class RabbitHoleCardView(APIView):
+    """GET /api/foursomes/{id}/rabbit/hole/{hole}/
+
+    One hole's score-entry card. The POST that saves a score returns the same
+    shape under `rabbit_hole`, so this is only for a hole the screen opens
+    without posting.
+    """
+    def get(self, request, pk, hole):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.rabbit import rabbit_hole_card
+        return Response(rabbit_hole_card(foursome, int(hole)))
 
 
 class SixesHoleCardView(APIView):

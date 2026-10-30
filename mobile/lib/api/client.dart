@@ -1974,6 +1974,17 @@ class ApiClient {
     return SixesSummary.fromJson(data as Map<String, dynamic>);
   }
 
+  /// GET /api/foursomes/{id}/rabbit/hole/{hole}/
+  ///
+  /// One hole's score-entry card. A save already returns this shape under
+  /// `rabbit_hole`, so this is for a hole opened without posting.
+  Future<RabbitHoleCard?> getRabbitHoleCard(int foursomeId, int hole) async {
+    final data = await _get('/foursomes/$foursomeId/rabbit/hole/$hole/');
+    final map = (data as Map).cast<String, dynamic>();
+    if (map.isEmpty) return null;
+    return RabbitHoleCard.fromJson(map);
+  }
+
   /// POST/DELETE /api/rounds/{id}/hide/ — take a round off MY lists, or put
   /// it back.
   ///

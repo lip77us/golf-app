@@ -9,7 +9,8 @@ Gross mode keeps the score math obvious.
 """
 from django.test import TestCase
 
-from services.rabbit import calculate_rabbit, setup_rabbit, rabbit_summary
+from services.rabbit import (calculate_rabbit, rabbit_hole_card,
+                             rabbit_summary, setup_rabbit)
 
 from ._helpers import (DEFAULT_HOLES, make_foursome, make_round, make_tee,
                        submit_hole)
@@ -782,3 +783,293 @@ class CarryTests(TestCase):
         self.assertIn('Carry', rabbit_summary(self.fs)['settings'])
         setup_rabbit(self.fs, num_segments=3, carry=False)
         self.assertNotIn('Carry', rabbit_summary(self.fs)['settings'])
+
+
+class _RabbitCardBase(TestCase):
+    """Fixture only — a sibling that INHERITED the tests would re-run them
+    against a fixture they were not written for (`_DayBetBase`)."""
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course)
+        self.fs = make_foursome(
+            self.round, [('Paul', 0), ('Dave', 0), ('Sam', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+
+    def _setup(self, **kw):
+        kw.setdefault('accumulate', True)
+        kw.setdefault('num_segments', 3)
+        kw.setdefault('handicap_mode', 'gross')
+        setup_rabbit(self.fs, **kw)
+
+    def _hole(self, h, paul, dave, sam):
+        submit_hole(self.fs, h, [(self.pid['Paul'], paul),
+                                 (self.pid['Dave'], dave),
+                                 (self.pid['Sam'], sam)])
+
+    def _card(self, hole):
+        calculate_rabbit(self.fs)
+        return rabbit_hole_card(self.fs, hole)
+
+
+class RabbitHoleCardTests(_RabbitCardBase):
+    """`rabbit_hole_card` — what the score-entry screen draws for one hole
+    (`~/Downloads/handoff-rabbit-score-entry`)."""
+
+    def test_it_names_the_rabbit_its_range_and_what_is_left(self):
+        self._setup()
+        r = self._card(10)['rabbit']
+        self.assertEqual((r['index'], r['of']), (2, 3))
+        self.assertEqual((r['start_hole'], r['end_hole']), (7, 12))
+        self.assertEqual(r['to_play'], 3)        # 10, 11, 12
+        self.assertTrue(r['loose'])
+
+    def test_the_holder_is_the_state_BEFORE_the_hole(self):
+        # Paul catches it on 7 and extends on 8; standing on 9 he is +2, and
+        # the hole's own result is what moves it.
+        self._setup()
+        for h in (7, 8):
+            self._hole(h, 3, 5, 5)
+        card = self._card(9)
+        self.assertEqual(card['rabbit']['holder_short'], 'P')
+        self.assertEqual(card['rabbit']['lead'], 2)
+        self.assertIsNone(card['result'], 'the 9th is not played yet')
+
+    def test_an_outright_low_lights_one_golfer_and_a_tie_lights_none(self):
+        self._setup()
+        self._hole(7, 3, 5, 5)
+        lit = [p['short'] for p in self._card(7)['players'] if p['is_best']]
+        self.assertEqual(lit, ['P'])
+
+        self._hole(8, 4, 4, 5)                   # two share the low
+        card = self._card(8)
+        self.assertTrue(card['hole_complete'])
+        self.assertEqual([p for p in card['players'] if p['is_best']], [],
+                         'a tie moves nothing, so it lights nothing')
+
+    def test_the_best_ball_waits_for_the_last_score(self):
+        self._setup()
+        submit_hole(self.fs, 7, [(self.pid['Paul'], 3)])
+        card = self._card(7)
+        self.assertFalse(card['hole_complete'])
+        self.assertTrue(all(not p['is_best'] for p in card['players']))
+
+    # ── the sentence under the rabbit ─────────────────────────────────────
+
+    def test_catching_it(self):
+        self._setup()
+        self._hole(7, 3, 5, 5)
+        r = self._card(7)['result']
+        self.assertEqual(r['event'], 'grab')
+        self.assertIn('catches it', r['line'])
+
+    def test_extending_names_what_it_would_take_to_lose_it(self):
+        self._setup()
+        self._hole(7, 3, 5, 5)
+        self._hole(8, 3, 5, 5)
+        r = self._card(8)['result']
+        self.assertEqual(r['event'], 'extend')
+        self.assertIn('Lead up to +2', r['line'])
+        self.assertIn('2 losses set it loose', r['line'])
+
+    def test_knocking_it_loose(self):
+        self._setup()
+        self._hole(7, 3, 5, 5)                   # Paul +1
+        self._hole(8, 5, 5, 3)                   # Sam beats him, lead 0
+        r = self._card(8)['result']
+        self.assertEqual(r['event'], 'freed')
+        self.assertIn('knocked it loose', r['line'])
+        self.assertIn('the next outright win catches it', r['line'])
+
+    def test_winning_one_back(self):
+        self._setup()
+        for h in (7, 8):
+            self._hole(h, 3, 5, 5)               # Paul +2
+        self._hole(9, 5, 3, 5)                   # Dave takes one off
+        r = self._card(9)['result']
+        self.assertEqual(r['event'], 'beaten')
+        self.assertIn('lead down to +1', r['line'])
+
+    def test_a_tie_leaves_it_where_it_is(self):
+        # The holder ties for low: nobody won the hole outright, so nothing
+        # moves. The engine reports this as HELD — the same event it uses for
+        # a holder who WON the hole in stop-after-one mode — so the sentence
+        # is chosen on whether there was an outright winner.
+        self._setup()
+        self._hole(7, 3, 5, 5)
+        self._hole(8, 4, 4, 5)
+        r = self._card(8)['result']
+        self.assertEqual(r['event'], 'held')
+        self.assertIsNone(r['winner_short'])
+        self.assertIn('stays put', r['line'])
+
+    def test_holding_it_by_winning_is_a_different_sentence(self):
+        self._setup(accumulate=False)            # the lead is capped at 1
+        self._hole(7, 3, 5, 5)
+        self._hole(8, 3, 5, 5)                   # wins it again, still +1
+        r = self._card(8)['result']
+        self.assertEqual(r['event'], 'held')
+        self.assertIn('holds on', r['line'])
+        self.assertIn('one loss sets it loose', r['line'])
+
+    # ── decided, and what takes over ──────────────────────────────────────
+
+    def test_a_decided_rabbit_says_so_and_names_the_next_one(self):
+        # Rolls on, so the next rabbit KEEPS ITS LENGTH and the leftovers at
+        # the end run as an extra.
+        self._setup(extra_rabbits=True)
+        for h in (7, 8, 9, 10):
+            self._hole(h, 3, 5, 5)               # +4 with 2 left on the 10th
+        card = self._card(10)
+        self.assertTrue(card['result']['decided'])
+        self.assertEqual(card['result']['line'], "can't be caught")
+        self.assertEqual(card['result']['leg_outcome'], 'won')
+        self.assertFalse(card['result']['held_to_end'])
+        nxt = card['next']
+        self.assertEqual(nxt['start_hole'], 11)
+        self.assertEqual(nxt['end_hole'], 16, 'a rabbit keeps its length')
+        self.assertFalse(nxt['half_stake'])
+
+    def test_a_rabbit_held_to_the_last_hole_is_won_but_not_early(self):
+        self._setup()
+        # No rolls-on, so the leg plays out its full range and the rabbit is
+        # carried to the 12th rather than won with holes to spare.
+        self._hole(7, 3, 5, 5)                   # Paul +1 and holds on
+        for h in (8, 9, 10, 11, 12):
+            self._hole(h, 4, 4, 4)               # tied all the way in
+        r = self._card(12)['result']
+        self.assertEqual(r['leg_outcome'], 'won')
+        self.assertTrue(r['held_to_end'])
+
+    def test_a_rabbit_nobody_held_ends_loose(self):
+        self._setup()
+        for h in range(7, 13):
+            self._hole(h, 4, 4, 4)               # never caught
+        r = self._card(12)['result']
+        self.assertEqual(r['leg_outcome'], 'loose')
+
+    def test_a_hole_mid_leg_has_not_ended_it(self):
+        self._setup()
+        self._hole(7, 3, 5, 5)
+        self.assertFalse(self._card(7)['result']['leg_ended'])
+
+    def test_a_live_rabbit_offers_no_next_one(self):
+        self._setup(extra_rabbits=True)
+        self._hole(7, 3, 5, 5)
+        card = self._card(7)
+        self.assertFalse(card['result']['decided'])
+        self.assertIsNone(card['next'])
+
+    def test_a_one_hole_extra_is_flagged_as_half(self):
+        self._setup(extra_rabbits=True)
+        for h in range(1, 7):                    # rabbit 1 runs its length
+            self._hole(h, 4, 4, 4)
+        # Decided on the 11th, not before: +1, +1, +2, +2, then +3 with one
+        # hole left. A clean sweep would have settled it on the 10th.
+        self._hole(7, 3, 5, 5)
+        self._hole(8, 4, 4, 4)
+        self._hole(9, 3, 5, 5)
+        self._hole(10, 4, 4, 4)
+        self._hole(11, 3, 5, 5)
+        card = self._card(11)
+        self.assertTrue(card['result']['decided'])
+        # Rabbit 3 takes 12–17 and the 18th is left over.
+        self.assertEqual((card['next']['start_hole'],
+                          card['next']['end_hole']), (12, 17))
+        tail = self._card(18)['rabbit']
+        self.assertTrue(tail['is_extra'])
+        self.assertEqual(tail['stake'], 2.5, 'one hole pays half')
+
+    # ── the rest ──────────────────────────────────────────────────────────
+
+    def test_the_rows_carry_a_stable_colour_and_the_handicap(self):
+        self._setup()
+        rows = {p['short']: p for p in self._card(7)['players']}
+        self.assertEqual({p['colour_index'] for p in rows.values()}, {0, 1, 2})
+        self.assertEqual(rows['P']['course_handicap'], 0)
+
+    def test_strokes_are_the_RABBIT_allocation(self):
+        # The round is net; this game is gross, and the dots follow the game.
+        self.fs.memberships.filter(player_id=self.pid['Sam']).update(
+            playing_handicap=18, course_handicap=18)
+        self._setup()
+        self._hole(7, 4, 4, 5)
+        rows = {p['short']: p for p in self._card(7)['players']}
+        self.assertEqual(rows['S']['strokes'], 0)
+        self.assertEqual(rows['S']['net'], rows['S']['gross'])
+
+    def test_the_hole_carries_its_par_index_and_nine(self):
+        self._setup()
+        card = self._card(10)
+        self.assertEqual(card['par'], self.tee.hole(10)['par'])
+        self.assertEqual(card['nine'], 'back nine')
+        self.assertEqual(self._card(7)['nine'], 'front nine')
+
+    def test_no_game_returns_nothing(self):
+        self.assertEqual(rabbit_hole_card(self.fs, 1), {})
+
+
+class RabbitFixtureRegenTests(_RabbitCardBase):
+    """Writes the JSON the Flutter tests draw, from the REAL engine.
+
+    `REGEN_RABBIT_FIXTURES=1 manage.py test scoring.tests.test_rabbit`
+    rewrites them — the Sequoya arrangement. A screen tested against
+    hand-written JSON is tested against what somebody THOUGHT the server
+    sends.
+    """
+
+    def _write(self, name, card):
+        import json, os, pathlib
+        if os.environ.get('REGEN_RABBIT_FIXTURES') != '1':
+            return
+        path = (pathlib.Path(__file__).resolve().parents[2]
+                / 'mobile' / 'test' / 'fixtures' / name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(card, indent=2, default=str) + '\n')
+
+    def test_regenerate(self):
+        # Rolls on, carry, strokes off the low man — the packet's settings.
+        self.fs.memberships.filter(player_id=self.pid['Dave']).update(
+            playing_handicap=4, course_handicap=4)
+        self.fs.memberships.filter(player_id=self.pid['Sam']).update(
+            playing_handicap=7, course_handicap=7)
+        self._setup(extra_rabbits=True, carry=True,
+                    handicap_mode='strokes_off')
+
+        for h in range(1, 7):
+            self._hole(h, 4, 4, 4)               # rabbit 1 never caught
+        self._hole(7, 3, 6, 6)
+        self._hole(8, 3, 6, 6)
+
+        # 1 · mid-rabbit, one score still out.
+        submit_hole(self.fs, 9, [(self.pid['Paul'], 4),
+                                 (self.pid['Dave'], 6)])
+        live = self._card(9)
+        self.assertFalse(live['hole_complete'])
+        self._write('rabbit_hole9_live.json', live)
+
+        # 2 · the hole lands and the lead goes up.
+        self._hole(9, 4, 6, 6)
+        up = self._card(9)
+        self.assertEqual(up['result']['event'], 'extend')
+        self._write('rabbit_hole9_lead_up.json', up)
+
+    def test_regenerate_won_early(self):
+        self._setup(extra_rabbits=True, carry=True)
+        for h in range(1, 7):
+            self._hole(h, 4, 4, 4)
+        for h in (7, 8, 9, 10):
+            self._hole(h, 3, 5, 5)               # +4 with 2 left
+        card = self._card(10)
+        self.assertTrue(card['result']['decided'])
+        self.assertIsNotNone(card['next'])
+        self._write('rabbit_hole10_won_early.json', card)
+
+    def test_regenerate_knocked_loose(self):
+        self._setup(extra_rabbits=True, carry=True)
+        self._hole(7, 3, 5, 5)                   # Paul +1
+        self._hole(8, 5, 5, 3)                   # Sam frees it
+        card = self._card(8)
+        self.assertEqual(card['result']['event'], 'freed')
+        self._write('rabbit_hole8_loose.json', card)

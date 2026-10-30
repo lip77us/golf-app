@@ -34,6 +34,8 @@ import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart' show scoreCellWithDots;
 import '../widgets/round_chat_button.dart';
 import '../widgets/spots_capture.dart';
+import '../widgets/rabbit_entry.dart';
+import '../widgets/forty_balls_keypad.dart';
 import '../utils/match_handicap.dart';
 import '../utils/play_order.dart';
 import '../utils/round_complete.dart';
@@ -92,6 +94,10 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
   // hot-spot on a completed hole).  Cleared on navigation and after saving.
   int? _editingPlayerId;
 
+  /// The tray stays down while the scorer has asked to edit — "Edit scores"
+  /// puts the keypad back over it.
+  bool _trayEditing = false;
+
   @override
   void initState() {
     super.initState();
@@ -103,6 +109,7 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
         rp.refreshPendingOverlay();
       }
       rp.loadRabbit(widget.foursomeId);
+      rp.loadRabbitHole(widget.foursomeId, _selectedHole);
       if (rp.round?.activeGames.contains('spots') ?? false) {
         rp.loadSpots(widget.foursomeId);
       }
@@ -225,6 +232,44 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
     });
   }
 
+  /// The Rabbit card for the hole on screen, once the server has sent it.
+  RabbitHoleCard? _card(RoundProvider rp) => rp.rabbitHole(_selectedHole);
+
+  /// Who the keypad is pointed at: the first golfer with no score, or the one
+  /// a scorer tapped back to. The same override the inline picker uses, so
+  /// the two controls cannot disagree about whose row is live.
+  Membership? _keypadMember(List<Membership> players, Map<int, int> scores) {
+    if (_editingPlayerId != null) {
+      for (final m in players) {
+        if (m.player.id == _editingPlayerId) return m;
+      }
+    }
+    final i = _hotSpotIdx(players, scores);
+    return (i >= 0 && i < players.length) ? players[i] : null;
+  }
+
+  /// The combo-tee chip and the Spots button, which belong to the ROW and are
+  /// the two things a dedicated screen is most likely to lose.
+  Widget? _rowExtras(RoundProvider rp, List<Membership> players, int pid) {
+    final m = players.where((x) => x.player.id == pid).firstOrNull;
+    final combo = m?.comboTeeOnHole(_selectedHole);
+    final spots = spotsActive(rp);
+    if (combo == null && !spots) return null;
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Row(children: [
+        if (combo != null) ComboTeeChip(tee: combo),
+        if (combo != null && spots) const SizedBox(width: 8),
+        if (spots)
+          SpotsButton(
+            types: spotsTypesFor(pid, _selectedHole, rp.spotsSummary),
+            onTap: () => openSpotsSheet(widget.foursomeId, pid, _selectedHole),
+            focused: spotsSheetOpenFor(pid),
+          ),
+      ]),
+    );
+  }
+
   /// Holes this group plays, in order (back-9 / 9-hole / shotgun aware).
   List<int> _playOrder(RoundProvider rp) =>
       roundPlayOrder(rp.round, rp.scorecard);
@@ -251,12 +296,36 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
   void _advance() {
     final next = nextInOrder(
         _playOrder(context.read<RoundProvider>()), _selectedHole);
-    if (next != null) setState(() { _selectedHole = next; _editingPlayerId = null; });
+    if (next != null) {
+      setState(() {
+        _selectedHole = next;
+        _editingPlayerId = null;
+        _trayEditing = false;
+      });
+      _loadCard();
+    }
   }
   void _retreat() {
     final prev = prevInOrder(
         _playOrder(context.read<RoundProvider>()), _selectedHole);
-    if (prev != null) setState(() { _selectedHole = prev; _editingPlayerId = null; });
+    if (prev != null) {
+      setState(() {
+        _selectedHole = prev;
+        _editingPlayerId = null;
+        _trayEditing = false;
+      });
+      _loadCard();
+    }
+  }
+
+  /// This hole's card. A save brings the next one back with it, so this is
+  /// for a hole opened without posting — moving between holes, or picking up
+  /// a round somebody else is scoring.
+  void _loadCard() {
+    final rp = context.read<RoundProvider>();
+    final games = rp.round?.activeGames ?? const <String>[];
+    if (!games.contains('rabbit')) return;
+    rp.loadRabbitHole(widget.foursomeId, _selectedHole);
   }
 
   /// Persist whatever is pending for [hole] without changing the selected hole.
@@ -537,6 +606,7 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
     final scores   = _effectiveScores(sc, _selectedHole);
     final hotSpot  = isComplete ? -1 : _hotSpotIdx(players, scores);
     final par      = holeData?.par ?? 4;
+    final card     = _card(rp);
 
     // Rabbit state for the SELECTED hole's segment (not the globally last
     // scored hole) — the segment resets, so on the first hole of a new
@@ -557,6 +627,28 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            // **The Rabbit entry card** (`handoff-rabbit-score-entry`), on
+            // the same keypad and tray vocabulary as 40 Balls and Sixes. The
+            // older inline-picker card is kept for the moment the server has
+            // not sent this hole's card yet — a group must never be stuck
+            // looking at nothing because a fetch is in flight.
+            if (card != null) ...[
+              RabbitHoleHeader(card: card),
+              const SizedBox(height: 12),
+              RabbitPlayersCard(
+                card: card,
+                netStyle: ctx.watch<SettingsProvider>().netStyleEntry,
+                activePlayerId: isComplete
+                    ? null
+                    : _keypadMember(players, scores)?.player.id,
+                onTapPlayer: (pid) => setState(() {
+                  _editingPlayerId = pid;
+                  _trayEditing = true;
+                }),
+                rowExtras: (p) => _rowExtras(rp, players, p.playerId)
+                    ?? const SizedBox.shrink(),
+              ),
+            ] else ...[
             HoleHeader(
               holeData:    holeData,
               holeNumber:  _selectedHole,
@@ -588,11 +680,14 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
                   openSpotsSheet(widget.foursomeId, pid, _selectedHole),
               spotsSheetOpen: spotsSheetOpenFor,
             ),
+            ],
             // Spots' greenie pick, on par 3s only — empty on
             // every other hole. The server decides which
             // holes are par 3s; it is walking the carry.
             ...greenieCards(rp, widget.foursomeId, _selectedHole),
-            if (holeInfo != null && holeInfo.isScored) ...[
+            // The tray says what the hole did, so this only speaks when
+            // there is no card to raise one.
+            if (card == null && holeInfo != null && holeInfo.isScored) ...[
               const SizedBox(height: 10),
               _OutcomeLine(hole: holeInfo),
             ],
@@ -682,6 +777,69 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
     final order   = _playOrder(rp);
     final prevHole = prevInOrder(order, _selectedHole);
     final nextHole = nextInOrder(order, _selectedHole);
+
+    // **The keypad, and the tray over the pager.** Same shape as Sixes: while
+    // the tray is up it IS the bottom bar, because its forward button can
+    // name the next RABBIT and a generic pager cannot. The pager below is
+    // still what a group uses whenever the tray is not up — including while a
+    // result is still coming — so a slow card never strands them on a hole.
+    final card = _card(rp);
+    if (card != null && !isComplete) {
+      if (allDone && !_trayEditing && _editingPlayerId == null) {
+        return SafeArea(
+          child: RabbitHoleTray(
+            card: card,
+            nextHole: nextHole,
+            gettingResult: _pending[_selectedHole]?.isNotEmpty ?? false,
+            onEdit: () => setState(() {
+              _trayEditing = true;
+              _editingPlayerId = players.first.player.id;
+            }),
+            onPrev: prevHole == null ? null : _retreat,
+            onNext: nextHole == null ? null : _advance,
+          ),
+        );
+      }
+      final m = _keypadMember(players, scores);
+      if (m != null) {
+        return SafeArea(
+          child: FortyBallsKeypad(
+            playerName: m.player.name,
+            // HIS par, not the hole's — on mixed tees the hole is a 4 for one
+            // golfer and a 5 for the next.
+            par: sc.holeData(_selectedHole)
+                    ?.scoreFor(m.player.id)?.par ?? (card.par ?? 4),
+            // The strokes the RABBIT issues, which a strokes-off game spreads
+            // across its legs — not the round's stored allocation.
+            strokes: card.players
+                .where((p) => p.playerId == m.player.id)
+                .map((p) => p.strokes)
+                .firstOrNull ?? 0,
+            netStyle: ctx.watch<SettingsProvider>().netStyleEntry,
+            onScore: (n) {
+              _handleScore(ctx, m, n, players);
+              if (_editingPlayerId != null || _trayEditing) {
+                setState(() { _editingPlayerId = null; _trayEditing = false; });
+              }
+              // **The hole is POSTED on its last score.** The tray reports
+              // the SERVER's result, so a hole left unsent raises a tray with
+              // nothing in it — the bug Annandale and then Sixes both hit.
+              final now = _effectiveScores(sc, _selectedHole);
+              if (n > 0 && _allScored(players, now)) {
+                final hole = _selectedHole;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted || _selectedHole != hole) return;
+                  if (context.read<RoundProvider>().submitting) return;
+                  _saveHole(ctx, hole, players);
+                });
+              }
+            },
+            onClear: () => _selectScore(m, 0, _selectedHole),
+          ),
+        );
+      }
+    }
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),

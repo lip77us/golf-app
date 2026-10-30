@@ -893,3 +893,216 @@ def rabbit_summary(foursome) -> dict:
                               (2 if game.extra_rabbits else 0)) * entry,
         },
     }
+
+
+def _rabbit_line(event, lead, to_play, accumulate, winner_short, holder_short,
+                 decided, loose_before, held_to_end=False) -> str:
+    """The sentence under the rabbit's state: what the hole did, and what is
+    still at risk.
+
+    Written here because every clause is a RULE — how a lead grows, how many
+    losses set it loose, and when it can no longer be caught. A client
+    composing it would be a second copy of the engine's own transitions.
+    """
+    if decided:
+        return "can't be caught"
+    if held_to_end:
+        return ''
+    left = f'{to_play} to play' if to_play != 1 else '1 to play'
+    if event == RabbitHoleResult.GRAB:
+        return f'{winner_short} catches it · {left}'
+    if event == RabbitHoleResult.FREED:
+        return (f'{winner_short} knocked it loose · {left} · '
+                'the next outright win catches it')
+    if event == RabbitHoleResult.TIE:
+        if loose_before:
+            return f'No outright winner, it stays loose · {left}'
+        return f'Tie for low net, the rabbit stays put · {left}'
+    if event == RabbitHoleResult.BEATEN:
+        return (f'{winner_short} wins one back, lead down to +{lead} · {left}')
+    if event == RabbitHoleResult.EXTEND:
+        losses = 'loss' if lead == 1 else 'losses'
+        return f'Lead up to +{lead} · {left} · {lead} {losses} set it loose'
+    if event == RabbitHoleResult.HELD:
+        # HELD covers two different holes: the holder TIED for low (nothing
+        # moves because nobody won it outright), and the holder won it in
+        # stop-after-one mode, where the lead is capped so winning adds
+        # nothing. `winner_short` is None exactly on a tie, which is what
+        # separates them — and they are not the same sentence.
+        if winner_short is None:
+            return f'Tie for low net, the rabbit stays put · {left}'
+        if accumulate:
+            return f'{holder_short} holds on · {left}'
+        return f'{holder_short} holds on · {left} · one loss sets it loose'
+    return left
+
+
+def rabbit_hole_card(foursome, hole: int) -> dict:
+    """Everything the Rabbit score-entry screen draws for ONE hole.
+
+    Built from `rabbit_summary`, which has already walked the legs — the
+    holder, the lead, the event and where a leg was decided are the ENGINE's
+    answers, so the tray and the leaderboard cannot disagree about who has the
+    rabbit. What is derived here is layout: which leg owns the hole, how much
+    of it is left, and which rabbit takes over.
+
+    Returns `{}` when Rabbit is not set up, so a caller can test the key.
+    """
+    summary = rabbit_summary(foursome)
+    segs = summary.get('segments') or []
+    if not segs:
+        return {}
+
+    holes = summary.get('holes') or []
+    by_hole = {h['hole']: h for h in holes}
+    here = by_hole.get(hole)
+    if here is None:
+        return {}
+
+    leg_index = here['segment']
+    leg = next((s for s in segs if s['index'] == leg_index), None)
+    if leg is None:
+        return {}
+
+    # The leg's holes in play order — `holes` is already in that order, and
+    # carries every hole in play rather than only the scored ones.
+    leg_holes = [h['hole'] for h in holes if h['segment'] == leg_index]
+    pos = leg_holes.index(hole)
+    to_play = len(leg_holes) - pos          # including this one
+
+    # State BEFORE the hole: the last scored hole of this leg before it.
+    holder_before, lead_before = None, 0
+    for h in leg_holes[:pos]:
+        row = by_hole.get(h) or {}
+        if row.get('event'):
+            holder_before, lead_before = row.get('holder_id'), row.get('lead', 0)
+
+    short_of = {p['player_id']: (p['short_name'] or p['name'])
+                for p in summary.get('players', [])}
+    name_of  = {p['player_id']: p['name'] for p in summary.get('players', [])}
+
+    members = [m for m in foursome.memberships.all() if not m.player.is_phantom]
+    order_ids = [m.player_id for m in members]
+    entries = {e['player_id']: e for e in (here.get('entries') or [])}
+
+    players = []
+    for i, m in enumerate(members):
+        e = entries.get(m.player_id, {})
+        players.append({
+            'player_id': m.player_id,
+            'name'     : name_of.get(m.player_id, m.player.name),
+            'short'    : short_of.get(m.player_id, m.player.short_name),
+            'course_handicap': m.course_handicap,
+            # Rabbit is three golfers in three colours — identity, not sides,
+            # so the slot follows the roster and never moves.
+            'colour_index': i,
+            'strokes'  : e.get('strokes', 0),
+            'gross'    : e.get('gross'),
+            'net'      : e.get('net_score'),
+            'is_holder': m.player_id == holder_before,
+        })
+
+    complete = all(p['gross'] is not None for p in players)
+    # The outright low net only. A tie lights none — which is the same rule
+    # that decides whether anything moves.
+    winner_id = here.get('winner_id') if complete else None
+    for p in players:
+        p['is_best'] = complete and p['player_id'] == winner_id
+
+    result = None
+    if here.get('event'):
+        nets = sorted(p['net'] for p in players if p['net'] is not None)
+        last_hole = (hole == leg_holes[-1])
+        # **Winning early and holding on to the end are different sentences**,
+        # and `decided_on` alone cannot tell them apart. `_is_decided` is true
+        # on the last hole too (a lead of one with nothing left cannot be
+        # caught either), and when the game ROLLS ON the leg is truncated to
+        # the hole it was decided on — so there an early finish always looks
+        # like the last hole.
+        #
+        # The game's own flag settles it: rolling on means a leg ends exactly
+        # when it is decided, so `decided_on` IS an early finish. Without it
+        # the leg plays out, and an early finish is one decided before its
+        # final hole.
+        rolls_on = bool(summary.get('extra_rabbits')
+                        and summary.get('accumulate'))
+        decided = (leg['decided_on'] == hole
+                   and (rolls_on or not last_hole))
+        if decided:
+            outcome, held = 'won', False
+        elif last_hole:
+            outcome = 'won' if here.get('holder_id') else 'loose'
+            held = outcome == 'won'
+        else:
+            outcome, held = None, False
+        result = {
+            'leg_ended'   : bool(outcome),
+            'leg_outcome' : outcome,
+            'held_to_end' : held,
+            'winner_id'   : winner_id,
+            'winner_short': here.get('winner_short'),
+            'best_net'    : nets[0] if nets else None,
+            'runner_net'  : nets[1] if len(nets) > 1 else None,
+            'holder_id'   : here.get('holder_id'),
+            'holder_short': here.get('holder_short'),
+            'lead'        : here.get('lead', 0),
+            'event'       : here.get('event'),
+            'decided'     : decided,
+            'line'        : _rabbit_line(
+                here.get('event'), here.get('lead', 0), to_play - 1,
+                summary.get('accumulate', True), here.get('winner_short'),
+                here.get('holder_short'), decided, holder_before is None,
+                held),
+        }
+
+    # The rabbit that takes over, offered only once this one is decided.
+    nxt = None
+    if result and result['leg_ended']:
+        follow = next((s for s in segs if s['index'] == leg_index + 1), None)
+        if follow is not None:
+            nxt = {
+                'index'     : follow['index'],
+                'of'        : summary.get('num_segments'),
+                'is_extra'  : follow['is_extra'],
+                'start_hole': follow['start_hole'],
+                'end_hole'  : follow['end_hole'],
+                'stake'     : follow['value'],
+                # A rabbit nobody had a chance to chase is worth half.
+                'half_stake': follow['is_extra'] and follow['holes'] == 1,
+            }
+
+    tee = next((m.tee for m in members if m.tee_id), None)
+    h   = tee.hole(hole) if tee else {}
+
+    return {
+        'hole'  : hole,
+        'par'   : h.get('par'),
+        'stroke_index': h.get('stroke_index'),
+        'yards' : h.get('yards'),
+        'nine'  : _nine_of_hole(hole),
+        'rabbit': {
+            'index'       : leg_index,
+            'of'          : summary.get('num_segments'),
+            'is_extra'    : leg['is_extra'],
+            'start_hole'  : leg_holes[0],
+            'end_hole'    : leg_holes[-1],
+            'holder_id'   : holder_before,
+            'holder_short': short_of.get(holder_before),
+            'lead'        : lead_before,
+            'loose'       : holder_before is None,
+            'to_play'     : to_play,
+            # What is riding: the leg's stake including anything carried in.
+            'stake'       : leg['value'],
+            'carried_in'  : leg['carried_in'],
+        },
+        'players'      : players,
+        'hole_complete': complete,
+        'result'       : result,
+        'next'         : nxt,
+        'payout'       : leg['payout'],
+        'order_ids'    : order_ids,
+    }
+
+
+def _nine_of_hole(hole: int) -> str:
+    return 'front nine' if hole <= 9 else 'back nine'

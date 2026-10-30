@@ -134,6 +134,8 @@ class RoundProvider extends ChangeNotifier {
   /// One entry per hole — the Sixes score-entry card. Keyed by hole because
   /// the card IS one hole, unlike every other summary here.
   final Map<int, SixesHoleCard> _sixesHoles = {};
+  /// The same, per hole, for Rabbit.
+  final Map<int, RabbitHoleCard> _rabbitHoles = {};
   Points531Summary? _points531Summary;
   VegasSummary?    _vegasSummary;
   FourballSummary? _fourballSummary;
@@ -202,6 +204,7 @@ class RoundProvider extends ChangeNotifier {
   Leaderboard?      get leaderboard        => _leaderboard;
   SixesSummary?     get sixesSummary       => _sixesSummary;
   SixesHoleCard?    sixesHole(int hole)    => _sixesHoles[hole];
+  RabbitHoleCard?   rabbitHole(int hole)   => _rabbitHoles[hole];
   Points531Summary? get points531Summary   => _points531Summary;
   VegasSummary?     get vegasSummary        => _vegasSummary;
   FourballSummary?  get fourballSummary     => _fourballSummary;
@@ -276,6 +279,7 @@ class RoundProvider extends ChangeNotifier {
     _scorecard               = null;
     _sixesSummary            = null;
     _sixesHoles.clear();
+    _rabbitHoles.clear();
     _points531Summary        = null;
     _skinsSummary            = null;
     _spotsSummary            = null;
@@ -413,6 +417,7 @@ class RoundProvider extends ChangeNotifier {
       _tripleCupSummary = null;
       _sixesSummary     = null;
       _sixesHoles.clear();
+      _rabbitHoles.clear();
       _points531Summary = null;
       _honorsSummary    = null;
       _wolfSummary      = null;
@@ -476,7 +481,8 @@ class RoundProvider extends ChangeNotifier {
       // Annandale Friday and Sixes. A hold that only knew about Annandale
       // left the Sixes tray free to draw the card from before this score.
       if (foursomeId == _activeFoursomeId &&
-          (_annandaleFridaySummary != null || _sixesHoles.isNotEmpty)) {
+          (_annandaleFridaySummary != null
+           || _sixesHoles.isNotEmpty || _rabbitHoles.isNotEmpty)) {
         _annandaleResults.hold(holeNumber);
       }
 
@@ -808,6 +814,22 @@ class RoundProvider extends ChangeNotifier {
       // Offline — keep whatever is on screen.
     } catch (e) {
       debugPrint('loadSixesHole error: $e');
+    }
+  }
+
+  /// Fetch one hole's Rabbit card. Silent on failure: a card that cannot be
+  /// fetched must not stop a group entering scores.
+  Future<void> loadRabbitHole(int foursomeId, int hole) async {
+    try {
+      final card = await _client.getRabbitHoleCard(foursomeId, hole);
+      if (card != null) {
+        _rabbitHoles[hole] = card;
+        notifyListeners();
+      }
+    } on NetworkException {
+      // Offline — keep whatever is on screen.
+    } catch (e) {
+      debugPrint('loadRabbitHole error: $e');
     }
   }
 
@@ -1361,6 +1383,13 @@ class RoundProvider extends ChangeNotifier {
       _sixesHoles[holeNumber] = SixesHoleCard.fromJson(six);
       // The card IS the answer, so the hold ends here rather than running
       // its full wait — which is what made the result look slow.
+      _annandaleResults.answer(holeNumber);
+      notifyListeners();
+    }
+
+    final rab = response['rabbit_hole'];
+    if (rab is Map<String, dynamic>) {
+      _rabbitHoles[holeNumber] = RabbitHoleCard.fromJson(rab);
       _annandaleResults.answer(holeNumber);
       notifyListeners();
     }

@@ -9437,3 +9437,258 @@ class SixesHoleCard {
         betUnit: (j['bet_unit'] as num?)?.toDouble(),
       );
 }
+
+// ---------------------------------------------------------------------------
+// Rabbit — one hole's score-entry card
+// ---------------------------------------------------------------------------
+
+/// One golfer's row on the hole.
+class RabbitHolePlayer {
+  final int playerId;
+  final String name;
+  final String short;
+  final int courseHandicap;
+
+  /// Identity, not a side — three golfers in three colours, and the slot
+  /// follows the roster so it never moves.
+  final int colourIndex;
+  final int strokes;
+  final int? gross;
+  final int? net;
+
+  /// He held the rabbit going INTO this hole.
+  final bool isHolder;
+
+  /// The outright low net. A tie lights none, which is the same rule that
+  /// decides whether anything moves.
+  final bool isBest;
+
+  const RabbitHolePlayer({
+    required this.playerId,
+    required this.name,
+    required this.short,
+    required this.courseHandicap,
+    required this.colourIndex,
+    required this.strokes,
+    required this.gross,
+    required this.net,
+    required this.isHolder,
+    required this.isBest,
+  });
+
+  factory RabbitHolePlayer.fromJson(Map<String, dynamic> j) => RabbitHolePlayer(
+        playerId: j['player_id'] as int,
+        name: (j['name'] as String?) ?? '',
+        short: (j['short'] as String?) ?? '',
+        courseHandicap: (j['course_handicap'] as num?)?.toInt() ?? 0,
+        colourIndex: (j['colour_index'] as num?)?.toInt() ?? 0,
+        strokes: (j['strokes'] as num?)?.toInt() ?? 0,
+        gross: (j['gross'] as num?)?.toInt(),
+        net: (j['net'] as num?)?.toInt(),
+        isHolder: j['is_holder'] as bool? ?? false,
+        isBest: j['is_best'] as bool? ?? false,
+      );
+}
+
+/// The rabbit this hole belongs to, as it stood BEFORE the hole.
+class RabbitLegInfo {
+  final int index;
+  final int of;
+  final bool isExtra;
+  final int startHole;
+  final int endHole;
+  final int? holderId;
+  final String? holderShort;
+  final int lead;
+  final bool loose;
+
+  /// Holes of this rabbit still to play, including the one in front of you.
+  final int toPlay;
+
+  /// What is riding: the leg's stake, including anything carried in.
+  final double stake;
+  final double carriedIn;
+
+  const RabbitLegInfo({
+    required this.index,
+    required this.of,
+    required this.isExtra,
+    required this.startHole,
+    required this.endHole,
+    required this.holderId,
+    required this.holderShort,
+    required this.lead,
+    required this.loose,
+    required this.toPlay,
+    required this.stake,
+    required this.carriedIn,
+  });
+
+  factory RabbitLegInfo.fromJson(Map<String, dynamic> j) => RabbitLegInfo(
+        index: (j['index'] as num?)?.toInt() ?? 1,
+        of: (j['of'] as num?)?.toInt() ?? 1,
+        isExtra: j['is_extra'] as bool? ?? false,
+        startHole: (j['start_hole'] as num?)?.toInt() ?? 0,
+        endHole: (j['end_hole'] as num?)?.toInt() ?? 0,
+        holderId: (j['holder_id'] as num?)?.toInt(),
+        holderShort: j['holder_short'] as String?,
+        lead: (j['lead'] as num?)?.toInt() ?? 0,
+        loose: j['loose'] as bool? ?? true,
+        toPlay: (j['to_play'] as num?)?.toInt() ?? 0,
+        stake: (j['stake'] as num?)?.toDouble() ?? 0,
+        carriedIn: (j['carried_in'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+/// What the hole did to the rabbit.
+class RabbitHoleOutcome {
+  final int? winnerId;
+  final String? winnerShort;
+  final int? bestNet;
+  final int? runnerNet;
+  final int? holderId;
+  final String? holderShort;
+  final int lead;
+
+  /// `grab` · `extend` · `held` · `beaten` · `freed` · `tie`.
+  final String event;
+
+  /// Won with holes to spare — the rabbit can no longer be caught.
+  final bool decided;
+
+  /// This hole ended the rabbit, one way or another.
+  final bool legEnded;
+
+  /// `won` · `loose` · null.
+  final String? legOutcome;
+
+  /// Carried to the end of its range rather than won early. A different
+  /// sentence, and `decided` alone cannot tell them apart.
+  final bool heldToEnd;
+
+  /// The rule clause under the rabbit — the server writes it, because every
+  /// part of it is a rule.
+  final String line;
+
+  const RabbitHoleOutcome({
+    required this.winnerId,
+    required this.winnerShort,
+    required this.bestNet,
+    required this.runnerNet,
+    required this.holderId,
+    required this.holderShort,
+    required this.lead,
+    required this.event,
+    required this.decided,
+    required this.legEnded,
+    required this.legOutcome,
+    required this.heldToEnd,
+    required this.line,
+  });
+
+  bool get noWinner => winnerId == null;
+  bool get loose => holderId == null;
+
+  factory RabbitHoleOutcome.fromJson(Map<String, dynamic> j) =>
+      RabbitHoleOutcome(
+        winnerId: (j['winner_id'] as num?)?.toInt(),
+        winnerShort: j['winner_short'] as String?,
+        bestNet: (j['best_net'] as num?)?.toInt(),
+        runnerNet: (j['runner_net'] as num?)?.toInt(),
+        holderId: (j['holder_id'] as num?)?.toInt(),
+        holderShort: j['holder_short'] as String?,
+        lead: (j['lead'] as num?)?.toInt() ?? 0,
+        event: (j['event'] as String?) ?? '',
+        decided: j['decided'] as bool? ?? false,
+        legEnded: j['leg_ended'] as bool? ?? false,
+        legOutcome: j['leg_outcome'] as String?,
+        heldToEnd: j['held_to_end'] as bool? ?? false,
+        line: (j['line'] as String?) ?? '',
+      );
+}
+
+/// The rabbit that takes over, offered only once this one has ended.
+class RabbitNextLeg {
+  final int index;
+  final int of;
+  final bool isExtra;
+  final int? startHole;
+  final int? endHole;
+  final double stake;
+  final bool halfStake;
+
+  const RabbitNextLeg({
+    required this.index,
+    required this.of,
+    required this.isExtra,
+    required this.startHole,
+    required this.endHole,
+    required this.stake,
+    required this.halfStake,
+  });
+
+  factory RabbitNextLeg.fromJson(Map<String, dynamic> j) => RabbitNextLeg(
+        index: (j['index'] as num?)?.toInt() ?? 0,
+        of: (j['of'] as num?)?.toInt() ?? 0,
+        isExtra: j['is_extra'] as bool? ?? false,
+        startHole: (j['start_hole'] as num?)?.toInt(),
+        endHole: (j['end_hole'] as num?)?.toInt(),
+        stake: (j['stake'] as num?)?.toDouble() ?? 0,
+        halfStake: j['half_stake'] as bool? ?? false,
+      );
+}
+
+/// Everything the Rabbit score-entry screen draws for one hole.
+class RabbitHoleCard {
+  final int hole;
+  final int? par;
+  final int? strokeIndex;
+  final int? yards;
+  final String nine;
+  final RabbitLegInfo rabbit;
+  final List<RabbitHolePlayer> players;
+  final bool holeComplete;
+  final RabbitHoleOutcome? result;
+  final RabbitNextLeg? next;
+
+  /// What the holder collects from EACH other golfer when this rabbit ends.
+  final double payout;
+
+  const RabbitHoleCard({
+    required this.hole,
+    required this.par,
+    required this.strokeIndex,
+    required this.yards,
+    required this.nine,
+    required this.rabbit,
+    required this.players,
+    required this.holeComplete,
+    required this.result,
+    required this.next,
+    required this.payout,
+  });
+
+  factory RabbitHoleCard.fromJson(Map<String, dynamic> j) => RabbitHoleCard(
+        hole: (j['hole'] as num?)?.toInt() ?? 0,
+        par: (j['par'] as num?)?.toInt(),
+        strokeIndex: (j['stroke_index'] as num?)?.toInt(),
+        yards: (j['yards'] as num?)?.toInt(),
+        nine: (j['nine'] as String?) ?? '',
+        rabbit: RabbitLegInfo.fromJson(
+            (j['rabbit'] as Map?)?.cast<String, dynamic>() ?? const {}),
+        players: ((j['players'] as List?) ?? const [])
+            .map((e) =>
+                RabbitHolePlayer.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(),
+        holeComplete: j['hole_complete'] as bool? ?? false,
+        result: j['result'] == null
+            ? null
+            : RabbitHoleOutcome.fromJson(
+                (j['result'] as Map).cast<String, dynamic>()),
+        next: j['next'] == null
+            ? null
+            : RabbitNextLeg.fromJson(
+                (j['next'] as Map).cast<String, dynamic>()),
+        payout: (j['payout'] as num?)?.toDouble() ?? 0,
+      );
+}

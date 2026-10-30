@@ -25,6 +25,7 @@ import 'package:flutter/material.dart';
 
 import '../api/models.dart';
 import '../theme/halved_brand.dart';
+import 'dashed_border.dart';
 import 'forty_balls_keypad.dart';
 import 'stroke_dots.dart';
 
@@ -632,7 +633,7 @@ class SixesHoleTray extends StatelessWidget {
         ? '${n.team1.short} v ${n.team2.short}'
         : 'sides not set';
     return CustomPaint(
-      painter: const _DashedBorder(Color(0x4DFFFFFF)),
+      painter: const DashedRRect(color: Color(0x4DFFFFFF), width: 1),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
         child: Column(
@@ -907,36 +908,4 @@ class SixesTeamsBand extends StatelessWidget {
       ),
     );
   }
-}
-
-/// A dashed rounded rectangle — the next-match card's border.
-///
-/// Flutter has no dashed border, and the dash is doing work here: it says the
-/// card describes something that has NOT happened yet, beside a solid card
-/// that reports something that has.
-class _DashedBorder extends CustomPainter {
-  final Color colour;
-  const _DashedBorder(this.colour);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rrect = RRect.fromRectAndRadius(
-        Offset.zero & size, const Radius.circular(12));
-    final path = Path()..addRRect(rrect);
-    final paint = Paint()
-      ..color = colour
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    for (final metric in path.computeMetrics()) {
-      var d = 0.0;
-      while (d < metric.length) {
-        final end = (d + 5).clamp(0.0, metric.length);
-        canvas.drawPath(metric.extractPath(d, end), paint);
-        d += 9;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DashedBorder old) => old.colour != colour;
 }

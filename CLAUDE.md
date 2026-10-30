@@ -7555,6 +7555,81 @@ same shape.
 notifications on `HiddenRound` — if a watcher of a hidden round still gets
 "round complete", that is the obvious follow-up.
 
+## Rabbit score entry — `handoff-rabbit-score-entry`
+
+The keypad and dark tray carried to Rabbit, on the same widgets as 40 Balls
+and Sixes.
+
+### The packet's "rule correction" was already our behaviour
+
+Its §"Rule correction" says the early finish changes the scoring engine. It
+does not — measured before touching anything. With rolls-on, rabbit 2 locked
+on the 10th gives rabbit 3 holes **11–16**, keeping its length, and 17–18 as
+a full-stake extra; a one-hole leftover already pays half. The design's own
+`rabbit-board.js` had the bug and fixed it there; `services/rabbit.py` never
+had it.
+
+**What IS worth knowing: it is gated behind `extra_rabbits`, which defaults
+off** — and with it off nothing rolls at all. This file previously claimed
+rolling was "unconditional, not an option"; that was wrong, and checked now
+rather than inherited. Paul (30 Oct 2026) kept the default: *"I am fine with
+the default being rabbits that are exactly 6 holes. The extra hole thing is a
+nuance that my group plays."* The switch should be renamed **"Rolls on"** —
+it is named after the by-product, and the roll-on rule is buried in its
+subtitle. Not done.
+
+### `rabbit_hole_card(foursome, hole)`
+
+Built from `rabbit_summary`, not a second walk: the holder, the lead, the
+event and where a leg was decided are the ENGINE's.
+
+- **Winning early and holding to the end are different sentences**, and
+  `decided_on` alone cannot separate them. `_is_decided` is true on the last
+  hole too (a lead of one with nothing left cannot be caught either), and when
+  the game rolls on the leg is TRUNCATED to the hole it was decided on — so
+  there an early finish always looks like the last hole. The game's own flag
+  settles it: rolling on means a leg ends when it is decided.
+- **`held` covers two different holes** — the holder tied for low (nothing
+  moves) and the holder won it in stop-after-one (the lead is capped, so
+  winning adds nothing). `winner_short` is None exactly on a tie, which is
+  what separates them, and they are not the same sentence.
+- The outright low lights one chip; **a tie lights none**, which is the same
+  rule that decides whether the rabbit moves.
+
+Returned WITH the save as `rabbit_hole`, plus
+`GET /api/foursomes/{id}/rabbit/hole/{hole}/`.
+
+### It stays on the DEDICATED screen, and that is the opposite call to Sixes
+
+Sixes had no play screen, so its design was built as a mode of the shared
+one. Rabbit has `rabbit_screen.dart`, already carrying the combo-tee chip,
+Spots capture, the `effectiveScores` sync merge and withdrawal — so replacing
+its entry card there keeps all of it, where moving the game to the shared
+screen would have been the larger change. The old inline-picker card is kept
+behind `if (card != null)`: a group must never be stuck looking at nothing
+because a fetch is in flight.
+
+Three source guards pin what such a screen loses — the row's combo-tee chip
+and Spots button, the keypad POSTING the hole on its last score (the bug
+Annandale hit and then Sixes), and the keypad taking its strokes from the
+CARD rather than the round's stored allocation.
+
+Colour here is **identity** — three golfers, three slots off `Halved.golfer`
+by roster order — which is the opposite of Sixes, where it says which side
+you are on and changes at the turn.
+
+`sixes_entry`'s private `_DashedBorder` is gone; both entry screens use the
+shared `DashedRRect`, and a test says so.
+
+Tests: `RabbitHoleCardTests` (20) + `RabbitFixtureRegenTests` (3) in
+`scoring/tests/test_rabbit.py`, `api/test_rabbit_hole_card.py` (6),
+`mobile/test/rabbit_entry_test.dart` (20) against four fixtures written by
+`REGEN_RABBIT_FIXTURES=1`.
+
+**Not done:** the guide's extra-rabbit card already explained early finishes,
+so only the missing "holes 13–18" column needed fixing (separate commit). Not
+seen on a device.
+
 ## Sixes score entry — `handoff-sixes-score-entry` (server done, bottom half wired)
 
 The 40 Balls keypad and dark tray carried to Sixes. **The first of the score
