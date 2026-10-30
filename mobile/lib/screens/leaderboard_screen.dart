@@ -8279,6 +8279,14 @@ class _AfMatchPill extends StatelessWidget {
     final leadTeam = margin > 0 ? match.side1Team
         : margin < 0 ? match.side2Team : null;
     final thru = n.holes.length;
+    // The 18 beside the nine: the pill showed the nine alone, and the
+    // overall bet was only in the selected match's dark card below.
+    final all = annandaleOverallAt(n.overall, n.overall.margin, thru - 1);
+    final allStatus = all.closedWith != null
+        ? '${all.margin.abs()}&${all.closedWith}'
+        : all.margin == 0 ? 'AS' : '${all.margin.abs()} UP';
+    final allLead = all.margin > 0 ? match.side1Team
+        : all.margin < 0 ? match.side2Team : null;
     return Material(
       color: Halved.card,
       borderRadius: BorderRadius.circular(12),
@@ -8319,6 +8327,20 @@ class _AfMatchPill extends StatelessWidget {
                     style: const TextStyle(
                         fontSize: 11.5, color: Halved.muted)),
               ]),
+              if (thru > 0) ...[
+                const SizedBox(width: 14),
+                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  Text(allStatus,
+                      style: TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w800,
+                          color: allLead == null
+                              ? Halved.muted
+                              : annandaleTeamColour(allLead))),
+                  Text(n.overall.isComplete ? '18 · final' : '18',
+                      style: const TextStyle(
+                          fontSize: 11.5, color: Halved.muted)),
+                ]),
+              ],
             ]),
           ),
         ),

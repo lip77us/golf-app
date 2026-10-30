@@ -61,6 +61,17 @@ AnnandaleBetAt annandaleNineAt(
   return (margin: runningMargin, closedWith: null);
 }
 
+/// The 18 (the overall bet) as of position [pos] — the same rule, over the
+/// whole round: "6&5" from the hole it was decided on.
+AnnandaleBetAt annandaleOverallAt(
+    NassauBetResult bet, int runningMargin, int pos) {
+  final r = bet.decidedRemaining;
+  if (bet.decidedMargin != null && r != null && r > 0 && 17 - r <= pos) {
+    return (margin: bet.decidedMargin!, closedWith: r);
+  }
+  return (margin: runningMargin, closedWith: null);
+}
+
 /// A press as of position [pos] — the same rule: a press closed 3&1 reads
 /// "3&1" from the hole it closed on. Its margin is the server's current one,
 /// which is the final one once closed.
@@ -293,6 +304,10 @@ class AnnandaleHoleTray extends StatelessWidget {
           _status(front ? 'Front' : 'Back', nineBet, m),
           for (final (i, p) in live.indexed)
             _status('P${i + 1}', annandalePressAt(p, pos, front: front), m),
+          // The 18 rides along on every hole. It was missing from the tray
+          // altogether, front nine and back (Paul, 29 Oct 2026).
+          _status('18', annandaleOverallAt(
+              s.overall, h.overallMargin ?? 0, pos), m),
           for (final p in starting)
             Padding(
               padding: const EdgeInsets.only(right: 12),

@@ -229,6 +229,22 @@ void main() {
       expect(annandalePressAt(p2, 7, front: true).closedWith, isNull);
     });
 
+    test('the 18 is on the tray and the pills', () {
+      // It was in neither: the tray showed the nine and its presses, the
+      // pill the nine alone.
+      final s = AnnandaleFridaySummary.fromJson(jsonDecode(
+          File('test/fixtures/annandale_friday_front_closed.json')
+              .readAsStringSync()) as Map<String, dynamic>);
+      final m = s.matches.first.summary;
+      expect(annandaleOverallAt(m.overall, m.overall.margin, 7).margin, 5);
+      expect(annandaleOverallAt(m.overall, m.overall.margin, 7).closedWith,
+          isNull);   // 5 up with ten to play is not closed
+      expect(_src('lib/widgets/annandale_friday.dart'),
+          contains("_status('18', annandaleOverallAt("));
+      expect(_src('lib/screens/leaderboard_screen.dart'),
+          contains('annandaleOverallAt(n.overall'));
+    });
+
     test('a setup step opens at its top', () {
       expect(_src('lib/screens/annandale_friday_setup_screen.dart'),
           contains('key: ValueKey(_step)'));
