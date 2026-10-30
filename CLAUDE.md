@@ -7143,7 +7143,7 @@ one was invisible to the suites, and two of them are money:
   woman's par read as a bogey. It uses the golfer's own par (helps 40 Balls).
 - **The tray could not say who was up**: the light golfer tints made pine and
   slate the same grey on the dark tray. It uses the reference's own dark
-  variants (`#3BD89A` / `#F2A86E` / `#AFC0D8`) and a "Wins hole" pill in the
+  variants (`#3BD89A` / `#F2A86E`, and slate moved from the reference's `#AFC0D8` to `#8FB4FF` because it matched the label grey) with NEUTRAL white-55% labels, and a "Wins hole" pill in the
   winner's colour.
 Also: each setup step opens at its top, and the press stake follows the bet
 until it is edited.

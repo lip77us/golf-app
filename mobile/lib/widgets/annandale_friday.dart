@@ -29,8 +29,13 @@ Color annandaleTeamColour(int? team) => team == null
 /// own dark variants (`--td`), not the light golfer tints: on the phone the
 /// tints made pine and slate nearly the same grey, and a team you cannot
 /// tell apart is the one thing this tray must not have.
+///
+/// **Slate departs from the reference** (`#AFC0D8` there): that pale
+/// blue-grey was indistinguishable from the tray's label grey, so the third
+/// team's names and figures looked like labels. `#8FB4FF` is the same hue,
+/// clearly blue.
 const List<Color> kAnnandaleTeamOnDark = [
-  Halved.brightMint, Color(0xFFF2A86E), Color(0xFFAFC0D8),
+  Halved.brightMint, Color(0xFFF2A86E), Color(0xFF8FB4FF),
 ];
 
 Color annandaleTeamTint(int? team) => team == null
@@ -145,7 +150,10 @@ class AnnandaleHoleTray extends StatelessWidget {
   final VoidCallback onEdit;
   final void Function(AnnandaleFridayMatch match, int startHole) onPress;
 
-  static const _dim = Color(0xFFB9CCC3);
+  /// Labels and secondary text: NEUTRAL white, no hue. It was the
+  /// green-grey `#B9CCC3`, which sat on top of the slate team's colour —
+  /// "Front", "P1" and "18" read as Larry & RyanL's (Paul, 29 Oct 2026).
+  static const _dim = Color(0x8CFFFFFF);
 
   @override
   Widget build(BuildContext context) {
