@@ -483,6 +483,16 @@ enum Sixes {
     static let gold     = Color(hex: 0xE8C46A)
     static let amber    = Color(hex: 0xF0C070)
 
+    /// Annandale Friday's teams — the score tray's dark variants of pine, clay
+    /// and slate, so a team is one colour on every surface. Colour belongs to
+    /// the TEAM there, not the reader, which is why these are not blue/orange.
+    static let teamPine  = Color(hex: 0x3BD89A)
+    static let teamClay  = Color(hex: 0xF2A86E)
+    static let teamSlate = Color(hex: 0x8FB4FF)
+    /// That card's press chip. Mint is a team's colour on it, and orange sits
+    /// too near clay, so the press takes its own amber.
+    static let pressAmber = Color(hex: 0xFFD36B)
+
     /// A side's colour by the server's name for it. `neutral` is all square —
     /// white, so it belongs to neither side.
     static func side(_ name: String) -> Color {
@@ -501,6 +511,12 @@ enum Sixes {
         // appears in no other card.
         case "gold":   return gold
         case "amber":  return amber
+        case "team_pine":  return teamPine
+        case "team_clay":  return teamClay
+        case "team_slate": return teamSlate
+        // A figure that belongs to nobody's side — Annandale Friday's closing
+        // net, where mint would read as the pine team's.
+        case "white":  return .white
         // The dash between two split digits. It belongs to neither side, so
         // it is neither side's colour — and it is the thing that keeps the
         // pair reading as one score rather than two numbers.

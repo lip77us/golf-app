@@ -72,26 +72,34 @@ class SixGolferTests(_Base):
             ('DAVE·RAY', 'v SAM·TOM'),
         ])
 
-    def test_your_team_is_blue_and_the_others_orange_and_plum(self):
+    def test_a_team_is_one_colour_for_every_reader(self):
+        """Pine, clay, slate by team index — the score tray's colours. The
+        first build made the READER's team blue, which put one team in two
+        colours between the tray and the lock screen."""
         self._play(1, Paul=4, Jim=5, Dave=5, Ray=5, Sam=4, Tom=5)
-        for who in ('Paul', 'Dave', 'Sam'):
+        # Each reader sees the same three colour pairs — a match's colours do
+        # not move with who is holding the phone (only its label and order).
+        want = {frozenset(['team_pine', 'team_clay']),
+                frozenset(['team_pine', 'team_slate']),
+                frozenset(['team_clay', 'team_slate'])}
+        for who in ('Paul', 'Dave', 'Sam', None):
             strip = self._state(1, who=who)['strip']
-            mine = [c for c in strip if c['is_reader']]
-            self.assertEqual(len(mine), 2)
-            self.assertTrue(all(c['dots'][0] == 'blue' for c in mine),
-                            f'{who}: his own team is blue, on top')
-            theirs = [c for c in strip if not c['is_reader']][0]
-            self.assertEqual(set(theirs['dots']), {'orange', 'plum'})
+            self.assertEqual({frozenset(c['dots']) for c in strip}, want,
+                             f'{who} sees different colours')
+        third = [c for c in self._state(1)['strip'] if not c['is_reader']][0]
+        self.assertEqual(third['dots'], ['team_clay', 'team_slate'])
+        mine = self._state(1)['strip'][0]
+        self.assertEqual(mine['dots'], ['team_pine', 'team_clay'])
 
     def test_a_figure_wears_the_leading_teams_colour_and_never_says_down(self):
         # Paul & Jim beat Dave & Ray; Sam & Tom beat Paul & Jim.
         self._play(1, Paul=4, Jim=5, Dave=5, Ray=5, Sam=3, Tom=5)
         strip = self._state(1)['strip']
         v_dr, v_st, third = strip
-        self.assertEqual((v_dr['figure'], v_dr['colour']), ('1 UP', 'blue'))
-        self.assertEqual(v_st['figure'], '1 UP')
-        self.assertIn(v_st['colour'], ('orange', 'plum'))
-        self.assertNotEqual(v_st['colour'], 'blue')
+        self.assertEqual((v_dr['figure'], v_dr['colour']),
+                         ('1 UP', 'team_pine'))
+        self.assertEqual((v_st['figure'], v_st['colour']),
+                         ('1 UP', 'team_slate'))
         for c in strip:
             self.assertNotIn('DN', c['figure'])
 
@@ -120,6 +128,19 @@ class SixGolferTests(_Base):
         s = self._state(1)
         self.assertEqual(s['footer']['money'], '−$60 to +$60')
         self.assertEqual(s['footer']['context'], '$10 a bet')
+
+    def test_a_cap_moves_the_floor_and_the_footer_says_so(self):
+        """A $20 cap per side per Nassau: each of the two matches is
+        clamped to ±$20 before summing. **±, not just the floor** — the
+        engine's cap is symmetric, because with two sides the loser's cap is
+        the winner's ceiling. The revised packet draws −$40 to +$60, which
+        would promise a win the other side cannot be asked to pay."""
+        setup_annandale_friday(self.fs, self.teams(), handicap_mode='gross',
+                               auto_press=False, press_unit=10, loss_cap=20)
+        self._play(1, Paul=4, Jim=4, Dave=4, Ray=4, Sam=4, Tom=4)
+        s = self._state(1)
+        self.assertEqual(s['footer']['money'], '−$40 to +$40')
+        self.assertEqual(s['footer']['context'], '$10 a bet · capped $20')
 
     def test_a_press_is_a_chip_on_its_figure_and_widens_the_range(self):
         from services.annandale_friday import press_annandale
@@ -159,6 +180,8 @@ class FinalTests(_Base):
     def test_the_headline_is_the_readers_net_and_his_match_count(self):
         s = self._round()
         self.assertEqual(s['number']['text'], 'EVEN')
+        # White, not mint: mint is the pine team's colour on this card.
+        self.assertEqual(s['number']['colour'], 'white')
         self.assertEqual(s['state']['word'], '2 NASSAUS')
 
     def test_the_footer_names_whom_to_collect_from_and_pay(self):
@@ -184,7 +207,7 @@ class FiveGolferTests(_Base):
     def test_the_three_is_one_team_and_one_colour(self):
         self._play(1, Paul=4, Jim=4, Dave=4, Ray=4, Sam=4)
         strip = self._state(1)['strip']
-        self.assertEqual({c['dots'][1] for c in strip}, {'orange'})
+        self.assertEqual({c['dots'][1] for c in strip}, {'team_clay'})
 
     def test_the_pairs_range_is_nine_bets(self):
         self._play(1, Paul=4, Jim=4, Dave=4, Ray=4, Sam=4)
@@ -201,7 +224,9 @@ class FiveGolferTests(_Base):
         self.assertEqual(len(mine), 2)
         self.assertEqual(sorted(c['label'] for c in mine),
                          ['YOU·RAY', 'YOU·SAM'])
-        self.assertTrue(all(c['dots'][0] == 'blue' for c in mine))
+        # Colour is the team's, not the reader's: the three is clay to Dave
+        # too, exactly as it is on his tray.
+        self.assertTrue(all(c['dots'][0] == 'team_clay' for c in mine))
         self.assertEqual([c['dim'] for c in strip].count(True), 1)
 
 

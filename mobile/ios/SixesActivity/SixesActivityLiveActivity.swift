@@ -1113,7 +1113,9 @@ private struct TripleNassauBoardView: View {
             if let strip = state.strip, !strip.isEmpty {
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(Array(strip.enumerated()), id: \.offset) { _, c in
-                        MatchColumn(col: c)
+                        MatchColumn(col: c,
+                                    chipColour: state.kind == "annandale_friday"
+                                        ? Sixes.pressAmber : Sixes.orange)
                     }
                 }
             }
@@ -1138,6 +1140,9 @@ private struct TripleNassauBoardView: View {
 /// score with no way to know whose match it was.
 private struct MatchColumn: View {
     let col: SixesActivityAttributes.ContentState.StripCol
+    /// Orange on Triple Nassau; amber on Annandale Friday, where mint and
+    /// clay are team colours and an orange chip would read as one.
+    var chipColour: Color = Sixes.orange
 
     private var figureColour: Color {
         // Empty means ALL SQ — white, because it belongs to neither man.
@@ -1209,7 +1214,7 @@ private struct MatchColumn: View {
                 if let chip = col.chip, !chip.isEmpty {
                     Text(chip)
                         .font(Sixes.body(8.5, .bold))
-                        .foregroundStyle(Sixes.orange)
+                        .foregroundStyle(chipColour)
                         .baselineOffset(8)
                 }
             }
@@ -1228,7 +1233,7 @@ private struct MatchColumn: View {
 
 /// Annandale Friday in the compact island: **the reader's matches only** —
 /// two figures with six golfers, three for the pair with five — split by a
-/// hairline, a press as an orange `+N`, level as `AS` to save width.
+/// hairline, a press as an amber `+N`, level as `AS` to save width.
 private struct AnnandaleCompactView: View {
     let strip: [SixesActivityAttributes.ContentState.StripCol]
 
@@ -1249,7 +1254,7 @@ private struct AnnandaleCompactView: View {
                     if let chip = c.chip, !chip.isEmpty {
                         Text(chip)
                             .font(Sixes.body(7, .bold))
-                            .foregroundStyle(Sixes.orange)
+                            .foregroundStyle(Sixes.pressAmber)
                     }
                 }
             }

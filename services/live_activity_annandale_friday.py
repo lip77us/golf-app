@@ -22,9 +22,10 @@ What changes is that the matches are between TEAMS:
 * **A label is two lines**, one team per line, each with its colour dot —
   `YOU` over `v DAVE·RAY`, or `DAVE·RAY` over `v JIM·SAM` for the match the
   reader is not in. First names, as on the leaderboard pills.
-* **Colour is the team, not the golfer.** The reader's team is always blue;
-  the other two take orange and plum in card order. With five, the three is
-  one team, so all three of the pair's opponents wear one colour.
+* **Colour is the team, not the golfer** — and the same team colour as the
+  score tray: pine, clay, slate by team index, for every reader. With five,
+  the three is one team, so all three of the pair's opponents wear one colour.
+  A press chip is amber here, because mint is now a team's colour.
 * **Which columns are at weight follows the reader**: two of three with six,
   all three for the pair with five, two of three for one of the three.
 
@@ -42,11 +43,14 @@ from services.live_activity_triple_nassau import (_BET_LABEL, _bet_key,
 KIND = 'annandale_friday'
 GAME = 'ANNANDALE FRIDAY'
 
-# The reader's team is blue on his own phone. The other two take orange and
-# plum in card order — **assigned per reader, never per team record**, or two
-# golfers in one group would read the same match in two colour schemes. Same
-# rule as Triple Nassau and Las Vegas.
-_OTHERS = ('orange', 'plum')
+# **A team is the same colour on every surface** — the score tray's dark
+# variants of pine, clay and slate, by TEAM INDEX, which is the rule
+# `annandaleTeamColour` uses in the app. Colour belongs to the team, not to
+# the viewer (revised packet, 30 Oct 2026): the first build made the reader's
+# team blue, which put one team in two colours between the tray and the lock
+# screen. With five, the three is one team, so the pair's every opponent
+# wears one colour.
+_TEAM_COLOURS = ('team_pine', 'team_clay', 'team_slate')
 
 
 def _summary(foursome):
@@ -67,19 +71,10 @@ def _playing(summary, player_id) -> bool:
     return player_id in _team_of(summary)
 
 
-def _team_colours(summary, player_id) -> dict:
-    """`{team index: colour}` — **the reader's team blue, always.**
-
-    A watcher owns no team, so card order supplies all three and nothing is
-    held back: none of it is his money.
-    """
+def _team_colours(summary, player_id=None) -> dict:
+    """`{team index: colour}` — the same for every reader, watchers included."""
     count = len(summary.get('teams') or [])
-    order = list(range(count))
-    mine = _team_of(summary).get(player_id)
-    if mine is None:
-        return dict(zip(order, ('blue',) + _OTHERS))
-    others = [t for t in order if t != mine]
-    return {mine: 'blue', **dict(zip(others, _OTHERS))}
+    return {t: _TEAM_COLOURS[t % len(_TEAM_COLOURS)] for t in range(count)}
 
 
 def _first(name: str) -> str:
@@ -205,6 +200,11 @@ def _context(summary, key, played) -> str:
         return 'fronts in' + (f' · {left} to play' if left else '')
     unit = float(summary.get('bet_unit') or 0)
     bits = [f'${unit:,.0f} a bet'] if unit else []
+    # The cap is per side, per Nassau, and it is what moves the range's floor
+    # — so the footer says why −$40 is not −$60.
+    cap = summary.get('loss_cap')
+    if cap is not None:
+        bits.append(f'capped ${float(cap):,.0f}')
     if summary.get('group_size') == 5:
         bits.append('5 golfers')
     return ' · '.join(bits)
@@ -317,7 +317,9 @@ def annandale_friday_final_state(foursome, *, player_id=None) -> dict:
         'kind'  : KIND,
         'header': {'game': GAME, 'segment': 'ROUND COMPLETE'},
         'closed': True,
-        'number': {'text': _cash(net) if net else 'EVEN', 'colour': 'mint'},
+        # White, not mint: mint is a team's colour on this card now, and the
+        # reader's net is his, not his team's.
+        'number': {'text': _cash(net) if net else 'EVEN', 'colour': 'white'},
         'sides' : [],
         'strip' : strip,
         'state' : {'word': f'{played_in} NASSAUS' if played_in else '',

@@ -7200,16 +7200,25 @@ things on two cards.
 - **Two-line labels**: `YOU` over `v DAVE·RAY`; the match the reader is not in
   reads `DAVE·RAY` over `v JIM·SAM`. `StripCol.label2` in Swift, with
   `dots[0]` / `dots[1]` beside each line; absent on every other card.
-- **Colour is the team**, the reader's always blue, the others orange then
-  plum in card order. With five, the three is one team and one colour.
+- **Colour is the team, and the same as the score tray** — pine `#3BD89A`,
+  clay `#F2A86E`, slate `#8FB4FF` by team index, for every reader (revised
+  packet; the first build made the reader's team blue, which put one team in
+  two colours between tray and lock screen). Because mint is now a team's
+  colour, the press chip is amber `#FFD36B` and the closing net is white.
+  With five, the three is one team and one colour.
 - **Weight follows the reader**: two of three with six, all three for the pair
   with five, two of three for one of the three. A watcher holds nothing back.
 - **One departure**: with five, a golfer in the three partners a different man
   in each match, so his side reads `YOU·SAM` — the bare `YOU` the packet draws
   would hide the one thing that differs between his two columns.
 - Exposure is each match's range summed, **each match clamped to its own loss
-  cap first** (the cap is per side per Nassau). The final reads `total_capped`,
-  the figure settlement uses.
+  cap first** (the cap is per side per Nassau), and the footer says
+  `$10 a bet · capped $20`. **The clamp is symmetric**: with two sides the
+  loser's cap is the winner's ceiling, which is what the engine's
+  `_clamp_to_cap` does. The revised packet draws a $20 cap as `−$40 to +$60`
+  — capping only the floor — which would promise a win nobody can be asked to
+  pay; the card shows `−$40 to +$40`. The final reads `total_capped`, the
+  figure settlement uses.
 - Compact island: the reader's matches only, `AS` for level, `+N` presses.
 
 #### The pushes — the first that differ between phones
