@@ -326,6 +326,32 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
     }
   }
 
+  /// The hole we have asked the server for, so a missing card is fetched
+  /// once rather than on every frame. Cleared the moment one arrives, which
+  /// is what lets the fetch run AGAIN if that card is then dropped.
+  int? _cardAsked;
+
+  /// **Make sure the hole on screen has a card**, because without one the
+  /// keypad is not drawn at all.
+  ///
+  /// A save drops every other hole's card (they can be stale), and that races
+  /// the fetch the forward button already started: the next hole's card can
+  /// arrive FIRST and then be thrown away by the response to a save that was
+  /// posted before it. The scorer is then looking at a screen with no keypad
+  /// (Paul, 30 Oct 2026). This closes the race from the other end — whenever
+  /// the hole on screen has no card, one is asked for.
+  void _ensureCard(RoundProvider rp) {
+    if (rp.rabbitHole(_selectedHole) != null) {
+      _cardAsked = null;
+      return;
+    }
+    if (_cardAsked == _selectedHole) return;
+    _cardAsked = _selectedHole;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadCard();
+    });
+  }
+
   /// This hole's card. A save brings the next one back with it, so this is
   /// for a hole opened without posting — moving between holes, or picking up
   /// a round somebody else is scoring.
@@ -614,6 +640,7 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
     final scores   = _effectiveScores(sc, _selectedHole);
     final hotSpot  = isComplete ? -1 : _hotSpotIdx(players, scores);
     final par      = holeData?.par ?? 4;
+    _ensureCard(rp);
     final card     = _card(rp);
 
     // Rabbit state for the SELECTED hole's segment (not the globally last

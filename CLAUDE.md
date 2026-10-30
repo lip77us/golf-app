@@ -7666,6 +7666,19 @@ Three more from the phone (30 Oct 2026).
   rolls-on, the leg RANGES), so `_onScorePosted` now drops every other hole's
   card and keeps only the one the save returned. **Sixes had the identical
   hole**, for the identical reason, and got the identical fix.
+- **...and that drop then took the keypad away.** *"Now I lost my big bottom
+  score entry pad."* The drop RACES the fetch the forward button started: the
+  next hole's card can arrive first and then be thrown away by the response
+  to a save posted before it, and with no card the keypad is not drawn at
+  all. Closed from the other end — `_ensureCard` asks for one whenever the
+  hole on screen has none, once per hole, with the latch cleared the moment a
+  card arrives so it can fire again if that card is dropped. Sixes got the
+  same (`_ensureSixesCard`), because it got the same drop.
+
+  Worth keeping as a shape: **a cache that is correct to invalidate still
+  needs somebody to refill it**, and "drop what might be stale" and "fetch
+  what is missing" have to be written together or the gap between them is a
+  blank screen.
 - **`0 strokes`** on the keypad header, which reads as a quantity of nothing.
   Both packets write `no stroke`; the shared keypad says that now, so 40
   Balls and Annandale get it too.

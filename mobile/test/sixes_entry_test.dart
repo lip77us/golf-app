@@ -304,6 +304,15 @@ void main() {
       expect(src.substring(at - 400, at), contains('!_raisesTray(rp)'));
     });
 
+    test('a hole with no card asks for one, so the keypad comes back', () {
+      final at = src.indexOf('void _ensureSixesCard(');
+      expect(at, greaterThan(0));
+      final body = src.substring(at, src.indexOf('\n  }', at));
+      expect(body, contains('loadSixesHole('));
+      expect(body, contains('_sixesCardAsked = null'));
+      expect(src, contains('_ensureSixesCard(rp);'));
+    });
+
     test('the screen hides its own pager under the tray', () {
       // Two sets of arrows at the bottom is what a phone showed. The design
       // has the tray overlaying that row, and the tray's forward button can

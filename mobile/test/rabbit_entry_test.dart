@@ -263,6 +263,21 @@ void main() {
       expect(board, contains('class RabbitBoard'));
     });
 
+    test('a hole with no card asks for one, so the keypad comes back', () {
+      // The drop races the fetch the forward button started: the next hole's
+      // card can arrive first and then be thrown away by the response to an
+      // earlier save, leaving a screen with no keypad at all.
+      final at = src.indexOf('void _ensureCard(');
+      expect(at, greaterThan(0));
+      final body = src.substring(at, src.indexOf('\n  }', at));
+      expect(body, contains('_loadCard()'));
+      // Asked once per hole, not once per frame — and the latch clears the
+      // moment a card arrives, which is what lets it fire again if that card
+      // is dropped.
+      expect(body, contains('_cardAsked = null'));
+      expect(src, contains('_ensureCard(rp);'));
+    });
+
     test('a saved hole drops the cards held for every OTHER hole', () {
       // The banner said one golfer had it and the header chip beside it said
       // Loose, because that hole's card had been fetched before the hole

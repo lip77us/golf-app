@@ -1476,6 +1476,29 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   bool _raisesTray(RoundProvider rp) =>
       rp.annandaleFridaySummary != null || _sixesCard(rp) != null;
 
+  /// The hole we have asked the server for; see `_ensureSixesCard`.
+  int? _sixesCardAsked;
+
+  /// **Make sure the hole on screen has a Sixes card.** Without one the
+  /// keypad is not drawn. A save drops every other hole's card because they
+  /// can be stale, and that races the fetch the forward button started — the
+  /// next hole's card can arrive first and then be thrown away by the
+  /// response to an earlier save. Same hole Rabbit showed on a phone.
+  void _ensureSixesCard(RoundProvider rp) {
+    if (_activeGames(rp.round).contains(GameIds.sixes) != true) return;
+    if (rp.sixesHole(_selectedHole) != null) {
+      _sixesCardAsked = null;
+      return;
+    }
+    if (_sixesCardAsked == _selectedHole) return;
+    _sixesCardAsked = _selectedHole;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<RoundProvider>()
+          .loadSixesHole(widget.foursomeId, _selectedHole);
+    });
+  }
+
   /// The Sixes card for the hole on screen, when this round is playing it.
   SixesHoleCard? _sixesCard(RoundProvider rp) {
     final games = _activeGames(rp.round);
@@ -2996,6 +3019,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // sides — nothing can be entered yet, and a keypad under an explanation
     // of why you cannot use it is an invitation to try. The tray rises after
     // the last score, exactly as Annandale's does.
+    _ensureSixesCard(rp);
     final six = _sixesCard(rp);
     final sixBand = six != null && fbActive && !six.match.teamsSet;
     final sixTray = six != null && fbActive && allDone && !sixBand &&
