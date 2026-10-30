@@ -13,7 +13,7 @@ on — so the composition returns to the single headline.
 **Money in the headline is the documented exception.** The other three cards
 push money to the footer because a lock screen is a neutral board and personal
 money in the headline breaks it. Skins is the one game where the pot is not
-personal: everyone on the tee is playing for the same $18. No other card may do
+personal: everyone on the tee is playing for the same $72. No other card may do
 this.
 
 **People are named** (reversed 2026-09-01 by
@@ -76,6 +76,18 @@ def _carry_origin(hole, riding):
     return hole - riding + 1
 
 
+def _skin_worth(summary) -> float:
+    """One per-skin skin: everybody's stake, the winner's included, the same
+    figure the board quotes (`SkinsBoardData.skinWorth`). Five golfers at $5 is
+    a $25 skin that nets him $20. Against the average each golfer puts in
+    `rate / n`, so that skin is worth one rate.
+    """
+    rate = float(summary.get('per_point_rate') or 0)
+    if summary.get('per_point_mode') == 'average':
+        return rate
+    return rate * len(summary.get('players') or [])
+
+
 def _skin_value(summary) -> float:
     """What one skin is worth right now.
 
@@ -88,14 +100,14 @@ def _skin_value(summary) -> float:
         pool  = float(money.get('pool') or 0)
         total = int(money.get('total_skins') or 0)
         return pool / total if total else pool
-    return float(summary.get('per_point_rate') or 0)
+    return _skin_worth(summary)
 
 
 def _headline(summary, riding) -> float:
     """Pool shows the pot; per-skin shows what this hole is carrying."""
     if _is_pool(summary):
         return float((summary.get('money') or {}).get('pool') or 0)
-    return riding * float(summary.get('per_point_rate') or 0)
+    return riding * _skin_worth(summary)
 
 
 def _cash(amount) -> str:
@@ -387,8 +399,8 @@ def skins_activity_state(foursome, *, player_id=None, thru=None) -> dict:
             and (last.get('skins_value') or 1) > 1
             and (last.get('hole') or 0) == hole - 1):
         won_n   = int(last.get('skins_value') or 1)
-        won_amt = won_n * float(summary.get('per_point_rate') or 0)
-        nxt     = float(summary.get('per_point_rate') or 0)
+        won_amt = won_n * _skin_worth(summary)
+        nxt     = _skin_worth(summary)
         who     = last.get('winner_short') or 'Someone'
         leader, lead_n = _leader(summary)
         return {

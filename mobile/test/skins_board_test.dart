@@ -93,6 +93,9 @@ void main() {
       )));
       expect(find.text('No carry'), findsOneWidget);
       expect(find.text('skin · \$2'), findsOneWidget);   // singular
+      expect(find.textContaining(' each'), findsWidgets);
+      expect(find.textContaining(' a skin'), findsNothing,
+          reason: 'the ledger names what each golfer pays, not a skin\'s worth');
     });
 
     testWidgets('a finished round reports the total, not a 19th hole',

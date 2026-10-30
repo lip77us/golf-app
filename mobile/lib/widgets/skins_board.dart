@@ -372,7 +372,7 @@ class _Ledger extends StatelessWidget {
                   // golfer's share of it.
                   data.isPool
                       ? '\$${_plain(data.pool)} pool'
-                      : '\$${_plain(data.stake)} a skin',
+                      : '\$${_plain(data.stake)} each',
                   style: const TextStyle(
                       fontSize: 20, fontWeight: FontWeight.w700,
                       color: Colors.white)),

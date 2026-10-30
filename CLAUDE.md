@@ -6290,7 +6290,8 @@ read `$10 a skin` and `2 skins · $80` over correct money, because `betUnit` is
 the ROUND's stake and belongs to the primary game. `skinWorth` is everybody's
 stake including the winner's, so five at $5 is a **$25 skin** that nets him
 $20 (Paul: the golfer knows the $5 is his entry); against the average it is
-one rate. The lock card still quotes riding × rate. Both
+one rate. The ledger header reads `$5 each`, and the lock card quotes the same
+worth (`_skin_worth`). Both
 test helpers had put `payout_style` inside `money`, where the server does not
 send it, so every summary in them was a pool and none could have caught this.
 

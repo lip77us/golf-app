@@ -52,7 +52,7 @@ class _Base(TestCase):
 
 
 class CarryModeTests(_Base):
-    """Per-skin with carries — the `$18, 3 skins carried from the 10th` card."""
+    """Per-skin with carries — the `$72, 3 skins carried from the 10th` card."""
 
     def configure(self):
         setup_skins(self.fs, handicap_mode=HandicapMode.GROSS, carryover=True,
@@ -62,7 +62,7 @@ class CarryModeTests(_Base):
     def test_a_fresh_hole_is_one_skin(self):
         self._play(1, 3, 4, 4, 4)       # Paul wins it outright
         s = self._state(thru=1)
-        self.assertEqual(s['number']['text'], '$6')
+        self.assertEqual(s['number']['text'], '$24')
         # The state slot is the READER's standing now, not the hole's carry
         # status — the carry is already the headline and the sub-line.
         self.assertEqual(s['state']['word'], '1 SKIN')
@@ -71,7 +71,7 @@ class CarryModeTests(_Base):
     def test_a_tie_carries_and_the_number_grows(self):
         self._play(1, 4, 4, 4, 4)       # halved — carries
         s = self._state(thru=1)
-        self.assertEqual(s['number']['text'], '$12')
+        self.assertEqual(s['number']['text'], '$48')
         self.assertEqual(s['sides'][0]['names'],
                          '2 skins, carried from the 1st')
 
@@ -81,7 +81,7 @@ class CarryModeTests(_Base):
         self._play(1, 4, 4, 4, 4)
         self._play(2, 4, 4, 4, 4)
         s = self._state(thru=2)
-        self.assertEqual(s['number']['text'], '$18')
+        self.assertEqual(s['number']['text'], '$72')
         self.assertEqual(s['sides'][0]['names'],
                          '3 skins, carried from the 1st')
 
@@ -93,7 +93,7 @@ class CarryModeTests(_Base):
         self._play(2, 3, 4, 4, 4)       # Paul takes 2 skins
         s = self._state(thru=2)
         self.assertEqual(s['number']['text'], 'P')
-        self.assertEqual(s['state']['word'], 'WON $12')
+        self.assertEqual(s['state']['word'], 'WON $48')
         self.assertEqual(s['state']['to_play'], 'ON THE 2ND')
         self.assertIn('no carry', s['sides'][0]['names'])
 
@@ -115,7 +115,7 @@ class CarryModeTests(_Base):
         self._play(2, 3, 4, 4, 4)       # Paul takes 2
         self._play(3, 4, 4, 4, 4)       # halved, carries again
         s = self._state(thru=3)
-        self.assertEqual(s['number']['text'], '$12')
+        self.assertEqual(s['number']['text'], '$48')
 
     def test_the_money_is_the_headline_and_that_is_the_exception(self):
         """The one game where the pot is not personal — everyone on the tee is
@@ -127,7 +127,15 @@ class CarryModeTests(_Base):
         setup_skins(self.fs, handicap_mode=HandicapMode.GROSS, carryover=False,
                     payout_style='per_point', per_point_rate=6)
         self._play(1, 4, 4, 4, 4)
-        self.assertEqual(self._state(thru=1)['number']['text'], '$6')
+        self.assertEqual(self._state(thru=1)['number']['text'], '$24')
+
+    def test_against_the_average_a_skin_is_worth_one_rate(self):
+        setup_skins(self.fs, handicap_mode=HandicapMode.GROSS, carryover=True,
+                    payout_style='per_point', per_point_mode='average',
+                    per_point_rate=6)
+        from services.live_activity_skins import _skin_worth
+        from services.skins import skins_summary
+        self.assertEqual(_skin_worth(skins_summary(self.fs)), 6)
 
 
 class PoolModeTests(_Base):
