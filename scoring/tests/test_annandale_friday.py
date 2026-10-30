@@ -214,6 +214,15 @@ class MoneyTests(_Base):
         assert net[self.pid['Bill']] == 40
         assert abs(sum(net.values())) < 0.005
 
+    def test_each_total_is_the_sum_of_its_matches(self):
+        setup_annandale_friday(self.fs, self.teams(), handicap_mode='gross')
+        self._sweep(8)
+        for p in annandale_friday_summary(self.fs)['players']:
+            assert len(p['by_match']) == 2
+            assert abs(sum(m['live_net'] for m in p['by_match'])
+                       - p['live_net']) < 0.005, p
+            assert abs(sum(m['net'] for m in p['by_match']) - p['net']) < 0.005
+
     def test_mid_round_the_live_figure_moves_and_the_settled_one_waits(self):
         setup_annandale_friday(self.fs, self.teams(), handicap_mode='gross',
                                auto_press=False)

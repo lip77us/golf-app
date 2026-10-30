@@ -40,6 +40,7 @@ import 'package:golf_mobile/api/models.dart';
 final Map<String, Object Function(Map<String, dynamic>)> _models = {
   'AccountInfo': (j) => AccountInfo.fromJson(j),
   'AnnandaleFridayMatch': (j) => AnnandaleFridayMatch.fromJson(j),
+  'AnnandaleFridayMatchMoney': (j) => AnnandaleFridayMatchMoney.fromJson(j),
   'AnnandaleFridayPlayer': (j) => AnnandaleFridayPlayer.fromJson(j),
   'AnnandaleFridaySummary': (j) => AnnandaleFridaySummary.fromJson(j),
   'AuthResult': (j) => AuthResult.fromJson(j),

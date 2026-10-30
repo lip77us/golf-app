@@ -934,10 +934,14 @@ def _build_leaderboard(round_obj: Round) -> dict:
             summary = annandale_friday_summary(fs)
             if summary is None:
                 continue
+            from services.annandale_friday import settings_chips
             af_groups.append({
                 'foursome_id' : fs.id,
                 'group_number': fs.group_number,
                 'summary'     : summary,
+                # Stated here, stakes included — `game_settings.attach`
+                # never replaces a group's own chips.
+                'settings'    : settings_chips(summary),
             })
         if af_groups:
             games['annandale_friday'] = {

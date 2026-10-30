@@ -7148,6 +7148,24 @@ one was invisible to the suites, and two of them are money:
 Also: each setup step opens at its top, and the press stake follows the bet
 until it is edited.
 
+#### One place for money, and it shows what it is made of
+Paul, 29 Oct 2026: *"Paul and Jim are +40 but net position now is +70 and
+the bet is 10 and the press $10 — a lot of numbers that are confusing."*
+Every figure was right; nothing said how they related. +$40 was ONE match
+(the board's "each · now"), +$70 both of Paul's, and "Bet $10 · Press $10"
+were prices sitting under winnings.
+- The board passes `noMoney: true`: it states the bets, the ledger states
+  the money. Two money figures for one golfer on one screen is the problem.
+- The ledger shows each total's parts, one per match, from the server's
+  `by_match` (`net`, `live_net`, `vs_ids` per golfer) — so they add up by
+  construction (`test_each_total_is_the_sum_of_its_matches`).
+- The stakes are chips in the settings strip ("$10 a bet", "$10 a press"),
+  from `services.annandale_friday.settings_chips` on the leaderboard row —
+  `game_settings` leaves stakes out generically; this game's unit is plain.
+- A live press on the SHARED Nassau board reads "1 UP · 1 to play" or
+  "1 UP · dormie", not "· live" (`_toPlay` walks the window, so a shotgun
+  press wrapping the 18th counts right). Reaches every Nassau board.
+
 **Not built from the packet:** the hole header's "2 skins · 1 carried from 6"
 (the tray carries the skin instead), and the Skins card's settings summary
 on setup step 3.

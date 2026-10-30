@@ -72,7 +72,27 @@
    "strokes_in_play": 0,
    "matches": 2,
    "net": 0.0,
-   "live_net": 40.0
+   "live_net": 40.0,
+   "by_match": [
+    {
+     "match": 1,
+     "vs_ids": [
+      3,
+      4
+     ],
+     "net": 0.0,
+     "live_net": 20.0
+    },
+    {
+     "match": 2,
+     "vs_ids": [
+      5,
+      6
+     ],
+     "net": 0.0,
+     "live_net": 20.0
+    }
+   ]
   },
   {
    "player_id": 2,
@@ -83,7 +103,27 @@
    "strokes_in_play": 0,
    "matches": 2,
    "net": 0.0,
-   "live_net": 40.0
+   "live_net": 40.0,
+   "by_match": [
+    {
+     "match": 1,
+     "vs_ids": [
+      3,
+      4
+     ],
+     "net": 0.0,
+     "live_net": 20.0
+    },
+    {
+     "match": 2,
+     "vs_ids": [
+      5,
+      6
+     ],
+     "net": 0.0,
+     "live_net": 20.0
+    }
+   ]
   },
   {
    "player_id": 3,
@@ -94,7 +134,27 @@
    "strokes_in_play": 0,
    "matches": 2,
    "net": 0.0,
-   "live_net": 0.0
+   "live_net": 0.0,
+   "by_match": [
+    {
+     "match": 1,
+     "vs_ids": [
+      1,
+      2
+     ],
+     "net": -0.0,
+     "live_net": -20.0
+    },
+    {
+     "match": 3,
+     "vs_ids": [
+      5,
+      6
+     ],
+     "net": 0.0,
+     "live_net": 20.0
+    }
+   ]
   },
   {
    "player_id": 4,
@@ -105,7 +165,27 @@
    "strokes_in_play": 0,
    "matches": 2,
    "net": 0.0,
-   "live_net": 0.0
+   "live_net": 0.0,
+   "by_match": [
+    {
+     "match": 1,
+     "vs_ids": [
+      1,
+      2
+     ],
+     "net": -0.0,
+     "live_net": -20.0
+    },
+    {
+     "match": 3,
+     "vs_ids": [
+      5,
+      6
+     ],
+     "net": 0.0,
+     "live_net": 20.0
+    }
+   ]
   },
   {
    "player_id": 5,
@@ -116,7 +196,27 @@
    "strokes_in_play": 0,
    "matches": 2,
    "net": 0.0,
-   "live_net": -40.0
+   "live_net": -40.0,
+   "by_match": [
+    {
+     "match": 2,
+     "vs_ids": [
+      1,
+      2
+     ],
+     "net": -0.0,
+     "live_net": -20.0
+    },
+    {
+     "match": 3,
+     "vs_ids": [
+      3,
+      4
+     ],
+     "net": -0.0,
+     "live_net": -20.0
+    }
+   ]
   },
   {
    "player_id": 6,
@@ -127,7 +227,27 @@
    "strokes_in_play": 0,
    "matches": 2,
    "net": 0.0,
-   "live_net": -40.0
+   "live_net": -40.0,
+   "by_match": [
+    {
+     "match": 2,
+     "vs_ids": [
+      1,
+      2
+     ],
+     "net": -0.0,
+     "live_net": -20.0
+    },
+    {
+     "match": 3,
+     "vs_ids": [
+      3,
+      4
+     ],
+     "net": -0.0,
+     "live_net": -20.0
+    }
+   ]
   }
  ],
  "matches": [

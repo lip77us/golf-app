@@ -8169,6 +8169,11 @@ class _AnnandaleFridayGroupCardState extends State<_AnnandaleFridayGroupCard> {
           m.summary,
           // The pill above already names the match.
           showSides: false,
+          // The money is the ledger's alone. The board's own "each · now"
+          // figure is one match of a golfer's two or three, and beside a
+          // ledger total for all of them it read as a second, disagreeing
+          // number (Paul, 29 Oct 2026). The 18's status stays on the card.
+          noMoney: true,
           side0Colour: annandaleTeamColour(m.side1Team),
           side1Colour: annandaleTeamColour(m.side2Team),
         ),
@@ -8360,6 +8365,14 @@ class _AfNetPosition extends StatelessWidget {
   final AnnandaleFridaySummary summary;
   final bool done;
 
+  String _names(List<int> ids) => ids
+      .map((id) => summary.players
+          .where((p) => p.playerId == id).map((p) => p.label).firstOrNull ?? '?')
+      .join(' & ');
+
+  static Color _ink(double v) =>
+      v > 0 ? Halved.pine : v < 0 ? Halved.clayInk : Halved.muted;
+
   @override
   Widget build(BuildContext context) => Container(
         decoration: BoxDecoration(
@@ -8374,48 +8387,64 @@ class _AfNetPosition extends StatelessWidget {
               color: Halved.pine,
               borderRadius: BorderRadius.vertical(top: Radius.circular(13)),
             ),
+            // The stakes are in the settings strip at the top, with the
+            // other rules (Paul, 29 Oct 2026) — the server states them.
             child: Text('Net position · ${done ? 'Final' : 'now'}',
                 style: const TextStyle(
                     color: Colors.white, fontWeight: FontWeight.w700)),
           ),
-          for (final p in summary.players)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
-              child: Row(children: [
-                Container(
-                  width: 9, height: 9,
-                  decoration: BoxDecoration(
-                      color: annandaleTeamColour(p.team),
-                      borderRadius: BorderRadius.circular(2)),
-                ),
-                const SizedBox(width: 9),
-                Expanded(
-                  child: Text(p.label,
-                      style: const TextStyle(
-                          fontSize: 14.5, fontWeight: FontWeight.w700,
-                          color: Halved.deepPine)),
-                ),
-                Text('in ${p.matches}',
-                    style: const TextStyle(fontSize: 12, color: Halved.muted)),
-                const SizedBox(width: 12),
-                SizedBox(
-                  width: 72,
-                  child: Builder(builder: (_) {
-                    final v = done ? p.net : p.liveNet;
-                    return Text(_tnMoney(v),
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w800,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                            color: v > 0 ? Halved.pine
-                                : v < 0 ? Halved.clayInk : Halved.muted));
-                  }),
-                ),
-              ]),
-            ),
+          for (final p in summary.players) _row(p),
           const SizedBox(height: 4),
         ]),
       );
+
+  /// A golfer's total, and under it what the total is made of — one figure
+  /// per match, the server's, so they add up to it by construction.
+  Widget _row(AnnandaleFridayPlayer p) {
+    final total = done ? p.net : p.liveNet;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 9, height: 9,
+            decoration: BoxDecoration(
+                color: annandaleTeamColour(p.team),
+                borderRadius: BorderRadius.circular(2)),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(p.label,
+                style: const TextStyle(
+                    fontSize: 14.5, fontWeight: FontWeight.w700,
+                    color: Halved.deepPine)),
+          ),
+          Text(_tnMoney(total),
+              style: TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.w800,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                  color: _ink(total))),
+        ]),
+        if (p.byMatch.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(left: 18, top: 2),
+            child: Wrap(spacing: 12, runSpacing: 2, children: [
+              for (final m in p.byMatch)
+                Builder(builder: (_) {
+                  final v = done ? m.net : m.liveNet;
+                  return Text.rich(TextSpan(children: [
+                    TextSpan(text: _tnMoney(v),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, color: _ink(v))),
+                    TextSpan(text: ' v ${_names(m.vsIds)}',
+                        style: const TextStyle(color: Halved.muted)),
+                  ]), style: const TextStyle(fontSize: 12));
+                }),
+            ]),
+          ),
+      ]),
+    );
+  }
 }
 
 class _QuotaNassauGroupCard extends StatelessWidget {

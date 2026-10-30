@@ -18,6 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
 import 'package:golf_mobile/game_catalog.dart';
 import 'package:golf_mobile/utils/annandale_teams.dart';
+import 'package:golf_mobile/utils/nassau_board_model.dart';
 import 'package:golf_mobile/widgets/annandale_friday.dart';
 
 AnnandaleFridaySummary _fixture() => AnnandaleFridaySummary.fromJson(
@@ -178,7 +179,7 @@ void main() {
       expect(s.players.fold<double>(0, (a, p) => a + p.liveNet).abs(),
           lessThan(0.005));
       expect(_src('lib/screens/leaderboard_screen.dart'),
-          contains('final v = done ? p.net : p.liveNet;'));
+          contains('final total = done ? p.net : p.liveNet;'));
     });
 
     test("the keypad codes keys against the golfer's own par", () {
@@ -243,6 +244,36 @@ void main() {
           contains("_status('18', annandaleOverallAt("));
       expect(_src('lib/screens/leaderboard_screen.dart'),
           contains('annandaleOverallAt(n.overall'));
+    });
+
+    test('one place for money, and the totals show what they are made of',
+        () {
+      // Paul: "+$40 on the board, +$70 in net position, $10 bet, $10 press
+      // — a lot of numbers that are confusing."
+      final src = _src('lib/screens/leaderboard_screen.dart');
+      expect(src, contains('noMoney: true'));          // board: status only
+      expect(src, contains('for (final m in p.byMatch)'));
+      final s = _fixture();
+      for (final p in s.players) {
+        expect(p.byMatch.length, 2);
+        expect((p.byMatch.fold<double>(0, (a, m) => a + m.liveNet)
+                - p.liveNet).abs(), lessThan(0.005));
+      }
+    });
+
+    test('a live press says how much is left, not "live"', () {
+      // Paul's round: Press 8–9, 1 up with the 9th to play, read "1 UP ·
+      // live". A lead equal to what is left is dormie.
+      final closed = AnnandaleFridaySummary.fromJson(jsonDecode(
+          File('test/fixtures/annandale_friday_front_closed.json')
+              .readAsStringSync()) as Map<String, dynamic>);
+      final b1 = NassauBoardData.fromSummary(closed.matches.first.summary);
+      final p2 = b1.presses.firstWhere((p) => p.from == 8);
+      expect((p2.view.headline, p2.view.sub), ('1 UP', 'dormie'));
+      // Two holes in, the press from the 3rd is level with seven to play.
+      final b2 = NassauBoardData.fromSummary(_fixture().matches.first.summary);
+      final p1 = b2.presses.firstWhere((p) => p.from == 3);
+      expect((p1.view.headline, p1.view.sub), ('AS', '7 to play'));
     });
 
     test('a setup step opens at its top', () {

@@ -5259,6 +5259,30 @@ class TripleNassauSummary {
 // Annandale Friday — a group of 5 or 6, teams that make three Nassaus
 // ---------------------------------------------------------------------------
 
+/// One golfer's money in one match — what his total is made of.
+class AnnandaleFridayMatchMoney {
+  final int       match;
+  final List<int> vsIds;
+  final double    net;
+  final double    liveNet;
+
+  const AnnandaleFridayMatchMoney({
+    required this.match,
+    required this.vsIds,
+    required this.net,
+    required this.liveNet,
+  });
+
+  factory AnnandaleFridayMatchMoney.fromJson(Map<String, dynamic> j) =>
+      AnnandaleFridayMatchMoney(
+        match  : j['match'] as int? ?? 0,
+        vsIds  : [for (final x in (j['vs_ids'] as List? ?? [])) x as int],
+        net    : (j['net'] as num?)?.toDouble() ?? 0,
+        liveNet: (j['live_net'] as num?)?.toDouble()
+            ?? (j['net'] as num?)?.toDouble() ?? 0,
+      );
+}
+
 /// One golfer: which team he is on, how many of the three matches he is in
 /// (two, or all three for the pair in a five), and his net across them —
 /// the server's figure, never re-summed here.
@@ -5276,6 +5300,8 @@ class AnnandaleFridayPlayer {
   final double  net;
   /// What every bet would pay if the round stopped now — the board's "now".
   final double  liveNet;
+  /// The total match by match, so the ledger can show what it is made of.
+  final List<AnnandaleFridayMatchMoney> byMatch;
 
   const AnnandaleFridayPlayer({
     required this.playerId,
@@ -5287,6 +5313,7 @@ class AnnandaleFridayPlayer {
     this.matches = 0,
     this.net = 0,
     this.liveNet = 0,
+    this.byMatch = const [],
   });
 
   factory AnnandaleFridayPlayer.fromJson(Map<String, dynamic> j) =>
@@ -5303,6 +5330,10 @@ class AnnandaleFridayPlayer {
         // fallback rather than a zero that reads as a result.
         liveNet        : (j['live_net'] as num?)?.toDouble()
             ?? (j['net'] as num?)?.toDouble() ?? 0,
+        byMatch        : [
+          for (final m in (j['by_match'] as List? ?? []))
+            AnnandaleFridayMatchMoney.fromJson(m as Map<String, dynamic>)
+        ],
       );
 
   String get label => shortName.isNotEmpty ? shortName : name;

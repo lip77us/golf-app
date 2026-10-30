@@ -127,6 +127,8 @@ class NassauBoardData {
           })
         : const <NassauBallsHole>[];
 
+    final played = {for (final h in s.holes) h.hole};
+
     return NassauBoardData(
       sides: [
         NassauSide(name: nameOf(s.team1), colourIndex: 0,
@@ -139,12 +141,14 @@ class NassauBoardData {
       back:    NassauBetView.fromBet(s.back9,   label: 'Back',  startHole: 10),
       overall: NassauBetView.fromBet(s.overall, label: 'Match', startHole: 1),
       presses: [
-        for (final p in s.presses) NassauPressView.fromPress(p),
+        for (final p in s.presses)
+          NassauPressView.fromPress(p, toPlay: _toPlay(p, played)),
         // Claremont's points presses are a SECOND series over the same holes,
         // labelled apart so a reader is never asked which of two identical
         // bars is which.
         for (final p in s.bottomPresses)
-          NassauPressView.fromPress(p, points: true),
+          NassauPressView.fromPress(p, points: true,
+              toPlay: _toPlay(p, played)),
       ],
       stake:      s.betUnit,
       pressStake: s.pressUnit,
@@ -298,6 +302,20 @@ class NassauBetView {
   }
 }
 
+/// Holes left in a press's window: its holes not yet played. A window can
+/// wrap the 18th off a shotgun start (the 16th to the 2nd), so it is walked
+/// rather than subtracted.
+int _toPlay(NassauPressResult p, Set<int> played) {
+  final window = <int>[];
+  var h = p.startHole;
+  for (var i = 0; i < 18; i++) {
+    window.add(h);
+    if (h == p.endHole) break;
+    h = h == 18 ? 1 : h + 1;
+  }
+  return window.where((x) => !played.contains(x)).length;
+}
+
 class NassauPressView {
   const NassauPressView({
     required this.nine,
@@ -318,7 +336,7 @@ class NassauPressView {
   bool get done => view.done;
 
   factory NassauPressView.fromPress(NassauPressResult p,
-      {bool points = false}) {
+      {bool points = false, int? toPlay}) {
     // A press is a bet like any other; the only thing that differs is that
     // its window is a hole range rather than a nine, and the SERVER says how
     // many holes were left when it closed.
@@ -329,7 +347,14 @@ class NassauPressView {
     final bool done;
     if (p.result == null) {
       headline = m == 0 ? 'AS' : '${m.abs()} UP';
-      sub = 'live';
+      // How much golf is left, not "live" (Paul, 29 Oct 2026): "1 UP ·
+      // 1 to play", or "dormie" when the lead equals what is left — the
+      // trailing side cannot win it, only halve it.
+      sub = toPlay == null
+          ? 'live'
+          : (m != 0 && m.abs() == toPlay)
+              ? 'dormie'
+              : '$toPlay to play';
       done = false;
     } else if (decided) {
       headline = '${m.abs()}&${p.holesRemaining}';

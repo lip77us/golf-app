@@ -352,6 +352,26 @@ def press_annandale(foursome, match: int, start_hole: int):
 # Summary
 # ---------------------------------------------------------------------------
 
+def settings_chips(summary: dict) -> list[str]:
+    """The board's settings strip: the shared chips, then the STAKES.
+
+    `services.game_settings` leaves the stake out on purpose — its unit is
+    game-specific — but this game's unit is plain (a bet, a press), and the
+    stakes sat on the board beside the money, where "Bet $10 · Press $10"
+    read as part of what had been won (Paul, 29 Oct 2026: "move the $10 bet
+    and $10 press to the top with the other parameters").
+    """
+    from services.game_settings import _money, settings_chips as shared
+    out = shared(summary)
+    bet = _money(summary.get('bet_unit'))
+    if bet:
+        out.append(f'{bet} a bet')
+    press = summary.get('press_unit') or 0
+    if (summary.get('auto_press') or summary.get('manual_press')) and press:
+        out.append(f'{_money(press)} a press')
+    return out
+
+
 def annandale_friday_summary(foursome) -> dict | None:
     """The three Nassau summaries, the teams, and each golfer's net across
     every match he is in. None when no Annandale Friday is configured.
@@ -392,6 +412,11 @@ def annandale_friday_summary(foursome) -> dict | None:
     # keypad states it; reading it here keeps that caption from carrying a
     # second copy of the handicap rules.
     strokes_by_pid: dict = {}
+    # Each golfer's money match by match — what his total is MADE of. The
+    # ledger shows it under the total so the numbers on the board reconcile:
+    # "+$70" with nothing beside it, under a match card saying "+$40", was
+    # three right numbers nobody could connect (Paul, 29 Oct 2026).
+    by_match_pid: dict = {pid: [] for pid in order}
     matches_by_pid = {pid: 0 for pid in order}
     matches = []
     cfg = {}
@@ -411,6 +436,14 @@ def annandale_friday_summary(foursome) -> dict | None:
         for side in ('team1', 'team2'):
             for pl in s['teams'].get(side, []):
                 strokes_by_pid.setdefault(pl['player_id'], pl.get('phcp_in_play'))
+        for pid in side1:
+            by_match_pid.setdefault(pid, []).append({
+                'match': i + 1, 'vs_ids': list(side2),
+                'net': round(total, 2), 'live_net': round(live, 2)})
+        for pid in side2:
+            by_match_pid.setdefault(pid, []).append({
+                'match': i + 1, 'vs_ids': list(side1),
+                'net': round(-total, 2), 'live_net': round(-live, 2)})
         for pid in side1:
             net_by_pid[pid] = net_by_pid.get(pid, 0.0) + total
             live_by_pid[pid] = live_by_pid.get(pid, 0.0) + live
@@ -467,7 +500,8 @@ def annandale_friday_summary(foursome) -> dict | None:
              'strokes_in_play': strokes_by_pid.get(pid),
              'matches': matches_by_pid.get(pid, 0),
              'net'    : round(net_by_pid.get(pid, 0.0), 2),
-             'live_net': round(live_by_pid.get(pid, 0.0), 2)}
+             'live_net': round(live_by_pid.get(pid, 0.0), 2),
+             'by_match': by_match_pid.get(pid, [])}
             for pid in order
         ],
         'matches'             : matches,

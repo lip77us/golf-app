@@ -162,12 +162,15 @@ class AnnandaleFridayEndpointTests(TestCase):
         assert not {'af_1', 'af_2', 'af_3'} & set(fs['configured_games'])
 
     def test_the_leaderboard_has_the_block(self):
-        self._setup()
+        self._setup(auto_press=True, press_unit='10.00')
         self._post_hole(1, self._sweep())
         r = self.client.get(reverse('api-leaderboard', args=[self.round.id]))
         assert r.status_code == 200, r.content
         block = r.json()['games']['annandale_friday']
         assert block['label'] == 'Annandale Friday'
+        # The stakes ride in the strip with the other settings.
+        assert block['settings'][-2:] == ['$10 a bet', '$10 a press'], \
+            block['settings']
         assert len(block['by_group'][0]['summary']['matches']) == 3
 
     def test_the_settlement_nets_every_golfer_and_sums_to_zero(self):
