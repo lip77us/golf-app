@@ -644,13 +644,18 @@ class FoursomeSerializer(serializers.ModelSerializer):
             # container reports as 'triple_nassau' below, not per pair.
             games.extend(
                 obj.nassau_games
-                .exclude(game_type__in=('triple_1', 'triple_2', 'triple_3'))
+                .exclude(game_type__in=('triple_1', 'triple_2', 'triple_3',
+                                        'af_1', 'af_2', 'af_3'))
                 .values_list('game_type', flat=True)
             )
         except Exception:
             pass
         if obj.triple_nassau_games.exists():
             games.append('triple_nassau')
+        # Annandale Friday's three matches report as the one container, the
+        # same way Triple Nassau's do — never as three bare Nassaus.
+        if hasattr(obj, 'annandale_friday_game'):
+            games.append('annandale_friday')
         # OneToOne relationships — a missing row raises RelatedObjectDoesNotExist.
         # Catch ONLY that: a bare `except Exception` here silently swallows real
         # DB errors (e.g. an unapplied migration leaving a column missing), which
@@ -1431,6 +1436,51 @@ class TripleNassauSetupSerializer(serializers.Serializer):
         if len(set(value)) != 3:
             raise serializers.ValidationError('Three distinct players are required.')
         return value
+
+
+class AnnandaleFridaySetupSerializer(serializers.Serializer):
+    """
+    Configure an Annandale Friday for a group of 5 or 6.
+
+    teams: the split, a list of player-id lists in display order — three pairs
+    for six, a pair and a three for five. The shape itself is checked by
+    `services.annandale_friday.shape_problem`, which knows the roster; this
+    only checks it is a list of lists.
+
+    One set of options for every Nassau. bet_unit (stake per bet) is optional;
+    when given it's written to Round.bet_unit, as for Triple Nassau.
+    """
+    teams = serializers.ListField(
+        child=serializers.ListField(child=serializers.IntegerField(),
+                                    min_length=1),
+        min_length=2, max_length=3,
+    )
+    handicap_mode = serializers.ChoiceField(
+        choices=['net', 'gross', 'strokes_off'], default='strokes_off',
+    )
+    net_percent          = serializers.IntegerField(min_value=0, max_value=200,
+                                                    default=100)
+    second_ball_tiebreak = serializers.BooleanField(default=True)
+    claremont            = serializers.BooleanField(default=False)
+    auto_press           = serializers.BooleanField(default=True)
+    manual_press         = serializers.BooleanField(default=False)
+    press_unit  = serializers.DecimalField(
+        max_digits=8, decimal_places=2, default='0.00', min_value=0,
+    )
+    loss_cap    = serializers.DecimalField(
+        max_digits=8, decimal_places=2, required=False, allow_null=True,
+        default=None, min_value=0,
+    )
+    bet_unit    = serializers.DecimalField(
+        max_digits=8, decimal_places=2, required=False, allow_null=True,
+        default=None, min_value=0,
+    )
+
+
+class AnnandaleFridayPressSerializer(serializers.Serializer):
+    """Call a manual press in ONE of the three matches (1, 2 or 3)."""
+    match      = serializers.IntegerField(min_value=1, max_value=3)
+    start_hole = serializers.IntegerField(min_value=1, max_value=18)
 
 
 class TripleNassauPressSerializer(serializers.Serializer):

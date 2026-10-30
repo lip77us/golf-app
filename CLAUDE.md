@@ -6986,7 +6986,7 @@ Tests: `mobile/test/rabbit_board_test.dart` (17), `CarryTests` (9) and
 `Rolls on` is never claimed, and that carry stays zero-sum and never moves
 the total at risk.
 
-## Annandale Friday (`annandale_friday`) — ENGINE done (API + mobile pending)
+## Annandale Friday (`annandale_friday`) — ENGINE + API done (mobile pending)
 
 `~/Downloads/handoff-annandale-friday`. One group of **5 or 6** on one card;
 the teams make three better-ball Nassaus — three pairs each playing the other
@@ -7025,8 +7025,28 @@ loss cap off the foursome's PRIMARY Nassau rather than the `game_type` it was
 given. For a child match (Triple Nassau too) the cap lookup found nothing and
 was skipped, so a side past its cap could press for free.
 
-Tests: `scoring/tests/test_annandale_friday.py` (32). Already built and not
+**API.** `GET/POST /api/foursomes/{id}/annandale-friday/setup/` (the GET
+returns the packet's defaults with `configured: false` before setup),
+`GET …/annandale-friday/` and `POST …/annandale-friday/press/`
+`{match: 1|2|3, start_hole}`. A shape or lock refusal is a 400 whose
+`detail` is the setup screen's own sentence, and a `bet_unit` sent with a
+refused setup is rolled back. Recalc after a posted score, the leaderboard
+block (`games['annandale_friday']`, `by_group`), `configured_games` (the
+container once, never `af_*`) and `services.settlement` are wired. The
+summary carries raw `variant` / `press_mode` so `game_settings` builds the
+strip in the words every Nassau uses.
+
+**The recalc is keyed off the slug alone.** The children are not `nassau`
+rows, so `calculate_all_nassau` only reaches them when a plain Nassau is also
+active; `test_a_posted_score_moves_the_matches` fails without the dispatch.
+**The score endpoint already took six golfers** — nothing there caps at four.
+
+Not wired yet: the watch page, the Live Activity card, and the strip's loss
+cap reads `Loses at most $50` where the cap is per side PER NASSAU.
+
+Tests: `scoring/tests/test_annandale_friday.py` (32) and
+`api/test_annandale_friday.py` (24, six and five). Already built and not
 part of this: the two Skins options (`skin_minimum` / `birdie_steal`). Still
-to do: API, the 5–6 group-size validation (Groups & tees caps at 4 — a
+to do: the 5–6 group-size validation (Groups & tees caps at 4 — a
 validation change, not a structural one), mobile, and moving the guide from
 `/preview/` to `/games/` LAST.

@@ -433,6 +433,10 @@ def annandale_friday_summary(foursome) -> dict | None:
         'group_size'          : len(order),
         'handicap_mode'       : cfg.get('handicap_mode'),
         'net_percent'         : cfg.get('net_percent', 100),
+        # The two raw keys `services.game_settings` reads, so the board's
+        # settings strip states them in the same words as every Nassau.
+        'variant'             : variant,
+        'press_mode'          : press_mode,
         'second_ball_tiebreak': variant == 'tiebreak_2nd',
         'claremont'           : variant == 'claremont',
         'auto_press'          : press_mode in ('auto', 'both'),

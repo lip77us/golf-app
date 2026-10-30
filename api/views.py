@@ -91,6 +91,7 @@ from .serializers import (
     TournamentCreateSerializer, RoundCreateSerializer,
     NassauSetupSerializer, NassauPressSerializer,
     TripleNassauSetupSerializer, TripleNassauPressSerializer,
+    AnnandaleFridaySetupSerializer, AnnandaleFridayPressSerializer,
     SixesSetupSerializer, CourseSerializer,
     Points531SetupSerializer, CasualRoundSummarySerializer,
     BetterBallSetupSerializer,
@@ -146,6 +147,14 @@ def _recalculate_games(foursome: Foursome) -> None:
     if 'triple_nassau' in active_games or foursome.triple_nassau_games.exists():
         from services.triple_nassau import calculate_triple_nassau
         calculate_triple_nassau(foursome)
+
+    # Annandale Friday — three better-ball Nassaus in their own container
+    # (af_1/2/3). Keyed off the slug: its children are not 'nassau' rows, so
+    # calculate_all_nassau above only reaches them when a plain Nassau is
+    # also active, and must not be relied on to.
+    if 'annandale_friday' in active_games:
+        from services.annandale_friday import calculate_annandale_friday
+        calculate_annandale_friday(foursome)
 
     # Tournament-level games (match_play, three_person_match) live on
     # tournament.active_games rather than the round or foursome, so they may
@@ -912,6 +921,28 @@ def _build_leaderboard(round_obj: Round) -> dict:
             games['triple_nassau'] = {
                 'label'   : 'Triple Nassau',
                 'by_group': tn_groups,
+            }
+
+    # Annandale Friday — three better-ball Nassaus for a group of 5 or 6.
+    _af_active = 'annandale_friday' in active_games or any(
+        'annandale_friday' in (fs.active_games or []) for fs in foursomes
+    )
+    if _af_active:
+        from services.annandale_friday import annandale_friday_summary
+        af_groups = []
+        for fs in foursomes:
+            summary = annandale_friday_summary(fs)
+            if summary is None:
+                continue
+            af_groups.append({
+                'foursome_id' : fs.id,
+                'group_number': fs.group_number,
+                'summary'     : summary,
+            })
+        if af_groups:
+            games['annandale_friday'] = {
+                'label'   : 'Annandale Friday',
+                'by_group': af_groups,
             }
 
     # Cup singles rounds store 'singles_18' or 'singles_nassau' in per-foursome
@@ -7615,6 +7646,126 @@ class TripleNassauResultView(APIView):
         if summary is None:
             return Response(
                 {'detail': 'No Triple Nassau set up for this foursome.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(summary)
+
+
+# ---------------------------------------------------------------------------
+# Annandale Friday — three better-ball Nassaus for a group of 5 or 6
+# ---------------------------------------------------------------------------
+
+class AnnandaleFridaySetupView(APIView):
+    """
+    GET  /api/foursomes/{id}/annandale-friday/setup/ — the saved config, or
+         the defaults with `configured: false`, so the setup screen opens on
+         what the round will get.
+    POST /api/foursomes/{id}/annandale-friday/setup/
+    Body: {
+        "teams":                [[p1, p2], [p3, p4], [p5, p6]],
+        "handicap_mode":        "strokes_off" | "net" | "gross",
+        "net_percent":          100,
+        "second_ball_tiebreak": true,
+        "claremont":            false,
+        "auto_press":           true,
+        "manual_press":         false,
+        "press_unit":           10.00,
+        "loss_cap":             null | 50.00,
+        "bet_unit":             10.00        # optional; sets Round.bet_unit
+    }
+    Refuses with the setup screen's own sentence when the teams don't fit the
+    shape for 5 or 6, and once the teams are locked.
+    """
+    def get(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.annandale_friday import annandale_friday_summary
+        s = annandale_friday_summary(foursome)
+        if s is not None:
+            return Response({'configured': True, **s})
+        return Response({
+            'configured'          : False,
+            'handicap_mode'       : 'strokes_off',
+            'net_percent'         : 100,
+            'second_ball_tiebreak': True,
+            'claremont'           : False,
+            'auto_press'          : True,
+            'manual_press'        : False,
+            'bet_unit'            : float(foursome.round.bet_unit),
+            'press_unit'          : 0.0,
+            'loss_cap'            : None,
+            'teams'               : [],
+        })
+
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        ser = AnnandaleFridaySetupSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        d = ser.validated_data
+
+        from services.annandale_friday import (
+            AnnandaleLocked, AnnandaleShapeError,
+            setup_annandale_friday, annandale_friday_summary,
+        )
+        with transaction.atomic():
+            if d.get('bet_unit') is not None:
+                rnd = foursome.round
+                rnd.bet_unit = d['bet_unit']
+                rnd.save(update_fields=['bet_unit'])
+            try:
+                setup_annandale_friday(
+                    foursome,
+                    teams                = d['teams'],
+                    handicap_mode        = d['handicap_mode'],
+                    net_percent          = d['net_percent'],
+                    second_ball_tiebreak = d['second_ball_tiebreak'],
+                    claremont            = d['claremont'],
+                    auto_press           = d['auto_press'],
+                    manual_press         = d['manual_press'],
+                    press_unit           = d['press_unit'],
+                    loss_cap             = d.get('loss_cap'),
+                )
+            except (AnnandaleShapeError, AnnandaleLocked) as exc:
+                transaction.set_rollback(True)
+                return Response({'detail': str(exc)},
+                                status=status.HTTP_400_BAD_REQUEST)
+        return Response(annandale_friday_summary(foursome),
+                        status=status.HTTP_201_CREATED)
+
+
+class AnnandaleFridayPressView(APIView):
+    """
+    POST /api/foursomes/{id}/annandale-friday/press/
+    Body: { "match": 2, "start_hole": 8 }
+
+    A manual press in ONE match, from start_hole to the end of that nine.
+    Allowed when a side is 1 down or the match is level, and only when the
+    game has manual presses on.
+    """
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        ser = AnnandaleFridayPressSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        from services.annandale_friday import (
+            AnnandalePressRefused, press_annandale, annandale_friday_summary,
+        )
+        try:
+            press_annandale(foursome, ser.validated_data['match'],
+                            ser.validated_data['start_hole'])
+        except AnnandalePressRefused as exc:
+            return Response({'detail': str(exc)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        return Response(annandale_friday_summary(foursome))
+
+
+class AnnandaleFridayResultView(APIView):
+    """GET /api/foursomes/{id}/annandale-friday/ — the summary."""
+    def get(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.annandale_friday import annandale_friday_summary
+        summary = annandale_friday_summary(foursome)
+        if summary is None:
+            return Response(
+                {'detail': 'No Annandale Friday set up for this group.'},
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(summary)

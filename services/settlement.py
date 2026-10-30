@@ -27,6 +27,7 @@ from collections import defaultdict
 NETTABLE = {
     'skins', 'spots', 'points_531', 'wolf', 'sixes', 'fourball',
     'low_net_round', 'stableford', 'match_play', 'triple_nassau',
+    'annandale_friday',
 }
 
 _LABELS = {
@@ -34,6 +35,7 @@ _LABELS = {
     'wolf': 'Wolf', 'sixes': 'Sixes', 'fourball': 'Fourball',
     'low_net_round': 'Stroke Play', 'stableford': 'Stableford',
     'match_play': 'Singles Bracket', 'triple_nassau': 'Triple Nassau',
+    'annandale_friday': 'Annandale Friday',
     'sequoya_threes': 'Sequoya 3s',
 }
 
@@ -136,6 +138,17 @@ def _pid_nets_for_game(game_key, round_obj, foursomes):
         from services.triple_nassau import triple_nassau_summary
         for fs in foursomes:
             s = triple_nassau_summary(fs)
+            if not s:
+                continue
+            for p in s.get('players', []):
+                out[p['player_id']] += p.get('net', 0) or 0
+
+    elif game_key == 'annandale_friday':
+        # Three better-ball Nassaus; the summary has already netted each
+        # golfer's two or three matches into `net`, zero-sum across the card.
+        from services.annandale_friday import annandale_friday_summary
+        for fs in foursomes:
+            s = annandale_friday_summary(fs)
             if not s:
                 continue
             for p in s.get('players', []):
