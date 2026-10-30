@@ -7887,3 +7887,23 @@ Stroke Play tab carries gross), the won–lost–halved record, and who-pays-who
 Tests: `mobile/test/sequoya_board_test.dart` (12),
 `LiveMoneyForTheBoardTests` (4) and `ThePacketsWorkedExampleTests` (2) in
 `scoring/tests/test_sequoya_threes.py`. Seen on an iPhone 13 mini.
+
+#### Two from the first rabbit round on a phone
+- **`No outright ...`**. The tray's result chip ellipsised a nineteen-
+  character label while two words of white space sat to its left:
+  `Hole 4` was `Expanded` beside a `Flexible` chip and **both default to
+  flex 1**, so they split the row evenly whatever either one needs. Same
+  trap as the Points board's ledger header, one card over. The label takes
+  its natural width now and the chip takes the rest. The guard is geometry,
+  not fit — the test font is one square per glyph, so nothing in a widget
+  test can say whether a string fits a real phone; what it pins is that the
+  chip gets the row's whole slack.
+- **Stroke by stroke had nowhere left to live.** The packet drops the gross
+  scorecard from the Rabbit board, and score entry's own grid came off the
+  same week (Paul did not like it there and said to put it on the board) —
+  so for a few hours the round's hole-by-hole card, and the stroke dots that
+  say where the strokes fall, existed on no screen at all. The shared
+  `HoleGridScorecard` is now a fourth card at the bottom of `RabbitBoard`,
+  fed by `RabbitSummary.scorecard*` → `RabbitBoardData.card*`, so it travels
+  with the board rather than being appended by one screen. It draws only
+  when the server sends the block.

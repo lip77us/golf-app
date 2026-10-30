@@ -1104,6 +1104,18 @@ class RabbitFixtureRegenTests(_RabbitCardBase):
         self.assertIsNotNone(card['next'])
         self._write('rabbit_hole10_won_early.json', card)
 
+    def test_regenerate_halved(self):
+        # The hole Paul was looking at when the result chip ellipsised: three
+        # golfers level, so nothing moves and the chip is the neutral one.
+        self._setup(extra_rabbits=True, carry=True)
+        self._hole(7, 3, 5, 5)                   # Paul +1
+        self._hole(8, 4, 4, 4)                   # nobody wins it
+        card = self._card(8)
+        self.assertIsNone(card['result']['winner_id'])
+        self.assertEqual(card['result']['best_net'],
+                         card['result']['runner_net'])
+        self._write('rabbit_hole8_halved.json', card)
+
     def test_regenerate_knocked_loose(self):
         self._setup(extra_rabbits=True, carry=True)
         self._hole(7, 3, 5, 5)                   # Paul +1

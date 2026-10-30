@@ -1,0 +1,82 @@
+{
+  "hole": 8,
+  "par": 5,
+  "stroke_index": 11,
+  "yards": 540,
+  "nine": "front nine",
+  "rabbit": {
+    "index": 2,
+    "of": 3,
+    "is_extra": false,
+    "start_hole": 7,
+    "end_hole": 12,
+    "holder_id": 4,
+    "holder_short": "P",
+    "lead": 1,
+    "loose": false,
+    "to_play": 5,
+    "stake": 5.0,
+    "carried_in": 0.0
+  },
+  "players": [
+    {
+      "player_id": 4,
+      "name": "Paul",
+      "short": "P",
+      "course_handicap": 0,
+      "colour_index": 0,
+      "strokes": 0,
+      "gross": 4,
+      "net": 4,
+      "is_holder": true,
+      "is_best": false
+    },
+    {
+      "player_id": 5,
+      "name": "Dave",
+      "short": "D",
+      "course_handicap": 0,
+      "colour_index": 1,
+      "strokes": 0,
+      "gross": 4,
+      "net": 4,
+      "is_holder": false,
+      "is_best": false
+    },
+    {
+      "player_id": 6,
+      "name": "Sam",
+      "short": "S",
+      "course_handicap": 0,
+      "colour_index": 2,
+      "strokes": 0,
+      "gross": 4,
+      "net": 4,
+      "is_holder": false,
+      "is_best": false
+    }
+  ],
+  "hole_complete": true,
+  "result": {
+    "leg_ended": false,
+    "leg_outcome": null,
+    "held_to_end": false,
+    "winner_id": null,
+    "winner_short": null,
+    "best_net": 4,
+    "runner_net": 4,
+    "holder_id": 4,
+    "holder_short": "P",
+    "lead": 1,
+    "event": "held",
+    "decided": false,
+    "line": "Tie for low net, the rabbit stays put \u00b7 4 to play"
+  },
+  "next": null,
+  "payout": 0.0,
+  "order_ids": [
+    4,
+    5,
+    6
+  ]
+}

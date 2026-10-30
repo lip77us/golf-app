@@ -149,6 +149,33 @@ void main() {
       expect(text, contains('Hole 10 ›'));
     });
 
+    testWidgets('a halved hole says so in full, not ellipsised', (t) async {
+      // `Hole 4` was `Expanded` beside a `Flexible` chip and both default to
+      // flex 1, so they split the row and the chip read `No outright ...`
+      // over two words of white space (Paul, 30 Oct 2026). The measurement is
+      // the claim: the label is laid out at its full intrinsic width.
+      final card = _card('rabbit_hole8_halved');
+      await _pump(t, RabbitHoleTray(card: card, nextHole: 9, onEdit: () {}));
+      expect(_allText(t), contains('No outright winner'));
+      expect(_allText(t), contains('net 4 v 4'));
+
+      // Measured as geometry, not as fit: the test font is one square per
+      // glyph, so nothing here can say whether a string fits a real phone.
+      // What it CAN pin is that the chip is handed the row's whole slack
+      // rather than half of it, which is what was wrong.
+      final row = t.getSize(find.ancestor(
+          of: find.text('Hole 8'), matching: find.byType(Row)).first);
+      final label = t.getSize(find.text('Hole 8'));
+      final chip = t.getSize(find
+          .ancestor(
+              of: find.text('No outright winner'),
+              matching: find.byType(Container))
+          .first);
+      expect(chip.width, greaterThan(row.width / 2),
+          reason: 'the chip was splitting the row with a six-character label');
+      expect(chip.width, closeTo(row.width - label.width - 10, 1));
+    });
+
     testWidgets('a hole nobody won is neutral and moves nothing', (t) async {
       final card = _card('rabbit_hole8_loose');
       await _pump(t, RabbitHoleTray(card: card, nextHole: 9, onEdit: () {}));

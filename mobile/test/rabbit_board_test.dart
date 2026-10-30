@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
 import 'package:golf_mobile/utils/rabbit_board_model.dart';
 import 'package:golf_mobile/widgets/rabbit_board.dart';
+import 'package:golf_mobile/widgets/hole_grid_scorecard.dart';
 
 /// `~/Downloads/handoff-rabbit-leaderboard` — one widget for every Rabbit
 /// leaderboard. The engine decides holders, leads, ranges after rolling and
@@ -44,6 +45,7 @@ RabbitSummary _rabbit({
   List<Map<String, dynamic>>? players,
   int? currentHolder,
   int currentLead = 0,
+  Map<String, dynamic> scorecard = const <String, dynamic>{},
 }) =>
     RabbitSummary.fromJson({
       'status': status,
@@ -63,7 +65,7 @@ RabbitSummary _rabbit({
          'money': -15.0, 'segments_won': 0, 'phcp_in_play': 0},
       ],
       'holes': holes,
-      'scorecard': const <String, dynamic>{},
+      'scorecard': scorecard,
       'current': {'holder_id': currentHolder, 'holder_short': null,
                   'lead': currentLead, 'segment': 2},
       'money': {'bet_unit': 5.0, 'entry': 5.0, 'seg_value': 5.0,
@@ -76,7 +78,55 @@ Future<void> _pump(WidgetTester t, RabbitBoardData d) => t.pumpWidget(
       ),
     );
 
+/// The server's `scorecard` block — gross + the allocator's strokes per hole.
+Map<String, dynamic> _card() => {
+      'players': [
+        {'player_id': 1, 'name': 'Paul Lipkin', 'short_name': 'Paul'},
+        {'player_id': 2, 'name': 'Sam Reid', 'short_name': 'Sam'},
+      ],
+      'holes': [
+        for (var h = 1; h <= 18; h++)
+          {
+            'hole': h, 'par': 4, 'stroke_index': h,
+            'winner_id': h == 3 ? 1 : null,
+            'winner_short': h == 3 ? 'Paul' : null,
+            'scores': [
+              {'player_id': 1, 'gross': 4, 'strokes': h <= 2 ? 1 : 0},
+              {'player_id': 2, 'gross': 5, 'strokes': 0},
+            ],
+          },
+      ],
+      'holes_in_play': [for (var h = 1; h <= 18; h++) h],
+    };
+
 void main() {
+  group('stroke by stroke', () {
+    // The three cards above answer where the RABBIT went. Where the STROKES
+    // fall is a different question, and after score entry lost its own grid
+    // the board is the only place it is answered (Paul, 30 Oct 2026).
+    testWidgets('the shared grid sits under the ledger', (t) async {
+      await _pump(t, RabbitBoardData.fromSummary(_rabbit(
+        segments: [_seg(1, 1, 6, holder: 1, short: 'Paul', lead: 2,
+            complete: false)],
+        holes: [_hole(1, 1, holder: 1, lead: 1)],
+        scorecard: _card(),
+      )));
+      expect(find.byType(HoleGridScorecard), findsOneWidget);
+      // Last, because it is the reference and not the story.
+      expect(t.getTopLeft(find.byType(HoleGridScorecard)).dy,
+          greaterThan(t.getTopLeft(find.text('PLAYER')).dy));
+    });
+
+    testWidgets('a server that sends no card draws none', (t) async {
+      await _pump(t, RabbitBoardData.fromSummary(_rabbit(
+        segments: [_seg(1, 1, 6, holder: 1, short: 'Paul', lead: 2,
+            complete: false)],
+        holes: [_hole(1, 1, holder: 1, lead: 1)],
+      )));
+      expect(find.byType(HoleGridScorecard), findsNothing);
+    });
+  });
+
   group('the rabbit in play', () {
     testWidgets('names the holder, the lead and what is riding', (t) async {
       await _pump(t, RabbitBoardData.fromSummary(_rabbit(

@@ -31,6 +31,9 @@ class RabbitBoardData {
     this.nextHole,
     this.nextPar,
     this.holesLeft = 0,
+    this.cardHoles = const [],
+    this.cardPlayers = const [],
+    this.cardHolesInPlay = const [],
   });
 
   final List<RabbitBoardGolfer> golfers;
@@ -50,6 +53,16 @@ class RabbitBoardData {
   final int? nextHole;
   final int? nextPar;
   final int holesLeft;
+
+  /// The server's `scorecard` block, passed straight to the shared grid.
+  ///
+  /// Stroke by stroke, and where the strokes fall — the one thing the four
+  /// cards above do not say. It used to be on this card and came off with the
+  /// packet rewrite; score entry lost its own grid the same week, so the
+  /// board is now the only place it exists (Paul, 30 Oct 2026).
+  final List<Map<String, dynamic>> cardHoles;
+  final List<Map<String, dynamic>> cardPlayers;
+  final List<int> cardHolesInPlay;
 
   /// The rabbit being played, or null once the round is over.
   RabbitBoardLeg? get liveLeg {
@@ -143,6 +156,9 @@ class RabbitBoardData {
       holesLeft: over
           ? 0
           : s.holes.where((h) => !h.entries.any((e) => e.gross != null)).length,
+      cardHoles: s.scorecardHoles,
+      cardPlayers: s.scorecardPlayers,
+      cardHolesInPlay: s.scorecardHolesInPlay,
     );
   }
 }

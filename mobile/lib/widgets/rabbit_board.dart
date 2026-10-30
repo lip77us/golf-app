@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/halved_brand.dart';
 import '../utils/rabbit_board_model.dart';
 import 'dashed_border.dart';
+import 'hole_grid_scorecard.dart';
 
 /// The Rabbit board — ONE widget for every Rabbit leaderboard.
 ///
@@ -10,6 +11,13 @@ import 'dashed_border.dart';
 /// (or the round's summary once it is over), where every rabbit went hole by
 /// hole, and the ledger. Everything reaches it through [RabbitBoardData],
 /// which reads the engine rather than replaying the round.
+///
+/// A fourth sits under them: the shared [HoleGridScorecard], gross hole by
+/// hole with the stroke dots. The packet drops it and the three cards above
+/// answer where the RABBIT went rather than where the strokes fall — so when
+/// score entry's own grid came off the same week, the round's stroke-by-stroke
+/// card existed nowhere (Paul, 30 Oct 2026). It goes last because it is the
+/// reference, not the story.
 class RabbitBoard extends StatelessWidget {
   const RabbitBoard({super.key, required this.data});
 
@@ -24,6 +32,26 @@ class RabbitBoard extends StatelessWidget {
           _ByHole(data: data),
           const SizedBox(height: 10),
           _Ledger(data: data),
+          if (data.cardHoles.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              decoration: BoxDecoration(
+                color: Halved.card,
+                border: Border.all(color: Halved.cardBorder, width: 1.5),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+              child: HoleGridScorecard(
+                holes: data.cardHoles,
+                participants: data.cardPlayers,
+                holesInPlay: data.cardHolesInPlay,
+                // No legend: the green cell is the hole's outright low net,
+                // which the by-hole card above has already explained in its
+                // own key, and a second one would describe a different mark.
+                legend: null,
+              ),
+            ),
+          ],
         ],
       );
 }

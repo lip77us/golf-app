@@ -4348,6 +4348,14 @@ class RabbitSummary {
   final double pot;       // n_players × entry
   final double segValue;
 
+  /// The `scorecard` block, raw, for the shared [HoleGridScorecard] — gross
+  /// per golfer per hole with the allocator's stroke dots. Kept as maps
+  /// because that is the shape the grid takes; modelling it would be a second
+  /// description of a payload four other games already hand over as-is.
+  final List<Map<String, dynamic>> scorecardHoles;
+  final List<Map<String, dynamic>> scorecardPlayers;
+  final List<int>                  scorecardHolesInPlay;
+
   const RabbitSummary({
     required this.status,
     required this.handicapMode,
@@ -4368,6 +4376,9 @@ class RabbitSummary {
     required this.entry,
     required this.pot,
     required this.segValue,
+    this.scorecardHoles = const [],
+    this.scorecardPlayers = const [],
+    this.scorecardHolesInPlay = const [],
   });
 
   bool get isNet        => handicapMode == 'net';
@@ -4412,6 +4423,16 @@ class RabbitSummary {
                 ?? (money['bet_unit'] as num?)?.toDouble() ?? 1.0,
       pot:      (money['pot']       as num?)?.toDouble() ?? 1.0,
       segValue: (money['seg_value'] as num?)?.toDouble() ?? 1.0,
+      scorecardHoles: ((j['scorecard'] as Map<String, dynamic>?
+                  ?? const {})['holes'] as List? ?? const [])
+          .cast<Map<String, dynamic>>(),
+      scorecardPlayers: ((j['scorecard'] as Map<String, dynamic>?
+                  ?? const {})['players'] as List? ?? const [])
+          .cast<Map<String, dynamic>>(),
+      scorecardHolesInPlay: ((j['scorecard'] as Map<String, dynamic>?
+                  ?? const {})['holes_in_play'] as List? ?? const [])
+          .map((e) => e as int)
+          .toList(),
     );
   }
 }

@@ -10,7 +10,7 @@
     "is_extra": false,
     "start_hole": 7,
     "end_hole": 12,
-    "holder_id": 4,
+    "holder_id": 7,
     "holder_short": "P",
     "lead": 1,
     "loose": false,
@@ -20,7 +20,7 @@
   },
   "players": [
     {
-      "player_id": 4,
+      "player_id": 7,
       "name": "Paul",
       "short": "P",
       "course_handicap": 0,
@@ -32,7 +32,7 @@
       "is_best": false
     },
     {
-      "player_id": 5,
+      "player_id": 8,
       "name": "Dave",
       "short": "D",
       "course_handicap": 0,
@@ -44,7 +44,7 @@
       "is_best": false
     },
     {
-      "player_id": 6,
+      "player_id": 9,
       "name": "Sam",
       "short": "S",
       "course_handicap": 0,
@@ -61,7 +61,7 @@
     "leg_ended": false,
     "leg_outcome": null,
     "held_to_end": false,
-    "winner_id": 6,
+    "winner_id": 9,
     "winner_short": "S",
     "best_net": 3,
     "runner_net": 5,
@@ -75,8 +75,8 @@
   "next": null,
   "payout": 0.0,
   "order_ids": [
-    4,
-    5,
-    6
+    7,
+    8,
+    9
   ]
 }

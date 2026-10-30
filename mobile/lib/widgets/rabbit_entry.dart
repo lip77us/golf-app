@@ -511,16 +511,25 @@ class RabbitHoleTray extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          // **The chip gets the room, not the label.** `Hole 4` was
+          // `Expanded` beside a `Flexible` chip, and both default to flex 1 —
+          // so they split the row evenly, leaving two words of white space on
+          // the left and `No outright ...` ellipsised on the right (Paul, 30
+          // Oct 2026). The label is three characters and a number; it takes
+          // its natural width and the chip takes everything else.
           Row(children: [
+            Text('Hole ${card.hole}',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16)),
+            const SizedBox(width: 10),
             Expanded(
-              child: Text('Hole ${card.hole}',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16)),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: _winnerChip(r),
+              ),
             ),
-            const SizedBox(width: 8),
-            Flexible(child: _winnerChip(r)),
           ]),
           const SizedBox(height: 6),
           _rabbitLine(r),
