@@ -211,8 +211,11 @@ void main() {
           _nassau(overall: _bet(margin: 2, holesPlayed: 9)), noMoney: true));
       expect(find.textContaining('each'), findsNothing);
       expect(find.text('Bet \$10', findRichText: true), findsNothing);
-      // ...but the match is still reported.
-      expect(find.textContaining('Overall'), findsOneWidget);
+      // ...but the match is still reported — as the 18, on a light card
+      // that names who is up (Paul, 29 Oct 2026), not a dark money card
+      // holding a status line.
+      expect(find.text('Paul & Mike '), findsOneWidget);   // who is up
+      expect(find.text('2 UP'), findsOneWidget);
     });
 
     testWidgets('a finished match says won rather than now', (t) async {

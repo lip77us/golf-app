@@ -34,8 +34,76 @@ class NassauBoard extends StatelessWidget {
               points: data.claremont?.back),
         ],
         const SizedBox(height: 10),
-        _MoneyCard(data: data),
+        // With no money to show, the overall is one more bet: a light card
+        // beside Front and Back, naming who is up. The dark card exists to
+        // carry the money; holding only "Overall · 3 UP" it made a status
+        // line the loudest thing on the board, and its swatch alone did not
+        // say whose lead it was (Paul, 29 Oct 2026). A one-match board has
+        // no separate overall — its single card IS the match.
+        if (data.noMoney && !data.single)
+          _OverallCard(data: data)
+        else
+          _MoneyCard(data: data),
       ],
+    );
+  }
+}
+
+/// The 18 as a plain bet card, the leader NAMED: "Paul & Jim · 3 UP".
+class _OverallCard extends StatelessWidget {
+  const _OverallCard({required this.data});
+  final NassauBoardData data;
+
+  Widget _row(String label, NassauBetView bet) {
+    final colour = _sideColour(data, bet.leader);
+    final who = bet.leader == null ? null : data.sides[bet.leader!].name;
+    return Row(children: [
+      Text(label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+          if (bet.leader != null) _Swatch(colour, size: 8),
+          if (who != null)
+            Flexible(
+              child: Text('$who ',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w600,
+                      color: colour)),
+            ),
+          Text(bet.headline,
+              style: TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w800,
+                  color: bet.leader == null ? Halved.muted : colour)),
+          const SizedBox(width: 6),
+          Text(bet.notStarted ? 'not started' : bet.sub,
+              style: const TextStyle(fontSize: 11, color: Halved.muted)),
+        ]),
+      ),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final o = data.overall;
+    final border = o.done && o.leader != null
+        ? BorderSide(color: _sideColour(data, o.leader), width: 2)
+        : const BorderSide(color: Halved.cardBorder, width: 1.5);
+    return Container(
+      decoration: BoxDecoration(
+        color: Halved.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.fromBorderSide(border),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
+      child: Column(children: [
+        _row('18', o),
+        if (data.claremont?.overall != null) ...[
+          const SizedBox(height: 6),
+          _row('Points', data.claremont!.overall!),
+        ],
+      ]),
     );
   }
 }

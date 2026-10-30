@@ -429,6 +429,14 @@ def annandale_friday_summary(foursome) -> dict | None:
         s = nassau_summary(foursome, slug)
         if s is None:
             continue
+        # Each side's golfers in CARD order. The Nassau engine lists a team in
+        # database order, so the board said "Jim & Paul" under a pill saying
+        # "Paul & Jim" — two names for one side on one screen.
+        for key, ids in (('team1', side1), ('team2', side2)):
+            pos = {pid: n for n, pid in enumerate(ids)}
+            s['teams'][key] = sorted(
+                s['teams'].get(key, []),
+                key=lambda pl: pos.get(pl['player_id'], len(pos)))
         # CAPPED: the loss cap is per side per Nassau, and `total` is the
         # uncapped sum — settling on it would pay out past the cap.
         total = float(s['payouts']['total_capped'])

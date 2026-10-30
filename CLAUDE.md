@@ -7166,6 +7166,15 @@ were prices sitting under winnings.
   "1 UP · dormie", not "· live" (`_toPlay` walks the window, so a shotgun
   press wrapping the 18th counts right). Reaches every Nassau board.
 
+- **With `noMoney`, the overall is a light "18" card naming the leader**
+  ("Jim & Paul 5 UP · thru 8"), not the dark money card holding a status
+  line — that made the 18 the loudest thing on the board and said only by a
+  swatch whose lead it was. Shared board, so the CUP match board (the other
+  `noMoney` caller) gets it too.
+- Each match's sides come back in CARD order: the Nassau engine lists a
+  team in database order, so the board said "Jim & Paul" under a pill
+  saying "Paul & Jim".
+
 **Not built from the packet:** the hole header's "2 skins · 1 carried from 6"
 (the tray carries the skin instead), and the Skins card's settings summary
 on setup step 3.

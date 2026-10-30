@@ -20,6 +20,7 @@ import 'package:golf_mobile/game_catalog.dart';
 import 'package:golf_mobile/utils/annandale_teams.dart';
 import 'package:golf_mobile/utils/nassau_board_model.dart';
 import 'package:golf_mobile/widgets/annandale_friday.dart';
+import 'package:golf_mobile/widgets/nassau_board.dart';
 
 AnnandaleFridaySummary _fixture() => AnnandaleFridaySummary.fromJson(
     jsonDecode(File('test/fixtures/annandale_friday_hole2.json')
@@ -274,6 +275,28 @@ void main() {
       final b2 = NassauBoardData.fromSummary(_fixture().matches.first.summary);
       final p1 = b2.presses.firstWhere((p) => p.from == 3);
       expect((p1.view.headline, p1.view.sub), ('AS', '7 to play'));
+    });
+
+    testWidgets('the 18 is a light card that names who is up', (t) async {
+      // The dark card held only "Overall · 3 UP" once the money left it:
+      // the loudest thing on the board, and a swatch was all that said
+      // whose lead it was.
+      t.view.physicalSize = const Size(1200, 3000);
+      t.view.devicePixelRatio = 2;
+      addTearDown(t.view.reset);
+      final s = AnnandaleFridaySummary.fromJson(jsonDecode(
+          File('test/fixtures/annandale_friday_front_closed.json')
+              .readAsStringSync()) as Map<String, dynamic>);
+      final data = NassauBoardData.fromSummary(s.matches.first.summary,
+          showSides: false, noMoney: true);
+      await t.pumpWidget(MaterialApp(home: Scaffold(
+          body: SingleChildScrollView(child: NassauBoard(data: data)))));
+      // "18" is also the back nine's last tile, so assert the label pair:
+      // the card's own label and the leader it names.
+      expect(find.text('18'), findsNWidgets(2));
+      expect(find.text('${data.sides[0].name} '), findsOneWidget);
+      expect(find.text('5 UP'), findsOneWidget);
+      expect(find.textContaining('each'), findsNothing);   // no money line
     });
 
     test('a setup step opens at its top', () {

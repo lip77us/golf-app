@@ -119,6 +119,17 @@ class SixTests(_Base):
         assert all(p['matches'] == 2 for p in s['players'])
         assert s['group_size'] == 6
 
+    def test_each_match_lists_a_side_in_card_order(self):
+        # Card order is the order the teams were given in, Tom before Bill
+        # here, whatever order the database returns them in.
+        teams = [self.ids('Tom', 'Bill'), self.ids('Ray', 'Dave'),
+                 self.ids('Sam', 'Jim')]
+        setup_annandale_friday(self.fs, teams)
+        for m in annandale_friday_summary(self.fs)['matches']:
+            got1 = [p['player_id'] for p in m['summary']['teams']['team1']]
+            got2 = [p['player_id'] for p in m['summary']['teams']['team2']]
+            assert (got1, got2) == (m['side1_ids'], m['side2_ids'])
+
     def test_the_defaults_are_the_packets(self):
         setup_annandale_friday(self.fs, self.teams())
         s = annandale_friday_summary(self.fs)
