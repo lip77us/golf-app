@@ -44,6 +44,7 @@ import '../widgets/stroke_play_progress_grid.dart';
 import '../utils/play_order.dart';
 import '../api/client.dart' show NetworkException;
 import '../widgets/annandale_friday.dart';
+import '../widgets/reveal_on_mount.dart';
 import '../widgets/error_view.dart' show friendlyError;
 import '../widgets/forty_balls_keypad.dart';
 import '../widgets/forty_balls_picker.dart';
@@ -4564,7 +4565,11 @@ class _HoleScoreCard extends StatelessWidget {
                   );
             return [
               ...teamHead,
-              Container(
+              // Keyed on hole and golfer so each new entry reveals its row:
+              // the keypad covers the last rows of a big card.
+              RevealOnMount(
+                key: ValueKey('entry-$holeNumber-${m.player.id}'),
+                child: Container(
                 // Flush on the LEFT so the bold accent bar lines up with the
                 // inactive rows' left bars; inset on the RIGHT so the right line
                 // stays visible (not hidden flush against the card edge).
@@ -4588,6 +4593,7 @@ class _HoleScoreCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [rowWidget, entryControl],
                 ),
+              ),
               ),
             ];
           }).toList(),
