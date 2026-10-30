@@ -93,7 +93,7 @@ class AnnandaleFridayEndpointTests(TestCase):
         d = r.json()
         assert d['configured'] is False
         assert d['handicap_mode'] == 'strokes_off'
-        assert d['second_ball_tiebreak'] is True
+        assert d['second_ball_tiebreak'] is False
         assert d['auto_press'] is True
         assert d['manual_press'] is False
 

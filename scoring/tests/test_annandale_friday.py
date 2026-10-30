@@ -134,11 +134,17 @@ class SixTests(_Base):
         setup_annandale_friday(self.fs, self.teams())
         s = annandale_friday_summary(self.fs)
         assert s['handicap_mode'] == 'strokes_off'
-        assert s['second_ball_tiebreak'] is True
+        assert s['second_ball_tiebreak'] is False
         assert s['claremont'] is False
         assert s['auto_press'] is True
         assert s['manual_press'] is False
         assert s['loss_cap'] is None
+
+    def test_saving_settings_clears_a_cap_from_before_it_was_removed(self):
+        setup_annandale_friday(self.fs, self.teams())
+        NassauGame.objects.filter(game_type__in=AF_CHILD_SLUGS).update(loss_cap=20)
+        setup_annandale_friday(self.fs, self.teams())
+        assert annandale_friday_summary(self.fs)['loss_cap'] is None
 
     def test_a_golfer_takes_the_same_strokes_into_every_match(self):
         # Off the low man of the WHOLE group: Dave is 4, so Sam (22) gets 18
@@ -156,7 +162,8 @@ class SixTests(_Base):
         assert by_pid[sam] == 18 and by_pid[dave] == 0
 
     def test_the_second_ball_breaks_a_tied_best_ball(self):
-        setup_annandale_friday(self.fs, self.teams(), handicap_mode='gross')
+        setup_annandale_friday(self.fs, self.teams(), handicap_mode='gross',
+                               second_ball_tiebreak=True)
         # AB v CD on hole 1: best balls 4 v 4, second balls 5 v 6 → AB wins.
         self.score_all(1, {'Bill': 4, 'Tom': 5, 'Dave': 4, 'Ray': 6,
                            'Jim': 7, 'Sam': 7})
@@ -215,9 +222,11 @@ class MoneyTests(_Base):
     def test_the_loss_cap_holds_in_settlement(self):
         # Uncapped, Jim loses $30 in each of his two matches. Capped at $20 a
         # side per Nassau, he loses $20 in each — settling off the uncapped
-        # total would have charged him $60.
+        # total would have charged him $60. Setup no longer offers a cap; a
+        # round set up before that keeps its own, so the row is written here.
         setup_annandale_friday(self.fs, self.teams(), handicap_mode='gross',
-                               auto_press=False, loss_cap=20)
+                               auto_press=False)
+        NassauGame.objects.filter(game_type__in=AF_CHILD_SLUGS).update(loss_cap=20)
         self._sweep(18)
         net = {p['player_id']: p['net']
                for p in annandale_friday_summary(self.fs)['players']}
@@ -380,7 +389,8 @@ class ManualPressTests(_Base):
         # already lost its cap could press for free. Same bug in Triple Nassau.
         from services.nassau import add_manual_press
         setup_annandale_friday(self.fs, self.teams(), handicap_mode='gross',
-                               manual_press=True, auto_press=False, loss_cap=10)
+                               manual_press=True, auto_press=False)
+        NassauGame.objects.filter(game_type__in=AF_CHILD_SLUGS).update(loss_cap=10)
         for h in range(1, 10):
             self._hole(h, 5, 4)          # CD take the front: AB lose $10
         self._hole(10, 5, 4)             # and go 1 down on the back

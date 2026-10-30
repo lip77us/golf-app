@@ -1928,12 +1928,11 @@ class ApiClient {
     required List<List<int>> teams,
     String  handicapMode       = 'strokes_off',
     int     netPercent         = 100,
-    bool    secondBallTiebreak = true,
+    bool    secondBallTiebreak = false,
     bool    claremont          = false,
     bool    autoPress          = true,
     bool    manualPress        = false,
     double  pressUnit          = 0.0,
-    double? lossCap,
     double? betUnit,
   }) async {
     final data = await _post('/foursomes/$foursomeId/annandale-friday/setup/', {
@@ -1945,7 +1944,6 @@ class ApiClient {
       'auto_press'          : autoPress,
       'manual_press'        : manualPress,
       'press_unit'          : pressUnit.toStringAsFixed(2),
-      'loss_cap'            : lossCap?.toStringAsFixed(2),
       if (betUnit != null) 'bet_unit': betUnit.toStringAsFixed(2),
     });
     return AnnandaleFridaySummary.fromJson(data as Map<String, dynamic>);

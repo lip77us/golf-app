@@ -6,7 +6,7 @@
 ///      matches box lists the three Nassaus the teams make, or says what is
 ///      wrong with the split, and Next stays off until it plays.
 ///   2. **Nassau** — one set of options for every Nassau: handicap, stake
-///      per bet and per press, 2nd ball / Claremont, presses, loss cap.
+///      per bet and per press, 2nd ball / Claremont, presses.
 ///   3. **Side games** — any standard side game for the whole group, each
 ///      opening its own setup. Skins is not part of this game; it is added
 ///      here like anywhere else.
@@ -58,15 +58,13 @@ class _AnnandaleFridaySetupScreenState
 
   String _mode        = 'strokes_off';
   int    _netPercent  = 100;
-  bool   _secondBall  = true;
+  bool   _secondBall  = false;
   bool   _claremont   = false;
   bool   _autoPress   = true;
   bool   _manualPress = false;
-  bool   _capOn       = false;
 
   final _betCtrl   = TextEditingController();
   final _pressCtrl = TextEditingController();
-  final _capCtrl   = TextEditingController();
   bool _stakeOk = false;
   /// The press stake follows the bet until somebody types in it: a press is
   /// usually played for the bet, and a press field left at $0 when the bet
@@ -88,7 +86,6 @@ class _AnnandaleFridaySetupScreenState
   void dispose() {
     _betCtrl.dispose();
     _pressCtrl.dispose();
-    _capCtrl.dispose();
     super.dispose();
   }
 
@@ -129,7 +126,7 @@ class _AnnandaleFridaySetupScreenState
         _editing = configured;
         _mode        = cfg['handicap_mode'] as String? ?? 'strokes_off';
         _netPercent  = cfg['net_percent'] as int? ?? 100;
-        _secondBall  = cfg['second_ball_tiebreak'] as bool? ?? true;
+        _secondBall  = cfg['second_ball_tiebreak'] as bool? ?? false;
         _claremont   = cfg['claremont'] as bool? ?? false;
         _autoPress   = cfg['auto_press'] as bool? ?? true;
         _manualPress = cfg['manual_press'] as bool? ?? false;
@@ -140,9 +137,6 @@ class _AnnandaleFridaySetupScreenState
         _pressCtrl.text = _money(press > 0 ? press : bet);
         // A saved press stake that differs from the bet was chosen.
         _pressEdited = configured && press > 0 && press != bet;
-        final cap = (cfg['loss_cap'] as num?)?.toDouble();
-        _capOn = cap != null;
-        if (cap != null) _capCtrl.text = _money(cap);
 
         // Saved teams when there are any; otherwise golfers in card order.
         final saved = <List<int>>[
@@ -177,7 +171,6 @@ class _AnnandaleFridaySetupScreenState
         manualPress       : _manualPress,
         pressUnit         : (_autoPress || _manualPress)
             ? (double.tryParse(_pressCtrl.text.trim()) ?? 0) : 0,
-        lossCap           : _capOn ? double.tryParse(_capCtrl.text.trim()) : null,
         betUnit           : double.tryParse(_betCtrl.text.trim()),
       );
       rp.setAnnandaleFridaySummary(s);
@@ -461,22 +454,6 @@ class _AnnandaleFridaySetupScreenState
             _switch('Manual press',
                 'When 1 down or level, from the next hole',
                 _manualPress, (v) => setState(() => _manualPress = v)),
-            _switch('Cap losses', 'Per side, per Nassau',
-                _capOn, (v) => setState(() => _capOn = v)),
-            if (_capOn)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: TextField(
-                  controller: _capCtrl,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Most a side can lose in one Nassau',
-                    prefixText: '\$ ',
-                    border: OutlineInputBorder(), isDense: true,
-                  ),
-                ),
-              ),
           ]),
         ),
       ];

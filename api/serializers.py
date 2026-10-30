@@ -1460,16 +1460,12 @@ class AnnandaleFridaySetupSerializer(serializers.Serializer):
     )
     net_percent          = serializers.IntegerField(min_value=0, max_value=200,
                                                     default=100)
-    second_ball_tiebreak = serializers.BooleanField(default=True)
+    second_ball_tiebreak = serializers.BooleanField(default=False)
     claremont            = serializers.BooleanField(default=False)
     auto_press           = serializers.BooleanField(default=True)
     manual_press         = serializers.BooleanField(default=False)
     press_unit  = serializers.DecimalField(
         max_digits=8, decimal_places=2, default='0.00', min_value=0,
-    )
-    loss_cap    = serializers.DecimalField(
-        max_digits=8, decimal_places=2, required=False, allow_null=True,
-        default=None, min_value=0,
     )
     bet_unit    = serializers.DecimalField(
         max_digits=8, decimal_places=2, required=False, allow_null=True,

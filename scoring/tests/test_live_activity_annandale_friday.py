@@ -136,7 +136,9 @@ class SixGolferTests(_Base):
         the winner's ceiling. The revised packet draws −$40 to +$60, which
         would promise a win the other side cannot be asked to pay."""
         setup_annandale_friday(self.fs, self.teams(), handicap_mode='gross',
-                               auto_press=False, press_unit=10, loss_cap=20)
+                               auto_press=False, press_unit=10)
+        from games.models import NassauGame
+        NassauGame.objects.filter(game_type__startswith='af_').update(loss_cap=20)
         self._play(1, Paul=4, Jim=4, Dave=4, Ray=4, Sam=4, Tom=4)
         s = self._state(1)
         self.assertEqual(s['footer']['money'], '−$40 to +$40')

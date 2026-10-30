@@ -165,12 +165,11 @@ def setup_annandale_friday(
     teams:                list,
     handicap_mode:        str   = HandicapMode.STROKES_OFF,
     net_percent:          int   = 100,
-    second_ball_tiebreak: bool  = True,
+    second_ball_tiebreak: bool  = False,
     claremont:            bool  = False,
     auto_press:           bool  = True,
     manual_press:         bool  = False,
     press_unit:           float = 0.00,
-    loss_cap                    = None,
 ) -> AnnandaleFridayGame:
     """Create or update this foursome's Annandale Friday.
 
@@ -193,10 +192,10 @@ def setup_annandale_friday(
     variant    = _variant(second_ball_tiebreak, claremont)
     press_mode = _press_mode(auto_press, manual_press)
     net_percent = max(0, min(200, int(net_percent)))
-    if loss_cap is not None:
-        loss_cap = Decimal(str(loss_cap))
-        if loss_cap <= 0:
-            loss_cap = None
+    # No cap on this game (Paul, 30 Oct 2026): a group worried about the
+    # exposure plays a lower stake. The Nassau engine still honours one on a
+    # round set up before this, and saving that round's settings clears it.
+    loss_cap = None
 
     container = _container_for(foursome)
     if container is not None and _same_teams(container.teams, teams):

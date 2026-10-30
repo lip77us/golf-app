@@ -7225,6 +7225,11 @@ things on two cards.
 - **One departure**: with five, a golfer in the three partners a different man
   in each match, so his side reads `YOU·SAM` — the bare `YOU` the packet draws
   would hide the one thing that differs between his two columns.
+- **Annandale Friday no longer offers a loss cap** (Paul, 30 Oct 2026, from
+  testing: a group worried about exposure plays a lower stake), and **2nd ball
+  ties default OFF**. The cap notes here apply only to a round set up before
+  that; saving its settings clears the cap. Plain Nassau and Triple Nassau
+  still offer one.
 - Exposure is each match's range summed, **each match clamped to its own loss
   cap first** (the cap is per side per Nassau), and the footer says
   `$10 a bet · capped $20`. **The clamp is symmetric**: with two sides the

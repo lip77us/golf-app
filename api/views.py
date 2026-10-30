@@ -7677,12 +7677,11 @@ class AnnandaleFridaySetupView(APIView):
         "teams":                [[p1, p2], [p3, p4], [p5, p6]],
         "handicap_mode":        "strokes_off" | "net" | "gross",
         "net_percent":          100,
-        "second_ball_tiebreak": true,
+        "second_ball_tiebreak": false,
         "claremont":            false,
         "auto_press":           true,
         "manual_press":         false,
         "press_unit":           10.00,
-        "loss_cap":             null | 50.00,
         "bet_unit":             10.00        # optional; sets Round.bet_unit
     }
     Refuses with the setup screen's own sentence when the teams don't fit the
@@ -7698,13 +7697,12 @@ class AnnandaleFridaySetupView(APIView):
             'configured'          : False,
             'handicap_mode'       : 'strokes_off',
             'net_percent'         : 100,
-            'second_ball_tiebreak': True,
+            'second_ball_tiebreak': False,
             'claremont'           : False,
             'auto_press'          : True,
             'manual_press'        : False,
             'bet_unit'            : float(foursome.round.bet_unit),
             'press_unit'          : 0.0,
-            'loss_cap'            : None,
             'teams'               : [],
         })
 
@@ -7734,7 +7732,6 @@ class AnnandaleFridaySetupView(APIView):
                     auto_press           = d['auto_press'],
                     manual_press         = d['manual_press'],
                     press_unit           = d['press_unit'],
-                    loss_cap             = d.get('loss_cap'),
                 )
             except (AnnandaleShapeError, AnnandaleLocked) as exc:
                 transaction.set_rollback(True)
