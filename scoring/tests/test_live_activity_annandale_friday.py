@@ -203,3 +203,133 @@ class FiveGolferTests(_Base):
                          ['YOU·RAY', 'YOU·SAM'])
         self.assertTrue(all(c['dots'][0] == 'blue' for c in mine))
         self.assertEqual([c['dim'] for c in strip].count(True), 1)
+
+
+class _PushBase(_Base):
+    def setUp(self):
+        super().setUp()
+        setup_annandale_friday(self.fs, self.teams(), handicap_mode='gross',
+                               auto_press=True, press_unit=10)
+
+    def _alerts(self):
+        from services.live_activity_annandale_push import annandale_alerts
+        return annandale_alerts(self.round)
+
+    def _named(self, alerts):
+        by_id = {v: k for k, v in self.pid.items()}
+        return {by_id[p]: a for p, a in alerts.items()}
+
+
+class PushTests(_PushBase):
+    """**Three events ring, only for the golfers in that match, and once.**"""
+
+    def test_the_first_call_takes_a_baseline_and_announces_nothing(self):
+        for h in (1, 2):
+            self._play(h, Paul=5, Jim=5, Dave=5, Ray=5, Sam=3, Tom=5)
+        self.assertEqual(self._alerts(), {},
+                         'a round already under way is not news')
+
+    def test_an_auto_press_rings_only_the_two_teams_in_that_match(self):
+        self._play(1, Paul=4, Jim=4, Dave=4, Ray=4, Sam=4, Tom=4)
+        self._alerts()                                   # baseline
+        # Best ball is a total order within a hole, so moving ONE match takes
+        # two hole shapes that swap the other two: Dave > Sam > Paul, then
+        # Sam > Paul > Dave. Sam & Tom win both against Paul & Jim; the other
+        # two matches go one each way and stay level.
+        self._play(2, Paul=5, Jim=6, Dave=3, Ray=6, Sam=4, Tom=6)
+        self.assertEqual(self._alerts(), {})
+        self._play(3, Paul=4, Jim=6, Dave=5, Ray=6, Sam=3, Tom=6)
+        got = self._named(self._alerts())
+        self.assertEqual(set(got), {'Paul', 'Jim', 'Sam', 'Tom'},
+                         'Dave & Ray are not in that match')
+        self.assertEqual(got['Paul']['title'], 'Auto press v Sam & Tom')
+        self.assertEqual(
+            got['Paul']['body'],
+            'You went 2 down on 3. A new $10 bet from hole 4 to the end of '
+            'the front nine.')
+        self.assertEqual(got['Sam']['title'], 'Auto press v Paul & Jim')
+        self.assertTrue(got['Sam']['body'].startswith('Paul & Jim went 2 down'))
+
+    def test_it_fires_once(self):
+        self._play(1, Paul=4, Jim=4, Dave=4, Ray=4, Sam=4, Tom=4)
+        self._alerts()
+        for h in (2, 3):
+            self._play(h, Paul=5, Jim=5, Dave=5, Ray=5, Sam=3, Tom=5)
+        self.assertTrue(self._alerts())
+        self.assertEqual(self._alerts(), {}, 'the same press twice')
+
+    def test_a_nine_closing_out_names_the_result_and_the_money(self):
+        setup_annandale_friday(self.fs, self.teams(), handicap_mode='gross',
+                               auto_press=False, press_unit=10)
+        self._play(1, Paul=4, Jim=4, Dave=4, Ray=4, Sam=4, Tom=4)
+        self._alerts()
+        # Paul & Jim win holes 2–6 against Dave & Ray: 5 up with 3 to play.
+        for h in range(2, 7):
+            self._play(h, Paul=3, Jim=5, Dave=4, Ray=5, Sam=3, Tom=5)
+        got = self._named(self._alerts())
+        self.assertEqual(got['Paul']['title'], 'Front nine v Dave & Ray')
+        self.assertEqual(got['Paul']['body'], 'You won 5&3. +$10 each.')
+        self.assertEqual(got['Dave']['title'], 'Front nine v Paul & Jim')
+        self.assertEqual(got['Dave']['body'], 'Paul & Jim won 5&3. −$10 each.')
+
+    def test_the_third_match_never_pushes(self):
+        """Dave & Ray v Sam & Tom closes and neither Paul nor Jim hears of
+        it: each Nassau settles on its own, so it never changes what they
+        settle."""
+        setup_annandale_friday(self.fs, self.teams(), handicap_mode='gross',
+                               auto_press=False, press_unit=10)
+        self._play(1, Paul=4, Jim=4, Dave=4, Ray=4, Sam=4, Tom=4)
+        self._alerts()
+        # Paul > Sam > Dave, then Sam > Dave > Paul, alternating: Sam & Tom
+        # beat Dave & Ray every hole, and both of Paul & Jim's matches swing
+        # a hole each way and stay open.
+        for h in range(2, 7):
+            if h % 2:
+                self._play(h, Paul=5, Jim=6, Dave=4, Ray=6, Sam=3, Tom=6)
+            else:
+                self._play(h, Paul=3, Jim=6, Dave=5, Ray=6, Sam=4, Tom=6)
+        got = self._named(self._alerts())
+        self.assertNotIn('Paul', got)
+        self.assertNotIn('Jim', got)
+        self.assertEqual(got['Sam']['title'], 'Front nine v Dave & Ray')
+
+
+class PushRoundDeliversPerGolferTests(_PushBase):
+    """`push_round` hands each phone ITS golfer's alert — the cup's alerts are
+    one per round, and these are the first that differ between phones."""
+
+    def test_only_the_golfers_in_the_match_get_the_sound(self):
+        from unittest import mock
+
+        from django.contrib.auth import get_user_model
+
+        from core.models import Player
+        from services import live_activity_push as lap
+        from tournament.models import LiveActivityToken
+
+        User = get_user_model()
+        acct = self.round.account
+        users = {}
+        for name in ('Paul', 'Dave'):
+            users[name] = User.objects.create_user(username=name.lower(),
+                                                   account=acct)
+            Player.objects.filter(pk=self.pid[name]).update(user=users[name])
+            LiveActivityToken.objects.create(round=self.round,
+                                             user=users[name], token=name)
+
+        self._play(1, Paul=4, Jim=4, Dave=4, Ray=4, Sam=4, Tom=4)
+        self._alerts()                                   # baseline
+        self._play(2, Paul=5, Jim=6, Dave=3, Ray=6, Sam=4, Tom=6)
+        self._play(3, Paul=4, Jim=6, Dave=5, Ray=6, Sam=3, Tom=6)
+
+        with mock.patch.object(lap, 'is_enabled', return_value=True), \
+             mock.patch('services.live_activity_registry.UNSHIPPED_KINDS',
+                        set()), \
+             mock.patch.object(lap, 'send_state',
+                               return_value=True) as send:
+            lap.push_round(self.round)
+
+        alerts = {c.args[0]: c.kwargs.get('alert')
+                  for c in send.call_args_list}
+        self.assertEqual(alerts['Paul']['title'], 'Auto press v Sam & Tom')
+        self.assertIsNone(alerts['Dave'], 'Dave & Ray are not in that match')

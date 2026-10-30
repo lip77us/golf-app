@@ -7189,5 +7189,53 @@ were prices sitting under winnings.
 (the tray carries the skin instead), and the Skins card's settings summary
 on setup step 3.
 
-Still to do: the watch page, the Live Activity card, and moving the guide
-from `/preview/` to `/games/` LAST.
+### The lock screen — `handoff-annandale-friday-lock`
+
+`services/live_activity_annandale_friday.py`, **in `UNSHIPPED_KINDS`** until
+the build carrying the layout ships. It is the Triple Nassau card with the
+matches between TEAMS, and it imports that module's bet key, figure and press
+chip rather than copying them, so `3&2` and `+1` cannot come to mean two
+things on two cards.
+
+- **Two-line labels**: `YOU` over `v DAVE·RAY`; the match the reader is not in
+  reads `DAVE·RAY` over `v JIM·SAM`. `StripCol.label2` in Swift, with
+  `dots[0]` / `dots[1]` beside each line; absent on every other card.
+- **Colour is the team**, the reader's always blue, the others orange then
+  plum in card order. With five, the three is one team and one colour.
+- **Weight follows the reader**: two of three with six, all three for the pair
+  with five, two of three for one of the three. A watcher holds nothing back.
+- **One departure**: with five, a golfer in the three partners a different man
+  in each match, so his side reads `YOU·SAM` — the bare `YOU` the packet draws
+  would hide the one thing that differs between his two columns.
+- Exposure is each match's range summed, **each match clamped to its own loss
+  cap first** (the cap is per side per Nassau). The final reads `total_capped`,
+  the figure settlement uses.
+- Compact island: the reader's matches only, `AS` for level, `+N` presses.
+
+#### The pushes — the first that differ between phones
+`services/live_activity_annandale_push.py`. An auto press, a manual press, and
+a nine or the overall closing out ring **only the golfers in that match**; the
+third match never pushes (each Nassau settles on its own). `push_round` asks
+`annandale_alerts(round)` ONCE per posted score and matches each token's user
+to his golfer — the cup's alerts were one per round, these are per player.
+
+- **Fired once**, via `AnnandaleFridayGame.announced` (`games/0101`). NULL
+  until the first push, which records what has already happened WITHOUT
+  announcing it, so a round under way when this ships does not ring six
+  phones with a whole front nine.
+- **No "who pressed" is stored.** An auto press's down side is read off the
+  nine's margin on the hole that fired it (the press's own first hole is not
+  played yet, so that is the last hole in the list); a manual press names its
+  presser only when a side is down, and the match and holes alone when level.
+- **A zero press stake reads `A new press`**, not the bet's figure — the
+  engine pays nothing on it.
+- Caught by the tests, worth not repeating: the event builders are closures
+  in a loop, and one that read `sides` late named the LAST match's teams on
+  every push. Every loop value is bound as a default.
+
+Tests: `scoring/tests/test_live_activity_annandale_friday.py` (23). Not yet
+seen on a device: the card is type-checked, not measured against the ~160pt
+ceiling the packet puts it at 127.
+
+Still to do: the watch page, and moving the guide from `/preview/` to
+`/games/` LAST.

@@ -1597,6 +1597,13 @@ class AnnandaleFridayGame(models.Model):
                      max_length=20, choices=MatchStatus.choices,
                      default=MatchStatus.PENDING,
                  )
+    # The lock-screen pushes already sent — press and close-out keys
+    # (`services.live_activity_annandale_push`). NULL until the first score
+    # is pushed, which takes a baseline rather than announcing a backlog.
+    announced  = models.JSONField(
+                     null=True, blank=True, default=None,
+                     help_text="Lock-screen push events already sent.",
+                 )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

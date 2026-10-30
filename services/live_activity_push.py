@@ -472,6 +472,13 @@ def push_start_to_absent(round_obj) -> int:
     return sent
 
 
+def _player_alert(round_obj, user, per_player):
+    """The alert keyed to this user's golfer, if any."""
+    from services.live_activity_registry import foursome_for, primary_game
+    _, pid = foursome_for(round_obj, user, primary_game(round_obj))
+    return per_player.get(pid) if pid is not None else None
+
+
 def push_round(round_obj, *, final=False) -> int:
     """Send the current board to every activity registered for this round.
 
@@ -506,15 +513,30 @@ def push_round(round_obj, *, final=False) -> int:
             logger.exception('live_activity_push: cup alert, round %s',
                              round_obj.id)
 
+    # Annandale Friday's are PER GOLFER — a press or a closed bet rings only
+    # the men in that match — so they come back keyed by player and are
+    # matched to each row below. Asked once, for the same reason as the cup.
+    per_player = {}
+    if not final:
+        from services.live_activity_annandale_push import annandale_alerts
+        try:
+            per_player = annandale_alerts(round_obj)
+        except Exception:  # pragma: no cover - never blocks a score
+            logger.exception('live_activity_push: annandale alerts, round %s',
+                             round_obj.id)
+
     sent = 0
     for row in rows:
         try:
             state = activity_state(round_obj, row.user, final=final)
             if not state:
                 continue
+            mine = alert
+            if per_player:
+                mine = _player_alert(round_obj, row.user, per_player) or alert
             if send_state(row.token, state,
                           event='end' if final else 'update',
-                          alert=alert):
+                          alert=mine):
                 sent += 1
         except Exception:  # pragma: no cover - one bad row never stops the rest
             logger.exception('live_activity_push: round %s user %s',
