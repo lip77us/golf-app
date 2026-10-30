@@ -189,6 +189,21 @@ void main() {
           contains('?.scoreFor(fbMember.player.id)?.par'));
     });
 
+    test('a closed nine reads as its result on the pill', () {
+      // Paul's round: front won 4&2 on the 7th, the 8th played for the
+      // presses. The pill said "5 UP · front · thru 8" under a board saying
+      // "4&2 Final". Fixture is the engine's output for those holes.
+      final s = AnnandaleFridaySummary.fromJson(jsonDecode(
+          File('test/fixtures/annandale_friday_front_closed.json')
+              .readAsStringSync()) as Map<String, dynamic>);
+      final f = s.matches.first.summary.front9;
+      expect(f.margin, 5);
+      expect((f.decidedMargin, f.decidedRemaining), (4, 2));
+      final src = _src('lib/screens/leaderboard_screen.dart');
+      expect(src, contains("'\${margin.abs()}&\${bet.decidedRemaining}'"));
+      expect(src, contains("'\$nine · final'"));
+    });
+
     test('a setup step opens at its top', () {
       expect(_src('lib/screens/annandale_friday_setup_screen.dart'),
           contains('key: ValueKey(_step)'));

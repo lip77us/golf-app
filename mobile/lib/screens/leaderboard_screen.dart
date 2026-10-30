@@ -8262,7 +8262,17 @@ class _AfMatchPill extends StatelessWidget {
     final n = match.summary;
     // The nine being played: the back once a hole of it is in.
     final back = n.back9.holesPlayed > 0;
-    final margin = back ? n.back9.margin : n.front9.margin;
+    final bet = back ? n.back9 : n.front9;
+    final nine = back ? 'back' : 'front';
+    // **A nine closed out early reads as its result, not the running
+    // count.** The front won 4&2 on the 7th kept counting holes for the
+    // presses, so the pill said "5 UP · thru 8" over a board saying
+    // "4&2 Final" (Paul, 29 Oct 2026). Same rule the board itself uses.
+    final closed = bet.decidedMargin != null && (bet.decidedRemaining ?? 0) > 0;
+    final margin = closed ? bet.decidedMargin! : bet.margin;
+    final status = closed
+        ? '${margin.abs()}&${bet.decidedRemaining}'
+        : margin == 0 ? 'AS' : '${margin.abs()} UP';
     final leadTeam = margin > 0 ? match.side1Team
         : margin < 0 ? match.side2Team : null;
     final thru = n.holes.length;
@@ -8292,7 +8302,7 @@ class _AfMatchPill extends StatelessWidget {
                 ]),
               ),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text(margin == 0 ? 'AS' : '${margin.abs()} UP',
+                Text(status,
                     style: TextStyle(
                         fontSize: 18, fontWeight: FontWeight.w800,
                         color: leadTeam == null
@@ -8300,7 +8310,9 @@ class _AfMatchPill extends StatelessWidget {
                             : annandaleTeamColour(leadTeam))),
                 Text(thru == 0
                         ? 'not started'
-                        : '${back ? 'back' : 'front'} · thru $thru',
+                        : bet.isComplete
+                            ? '$nine · final'
+                            : '$nine · thru $thru',
                     style: const TextStyle(
                         fontSize: 11.5, color: Halved.muted)),
               ]),
