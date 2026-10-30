@@ -163,6 +163,61 @@ reduces risk rather than just waiting.
 Shipping builds into the closed track still does not reset it. Only the
 count falling below 12 does.
 
+### DECLINED A SECOND TIME — reviewed Wed 28 Oct 2026, 3:20 PM
+
+Reapplied Tue 27 Oct with answers rewritten to lead on what had changed
+since the first review. Refused the next afternoon, identical wording, all
+three criteria struck through again.
+
+- **New clock: 14 days from Wed 28 Oct 15:20. Earliest Wed 11 Nov; the
+  file says Thu 12 Nov**, for the same reason as every clock before it.
+- The console reads "12 testers have currently been opted in for 1 day".
+  **That is the restarted counter, not a dropout** — one complete day had
+  elapsed by Thu 29 Oct. Same check as last time, same answer.
+
+### WHY IT KEEPS BEING REFUSED — the thing that was invisible for five weeks
+
+**Nine of the eleven Android testers have never entered a single score.**
+Measured 29 Oct against production:
+
+```
+Charlie Wicke  never     Bill Sinn      never     Justin        never
+David Webb     never     Bob Scott      never     Richard Feller never
+Louis Epstein  never     Igor Kipnis    never     K Chan        never
+rfelix         2 scores, 29 Sep
+Paul Lipkin    186 scores -- but off the iPhone; the Android is WiFi-only
+```
+
+**Google cannot see the usage the application was describing.** The 45
+rounds and 2,387 hole scores quoted in both applications are real and almost
+entirely iOS. Play sees twelve people who opted in, installed, signed in and
+then never used the app. *"Your app requires more testing"* is not
+boilerplate — it is a literal reading of their data.
+
+That is the whole explanation for the shape of both refusals: every criterion
+struck through, reviewed inside a day, refused anyway. **The criteria measure
+opt-ins; the decision measures engagement**, and the two have been diverging
+since 26 Sep.
+
+**So a third application with better answers fails the same way.** The
+answers were never the problem, which is exactly why rewriting them changed
+nothing. The next fortnight has to produce ANDROID ROUNDS, not more waiting.
+
+- **Look at what Google sees** before planning anything: Play Console ->
+  Closed testing -> Alpha -> the statistics view (installs, active users,
+  retention). Both applications were made blind to it.
+- **Ask four or five named testers for one round each, on their own phone.**
+  Not "please test" — a specific round on a specific day. Four testers times
+  one round is four times the Android usage of the preceding five weeks.
+- **Verify before applying.** `scripts/android_testers.py` prints exactly the
+  table above. Run it a week in; if the `never` column has not moved, do not
+  apply on 12 Nov, because the outcome is already decided.
+
+**The reason this took two refusals to find:** every measurement we had ran
+against our own database, which is platform-blind and dominated by iOS. The
+one number that mattered — did an Android tester open the app — was never
+once asked for. Ask it first next time.
+
 ### Still to do, in order of what blocks the calendar
 
 - [x] **12 testers opted in** — done 26 Sep 2026. See the clock above.
