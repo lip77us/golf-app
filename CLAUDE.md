@@ -7466,6 +7466,22 @@ has to be closed on the server (`Round.objects.get(pk=493)`, set
 skips `maybe_notify_round_complete` and `emit_round_complete`, so a field of
 fifty-six does not get a "round complete" push three days late.
 
+### The Sixes strokes card: every dot is filled
+
+A spent stroke was drawn hollow and the ones still to come filled. Two things
+killed it (Paul, 30 Oct 2026, *"just leave them all filled in"*):
+
+- **Nobody could read it.** The question that retired it was *"what are the
+  closed circles vs the open circles on the strokes card"* — which is the
+  whole answer about whether a distinction is carrying its weight.
+- **It inverted this app's own vocabulary.** `filled = settled, outlined =
+  still live` is the rule on the Rabbit board, the Sequoya ledger **and the
+  Sixes ledger 220 lines below it in the same file**. One screen carried both
+  readings, stacked.
+
+Nothing is lost: the hole in play is the bold column header, and the HOLES
+WON grid above says which of the rest have been played.
+
 ## Sixes score entry — `handoff-sixes-score-entry` (server done, bottom half wired)
 
 The 40 Balls keypad and dark tray carried to Sixes. **The first of the score

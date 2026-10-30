@@ -4,6 +4,8 @@
 // and the ledger cannot answer "is it closed out" or "how many to play" three
 // different ways. These pin the answers.
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
 import 'package:golf_mobile/widgets/sixes_board.dart';
@@ -160,6 +162,23 @@ void main() {
       final two = match(start: 7, end: 12, a: const [1, 3], b: const [2, 4],
           winners: const ['T1']);
       expect(one.leaderColour, two.leaderColour);
+    });
+  });
+
+  group('the strokes card', () {
+    test('every stroke is a filled dot', () {
+      // A spent stroke used to be hollow. Nobody could read it — the question
+      // that retired it was "what are the closed circles vs the open circles"
+      // — and it inverted this app's vocabulary, where filled means settled.
+      // The ledger on the same screen says exactly that.
+      final src = File('lib/widgets/sixes_board.dart').readAsStringSync();
+      final at = src.indexOf('static Widget _dot(');
+      expect(at, greaterThan(0));
+      final body = src.substring(at, src.indexOf('\n  }', at));
+      expect(body.contains('Border.all'), isFalse,
+          reason: 'a stroke dot is filled, never outlined');
+      expect(body.contains('Colors.transparent'), isFalse);
+      expect(body, contains('Halved.brightMint'));
     });
   });
 }

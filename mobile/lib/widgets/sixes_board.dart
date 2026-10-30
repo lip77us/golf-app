@@ -552,7 +552,6 @@ class _StrokesCard extends StatelessWidget {
     return 0;
   }
 
-  bool _played(int hole) => match.sideAt(hole) != null;
 
   String _name(int pid) {
     final p = players.firstWhere(
@@ -620,7 +619,7 @@ class _StrokesCard extends StatelessWidget {
                     color: Halved.deepPine)),
           ),
           for (final h in hs)
-            Expanded(child: Center(child: _dot(_strokes(pid, h), _played(h)))),
+            Expanded(child: Center(child: _dot(_strokes(pid, h)))),
           SizedBox(
             width: 26,
             child: Text(
@@ -633,18 +632,25 @@ class _StrokesCard extends StatelessWidget {
         ]),
       );
 
-  /// A stroke on a hole already played is OUTLINED rather than filled — it
-  /// happened, and the filled dots are the ones still to come.
-  static Widget _dot(int strokes, bool played) {
+  /// **Every stroke is a filled dot** (Paul, 30 Oct 2026: *"just leave them
+  /// all filled in"*).
+  ///
+  /// A spent stroke used to be drawn hollow, on the reasoning that the filled
+  /// ones are the strokes still to come. Two things against it: nobody could
+  /// read it — the question that retired it was *"what are the closed circles
+  /// vs the open circles"* — and it INVERTED this app's own vocabulary, where
+  /// filled means settled and outlined means still live. The ledger directly
+  /// below this card says exactly that, so one screen carried both readings.
+  ///
+  /// Which holes have been played is already on the card: the hole in play is
+  /// the bold column header, and the HOLES WON grid above shows the rest.
+  static Widget _dot(int strokes) {
     if (strokes <= 0) return const SizedBox(width: 9, height: 9);
     return Container(
       width: 9, height: 9,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         shape: BoxShape.circle,
-        color: played ? Colors.transparent : Halved.brightMint,
-        border: played
-            ? Border.all(color: Halved.brightMint, width: 1.4)
-            : null,
+        color: Halved.brightMint,
       ),
     );
   }
