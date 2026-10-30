@@ -36,18 +36,45 @@ void main() {
         {int par = 4,
         int strokes = 1,
         void Function(int)? onScore,
-        VoidCallback? onClear}) =>
+        VoidCallback? onClear,
+        VoidCallback? onDone,
+        String name = 'Alan Petersen'}) =>
         t.pumpWidget(MaterialApp(
           home: Scaffold(
             body: FortyBallsKeypad(
-              playerName: 'Alan Petersen',
+              playerName: name,
               par: par,
               strokes: strokes,
               onScore: onScore ?? (_) {},
               onClear: onClear ?? () {},
+              onDone: onDone,
             ),
           ),
         ));
+
+    // `Edit scores` is plural and used to let you change exactly one — the
+    // screen dropped its editing flag the moment a key landed, so the tray
+    // came straight back (Paul, 30 Oct 2026). A session needs a way out.
+    testWidgets('Done appears only for an edit session', (t) async {
+      await pump(t);
+      expect(find.text('Done'), findsNothing);
+      var done = 0;
+      await pump(t, onDone: () => done++);
+      expect(find.text('Done'), findsOneWidget);
+      await t.tap(find.text('Done'));
+      expect(done, 1);
+    });
+
+    testWidgets('Done is a 44pt target and survives a long name', (t) async {
+      await t.binding.setSurfaceSize(const Size(320, 700));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await pump(t,
+          onDone: () {}, name: 'Bartholomew Fotheringay');
+      expect(t.takeException(), isNull);     // the header must not overflow
+      final btn = find.ancestor(
+          of: find.text('Done'), matching: find.byType(SizedBox)).first;
+      expect(t.getSize(btn).height, 44);
+    });
 
     testWidgets('it offers 1 to 9, then 10+ and Clear', (t) async {
       await pump(t);

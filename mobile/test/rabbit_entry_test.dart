@@ -280,6 +280,20 @@ void main() {
       expect(body.contains('handicapStrokes'), isFalse);
     });
 
+    test('Edit scores is a session, not one score', () {
+      // It is plural, and it used to let you change exactly one: the flag
+      // cleared the moment a key landed and the tray came straight back
+      // (Paul, 30 Oct 2026). The keypad stays until Done.
+      final at = src.indexOf('onScore: (n) {');
+      expect(at, greaterThan(0));
+      final body = src.substring(at, src.indexOf('onClear:', at));
+      expect(body.contains('_trayEditing = false'), isFalse,
+          reason: 'a score must not end the session');
+      // And there is a way out of it.
+      final kp = src.indexOf('FortyBallsKeypad(');
+      expect(src.substring(kp, at), contains('onDone:'));
+    });
+
     test('auto-advance does not carry the scorer past the tray', () {
       // The tray IS the end of the hole; its forward button is the advance.
       final at = src.indexOf('autoAdvanceHole');

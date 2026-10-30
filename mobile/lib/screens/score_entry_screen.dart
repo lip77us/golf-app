@@ -3091,13 +3091,23 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               par       : sc.holeData(_selectedHole)
                       ?.scoreFor(fbMember.player.id)?.par ?? par,
               strokes   : _keypadStrokes(fbMember, sc),
+              onDone    : _trayEditing
+                  ? () => setState(() {
+                        _trayEditing = false;
+                        _editHotPid = null;
+                      })
+                  : null,
               onScore   : (n) {
                 _selectScore(fbMember, n, _selectedHole);
-                // Editing a tapped golfer is a one-shot, exactly as it is for
-                // the inline picker: once a value lands, the natural next
-                // scorer resumes.
-                if (_editHotPid != null || _trayEditing) {
-                  setState(() { _editHotPid = null; _trayEditing = false; });
+                // **`Edit scores` is a SESSION, not one score** (Paul, 30 Oct
+                // 2026). While `_trayEditing` the keypad stays on the golfer
+                // just edited — a mis-tap is corrected in place — and another
+                // row is one tap away; `Done` hands the bar back to the tray.
+                // Tapping a golfer from the inline picker (`_editHotPid`
+                // alone) stays the one-shot it has always been: there the
+                // natural next scorer resumes.
+                if (!_trayEditing && _editHotPid != null) {
+                  setState(() => _editHotPid = null);
                 }
                 // **A tray game posts the hole on its last score and
                 // stays**, the same as the inline picker does. The tray

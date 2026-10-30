@@ -851,10 +851,22 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
                 .map((p) => p.strokes)
                 .firstOrNull ?? 0,
             netStyle: ctx.watch<SettingsProvider>().netStyleEntry,
+            onDone: _trayEditing
+                ? () => setState(() {
+                      _trayEditing = false;
+                      _editingPlayerId = null;
+                    })
+                : null,
             onScore: (n) {
               _handleScore(ctx, m, n, players);
-              if (_editingPlayerId != null || _trayEditing) {
-                setState(() { _editingPlayerId = null; _trayEditing = false; });
+              // **An edit is a SESSION, not one score.** The flag used to
+              // clear the moment a key landed, so `Edit scores` let you
+              // change exactly one and the tray came straight back (Paul,
+              // 30 Oct 2026). The keypad stays on the golfer just edited —
+              // a mis-tap is corrected in place — and another row is one tap
+              // away. `Done` is the way out.
+              if (!_trayEditing && _editingPlayerId != null) {
+                setState(() => _editingPlayerId = null);
               }
               // **The hole is POSTED on its last score.** The tray reports
               // the SERVER's result, so a hole left unsent raises a tray with

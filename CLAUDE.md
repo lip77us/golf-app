@@ -7929,3 +7929,25 @@ on its own last hole is held to the end, whatever the setting.
 **Two lengths were `end − start + 1`**, which a shotgun leg wrapping the turn
 makes wrong — the last hole has the smaller number. The server counts them
 (`rabbit.holes`, `next.holes`) and the card reads them.
+
+#### `Edit scores` is plural, and let you change exactly one
+Paul, 30 Oct 2026. The tray's button set `_trayEditing` and the keypad's
+`onScore` cleared it again the moment a key landed, so the tray came straight
+back and a second correction meant pressing Edit again.
+
+An edit is a **session** now: while `_trayEditing` the keypad stays, on the
+golfer just edited — a mis-tap is corrected in place — and the players card
+is one tap away for anybody else. The hole still posts on every edit, because
+the tray reports the SERVER's result.
+
+A session needs a way out that is not "type another number", so
+`FortyBallsKeypad.onDone` draws a 44pt **Done** in the header. It is optional
+and null everywhere else, which keeps 40 Balls unchanged.
+
+**Tapping a golfer from the inline picker stays a one-shot** (`_editHotPid`
+alone, on the shared screen): that is a different control with a different
+promise — pick a row, give it a number, the natural next scorer resumes.
+
+Both screens carry it (Rabbit's own screen, and score entry for Sixes and
+Annandale), with a source guard each — anchored on `onScore`'s own body, and
+both checked by putting the old line back.

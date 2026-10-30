@@ -294,6 +294,21 @@ void main() {
       expect(gate, contains('!_fortyBallsRound(rp)'));
     });
 
+    test('Edit scores is a session, not one score', () {
+      // Plural, and it used to let you change exactly one: the flag cleared
+      // the moment a key landed and the tray came straight back (Paul, 30
+      // Oct 2026). Tapping a golfer from the inline picker stays a one-shot
+      // — that is a different control with a different promise.
+      final at = src.indexOf('onScore   : (n) {');
+      expect(at, greaterThan(0));
+      final body = src.substring(at, src.indexOf('onClear   :', at));
+      expect(body.contains('_trayEditing = false'), isFalse,
+          reason: 'a score must not end the session');
+      expect(body, contains('_editHotPid = null'));   // the one-shot stays
+      final kp = src.indexOf('FortyBallsKeypad(');
+      expect(src.substring(kp, at), contains('onDone'));
+    });
+
     test('auto-advance does not carry the scorer past the tray', () {
       // Sixes had the same defect Rabbit reported: the hole completes, the
       // screen jumps to the next one, and the tray that reports the hole is

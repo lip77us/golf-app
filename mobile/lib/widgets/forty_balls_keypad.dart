@@ -187,6 +187,15 @@ class FortyBallsKeypad extends StatefulWidget {
   final ValueChanged<int> onScore;
   final VoidCallback onClear;
 
+  /// Ends an EDIT SESSION and hands the bar back to the tray.
+  ///
+  /// `Edit scores` is plural and used to let you change exactly one: the
+  /// screen cleared its editing flag the moment a key landed, so the tray
+  /// came straight back (Paul, 30 Oct 2026). A session needs a way out that
+  /// is not "type another number", and this is it. Null — every other
+  /// caller — draws nothing and keeps the old one-shot behaviour.
+  final VoidCallback? onDone;
+
   const FortyBallsKeypad({
     super.key,
     required this.playerName,
@@ -195,6 +204,7 @@ class FortyBallsKeypad extends StatefulWidget {
     required this.onScore,
     required this.onClear,
     this.netStyle = false,
+    this.onDone,
   });
 
   @override
@@ -245,12 +255,33 @@ class _FortyBallsKeypadState extends State<FortyBallsKeypad> {
           ),
         ),
         const SizedBox(width: 10),
-        Text(
-          _typing
-              ? 'Type a score of 10 or more'
-              : '${_strokeWord(widget.strokes)} · par ${widget.par}',
-          style: const TextStyle(fontSize: 12, color: Halved.muted),
+        Flexible(
+          child: Text(
+            _typing
+                ? 'Type a score of 10 or more'
+                : '${_strokeWord(widget.strokes)} · par ${widget.par}',
+            style: const TextStyle(fontSize: 12, color: Halved.muted),
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
+        if (widget.onDone != null) ...[
+          const SizedBox(width: 6),
+          // 44pt, because it is the only way out of an edit session.
+          SizedBox(
+            height: 44,
+            child: TextButton(
+              onPressed: widget.onDone,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                foregroundColor: Halved.deepPine,
+              ),
+              child: const Text('Done',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ],
       ]);
 
   /// `no stroke` rather than `0 strokes`, which is what it used to say and
