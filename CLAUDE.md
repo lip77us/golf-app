@@ -6210,6 +6210,20 @@ edited one survives. It fails loudly before the archive if the platform line
 has changed shape, and re-checks after it in case the build regenerated it
 anyway.
 
+**...and the edit alone did not survive either** (build 58, 30 Oct 2026):
+after `flutter clean`, `flutter build ipa` re-runs pub resolution and
+regenerates the package at 13.0 after the script's edit — the log said
+`Raised … to iOS 15.0` and the archive still failed. The build now runs
+**`flutter build ipa --no-pub`**, which is what keeps the edit. (Flutter's own
+fix, `SwiftPackageManager.updateMinimumDeployment`, reads the Runner's
+`IPHONEOS_DEPLOYMENT_TARGET` — 15.0 — but only rewrites the exact string
+`.iOS("13.0")`, before the regeneration that undoes it.)
+
+**The export step needs Xcode's signing.** From a shell with no access to the
+keychain or Xcode accounts, the archive builds and the export fails with
+`No signing certificate "iOS Distribution" found` — distribute the
+`build/ios/archive/Runner.xcarchive` from Xcode's Organizer instead.
+
 ## The skins board — one widget, every skins leaderboard
 
 Built from `~/Downloads/handoff-skins-leaderboard` (28 Oct 2026), whose first
