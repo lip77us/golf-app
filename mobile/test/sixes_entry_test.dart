@@ -284,6 +284,22 @@ void main() {
           contains('trayResultPending'));
     });
 
+    test('the keypad takes its strokes from the CARD, not the scorecard', () {
+      // A strokes-off match spreads its allowance across the three matches,
+      // so the strokes on a hole are the game's answer and not a function of
+      // the stroke index. The fallback is the ROUND's full-net allocation —
+      // which is what the keypad showed on a strokes-off round while the
+      // rows beside it were right (30 Oct 2026).
+      final at = src.indexOf('int _keypadStrokes(');
+      expect(at, greaterThan(0));
+      final body = src.substring(at, src.indexOf('handicapStrokes ?? 0', at));
+      final sixAt = body.indexOf('_sixesCard(');
+      final afAt  = body.indexOf('annandaleFridaySummary');
+      expect(sixAt, greaterThan(0), reason: 'Sixes must state its own');
+      expect(sixAt, lessThan(afAt),
+          reason: 'and before the fallbacks, not after them');
+    });
+
     test('there is no dedicated Sixes score screen', () {
       final screens = Directory('lib/screens')
           .listSync()

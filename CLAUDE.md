@@ -7547,9 +7547,27 @@ read at arm's length, and short_name is account-editable), not a new one.
   is lost on a close-out, because the next-match card names the hole the new
   partners start on.
 
+- **The keypad read the ROUND's full-net strokes.** `_keypadStrokes` falls
+  back to `HoleScore.handicap_strokes`, so a strokes-off Sixes match told the
+  low man he had six — while the rows beside it were right, because
+  `_handicapParams` reads the Sixes summary and the row allocator has a
+  per-segment Sixes branch. Mixed, which is why it read as *"score entry
+  looks like it is playing full net"*. The keypad takes the strokes off the
+  CARD now, which states them for the hole from the game's own allocator —
+  a strokes-off allowance is spread across the three matches, so it is not a
+  function of the stroke index and cannot be re-derived at the call site.
+  (Known gap: before the card lands for a hole it still falls back, so an
+  offline hole can show the round's dots for a moment.)
+
 Both guards are anchored on the GATE rather than on the comment above it —
 the Annandale one broke merely because that comment was reworded, and a guard
 that fails on a rewording is one that gets deleted.
+
+**Three fixed-window source guards broke in one session, none of them for a
+real reason** — `src.substring(at, at + 500 / 900 / 1400)`, each pushed past
+its window by a line inserted above the claim. A source guard is bounded by a
+LANDMARK (the next `onScore`, the function's own last line) or it reports
+edits rather than regressions.
 
 ### Two layout bugs the tests found
 Both tray rows could overflow — the sides line beside the result chip, and

@@ -191,9 +191,14 @@ void main() {
       // It said "1 stroke" to the low man, who plays off scratch.
       expect(_fixture().players.every((p) => p.strokesInPlay == 0), isTrue,
           reason: 'the fixture is gross, so nobody strokes');
+      // Bounded by the FUNCTION, not by 900 characters: Sixes added its own
+      // branch above this one and pushed the claim out of the window, which
+      // says nothing about whether Annandale still reads its own strokes.
       final src = _src('lib/screens/score_entry_screen.dart');
       final at = src.indexOf('int _keypadStrokes(');
-      expect(src.substring(at, at + 900), contains('strokesInPlay'));
+      expect(at, greaterThan(0));
+      final body = src.substring(at, src.indexOf('handicapStrokes ?? 0', at));
+      expect(body, contains('strokesInPlay'));
     });
 
     test('the ledger shows the live figure until the round is final', () {

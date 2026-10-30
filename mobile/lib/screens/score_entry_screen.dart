@@ -172,11 +172,28 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// its handicap mode from fields the screen does not hold.
   int _keypadStrokes(Membership m, Scorecard sc) {
     final entry = sc.holeData(_selectedHole)?.scoreFor(m.player.id);
+    final rp = context.read<RoundProvider>();
+
+    // **Sixes states the strokes for THIS hole outright**, from the game's
+    // own allocator — which spreads a strokes-off allowance across the three
+    // matches, so it is not a function of the stroke index alone and cannot
+    // be re-derived here. The fallback at the bottom is the ROUND's full-net
+    // allocation, which is why a strokes-off match read as full net on the
+    // keypad while the rows beside it were right (Paul, 30 Oct 2026).
+    final six = _sixesCard(rp);
+    if (six != null) {
+      final s = six.players
+          .where((p) => p.playerId == m.player.id)
+          .map((p) => p.strokes)
+          .firstOrNull;
+      if (s != null) return s;
+    }
+
     // Annandale Friday plays off the group's low man, not full handicap, so
     // the stored full-net strokes would say "1 stroke" to the low man himself
     // while his row shows none. The server states each golfer's strokes in
     // play; allocate that by stroke index, as its own engine does.
-    final af = context.read<RoundProvider>().annandaleFridaySummary;
+    final af = rp.annandaleFridaySummary;
     final n = af?.players
         .where((p) => p.playerId == m.player.id)
         .map((p) => p.strokesInPlay).firstOrNull;
