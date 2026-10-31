@@ -21,7 +21,7 @@ from scoring.tests._helpers import (
 )
 
 
-class LowNetModesTests(TestCase):
+class _LowNetBase(TestCase):
     def setUp(self):
         course = make_course()
         self.tee = make_tee(course=course, holes=DEFAULT_HOLES)
@@ -48,6 +48,8 @@ class LowNetModesTests(TestCase):
     def _by_name(results):
         return {r['name']: r for r in results}
 
+
+class LowNetModesTests(_LowNetBase):
     # ── structure ────────────────────────────────────────────────────────────
     def test_all_three_modes_present(self):
         s = low_net_round_summary(self.round)
@@ -160,3 +162,47 @@ class LowNetStrokesOffPercentTests(TestCase):
         self.assertIn('low_net_round', lb)         # auto-added Stroke Play tab
         self.assertTrue(lb['low_net_round']['so_available'])
         self.assertTrue(lb['low_net_round']['primary_game_is_so'])
+
+
+class TheWireRowCarriesTheCourseHandicapTests(_LowNetBase):
+    """`_rank_standings` has carried the course handicap since the board
+    started labelling it `CH`, and `_serialize_results` dropped it — so the
+    board fell back to the PLAYING handicap and called it CH, which is the
+    wrong number on a mixed-par card.
+    """
+
+    def test_the_row_carries_both_handicaps(self):
+        # Force them apart, which is the only state that can tell them apart:
+        # a fixture where they coincide cannot pin the distinction.
+        self.fs.memberships.filter(player__name='Bea').update(
+            course_handicap=19, playing_handicap=18)
+        row = self._by_name(low_net_round_summary(self.round)['results'])['Bea']
+        self.assertEqual(row['course_handicap'], 19)
+        self.assertEqual(row['handicap'], 18)
+
+    def test_every_mode_carries_it(self):
+        for mode in low_net_round_summary(self.round)['modes'].values():
+            for row in mode['results']:
+                self.assertIn('course_handicap', row)
+
+    def test_the_prize_rank_is_named(self):
+        """Not the display rank: an excluded golfer holds a place on the
+        board and is skipped for the money, so the ledger has to name the
+        rank the payout was actually assigned to."""
+        s = low_net_round_summary(self.round)
+        rows = self._by_name(s['results'])
+        # Bea leads on net and takes the one prize.
+        self.assertEqual(rows['Bea']['prize_rank'], 1)
+        self.assertEqual(rows['Bea']['payout'], 20.0)
+
+        config = self.round.low_net_config
+        config.excluded_player_ids = [self._pid('Bea')]
+        config.save()
+        rows = self._by_name(low_net_round_summary(self.round)['results'])
+        self.assertEqual(rows['Bea']['rank'], 1, 'still on the board')
+        self.assertIsNone(rows['Bea']['prize_rank'])
+        self.assertEqual(rows['Ann']['prize_rank'], 1,
+                         'the money moves up a place')
+
+    def test_the_purse_is_the_table(self):
+        self.assertEqual(low_net_round_summary(self.round)['purse'], 20.0)

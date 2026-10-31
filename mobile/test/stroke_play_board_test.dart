@@ -15,6 +15,7 @@ StrokePlayRow _row({
   int? gross,
   int thru = 18,
   double? payout,
+  int? prizeRank,
   String hcap = '8.2',
   List<Map<String, dynamic>> holes = const [],
 }) =>
@@ -28,20 +29,21 @@ StrokePlayRow _row({
       thru: thru,
       holes: holes,
       payout: payout,
+      prizeRank: prizeRank,
     );
 
 StrokePlayBoardData _board({
   required List<StrokePlayRow> rows,
   double entryFee = 0,
+  double purse = 0,
   bool hasPot = false,
   String basis = 'Net',
-  String counting = 'single round',
 }) =>
     StrokePlayBoardData(
       rows: rows,
       basisLabel: basis,
-      countingLabel: counting,
       entryFee: entryFee,
+      purse: purse,
       hasPot: hasPot,
       holePars: {for (var h = 1; h <= 18; h++) h: 4},
       holesInPlay: [for (var h = 1; h <= 18; h++) h],
@@ -54,19 +56,85 @@ Future<void> _pump(WidgetTester t, StrokePlayBoardData d,
     ));
 
 void main() {
-  group('the meta line', () {
-    testWidgets('states the basis and the counting rule', (t) async {
+  group('the ledger', () {
+    // The meta line it replaced stated the basis, the counting rule and the
+    // pot. The settings strip above the board states the rules and the
+    // selector states the mode, so the line was restating both and could
+    // disagree with them; the money is read at the bottom, where a ledger
+    // belongs.
+    testWidgets('draws nothing when nobody is being paid', (t) async {
       await _pump(t, _board(rows: [_row(rank: 1, name: 'Paul', toPar: -2)]));
-      expect(find.text('Net · single round'), findsOneWidget);
+      expect(find.textContaining('prize'), findsNothing);
+      expect(find.textContaining('Pool'), findsNothing);
     });
 
-    testWidgets('names the entry, or says there is no pot', (t) async {
-      await _pump(t, _board(
-          rows: [_row(rank: 1, name: 'Paul', toPar: -2)], entryFee: 40));
-      expect(find.text('Entry \$40'), findsOneWidget);
+    testWidgets('is PROJECTED while anybody is still out', (t) async {
+      await _pump(t, _board(hasPot: true, purse: 580, rows: [
+        _row(rank: 1, name: 'Paul', toPar: -2, thru: 18,
+            payout: 300, prizeRank: 1),
+        _row(rank: 2, name: 'Dave', toPar: 1, thru: 12),
+      ]));
+      expect(find.text('Projected · prize'), findsOneWidget);
+      expect(find.text('Pool \$580'), findsOneWidget);
+      expect(find.text('1 on course'), findsOneWidget);
+    });
 
-      await _pump(t, _board(rows: [_row(rank: 1, name: 'Paul', toPar: -2)]));
-      expect(find.text('No pot'), findsOneWidget);
+    testWidgets('is FINAL once they are all in', (t) async {
+      await _pump(t, _board(hasPot: true, purse: 300, rows: [
+        _row(rank: 1, name: 'Paul', toPar: -2, thru: 18,
+            payout: 300, prizeRank: 1),
+        _row(rank: 2, name: 'Dave', toPar: 1, thru: 18),
+      ]));
+      expect(find.text('Final, prize'), findsOneWidget);
+      expect(find.text('All in'), findsOneWidget);
+    });
+
+    testWidgets('a golfer who never teed off does not hold it open',
+        (t) async {
+      // On a big field somebody is always entered and absent, and a board
+      // that said Projected all evening because of him would never say
+      // anything else.
+      await _pump(t, _board(hasPot: true, purse: 300, rows: [
+        _row(rank: 1, name: 'Paul', toPar: -2, thru: 18,
+            payout: 300, prizeRank: 1),
+        _row(rank: 2, name: 'Absent', toPar: null, thru: 0),
+      ]));
+      expect(find.text('Final, prize'), findsOneWidget);
+    });
+
+    testWidgets('names the paid golfers and the PRIZE rank', (t) async {
+      // Not the board rank: an excluded golfer holds a place and is skipped
+      // for the money, so the man behind him collects 2nd while standing
+      // 3rd — and a ledger reading his board rank names a place somebody
+      // else holds.
+      await _pump(t, _board(hasPot: true, purse: 480, rows: [
+        _row(rank: 1, name: 'Ann', toPar: -4, thru: 18),
+        _row(rank: 2, name: 'Paul', toPar: -2, thru: 18,
+            payout: 300, prizeRank: 1),
+        _row(rank: 3, name: 'Dave', toPar: 0, thru: 18,
+            payout: 180, prizeRank: 2),
+      ]));
+      expect(find.text('+\$300'), findsOneWidget);
+      expect(find.text('+\$180'), findsOneWidget);
+      // Dave stands 3rd and collects SECOND prize, so his ledger line says
+      // 2. Scoped to the line, because `3` is also his rank badge up on the
+      // board and an unscoped finder would pass either way.
+      final line = find
+          .ancestor(of: find.text('+\$180'), matching: find.byType(Row))
+          .first;
+      expect(find.descendant(of: line, matching: find.text('2')),
+          findsOneWidget);
+      expect(find.descendant(of: line, matching: find.text('3')),
+          findsNothing);
+    });
+
+    testWidgets('the entry is in the footer, where it was collected',
+        (t) async {
+      await _pump(t, _board(hasPot: true, purse: 300, entryFee: 40, rows: [
+        _row(rank: 1, name: 'Paul', toPar: -2, thru: 18,
+            payout: 300, prizeRank: 1),
+      ]));
+      expect(find.text('Entry \$40'), findsOneWidget);
     });
   });
 
@@ -166,10 +234,17 @@ void main() {
   });
 
   group('the open card', () {
+    // **The server's own keys.** These fixtures used to carry `net_adj` and
+    // `handicap_strokes`, which `low_net_round` has never sent — so they
+    // tested the board against what somebody thought the server sends, and
+    // the board's fallback was the only branch ever taken. A hole carries
+    // `net` (the UNCAPPED adjusted score), `capped` (the counted one) and
+    // `strokes`.
     final holes = [
       for (var h = 1; h <= 9; h++)
         {'hole': h, 'gross': h == 5 ? 3 : 4, 'par': 4,
-         'net_adj': h == 5 ? 3 : 4, 'handicap_strokes': h == 1 ? 1 : 0},
+         'net': h == 5 ? 3 : 4, 'capped': h == 5 ? 3 : 4,
+         'strokes': h == 1 ? 1 : 0},
     ];
 
     testWidgets('a row opens in place, and only one at a time', (t) async {
@@ -208,20 +283,47 @@ void main() {
       await t.pumpAndSettle();
       expect(find.textContaining('Gross 35'), findsOneWidget);
       expect(find.textContaining('Thru 9'), findsOneWidget);
-      for (final l in ['Birdie', 'Bogey', 'Double', 'Stroke']) {
+      for (final l in ['Birdie', 'Par', 'Bogey', 'Double+', 'Stroke']) {
         expect(find.text(l), findsOneWidget, reason: l);
       }
+      // No hole here was capped, so the cap key is absent: a legend entry
+      // for something that did not happen is a legend nobody reads.
+      expect(find.text('Capped at net double bogey'), findsNothing);
+    });
+
+    testWidgets('the net row is the COUNTED figure, not the uncapped one',
+        (t) async {
+      // The card used to sum `net`, which is the score BEFORE the net double
+      // bogey — so on a capped hole its `Net 36` disagreed with the Tot box
+      // the board ranks on, one row above it.
+      final capped = [
+        for (var h = 1; h <= 9; h++)
+          {'hole': h, 'gross': h == 3 ? 9 : 4, 'par': 4,
+           'net': h == 3 ? 9 : 4, 'capped': h == 3 ? 6 : 4, 'strokes': 0},
+      ];
+      await _pump(t, _board(rows: [
+        _row(rank: 1, name: 'Paul', toPar: 2, gross: 41, thru: 9,
+            holes: capped),
+      ]));
+      await t.tap(find.text('Paul'));
+      await t.pumpAndSettle();
+      // 8 × 4 + 6 = 38, not 8 × 4 + 9 = 41.
+      expect(find.textContaining('Net 38'), findsOneWidget);
+      expect(find.textContaining('Net 41'), findsNothing);
+      // …and the hole says so, in words and in the legend.
+      expect(find.text('Capped at net double bogey'), findsOneWidget);
+      expect(find.textContaining('counted a net double bogey'),
+          findsOneWidget);
     });
 
     testWidgets('a back-nine round draws IN alone', (t) async {
       final back = [
         for (var h = 10; h <= 18; h++)
-          {'hole': h, 'gross': 4, 'par': 4, 'net_adj': 4},
+          {'hole': h, 'gross': 4, 'par': 4, 'net': 4, 'capped': 4},
       ];
       await _pump(t, StrokePlayBoardData(
         rows: [_row(rank: 1, name: 'Paul', toPar: 0, holes: back, thru: 9)],
         basisLabel: 'Net',
-        countingLabel: 'single round',
         holePars: {for (var h = 1; h <= 18; h++) h: 4},
         holesInPlay: [for (var h = 10; h <= 18; h++) h],
       ));
@@ -263,13 +365,12 @@ void main() {
               for (var i = 0; i < n; i++)
                 [
                   for (var h = 1; h <= 9; h++)
-                    {'hole': h, 'gross': 4, 'par': 4, 'net_adj': 4},
+                    {'hole': h, 'gross': 4, 'par': 4, 'net': 4, 'capped': 4},
                 ],
             ],
           ),
         ],
         basisLabel: 'Net',
-        countingLabel: n == 1 ? 'single round' : 'best of $n rounds',
         rounds: [
           for (var i = 0; i < n; i++)
             StrokeRoundCol(index: i, label: 'R${i + 1}', live: i == live),
@@ -341,7 +442,7 @@ void main() {
       await _pump(t, _board(rows: [
         _row(rank: 1, name: 'Paul', toPar: -1, holes: [
           for (var h = 1; h <= 9; h++)
-            {'hole': h, 'gross': 4, 'par': 4, 'net_adj': 4},
+            {'hole': h, 'gross': 4, 'par': 4, 'net': 4, 'capped': 4},
         ]),
       ]));
       await t.tap(find.text('Paul'));

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/halved_brand.dart';
 import '../utils/nine_totals.dart';
 import '../utils/stroke_play_board_model.dart';
+import 'forty_balls_keypad.dart' show ScoreNotation;
 
 /// The Stroke Play board — ONE widget for every stroke play leaderboard.
 ///
@@ -44,12 +45,15 @@ class _StrokePlayBoardState extends State<StrokePlayBoard> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
       children: [
-        _MetaLine(data: d),
+        // **No meta line.** The settings strip above this board states the
+        // rules the round is played under, and the selector states the mode
+        // — the line restated both, and could disagree with them. The stake
+        // and the pot moved into the ledger at the bottom, which is where
+        // money is read.
         if (widget.selector != null) ...[
-          const SizedBox(height: 10),
           widget.selector!,
+          const SizedBox(height: 10),
         ],
-        const SizedBox(height: 10),
         if (d.rows.isEmpty)
           const Padding(
             padding: EdgeInsets.only(top: 24),
@@ -77,6 +81,10 @@ class _StrokePlayBoardState extends State<StrokePlayBoard> {
               ],
             ]),
           ),
+        if (d.hasPot && d.paidRows.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _Ledger(data: d),
+        ],
         if (widget.footer != null) ...[
           const SizedBox(height: 12),
           widget.footer!,
@@ -86,30 +94,110 @@ class _StrokePlayBoardState extends State<StrokePlayBoard> {
   }
 }
 
-/// `Net · single round` on the left, `Entry $40` or `No pot` on the right.
-class _MetaLine extends StatelessWidget {
-  const _MetaLine({required this.data});
+
+/// The light ledger that closes the board.
+///
+/// `Projected · prize` with the pool while anybody is still out, `Final,
+/// prize` once they are all in — the distinction the Flights work made the
+/// case for: *"a golfer thru 1 showing $48 in green was the single most
+/// misleading thing on the live board."*
+///
+/// **It names the PRIZE rank, not the board rank.** An excluded golfer holds
+/// a place and is skipped for the money, so the man behind him collects 2nd
+/// while standing 3rd, and a ledger reading his board rank would be naming a
+/// place somebody else holds.
+class _Ledger extends StatelessWidget {
+  const _Ledger({required this.data});
   final StrokePlayBoardData data;
+
+  static String _money(double v) => v == v.roundToDouble()
+      ? v.toStringAsFixed(0)
+      : v.toStringAsFixed(2);
 
   @override
   Widget build(BuildContext context) {
-    final left = [
-      data.basisLabel,
-      if (data.countingLabel.isNotEmpty) data.countingLabel,
-      if (data.stakeLabel.isNotEmpty) data.stakeLabel,
-    ].join(' · ');
-    const style = TextStyle(fontSize: 12, color: Halved.muted);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Row(children: [
-        Flexible(child: Text(left, style: style, overflow: TextOverflow.ellipsis)),
-        if (data.potLabel.isNotEmpty) ...[
-          const SizedBox(width: 14),
-          Text(data.potLabel, style: style),
-        ],
+    final paid = data.paidRows;
+    final fin = data.allIn;
+    return Container(
+      decoration: BoxDecoration(
+        color: Halved.card,
+        border: Border.all(color: Halved.cardBorder, width: 1.5),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Container(
+          color: Halved.deepPine,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Expanded(
+              child: Text(fin ? 'Final, prize' : 'Projected · prize',
+                  style: const TextStyle(
+                      color: Color(0xFFB9CCC3), fontSize: 13)),
+            ),
+            if (data.purse > 0)
+              Text('Pool \$${_money(data.purse)}',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w700)),
+          ]),
+        ),
+        for (final r in paid) _line(r),
+        Container(
+          color: Halved.deepPine,
+          padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
+          child: Row(children: [
+            Expanded(child: _foot(data.entryFee > 0
+                ? 'Entry \$${_money(data.entryFee)}'
+                : '${paid.length} paid')),
+            _foot(fin
+                ? 'All in'
+                : '${data.onCourse} on course'),
+          ]),
+        ),
       ]),
     );
   }
+
+  Widget _foot(String t) => Text(t,
+      style: const TextStyle(color: Color(0xFFB9CCC3), fontSize: 12.5));
+
+  Widget _line(StrokePlayRow r) => Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(children: [
+          Expanded(
+            child: Row(children: [
+              Flexible(
+                child: Text(r.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600)),
+              ),
+              if (r.prizeRank != null) ...[
+                const SizedBox(width: 6),
+                Text('${r.prizeRank}',
+                    style: const TextStyle(
+                        fontSize: 12, color: Halved.muted)),
+              ],
+            ]),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+                color: Halved.brightMint,
+                borderRadius: BorderRadius.circular(8)),
+            child: Text('+\$${_money(r.payout!)}',
+                style: const TextStyle(
+                    color: Halved.deepPine,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700)),
+          ),
+        ]),
+      );
 }
 
 const double _rankW  = 34;
@@ -398,11 +486,14 @@ class _OpenCardState extends State<_OpenCard> {
       if (split.showIn) (holes: split.back, label: 'IN'),
     ];
 
-    var gross = 0, net = 0, played = 0;
+    var gross = 0, net = 0, played = 0, capped = 0;
     for (final h in holes) {
       final g = h['gross'] as int?;
       if (g != null) { gross += g; played++; }
-      net += (h['net_adj'] as int?) ?? (h['net'] as int?) ?? 0;
+      // The COUNTED net, so this line cannot disagree with the Tot box the
+      // board ranks on — see `strokeHoleNet`.
+      net += strokeHoleNet(h) ?? 0;
+      if (strokeHoleCapped(h)) capped++;
     }
     final thru = multi
         ? (played == 0 ? '—' : played >= 18 ? 'F' : '$played')
@@ -441,8 +532,12 @@ class _OpenCardState extends State<_OpenCard> {
           ),
           if (i != nines.length - 1) const SizedBox(height: 8),
         ],
+        if (capped > 0) ...[
+          const SizedBox(height: 8),
+          _CapNote(holes: capped),
+        ],
         const SizedBox(height: 8),
-        const _Legend(),
+        _Legend(anyCapped: capped > 0),
       ]),
     );
   }
@@ -539,8 +634,7 @@ class _NineGrid extends StatelessWidget {
     final parTotal = holes.fold<int>(
         0, (a, h) => a + (data.holePars[h] ?? 0));
     final scoreTotal = sum((m) => m['gross'] as int?);
-    final netTotal =
-        sum((m) => (m['net_adj'] as int?) ?? (m['net'] as int?));
+    final netTotal = sum(strokeHoleNet);
 
     Widget band(String name, List<Widget> cells, String total,
         {bool dark = false}) {
@@ -567,6 +661,17 @@ class _NineGrid extends StatelessWidget {
       ]);
     }
 
+    Widget netCell(Map<String, dynamic>? h) {
+      final v = h == null ? null : strokeHoleNet(h);
+      final wasCapped = h != null && strokeHoleCapped(h);
+      return Text(v == null ? '–' : '$v',
+          style: wasCapped
+              ? const TextStyle(
+                  fontSize: 11, color: _capAmberInk,
+                  fontWeight: FontWeight.w700)
+              : cell);
+    }
+
     return Column(children: [
       Container(
         color: Halved.deepPine,
@@ -590,119 +695,128 @@ class _NineGrid extends StatelessWidget {
         child: band('SCORE',
             [for (final h in holes) _ScoreMark(
                 gross: byHole[h]?['gross'] as int?,
-                par: data.holePars[h],
-                strokes: (byHole[h]?['handicap_strokes'] as int?)
-                    ?? row.strokePlan[h] ?? 0)],
+                // The golfer's OWN par where the hole carries one: on mixed
+                // tees a hole is a 4 for one man and a 5 for the next, and
+                // the shape is coded against it.
+                par: (byHole[h]?['par'] as int?) ?? data.holePars[h],
+                strokes: (byHole[h]?['strokes'] as int?)
+                    ?? row.strokePlan[h] ?? 0,
+                capped: byHole[h] == null
+                    ? false
+                    : strokeHoleCapped(byHole[h]!))],
             scoreTotal == null ? '—' : '$scoreTotal'),
       ),
       Padding(
         padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
         child: band('NET',
-            [for (final h in holes) Text(
-                '${(byHole[h]?['net_adj'] ?? byHole[h]?['net']) ?? '–'}',
-                style: cell)],
+            [for (final h in holes) netCell(byHole[h])],
             netTotal == null ? '—' : '$netTotal'),
       ),
     ]);
   }
 }
 
-/// Birdie a filled pine circle, eagle a double circle, bogey a square,
-/// double+ a double square, and a small mint dot for a stroke received.
+/// Amber, for a hole the net double bogey took a stroke off. It appears
+/// nowhere else on this board, so it cannot be read as a state.
+const Color _capAmber = Color(0xFFD98E04);
+const Color _capAmberInk = Color(0xFF8A5216);
+
+/// A score in scorecard notation, with a mint dot for a stroke received and
+/// an amber outline when the cap took a stroke off.
+///
+/// **It is the SHARED `ScoreNotation`** — the same widget the keypad and the
+/// score box draw, which is the packet's own instruction ("the hole-by-hole
+/// card uses the score-entry shapes"). It used to be a mark of its own, with
+/// par drawn as a bare digit and bogeys outlined in deep pine, so a hole read
+/// one way during the round and another on the board afterwards.
 class _ScoreMark extends StatelessWidget {
-  const _ScoreMark(
-      {required this.gross, required this.par, required this.strokes});
+  const _ScoreMark({
+    required this.gross,
+    required this.par,
+    required this.strokes,
+    this.capped = false,
+  });
   final int? gross;
   final int? par;
   final int strokes;
+  final bool capped;
 
   @override
   Widget build(BuildContext context) {
-    if (gross == null) {
-      return const Text('–', style: TextStyle(fontSize: 11, color: Halved.muted));
+    if (gross == null || par == null) {
+      return const Text('–',
+          style: TextStyle(fontSize: 11, color: Halved.muted));
     }
-    final d = par == null ? 0 : gross! - par!;
-    final text = Text('$gross',
-        style: TextStyle(
-            fontSize: 11,
-            fontWeight: d <= -1 ? FontWeight.w700 : FontWeight.w500,
-            color: d <= -1 ? Colors.white : Halved.deepPine));
+    Widget mark = ScoreNotation(
+      score: gross!,
+      par: par!,
+      strokes: strokes,
+      width: 24,
+      height: 24,
+      fontSize: 11.5,
+      cornerRadius: 5,
+    );
 
-    Widget mark;
-    if (d <= -2) {
-      mark = _Ring(double_: true, filled: true, child: text);
-    } else if (d == -1) {
-      mark = _Ring(filled: true, child: text);
-    } else if (d == 1) {
-      mark = _Ring(square: true, child: text);
-    } else if (d >= 2) {
-      mark = _Ring(square: true, double_: true, child: text);
-    } else {
-      mark = SizedBox(width: 20, height: 20, child: Center(child: text));
+    if (capped) {
+      mark = Container(
+        padding: const EdgeInsets.all(1.5),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: _capAmber, width: 2),
+        ),
+        child: mark,
+      );
     }
 
     if (strokes <= 0) return mark;
     return Stack(clipBehavior: Clip.none, children: [
       mark,
       Positioned(
-        top: -1,
-        right: -1,
+        top: -2,
+        right: -2,
         child: Container(
-          width: 5, height: 5,
-          decoration: const BoxDecoration(
-              color: Halved.brightMint, shape: BoxShape.circle),
+          width: 6, height: 6,
+          decoration: BoxDecoration(
+            color: Halved.brightMint,
+            shape: BoxShape.circle,
+            border: Border.all(color: Halved.deepPine, width: 0.8),
+          ),
         ),
       ),
     ]);
   }
 }
 
-class _Ring extends StatelessWidget {
-  const _Ring({
-    required this.child,
-    this.filled = false,
-    this.square = false,
-    // ignore: non_constant_identifier_names
-    this.double_ = false,
-  });
-  final Widget child;
-  final bool filled;
-  final bool square;
-  // ignore: non_constant_identifier_names
-  final bool double_;
+/// The cap, in words — the card keeps the score and the total counts the
+/// ceiling, which is two facts about one number.
+class _CapNote extends StatelessWidget {
+  const _CapNote({required this.holes});
+  final int holes;
 
   @override
-  Widget build(BuildContext context) {
-    BoxDecoration deco(double inset) => BoxDecoration(
-          color: filled ? Halved.pine : null,
-          border: filled
-              ? null
-              : Border.all(color: Halved.deepPine, width: 1),
-          borderRadius:
-              square ? BorderRadius.circular(2) : BorderRadius.circular(99),
-        );
-    final inner = Container(
-      width: 20, height: 20,
-      alignment: Alignment.center,
-      decoration: deco(0),
-      child: child,
-    );
-    if (!double_) return inner;
-    return Container(
-      width: 24, height: 24,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        border: Border.all(color: Halved.deepPine, width: 1),
-        borderRadius:
-            square ? BorderRadius.circular(3) : BorderRadius.circular(99),
-      ),
-      child: inner,
-    );
-  }
+  Widget build(BuildContext context) => Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFFDF3E7),
+          border: Border.all(color: const Color(0xFFE8D6BC)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        child: Text(
+            holes == 1
+                ? 'One hole counted a net double bogey. The card keeps the '
+                    'score that was made.'
+                : '$holes holes counted a net double bogey. The card keeps '
+                    'the scores that were made.',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF5C4326))),
+      );
 }
 
 class _Legend extends StatelessWidget {
-  const _Legend();
+  const _Legend({this.anyCapped = false});
+
+  /// The cap key appears only when a hole on this card was capped — a legend
+  /// entry for something that did not happen is a legend nobody reads.
+  final bool anyCapped;
 
   @override
   Widget build(BuildContext context) {
@@ -715,19 +829,23 @@ class _Legend extends StatelessWidget {
                 style: const TextStyle(fontSize: 10, color: Halved.muted)),
           ],
         );
-    Widget dot({bool filled = false, bool square = false}) => Container(
-          width: 9, height: 9,
-          decoration: BoxDecoration(
-            color: filled ? Halved.pine : null,
-            border: filled ? null : Border.all(color: Halved.deepPine, width: 1),
-            borderRadius:
-                square ? BorderRadius.circular(2) : BorderRadius.circular(99),
-          ),
+    // Drawn with the real widget at a legend size, so the key cannot show a
+    // shape the grid above it does not use. `fontSize: 0` is deliberate: a
+    // key is a SHAPE, and a digit in it would read as a score — `4 Par` says
+    // par is four, which it is not on fourteen of the holes above.
+    Widget shape(int diff) => ScoreNotation(
+          score: 4 + diff,
+          par: 4,
+          width: 16,
+          height: 16,
+          fontSize: 0,
+          cornerRadius: 4,
         );
     return Wrap(spacing: 12, runSpacing: 4, children: [
-      item(dot(filled: true), 'Birdie'),
-      item(dot(square: true), 'Bogey'),
-      item(dot(square: true), 'Double'),
+      item(shape(-1), 'Birdie'),
+      item(shape(0), 'Par'),
+      item(shape(1), 'Bogey'),
+      item(shape(2), 'Double+'),
       item(
           Container(
             width: 7, height: 7,
@@ -735,6 +853,16 @@ class _Legend extends StatelessWidget {
                 color: Halved.brightMint, shape: BoxShape.circle),
           ),
           'Stroke'),
+      if (anyCapped)
+        item(
+            Container(
+              width: 13, height: 13,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: _capAmber, width: 2),
+              ),
+            ),
+            'Capped at net double bogey'),
     ]);
   }
 }

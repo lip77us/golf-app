@@ -351,6 +351,10 @@ def _rank_standings(player_totals, payouts_cfg, excluded_ids) -> list:
         payout      = None if is_excluded else prize_rank_payout.get(prize_rank_map.get(pid))
         standings.append({
             'rank'        : display_rank,
+            # The PRIZE rank, which is not the display rank: an excluded
+            # golfer holds a place on the board and is skipped for the money,
+            # so the ledger has to name the rank the payout was assigned to.
+            'prize_rank'  : prize_rank_map.get(pid),
             'player_id'   : pid,
             'player_name' : data['name'],
             'net_total'   : data['total'],
@@ -389,6 +393,12 @@ def _serialize_results(standings) -> list:
             'excluded'    : s.get('excluded', False),
             'payout'      : s['payout'],
             'handicap'    : s.get('handicap', 0),
+            # The TRUE course handicap. `handicap` is the playing one and
+            # differs on a mixed-par card, so a board labelling it `CH` was
+            # naming the wrong number — `_rank_standings` has carried the CH
+            # since the label shipped and this serializer dropped it.
+            'course_handicap': s.get('course_handicap'),
+            'prize_rank'  : s.get('prize_rank'),
             'handicap_index': s.get('handicap_index', ''),
             'holes'       : [
                 {'hole': h, **v}
@@ -591,6 +601,10 @@ def low_net_round_summary(round_obj) -> dict:
         'net_percent'  : npct,
         'entry_fee'    : entry_fee,
         'payouts'      : payouts_cfg,
+        # What the table pays out in total — the ledger's `Pool $580`. Here
+        # rather than summed on the phone: a client adding a money column up
+        # is a client with an opinion about money.
+        'purse'        : float(sum(p.get('amount') or 0 for p in payouts_cfg)),
         'holes_in_play': in_play,
         'hole_pars'    : hole_pars,
         'hole_stroke_index': hole_si,

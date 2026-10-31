@@ -71,6 +71,14 @@ class ScoreNotation extends StatelessWidget {
   final double fontSize;
   final VoidCallback? onTap;
 
+  /// The square shapes' corner, and the inset of a doubled ring.
+  ///
+  /// The defaults are drawn for a 60pt key and a 44pt score box. At the 24pt
+  /// the leaderboard card wants, a 10pt corner is a squircle and a 4pt inset
+  /// swallows the digit — so the SIZE is a parameter rather than a reason for
+  /// a second widget. Null keeps the figures every existing caller draws.
+  final double? cornerRadius;
+
   const ScoreNotation({
     super.key,
     required this.score,
@@ -80,6 +88,7 @@ class ScoreNotation extends StatelessWidget {
     this.height = 60,
     this.fontSize = 25,
     this.onTap,
+    this.cornerRadius,
   });
 
   @override
@@ -100,24 +109,28 @@ class ScoreNotation extends StatelessWidget {
     final doubled = shape == ScoreShape.eagle || shape == ScoreShape.double;
 
     BorderRadius radius(double r) => BorderRadius.circular(r);
+    final corner = cornerRadius ?? 10;
+    // The inner ring's inset. 4 at the default, and proportional below it so
+    // a 24pt mark keeps a readable digit inside two rings.
+    final inset = cornerRadius == null ? 4.0 : (height / 10).clamp(2.0, 4.0);
 
     Widget box = Container(
       width: width,
       height: height,
       decoration: BoxDecoration(
         color: fill,
-        borderRadius: radius(rounded ? height / 2 : 10),
+        borderRadius: radius(rounded ? height / 2 : corner),
         border: Border.all(color: line, width: 1.5),
       ),
       alignment: Alignment.center,
       child: doubled
           ? Container(
-              // The inner ring. Inset by 4 on every side so both are visible
-              // at a 60pt key and still legible at a 44pt score box.
-              margin: const EdgeInsets.all(4),
+              margin: EdgeInsets.all(inset),
               decoration: BoxDecoration(
-                borderRadius: radius(rounded ? (height - 8) / 2 : 7),
-                border: Border.all(color: line, width: 1.5),
+                borderRadius: radius(rounded
+                    ? (height - inset * 2) / 2
+                    : (corner - inset).clamp(1.0, corner)),
+                border: Border.all(color: line, width: 1.2),
               ),
               alignment: Alignment.center,
               child: _numeral(score, text, fontSize),
@@ -132,7 +145,7 @@ class ScoreNotation extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: radius(rounded ? height / 2 : 10),
+          borderRadius: radius(rounded ? height / 2 : corner),
           onTap: () {
             HapticFeedback.selectionClick();
             onTap!();

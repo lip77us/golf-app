@@ -298,6 +298,17 @@ class HalvedSegmented<T> extends StatelessWidget {
   /// so leaving it out divides the remainder equally.
   final int Function(T value)? segmentFlex;
 
+  /// Shrink-wrap: each segment takes its own width and the control takes no
+  /// more room than its labels.
+  ///
+  /// The same control, sized two ways — which is why it is a flag rather than
+  /// a second widget, the split `StrokeDotRow` and `StrokeDotColumn` earned
+  /// by doing genuinely different jobs. The case is a control that sits
+  /// directly under `GameSwitcher`: full width there, two pill rows stacked
+  /// read as a second row of tabs, which the stroke play packet rules out in
+  /// as many words.
+  final bool compact;
+
   const HalvedSegmented({
     super.key,
     required this.segments,
@@ -305,6 +316,7 @@ class HalvedSegmented<T> extends StatelessWidget {
     required this.onChanged,
     this.segmentWidth,
     this.segmentFlex,
+    this.compact = false,
   });
 
   @override
@@ -316,6 +328,7 @@ class HalvedSegmented<T> extends StatelessWidget {
         borderRadius: BorderRadius.circular(Halved.rPill),
       ),
       child: Row(
+        mainAxisSize: compact ? MainAxisSize.min : MainAxisSize.max,
         children: [
           for (final s in segments)
             if (segmentWidth?.call(s.value) case final w?)
@@ -324,6 +337,9 @@ class HalvedSegmented<T> extends StatelessWidget {
                 child: _seg(s.value == selected, s.label, s.icon,
                     () => onChanged(s.value)),
               )
+            else if (compact)
+              _seg(s.value == selected, s.label, s.icon,
+                  () => onChanged(s.value))
             else
               Expanded(
                 flex: segmentFlex?.call(s.value) ?? 10,
@@ -342,7 +358,11 @@ class HalvedSegmented<T> extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        // The horizontal padding is the tap target when the row is shrink-
+        // wrapped: without it the labels touch, and a gap outside the
+        // gesture is a gap where taps are lost.
+        padding: EdgeInsets.symmetric(
+            vertical: 10, horizontal: compact ? 14 : 0),
         decoration: BoxDecoration(
           color: active ? Halved.pine : Colors.transparent,
           borderRadius: BorderRadius.circular(Halved.rPill),

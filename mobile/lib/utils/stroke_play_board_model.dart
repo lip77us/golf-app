@@ -19,6 +19,26 @@
 /// and which nine a hole belongs to.
 library;
 
+/// The COUNTED net on a hole — post-cap, which is what the total is built
+/// from.
+///
+/// **The two adjusted figures are easy to read the wrong way round**, and the
+/// board read the wrong one: `net` is the UNCAPPED score and `capped` is the
+/// one the engine totals, so a card summing `net` printed a net total that
+/// disagreed with the Tot box beside it. It also read a `net_adj` key the
+/// server has never sent, which is how it went unnoticed — the fallback was
+/// always taken.
+int? strokeHoleNet(Map<String, dynamic> h) =>
+    (h['capped'] as num?)?.toInt() ?? (h['net'] as num?)?.toInt();
+
+/// The net double bogey took a stroke off this hole, so the card keeps the
+/// score and the total counts the ceiling.
+bool strokeHoleCapped(Map<String, dynamic> h) {
+  final counted = (h['capped'] as num?)?.toInt();
+  final raw = (h['net'] as num?)?.toInt();
+  return counted != null && raw != null && counted != raw;
+}
+
 /// `E` for level, a sign otherwise, an em dash for nothing played.
 ///
 /// Here rather than on the board because the score-entry tray reports the
@@ -71,10 +91,9 @@ class StrokePlayBoardData {
   const StrokePlayBoardData({
     required this.rows,
     required this.basisLabel,
-    required this.countingLabel,
     this.entryFee = 0,
+    this.purse = 0,
     this.hasPot = false,
-    this.stakeLabel = '',
     this.holePars = const {},
     this.holeStrokeIndex = const {},
     this.holesInPlay = const [],
@@ -84,18 +103,23 @@ class StrokePlayBoardData {
 
   final List<StrokePlayRow> rows;
 
-  /// `Net`, `Net 90%`, `Gross`, `Strokes off` — the basis the board ranks on.
+  /// `Net`, `Net 90%`, `Gross`, `Strokes off` — the basis the board ranks
+  /// on. Read by nothing on the board itself: the settings strip above it
+  /// states the rules, and the selector states the mode. Kept because the
+  /// unwired tournament half still needs a basis of its own.
   final String basisLabel;
-  /// `single round`, `best of 2 rounds` — empty when there is nothing to say.
-  final String countingLabel;
 
   final double entryFee;
+
+  /// What the payout table pays out in total — the ledger's `Pool $580`.
+  /// The SERVER's figure: a client adding a money column up is a client with
+  /// an opinion about money.
+  final double purse;
+
   /// Whether anything is being paid. **Not `entryFee > 0`**: a round can
   /// collect an entry and pay nobody yet, and the Prize column is about
   /// whether money is being paid at all.
   final bool hasPot;
-  /// A casual round's own stake line (`$1 a stroke`), when it has one.
-  final String stakeLabel;
 
   final Map<int, int> holePars;
   final Map<int, int> holeStrokeIndex;
@@ -120,14 +144,24 @@ class StrokePlayBoardData {
     return rounds.isEmpty ? null : rounds.last;
   }
 
-  /// The meta line's right half: the entry, or that there is no pot.
-  String get potLabel {
-    if (entryFee > 0) {
-      final f = entryFee;
-      return 'Entry \$${f % 1 == 0 ? f.toStringAsFixed(0) : f.toStringAsFixed(2)}';
-    }
-    return hasPot ? '' : 'No pot';
+  /// Golfers part-way round — what the ledger's footer counts, and what
+  /// makes its money PROJECTED rather than final.
+  int get onCourse =>
+      rows.where((r) => r.thru > 0 && r.thru < 18).length;
+
+  /// Everybody who started has finished, so the money is settled.
+  ///
+  /// A golfer who has not teed off does not hold it open: on a big field
+  /// somebody is always entered and absent, and a board that said
+  /// `Projected` all evening because of him would never say anything else.
+  bool get allIn {
+    final started = rows.where((r) => r.thru > 0);
+    return started.isNotEmpty && started.every((r) => r.thru >= 18);
   }
+
+  /// The paid rows, in board order — the ledger's lines.
+  List<StrokePlayRow> get paidRows =>
+      [for (final r in rows) if ((r.payout ?? 0) > 0) r];
 
   /// Which ranks are PAID, so the badge and the tint land on the same rows
   /// the money does.
@@ -159,6 +193,7 @@ class StrokePlayRow {
     required this.thru,
     required this.holes,
     this.payout,
+    this.prizeRank,
     this.excluded = false,
     this.strokePlan = const {},
     this.roundToPar = const [],
@@ -184,6 +219,12 @@ class StrokePlayRow {
   final int thru;
   final List<Map<String, dynamic>> holes;
   final double? payout;
+
+  /// The rank the PAYOUT was assigned to, which is not always the rank on
+  /// the board: an excluded golfer holds a place and is skipped for the
+  /// money, so the man behind him is paid 2nd while standing 3rd.
+  final int? prizeRank;
+
   final bool excluded;
   final Map<int, int> strokePlan;
 

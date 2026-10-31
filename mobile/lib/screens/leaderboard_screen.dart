@@ -1683,9 +1683,10 @@ class _LowNetViewState extends State<_LowNetView> {
 
     // Gross · Net · [Strokes-off] — pine-filled selected segment (brand rule:
     // selected segments are pine, never mint).
-    final selector = Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+    final selector = Align(
+      alignment: Alignment.centerRight,
       child: HalvedSegmented<String>(
+        compact: true,
         selected: _mode!,
         onChanged: (m) => setState(() => _mode = m),
         segments: [
@@ -1714,10 +1715,10 @@ class _LowNetViewState extends State<_LowNetView> {
             _strokeRow(r as Map<String, dynamic>, showNet: showNet),
         ],
         basisLabel: _basisLine(showNet),
-        // A casual round is one round; the counting rule is a tournament's
-        // fact and arrives with the tournament half of this board.
-        countingLabel: 'single round',
         entryFee: entryFee,
+        // The SERVER's figure. A client summing the payout table would be a
+        // client adding money up.
+        purse: (widget.data['purse'] as num?)?.toDouble() ?? 0,
         hasPot: results.any((r) => ((r as Map)['payout'] as num?) != null),
         holePars: _intMap(widget.data['hole_pars']),
         holeStrokeIndex: _intMap(widget.data['hole_stroke_index']),
@@ -1819,6 +1820,7 @@ class _LowNetViewState extends State<_LowNetView> {
       thru: r['holes_played'] as int? ?? holes.length,
       holes: holes,
       payout: (r['payout'] as num?)?.toDouble(),
+      prizeRank: (r['prize_rank'] as num?)?.toInt(),
       excluded: r['excluded'] == true,
       strokePlan: _intMap(r['stroke_plan']),
     );

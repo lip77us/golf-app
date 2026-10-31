@@ -8544,3 +8544,130 @@ the device.**
 `phase_word` had no reader left, so it is gone from the payload and
 `_PHASE_WORD` with it: a field nobody reads is the same dead weight as a flag
 nobody reads.
+
+## Stroke Play v2 — `~/Downloads/handoff-stroke-play`
+
+Two halves: the keypad-and-tray score entry Stroke Play did not have, and the
+board brought onto the standards the others adopted in October.
+
+### Score entry — the tray reports a PLACE
+
+It plays through `score_entry_screen`, not a screen of its own, so it
+inherits the sync queue, the combo-tee chip, Spots capture, withdrawal and
+the landscape scorecard. Same keypad and dark tray as 40 Balls, Sixes,
+Rabbit, Survivor and Annandale Friday, which is the packet's own first
+instruction.
+
+**`services.low_net_round.stroke_play_hole_card(foursome, hole)`** is built
+from `low_net_round_standings` — the board the tray's own places open
+through — so the two cannot disagree about whether a golfer is 2nd. What is
+derived is the one thing the engine has no reason to answer: where this hole
+left each golfer against where he stood before it.
+
+- **The field is the whole ROUND.** The packet writes it as "casual rounds:
+  positions count within your own group only", which is the same thing
+  because a casual round is one group; where it is not, ranking the group
+  alone would put a golfer 2nd on the tray and 5th on the board, which is
+  the mistake `field_standing` carries a paragraph about.
+- **A golfer's FIRST hole has no place to have moved from**, so `moved` is
+  null rather than a jump from nowhere; and it is null on the last hole,
+  where the packet drops the arrow.
+- **The leader line names a golfer OFF this card**, and is absent when he is
+  on it — naming a man two rows below is a repeat.
+- **The cap has words, and they are the server's**, because it is a rule:
+  `Mike's 12 counts as 8, net double bogey. The card keeps the 12.` Stated in
+  GROSS, which is the number he typed; the net would be 7, and a golfer
+  reading that beside his own 12 is comparing two different things.
+- **`cap_in_force` is extracted** so the keypad's `max 7` cannot be a ceiling
+  the engine does not enforce — the totals builder and the card now ask one
+  function. Null everywhere else, so no other game grows a maximum.
+- The keypad's strokes come off the CARD, not the round's stored allocation:
+  Stroke Play carries its own handicap mode and allowance, so a gross game
+  inside a net round would show full-net dots. The bug Sixes had.
+
+**`TrayScoreMark` is the dark-tray twin of `ScoreNotation`.** On a light card
+a birdie is a white circle ringed in pine, which on this background is
+invisible, so the packet gives its own dark variants — birdie bright mint,
+eagle white. Public, so the next tray finds it instead of writing a third.
+
+Fixtures are real engine output (`REGEN_STROKE_PLAY_FIXTURES=1`), and the
+regen round deliberately has a SECOND group: the leader line and a field
+place are the half a single-foursome fixture cannot exercise at all.
+
+### The board — three things, and two of them were bugs
+
+**The net row was the UNCAPPED score.** The open card summed `net_adj`, a key
+`low_net_round` has never sent, so the fallback to `net` — the score BEFORE
+the net double bogey — was the only branch ever taken. Found against the real
+database, not a fixture: round 115, Carol Martin, two capped holes, the card
+reading `Net 87` under a Tot box ranking her on **85**. `strokeHoleNet` and
+`strokeHoleCapped` are now the one place those two keys are read, because the
+hole dict's `net` and `capped` are easy to take the wrong way round: `net` is
+uncapped and `capped` is the figure the engine totals.
+
+**The wire row had no course handicap.** `_rank_standings` has carried it
+since the board started drawing `CH n` beside a name, and `_serialize_results`
+dropped it — so the board fell back to the PLAYING handicap and labelled it
+CH, which is the wrong number on a mixed-par card. The note above claiming
+the CH "now ships on `low_net_round`" was false for this payload; it is true
+now. `prize_rank` and `purse` went on in the same pass.
+
+**The meta line is gone.** It stated the basis, the counting rule and the pot
+— and the settings strip above the board states the rules while the selector
+states the mode, so it was restating both and could disagree with them. The
+money moved to the ledger, which is where money is read.
+
+**The light ledger** closes the board: `Projected · prize` with the pool
+while anybody is still out, `Final, prize` once they are all in — the
+distinction the Flights work made the case for. It names the **prize rank**,
+not the board rank: an excluded golfer holds a place and is skipped for the
+money, so the man behind him collects 2nd while standing 3rd. A golfer who
+never teed off does not hold it open, or a big field would read `Projected`
+all evening because of one absentee.
+
+**The card's shapes are the SHARED `ScoreNotation`** — par mid-green, bogey
+soft clay, double a clay double square — rather than a mark of its own, where
+par was a bare digit and a bogey was outlined in deep pine. That needed one
+parameter: `cornerRadius`, because the defaults are drawn for a 60pt key and
+at 24pt a 10pt corner is a squircle. The legend draws the real widget at
+legend size, so the key cannot show a shape the grid above it does not use,
+and the **cap key appears only when a hole on that card was capped**.
+
+**The selector is compact and right-aligned** (`HalvedSegmented.compact`): a
+full-width pill row directly under `GameSwitcher` reads as a second row of
+tabs, which the packet rules out in as many words. One flag rather than a
+third segmented control, since it is the same control sized two ways.
+
+**The settings strip stays suppressed at a full allowance** (Paul, 28 Oct
+2026) even though the packet draws `Net 100%` in it. That decision is three
+days old and about this exact board: the mode is in the selector, and a chip
+naming it is the same axis stated twice.
+
+### Not built, and why
+
+- **The casual `$1 a stroke` ledger.** Stroke Play has no stake: its money
+  model is `entry_fee` + `payouts`, and `Round.bet_unit` belongs to the
+  primary game. "Each pair settles the difference" is `services.wager`'s
+  `PAY_ABOVE` over net-to-par, so the engine exists — what is missing is a
+  stake on `LowNetRoundConfig`, a control to set it, and settlement and
+  receipt wiring. That is a money model, not a rendering change. A casual
+  round WITH a pot already gets the prize ledger, which is the common case.
+- **The tray's multi-round carry** (`R2 +1` under the name, Tot carrying
+  round 1). Needs `low_net_championship_summary`, whose field is the
+  tournament and which carries best-N-of-M; the tray reports THIS round.
+- **The tournament board** is still unwired, for the reason recorded above:
+  it carries flight headers, projected-money italics and the cut index, none
+  of which the casual board uses.
+
+Tests: `scoring/tests/test_stroke_play_hole_card.py` (18),
+`api/test_stroke_play_hole_card.py` (5), `api/test_low_net_modes.py` (15 — its
+fixture is now `_LowNetBase`, split from the tests the way `api/test_day_bet.py`
+had to be, because a subclass re-runs its parent's),
+`mobile/test/stroke_play_entry_test.dart` (28) and
+`mobile/test/stroke_play_board_test.dart` (30). Every source guard and the
+two bug tests were checked by putting the old code back.
+
+**The board test's fixtures spoke a shape the server never sent** — `net_adj`
+and `handicap_strokes` — so they tested the board against what somebody
+thought the server sends, which is how the capped-net bug survived a suite
+that covered the card. They use the real keys now.
