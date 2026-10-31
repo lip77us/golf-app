@@ -996,18 +996,26 @@ def _rabbit_verdict(event, lead, winner_short, holder_short) -> str:
     the rabbit lost and is loose."* A hole is only interesting here for what
     it does to the rabbit, so that is what the chip says.
 
-    Short on purpose — `line` carries the explanation and what is still at
-    stake, and two sentences saying the same thing is how they come to
-    disagree.
+    **Three words, and it repeats nothing on the card.** The first version
+    read `Rabbit loose — Jim lost it` and ellipsised to `Rabbit loose — Jim
+    los…` on a phone (Paul, 31 Oct 2026) — and the two words it spent that
+    width on were already the big state word directly below it. The lead is
+    dropped for the same reason: `beaten` and `extends` are followed by a
+    line that gives the new number, and the header above the rows carries the
+    holder and his lead going in.
+
+    So this says the one thing nothing else on the card does: WHO it happened
+    to. `line` keeps the explanation and what is still at stake — two
+    sentences saying the same thing is how they come to disagree.
     """
     if event == RabbitHoleResult.GRAB:
         return f'{winner_short} catches it'
     if event == RabbitHoleResult.FREED:
-        return f'Rabbit loose — {holder_short} lost it'
+        return f'{holder_short} loses it'
     if event == RabbitHoleResult.BEATEN:
-        return f'{holder_short} beaten, lead +{lead}'
+        return f'{holder_short} beaten'
     if event == RabbitHoleResult.EXTEND:
-        return f'{holder_short} extends to +{lead}'
+        return f'{holder_short} extends'
     if event == RabbitHoleResult.HELD:
         return f'{holder_short} keeps it'
     return 'Still loose'          # TIE — nobody had it, nobody took it

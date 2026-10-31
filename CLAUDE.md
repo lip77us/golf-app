@@ -8114,6 +8114,22 @@ reported. They say `Beaten by the field` now.
 `verdict` and `nets` are finished strings from the server, like `line`, so
 the chip cannot disagree with the engine about what happened.
 
+**Three words, because the first version was too long for its own chip.**
+`Rabbit loose — Jim lost it` ellipsised to `Rabbit loose — Jim los…` on a
+phone (31 Oct 2026) — and the two words it spent that width on were already
+the big state word directly below it, which made the card say `loose` three
+times. The lead went for the same reason: `beaten` and `extends` are followed
+by a line giving the new number, and the header above the rows carries the
+holder and his lead going in. So the chip says the one thing nothing else on
+the card does — WHO it happened to: `Jim loses it`, `Paul catches it`,
+`P beaten`, `P extends`, `P keeps it`, `Still loose`.
+
+A widget test cannot pin this: the Flutter test font is one square per glyph,
+so a string that fits there may not on a device. What
+`test_the_verdict_fits_the_chip` pins instead is the BUDGET — every event's
+verdict under 18 characters with a four-character short name — which is the
+thing that was blown.
+
 Fixtures regenerated (`REGEN_RABBIT_FIXTURES=1`). Tests:
 `TheChipReportsTheRabbitTests` (`scoring/tests/test_rabbit.py`, 8 — both the
 tied hole and the broken tie landing on `net 4 v 6`) and the `tray` group in

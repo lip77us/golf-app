@@ -140,7 +140,7 @@ void main() {
       await _pump(t, RabbitHoleTray(
           card: card, nextHole: 10, onEdit: () {}));
       final text = _allText(t);
-      expect(text, contains('P extends to +3'));
+      expect(text, contains('P extends'));
       expect(text, contains('net 4 v 5'));
       expect(text, contains('P holds the rabbit'));
       // The sentence is the SERVER's — every clause of it is a rule.
@@ -184,7 +184,7 @@ void main() {
       final card = _card('rabbit_hole8_loose');
       await _pump(t, RabbitHoleTray(card: card, nextHole: 9, onEdit: () {}));
       final text = _allText(t);
-      expect(text, contains('Rabbit loose — P lost it'));
+      expect(text, contains('P loses it'));
       expect(text.contains('wins hole'), isFalse);
       expect(text, contains('net 3 v 5'));
       expect(text, contains('knocked it loose'));
@@ -198,7 +198,7 @@ void main() {
       final neutral = t
           .widget<Container>(find
               .ancestor(
-                  of: find.text('Rabbit loose — P lost it'),
+                  of: find.text('P loses it'),
                   matching: find.byType(Container))
               .first)
           .decoration as BoxDecoration;
@@ -208,7 +208,7 @@ void main() {
       final owned = t
           .widget<Container>(find
               .ancestor(
-                  of: find.text('P extends to +3'),
+                  of: find.text('P extends'),
                   matching: find.byType(Container))
               .first)
           .decoration as BoxDecoration;

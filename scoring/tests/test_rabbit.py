@@ -870,7 +870,7 @@ class TheChipReportsTheRabbitTests(_RabbitCardBase):
 
     def test_the_verdict_names_the_rabbit_not_the_hole(self):
         r = self._freed_by_a_tie()
-        self.assertEqual(r['verdict'], 'Rabbit loose — P lost it')
+        self.assertEqual(r['verdict'], 'P loses it')
         self.assertNotIn('outright', r['verdict'])
 
     def test_the_nets_are_the_pair_the_engine_compared(self):
@@ -894,7 +894,7 @@ class TheChipReportsTheRabbitTests(_RabbitCardBase):
         self._hole(9, 6, 4, 4)            # beaten by both, tied
         r = self._card(9)['result']
         self.assertEqual(r['event'], 'beaten')
-        self.assertEqual(r['verdict'], 'P beaten, lead +1')
+        self.assertEqual(r['verdict'], 'P beaten')
         self.assertEqual(r['nets'], 'net 4 v 6')
         self.assertNotIn('None', r['line'])
 
@@ -906,7 +906,7 @@ class TheChipReportsTheRabbitTests(_RabbitCardBase):
         self._hole(8, 4, 6, 6)            # Paul wins outright — Sam loses it
         r = self._card(8)['result']
         self.assertEqual(r['event'], 'freed')
-        self.assertEqual(r['verdict'], 'Rabbit loose — S lost it')
+        self.assertEqual(r['verdict'], 'S loses it')
         self.assertEqual(r['nets'], 'net 4 v 6')
         self.assertIn('knocked it loose', r['line'])
 
@@ -914,6 +914,33 @@ class TheChipReportsTheRabbitTests(_RabbitCardBase):
         self._setup()
         r = (self._hole(7, 3, 5, 5), self._card(7)['result'])[1]
         self.assertEqual(r['verdict'], 'P catches it')
+
+    def test_the_verdict_fits_the_chip(self):
+        # It ellipsised on a phone as `Rabbit loose — Jim los…` (Paul, 31 Oct
+        # 2026). The test font is one square per glyph, so no widget test can
+        # say whether a string fits a real screen — what this pins is the
+        # BUDGET, with a four-character short name, which is what was blown.
+        self._setup()
+        seen = []
+        self._hole(7, 3, 5, 5)                     # grab
+        seen.append(self._card(7)['result']['verdict'])
+        self._hole(8, 3, 5, 5)                     # extend
+        seen.append(self._card(8)['result']['verdict'])
+        self._hole(9, 5, 5, 5)                     # held (tie for low)
+        seen.append(self._card(9)['result']['verdict'])
+        self._hole(10, 6, 4, 5)                    # beaten
+        seen.append(self._card(10)['result']['verdict'])
+        self._hole(11, 6, 4, 5)                    # freed
+        seen.append(self._card(11)['result']['verdict'])
+        for v in seen:
+            self.assertLessEqual(
+                len(v.replace('P', 'Paul')), 18, f'{v!r} is too long')
+
+    def test_the_verdict_does_not_repeat_the_state_word(self):
+        # `Loose` is already the big word directly below the chip, so the
+        # width went on saying it a second time.
+        r = self._freed_by_a_tie()
+        self.assertNotIn('loose', r['verdict'].lower())
 
     def test_a_loose_hole_compares_the_best_against_the_runner_up(self):
         # Nobody holds it, so the pair that matters is whether anyone got

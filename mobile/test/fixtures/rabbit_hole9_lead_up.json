@@ -70,7 +70,7 @@
     "holder_short": "P",
     "lead": 3,
     "event": "extend",
-    "verdict": "P extends to +3",
+    "verdict": "P extends",
     "nets": "net 4 v 5",
     "decided": false,
     "ended_early": false,
