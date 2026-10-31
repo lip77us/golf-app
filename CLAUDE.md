@@ -8373,3 +8373,36 @@ Tests: `SurvivorHoleCardTests` (18) + `SurvivorFixtureRegenTests` (3) in
 the server's doing and needs no client work, but it has no test; and the
 `last hole` section title is written here rather than taken from the packet,
 which only specifies the decider and elimination bands.
+
+### Two panels off the Survivor screen, and both handicaps on Stroke Play
+
+Paul, 31 Oct 2026, from the device.
+
+**The by-hole grid and the R5 rail are the BOARD's.** Both drew under the
+players card as well, and both are on the leaderboard already — the same two
+drawings of one thing that Rabbit's grid was, crushed under the tray where
+nobody could read them. `_OutcomeLine` went with them: the tray reports the
+same hole in more words, so it was a third statement of one fact. The screen
+is now the header, the rows, the keypad and the tray; the board is where the
+round's shape is read.
+
+**That contradicts a line in the Survivor leaderboard note above** — the rail
+"belongs on BOTH surfaces, same widget as the leaderboard's". It does belong
+on both; what it cannot do is sit under a tray that takes most of the screen.
+`SurvivorRail` is unchanged and the leaderboard still draws it.
+
+**Stroke Play names both handicaps.** The row showed the index alone, on the
+packet's rule that "CH is what you play off today and the index is who you
+are" — right that CH is not identity, wrong that it is either-or. The index
+cannot be used to read a net figure, which is what a board is for: *"the index
+shows, but not the gets, so I don't know the players CH."* It is `8.4 · CH 9`
+now, and an older payload with no index still names the CH.
+
+The label is composed in `leaderboard_screen`, which is where the guard sits
+— and the guard tests the CALL form rather than the name, because the comment
+explaining a removal mentions all three widgets and a bare-name test matches
+its own prose. (Cost one red run.)
+
+**The other new boards show no handicap at all** — Points, Skins, Rabbit and
+Nassau name none, and Sequoya answers it with a strokes card instead. Worth
+deciding as one thing rather than four.

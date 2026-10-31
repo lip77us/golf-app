@@ -1800,10 +1800,15 @@ class _LowNetViewState extends State<_LowNetView> {
       playerId: r['player_id'] as int?,
       rank: r['rank'] as int? ?? 0,
       name: r['name']?.toString() ?? '—',
-      // The index where the server sends one, the playing handicap where it
-      // does not — an older payload has only the latter.
-      handicapLabel:
-          index.isNotEmpty ? index : 'CH ${r['handicap'] ?? 0}',
+      // **Both, because they answer different questions.** The index is who
+      // a golfer is; the CH is what he is getting today, and that is the one
+      // you need to read a net figure — "the index shows, but not the gets,
+      // so I don't know the players CH" (Paul, 31 Oct 2026). The packet asked
+      // for the index and it was right that CH alone is not identity; it is
+      // not either-or. An older payload has only the CH.
+      handicapLabel: index.isNotEmpty
+          ? '$index · CH ${r['handicap'] ?? 0}'
+          : 'CH ${r['handicap'] ?? 0}',
       // In a gross round the ranked figure IS gross to par, which is why
       // there is no separate strokes-off column either: in that mode the
       // ranked figure is the strokes-off one.

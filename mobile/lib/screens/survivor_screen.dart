@@ -31,7 +31,6 @@ import '../widgets/icon_help_sheet.dart';
 import '../widgets/inline_message.dart';
 import '../widgets/inline_score_picker.dart';
 import '../widgets/standing_ribbon.dart';
-import '../widgets/survivor_rail.dart';
 import '../widgets/survivor_entry.dart';
 import '../widgets/forty_balls_keypad.dart';
 import '../widgets/net_score_button.dart' show scoreCellWithDots;
@@ -41,9 +40,7 @@ import '../utils/match_handicap.dart';
 import '../utils/play_order.dart';
 import '../utils/round_complete.dart';
 import '../utils/survivor_standing.dart';
-import '../widgets/pinned_hole_grid.dart';
 import '../widgets/combo_tee_chip.dart';
-import '../utils/nine_totals.dart';
 
 /// Handicap strokes a player receives on a hole, read straight from the
 /// Survivor summary.  The engine emits its own allocation for EVERY hole,
@@ -738,44 +735,17 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
             // every other hole. The server decides which
             // holes are par 3s; it is walking the carry.
             ...greenieCards(rp, widget.foursomeId, _selectedHole),
-            if (holeInfo != null && holeInfo.isScored) ...[
-              const SizedBox(height: 10),
-              _OutcomeLine(hole: holeInfo),
-            ],
-            const SizedBox(height: 12),
-            if (summary != null)
-              _SurvivorGrid(
-                summary: summary, players: players, scorecard: sc,
-                currentHole: _selectedHole,
-                onTapHole: (h) => setState(() {
-                  _selectedHole = h; _editingPlayerId = null;
-                })),
-            const SizedBox(height: 12),
-            // The R5 rail. The packet's primary artefact, and it belongs on
-            // BOTH surfaces — same widget as the leaderboard's, so the two can
-            // never drift into two different pictures of one Survivor.
+            // **The by-hole grid and the R5 rail are the BOARD's.**
+            // `_SurvivorGrid` and `SurvivorRail` both drew here as well, and
+            // both are on the leaderboard already — the same two drawings of
+            // one thing that Rabbit's grid was, crushed under the tray where
+            // nobody could read them (Paul, 31 Oct 2026: "remove the two
+            // score panels that are under the names, that is all on the
+            // Leaderboard"). The tray says what the hole did; the board says
+            // what the round looks like.
             //
-            // **Below the by-hole card, not above it.** The grid is about the
-            // hole the group is standing on — tapping a column moves the
-            // screen there — so it belongs nearer the score box. The rail is
-            // the round's shape, which is what you read once the hole is in.
-            if (summary != null && summary.survivors.isNotEmpty) ...[
-              Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(
-                      color: Theme.of(ctx).colorScheme.outline),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: SurvivorRail.fromSummary(
-                    summary: summary,
-                    holesInPlay: [for (final h in sc.holes) h.holeNumber],
-                  ),
-                ),
-              ),
-            ],
+            // `_OutcomeLine` went with them: the tray reports the same hole
+            // in more words, so it was a third statement of one fact.
             const SizedBox(height: 16),
           ]),
         ),
@@ -1363,67 +1333,6 @@ class _PlayerRow extends StatelessWidget {
 // Per-hole outcome line
 // ===========================================================================
 
-class _OutcomeLine extends StatelessWidget {
-  final SurvivorHole hole;
-  const _OutcomeLine({required this.hole});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    String text;
-    Color color = theme.colorScheme.onSurfaceVariant;
-
-    // A resurrection outranks whatever else the hole did — it is the thing
-    // that changed, and the Survivor number does NOT increment: the same
-    // Survivor keeps running.
-    if (hole.resurrectedShort != null) {
-      final sentTo = hole.eliminatedShort;
-      return Text(
-        sentTo != null
-            ? '${hole.resurrectedShort} is alive again — $sentTo goes to '
-              'Zombieville. Survivor ${hole.survivor ?? ''} carries on.'
-            : '${hole.resurrectedShort} is alive again — the deciders tied, so '
-              'all three are back in. Survivor ${hole.survivor ?? ''} carries on.',
-        style: theme.textTheme.bodySmall?.copyWith(
-            color: Halved.zombie, fontWeight: FontWeight.w600),
-      );
-    }
-
-    switch (hole.event) {
-      case 'eliminated':
-        text = '${hole.eliminatedShort} had the worst score — knocked out.';
-        color = theme.colorScheme.error;
-      case 'no_elimination':
-        text = 'The two worst scores tied — nobody goes, everyone plays on.';
-      case 'won':
-        text = '${hole.winnerShort} wins Survivor ${hole.survivor ?? ''}'
-               '${hole.role == 'final' ? ' on the last hole' : ''}!';
-        color = Colors.green.shade700;
-      case 'carried':
-        text = 'Tied — the same two carry on to the next hole.';
-        color = theme.colorScheme.primary;
-      case 'split':
-        text = 'Tied on the last hole — the two split '
-               '${hole.eliminatedShort ?? 'the loser'}’s entry.';
-        color = theme.colorScheme.primary;
-      case 'no_blood':
-        text = 'Tied for low on the last hole — no blood, nobody pays.';
-      default:
-        text = 'No change.';
-    }
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.4)),
-      ),
-      child: Text(text, style: theme.textTheme.bodyMedium?.copyWith(
-          fontWeight: FontWeight.w600, color: color)),
-    );
-  }
-}
 
 // `_SurvivorStrip` was here — a card headed **Survivors**, one row per leg
 // with its range, its winner and its payout. **Removed 22 Sep 2026.**
@@ -1437,248 +1346,3 @@ class _OutcomeLine extends StatelessWidget {
 // Survivor by-hole grid
 // ===========================================================================
 
-class _SurvivorGrid extends StatelessWidget {
-  final SurvivorSummary summary;
-  final List<Membership> players;
-  final Scorecard        scorecard;
-  final int              currentHole;
-  final void Function(int) onTapHole;
-
-  const _SurvivorGrid({
-    required this.summary, required this.players, required this.scorecard,
-    required this.currentHole, required this.onTapHole});
-
-  /// Handicap strokes for [m] on [hole] — the engine's own allocation, which
-  /// is defined for unscored holes too, so the whole plan shows up front.
-  int _strokesFor(Membership m, int hole) {
-    final h = summary.holeFor(hole);
-    if (h == null) return 0;
-    for (final e in h.entries) {
-      if (e.playerId == m.player.id) return e.strokes.clamp(0, 9);
-    }
-    return 0;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    const double labelColW = 56.0;
-    const double cellW = 34.0;
-    const double rowH  = 32.0;
-    // The header band's own height. Named, because **every cell in a band —
-    // including its pinned LABEL — has to be exactly this tall** or the two
-    // halves of the grid run at different pitches and the names stop lining up
-    // with the rows they name.
-    const double headerH = 26.0;
-    final holeRange = summary.holes.isNotEmpty
-        ? summary.holes.map((h) => h.hole).toList()
-        : List.generate(18, (i) => i + 1);
-
-    Widget headerCell(int h) {
-      final info    = summary.holeFor(h);
-      final isNow   = h == currentHole;
-      // A hole that settled a Survivor gets a heavier frame — that's where the
-      // money changed hands.
-      final settled = info != null &&
-          (info.winnerId != null || info.event == 'split' ||
-           info.event == 'no_blood');
-      return GestureDetector(
-        onTap: () => onTapHole(h),
-        child: Container(
-          width: cellW, height: 26,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isNow
-                ? theme.colorScheme.primary.withOpacity(0.14)
-                : Colors.transparent,
-            border: Border(
-              bottom: BorderSide(
-                color: settled
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.outlineVariant,
-                width: settled ? 2 : 1),
-            ),
-          ),
-          child: Text('$h',
-              style: theme.textTheme.labelSmall?.copyWith(
-                  fontWeight: isNow ? FontWeight.bold : FontWeight.w500,
-                  color: isNow ? theme.colorScheme.primary : null)),
-        ),
-      );
-    }
-
-    Widget cell(Membership m, int h) {
-      final info = summary.holeFor(h);
-      final entry = info?.entries
-          .where((e) => e.playerId == m.player.id).firstOrNull;
-      final gross = entry?.gross;
-      final out   = entry != null && !entry.isAlive;
-      final won   = entry?.isWinner ?? false;
-      final knocked = entry?.isEliminated ?? false;
-      // The hole he came back in on. It can coincide with another player's
-      // out-mark on the SAME hole — the resurrection is what sent that decider
-      // to Zombieville.
-      final revived = entry?.isResurrected ?? false;
-      final zombieOn = summary.zombieOption;
-
-      // **The marks come from `SurvivorMarks`, which the rail below draws
-      // from too.** This grid used to carry its own — a red knock-out whatever
-      // the round's rules were, and a resurrection at the same plum weight as
-      // the elimination. So on a Zombie round the two cards disagreed about
-      // the colour of the same hole, and inside this one card going out and
-      // coming back looked identical.
-      Color? bg;
-      Color? line;
-      Color? fg;
-      if (won) {
-        bg   = SurvivorMarks.wonFill;
-        line = SurvivorMarks.wonLine;
-        fg   = SurvivorMarks.wonText;
-      } else if (revived) {
-        // The LIGHT plum. Dark is going out, light is coming back.
-        bg   = SurvivorMarks.backFill;
-        line = SurvivorMarks.backLine;
-        fg   = Halved.zombie;
-      } else if (knocked) {
-        // Plum in a Zombie round, red without one: a man in Zombieville is
-        // out of the running and still hitting shots, which is neither of the
-        // things red means.
-        bg   = SurvivorMarks.outFill(zombieOn);
-        line = SurvivorMarks.outLine(zombieOn);
-        fg   = zombieOn ? Halved.zombie : theme.colorScheme.error;
-      } else if (out) {
-        fg = theme.colorScheme.outline;
-      }
-
-      return GestureDetector(
-        onTap: () => onTapHole(h),
-        child: Container(
-          width: cellW, height: rowH,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: bg,
-            border: Border.all(color: line ?? Colors.transparent),
-            borderRadius: BorderRadius.circular(3),
-          ),
-          child: scoreCellWithDots(
-            Text(gross?.toString() ?? '',
-                style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: (won || knocked || revived)
-                        ? FontWeight.bold : FontWeight.w500,
-                    color: fg)),
-            _strokesFor(m, h),
-            theme.colorScheme.primary,
-          ),
-        ),
-      );
-    }
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: theme.colorScheme.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Text('Survivor by hole',
-                style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary)),
-            const SizedBox(width: 8),
-            // **The rail's own legend, not a sentence of this card's.** The
-            // written one said `red = knocked out`, which is false in a Zombie
-            // round — and it could not name the light plum at all, so the mark
-            // a golfer most needs explained was the one with no key.
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: SurvivorLegend(zombieOn: summary.zombieOption),
-              ),
-            ),
-          ]),
-          const SizedBox(height: 8),
-          Builder(builder: (_) {
-            final split = NineSplit.of(holeRange);
-            const summaryW = 34.0;
-
-            Widget sumCell(String t, {double height = rowH}) => SizedBox(
-                  width: summaryW, height: height,
-                  child: Center(
-                    child: Text(t,
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(fontWeight: FontWeight.bold)),
-                  ),
-                );
-
-            /// A golfer's gross over a nine — an em dash until it is complete.
-            /// A knocked-out golfer has no score on the holes he missed, so his
-            /// nine stays a dash, which is the honest answer: he did not play
-            /// it.
-            Widget grossTotal(Membership m, List<int> holes) {
-              var total = 0;
-              for (final h in holes) {
-                final g = summary.holeFor(h)?.entries
-                    .where((e) => e.playerId == m.player.id)
-                    .firstOrNull?.gross;
-                if (g == null) return sumCell('—');
-                total += g;
-              }
-              return sumCell('$total');
-            }
-
-            return PinnedHoleGrid(
-              labelWidth  : labelColW,
-              cellWidth   : cellW,
-              holeCount   : holeRange.length,
-              // Never scrolled to a hole at all before — and Survivor is the
-              // game where it matters most, since the elimination you are
-              // looking for is the hole you have just played.
-              currentIndex: split.rightEdgeOf(
-                      currentHole, cellW, summaryW) == null ? -1 : 0,
-              currentRightEdge:
-                  split.rightEdgeOf(currentHole, cellW, summaryW),
-              contentWidth: split.contentWidth(cellW, summaryW),
-              bands: [
-                // **`height:` sizes BOTH halves.** This grid handed in a bare
-                // `Text` per name and an empty `SizedBox` for the header, so
-                // the pinned column ran at the text's line height while the
-                // scrolling half ran at 32 — and the names ended up stacked
-                // above the grid instead of beside their own rows. Declaring
-                // the height on the band is what makes that unsayable.
-                HoleGridBand(
-                  null,
-                  [
-                    for (final h in split.front) headerCell(h),
-                    if (split.showOut) sumCell('OUT', height: headerH),
-                    for (final h in split.back) headerCell(h),
-                    if (split.showIn) sumCell('IN', height: headerH),
-                    if (split.showTot) sumCell('TOT', height: headerH),
-                  ],
-                  height: headerH,
-                ),
-                for (final m in players)
-                  HoleGridBand(
-                    height: rowH,
-                    Text(m.player.displayShort,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(fontWeight: FontWeight.w600)),
-                    [
-                      for (final h in split.front) cell(m, h),
-                      if (split.showOut) grossTotal(m, split.front),
-                      for (final h in split.back) cell(m, h),
-                      if (split.showIn) grossTotal(m, split.back),
-                      if (split.showTot) grossTotal(m, split.all),
-                    ],
-                  ),
-              ],
-            );
-          }),
-        ]),
-      ),
-    );
-  }
-}

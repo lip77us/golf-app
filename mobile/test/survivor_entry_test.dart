@@ -227,6 +227,20 @@ void _screenGuards() {
       expect(src.substring(at, end), contains('_pager('));
     });
 
+    test('the by-hole grid and the rail are the BOARD\'s', () {
+      // Both drew here as well and both are on the leaderboard already — two
+      // drawings of one thing, crushed under the tray where nobody could
+      // read them (Paul, 31 Oct 2026). The tray says what the hole did; the
+      // board says what the round looks like.
+      // The CALL form, not the name — the comment explaining the removal
+      // mentions all three, so a bare name test matches its own prose.
+      expect(src.contains('_SurvivorGrid('), isFalse);
+      expect(src.contains('SurvivorRail.'), isFalse);
+      // …and the outcome line with them: the tray reports the same hole in
+      // more words.
+      expect(src.contains('_OutcomeLine('), isFalse);
+    });
+
     test('a clear is sent as a null gross, not a score of zero', () {
       expect(src, contains('_kCleared ? null'));
       expect(src, contains('clearedSentinel: _kCleared'));
