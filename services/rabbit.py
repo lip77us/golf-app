@@ -950,6 +950,13 @@ def _rabbit_line(event, lead, to_play, accumulate, winner_short, holder_short,
     if event == RabbitHoleResult.GRAB:
         return f'{winner_short} catches it · {left}'
     if event == RabbitHoleResult.FREED:
+        # **No outright winner still frees it.** The holder can be beaten by
+        # everybody while those two tie with each other, which is the hole
+        # Paul reported (30 Oct 2026) — and `winner_short` is None exactly
+        # there, so naming it printed a literal `None knocked it loose`.
+        if winner_short is None:
+            return (f'Beaten by the field · {left} · '
+                    'the next outright win catches it')
         return (f'{winner_short} knocked it loose · {left} · '
                 'the next outright win catches it')
     if event == RabbitHoleResult.TIE:
@@ -957,6 +964,9 @@ def _rabbit_line(event, lead, to_play, accumulate, winner_short, holder_short,
             return f'No outright winner, it stays loose · {left}'
         return f'Tie for low net, the rabbit stays put · {left}'
     if event == RabbitHoleResult.BEATEN:
+        # Same shape as FREED: beaten by all of them, tied among themselves.
+        if winner_short is None:
+            return f'Beaten by the field, lead down to +{lead} · {left}'
         return (f'{winner_short} wins one back, lead down to +{lead} · {left}')
     if event == RabbitHoleResult.EXTEND:
         losses = 'loss' if lead == 1 else 'losses'
@@ -973,6 +983,34 @@ def _rabbit_line(event, lead, to_play, accumulate, winner_short, holder_short,
             return f'{holder_short} holds on · {left}'
         return f'{holder_short} holds on · {left} · one loss sets it loose'
     return left
+
+
+def _rabbit_verdict(event, lead, winner_short, holder_short) -> str:
+    """The chip's label: what this hole did to the RABBIT.
+
+    It used to report the HOLE — `Paul wins hole 11`, or `No outright winner`
+    when nobody did. Both are the lesser fact, and Paul said so twice about
+    one hole (30 Oct 2026): *"it says no outright winner, but that is not the
+    relevant fact — rabbit lost is more important"*, and *"Paul winning hole
+    11 when I broke the tie is also not the most important fact, it is that
+    the rabbit lost and is loose."* A hole is only interesting here for what
+    it does to the rabbit, so that is what the chip says.
+
+    Short on purpose — `line` carries the explanation and what is still at
+    stake, and two sentences saying the same thing is how they come to
+    disagree.
+    """
+    if event == RabbitHoleResult.GRAB:
+        return f'{winner_short} catches it'
+    if event == RabbitHoleResult.FREED:
+        return f'Rabbit loose — {holder_short} lost it'
+    if event == RabbitHoleResult.BEATEN:
+        return f'{holder_short} beaten, lead +{lead}'
+    if event == RabbitHoleResult.EXTEND:
+        return f'{holder_short} extends to +{lead}'
+    if event == RabbitHoleResult.HELD:
+        return f'{holder_short} keeps it'
+    return 'Still loose'          # TIE — nobody had it, nobody took it
 
 
 def rabbit_hole_card(foursome, hole: int) -> dict:
@@ -1050,6 +1088,21 @@ def rabbit_hole_card(foursome, hole: int) -> dict:
     result = None
     if here.get('event'):
         nets = sorted(p['net'] for p in players if p['net'] is not None)
+        # **The pair the ENGINE compared, not the two lowest scores.** Every
+        # transition is the holder's net against the best of the others
+        # (`_advance_rabbit`), so that is the evidence for the verdict. The
+        # two lowest told Paul `net 4 v 4` on a hole where the field's 4 beat
+        # his 6 — the one comparison the hole was decided on, missing (30 Oct
+        # 2026). Lower first, so it always reads winner against loser.
+        held_net = next((p['net'] for p in players
+                         if p['player_id'] == holder_before), None)
+        others   = [p['net'] for p in players
+                    if p['player_id'] != holder_before and p['net'] is not None]
+        if held_net is not None and others:
+            pair = sorted((held_net, min(others)))
+        else:
+            # Loose: best against the runner-up, which is what decides a catch.
+            pair = nets[:2]
         last_hole = (hole == leg_holes[-1])
         # **Winning early and holding on to the end are different sentences**,
         # and `decided_on` alone cannot tell them apart. `_is_decided` is true
@@ -1083,6 +1136,12 @@ def rabbit_hole_card(foursome, hole: int) -> dict:
             'holder_short': here.get('holder_short'),
             'lead'        : here.get('lead', 0),
             'event'       : here.get('event'),
+            # The chip's own words — about the RABBIT, never about the hole.
+            'verdict'     : _rabbit_verdict(
+                here.get('event'), here.get('lead', 0),
+                here.get('winner_short'), short_of.get(holder_before)),
+            'nets'        : ('net %s v %s' % (pair[0], pair[1])
+                             if len(pair) == 2 else ''),
             'decided'     : decided,
             # The leg's window was cut, so the NEXT one starts early. Not the
             # same as `decided`: a leg settled on its own last hole is decided

@@ -140,7 +140,7 @@ void main() {
       await _pump(t, RabbitHoleTray(
           card: card, nextHole: 10, onEdit: () {}));
       final text = _allText(t);
-      expect(text, contains('P wins hole 9'));
+      expect(text, contains('P extends to +3'));
       expect(text, contains('net 4 v 5'));
       expect(text, contains('P holds the rabbit'));
       // The sentence is the SERVER's — every clause of it is a rule.
@@ -149,14 +149,14 @@ void main() {
       expect(text, contains('Hole 10 ›'));
     });
 
-    testWidgets('a halved hole says so in full, not ellipsised', (t) async {
+    testWidgets('the chip says so in full, not ellipsised', (t) async {
       // `Hole 4` was `Expanded` beside a `Flexible` chip and both default to
       // flex 1, so they split the row and the chip read `No outright ...`
       // over two words of white space (Paul, 30 Oct 2026). The measurement is
       // the claim: the label is laid out at its full intrinsic width.
       final card = _card('rabbit_hole8_halved');
       await _pump(t, RabbitHoleTray(card: card, nextHole: 9, onEdit: () {}));
-      expect(_allText(t), contains('No outright winner'));
+      expect(_allText(t), contains('P keeps it'));
       expect(_allText(t), contains('net 4 v 4'));
 
       // Measured as geometry, not as fit: the test font is one square per
@@ -168,7 +168,7 @@ void main() {
       final label = t.getSize(find.text('Hole 8'));
       final chip = t.getSize(find
           .ancestor(
-              of: find.text('No outright winner'),
+              of: find.text('P keeps it'),
               matching: find.byType(Container))
           .first);
       expect(chip.width, greaterThan(row.width / 2),
@@ -176,13 +176,44 @@ void main() {
       expect(chip.width, closeTo(row.width - label.width - 10, 1));
     });
 
-    testWidgets('a hole nobody won is neutral and moves nothing', (t) async {
+    testWidgets('a freed rabbit leads with the rabbit, not the hole', (t) async {
+      // Paul, 30 Oct 2026, twice about one hole: `No outright winner` is not
+      // the relevant fact, and neither is `Paul wins hole 11` when he broke
+      // the tie — what matters is that the rabbit went loose. Here Sam DID
+      // win the hole outright and the chip still reports the rabbit.
       final card = _card('rabbit_hole8_loose');
       await _pump(t, RabbitHoleTray(card: card, nextHole: 9, onEdit: () {}));
       final text = _allText(t);
-      expect(text, contains('S wins hole 8'));
-      expect(text, contains('Loose'));
+      expect(text, contains('Rabbit loose — P lost it'));
+      expect(text.contains('wins hole'), isFalse);
+      expect(text, contains('net 3 v 5'));
       expect(text, contains('knocked it loose'));
+    });
+
+    testWidgets('a loose rabbit wears nobody\'s colour', (t) async {
+      // Neutral is the right fill rather than a fallback: it belongs to
+      // nobody. A held rabbit wears the holder's.
+      final loose = _card('rabbit_hole8_loose');
+      await _pump(t, RabbitHoleTray(card: loose, nextHole: 9, onEdit: () {}));
+      final neutral = t
+          .widget<Container>(find
+              .ancestor(
+                  of: find.text('Rabbit loose — P lost it'),
+                  matching: find.byType(Container))
+              .first)
+          .decoration as BoxDecoration;
+
+      final held = _card('rabbit_hole9_lead_up');
+      await _pump(t, RabbitHoleTray(card: held, nextHole: 10, onEdit: () {}));
+      final owned = t
+          .widget<Container>(find
+              .ancestor(
+                  of: find.text('P extends to +3'),
+                  matching: find.byType(Container))
+              .first)
+          .decoration as BoxDecoration;
+
+      expect(neutral.color, isNot(owned.color));
     });
 
     testWidgets('a won rabbit names the money and the next one', (t) async {

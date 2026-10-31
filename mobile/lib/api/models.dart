@@ -9599,6 +9599,17 @@ class RabbitHoleOutcome {
   /// part of it is a rule.
   final String line;
 
+  /// The chip's label: what this hole did to the RABBIT. It used to report
+  /// the HOLE, and Paul said so twice about one hole (30 Oct 2026) — neither
+  /// `No outright winner` nor `Paul wins hole 11` is the fact that matters
+  /// when the rabbit has just gone loose.
+  final String verdict;
+
+  /// `net 4 v 6` — the pair the ENGINE compared (the holder against the best
+  /// of the others), lower first. Not the two lowest scores, which on that
+  /// hole read `net 4 v 4` and said nothing about the rabbit.
+  final String nets;
+
   const RabbitHoleOutcome({
     required this.winnerId,
     required this.winnerShort,
@@ -9614,6 +9625,8 @@ class RabbitHoleOutcome {
     required this.heldToEnd,
     this.endedEarly = false,
     required this.line,
+    this.verdict = '',
+    this.nets = '',
   });
 
   bool get noWinner => winnerId == null;
@@ -9635,6 +9648,8 @@ class RabbitHoleOutcome {
         heldToEnd: j['held_to_end'] as bool? ?? false,
         endedEarly: j['ended_early'] as bool? ?? false,
         line: (j['line'] as String?) ?? '',
+        verdict: (j['verdict'] as String?) ?? '',
+        nets: (j['nets'] as String?) ?? '',
       );
 }
 

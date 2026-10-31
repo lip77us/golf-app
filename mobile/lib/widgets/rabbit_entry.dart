@@ -542,16 +542,22 @@ class RabbitHoleTray extends StatelessWidget {
     );
   }
 
-  /// "Paul wins hole 10 · net 4 v 5" in his colour, or a neutral
-  /// "No outright winner" — which is the hole where nothing moves.
+  /// What this hole did to the RABBIT — `Rabbit loose — Paul lost it ·
+  /// net 4 v 6` — in the colour of whoever holds it afterwards, or neutral
+  /// when it is loose.
+  ///
+  /// It used to report the HOLE: `Paul wins hole 10`, or `No outright winner`
+  /// on a tie. Paul ruled out both about one hole (30 Oct 2026) — a hole is
+  /// only interesting here for what it does to the rabbit, and when the
+  /// rabbit has just gone loose, who won the hole is the lesser fact.
+  ///
+  /// **Neutral is the right fill for a loose rabbit**, not a fallback: it
+  /// belongs to nobody, so it wears nobody's colour.
   Widget _winnerChip(RabbitHoleOutcome r) {
-    final won = !r.noWinner;
-    final fill =
-        won ? _colourOf(r.winnerId) : const Color(0x33FFFFFF);
-    final ink = won ? Colors.white : Colors.white;
-    final nets = (r.bestNet == null || r.runnerNet == null)
-        ? ''
-        : 'net ${r.bestNet} v ${r.runnerNet}';
+    final held = !r.loose;
+    final fill = held ? _colourOf(r.holderId) : const Color(0x33FFFFFF);
+    const ink = Colors.white;
+    final nets = r.nets;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -560,12 +566,9 @@ class RabbitHoleTray extends StatelessWidget {
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Flexible(
-          child: Text(
-              won
-                  ? '${r.winnerShort} wins hole ${card.hole}'
-                  : 'No outright winner',
+          child: Text(r.verdict,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
+              style: const TextStyle(
                   color: ink, fontWeight: FontWeight.w700, fontSize: 13)),
         ),
         if (nets.isNotEmpty) ...[

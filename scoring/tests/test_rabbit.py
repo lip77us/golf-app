@@ -839,6 +839,92 @@ class _RabbitCardBase(TestCase):
         return rabbit_hole_card(self.fs, hole)
 
 
+class TheChipReportsTheRabbitTests(_RabbitCardBase):
+    """The chip says what the hole did to the RABBIT, and shows the pair the
+    engine compared.
+
+    Paul, 30 Oct 2026, about one hole: *"there was a rabbit of 1 and the other
+    two tied, but beat the rabbit. It says hole 11, no outright winner, but
+    that is not the relevant fact — rabbit lost is more important… it should
+    say net 4 vs. 6"*, and then *"Paul winning hole 11 when I broke the tie is
+    also not the most important fact, it is that the rabbit lost and is
+    loose."*
+
+    The ENGINE was right throughout — `_advance_rabbit` frees a rabbit whose
+    holder is outscored whether or not anybody won the hole outright. What was
+    wrong is what the card chose to report.
+    """
+
+    def _freed_by_a_tie(self):
+        """Paul holds it at +1 and is beaten by both, who tie with each other."""
+        self._setup()
+        self._hole(7, 3, 5, 5)            # Paul catches it, +1
+        self._hole(8, 6, 4, 4)            # both beat him, tied — freed
+        return self._card(8)['result']
+
+    def test_the_rabbit_goes_loose_even_with_no_outright_winner(self):
+        r = self._freed_by_a_tie()
+        self.assertEqual(r['event'], 'freed')
+        self.assertIsNone(r['winner_short'], 'nobody won the hole outright')
+        self.assertIsNone(r['holder_id'], 'and nobody holds the rabbit')
+
+    def test_the_verdict_names_the_rabbit_not_the_hole(self):
+        r = self._freed_by_a_tie()
+        self.assertEqual(r['verdict'], 'Rabbit loose — P lost it')
+        self.assertNotIn('outright', r['verdict'])
+
+    def test_the_nets_are_the_pair_the_engine_compared(self):
+        # The two LOWEST are 4 and 4 — the two who tied — which says nothing
+        # about the rabbit. The comparison that freed it is the field's 4
+        # against the holder's 6.
+        r = self._freed_by_a_tie()
+        self.assertEqual(r['nets'], 'net 4 v 6')
+
+    def test_no_line_ever_prints_a_literal_None(self):
+        # `winner_short` is None exactly on a tie, and the FREED and BEATEN
+        # sentences both named it.
+        r = self._freed_by_a_tie()
+        self.assertNotIn('None', r['line'])
+        self.assertIn('Beaten by the field', r['line'])
+
+    def test_a_lead_of_two_survives_the_same_hole_and_still_says_nothing_None(self):
+        self._setup()
+        for h in (7, 8):
+            self._hole(h, 3, 5, 5)        # Paul to +2
+        self._hole(9, 6, 4, 4)            # beaten by both, tied
+        r = self._card(9)['result']
+        self.assertEqual(r['event'], 'beaten')
+        self.assertEqual(r['verdict'], 'P beaten, lead +1')
+        self.assertEqual(r['nets'], 'net 4 v 6')
+        self.assertNotIn('None', r['line'])
+
+    def test_breaking_the_tie_still_leads_with_the_rabbit(self):
+        # Paul's second message: an outright winner does not make the hole
+        # the headline. The rabbit is still what moved.
+        self._setup()
+        self._hole(7, 5, 5, 3)            # Sam catches it, +1
+        self._hole(8, 4, 6, 6)            # Paul wins outright — Sam loses it
+        r = self._card(8)['result']
+        self.assertEqual(r['event'], 'freed')
+        self.assertEqual(r['verdict'], 'Rabbit loose — S lost it')
+        self.assertEqual(r['nets'], 'net 4 v 6')
+        self.assertIn('knocked it loose', r['line'])
+
+    def test_a_catch_names_the_man_who_caught_it(self):
+        self._setup()
+        r = (self._hole(7, 3, 5, 5), self._card(7)['result'])[1]
+        self.assertEqual(r['verdict'], 'P catches it')
+
+    def test_a_loose_hole_compares_the_best_against_the_runner_up(self):
+        # Nobody holds it, so the pair that matters is whether anyone got
+        # clear of the field.
+        self._setup()
+        self._hole(7, 4, 4, 6)            # tied low, stays loose
+        r = self._card(7)['result']
+        self.assertEqual(r['verdict'], 'Still loose')
+        self.assertEqual(r['nets'], 'net 4 v 4')
+
+
 class RabbitHoleCardTests(_RabbitCardBase):
     """`rabbit_hole_card` — what the score-entry screen draws for one hole
     (`~/Downloads/handoff-rabbit-score-entry`)."""

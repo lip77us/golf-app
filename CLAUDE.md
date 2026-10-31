@@ -8071,3 +8071,50 @@ three writers and two readers had to change and only some did. The guards in
 start a session, what the tap handler sets, what the gate asks, and that no
 clear inside `_handleScore` is unguarded — because each of the three bugs was
 a different site reading correctly on its own.
+
+### The chip reported the hole; the rabbit is the point
+
+Paul, 30 Oct 2026, three messages about one hole. He held the rabbit at +1,
+the other two tied — and both beat him:
+
+> *"It says hole 11, no outright winner, but that is not the relevant fact.
+> Rabbit lost is more important."* … *"It should say net 4 vs. 6."* … *"And
+> Paul winning hole 11 when I broke the tie is also not the most important
+> fact, it is that the rabbit lost and is loose."*
+
+**The engine was right throughout.** `_advance_rabbit` frees a rabbit whose
+holder is outscored whether or not anybody won the hole outright, so the
+rabbit really had gone loose. What was wrong is what the card chose to
+report, in three ways:
+
+- **The verdict named the HOLE.** `Paul wins hole 10`, or `No outright
+  winner` on a tie. The third message is what settles the design rather than
+  patching the tie case: a hole is only interesting here for what it does to
+  the rabbit, so `_rabbit_verdict` says that and nothing else —
+  `Rabbit loose — P lost it`, `P catches it`, `P beaten, lead +1`,
+  `P extends to +3`, `P keeps it`, `Still loose`. Short on purpose, because
+  `line` carries the explanation and two sentences saying one thing is how
+  they come to disagree.
+- **The nets were the two LOWEST scores**, which on that hole read
+  `net 4 v 4` — the two who tied with each other, saying nothing about the
+  rabbit. Every transition in the engine is **the holder against the best of
+  the others**, so that is the pair, lower first: `net 4 v 6`. When the
+  rabbit is loose there is no holder, so it stays best-against-runner-up,
+  which is what decides a catch.
+- **The colour.** Now the holder AFTER the hole, so a loose rabbit is
+  neutral — it belongs to nobody, which is the fill being *right* rather
+  than a fallback.
+
+**And two sentences printed a literal `None`.** `winner_short` is None
+exactly on a tie, and both the FREED and BEATEN lines named it — so that hole
+also read `None knocked it loose`. Reachable only when the holder is beaten by
+everybody while they tie with each other, which is precisely the hole
+reported. They say `Beaten by the field` now.
+
+`verdict` and `nets` are finished strings from the server, like `line`, so
+the chip cannot disagree with the engine about what happened.
+
+Fixtures regenerated (`REGEN_RABBIT_FIXTURES=1`). Tests:
+`TheChipReportsTheRabbitTests` (`scoring/tests/test_rabbit.py`, 8 — both the
+tied hole and the broken tie landing on `net 4 v 6`) and the `tray` group in
+`mobile/test/rabbit_entry_test.dart`.
