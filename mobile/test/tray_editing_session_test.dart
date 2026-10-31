@@ -44,6 +44,34 @@ void main() {
       });
     }
 
+    test('the Rabbit tray gate asks only about the cursor', () {
+      // A session always has a golfer under the keypad, so asking about the
+      // flag here was redundant — and an edit inside a session used to clear
+      // the cursor while leaving the flag set, which neither the tray nor the
+      // keypad would draw on a fully scored hole. The bottom bar fell through
+      // to the bare pager: "a blank bottom, not the hole summary".
+      final src = File(files['rabbit']!).readAsStringSync();
+      final at = src.indexOf('if (allDone &&');
+      expect(at, greaterThan(0), reason: 'the tray gate moved');
+      final line = src.substring(at, src.indexOf('\n', at));
+      expect(line, contains('_editingPlayerId == null'));
+      expect(line.contains('_trayEditing'), isFalse,
+          reason: 'the cursor is the only question: $line');
+    });
+
+    test('an edit inside a session keeps its cursor', () {
+      final src = File(files['rabbit']!).readAsStringSync();
+      final at = src.indexOf('void _handleScore(');
+      expect(at, greaterThan(0));
+      // Bounded by the function's own end, not a character count.
+      final body = src.substring(at, src.indexOf('\n  }', at));
+      for (final m in RegExp(r'[^\n]*_editingPlayerId = null[^\n]*')
+          .allMatches(body)) {
+        expect(m.group(0), contains('!_trayEditing'),
+            reason: 'only a one-shot ends on the score: ${m.group(0)}');
+      }
+    });
+
     test('the Rabbit tap handler sets the cursor and nothing else', () {
       final src = File(files['rabbit']!).readAsStringSync();
       final at = src.indexOf('onTapPlayer:');

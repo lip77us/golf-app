@@ -8039,3 +8039,35 @@ missed read correctly at its call site. So
 assignment** in both screens — the nearest handler named above a
 `_trayEditing = true` must be `onEdit` — rather than at the handler that
 happened to be wrong. Both halves were checked by putting the old line back.
+
+### The state nothing drew — a blank bottom
+
+*"When I click and enter the 3rd golfer, it is a blank bottom, not the hole
+summary."* (30 Oct 2026.) The third golfer is the last one, so this is the
+hole completing — and the bottom bar had a fourth state nobody had drawn.
+
+`_handleScore`'s edit-a-complete-hole branch cleared `_editingPlayerId`
+**unconditionally**, so an edit inside an `Edit scores` session left
+`_trayEditing` true with no golfer under the cursor. On a fully scored hole
+`_hotSpotIdx` returns −1, so `_keypadMember` had nobody to offer and the
+keypad did not draw; the tray's gate still read `!_trayEditing`, so the tray
+did not draw either. The bottom bar fell through to the bare pager.
+
+Two fixes, and the second is why it can't come back:
+
+- **A session keeps its cursor.** Only a one-shot ends on the score — the
+  same rule the keypad's own `onScore` already followed. That branch predates
+  sessions, so it had never had to know about them.
+- **The tray gate asks only about the cursor.** A session always has a golfer
+  being edited, so `!_trayEditing` was redundant there — and redundant plus
+  reachable is what made the empty state drawable at all. With the cursor as
+  the only question the two states cover everything: a golfer is being
+  edited, or the hole is reported.
+
+**Third report in a row from one flag gaining a meaning.** `_trayEditing`
+meant "do not draw the tray" and became "stay on this golfer until Done";
+three writers and two readers had to change and only some did. The guards in
+`mobile/test/tray_editing_session_test.dart` now pin all four facts — who may
+start a session, what the tap handler sets, what the gate asks, and that no
+clear inside `_handleScore` is unguarded — because each of the three bugs was
+a different site reading correctly on its own.

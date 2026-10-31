@@ -210,7 +210,15 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
       // for a correction, so persist it immediately — otherwise the change is
       // lost the moment the user navigates to another hole.  Auto-advance
       // deliberately does not fire on an edit.
-      setState(() => _editingPlayerId = null);
+      //
+      // **A session keeps its cursor.** This cleared it unconditionally, so
+      // an edit inside an `Edit scores` session left `_trayEditing` true with
+      // no golfer being edited — a state neither the tray nor the keypad
+      // draws, because every hole was scored and `_hotSpotIdx` had nobody to
+      // offer. The bottom bar fell through to the bare pager (Paul, 30 Oct
+      // 2026: "a blank bottom, not the hole summary"). Same rule as the
+      // keypad's own `onScore`: only a ONE-SHOT ends on the score.
+      if (!_trayEditing) setState(() => _editingPlayerId = null);
       _saveHole(ctx, hole, players);
       return;
     }
@@ -819,7 +827,13 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
     // result is still coming — so a slow card never strands them on a hole.
     final card = _card(rp);
     if (card != null && !isComplete) {
-      if (allDone && !_trayEditing && _editingPlayerId == null) {
+      // **The cursor decides, and `_trayEditing` is not consulted.** A
+      // session always has a golfer under the keypad, so testing the flag
+      // here was redundant — and redundant plus reachable is how the blank
+      // bottom above became drawable at all. With the cursor as the only
+      // question the two states cover everything: a golfer is being edited,
+      // or the hole is reported.
+      if (allDone && _editingPlayerId == null) {
         return SafeArea(
           child: RabbitHoleTray(
             card: card,
