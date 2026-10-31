@@ -8212,3 +8212,37 @@ inherits everything it did**, and the guard
 (`mobile/test/tray_last_hole_test.dart`) is written at both call sites rather
 than the one that was reported, since these two trays are the only controls
 in the app that take the pager away.
+
+### One tray header, three trays
+
+Asked for after Rabbit's `Edit scores` was fixed and Sixes and Annandale
+Friday were left guessing (Paul, 31 Oct 2026): *"fix the behaviour of the
+edit buttons in Annandale and sixes to be consistent."*
+
+Making the change a second and third time is what said it was the wrong
+shape. All three trays drew the same head — `All N scores in` and the button
+— each in its own file, so a one-line behaviour change was three edits and
+the first pass made one. `widgets/tray_edit_header.dart` is now the only
+place that row exists, and a guard asserts no tray spells `Edit scores`
+itself.
+
+**Two gates had to move with it.** `afTray` and `sixTray` both read
+`!_trayEditing`, which was redundant while the flag always came with a cursor
+— and becomes the state nothing draws the moment Edit stops choosing one.
+Exactly what Rabbit hit. The cursor is the only question on all three now.
+
+**The no-guess rule is checked at every Edit button**, inside the loop that
+already walks each `_trayEditing` assignment, rather than at the one that was
+reported. That loop is the third guard in this file to be widened after a fix
+reached one screen and not its siblings; the pattern is reliable enough to
+reach for first.
+
+**A fourth `Edit scores` exists and has never rendered.**
+`widgets/forty_balls_picker.dart` draws one behind `if (onEditScores !=
+null)`, and **nothing passes it** — the picker is constructed in exactly one
+place, without it. So the 40 Balls tray has no way to correct a score at all,
+and the button that would offer it has been dead since it was written. It is
+deliberately NOT swept into the shared header: that tray rises before every
+score is in (its title has two states) and the group has a ball COUNT to
+re-pick as well as scores, so what its edit should do is a question rather
+than a copy. Left for its own look.

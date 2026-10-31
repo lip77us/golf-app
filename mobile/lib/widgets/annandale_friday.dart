@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 
 import '../api/models.dart';
 import '../theme/halved_brand.dart';
+import 'tray_edit_header.dart';
 
 /// Team colours, in team order. With five, the three is team 2 — so every
 /// opponent of the pair wears clay, which is what the packet draws.
@@ -133,6 +134,7 @@ class AnnandaleTeamHeader extends StatelessWidget {
 class AnnandaleHoleTray extends StatelessWidget {
   const AnnandaleHoleTray({
     super.key,
+    this.picking = false,
     required this.summary,
     required this.hole,
     required this.nextHole,
@@ -150,6 +152,9 @@ class AnnandaleHoleTray extends StatelessWidget {
 
   /// The hole is saved on the phone and has not reached the server.
   final bool notSynced;
+
+  /// `Edit scores` pressed and no golfer chosen yet — see [TrayEditHeader].
+  final bool picking;
 
   final AnnandaleFridaySummary summary;
   final int hole;
@@ -189,19 +194,11 @@ class AnnandaleHoleTray extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(children: [
-            Text('All $playerCount scores in',
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w700)),
-            const Spacer(),
-            TextButton(
-              onPressed: onEdit,
-              style: TextButton.styleFrom(
-                  foregroundColor: Halved.brightMint,
-                  minimumSize: const Size(44, 40)),
-              child: const Text('Edit scores'),
-            ),
-          ]),
+          TrayEditHeader(
+            title: 'All $playerCount scores in',
+            picking: picking,
+            onEdit: onEdit,
+          ),
           Text('HOLE $hole · NASSAU · ${nine.toUpperCase()}',
               style: const TextStyle(
                   color: _dim, fontSize: 11, fontWeight: FontWeight.w700,

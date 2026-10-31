@@ -44,20 +44,39 @@ void main() {
               .group(0);
           expect(owner, 'onEdit',
               reason: 'a $owner handler must not start a session');
+
+          // **And it picks nobody.** Opening on `players.first` put the
+          // keypad on a golfer you did not ask for, so a quick tap changed
+          // the wrong man's score. Checked at every Edit button in the app
+          // rather than the one that was reported — Rabbit was fixed first
+          // and Sixes and Annandale kept guessing for an hour.
+          final end = src.indexOf('}),', at);
+          final body = src.substring(at, end > at ? end : at);
+          expect(body.contains('players.first'), isFalse,
+              reason: 'Edit must not guess a golfer: $body');
+          expect(body, contains('= null'),
+              reason: 'Edit must clear the cursor: $body');
         }
       });
     }
 
-    test('Edit scores picks nobody', () {
-      // It opened on `players.first`, so coming back to fix one golfer's
-      // score put the keypad on another (Paul, 31 Oct 2026).
-      final src = File(files['rabbit']!).readAsStringSync();
-      final at = src.indexOf('onEdit: () => setState(() {');
-      expect(at, greaterThan(0));
-      final body = src.substring(at, src.indexOf('}),', at));
-      expect(body, contains('_editingPlayerId = null'));
-      expect(body.contains('players.first'), isFalse,
-          reason: 'the session must not guess a golfer');
+    test('one header for all three trays', () {
+      // Rabbit, Sixes and Annandale Friday each drew `All N scores in` and
+      // its Edit button themselves, so the change had to be made three
+      // times — and the first pass made it once.
+      const trays = [
+        'lib/widgets/rabbit_entry.dart',
+        'lib/widgets/sixes_entry.dart',
+        'lib/widgets/annandale_friday.dart',
+      ];
+      for (final f in trays) {
+        final src = File(f).readAsStringSync();
+        expect(src, contains('TrayEditHeader('), reason: '$f draws its own');
+        expect(src.contains("'Edit scores'"), isFalse,
+            reason: '$f still spells the button itself');
+      }
+      expect(File('lib/widgets/tray_edit_header.dart').readAsStringSync(),
+          contains("'Edit scores'"));
     });
 
     test('the Rabbit tray gate asks only about the cursor', () {

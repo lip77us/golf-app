@@ -25,6 +25,7 @@ import 'package:flutter/material.dart';
 
 import '../api/models.dart';
 import '../theme/halved_brand.dart';
+import 'tray_edit_header.dart';
 import 'dashed_border.dart';
 import 'forty_balls_keypad.dart';
 import 'stroke_dots.dart';
@@ -413,6 +414,9 @@ class SixesHoleTray extends StatelessWidget {
   /// Saved on the phone, not yet at the server.
   final bool notSynced;
 
+  /// `Edit scores` pressed and no golfer chosen yet — see [TrayEditHeader].
+  final bool picking;
+
   const SixesHoleTray({
     super.key,
     required this.card,
@@ -423,6 +427,7 @@ class SixesHoleTray extends StatelessWidget {
     this.onSetTeams,
     this.gettingResult = false,
     this.notSynced = false,
+    this.picking = false,
   });
 
   @override
@@ -441,21 +446,11 @@ class SixesHoleTray extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(children: [
-            Expanded(
-              child: Text('All ${card.players.length} scores in',
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w700)),
-            ),
-            TextButton(
-              onPressed: onEdit,
-              style: TextButton.styleFrom(
-                  foregroundColor: Halved.brightMint,
-                  minimumSize: const Size(44, 40)),
-              child: const Text('Edit scores'),
-            ),
-          ]),
+          TrayEditHeader(
+            title: 'All ${card.players.length} scores in',
+            picking: picking,
+            onEdit: onEdit,
+          ),
           _labelRow(
             'HOLE ${card.hole} · MATCH ${card.match.number}',
             stake == null ? '' : '\$${_money(stake)} A MATCH',

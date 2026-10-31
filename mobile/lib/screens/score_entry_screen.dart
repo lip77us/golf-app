@@ -3009,8 +3009,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         ? rp.annandaleFridaySummary : null;
     // The tray rises after the last score — and only then. Editing (the
     // button, or tapping a golfer) puts the keypad back over it.
-    final afTray = af != null && fbActive && allDone &&
-        _editHotPid == null && !_trayEditing;
+    // **The cursor decides; `_trayEditing` only says the tray is PICKING.**
+    // It used to suppress the tray, which was redundant (a session always has
+    // a golfer under the keypad) until Edit stopped choosing one — then the
+    // flag with no cursor was a state nothing drew. Rabbit hit exactly that.
+    final afTray = af != null && fbActive && allDone && _editHotPid == null;
     var fbIdx = fbActive ? _hotSpotIdx(players, scores) : -1;
     if (fbActive && _editHotPid != null) {
       // The same override the inline picker uses when a scorer taps back to
@@ -3031,8 +3034,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     _ensureSixesCard(rp);
     final six = _sixesCard(rp);
     final sixBand = six != null && fbActive && !six.match.teamsSet;
-    final sixTray = six != null && fbActive && allDone && !sixBand &&
-        _editHotPid == null && !_trayEditing;
+    final sixTray =
+        six != null && fbActive && allDone && !sixBand && _editHotPid == null;
 
     return SafeArea(
       child: Column(
@@ -3074,9 +3077,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               gettingResult: rp.trayResultPending(_selectedHole) ||
                   _hasRealPending(_selectedHole),
               notSynced: rp.trayHoleUnsynced(_selectedHole),
+              // **It picks nobody**, the same as Rabbit's: opening on
+              // `players.first` put the keypad on a golfer you did not ask
+              // for, and a quick tap changed the wrong man's score. The tray
+              // stays up saying to tap one, which the card above already
+              // supported.
+              picking: _trayEditing,
               onEdit: () => setState(() {
-                _trayEditing = true;
-                _editHotPid = players.first.player.id;
+                _trayEditing = !_trayEditing;
+                _editHotPid = null;
               }),
             )
           else if (afTray)
@@ -3089,9 +3098,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               gettingResult: rp.annandaleResultPending(_selectedHole) ||
                   _hasRealPending(_selectedHole),
               notSynced: rp.annandaleHoleUnsynced(_selectedHole),
+              // Picks nobody — see the Sixes tray above.
+              picking  : _trayEditing,
               onEdit   : () => setState(() {
-                _trayEditing = true;
-                _editHotPid = players.first.player.id;
+                _trayEditing = !_trayEditing;
+                _editHotPid = null;
               }),
               onPress  : (m, start) => _afPress(rp, m, start),
             )

@@ -23,6 +23,7 @@ import 'package:flutter/material.dart';
 import '../api/models.dart';
 import '../theme/halved_brand.dart';
 import 'dashed_border.dart';
+import 'tray_edit_header.dart';
 import 'forty_balls_keypad.dart';
 import 'stroke_dots.dart';
 
@@ -445,27 +446,11 @@ class RabbitHoleTray extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(children: [
-            Expanded(
-              child: Text('All ${card.players.length} scores in',
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w700)),
-            ),
-            TextButton(
-              onPressed: onEdit,
-              style: TextButton.styleFrom(
-                  foregroundColor: Halved.brightMint,
-                  minimumSize: const Size(44, 40)),
-              child: Text(picking ? 'Done' : 'Edit scores'),
-            ),
-          ]),
-          if (picking)
-            const Padding(
-              padding: EdgeInsets.only(top: 2, bottom: 2),
-              child: Text('Tap a score above to change it',
-                  style: TextStyle(color: Halved.brightMint, fontSize: 12)),
-            ),
+          TrayEditHeader(
+            title: 'All ${card.players.length} scores in',
+            picking: picking,
+            onEdit: onEdit,
+          ),
           _labelRow(
             card.rabbit.isExtra
                 ? 'HOLE ${card.hole} · EXTRA RABBIT'
