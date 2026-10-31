@@ -54,7 +54,6 @@ Future<void> _pump(WidgetTester t, StrokePlayBoardData d,
     ));
 
 void main() {
-  _handicapLabel();
   group('the meta line', () {
     testWidgets('states the basis and the counting rule', (t) async {
       await _pump(t, _board(rows: [_row(rank: 1, name: 'Paul', toPar: -2)]));
@@ -352,29 +351,3 @@ void main() {
   });
 }
 
-/// Both handicaps, because they answer different questions.
-///
-/// The index is who a golfer is; the CH is what he is getting today, and
-/// that is the one you need to read a net figure — "the index shows, but not
-/// the gets, so I don't know the players CH" (Paul, 31 Oct 2026). The label
-/// is composed on the leaderboard, so this is where it is pinned.
-void _handicapLabel() {
-  group('the row names both handicaps', () {
-    final src = File('lib/screens/leaderboard_screen.dart').readAsStringSync();
-
-    test('index and CH, not one or the other', () {
-      final at = src.indexOf('handicapLabel:');
-      expect(at, greaterThan(0));
-      final body = src.substring(at, src.indexOf('toPar:', at));
-      expect(body, contains(r"$index · CH "));
-    });
-
-    test('an older payload with no index still names the CH', () {
-      final at = src.indexOf('handicapLabel:');
-      final body = src.substring(at, src.indexOf('toPar:', at));
-      expect(body, contains('index.isNotEmpty'));
-      expect("CH ".allMatches(body).length, greaterThanOrEqualTo(2),
-          reason: 'both arms must name the CH');
-    });
-  });
-}

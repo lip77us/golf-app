@@ -490,6 +490,14 @@ def points_531_summary(foursome) -> dict:
         m.player_id: _phcp_in_play(m.playing_handicap or 0)
         for m in real_members
     }
+    # **CH and the index, beside the effective handicap.** Three different
+    # numbers: the index is who a golfer is, the CH is what he plays off
+    # today, and `phcp_in_play` is what THIS game gives him after its own
+    # allowance. The board showed none of them, so a net figure could not be
+    # checked against anything (Paul, 31 Oct 2026).
+    ch_by_pid = {m.player_id: m.course_handicap for m in real_members}
+    idx_by_pid = {m.player_id: str(m.player.handicap_index or '')
+                  for m in real_members}
 
     # Money via the shared wager engine. The classic 5-3-1 is the
     # constant-baseline case of vs-average settlement: because a hole is
@@ -530,6 +538,8 @@ def points_531_summary(foursome) -> dict:
             'holes_played': hp,
             'money'       : float(payouts[pid]),
             'phcp_in_play': phcp_by_pid.get(pid),
+            'course_handicap': ch_by_pid.get(pid),
+            'handicap_index' : idx_by_pid.get(pid, ''),
         })
     # Leaderboard: money desc, then name for stable ordering.
     players_out.sort(key=lambda e: (-e['money'], e['name']))

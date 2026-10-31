@@ -1,4 +1,5 @@
 import '../api/models.dart';
+import 'handicap_label.dart';
 
 /// One shape for the Rabbit board.
 ///
@@ -113,6 +114,10 @@ class RabbitBoardData {
             shortName: s.players[i].shortName,
             colourIndex: i,
             money: s.players[i].money,
+            handicapLabel: handicapLabel(
+              index: s.players[i].handicapIndex,
+              courseHandicap: s.players[i].courseHandicap,
+            ),
           ),
       ],
       rabbits: [
@@ -170,6 +175,7 @@ class RabbitBoardGolfer {
     required this.shortName,
     required this.colourIndex,
     required this.money,
+    this.handicapLabel = '',
   });
 
   final int playerId;
@@ -177,6 +183,10 @@ class RabbitBoardGolfer {
   final String shortName;
   final int colourIndex;
   final double money;
+  /// `16.2 · CH 14`, composed by `utils/handicap_label.dart`. Empty when the
+  /// server sends neither — an older payload, or a game set up before the
+  /// numbers were added.
+  final String handicapLabel;
 
   /// `Lipkin` — the surname, muted, after the first name. Empty when the
   /// golfer has only one name to go on.

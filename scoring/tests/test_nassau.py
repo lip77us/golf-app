@@ -52,6 +52,29 @@ class NassauTests(TestCase):
 
     # ── 2v2 best-ball, gross ──────────────────────────────────────────────
 
+    def test_each_side_carries_its_golfers_handicaps(self):
+        # The board names SIDES, so the per-golfer CH and index go UNDER each
+        # side — and they have to be on the team block to get there (Paul, 31
+        # Oct 2026: "add the CH to all four boards"). There is no configured
+        # Nassau round in the local database, so this is what stands in for
+        # checking it against real data.
+        setup_nassau(self.fs, self.team1, self.team2, handicap_mode='net')
+        teams = nassau_summary(self.fs)['teams']
+        for side in ('team1', 'team2'):
+            self.assertTrue(teams[side], side)
+            for p in teams[side]:
+                self.assertIn('course_handicap', p)
+                self.assertIn('handicap_index', p)
+        # Keyed by ID, not short name: this fixture's four golfers are
+        # T1A/T1B/T2A/T2B, whose auto-initials are all `T`.
+        by_id = {p['player_id']: p for p in teams['team1'] + teams['team2']}
+        # The fixture's handicaps are 8 / 12 / 16 / 20, and `make_foursome`
+        # sets the course handicap to the same figure.
+        self.assertEqual(
+            [by_id[self.pid[n]]['course_handicap']
+             for n in ('T1A', 'T1B', 'T2A', 'T2B')],
+            [8, 12, 16, 20])
+
     def test_gross_2v2_team1_wins_front9_by_one(self):
         """T1 best-ball beats T2 best-ball on 5 of 9 holes → 1 UP F9."""
         setup_nassau(self.fs, self.team1, self.team2,

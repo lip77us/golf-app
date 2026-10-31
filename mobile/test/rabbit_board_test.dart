@@ -58,7 +58,8 @@ RabbitSummary _rabbit({
       'segments': segments,
       'players': players ?? [
         {'player_id': 1, 'name': 'Paul Lipkin', 'short_name': 'Paul',
-         'money': 20.0, 'segments_won': 2, 'phcp_in_play': 0},
+         'money': 20.0, 'segments_won': 2, 'phcp_in_play': 0,
+         'handicap_index': '16.2', 'course_handicap': 14},
         {'player_id': 2, 'name': 'Sam Reid', 'short_name': 'Sam',
          'money': -5.0, 'segments_won': 1, 'phcp_in_play': 0},
         {'player_id': 3, 'name': 'Dave Moran', 'short_name': 'Dave',
@@ -99,7 +100,37 @@ Map<String, dynamic> _card() => {
       'holes_in_play': [for (var h = 1; h <= 18; h++) h],
     };
 
+
+/// The handicap, because a net figure cannot be checked against nothing.
+///
+/// The board named neither number until 31 Oct 2026 — "add the CH to all
+/// four boards". The label itself is `utils/handicap_label.dart`.
+void _handicapOnTheLedger() {
+  group('the ledger names the handicap', () {
+    testWidgets('index and CH, beside the name', (t) async {
+      await _pump(t, RabbitBoardData.fromSummary(_rabbit(
+        segments: [_seg(1, 1, 6, holder: 1, complete: true, payout: 10)],
+        holes: [_hole(1, 1, holder: 1, lead: 1)],
+      )));
+      expect(find.textContaining('16.2 · CH 14'), findsOneWidget);
+    });
+
+    testWidgets('a payload with neither shows no empty separator', (t) async {
+      await _pump(t, RabbitBoardData.fromSummary(_rabbit(
+        segments: [_seg(1, 1, 6, holder: 1, complete: true, payout: 10)],
+        holes: [_hole(1, 1, holder: 1, lead: 1)],
+        players: [
+          {'player_id': 1, 'name': 'Paul Lipkin', 'short_name': 'Paul',
+           'money': 20.0, 'segments_won': 2, 'phcp_in_play': 0},
+        ],
+      )));
+      expect(find.textContaining(' · CH'), findsNothing);
+    });
+  });
+}
+
 void main() {
+  _handicapOnTheLedger();
   group('stroke by stroke', () {
     // The three cards above answer where the RABBIT went. Where the STROKES
     // fall is a different question, and after score entry lost its own grid

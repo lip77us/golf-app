@@ -149,27 +149,60 @@ class _SidesCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-        child: Row(children: [
-          _Swatch(_sideColour(data, 0)),
-          Flexible(
-            child: Text(data.sides[0].name,
-                maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontSize: 13.5, fontWeight: FontWeight.w700)),
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 10),
-            child: Text('vs',
-                style: TextStyle(fontSize: 12, color: Halved.muted)),
-          ),
-          _Swatch(_sideColour(data, 1)),
-          Flexible(
-            child: Text(data.sides[1].name,
-                maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontSize: 13.5, fontWeight: FontWeight.w700)),
-          ),
-        ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(children: [
+              _Swatch(_sideColour(data, 0)),
+              Flexible(
+                child: Text(data.sides[0].name,
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 13.5, fontWeight: FontWeight.w700)),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10),
+                child: Text('vs',
+                    style: TextStyle(fontSize: 12, color: Halved.muted)),
+              ),
+              _Swatch(_sideColour(data, 1)),
+              Flexible(
+                child: Text(data.sides[1].name,
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 13.5, fontWeight: FontWeight.w700)),
+              ),
+            ]),
+            // **Under the side, not inside it.** The row above names the
+            // SIDE, which is the right unit for a match; a 2v2 cannot carry
+            // four handicaps on that line. Each column sits under its own
+            // side so a reader can tell whose is whose.
+            if (data.sides.any((s) => s.golfers.isNotEmpty)) ...[
+              const SizedBox(height: 5),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < 2; i++)
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (final g in data.sides[i].golfers)
+                            Text(g,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 10.5, color: Halved.muted)),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
       );
 }
 

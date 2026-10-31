@@ -1,4 +1,5 @@
 import '../api/models.dart';
+import 'handicap_label.dart';
 
 /// One shape for the Points 5-3-1 board.
 ///
@@ -177,6 +178,10 @@ class PointsBoardData {
             colourIndex: i,
             points: totals[roster[i].id]?.points ?? 0,
             money: totals[roster[i].id]?.money ?? 0,
+            handicapLabel: handicapLabel(
+              index: totals[roster[i].id]?.handicapIndex,
+              courseHandicap: totals[roster[i].id]?.courseHandicap,
+            ),
           ),
       ],
       holes: {
@@ -222,6 +227,7 @@ class PointsBoardGolfer {
     required this.colourIndex,
     required this.points,
     required this.money,
+    this.handicapLabel = '',
   });
 
   final int playerId;
@@ -237,6 +243,10 @@ class PointsBoardGolfer {
   /// The SERVER's signed figure, honouring pool, pay-above, pay-leader and
   /// the loss cap. Never recomputed here.
   final double money;
+  /// `16.2 · CH 14`, composed by `utils/handicap_label.dart`. Empty when the
+  /// server sends neither — an older payload, or a game set up before the
+  /// numbers were added.
+  final String handicapLabel;
 
   /// The surname, when the full name carries one the short name does not.
   ///

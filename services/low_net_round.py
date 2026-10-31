@@ -175,6 +175,9 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
                 'par_played'   : 0,
                 'foursome_id'  : fs.pk,
                 'handicap'     : m.playing_handicap,
+                # The TRUE course handicap — `handicap` is the playing one
+                # and differs on a mixed-par card. The board's label says CH.
+                'course_handicap': m.course_handicap,
                 # The INDEX as well as the playing handicap: the board draws
                 # the index beside a name (Design's stroke play packet), and
                 # the two answer different questions — CH is what you play
@@ -233,6 +236,7 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
             'par_played'  : 0,
             'foursome_id' : fid,
             'handicap'    : membership.playing_handicap,
+            'course_handicap': membership.course_handicap,
             'handicap_index': str(membership.player.handicap_index or ''),
             'holes'       : {},   # {hole_number: {par, gross, net_adj, capped}}
         })
@@ -342,6 +346,7 @@ def _rank_standings(player_totals, payouts_cfg, excluded_ids) -> list:
             'excluded'    : is_excluded,
             'payout'      : payout,
             'handicap'    : data.get('handicap', 0),  # raw playing handicap
+            'course_handicap': data.get('course_handicap'),
             'handicap_index': data.get('handicap_index', ''),
             'holes'       : data.get('holes', {}),   # {hole_number: hole_data}
             # Prospective full-round stroke allocation (all holes in play) +

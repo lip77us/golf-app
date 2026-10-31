@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' show Color;
 
 import '../api/models.dart';
+import 'handicap_label.dart';
 
 /// One shape for the Nassau board, whatever produced it.
 ///
@@ -27,6 +28,15 @@ import '../api/models.dart';
 ///
 /// What IS derived here is layout: which tile belongs to which side, which
 /// nine a press sits on, and the words around a status the server decided.
+/// `Paul 16.2 · CH 16` per golfer, empty where the server sends neither.
+List<String> _handicaps(List<NassauPlayerInfo> team) => [
+      for (final p in team)
+        if (handicapLabel(
+                index: p.handicapIndex, courseHandicap: p.courseHandicap)
+            .isNotEmpty)
+          '${p.shortName} ${handicapLabel(index: p.handicapIndex, courseHandicap: p.courseHandicap)}',
+    ];
+
 class NassauBoardData {
   const NassauBoardData({
     required this.sides,
@@ -132,9 +142,9 @@ class NassauBoardData {
     return NassauBoardData(
       sides: [
         NassauSide(name: nameOf(s.team1), colourIndex: 0,
-            colour: side0Colour),
+            colour: side0Colour, golfers: _handicaps(s.team1)),
         NassauSide(name: nameOf(s.team2), colourIndex: 1,
-            colour: side1Colour),
+            colour: side1Colour, golfers: _handicaps(s.team2)),
       ],
       holes: holes,
       front:   NassauBetView.fromBet(s.front9,  label: 'Front', startHole: 1),
@@ -189,9 +199,17 @@ class NassauSide {
     required this.name,
     required this.colourIndex,
     this.colour,
+    this.golfers = const [],
   });
   final String name;
   final int colourIndex;
+
+  /// `Paul 16.2 · CH 16`, one per golfer on this side.
+  ///
+  /// The sides row names the SIDE — `Paul & Jim` — which is the right unit
+  /// for a match, so the handicaps go under it rather than inside it. A
+  /// four-name 2v2 cannot carry four of these on one line.
+  final List<String> golfers;
   /// An explicit colour that OVERRIDES the palette slot.
   ///
   /// A cup match's sides have their own declared colours and a board that

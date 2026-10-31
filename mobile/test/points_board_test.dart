@@ -36,7 +36,8 @@ Map<String, dynamic> _summary({
     'players': players ??
         [
           {'player_id': _paul, 'name': 'Paul Lipkin', 'short_name': 'Paul',
-           'points': 5.0 * thru, 'holes_played': thru, 'money': 2.0 * thru},
+           'points': 5.0 * thru, 'holes_played': thru, 'money': 2.0 * thru,
+           'handicap_index': '16.2', 'course_handicap': 14},
           {'player_id': _dave, 'name': 'Dave Moran', 'short_name': 'Dave',
            'points': 3.0 * thru, 'holes_played': thru, 'money': 0.0},
           {'player_id': _sam, 'name': 'Sam Reid', 'short_name': 'Sam',
@@ -97,7 +98,34 @@ Future<void> _pump(WidgetTester t, Map<String, dynamic> j,
   await t.pumpAndSettle();
 }
 
+
+/// The handicap, because a net figure cannot be checked against nothing.
+///
+/// The board named neither number until 31 Oct 2026 — "add the CH to all
+/// four boards". The label itself is `utils/handicap_label.dart`.
+void _handicapOnTheLedger() {
+  group('the ledger names the handicap', () {
+    testWidgets('index and CH, beside the name', (t) async {
+      await _pump(t, _summary(thru: 3));
+      expect(find.textContaining('16.2 · CH 14'), findsOneWidget);
+    });
+
+    testWidgets('a payload with neither shows no empty separator', (t) async {
+      await _pump(t, _summary(thru: 1, players: [
+        {'player_id': _paul, 'name': 'Paul Lipkin', 'short_name': 'Paul',
+         'points': 5.0, 'holes_played': 1, 'money': 2.0},
+        {'player_id': _dave, 'name': 'Dave Moran', 'short_name': 'Dave',
+         'points': 3.0, 'holes_played': 1, 'money': 0.0},
+        {'player_id': _sam, 'name': 'Sam Reid', 'short_name': 'Sam',
+         'points': 1.0, 'holes_played': 1, 'money': -2.0},
+      ]));
+      expect(find.textContaining(' · CH'), findsNothing);
+    });
+  });
+}
+
 void main() {
+  _handicapOnTheLedger();
   testWidgets('the hole just played leads the board', (t) async {
     await _pump(t, _summary(thru: 7));
     expect(find.text('HOLE 7 · PAR 3'), findsOneWidget);

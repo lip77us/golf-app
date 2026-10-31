@@ -2595,6 +2595,12 @@ class Points531PlayerTotal {
   final int    holesPlayed;
   final double money;
 
+  /// `16.2 · CH 14` — see `utils/handicap_label.dart`. The index is who a
+  /// golfer is and the CH is what he plays off today; a net figure cannot be
+  /// read against either one alone.
+  final int?    courseHandicap;
+  final String  handicapIndex;
+
   const Points531PlayerTotal({
     required this.playerId,
     required this.name,
@@ -2602,6 +2608,8 @@ class Points531PlayerTotal {
     required this.points,
     required this.holesPlayed,
     required this.money,
+    this.courseHandicap,
+    this.handicapIndex = '',
   });
 
   factory Points531PlayerTotal.fromJson(Map<String, dynamic> j) =>
@@ -2612,6 +2620,8 @@ class Points531PlayerTotal {
         points:      (j['points']      as num?)?.toDouble() ?? 0.0,
         holesPlayed: j['holes_played'] as int? ?? 0,
         money:       (j['money']       as num?)?.toDouble() ?? 0.0,
+        courseHandicap: (j['course_handicap'] as num?)?.toInt(),
+        handicapIndex: (j['handicap_index'] as String?) ?? '',
       );
 }
 
@@ -3048,6 +3058,12 @@ class SkinsPlayerTotal {
   final double payout;      // share of the pool (pool mode) / signed net (per-skin)
   final double net;         // signed, zero-sum net (+received / −owed) for Settlement
 
+  /// `16.2 · CH 14` — see `utils/handicap_label.dart`. The index is who a
+  /// golfer is and the CH is what he plays off today; a net figure cannot be
+  /// read against either one alone.
+  final int?    courseHandicap;
+  final String  handicapIndex;
+
   const SkinsPlayerTotal({
     required this.playerId,
     required this.name,
@@ -3057,6 +3073,8 @@ class SkinsPlayerTotal {
     required this.totalSkins,
     required this.payout,
     this.net = 0.0,
+    this.courseHandicap,
+    this.handicapIndex = '',
   });
 
   factory SkinsPlayerTotal.fromJson(Map<String, dynamic> j) =>
@@ -3069,6 +3087,8 @@ class SkinsPlayerTotal {
         totalSkins: j['total_skins'] as int? ?? 0,
         payout:     (j['payout']     as num?)?.toDouble() ?? 0.0,
         net:        (j['net']        as num?)?.toDouble() ?? 0.0,
+        courseHandicap: (j['course_handicap'] as num?)?.toInt(),
+        handicapIndex: (j['handicap_index'] as String?) ?? '',
       );
 }
 
@@ -4155,6 +4175,12 @@ class RabbitPlayerTotal {
   final int    segmentsWon;
   final int    phcpInPlay;
 
+  /// `16.2 · CH 14` — see `utils/handicap_label.dart`. The index is who a
+  /// golfer is and the CH is what he plays off today; a net figure cannot be
+  /// read against either one alone.
+  final int?    courseHandicap;
+  final String  handicapIndex;
+
   const RabbitPlayerTotal({
     required this.playerId,
     required this.name,
@@ -4162,6 +4188,8 @@ class RabbitPlayerTotal {
     required this.money,
     required this.segmentsWon,
     required this.phcpInPlay,
+    this.courseHandicap,
+    this.handicapIndex = '',
   });
 
   factory RabbitPlayerTotal.fromJson(Map<String, dynamic> j) =>
@@ -4172,6 +4200,8 @@ class RabbitPlayerTotal {
         money:       (j['money']       as num?)?.toDouble() ?? 0.0,
         segmentsWon: j['segments_won'] as int? ?? 0,
         phcpInPlay:  j['phcp_in_play'] as int? ?? 0,
+        courseHandicap: (j['course_handicap'] as num?)?.toInt(),
+        handicapIndex: (j['handicap_index'] as String?) ?? '',
       );
 }
 
@@ -4731,16 +4761,24 @@ class NassauPlayerInfo {
   final String name;
   final String shortName;
 
+  /// `16.2 · CH 14` — see `utils/handicap_label.dart`.
+  final int?   courseHandicap;
+  final String handicapIndex;
+
   const NassauPlayerInfo({
     required this.playerId,
     required this.name,
     required this.shortName,
+    this.courseHandicap,
+    this.handicapIndex = '',
   });
 
   factory NassauPlayerInfo.fromJson(Map<String, dynamic> j) => NassauPlayerInfo(
         playerId:  j['player_id']  as int,
         name:      j['name']       as String? ?? '',
         shortName: j['short_name'] as String? ?? '',
+        courseHandicap: (j['course_handicap'] as num?)?.toInt(),
+        handicapIndex: (j['handicap_index'] as String?) ?? '',
       );
 }
 

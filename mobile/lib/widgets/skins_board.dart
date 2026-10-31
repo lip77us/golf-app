@@ -445,11 +445,22 @@ class _LedgerRow extends StatelessWidget {
                         maxLines: 1, overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             fontSize: 15, fontWeight: FontWeight.w600)),
-                    if (golfer.thru != null)
+                    // **One under-line, not two.** The handicap and the
+                    // thru answer different questions but neither is worth
+                    // its own row in a four-name card, so they share one —
+                    // `16.2 · CH 16 · thru 9`.
+                    if (golfer.handicapLabel.isNotEmpty || golfer.thru != null)
                       Text(
-                          golfer.thru == 0
-                              ? 'not started'
-                              : 'thru ${golfer.thru}',
+                          [
+                            if (golfer.handicapLabel.isNotEmpty)
+                              golfer.handicapLabel,
+                            if (golfer.thru != null)
+                              golfer.thru == 0
+                                  ? 'not started'
+                                  : 'thru ${golfer.thru}',
+                          ].join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               fontSize: 11, color: Halved.muted)),
                   ],

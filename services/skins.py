@@ -923,6 +923,8 @@ def skins_summary(foursome) -> dict:
             'net'         : round(net_by_pid[pid], 2),
             'withdrew_after_hole': m.withdrew_after_hole,
             'phcp_in_play': _phcp_in_play(m.playing_handicap or 0),
+            'course_handicap': m.course_handicap,
+            'handicap_index' : str(m.player.handicap_index or ''),
         })
     players_out.sort(key=lambda x: (-x['total_skins'], x['name']))
 
@@ -975,6 +977,14 @@ def skins_summary(foursome) -> dict:
         m.player_id: _phcp_in_play(m.playing_handicap or 0)
         for m in real_members
     }
+    # **CH and the index, beside the effective handicap.** Three different
+    # numbers: the index is who a golfer is, the CH is what he plays off
+    # today, and `phcp_in_play` is what THIS game gives him after its own
+    # allowance. The board showed none of them, so a net figure could not be
+    # checked against anything (Paul, 31 Oct 2026).
+    ch_by_pid = {m.player_id: m.course_handicap for m in real_members}
+    idx_by_pid = {m.player_id: str(m.player.handicap_index or '')
+                  for m in real_members}
     from services.hole_plan import play_order as _play_order
     in_play = _play_order(foursome.round, foursome) or list(range(1, 19))
     holes_out: list = []

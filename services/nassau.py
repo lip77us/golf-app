@@ -1412,6 +1412,13 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
         .select_related('player')
         .filter(player__is_phantom=False)
     )
+    # **CH and the index, beside the effective handicap.** Three different
+    # numbers: the index is who a golfer is, the CH is what he plays off
+    # today, and `phcp_in_play` is what THIS game gives him after its own
+    # allowance. The board showed none of them (Paul, 31 Oct 2026).
+    ch_of  = {m.player_id: m.course_handicap for m in real_memberships}
+    idx_of = {m.player_id: str(m.player.handicap_index or '')
+              for m in real_memberships}
     real_phcps = [
         m.playing_handicap or 0 for m in real_memberships
         if m.playing_handicap is not None
@@ -1447,6 +1454,8 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
                 'name'         : p.name,
                 'short_name'   : p.short_name,
                 'phcp_in_play' : phcp_by_pid.get(p.id),
+                'course_handicap': ch_of.get(p.id),
+                'handicap_index' : idx_of.get(p.id, ''),
             }
             for p in teams[team_num].players.all()
         ]

@@ -36,7 +36,8 @@ NassauSummary _nassau({
       'press_unit': 5.0,
       'teams': {
         'team1': [
-          {'player_id': 1, 'name': 'Paul L', 'short_name': 'Paul'},
+          {'player_id': 1, 'name': 'Paul L', 'short_name': 'Paul',
+           'handicap_index': '16.2', 'course_handicap': 14},
           {'player_id': 2, 'name': 'Mike N', 'short_name': 'Mike'},
         ],
         'team2': [
@@ -61,7 +62,32 @@ Future<void> _pump(WidgetTester t, NassauBoardData d) => t.pumpWidget(
       ),
     );
 
+
+/// The handicap, because a net figure cannot be checked against nothing.
+///
+/// The board named neither number until 31 Oct 2026 — "add the CH to all
+/// four boards". Nassau names SIDES rather than golfers, so the handicaps go
+/// UNDER each side: a 2v2 cannot carry four of them on the sides line.
+void _handicapUnderTheSides() {
+  group('the sides card names each golfer\'s handicap', () {
+    testWidgets('under his own side, not inside the side name', (t) async {
+      await _pump(t, NassauBoardData.fromSummary(_nassau()));
+      expect(find.textContaining('Paul 16.2 · CH 14'), findsOneWidget);
+      // The side line itself is unchanged — it names the SIDE.
+      expect(find.textContaining('Paul & Mike'), findsOneWidget);
+    });
+
+    testWidgets('a golfer the server sent nothing for is simply absent',
+        (t) async {
+      await _pump(t, NassauBoardData.fromSummary(_nassau()));
+      expect(find.textContaining('Mike 16'), findsNothing);
+      expect(find.textContaining('Mike · CH'), findsNothing);
+    });
+  });
+}
+
 void main() {
+  _handicapUnderTheSides();
   _notStartedTests();
 
   group('claremont balls', () {

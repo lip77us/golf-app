@@ -36,6 +36,7 @@ import '../widgets/survivor_rail.dart';
 import 'tournament_settlement_screen.dart';
 import '../widgets/stroke_dots.dart';
 import '../widgets/pinned_hole_grid.dart';
+import '../utils/handicap_label.dart';
 import '../utils/nine_totals.dart';
 import '../utils/skins_board_model.dart';
 import '../widgets/skins_board.dart';
@@ -1800,15 +1801,16 @@ class _LowNetViewState extends State<_LowNetView> {
       playerId: r['player_id'] as int?,
       rank: r['rank'] as int? ?? 0,
       name: r['name']?.toString() ?? '—',
-      // **Both, because they answer different questions.** The index is who
-      // a golfer is; the CH is what he is getting today, and that is the one
-      // you need to read a net figure — "the index shows, but not the gets,
-      // so I don't know the players CH" (Paul, 31 Oct 2026). The packet asked
-      // for the index and it was right that CH alone is not identity; it is
-      // not either-or. An older payload has only the CH.
-      handicapLabel: index.isNotEmpty
-          ? '$index · CH ${r['handicap'] ?? 0}'
-          : 'CH ${r['handicap'] ?? 0}',
+      // Both, because they answer different questions — see
+      // `utils/handicap_label.dart`, which every board composes through.
+      // `course_handicap` is the true CH; `handicap` is the playing
+      // handicap and differs on a mixed-par card, so it is only the
+      // fallback for a payload sent before the CH was added.
+      handicapLabel: handicapLabel(
+        index: index,
+        courseHandicap: (r['course_handicap'] as num?)?.toInt()
+            ?? (r['handicap'] as num?)?.toInt(),
+      ),
       // In a gross round the ranked figure IS gross to par, which is why
       // there is no separate strokes-off column either: in that mode the
       // ranked figure is the strokes-off one.

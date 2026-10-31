@@ -8403,9 +8403,50 @@ The label is composed in `leaderboard_screen`, which is where the guard sits
 explaining a removal mentions all three widgets and a bare-name test matches
 its own prose. (Cost one red run.)
 
-**The other new boards show no handicap at all** — Points, Skins, Rabbit and
-Nassau name none, and Sequoya answers it with a strokes card instead. Worth
-deciding as one thing rather than four.
+**All five boards name it now** (asked for, 31 Oct 2026). Points, Skins,
+Rabbit and Nassau carried no handicap at all; Sequoya is the exception and
+keeps answering it with a strokes card, which is the better answer for a
+game whose whole subject is who gets what in which match.
+
+`utils/handicap_label.dart` is the one composer — five copies of
+`"$index · CH $ch"` is how they come to disagree about what a middot
+separates, the same reason `gross_to_par` and the tray header are shared. A
+test walks every board and fails one that spells it itself.
+
+**It is the COURSE handicap, which meant a new field.** `handicap` on the
+Stroke Play row is the PLAYING handicap and differs from CH on a mixed-par
+card — 21 of 446 memberships in the local database — so a label saying `CH`
+over that number was wrong on those. `course_handicap` now ships on
+`low_net_round`, `points_531`, `skins`, `rabbit` and `nassau`, with
+`handicap` kept as the fallback for a payload sent before it existed.
+
+**A game's own allowance is a THIRD number** and is deliberately not on the
+row: strokes-off and a net percentage are stated once per card in the
+settings strip, where `phcp_in_play` already is, rather than once per golfer.
+
+**Where it goes differs by board, and that is the design.** Points and Rabbit
+put it beside the name; Skins folds it into the under-line it already had
+(`16.2 · CH 16 · thru 9`) rather than growing a third row in a four-name
+card; and Nassau names SIDES rather than golfers, so the handicaps sit UNDER
+each side — a 2v2 cannot carry four of them on the sides line.
+
+**Flexible, not fixed.** A plain `Text` on the Points ledger overflowed by
+7px at phone width: it is the third thing on a row that already carries a
+name and a surname. It shrinks before the name does.
+
+Verified against the real database for Points, Skins, Rabbit and Stroke Play
+(`19 / 18.5`, `16 / 16.2`, `17 / 16.8`). **Nassau could not be** — there is
+no configured Nassau round locally — so
+`test_each_side_carries_its_golfers_handicaps` stands in for it. Note its
+fixture names four golfers `T1A`…`T2B`, whose auto-initials are all `T`, so
+the assertion keys by player id; a short-name key silently collapsed four
+rows into one and compared 20 against 8.
+
+**The guard written for Stroke Play forty minutes earlier had to go**, not be
+fixed: it asserted the hand-composed `'$index · CH …'`, which is exactly what
+the shared composer replaced. `handicap_label_test.dart` now covers all five
+boards, so keeping the old one would have been two guards for one rule and
+the stricter one was testing an implementation that no longer exists.
 
 **Sixes, Rabbit and Survivor needed nothing** (asked for, 31 Oct 2026): the
 label is composed once in `leaderboard_screen` and `low_net_round` emits a

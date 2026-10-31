@@ -1,4 +1,5 @@
 import '../api/models.dart';
+import 'handicap_label.dart';
 
 /// One shape for the skins board, whatever produced it.
 ///
@@ -175,6 +176,10 @@ class SkinsBoardData {
             junkSkins: s.players[i].junkSkins,
             money:     s.payoutStyle == 'pool'
                 ? s.players[i].payout : s.players[i].net,
+            handicapLabel: handicapLabel(
+              index: s.players[i].handicapIndex,
+              courseHandicap: s.players[i].courseHandicap,
+            ),
           ),
       ],
       holes: [
@@ -262,6 +267,7 @@ class SkinsBoardGolfer {
     required this.skinsWon,
     required this.junkSkins,
     required this.money,
+    this.handicapLabel = '',
     this.thru,
   });
 
@@ -280,6 +286,10 @@ class SkinsBoardGolfer {
   /// of the pot in a pool (the column sums to the pool), his signed net per
   /// skin (the column sums to zero).
   final double money;
+  /// `16.2 · CH 14`, composed by `utils/handicap_label.dart`. Empty when the
+  /// server sends neither — an older payload, or a game set up before the
+  /// numbers were added.
+  final String handicapLabel;
   /// How far round this golfer is — pool only, null in a single foursome.
   ///
   /// A cross-round pool spans groups playing at different paces, so a board

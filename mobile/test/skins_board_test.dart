@@ -37,10 +37,12 @@ SkinsSummary _skins({
     });
 
 Map<String, dynamic> _p(int id, String name,
-        {int won = 0, int junk = 0, double net = 0, double? payout}) =>
+        {int won = 0, int junk = 0, double net = 0, double? payout,
+         String index = '', int? ch}) =>
     {'player_id': id, 'name': name, 'short_name': name,
      'skins_won': won, 'junk_skins': junk, 'total_skins': won + junk,
-     'payout': payout ?? net, 'net': net};
+     'payout': payout ?? net, 'net': net,
+     'handicap_index': index, 'course_handicap': ch};
 
 Map<String, dynamic> _won(int h, int w, {int value = 1}) =>
     {'hole': h, 'par': 4, 'winner_id': w, 'skins_value': value,
@@ -60,7 +62,34 @@ Future<void> _pump(WidgetTester t, SkinsBoardData d) => t.pumpWidget(
       ),
     );
 
+
+/// The handicap, because a net figure cannot be checked against nothing.
+///
+/// The board named neither number until 31 Oct 2026 — "add the CH to all
+/// four boards". The label itself is `utils/handicap_label.dart`; this is
+/// that it reaches the ledger.
+void _handicapOnTheLedger() {
+  group('the ledger names the handicap', () {
+    testWidgets('index and CH, on the line it already had', (t) async {
+      await _pump(t, SkinsBoardData.fromSkins(_skins(players: [
+        _p(1, 'Paul', won: 2, net: 10, index: '16.2', ch: 14),
+        _p(2, 'Dave', net: -10),
+      ], holes: [_won(1, 1), _won(2, 1)])));
+      expect(find.textContaining('16.2 · CH 14'), findsOneWidget);
+    });
+
+    testWidgets('a payload with neither shows no empty separator', (t) async {
+      await _pump(t, SkinsBoardData.fromSkins(_skins(players: [
+        _p(1, 'Paul', won: 2, net: 10),
+        _p(2, 'Dave', net: -10),
+      ], holes: [_won(1, 1), _won(2, 1)])));
+      expect(find.textContaining(' · CH'), findsNothing);
+    });
+  });
+}
+
 void main() {
+  _handicapOnTheLedger();
   group('up next', () {
     testWidgets('names the carried holes and what is riding', (t) async {
       await _pump(t, SkinsBoardData.fromSkins(_skins(

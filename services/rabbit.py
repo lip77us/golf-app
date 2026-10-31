@@ -739,6 +739,14 @@ def rabbit_summary(foursome) -> dict:
                                    (m.playing_handicap or 0), low_phcp)
         for m in members
     }
+    # **CH and the index, beside the effective handicap.** Three different
+    # numbers: the index is who a golfer is, the CH is what he plays off
+    # today, and `phcp_in_play` is what THIS game gives him after its own
+    # allowance. The board showed none of them, so a net figure could not be
+    # checked against anything (Paul, 31 Oct 2026).
+    ch_by_pid = {m.player_id: m.course_handicap for m in members}
+    idx_by_pid = {m.player_id: str(m.player.handicap_index or '')
+                  for m in members}
 
     def short(pid):
         p = by_pid.get(pid)
@@ -896,6 +904,8 @@ def rabbit_summary(foursome) -> dict:
             'money'       : money_by_pid.get(pid, 0.0),
             'segments_won': segs_won,
             'phcp_in_play': phcp_by_pid.get(pid),
+            'course_handicap': ch_by_pid.get(pid),
+            'handicap_index' : idx_by_pid.get(pid, ''),
         })
     players_out.sort(key=lambda e: (-e['money'], e['name']))
 

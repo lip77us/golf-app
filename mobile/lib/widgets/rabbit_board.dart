@@ -567,6 +567,20 @@ class _Ledger extends StatelessWidget {
               Text(g.surname,
                   style: const TextStyle(fontSize: 11, color: Halved.muted)),
             ],
+            // **Flexible**, because it is the third thing on a row that
+            // already carries a name and a surname: at phone width the
+            // fixed version overflowed by 7px. It shrinks before the name
+            // does and never pushes the money off the right.
+            if (g.handicapLabel.isNotEmpty) ...[
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(g.handicapLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 10.5, color: Halved.muted)),
+              ),
+            ],
           ]),
         ),
         for (final l in legs)
