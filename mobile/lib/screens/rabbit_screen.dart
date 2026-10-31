@@ -874,7 +874,16 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
                   });
                 }
               },
-              onClear: () => _selectScore(m, 0, _selectedHole),
+              // **`-1` is the clear, not `0`.** `_selectScore` treats −1 as
+              // "take this golfer's entry out of pending" and anything else
+              // as a score, so Clear was writing a gross of ZERO: the row
+              // read as scored, so the keypad jumped to the next golfer and
+              // the hole counted as complete — Paul moved off the 7th with
+              // nothing entered (30 Oct 2026). Worse, the save then posted
+              // it, and `gross_score` has `min_value=1`, so the server
+              // refused the WHOLE hole and the sync queue dropped it as a
+              // permanent 4xx. Score entry's keypad has always passed −1.
+              onClear: () => _selectScore(m, -1, _selectedHole),
             ),
             _pager(ctx, rp, players, allDone, isComplete,
                    prevHole, nextHole),

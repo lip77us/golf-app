@@ -7979,3 +7979,37 @@ Tests: two source guards in the `the screen keeps what a dedicated screen
 loses` group (`mobile/test/rabbit_entry_test.dart`), the first anchored on
 the fallback return rather than a character count, both checked by making
 them fail.
+
+### Clear wrote a score of zero
+
+*"I hit clear and it jumped down to next golfer and let me move to 8th hole
+without entering a score."* (30 Oct 2026.)
+
+`_selectScore` reads **−1** as "take this golfer out of pending" and anything
+else as a score. Rabbit's keypad passed **0**, so Clear wrote a gross of zero:
+the row read as scored, `_hotSpotIdx` moved on, `_allScored` went true, and
+the next-hole button lit up on a hole with nothing in it.
+
+**The invisible half is worse.** The save posted it, and
+`SingleScoreSerializer.gross_score` is `min_value=1` — so the server refused
+the **whole hole**, and the sync queue drops a 4xx as a permanent failure
+(correctly; it is what stops an infinite retry). Locally the hole still read
+as scored. So a hole could be entered, cleared, completed and advanced past,
+and simply never reach the server.
+
+Score entry's keypad has always passed −1; these are the only two call sites.
+`mobile/test/keypad_clear_test.dart` asserts each one passes the sentinel AND
+that the two agree, bounded by the end of the keypad's argument list rather
+than a character count.
+
+**Still true on both screens: clearing a score the SERVER already has is a
+no-op.** `_selectScore(-1)` removes the pending entry and the merge still
+carries the saved value, so the row does not change. Score entry is wired for
+the other half — `_kClearedScore`, its `effectiveScores(clearedSentinel:)`
+filter, both payload builders mapping it to a null gross, and the Banker
+strip's filter — and the docstring says what should happen; the one line that
+would finish it is `_selectScore` STORING the sentinel instead of removing.
+Not done here, because five raw `_pending` readers on that screen
+(`_pending.isNotEmpty`, two `gettingResult` flags, `pendingHere`, Banker's
+`scoredCount`) would then see a −1 and have to be audited. The server already
+supports it: a null `gross_score` deletes the row.
