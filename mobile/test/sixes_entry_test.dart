@@ -115,6 +115,20 @@ void main() {
   });
 
   group('the tray', () {
+    testWidgets('the last hole offers Complete Round, not a dead Done',
+        (t) async {
+      var finished = false;
+      await _pump(t, SixesHoleTray(
+          card: _card('sixes_hole10_closed'),
+          nextHole: null,
+          onEdit: () {},
+          onNext: () => finished = true));
+      expect(find.text('Complete Round'), findsOneWidget);
+      await t.tap(find.text('Complete Round'));
+      expect(finished, isTrue,
+          reason: 'the tray covers the pager, so this is the only way out');
+    });
+
     testWidgets('names the side that WON THE HOLE, not the standing',
         (t) async {
       // The strokes fixture is the packet's own phone 3: Lee's net birdie

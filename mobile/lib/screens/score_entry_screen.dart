@@ -3056,7 +3056,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               // is hidden, so these are the only arrows on screen.
               nextHole: _nextHoleInOrder(rp),
               onPrev: _prevHoleInOrder(rp) == null ? null : _retreat,
-              onNext: _nextHoleInOrder(rp) == null ? null : _advance,
+              // **On the last hole the tray IS the way out.** It covers the
+              // pager, so a disabled forward button there left the round
+              // with no Complete Round at all. Reported on Rabbit, whose
+              // tray has the identical shape (Paul, 31 Oct 2026).
+              onNext: rp.submitting
+                  ? null
+                  : (_nextHoleInOrder(rp) == null
+                      ? () => _completeRound(ctx, players, par)
+                      : _advance),
               // Both open the same sheet — it carries the reel AND the two
               // legal pairings, so the buttons differ in what they promise
               // rather than in where they land.

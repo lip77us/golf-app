@@ -721,8 +721,11 @@ class RabbitHoleTray extends StatelessWidget {
 
   Widget _buttons(RabbitHoleOutcome? r) {
     final n = (r != null && r.legEnded) ? card.next : null;
+    // `Complete Round`, the same words the pager uses — this button is what
+    // replaces it on the last hole, so it should not be a different name for
+    // the same action.
     final label = nextHole == null
-        ? 'Done'
+        ? 'Complete Round'
         : n == null
             ? 'Hole $nextHole ›'
             : n.isExtra

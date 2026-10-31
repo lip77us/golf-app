@@ -702,8 +702,10 @@ class SixesHoleTray extends StatelessWidget {
 
   Widget _buttons(SixesHoleOutcome? r) {
     final closed = r != null && r.closed && card.nextMatch != null;
+    // `Complete Round`, the same words the pager uses — this button is what
+    // replaces it on the last hole.
     final label = nextHole == null
-        ? 'Done'
+        ? 'Complete Round'
         : closed
             ? 'Match ${card.nextMatch!.number} · hole $nextHole ›'
             : 'Hole $nextHole ›';

@@ -228,6 +228,21 @@ void main() {
       expect(text.contains('Edit scores'), isFalse);
     });
 
+    testWidgets('the last hole offers Complete Round, not a dead Done',
+        (t) async {
+      var finished = false;
+      final card = _card('rabbit_hole8_loose');
+      await _pump(t, RabbitHoleTray(
+          card: card,
+          nextHole: null,
+          onEdit: () {},
+          onNext: () => finished = true));
+      expect(_allText(t), contains('Complete Round'));
+      await t.tap(find.text('Complete Round'));
+      expect(finished, isTrue,
+          reason: 'the tray covers the pager, so this is the only way out');
+    });
+
     testWidgets('a won rabbit names the money and the next one', (t) async {
       final card = _card('rabbit_hole10_won_early');
       await _pump(t, RabbitHoleTray(card: card, nextHole: 11, onEdit: () {}));

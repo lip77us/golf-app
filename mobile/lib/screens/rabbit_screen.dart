@@ -869,7 +869,16 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
               _editingPlayerId = null;
             }),
             onPrev: prevHole == null ? null : _retreat,
-            onNext: nextHole == null ? null : _advance,
+            // **On the last hole the tray IS the way out.** It covers the
+            // pager, so a disabled forward button there left the round with
+            // no Complete Round at all — the group scores the 18th and the
+            // black bar is a dead end (Paul, 31 Oct 2026). The tray already
+            // labelled it for the last hole; nothing was wired to it.
+            onNext: rp.submitting
+                ? null
+                : (nextHole == null
+                    ? () => _finishRound(ctx, players)
+                    : _advance),
           ),
         );
       }

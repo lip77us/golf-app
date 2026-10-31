@@ -8187,3 +8187,28 @@ duplicating it and guessing.
 onEdit` matched a literal `= true`, and Rabbit's Edit now toggles — so the
 pattern found nothing and the test passed about a file it was no longer
 examining. It matches anything that can turn the flag ON.
+
+### The 18th was a dead end — the tray covers Complete Round
+
+*"I finished my rabbit round and when I scored 18, there is no way forward
+off the black screen."* (31 Oct 2026.)
+
+The Rabbit and Sixes trays replace the bottom bar entirely while they are up,
+deliberately: their forward button can name the next RABBIT or the next
+MATCH, which a generic pager cannot. What that covers on the eighteenth is
+**Complete Round** — and both screens passed `onNext: null` there, so the
+only control on screen read `Done` and did nothing.
+
+**Both trays already labelled the last hole**; nothing was ever wired to it.
+The forward button now calls `_finishRound` (Rabbit) or `_completeRound`
+(score entry), and the label says `Complete Round` rather than `Done`,
+because it is replacing that button and should not be a second name for it.
+Annandale was never affected — its pager is not hidden.
+
+Third time in this batch that the tray taking the bottom bar lost something
+the pager carried: first the back arrow while the keypad was up, then the
+state where neither drew, now the finish. **A control that replaces another
+inherits everything it did**, and the guard
+(`mobile/test/tray_last_hole_test.dart`) is written at both call sites rather
+than the one that was reported, since these two trays are the only controls
+in the app that take the pager away.
