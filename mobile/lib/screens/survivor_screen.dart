@@ -32,6 +32,8 @@ import '../widgets/inline_message.dart';
 import '../widgets/inline_score_picker.dart';
 import '../widgets/standing_ribbon.dart';
 import '../widgets/survivor_rail.dart';
+import '../widgets/survivor_entry.dart';
+import '../widgets/forty_balls_keypad.dart';
 import '../widgets/net_score_button.dart' show scoreCellWithDots;
 import '../widgets/round_chat_button.dart';
 import '../widgets/spots_capture.dart';
@@ -76,6 +78,11 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
   // holds their id so the inline picker re-opens for that row (there's no
   // hot-spot on a completed hole).  Cleared on navigation and after saving.
   int? _editingPlayerId;
+
+  /// `Edit scores` is a SESSION: the keypad stays on the golfer being edited
+  /// until Done, rather than ending on the first score. A TAP is a one-shot
+  /// and must not set this.
+  bool _trayEditing = false;
 
   @override
   void initState() {
@@ -140,12 +147,20 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
         hole,
         queued: context.read<RoundProvider>().localPendingByHole,
         pending: _pending,
+        clearedSentinel: _kCleared,
       );
+
+  /// Stored in [_pending] for a CLEARED score: dropped from the effective
+  /// scores so the box reads blank, and sent as a **null gross** so the
+  /// server deletes the row. Removing the entry instead does nothing at all
+  /// to a score the server already holds.
+  static const int _kCleared = -1;
 
   /// True once any score has been entered (saved or pending) — gates the
   /// app-bar Exit (✕) on a single-foursome casual round.
   bool get _hasAnyScore {
-    if (_pending.isNotEmpty) return true;
+    if (_pending.values
+        .any((h) => h.values.any((v) => v != _kCleared))) return true;
     final rp = context.read<RoundProvider>();
     final sc = rp.scorecard;
     if (sc != null) {
@@ -157,6 +172,92 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
         .where((f) => f.id == widget.foursomeId)
         .firstOrNull;
     return fs?.hasAnyScore ?? false;
+  }
+
+  /// This hole's card — the server's answer to what the hole IS and what it
+  /// DID, which is what the header, the players card and the tray draw.
+  SurvivorHoleCard? _card(RoundProvider rp) => rp.survivorHole(_selectedHole);
+
+  /// Who the keypad is on: the golfer being edited, else the first without a
+  /// score in ROW order (which is the standing the hole started under).
+  Membership? _keypadMember(List<Membership> ordered, Map<int, int> scores) {
+    if (_editingPlayerId != null) {
+      for (final m in ordered) {
+        if (m.player.id == _editingPlayerId) return m;
+      }
+    }
+    final i = _hotSpotIdx(ordered, scores);
+    return (i >= 0 && i < ordered.length) ? ordered[i] : null;
+  }
+
+  /// **Rows follow the card**, because the card is the standing the hole
+  /// started under — golfers still in, then Zombieville — and the keypad
+  /// follows the rows. Falls back to roster order before the card lands.
+  List<Membership> _rowOrder(List<Membership> players, SurvivorHoleCard? card) {
+    if (card == null || card.players.isEmpty) return players;
+    final byId = {for (final m in players) m.player.id: m};
+    final out = <Membership>[
+      for (final p in card.players)
+        if (byId[p.playerId] != null) byId[p.playerId]!,
+    ];
+    for (final m in players) {
+      if (!out.contains(m)) out.add(m);
+    }
+    return out;
+  }
+
+  /// The combo-tee chip and the Spots button, under a golfer's name.
+  ///
+  /// These are exactly what a dedicated play screen drops when its entry card
+  /// is swapped out, which is why they are threaded into the new one rather
+  /// than left behind with the old.
+  Widget? _rowExtras(RoundProvider rp, List<Membership> players, int pid) {
+    final m = players.where((x) => x.player.id == pid).firstOrNull;
+    final combo = m?.comboTeeOnHole(_selectedHole);
+    final spots = spotsActive(rp);
+    if (combo == null && !spots) return null;
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Row(children: [
+        if (combo != null) ComboTeeChip(tee: combo),
+        if (combo != null && spots) const SizedBox(width: 8),
+        if (spots)
+          SpotsButton(
+            types: spotsTypesFor(pid, _selectedHole, rp.spotsSummary),
+            onTap: () => openSpotsSheet(widget.foursomeId, pid, _selectedHole),
+            focused: spotsSheetOpenFor(pid),
+          ),
+      ]),
+    );
+  }
+
+  int? _cardAsked;
+
+  /// Ask for a card whenever the hole on screen has none. A posted hole drops
+  /// every other hole's card (the standing moved), and the fetch the forward
+  /// button started can be thrown away by the response to a save posted
+  /// before it — which leaves the scorer looking at a screen with no keypad.
+  /// This closes that race from the other end.
+  void _ensureCard(RoundProvider rp) {
+    if (rp.survivorHole(_selectedHole) != null) {
+      _cardAsked = null;
+      return;
+    }
+    if (_cardAsked == _selectedHole) return;
+    _cardAsked = _selectedHole;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadCard();
+    });
+  }
+
+  /// This hole's card. A save brings it back with the response, so this is
+  /// for a hole opened without posting — moving between holes, or picking up
+  /// a round somebody else is scoring.
+  void _loadCard() {
+    final rp = context.read<RoundProvider>();
+    final games = rp.round?.activeGames ?? const <String>[];
+    if (!games.contains('survivor')) return;
+    rp.loadSurvivorHole(widget.foursomeId, _selectedHole);
   }
 
   int _hotSpotIdx(List<Membership> players, Map<int, int> scores) {
@@ -171,12 +272,7 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
 
   void _selectScore(Membership player, int score, int hole) {
     setState(() {
-      if (score == -1) {
-        _pending[hole]?.remove(player.player.id);
-        if (_pending[hole]?.isEmpty ?? false) _pending.remove(hole);
-      } else {
-        _pending.putIfAbsent(hole, () => <int, int>{})[player.player.id] = score;
-      }
+      _pending.putIfAbsent(hole, () => <int, int>{})[player.player.id] = score;
     });
   }
 
@@ -190,16 +286,27 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
     final wasAllScored =
         sc != null && _allScored(players, _effectiveScores(sc, hole));
     _selectScore(m, score, hole);
-    if (sc == null || score <= 0) return;
+    if (sc == null) return;
     if (wasAllScored) {
       // Editing an already-complete (past) hole: there's no save+advance step
       // for a correction, so persist it immediately — otherwise the change is
       // lost the moment the user navigates to another hole.  Auto-advance
       // deliberately does not fire on an edit.
-      setState(() => _editingPlayerId = null);
+      //
+      // **A session keeps its cursor** — only a ONE-SHOT ends on the score,
+      // the same rule the keypad's own `onScore` follows. Clearing it while
+      // `_trayEditing` leaves a state neither the tray nor the keypad draws.
+      if (!_trayEditing) setState(() => _editingPlayerId = null);
       _saveHole(ctx, hole, players);
       return;
     }
+    // A clear on a hole that was NOT complete has nothing to save yet.
+    if (score <= 0) return;
+    // **A tray game saves and STAYS.** The tray IS the end of the hole — what
+    // it did to the Survivor, and what takes over — and its forward button is
+    // the advance. The keypad posts the hole itself, so nothing is left
+    // unsent. (Rabbit and Sixes, 30 Oct 2026.)
+    if (_card(context.read<RoundProvider>()) != null) return;
     if (!context.read<SettingsProvider>().autoAdvanceHole) return;
     if (!_allScored(players, _effectiveScores(sc, hole))) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -236,12 +343,26 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
   void _advance() {
     final next = nextInOrder(
         _playOrder(context.read<RoundProvider>()), _selectedHole);
-    if (next != null) setState(() { _selectedHole = next; _editingPlayerId = null; });
+    if (next != null) {
+      setState(() {
+        _selectedHole = next;
+        _editingPlayerId = null;
+        _trayEditing = false;
+      });
+      _loadCard();
+    }
   }
   void _retreat() {
     final prev = prevInOrder(
         _playOrder(context.read<RoundProvider>()), _selectedHole);
-    if (prev != null) setState(() { _selectedHole = prev; _editingPlayerId = null; });
+    if (prev != null) {
+      setState(() {
+        _selectedHole = prev;
+        _editingPlayerId = null;
+        _trayEditing = false;
+      });
+      _loadCard();
+    }
   }
 
   /// Persist whatever is pending for [hole] without changing the selected hole.
@@ -251,7 +372,10 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
     final edits = _pending[hole];
     if (edits == null || edits.isEmpty) return;
     final scores = edits.entries
-        .map((e) => {'player_id': e.key, 'gross_score': e.value})
+        .map((e) => {
+              'player_id': e.key,
+              'gross_score': e.value == _kCleared ? null : e.value,
+            })
         .toList();
     final rp = context.read<RoundProvider>();
     final ok = await rp.submitHole(
@@ -290,7 +414,10 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
     final pendingForHole = _pending[_selectedHole];
     if (pendingForHole != null && pendingForHole.isNotEmpty) {
       final scores = pendingForHole.entries
-          .map((e) => {'player_id': e.key, 'gross_score': e.value})
+          .map((e) => {
+                'player_id': e.key,
+                'gross_score': e.value == _kCleared ? null : e.value,
+              })
           .toList();
       final ok = await rp.submitHole(
         foursomeId: widget.foursomeId, holeNumber: _selectedHole, scores: scores);
@@ -519,6 +646,9 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
     final holeInfo = summary?.holeFor(_selectedHole);
     final holeData = sc.holeData(_selectedHole);
     final scores   = _effectiveScores(sc, _selectedHole);
+    _ensureCard(rp);
+    final card     = _card(rp);
+    final rowOrder = _rowOrder(players, card);
     final hotSpot  = isComplete ? -1 : _hotSpotIdx(players, scores);
     final par      = holeData?.par ?? 4;
 
@@ -547,6 +677,28 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            // **The card's header and rows when the server has sent one**,
+            // and the generic ones until it does — a group must never be
+            // stuck looking at nothing because a fetch is in flight.
+            if (card != null) ...[
+              SurvivorHoleHeader(card: card),
+              const SizedBox(height: 12),
+              SurvivorPlayersCard(
+                card: card,
+                // Saved, queued and unsaved — the card alone is server state
+                // and would leave a typed score invisible until the hole is
+                // posted.
+                scores: scores,
+                netStyle: ctx.watch<SettingsProvider>().netStyleEntry,
+                activePlayerId: isComplete
+                    ? null
+                    : _keypadMember(rowOrder, scores)?.player.id,
+                onTapPlayer: (pid) =>
+                    setState(() => _editingPlayerId = pid),
+                rowExtras: (p) => _rowExtras(rp, players, p.playerId)
+                    ?? const SizedBox.shrink(),
+              ),
+            ] else ...[
             HoleHeader(
               holeData:    holeData,
               holeNumber:  _selectedHole,
@@ -581,6 +733,7 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
                   openSpotsSheet(widget.foursomeId, pid, _selectedHole),
               spotsSheetOpen: spotsSheetOpenFor,
             ),
+            ],
             // Spots' greenie pick, on par 3s only — empty on
             // every other hole. The server decides which
             // holes are par 3s; it is walking the carry.
@@ -707,8 +860,98 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
     final order   = _playOrder(rp);
     final prevHole = prevInOrder(order, _selectedHole);
     final nextHole = nextInOrder(order, _selectedHole);
-    return SafeArea(
-      child: Padding(
+
+    // **The keypad, and the tray over the pager.** Same shape as Sixes and
+    // Rabbit: while the tray is up it IS the bottom bar, because its forward
+    // button can name the next SURVIVOR and a generic pager cannot — which
+    // also means it carries the way off the last hole. The pager below is
+    // what a group uses whenever the tray is not up, INCLUDING while a result
+    // is still coming, so a slow card never strands them on a hole.
+    final card = _card(rp);
+    final rowOrder = _rowOrder(players, card);
+    if (card != null && !isComplete) {
+      if (allDone && _editingPlayerId == null) {
+        return SafeArea(
+          child: SurvivorHoleTray(
+            card: card,
+            nextHole: nextHole,
+            gettingResult: _pending[_selectedHole]?.isNotEmpty ?? false,
+            // It picks nobody — the card above is the selection.
+            picking: _trayEditing,
+            onEdit: () => setState(() {
+              _trayEditing = !_trayEditing;
+              _editingPlayerId = null;
+            }),
+            onPrev: prevHole == null ? null : _retreat,
+            onNext: rp.submitting
+                ? null
+                : (nextHole == null
+                    ? () => _finishRound(ctx, players)
+                    : _advance),
+          ),
+        );
+      }
+      final m = _keypadMember(rowOrder, scores);
+      if (m != null) {
+        return SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            FortyBallsKeypad(
+              playerName: m.player.name,
+              // HIS par, not the hole's — on mixed tees the hole is a 4 for
+              // one golfer and a 5 for the next.
+              par: sc.holeData(_selectedHole)
+                      ?.scoreFor(m.player.id)?.par ?? (card.par ?? 4),
+              // The strokes the SURVIVOR issues, which a strokes-off game
+              // spreads off the low man — not the round's stored allocation.
+              strokes: card.players
+                  .where((p) => p.playerId == m.player.id)
+                  .map((p) => p.strokes)
+                  .firstOrNull ?? 0,
+              netStyle: ctx.watch<SettingsProvider>().netStyleEntry,
+              onDone: _trayEditing
+                  ? () => setState(() {
+                        _trayEditing = false;
+                        _editingPlayerId = null;
+                      })
+                  : null,
+              onScore: (n) {
+                _handleScore(ctx, m, n, players);
+                // An edit is a SESSION; only a one-shot ends on the score.
+                if (!_trayEditing && _editingPlayerId != null) {
+                  setState(() => _editingPlayerId = null);
+                }
+                // **The hole is POSTED on its last score.** The tray reports
+                // the SERVER's result, so a hole left unsent raises a tray
+                // with nothing in it.
+                final now = _effectiveScores(sc, _selectedHole);
+                if (n > 0 && _allScored(players, now)) {
+                  final hole = _selectedHole;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted || _selectedHole != hole) return;
+                    if (context.read<RoundProvider>().submitting) return;
+                    _saveHole(ctx, hole, players);
+                  });
+                }
+              },
+              onClear: () => _handleScore(ctx, m, _kCleared, players),
+            ),
+            _pager(ctx, rp, players, allDone, isComplete, prevHole, nextHole),
+          ]),
+        );
+      }
+    }
+
+    return SafeArea(child: _pager(ctx, rp, players, allDone, isComplete,
+                                  prevHole, nextHole));
+  }
+
+  /// The hole pager. **It draws UNDER the keypad as well as on its own** —
+  /// an alternative to it would leave a hole with nothing entered no way
+  /// back. The tray is the one thing that replaces it, and it carries its own
+  /// arrows and the finish.
+  Widget _pager(BuildContext ctx, RoundProvider rp, List<Membership> players,
+                bool allDone, bool isComplete, int? prevHole, int? nextHole) {
+    return Padding(
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
         child: Row(children: [
           Expanded(
@@ -724,7 +967,7 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
                 ? FilledButton.icon(
                     onPressed: rp.submitting ? null : () => _finishRound(ctx, players),
                     icon: const Icon(Icons.emoji_events, size: 20),
-                    label: const Text('Done'),
+                    label: const Text('Complete Round'),
                   )
                 : FilledButton.icon(
                     onPressed: (allDone && !rp.submitting)
@@ -739,7 +982,6 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
                   ),
           ),
         ]),
-      ),
     );
   }
 }

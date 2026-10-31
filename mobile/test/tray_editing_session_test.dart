@@ -18,6 +18,7 @@ void main() {
   const files = <String, String>{
     'score entry': 'lib/screens/score_entry_screen.dart',
     'rabbit': 'lib/screens/rabbit_screen.dart',
+    'survivor': 'lib/screens/survivor_screen.dart',
   };
 
   group('only Edit scores starts an edit session', () {
@@ -60,14 +61,16 @@ void main() {
       });
     }
 
-    test('one header for all three trays', () {
+    test('one header for every tray', () {
       // Rabbit, Sixes and Annandale Friday each drew `All N scores in` and
       // its Edit button themselves, so the change had to be made three
-      // times — and the first pass made it once.
+      // times — and the first pass made it once. Survivor was built on the
+      // shared one from the start, which is the whole point of having it.
       const trays = [
         'lib/widgets/rabbit_entry.dart',
         'lib/widgets/sixes_entry.dart',
         'lib/widgets/annandale_friday.dart',
+        'lib/widgets/survivor_entry.dart',
       ];
       for (final f in trays) {
         final src = File(f).readAsStringSync();

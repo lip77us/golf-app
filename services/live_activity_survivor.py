@@ -74,8 +74,23 @@ def _current_survivor(summary):
 
 
 def _holes_of(summary, sv_index):
+    """This Survivor's holes that have actually been PLAYED.
+
+    **The `event` test is the point.** This read `survivor == sv_index` alone
+    and got away with it only because an unscored hole used to carry no
+    Survivor at all — so the filter was really asking "has this hole
+    resolved", by accident, through a field that happened to be null.
+
+    The score-entry card needs the hole in play to know which Survivor it
+    belongs to, so the walk now records a standing for every hole (31 Oct
+    2026) — and this filter immediately started returning holes nobody had
+    reached, drawing them on the lock screen's track as `played`. It is the
+    FOURTH bug of this shape in this file, which is why `_track`'s own
+    comment already says a row's existence says nothing about whether it was
+    played. Now it is asked outright.
+    """
     return [h for h in (summary.get('holes') or [])
-            if h.get('survivor') == sv_index]
+            if h.get('survivor') == sv_index and h.get('event')]
 
 
 def _entry(hole, pid):

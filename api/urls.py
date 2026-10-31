@@ -180,6 +180,7 @@ urlpatterns = [
     # ---- Rabbit ----
     path('foursomes/<int:pk>/rabbit/',       views.RabbitResultView.as_view(), name='api-rabbit-result'),
     path('foursomes/<int:pk>/rabbit/hole/<int:hole>/', views.RabbitHoleCardView.as_view(), name='api-rabbit-hole'),
+    path('foursomes/<int:pk>/survivor/hole/<int:hole>/', views.SurvivorHoleCardView.as_view(), name='api-survivor-hole'),
     path('foursomes/<int:pk>/rabbit/setup/', views.RabbitSetupView.as_view(),  name='api-rabbit-setup'),
 
     # ---- Survivor ----

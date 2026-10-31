@@ -9743,3 +9743,277 @@ class RabbitHoleCard {
         payout: (j['payout'] as num?)?.toDouble() ?? 0,
       );
 }
+
+// ===========================================================================
+// Survivor — one hole's score-entry card
+// ===========================================================================
+//
+// `~/Downloads/handoff-survivor-score-entry`. Same shape as Rabbit's and
+// Sixes': the server answers what the hole IS and what it DID, and every
+// sentence on the tray is written there, because every one of them is a rule.
+
+/// One golfer on the Survivor hole card.
+class SurvivorCardPlayer {
+  final int playerId;
+  final String name;
+  final String short;
+  final int? courseHandicap;
+
+  /// Identity, not standing — the slot follows the roster, so a golfer does
+  /// not change colour when he is knocked out and the rows reorder.
+  final int colourIndex;
+  final int strokes;
+  final int? gross;
+  final int? net;
+  final bool isAlive;
+  final bool isZombie;
+
+  const SurvivorCardPlayer({
+    required this.playerId,
+    required this.name,
+    required this.short,
+    required this.courseHandicap,
+    required this.colourIndex,
+    required this.strokes,
+    required this.gross,
+    required this.net,
+    required this.isAlive,
+    required this.isZombie,
+  });
+
+  factory SurvivorCardPlayer.fromJson(Map<String, dynamic> j) =>
+      SurvivorCardPlayer(
+        playerId: (j['player_id'] as num?)?.toInt() ?? 0,
+        name: (j['name'] as String?) ?? '',
+        short: (j['short'] as String?) ?? '',
+        courseHandicap: (j['course_handicap'] as num?)?.toInt(),
+        colourIndex: (j['colour_index'] as num?)?.toInt() ?? 0,
+        strokes: (j['strokes'] as num?)?.toInt() ?? 0,
+        gross: (j['gross'] as num?)?.toInt(),
+        net: (j['net'] as num?)?.toInt(),
+        isAlive: j['is_alive'] as bool? ?? false,
+        isZombie: j['is_zombie'] as bool? ?? false,
+      );
+}
+
+/// A band in the players card: who is in, or Zombieville.
+class SurvivorCardSection {
+  final String key;
+  final String title;
+  final String note;
+  final List<int> playerIds;
+
+  const SurvivorCardSection({
+    required this.key,
+    required this.title,
+    required this.note,
+    required this.playerIds,
+  });
+
+  bool get isZombieville => key == 'zombieville';
+
+  factory SurvivorCardSection.fromJson(Map<String, dynamic> j) =>
+      SurvivorCardSection(
+        key: (j['key'] as String?) ?? '',
+        title: (j['title'] as String?) ?? '',
+        note: (j['note'] as String?) ?? '',
+        playerIds: ((j['player_ids'] as List?) ?? const [])
+            .map((e) => (e as num).toInt())
+            .toList(),
+      );
+}
+
+/// Which Survivor this hole belongs to, and what it is worth.
+class SurvivorLegInfo {
+  final int? index;
+  final int? fromHole;
+  final double pot;
+  final double stake;
+
+  const SurvivorLegInfo({
+    required this.index,
+    required this.fromHole,
+    required this.pot,
+    required this.stake,
+  });
+
+  factory SurvivorLegInfo.fromJson(Map<String, dynamic> j) => SurvivorLegInfo(
+        index: (j['index'] as num?)?.toInt(),
+        fromHole: (j['from_hole'] as num?)?.toInt(),
+        pot: (j['pot'] as num?)?.toDouble() ?? 0,
+        stake: (j['stake'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+/// One span of the tray's standing line: a word, and whose colour it wears.
+class SurvivorStandingSpan {
+  final int? playerId;
+  final String text;
+
+  const SurvivorStandingSpan({required this.playerId, required this.text});
+
+  factory SurvivorStandingSpan.fromJson(Map<String, dynamic> j) =>
+      SurvivorStandingSpan(
+        playerId: (j['player_id'] as num?)?.toInt(),
+        text: (j['text'] as String?) ?? '',
+      );
+}
+
+/// What the hole did to the Survivor.
+class SurvivorHoleOutcome {
+  /// `eliminated` · `no_elimination` · `won` · `carried` · `split` ·
+  /// `no_blood` · `resurrected` · `killed`.
+  final String event;
+
+  /// `elimination` · `decider` · `last hole`.
+  final String phaseWord;
+
+  /// The chip: what happened, and the comparison it happened on. A tie
+  /// carries no nets — the numbers are the evidence for something moving.
+  final String chip;
+  final String chipNets;
+  final int? chipPlayerId;
+
+  /// The standing after the hole, in spans so each name wears its colour.
+  final List<SurvivorStandingSpan> standing;
+
+  /// The right of that line: the money, or what the next hole is played as.
+  final String? standingRight;
+  final bool rightIsMoney;
+
+  /// What happened, with the lead bolded.
+  final String lineLead;
+  final String lineRest;
+
+  final bool survivorEnded;
+
+  const SurvivorHoleOutcome({
+    required this.event,
+    required this.phaseWord,
+    required this.chip,
+    required this.chipNets,
+    required this.chipPlayerId,
+    required this.standing,
+    required this.standingRight,
+    required this.rightIsMoney,
+    required this.lineLead,
+    required this.lineRest,
+    required this.survivorEnded,
+  });
+
+  factory SurvivorHoleOutcome.fromJson(Map<String, dynamic> j) =>
+      SurvivorHoleOutcome(
+        event: (j['event'] as String?) ?? '',
+        phaseWord: (j['phase_word'] as String?) ?? '',
+        chip: (j['chip'] as String?) ?? '',
+        chipNets: (j['chip_nets'] as String?) ?? '',
+        chipPlayerId: (j['chip_player_id'] as num?)?.toInt(),
+        standing: ((j['standing'] as List?) ?? const [])
+            .map((e) => SurvivorStandingSpan.fromJson(
+                (e as Map).cast<String, dynamic>()))
+            .toList(),
+        standingRight: j['standing_right'] as String?,
+        rightIsMoney: j['right_is_money'] as bool? ?? false,
+        lineLead: (j['line_lead'] as String?) ?? '',
+        lineRest: (j['line_rest'] as String?) ?? '',
+        survivorEnded: j['survivor_ended'] as bool? ?? false,
+      );
+}
+
+/// The Survivor that takes over, offered only once this one has ended.
+class SurvivorNextLeg {
+  final int index;
+  final int startHole;
+  final double pot;
+  final String title;
+  final String note;
+
+  const SurvivorNextLeg({
+    required this.index,
+    required this.startHole,
+    required this.pot,
+    required this.title,
+    required this.note,
+  });
+
+  factory SurvivorNextLeg.fromJson(Map<String, dynamic> j) => SurvivorNextLeg(
+        index: (j['index'] as num?)?.toInt() ?? 0,
+        startHole: (j['start_hole'] as num?)?.toInt() ?? 0,
+        pot: (j['pot'] as num?)?.toDouble() ?? 0,
+        title: (j['title'] as String?) ?? '',
+        note: (j['note'] as String?) ?? '',
+      );
+}
+
+class SurvivorHoleCard {
+  final int hole;
+  final int? par;
+  final int? strokeIndex;
+  final int? yards;
+  final String nine;
+  final SurvivorLegInfo survivor;
+
+  /// `elimination` · `decider` · `final`.
+  final String role;
+  final String phaseChip;
+  final String phaseNote;
+  final List<SurvivorCardSection> sections;
+  final List<SurvivorCardPlayer> players;
+  final bool zombieOption;
+  final SurvivorHoleOutcome? result;
+  final SurvivorNextLeg? next;
+
+  const SurvivorHoleCard({
+    required this.hole,
+    required this.par,
+    required this.strokeIndex,
+    required this.yards,
+    required this.nine,
+    required this.survivor,
+    required this.role,
+    required this.phaseChip,
+    required this.phaseNote,
+    required this.sections,
+    required this.players,
+    required this.zombieOption,
+    required this.result,
+    required this.next,
+  });
+
+  SurvivorCardPlayer? playerOf(int? pid) {
+    for (final p in players) {
+      if (p.playerId == pid) return p;
+    }
+    return null;
+  }
+
+  factory SurvivorHoleCard.fromJson(Map<String, dynamic> j) => SurvivorHoleCard(
+        hole: (j['hole'] as num?)?.toInt() ?? 0,
+        par: (j['par'] as num?)?.toInt(),
+        strokeIndex: (j['stroke_index'] as num?)?.toInt(),
+        yards: (j['yards'] as num?)?.toInt(),
+        nine: (j['nine'] as String?) ?? '',
+        survivor: SurvivorLegInfo.fromJson(
+            (j['survivor'] as Map?)?.cast<String, dynamic>() ?? const {}),
+        role: (j['role'] as String?) ?? '',
+        phaseChip: (j['phase_chip'] as String?) ?? '',
+        phaseNote: (j['phase_note'] as String?) ?? '',
+        sections: ((j['sections'] as List?) ?? const [])
+            .map((e) => SurvivorCardSection.fromJson(
+                (e as Map).cast<String, dynamic>()))
+            .toList(),
+        players: ((j['players'] as List?) ?? const [])
+            .map((e) => SurvivorCardPlayer.fromJson(
+                (e as Map).cast<String, dynamic>()))
+            .toList(),
+        zombieOption: j['zombie_option'] as bool? ?? false,
+        result: j['result'] == null
+            ? null
+            : SurvivorHoleOutcome.fromJson(
+                (j['result'] as Map).cast<String, dynamic>()),
+        next: j['next'] == null
+            ? null
+            : SurvivorNextLeg.fromJson(
+                (j['next'] as Map).cast<String, dynamic>()),
+      );
+}

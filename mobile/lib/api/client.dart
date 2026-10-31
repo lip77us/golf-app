@@ -1985,6 +1985,17 @@ class ApiClient {
     return RabbitHoleCard.fromJson(map);
   }
 
+  /// GET /api/foursomes/{id}/survivor/hole/{hole}/
+  ///
+  /// One hole's score-entry card. A save already returns this shape under
+  /// `survivor_hole`, so this is for a hole opened without posting.
+  Future<SurvivorHoleCard?> getSurvivorHoleCard(int foursomeId, int hole) async {
+    final data = await _get('/foursomes/$foursomeId/survivor/hole/$hole/');
+    final map = (data as Map).cast<String, dynamic>();
+    if (map.isEmpty) return null;
+    return SurvivorHoleCard.fromJson(map);
+  }
+
   /// POST/DELETE /api/rounds/{id}/hide/ — take a round off MY lists, or put
   /// it back.
   ///

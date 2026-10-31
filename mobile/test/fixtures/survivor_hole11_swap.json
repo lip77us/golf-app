@@ -1,0 +1,101 @@
+{
+  "hole": 11,
+  "par": 4,
+  "yards": 415,
+  "stroke_index": 4,
+  "nine": "back nine",
+  "survivor": {
+    "index": 5,
+    "from_hole": 10,
+    "pot": 15.0,
+    "stake": 5.0
+  },
+  "role": "decider",
+  "phase_chip": "Decider",
+  "phase_note": "PL v DK \u00b7 $15 pot",
+  "sections": [
+    {
+      "key": "in_play",
+      "title": "Decider \u00b7 PL v DK",
+      "note": "low takes it",
+      "player_ids": [
+        7,
+        8
+      ]
+    },
+    {
+      "key": "zombieville",
+      "title": "Zombieville",
+      "note": "low outright comes back",
+      "player_ids": [
+        9
+      ]
+    }
+  ],
+  "players": [
+    {
+      "player_id": 7,
+      "name": "Paul Lipkin",
+      "short": "PL",
+      "course_handicap": 8,
+      "colour_index": 0,
+      "strokes": 0,
+      "gross": 4,
+      "net": 4,
+      "is_alive": true,
+      "is_zombie": false
+    },
+    {
+      "player_id": 8,
+      "name": "Dave Kim",
+      "short": "DK",
+      "course_handicap": 12,
+      "colour_index": 1,
+      "strokes": 1,
+      "gross": 7,
+      "net": 6,
+      "is_alive": true,
+      "is_zombie": false
+    },
+    {
+      "player_id": 9,
+      "name": "Sam Reid",
+      "short": "SR",
+      "course_handicap": 15,
+      "colour_index": 2,
+      "strokes": 1,
+      "gross": 3,
+      "net": 2,
+      "is_alive": false,
+      "is_zombie": true
+    }
+  ],
+  "zombie_option": true,
+  "result": {
+    "event": "resurrected",
+    "phase_word": "decider",
+    "chip": "SR low outright",
+    "chip_nets": "net 2 v 4 v 6",
+    "chip_player_id": 9,
+    "standing": [
+      {
+        "player_id": 7,
+        "text": "PL"
+      },
+      {
+        "player_id": null,
+        "text": " v "
+      },
+      {
+        "player_id": 9,
+        "text": "SR"
+      }
+    ],
+    "standing_right": "Decider",
+    "right_is_money": false,
+    "line_lead": "SR is back in.",
+    "line_rest": "DK had the higher decider score and goes to Zombieville. Decider on 12.",
+    "survivor_ended": false
+  },
+  "next": null
+}

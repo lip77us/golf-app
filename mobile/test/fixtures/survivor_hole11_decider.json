@@ -1,0 +1,76 @@
+{
+  "hole": 11,
+  "par": 4,
+  "yards": 415,
+  "stroke_index": 4,
+  "nine": "back nine",
+  "survivor": {
+    "index": 5,
+    "from_hole": 10,
+    "pot": 15.0,
+    "stake": 5.0
+  },
+  "role": "decider",
+  "phase_chip": "Decider",
+  "phase_note": "PL v DK \u00b7 $15 pot",
+  "sections": [
+    {
+      "key": "in_play",
+      "title": "Decider \u00b7 PL v DK",
+      "note": "low takes it",
+      "player_ids": [
+        1,
+        2
+      ]
+    },
+    {
+      "key": "zombieville",
+      "title": "Zombieville",
+      "note": "low outright comes back",
+      "player_ids": [
+        3
+      ]
+    }
+  ],
+  "players": [
+    {
+      "player_id": 1,
+      "name": "Paul Lipkin",
+      "short": "PL",
+      "course_handicap": 8,
+      "colour_index": 0,
+      "strokes": 0,
+      "gross": 4,
+      "net": 4,
+      "is_alive": true,
+      "is_zombie": false
+    },
+    {
+      "player_id": 2,
+      "name": "Dave Kim",
+      "short": "DK",
+      "course_handicap": 12,
+      "colour_index": 1,
+      "strokes": 1,
+      "gross": 6,
+      "net": 5,
+      "is_alive": true,
+      "is_zombie": false
+    },
+    {
+      "player_id": 3,
+      "name": "Sam Reid",
+      "short": "SR",
+      "course_handicap": 15,
+      "colour_index": 2,
+      "strokes": 1,
+      "gross": null,
+      "net": null,
+      "is_alive": false,
+      "is_zombie": true
+    }
+  ],
+  "zombie_option": true,
+  "result": null,
+  "next": null
+}

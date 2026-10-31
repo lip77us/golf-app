@@ -18,10 +18,12 @@ void main() {
   const trays = <String, String>{
     'rabbit': 'lib/screens/rabbit_screen.dart',
     'sixes (score entry)': 'lib/screens/score_entry_screen.dart',
+    'survivor': 'lib/screens/survivor_screen.dart',
   };
   const finisher = <String, String>{
     'rabbit': '_finishRound(',
     'sixes (score entry)': '_completeRound(',
+    'survivor': '_finishRound(',
   };
 
   group('a tray that covers the pager finishes the round', () {

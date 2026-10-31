@@ -16,6 +16,7 @@ from scoring.tests._helpers import make_course, make_player
 from services.survivor import (
     calculate_survivor,
     setup_survivor,
+    survivor_hole_card,
     survivor_summary,
 )
 
@@ -279,7 +280,11 @@ class SurvivorTests(TestCase):
         self._play(3, 4, 5, 4)                      # hole 2 never posted
         s = self._summary()
         assert self._legs(s)[0] == (1, 1, 3, self.sn['Cal'], self.sn['Ann'], 'won')
-        assert self._event(s, 2) == (None, None)
+        # It RESOLVED nothing — but it knows what it would have been played
+        # as, which is what the hole in play needs before any score lands.
+        # (This read `(None, None)` while the walk recorded a standing only
+        # for scored holes, so an unscored hole reported all three alive.)
+        assert self._event(s, 2) == ('decider', None)
 
     # ── Handicaps ────────────────────────────────────────────────────────────
 
@@ -637,3 +642,301 @@ class SurvivorZombieCurrentStateTests(TestCase):
         # T is out, but he is not a Zombie — he is simply out.
         self.assertIsNone(current['zombie_id'])
         self.assertNotIn(self.t.id, current['alive_ids'])
+
+
+class SurvivorHoleCardTests(TestCase):
+    """`survivor_hole_card` — what the score-entry screen draws for one hole
+    (`~/Downloads/handoff-survivor-score-entry`).
+
+    Zombie ON, which is the game's default and the packet's example.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course)
+        self.round.bet_unit = 5
+        self.round.save(update_fields=['bet_unit'])
+        self.fs = make_foursome(
+            self.round, [('Ann', 0), ('Ben', 0), ('Cal', 0)], tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        self.sn = {m.player.name: m.player.short_name
+                   for m in self.fs.memberships.select_related('player')}
+        setup_survivor(self.fs, handicap_mode='gross', zombie_option=True)
+
+    def _play(self, hole, a, b, c):
+        submit_hole(self.fs, hole, [(self.pid['Ann'], a),
+                                    (self.pid['Ben'], b),
+                                    (self.pid['Cal'], c)])
+
+    def _card(self, hole):
+        calculate_survivor(self.fs)
+        return survivor_hole_card(self.fs, hole)
+
+    # ── The hole in play ────────────────────────────────────────────────────
+
+    def test_an_unscored_hole_knows_its_phase_and_who_is_in(self):
+        # The header chip and the players card are drawn BEFORE any score, so
+        # the standing going into the hole has to be answerable then.
+        self._play(1, 4, 5, 6)                    # Cal out
+        c = self._card(2)
+        self.assertEqual(c['role'], 'decider')
+        self.assertEqual(c['phase_chip'], 'Decider')
+        self.assertIsNone(c['result'], 'the hole is not played yet')
+        alive = [p['short'] for p in c['players'] if p['is_alive']]
+        self.assertEqual(sorted(alive), sorted([self.sn['Ann'], self.sn['Ben']]))
+
+    def test_zombieville_is_its_own_section_and_comes_last(self):
+        self._play(1, 4, 5, 6)
+        c = self._card(2)
+        keys = [s['key'] for s in c['sections']]
+        self.assertEqual(keys, ['in_play', 'zombieville'])
+        self.assertEqual(c['sections'][1]['note'], 'low outright comes back')
+        # Rows follow the sections: in play first, Zombieville last.
+        self.assertEqual(c['players'][-1]['short'], self.sn['Cal'])
+        self.assertTrue(c['players'][-1]['is_zombie'])
+
+    def test_a_fresh_survivor_has_no_zombieville_section(self):
+        c = self._card(1)
+        self.assertEqual([s['key'] for s in c['sections']], ['in_play'])
+        self.assertEqual(c['phase_chip'], 'Elimination')
+
+    def test_the_decider_chip_names_the_pair_and_the_pot(self):
+        self._play(1, 4, 5, 6)
+        c = self._card(2)
+        self.assertIn(self.sn['Ann'], c['phase_note'])
+        self.assertIn('$15 pot', c['phase_note'])
+
+    # ── The tray ────────────────────────────────────────────────────────────
+
+    def test_a_won_decider_names_the_winner_the_money_and_the_next(self):
+        self._play(1, 4, 5, 6)                    # Cal out
+        self._play(2, 4, 5, 6)                    # Ann takes it
+        r = self._card(2)['result']
+        self.assertEqual(r['event'], 'won')
+        self.assertEqual(r['chip'], f"{self.sn['Ann']} takes it")
+        self.assertEqual(r['chip_nets'], 'net 4 v 5')
+        self.assertEqual(r['standing_right'], '+$10')
+        self.assertTrue(r['right_is_money'])
+        self.assertEqual(r['line_lead'], 'Won on 2')
+        self.assertIn('$5 from each of the other two', r['line_rest'])
+        nxt = self._card(2)['next']
+        self.assertEqual((nxt['index'], nxt['start_hole']), (2, 3))
+
+    def test_an_elimination_names_the_worst_and_the_way_back(self):
+        self._play(1, 4, 5, 6)
+        r = self._card(1)['result']
+        self.assertEqual(r['event'], 'eliminated')
+        self.assertEqual(r['chip'], f"{self.sn['Cal']} out")
+        self.assertEqual(r['chip_nets'], 'net 6, worst')
+        self.assertEqual(r['line_lead'], f"{self.sn['Cal']} goes to Zombieville.")
+        self.assertIn('brings', r['line_rest'])
+        self.assertIsNone(self._card(1)['next'], 'the Survivor runs on')
+
+    def test_a_tie_carries_no_nets(self):
+        # The numbers are the evidence for something MOVING; on a tie nothing
+        # did, which is the packet's own chip list.
+        self._play(1, 4, 6, 6)                    # two tie for worst
+        r = self._card(1)['result']
+        self.assertEqual(r['event'], 'no_elimination')
+        self.assertEqual(r['chip'], 'Tie for worst')
+        self.assertEqual(r['chip_nets'], '')
+        self.assertEqual(r['standing_right'], 'Elimination')
+
+    def test_a_halved_decider_carries_and_says_who_is_chasing(self):
+        self._play(1, 4, 5, 6)                    # Cal out
+        self._play(2, 4, 4, 6)                    # deciders tie
+        r = self._card(2)['result']
+        self.assertEqual(r['event'], 'carried')
+        self.assertEqual(r['chip'], 'Decider halved')
+        self.assertEqual(r['standing_right'], 'Decider')
+        self.assertIn(self.sn['Cal'], r['line_rest'])
+
+    def test_a_zombie_coming_back_sends_a_decider_out(self):
+        self._play(1, 4, 5, 6)                    # Cal out
+        self._play(2, 5, 6, 3)                    # Cal low outright of all three
+        r = self._card(2)['result']
+        self.assertEqual(r['event'], 'resurrected')
+        self.assertEqual(r['chip'], f"{self.sn['Cal']} low outright")
+        self.assertEqual(r['chip_nets'], 'net 3 v 5 v 6')
+        self.assertEqual(r['line_lead'], f"{self.sn['Cal']} is back in.")
+        self.assertIn('Zombieville', r['line_rest'])
+
+    def test_the_standing_line_carries_a_colour_per_golfer(self):
+        self._play(1, 4, 5, 6)
+        self._play(2, 4, 5, 6)
+        r = self._card(2)['result']
+        owner = [s['player_id'] for s in r['standing'] if s['player_id']]
+        self.assertEqual(owner, [self.pid['Ann']])
+
+    # ── The 18th ────────────────────────────────────────────────────────────
+
+    def _to_hole(self, upto):
+        for h in range(1, upto, 2):
+            self._play(h,     4, 5, 6)
+            self._play(h + 1, 4, 5, 4)
+
+    def test_a_split_on_18_names_whose_stake_is_shared(self):
+        self._to_hole(17)
+        self._play(17, 4, 5, 6)                   # Cal out
+        # Cal must NOT be low outright, or a Zombie win kills it instead.
+        self._play(18, 4, 4, 5)                   # Ann + Ben tie
+        r = self._card(18)['result']
+        self.assertEqual(r['event'], 'split')
+        self.assertEqual(r['chip'], 'Tie for low')
+        self.assertEqual(r['standing_right'], '+$2.50 each')
+        self.assertTrue(r['right_is_money'])
+        # The stake shared is the ELIMINATED golfer's, and he went out on 17
+        # rather than on this hole — reading the hole's own event gives None.
+        self.assertIn(f"{self.sn['Cal']}’s $5", r['line_rest'])
+        self.assertTrue(r['survivor_ended'])
+        self.assertIsNone(self._card(18)['next'], 'there is no hole 19')
+
+    def test_no_blood_on_18_pays_nobody(self):
+        self._to_hole(17)
+        self._play(17, 4, 4, 4)                   # nobody out
+        self._play(18, 4, 4, 4)                   # all three tie for low
+        r = self._card(18)['result']
+        self.assertEqual(r['event'], 'no_blood')
+        self.assertEqual([x['text'] for x in r['standing']], ['No blood'])
+        # An em dash rather than an empty slot: the row is read ACROSS, and a
+        # blank where every other outcome carries a figure reads as missing.
+        self.assertEqual(r['standing_right'], '—')
+        self.assertFalse(r['right_is_money'])
+        self.assertIn('nobody pays', r['line_rest'])
+
+    def test_a_zombie_win_on_18_reads_as_no_blood(self):
+        # He is credited the trophy and paid nothing, so the standing line
+        # must not use money language — design's screen 08.
+        self._to_hole(17)
+        self._play(17, 4, 5, 6)                   # Cal out
+        self._play(18, 4, 4, 3)                   # Cal low outright of all three
+        r = self._card(18)['result']
+        self.assertEqual(r['event'], 'killed')
+        self.assertEqual(r['chip'], f"{self.sn['Cal']} low outright")
+        self.assertEqual(r['chip_nets'], 'net 3 v 4 v 4')
+        self.assertEqual([x['text'] for x in r['standing']], ['No blood'])
+        self.assertEqual(r['standing_right'], '—')
+        self.assertFalse(r['right_is_money'])
+        self.assertIn('kills the Survivor', r['line_rest'])
+
+    def test_the_last_hole_says_so(self):
+        self._to_hole(17)
+        self._play(17, 4, 4, 4)
+        c = self._card(18)
+        self.assertEqual(c['role'], 'final')
+        self.assertEqual(c['phase_chip'], 'Last hole')
+
+    def test_every_player_carries_a_stable_colour_index(self):
+        # Identity, not standing: the slot follows the roster so a golfer does
+        # not change colour when he is knocked out and the rows reorder.
+        self._play(1, 4, 5, 6)
+        before = {p['short']: p['colour_index'] for p in self._card(1)['players']}
+        after  = {p['short']: p['colour_index'] for p in self._card(2)['players']}
+        self.assertEqual(before, after)
+
+
+class SurvivorFixtureRegenTests(TestCase):
+    """Writes the JSON the Flutter tests draw, from the REAL engine.
+
+    `REGEN_SURVIVOR_FIXTURES=1 manage.py test scoring.tests.test_survivor`
+    rewrites them — the Sequoya arrangement. A screen tested against
+    hand-written JSON is tested against what somebody THOUGHT the server
+    sends.
+
+    Handicaps are the packet's: Paul 8, Dave 12, Sam 15, strokes off the low
+    man. **The holes are chosen from the real allocation rather than the
+    packet's hole numbers**: Dave strokes on SI ≤ 4 and Sam on SI ≤ 7, so the
+    decider is put on hole 11 (SI 4), where both of them take one — which is
+    what makes the stroke dots and the `net` chips worth drawing at all.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course)
+        self.round.bet_unit = 5
+        self.round.save(update_fields=['bet_unit'])
+        self.fs = make_foursome(
+            self.round,
+            [('Paul Lipkin', 8), ('Dave Kim', 12), ('Sam Reid', 15)],
+            tee=self.tee)
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        setup_survivor(self.fs, handicap_mode='strokes_off', net_percent=100,
+                       zombie_option=True)
+
+    def _play(self, hole, p, d, s):
+        submit_hole(self.fs, hole, [(self.pid['Paul Lipkin'], p),
+                                    (self.pid['Dave Kim'], d),
+                                    (self.pid['Sam Reid'], s)])
+
+    def _card(self, hole):
+        calculate_survivor(self.fs)
+        return survivor_hole_card(self.fs, hole)
+
+    def _write(self, name, card):
+        import json, os, pathlib
+        if os.environ.get('REGEN_SURVIVOR_FIXTURES') != '1':
+            return
+        path = (pathlib.Path(__file__).resolve().parents[2]
+                / 'mobile' / 'test' / 'fixtures' / name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(card, indent=2, default=str) + '\n')
+
+    def _to_survivor_5(self):
+        """Survivors 1-4 over holes 1-9, so Survivor 5 starts on the 10th."""
+        self._play(1, 4, 5, 7)        # SI 7: Sam strokes, still worst — out
+        self._play(2, 4, 6, 6)        # Paul takes it
+        self._play(3, 4, 5, 6)        # Sam out
+        self._play(4, 4, 6, 6)        # Paul takes it
+        self._play(5, 4, 5, 7)        # SI 1: Dave and Sam stroke; Sam out
+        self._play(6, 4, 6, 6)        # Paul takes it
+        self._play(7, 4, 5, 6)        # Sam out
+        self._play(8, 4, 4, 6)        # the decider ties and carries
+        self._play(9, 4, 6, 6)        # Paul takes Survivor 4
+
+    def test_regenerate(self):
+        self._to_survivor_5()
+        self._play(10, 4, 5, 6)                    # Sam out — Survivor 5
+        out = self._card(10)
+        self.assertEqual(out['result']['event'], 'eliminated')
+        self._write('survivor_hole10_out.json', out)
+
+        # The decider, with the Zombie still to score — the packet's phone 1a.
+        submit_hole(self.fs, 11, [(self.pid['Paul Lipkin'], 4),
+                                  (self.pid['Dave Kim'], 6)])
+        live = self._card(11)
+        self.assertIsNone(live['result'], 'the hole is not complete')
+        self.assertEqual(live['role'], 'decider')
+        self.assertEqual(
+            [p['strokes'] for p in live['players']], [0, 1, 1],
+            'hole 11 is SI 4, so Dave and Sam each take one')
+        self._write('survivor_hole11_decider.json', live)
+
+        # Sam makes 6 — Paul wins Survivor 5.
+        self._play(11, 4, 6, 6)
+        won = self._card(11)
+        self.assertEqual(won['result']['event'], 'won')
+        self._write('survivor_hole11_won.json', won)
+
+    def test_regenerate_zombie_back_all_three(self):
+        # The deciders TIE, so nobody takes his place and all three carry on.
+        self._to_survivor_5()
+        self._play(10, 4, 5, 6)                    # Sam out
+        self._play(11, 5, 6, 3)                    # Sam low outright — back in
+        card = self._card(11)
+        self.assertEqual(card['result']['event'], 'resurrected')
+        self._write('survivor_hole11_zombie_back.json', card)
+
+    def test_regenerate_zombie_back_one_out(self):
+        # The richer sentence: Sam comes back AND the higher decider takes
+        # his seat, so the next hole is still a decider.
+        self._to_survivor_5()
+        self._play(10, 4, 5, 6)                    # Sam out
+        self._play(11, 4, 7, 3)                    # Sam back; Dave the higher
+        card = self._card(11)
+        r = card['result']
+        self.assertEqual(r['event'], 'resurrected')
+        self.assertEqual(r['standing_right'], 'Decider')
+        self.assertIn('Zombieville', r['line_rest'])
+        self._write('survivor_hole11_swap.json', card)

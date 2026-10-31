@@ -228,13 +228,30 @@ def _run_survivor(game, foursome, score_index, real_ids):
         needed = list(alive)
         if zombie_on and eliminated_id is not None:
             needed.append(eliminated_id)
+        is_last = hole == last_hole
+        # **Recorded for EVERY hole, scored or not.** It used to be written
+        # after the completeness check, so an unscored hole had no state and
+        # the summary fell back to "all three alive, no Zombie" — wrong for
+        # any hole in the middle of a Survivor, and why the play screen had
+        # to walk back to the last scored hole to draw its banner. The card
+        # for the hole in play needs the standing it is ABOUT to be played
+        # under, which is exactly this.
+        state_by_hole[hole] = {
+            'alive'   : list(alive),
+            'zombie'  : eliminated_id,
+            'survivor': idx,
+            'first'   : holes[0] if holes else hole,
+            # What the hole will be played AS. The resolved rows carry their
+            # own `role`; this is the same question asked before the scores.
+            'role'    : (SurvivorHoleResult.FINAL if is_last
+                         else SurvivorHoleResult.ELIMINATION if len(alive) > 2
+                         else SurvivorHoleResult.DECIDER),
+        }
         complete, scores = _hole_scores(score_index, needed, hole)
         if not complete:
             continue                       # skip unscored; state carries
         fully_scored += 1
         holes.append(hole)
-        state_by_hole[hole] = (list(alive), eliminated_id)
-        is_last = hole == last_hole
         # Only the players still in decide the hole; the Zombie is judged
         # separately, below.
         live_scores = {pid: sc for pid, sc in scores.items() if pid in alive}
@@ -451,7 +468,9 @@ def survivor_summary(foursome) -> dict:
     holes_out: list = []
     for hole in order:
         r = results.get(hole)
-        live, zombie = state_by_hole.get(hole, (list(real_ids), None))
+        st     = state_by_hole.get(hole) or {}
+        live   = st.get('alive', list(real_ids))
+        zombie = st.get('zombie')
         entries = []
         for pid in real_ids:
             entries.append({
@@ -471,8 +490,12 @@ def survivor_summary(foursome) -> dict:
             })
         holes_out.append({
             'hole'             : hole,
-            'survivor'         : sv_of.get(hole),
-            'role'             : r.role if r else None,
+            # From the walk, so an UNSCORED hole knows which Survivor it
+            # belongs to and what it will be played as — `sv_of` covers only
+            # resolved holes, and the hole in play is by definition not one.
+            'survivor'         : st.get('survivor') or sv_of.get(hole),
+            'survivor_from'    : st.get('first'),
+            'role'             : (r.role if r else st.get('role')),
             'par'              : par_by_hole.get(hole),
             'eliminated_id'    : r.eliminated_id if r else None,
             'eliminated_short' : short(r.eliminated_id) if (r and r.eliminated_id) else None,
@@ -619,4 +642,311 @@ def survivor_summary(foursome) -> dict:
             # five on a nine-holer.
             'max_liability': bet_unit * max(1, (len(order) + 1) // 2),
         },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Score entry — one hole
+# ---------------------------------------------------------------------------
+
+_PHASE_WORD = {
+    SurvivorHoleResult.ELIMINATION: 'elimination',
+    SurvivorHoleResult.DECIDER    : 'decider',
+    SurvivorHoleResult.FINAL      : 'last hole',
+}
+_PHASE_CHIP = {
+    SurvivorHoleResult.ELIMINATION: 'Elimination',
+    SurvivorHoleResult.DECIDER    : 'Decider',
+    SurvivorHoleResult.FINAL      : 'Last hole',
+}
+
+
+def _money_text(v: float) -> str:
+    """`+$10`, `+$2.50`. Whole dollars lose the `.00`, as every other board."""
+    whole = abs(v) == int(abs(v))
+    body  = f'{abs(v):.0f}' if whole else f'{abs(v):.2f}'
+    return f"{'+' if v >= 0 else '−'}${body}"
+
+
+def _nets_text(nets: list) -> str:
+    """`net 4 v 5`, lowest first — the comparison the hole was decided on."""
+    vals = sorted(n for n in nets if n is not None)
+    return f"net {' v '.join(str(v) for v in vals)}" if vals else ''
+
+
+def survivor_hole_card(foursome, hole: int) -> dict:
+    """Everything the Survivor score-entry screen draws for ONE hole.
+
+    Built from `survivor_summary`, which has already walked the Survivors —
+    who is alive, who is in Zombieville, what the hole is being played as and
+    what it did are the ENGINE's answers, so the tray and the leaderboard
+    cannot disagree. What is derived here is layout and wording.
+
+    Returns `{}` when Survivor is not set up, so a caller can test the key.
+    """
+    summary = survivor_summary(foursome)
+    holes   = summary.get('holes') or []
+    here    = next((h for h in holes if h['hole'] == hole), None)
+    if here is None:
+        return {}
+
+    order    = [h['hole'] for h in holes]
+    pot      = float(summary['money']['pot'])
+    stake    = float(summary['money']['bet_unit'])
+    zombie_on = bool(summary.get('zombie_option'))
+    role      = here.get('role') or SurvivorHoleResult.ELIMINATION
+    sv_index  = here.get('survivor')
+    members   = [m for m in foursome.memberships.all() if not m.player.is_phantom]
+
+    # **Row order is the standing when the hole STARTS** — golfers still in,
+    # then Zombieville — and it does not move when somebody goes out or comes
+    # back on this hole. The tray says what happened; rows reorder on the
+    # next hole, which is the one they describe.
+    entries   = {e['player_id']: e for e in (here.get('entries') or [])}
+    roster    = [m.player_id for m in members]
+    in_play   = [pid for pid in roster if entries.get(pid, {}).get('is_alive')]
+    out_now   = [pid for pid in roster if pid not in in_play]
+    colour_of = {pid: i for i, pid in enumerate(roster)}
+
+    players = []
+    for pid in in_play + out_now:
+        e = entries.get(pid, {})
+        m = next((x for x in members if x.player_id == pid), None)
+        players.append({
+            'player_id'      : pid,
+            'name'           : e.get('name') or (m.player.name if m else ''),
+            'short'          : e.get('short_name'),
+            'course_handicap': m.course_handicap if m else None,
+            'colour_index'   : colour_of[pid],
+            'strokes'        : e.get('strokes', 0),
+            'gross'          : e.get('gross'),
+            'net'            : e.get('net_score'),
+            'is_alive'       : bool(e.get('is_alive')),
+            'is_zombie'      : bool(e.get('is_zombie')),
+        })
+
+    short_of = {p['player_id']: p['short'] for p in players}
+    name_of  = {p['player_id']: p['name'] for p in players}
+    net_of   = {p['player_id']: p['net'] for p in players}
+    complete = all(p['gross'] is not None for p in players)
+
+    # The sections the players card draws, and what each one is playing for.
+    alive_names = ' v '.join(short_of.get(p) or '' for p in in_play)
+    sections = [{
+        'key'   : 'in_play',
+        'title' : (f'Decider · {alive_names}' if role == SurvivorHoleResult.DECIDER
+                   else 'Last hole · what is standing'
+                   if role == SurvivorHoleResult.FINAL
+                   else 'Elimination · all three in'),
+        'note'  : ('low takes it' if role == SurvivorHoleResult.DECIDER
+                   else 'low takes it' if role == SurvivorHoleResult.FINAL
+                   else 'worst goes out'),
+        'player_ids': in_play,
+    }]
+    if out_now:
+        sections.append({
+            'key'   : 'zombieville',
+            'title' : 'Zombieville',
+            'note'  : ('low outright comes back' if zombie_on
+                       else 'out of this Survivor'),
+            'player_ids': out_now,
+        })
+
+    tee   = next((m.tee for m in members if m.tee_id), None)
+    hinfo = tee.hole(hole) if tee else {}
+
+    card = {
+        'hole'        : hole,
+        'par'         : here.get('par') or hinfo.get('par'),
+        'yards'       : hinfo.get('yards'),
+        'stroke_index': hinfo.get('stroke_index'),
+        'nine'        : 'back nine' if hole > 9 else 'front nine',
+        'survivor'    : {
+            'index'    : sv_index,
+            'from_hole': here.get('survivor_from'),
+            'pot'      : pot,
+            'stake'    : stake,
+        },
+        'role'       : role,
+        'phase_chip' : _PHASE_CHIP.get(role, 'Elimination'),
+        'phase_note' : (f'{alive_names} · ${pot:.0f} pot'
+                        if role == SurvivorHoleResult.DECIDER
+                        else f'${pot:.0f} pot'),
+        'sections'   : sections,
+        'players'    : players,
+        'zombie_option': zombie_on,
+        'result'     : None,
+        'next'       : None,
+    }
+
+    if not complete or not here.get('event'):
+        return card
+
+    card['result'] = _survivor_hole_result(
+        here, role, players, in_play, out_now, short_of, name_of, net_of,
+        summary, sv_index, stake, pot)
+
+    # The Survivor that takes over, offered only once this one has ended.
+    if card['result']['survivor_ended']:
+        pos  = order.index(hole)
+        nxt  = order[pos + 1] if pos + 1 < len(order) else None
+        if nxt is not None:
+            card['next'] = {
+                'index'     : (sv_index or 0) + 1,
+                'start_hole': nxt,
+                'pot'       : pot,
+                'title'     : f'Survivor {(sv_index or 0) + 1} from {nxt} '
+                              f'· all three in',
+                'note'      : 'Elimination first: the worst score outright '
+                              'goes out.',
+            }
+    return card
+
+
+def _survivor_hole_result(here, role, players, in_play, out_now,
+                          short_of, name_of, net_of, summary, sv_index,
+                          stake, pot) -> dict:
+    """The tray's three lines for a hole that has resolved.
+
+    **Every string is written here**, because every one of them is a RULE —
+    what a tie does, who pays whom, which Survivor takes over. A client
+    composing them would be a second copy of the engine's own transitions,
+    and the two would disagree the first time one of them was edited.
+    """
+    event = here['event']
+    out   = here.get('eliminated_id')
+    back  = here.get('resurrected_id')
+    win   = here.get('winner_id')
+    sv    = next((s for s in summary['survivors'] if s['index'] == sv_index), None)
+
+    # ── Line 1: the chip ────────────────────────────────────────────────────
+    # A tie carries NO nets: the numbers are the evidence for something
+    # moving, and on a tie nothing did (the packet's own chip list).
+    alive_nets = [net_of.get(p) for p in in_play]
+    all_nets   = [net_of.get(p['player_id']) for p in players]
+    chip_owner = None
+    if event == SurvivorHoleResult.WON:
+        chip, nets = f'{short_of.get(win)} takes it', _nets_text(alive_nets)
+        chip_owner = win
+    elif event == SurvivorHoleResult.RESURRECTED:
+        chip, nets = f'{short_of.get(back)} low outright', _nets_text(all_nets)
+        chip_owner = back
+    elif event == SurvivorHoleResult.ELIMINATED:
+        chip = f'{short_of.get(out)} out'
+        nets = f'net {net_of.get(out)}, worst'
+        chip_owner = out
+    elif event == SurvivorHoleResult.KILLED:
+        chip, nets = f'{short_of.get(win)} low outright', _nets_text(all_nets)
+        chip_owner = win
+    elif event == SurvivorHoleResult.SPLIT:
+        chip, nets = 'Tie for low', ''
+    elif event == SurvivorHoleResult.NO_BLOOD:
+        chip, nets = 'Tie for low', ''
+    elif event == SurvivorHoleResult.NO_ELIMINATION:
+        chip, nets = 'Tie for worst', ''
+    else:                                        # CARRIED
+        chip, nets = 'Decider halved', ''
+
+    # ── Line 2: the standing AFTER the hole ─────────────────────────────────
+    def span(pid, text):
+        return {'player_id': pid, 'text': text}
+
+    ended = event in (SurvivorHoleResult.WON, SurvivorHoleResult.SPLIT,
+                      SurvivorHoleResult.NO_BLOOD, SurvivorHoleResult.KILLED)
+    money, money_is_cash = None, False
+    if event == SurvivorHoleResult.WON:
+        segs  = [span(win, f'{name_of.get(win)} wins Survivor {sv_index}')]
+        money, money_is_cash = _money_text(stake * 2), True
+    elif event == SurvivorHoleResult.SPLIT:
+        pair  = [p for p in in_play]
+        segs  = [span(pair[0], short_of.get(pair[0])), span(None, ' v '),
+                 span(pair[1], short_of.get(pair[1]))]
+        money, money_is_cash = f'{_money_text(stake / 2)} each', True
+    elif event in (SurvivorHoleResult.NO_BLOOD, SurvivorHoleResult.KILLED):
+        # **A kill reads as `No blood`, not as the Zombie's name.** He is
+        # credited the trophy and paid nothing, so a standing line saying he
+        # WON it would be money language over a hole that moved none. The
+        # chip above already names him taking the hole outright, and line 3
+        # says what that did. Design's screen 08.
+        segs  = [span(None, 'No blood')]
+        money = '—'
+    else:
+        # Still running: who is in, and what the next hole is played as.
+        after_in  = [p['player_id'] for p in players if p['is_alive']]
+        if back is not None and out is None:
+            after_in = [p['player_id'] for p in players]
+        if event == SurvivorHoleResult.RESURRECTED:
+            after_in = [p['player_id'] for p in players
+                        if p['player_id'] != out]
+        if len(after_in) > 2:
+            segs  = [span(None, 'All three in')]
+            money = 'Elimination'
+        else:
+            segs  = [span(after_in[0], short_of.get(after_in[0])),
+                     span(None, ' v '),
+                     span(after_in[1], short_of.get(after_in[1]))]
+            money = 'Decider'
+
+    # ── Line 3: what happened, and what it costs ────────────────────────────
+    nxt_hole = None
+    order    = [h['hole'] for h in summary['holes']]
+    pos      = order.index(here['hole'])
+    if pos + 1 < len(order):
+        nxt_hole = order[pos + 1]
+
+    # **Who is CHASING is not who went out on this hole.** `eliminated_id` is
+    # this hole's event and is None on a halved decider — the man chasing has
+    # been in Zombieville since earlier in the Survivor, which is the standing
+    # the hole was played under. Reading the event gave `None still chasing`.
+    chaser = out_now[0] if out_now else None
+    loser  = (sv or {}).get('eliminated_id') or chaser
+
+    if event == SurvivorHoleResult.WON:
+        lead = f"Won on {here['hole']}"
+        rest = f"${stake:.0f} from each of the other two"
+    elif event == SurvivorHoleResult.CARRIED:
+        lead = ''
+        rest = (f'A tie carries. Decider again on {nxt_hole}, '
+                f'{short_of.get(chaser)} still chasing.')
+    elif event == SurvivorHoleResult.RESURRECTED and out is not None:
+        lead = f'{short_of.get(back)} is back in.'
+        rest = (f'{short_of.get(out)} had the higher decider score and goes '
+                f'to Zombieville. Decider on {nxt_hole}.')
+    elif event == SurvivorHoleResult.RESURRECTED:
+        lead = f'{short_of.get(back)} is back in.'
+        rest = (f'The deciders tied, so nobody goes out. '
+                f'Elimination on {nxt_hole}.')
+    elif event == SurvivorHoleResult.ELIMINATED:
+        lead = f'{short_of.get(out)} goes to Zombieville.'
+        rest = (f'A low score outright on {nxt_hole} brings '
+                f'{short_of.get(out)} back.'
+                if summary.get('zombie_option')
+                else f'{short_of.get(out)} is out of this Survivor.')
+    elif event == SurvivorHoleResult.NO_ELIMINATION:
+        lead = ''
+        rest = f'Nobody goes out. Elimination again on {nxt_hole}.'
+    elif event == SurvivorHoleResult.SPLIT:
+        lead = ''
+        rest = (f'Hole {here["hole"]} settles what is standing. '
+                f'{short_of.get(in_play[0])} and {short_of.get(in_play[1])} '
+                f'split {short_of.get(loser)}’s ${stake:.0f}.')
+    elif event == SurvivorHoleResult.KILLED:
+        lead = ''
+        rest = 'A Zombie win on 18 kills the Survivor. Nobody pays.'
+    else:                                        # NO_BLOOD
+        lead = ''
+        rest = 'Nobody took it outright, so nobody pays.'
+
+    return {
+        'event'         : event,
+        'phase_word'    : _PHASE_WORD.get(role, 'elimination'),
+        'chip'          : chip,
+        'chip_nets'     : nets,
+        'chip_player_id': chip_owner,
+        'standing'      : segs,
+        'standing_right': money,
+        'right_is_money': money_is_cash,
+        'line_lead'     : lead,
+        'line_rest'     : rest,
+        'survivor_ended': ended,
     }

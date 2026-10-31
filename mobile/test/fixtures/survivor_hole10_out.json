@@ -1,0 +1,86 @@
+{
+  "hole": 10,
+  "par": 4,
+  "yards": 395,
+  "stroke_index": 8,
+  "nine": "back nine",
+  "survivor": {
+    "index": 5,
+    "from_hole": 10,
+    "pot": 15.0,
+    "stake": 5.0
+  },
+  "role": "elimination",
+  "phase_chip": "Elimination",
+  "phase_note": "$15 pot",
+  "sections": [
+    {
+      "key": "in_play",
+      "title": "Elimination \u00b7 all three in",
+      "note": "worst goes out",
+      "player_ids": [
+        1,
+        2,
+        3
+      ]
+    }
+  ],
+  "players": [
+    {
+      "player_id": 1,
+      "name": "Paul Lipkin",
+      "short": "PL",
+      "course_handicap": 8,
+      "colour_index": 0,
+      "strokes": 0,
+      "gross": 4,
+      "net": 4,
+      "is_alive": true,
+      "is_zombie": false
+    },
+    {
+      "player_id": 2,
+      "name": "Dave Kim",
+      "short": "DK",
+      "course_handicap": 12,
+      "colour_index": 1,
+      "strokes": 0,
+      "gross": 5,
+      "net": 5,
+      "is_alive": true,
+      "is_zombie": false
+    },
+    {
+      "player_id": 3,
+      "name": "Sam Reid",
+      "short": "SR",
+      "course_handicap": 15,
+      "colour_index": 2,
+      "strokes": 0,
+      "gross": 6,
+      "net": 6,
+      "is_alive": true,
+      "is_zombie": false
+    }
+  ],
+  "zombie_option": true,
+  "result": {
+    "event": "eliminated",
+    "phase_word": "elimination",
+    "chip": "SR out",
+    "chip_nets": "net 6, worst",
+    "chip_player_id": 3,
+    "standing": [
+      {
+        "player_id": null,
+        "text": "All three in"
+      }
+    ],
+    "standing_right": "Elimination",
+    "right_is_money": false,
+    "line_lead": "SR goes to Zombieville.",
+    "line_rest": "A low score outright on 11 brings SR back.",
+    "survivor_ended": false
+  },
+  "next": null
+}

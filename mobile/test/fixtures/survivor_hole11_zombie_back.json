@@ -1,0 +1,93 @@
+{
+  "hole": 11,
+  "par": 4,
+  "yards": 415,
+  "stroke_index": 4,
+  "nine": "back nine",
+  "survivor": {
+    "index": 5,
+    "from_hole": 10,
+    "pot": 15.0,
+    "stake": 5.0
+  },
+  "role": "decider",
+  "phase_chip": "Decider",
+  "phase_note": "PL v DK \u00b7 $15 pot",
+  "sections": [
+    {
+      "key": "in_play",
+      "title": "Decider \u00b7 PL v DK",
+      "note": "low takes it",
+      "player_ids": [
+        4,
+        5
+      ]
+    },
+    {
+      "key": "zombieville",
+      "title": "Zombieville",
+      "note": "low outright comes back",
+      "player_ids": [
+        6
+      ]
+    }
+  ],
+  "players": [
+    {
+      "player_id": 4,
+      "name": "Paul Lipkin",
+      "short": "PL",
+      "course_handicap": 8,
+      "colour_index": 0,
+      "strokes": 0,
+      "gross": 5,
+      "net": 5,
+      "is_alive": true,
+      "is_zombie": false
+    },
+    {
+      "player_id": 5,
+      "name": "Dave Kim",
+      "short": "DK",
+      "course_handicap": 12,
+      "colour_index": 1,
+      "strokes": 1,
+      "gross": 6,
+      "net": 5,
+      "is_alive": true,
+      "is_zombie": false
+    },
+    {
+      "player_id": 6,
+      "name": "Sam Reid",
+      "short": "SR",
+      "course_handicap": 15,
+      "colour_index": 2,
+      "strokes": 1,
+      "gross": 3,
+      "net": 2,
+      "is_alive": false,
+      "is_zombie": true
+    }
+  ],
+  "zombie_option": true,
+  "result": {
+    "event": "resurrected",
+    "phase_word": "decider",
+    "chip": "SR low outright",
+    "chip_nets": "net 2 v 5 v 5",
+    "chip_player_id": 6,
+    "standing": [
+      {
+        "player_id": null,
+        "text": "All three in"
+      }
+    ],
+    "standing_right": "Elimination",
+    "right_is_money": false,
+    "line_lead": "SR is back in.",
+    "line_rest": "The deciders tied, so nobody goes out. Elimination on 12.",
+    "survivor_ended": false
+  },
+  "next": null
+}

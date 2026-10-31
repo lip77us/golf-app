@@ -8277,3 +8277,99 @@ them, so `_actions()` and the header's `Edit scores` have never rendered —
 the screen uses its own pager for 40 Balls rather than the picker's. Worth
 removing with the next thing that touches that file; left alone here because
 the request was about a rule, not a tidy.
+
+## Survivor score entry — `handoff-survivor-score-entry`
+
+The keypad and dark tray carried to Survivor, on the same widgets as 40
+Balls, Sixes, Rabbit and Annandale Friday. The packet's first instruction is
+that rule, and it is why the only new widget file is the three Survivor
+pieces: `TrayEditHeader` and `FortyBallsKeypad` are reused unchanged.
+
+**It stays on the DEDICATED screen**, the same call Rabbit got and the
+opposite of Sixes'. `survivor_screen.dart` already carries the combo-tee
+chip, Spots capture, the `effectiveScores` sync merge, withdrawal and the R5
+rail; replacing its entry card keeps all of it, where moving the game to the
+shared screen would have been the larger change. Five source guards pin
+exactly what such a screen loses — the row's chip and Spots button, the
+keypad POSTING the hole on its last score, the keypad reading the game's
+strokes rather than the round's, the pager surviving under the keypad, and a
+clear going out as a null gross.
+
+### `services.survivor.survivor_hole_card(foursome, hole)`
+
+Built from `survivor_summary`, so who is alive, who is in Zombieville, what
+the hole is being played as and what it did are the ENGINE's answers.
+
+**Every sentence is written on the server** (`_survivor_hole_result`),
+because every one of them is a rule — what a tie does, who pays whom, which
+Survivor takes over. The chip, the standing line and the what-happened line
+all arrive finished; the client renders and formats nothing.
+
+Three things that shape it:
+
+- **A tie carries NO nets.** `Paul takes it · net 4 v 5` and `Sam out · net
+  7, worst` state the comparison the hole turned on; `Decider halved`, `Tie
+  for worst` and `Tie for low` carry none, because the numbers are evidence
+  for something moving and on a tie nothing did. The packet's own chip list.
+- **A Zombie win on 18 reads as `No blood`**, not as his name. He is
+  credited the trophy and paid nothing, so a standing line saying he WON
+  would be money language over a hole that moved none. The right slot is an
+  em dash rather than empty — the row is read across, and a blank where every
+  other outcome carries a figure reads as missing. Design's screen 08.
+- **Who is CHASING is not who went out on this hole.** `eliminated_id` is the
+  hole's own event and is None on a halved decider, where the man chasing has
+  been in Zombieville since earlier in the Survivor. Reading the event gave
+  `None still chasing`; the standing going INTO the hole is the answer.
+
+**Row order is the standing when the hole STARTS** — in play, then
+Zombieville — and does not move when somebody goes out or comes back on it.
+The tray says what happened and the rows reorder on the next hole, which is
+the one they describe. The keypad follows the rows, so `_rowOrder` is what
+both read.
+
+### The walk records a standing for EVERY hole
+
+`_run_survivor` wrote `state_by_hole` after its completeness check, so an
+unscored hole had none and the summary fell back to "all three alive, no
+Zombie" — which is why the play screen had to walk back to the last scored
+hole to draw its banner. The hole in play needs the standing it is about to
+be played under, so the record moved above the check, and each entry carries
+`alive`, `zombie`, `survivor`, the Survivor's first hole and the `role` the
+hole will be played as.
+
+**That broke the lock screen, and the bug is worth more than the fix.**
+`live_activity_survivor._holes_of` filtered `h['survivor'] == idx` and got
+away with it only because an unscored hole carried no Survivor — so it was
+really asking "has this hole resolved", by accident, through a field that
+happened to be null. The moment unplayed holes had one, the track drew holes
+nobody had reached as `played`. `_track`'s own comment already said *"a row's
+existence says nothing about whether it was played"* and called it the third
+bug of that shape; this was the fourth. It asks outright now (`and
+h.get('event')`).
+
+**One assertion looked like 178 infrastructure failures.** That test failing
+killed its parallel worker, and everything scheduled after it reported
+`InterfaceError('connection already closed')` — 66 `setUpClass` errors across
+suites that had nothing to do with it. Running the same command on a stashed
+tree (3732 tests, OK) is what separated the two; the first failure in the log
+is the only one worth reading.
+
+### Fixtures
+
+`REGEN_SURVIVOR_FIXTURES=1 manage.py test scoring.tests.test_survivor` writes
+the five JSON files `mobile/test/survivor_entry_test.dart` draws.
+
+**The holes are chosen from the real allocation, not the packet's numbers.**
+Strokes off the low man with Paul 8 / Dave 12 / Sam 15 gives Dave strokes on
+SI ≤ 4 and Sam on SI ≤ 7, and the packet's hole 10 is SI 8 — nobody strokes
+there, so the stroke dots and the `net` chips would have drawn nothing. The
+decider is on hole 11 (SI 4), where both of them take one.
+
+Tests: `SurvivorHoleCardTests` (18) + `SurvivorFixtureRegenTests` (3) in
+`scoring/tests/test_survivor.py`, `api/test_survivor_hole_card.py` (6),
+`mobile/test/survivor_entry_test.dart` (18).
+
+**Not built:** the packet's phone 5b (rows reordering on the NEXT hole) is
+the server's doing and needs no client work, but it has no test; and the
+`last hole` section title is written here rather than taken from the packet,
+which only specifies the decider and elimination bands.
