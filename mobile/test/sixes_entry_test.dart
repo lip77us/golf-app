@@ -34,7 +34,25 @@ String _allText(WidgetTester t) => t
     .map((w) => w.data ?? w.textSpan?.toPlainText() ?? '')
     .join('\n');
 
+
+/// The scorecard under score entry is the BOARD's.
+///
+/// It drew on both — the same widget and the same payload — which is two
+/// drawings of one thing, and under the tray it is the one nobody can read
+/// (Paul, 31 Oct 2026). Rabbit's grid and Survivor's rail came off their
+/// screens for the same reason.
+void _scorecardIsTheBoards() {
+  test('score entry draws no Sixes scorecard', () {
+    final src = File('lib/screens/score_entry_screen.dart').readAsStringSync();
+    final at = src.indexOf("if (games.contains('sixes'))");
+    expect(at, -1,
+        reason: 'the Sixes block in the status section is back: '
+            '${at > 0 ? src.substring(at, at + 120) : ''}');
+  });
+}
+
 void main() {
+  _scorecardIsTheBoards();
   group('the hole header', () {
     testWidgets('states the standing in the leader\'s colour', (t) async {
       final card = _card('sixes_hole10_live');

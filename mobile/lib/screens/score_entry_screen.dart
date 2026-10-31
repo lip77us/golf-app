@@ -6200,22 +6200,12 @@ class _GameStatusSection extends StatelessWidget {
         ],
 
         // The match strip is gone — the app-bar standing row replaced it.
-        if (games.contains('sixes')) ...[
-          // The card the leaderboard shows, under the match scores. Same
-          // widget, same payload, same green hole-winner cell — the group
-          // reads the holes it just played without leaving score entry.
-          if (sixesSummary != null && sixesSummary!.holes.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: HoleGridScorecard(
-                holes:        sixesSummary!.holes,
-                participants: sixesSummary!.players,
-                legend:       null,
-                holesInPlay:  sixesSummary!.holesInPlay,
-              ),
-            ),
-          const SizedBox(height: 12),
-        ],
+        // **Sixes' scorecard is the BOARD's** (Paul, 31 Oct 2026). It drew
+        // here too — the same widget and the same payload the leaderboard
+        // uses — which is two drawings of one thing, and under the tray it
+        // is the one nobody can read. Rabbit's grid and Survivor's rail came
+        // off their screens for the same reason; the tray says what the hole
+        // did, and the board says what the round looks like.
 
         // Triple Cup — the app's standard scorecard.
         //

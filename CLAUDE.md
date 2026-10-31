@@ -8406,3 +8406,15 @@ its own prose. (Cost one red run.)
 **The other new boards show no handicap at all** — Points, Skins, Rabbit and
 Nassau name none, and Sequoya answers it with a strokes card instead. Worth
 deciding as one thing rather than four.
+
+**Sixes, Rabbit and Survivor needed nothing** (asked for, 31 Oct 2026): the
+label is composed once in `leaderboard_screen` and `low_net_round` emits a
+row for every individual-ball round, so one change covered all three.
+Verified against the local database rather than asserted — `16.2 · CH 16`,
+`16.4 · CH 17`, and a Survivor round reading **`16.2 · CH 14`**, which is the
+case that makes it worth doing: the index alone said nothing about the
+strokes that golfer was getting.
+
+**Sixes' scorecard came off score entry** with them. Same widget and same
+payload as the leaderboard's, so it was the third screen drawing a board's
+card under a tray that leaves no room to read it.
