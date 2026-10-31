@@ -73,7 +73,6 @@
   "zombie_option": true,
   "result": {
     "event": "resurrected",
-    "phase_word": "The Duel",
     "chip": "SR low outright",
     "chip_nets": "net 2 v 5 v 5",
     "chip_player_id": 6,

@@ -8518,3 +8518,29 @@ Fixtures regenerated. A 1px overflow turned up in the tray's hole line —
 `Hole 10 · The Island` beside a long chip — and the fix is the label
 yielding, not the chip: the chip still takes the rest of the row, and the
 label is the half that can ellipsise without losing a fact.
+
+#### The phase was on the screen four times
+
+Reported from the device (31 Oct 2026): *"Jim Low out… does not fit. It does
+say the duel twice."* Two observations, one cause.
+
+On a resurrection hole the screen read `The Duel` in the header chip, in the
+section band, in the tray's hole line and in the tray's standing line — four
+times, because the last two are different facts (the hole just played, and
+the hole coming) that happen to coincide whenever a Duel carries on.
+
+**The backward-looking one went.** The tray's line 1 is `Hole 11` with the
+chip, which is exactly Rabbit's tray line — one less shape to learn — and the
+phase of the hole just played is still on screen twice directly above it.
+Line 2 keeps naming the NEXT phase, which is the only forward-looking one.
+
+**That is also what fixed the chip.** `Jim low outright · net 4 v 5 v 6` was
+being ellipsised to `Jim low out…` by a label it did not need; dropping the
+phase hands the chip the row's whole slack. The guard measures that share
+rather than the fit, because the Flutter test font is one square per glyph
+and can say nothing about a real screen — **this still wants eyeballing on
+the device.**
+
+`phase_word` had no reader left, so it is gone from the payload and
+`_PHASE_WORD` with it: a field nobody reads is the same dead weight as a flag
+nobody reads.

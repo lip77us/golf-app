@@ -73,7 +73,6 @@
   "zombie_option": true,
   "result": {
     "event": "resurrected",
-    "phase_word": "The Duel",
     "chip": "SR low outright",
     "chip_nets": "net 2 v 4 v 6",
     "chip_player_id": 9,
@@ -94,7 +93,7 @@
     "standing_right": "The Duel",
     "right_is_money": false,
     "line_lead": "SR is back in.",
-    "line_rest": "DK had the higher score in the Duel and goes to Zombieville. The Duel on 12.",
+    "line_rest": "DK had the higher score and goes to Zombieville. The Duel on 12.",
     "survivor_ended": false
   },
   "next": null

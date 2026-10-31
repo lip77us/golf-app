@@ -660,11 +660,6 @@ def survivor_summary(foursome) -> dict:
 #
 # The names do not change with the Zombie option, which is the point of
 # having them: a golfer learns one word for the phase he is in.
-_PHASE_WORD = {
-    SurvivorHoleResult.ELIMINATION: 'The Island',
-    SurvivorHoleResult.DECIDER    : 'The Duel',
-    SurvivorHoleResult.FINAL      : 'last hole',
-}
 _PHASE_CHIP = {
     SurvivorHoleResult.ELIMINATION: 'The Island',
     SurvivorHoleResult.DECIDER    : 'The Duel',
@@ -921,8 +916,11 @@ def _survivor_hole_result(here, role, players, in_play, out_now,
                 f'{short_of.get(chaser)} still chasing.')
     elif event == SurvivorHoleResult.RESURRECTED and out is not None:
         lead = f'{short_of.get(back)} is back in.'
-        rest = (f'{short_of.get(out)} had the higher score in the Duel and '
-                f'goes to Zombieville. The Duel on {nxt_hole}.')
+        # **No `in the Duel` clause.** The chip and the standing line above
+        # both say which phase this is, so naming it inside the sentence as
+        # well made the tray state it three times on one hole.
+        rest = (f'{short_of.get(out)} had the higher score and goes to '
+                f'Zombieville. The Duel on {nxt_hole}.')
     elif event == SurvivorHoleResult.RESURRECTED:
         lead = f'{short_of.get(back)} is back in.'
         rest = (f'The Duel tied, so nobody goes out. '
@@ -950,7 +948,6 @@ def _survivor_hole_result(here, role, players, in_play, out_now,
 
     return {
         'event'         : event,
-        'phase_word'    : _PHASE_WORD.get(role, 'elimination'),
         'chip'          : chip,
         'chip_nets'     : nets,
         'chip_player_id': chip_owner,

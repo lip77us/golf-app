@@ -66,7 +66,6 @@
   "zombie_option": true,
   "result": {
     "event": "eliminated",
-    "phase_word": "The Island",
     "chip": "SR out",
     "chip_nets": "net 6, worst",
     "chip_player_id": 3,

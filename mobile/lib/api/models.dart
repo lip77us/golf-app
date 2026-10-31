@@ -9903,9 +9903,6 @@ class SurvivorHoleOutcome {
   /// `no_blood` · `resurrected` · `killed`.
   final String event;
 
-  /// `elimination` · `decider` · `last hole`.
-  final String phaseWord;
-
   /// The chip: what happened, and the comparison it happened on. A tie
   /// carries no nets — the numbers are the evidence for something moving.
   final String chip;
@@ -9927,7 +9924,6 @@ class SurvivorHoleOutcome {
 
   const SurvivorHoleOutcome({
     required this.event,
-    required this.phaseWord,
     required this.chip,
     required this.chipNets,
     required this.chipPlayerId,
@@ -9942,7 +9938,6 @@ class SurvivorHoleOutcome {
   factory SurvivorHoleOutcome.fromJson(Map<String, dynamic> j) =>
       SurvivorHoleOutcome(
         event: (j['event'] as String?) ?? '',
-        phaseWord: (j['phase_word'] as String?) ?? '',
         chip: (j['chip'] as String?) ?? '',
         chipNets: (j['chip_nets'] as String?) ?? '',
         chipPlayerId: (j['chip_player_id'] as num?)?.toInt(),

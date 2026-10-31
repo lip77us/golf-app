@@ -140,6 +140,35 @@ void main() {
       expect(text, contains(card.result!.chip));
     });
 
+    testWidgets('the hole line names no phase, and the chip gets the room',
+        (t) async {
+      // The phase was on this line too, which made it the THIRD statement of
+      // the same thing on one screen — the header chip and the section band
+      // carry it above, and the standing line below names the NEXT one. On a
+      // resurrection all four read `The Duel` (Paul, 31 Oct 2026), and the
+      // label was squeezing `Jim low outright · net 4 v 5 v 6` into
+      // `Jim low out…`.
+      final card = _card('survivor_hole11_swap');
+      await _pump(t, SurvivorHoleTray(
+          card: card, nextHole: 12, onEdit: () {}));
+
+      final hole = find.text('Hole 11');
+      expect(hole, findsOneWidget);
+      // Measured as geometry, not as fit: the test font is one square per
+      // glyph, so nothing here can say whether a string fits a real phone.
+      // What it CAN pin is that the chip is handed the row's whole slack.
+      final row = t.getSize(
+          find.ancestor(of: hole, matching: find.byType(Row)).first);
+      final label = t.getSize(hole);
+      final chip = t.getSize(find
+          .ancestor(
+              of: find.text(card.result!.chip), matching: find.byType(Container))
+          .first);
+      expect(chip.width, greaterThan(row.width / 2),
+          reason: 'the chip was splitting the row with the hole label');
+      expect(chip.width, closeTo(row.width - label.width - 10, 1));
+    });
+
     testWidgets('the last hole offers Complete Round, not a dead Done',
         (t) async {
       var finished = false;

@@ -73,7 +73,6 @@
   "zombie_option": true,
   "result": {
     "event": "won",
-    "phase_word": "The Duel",
     "chip": "PL takes it",
     "chip_nets": "net 4 v 5",
     "chip_player_id": 1,

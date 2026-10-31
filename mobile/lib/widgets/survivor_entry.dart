@@ -479,28 +479,23 @@ class SurvivorHoleTray extends StatelessWidget {
             // The chip gets the row's slack, not the label — three characters
             // and a number against a sentence (Rabbit, 30 Oct 2026).
             Row(children: [
-              // **Flexible, so the chip is never squeezed past its own
-              // padding.** The chip still gets the room — it takes the rest
-              // of the row — but with a fixed label a long phase name and a
-              // long chip together overflowed by a pixel, and the label is
-              // the half that can ellipsise without losing a fact.
-              Flexible(
-                child: Text.rich(
-                  TextSpan(children: [
-                    TextSpan(
-                        text: 'Hole ${card.hole}',
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16)),
-                    TextSpan(
-                        text: ' · ${r.phaseWord}',
-                        style: const TextStyle(color: _dim, fontSize: 14)),
-                  ]),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
+              // **`Hole 10`, with no phase after it.** The phase was named
+              // here as well, which made it the THIRD statement of the same
+              // thing on one screen — the header chip and the section band
+              // both carry it directly above — and the fourth is the line
+              // below, which names the phase of the NEXT hole. On a
+              // resurrection all four were `The Duel` (Paul, 31 Oct 2026).
+              //
+              // Dropping the backward-looking one is also what gives the
+              // chip its room: `Jim low outright · net 4 v 5 v 6` was
+              // ellipsised to `Jim low out…` by a label it did not need.
+              // This is now exactly Rabbit's tray line, which is one less
+              // shape to learn.
+              Text('Hole ${card.hole}',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16)),
               const SizedBox(width: 10),
               Expanded(
                 child: Align(
