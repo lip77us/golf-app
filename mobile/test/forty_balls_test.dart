@@ -138,11 +138,18 @@ void main() {
       expect(taps, [4]);
     });
 
-    testWidgets('a settled hole says so and offers nothing', (tester) async {
+    testWidgets('a settled hole fixes the COUNT, not the scores',
+        (tester) async {
+      // The count lock is the game's rule — `_is_locked` refuses a pick once
+      // a later hole has scores. A score is a different thing: nothing
+      // guards its save, so a wrong number can still be fixed, and the note
+      // used to read as though the whole hole were closed (Paul, 31 Oct
+      // 2026).
       await pumpPicker(tester,
           picker(count: 2, canPick: false, locked: true));
-      expect(find.text('Settled'), findsOneWidget);
+      expect(find.text('Count settled'), findsOneWidget);
       expect(find.textContaining('fixed at 2'), findsOneWidget);
+      expect(find.textContaining('can still be corrected'), findsOneWidget);
     });
 
     testWidgets('a group that is OUT says so and offers no counts',

@@ -152,11 +152,19 @@ class FortyBallsPicker extends StatelessWidget {
       ));
     }
     if (state.locked) {
+      // **The COUNT is settled; a score is not.** The note said only that the
+      // group had moved on, which reads as "nothing here can change" — and
+      // Paul asked whether a score edit could be allowed on a past hole
+      // while the count stayed fixed (31 Oct 2026). It already is: nothing
+      // guards the score save, the pager's forward button posts the edit,
+      // and the summary is derived on read so the hole's result recomputes
+      // against the stored count. Only the app never said so.
       return _tray(child: _TrayNote(
         icon: Icons.lock_outline,
-        title: 'Settled',
+        title: 'Count settled',
         body: "The group has moved on, so this hole's count is fixed"
-              '${state.count == null ? '' : ' at ${state.count}'}.',
+              '${state.count == null ? '' : ' at ${state.count}'}'
+              '. A wrong score can still be corrected — tap it above.',
       ));
     }
 

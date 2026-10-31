@@ -8246,3 +8246,34 @@ deliberately NOT swept into the shared header: that tray rises before every
 score is in (its title has two states) and the group has a ball COUNT to
 re-pick as well as scores, so what its edit should do is a question rather
 than a copy. Left for its own look.
+
+### 40 Balls: the COUNT is settled, the score is not
+
+Paul, 31 Oct 2026: *"once you submit hole N and the ball count, you can't
+edit the previous hole. Probably better to allow a score edit, but certainly
+not a ball count edit. Is that possible?"*
+
+**It already is, end to end** — checked against the code rather than assumed:
+
+- **The count** is frozen exactly as he describes. `_is_locked` answers "a
+  later hole has scores", and `set_count` raises `FortyBallsLocked` on it.
+  That rule predates the question and is unchanged.
+- **The score** is not guarded anywhere. `ScoreSubmitView` knows nothing
+  about 40 Balls; the pager's forward button calls `_saveAndAdvance`, and on
+  a settled hole `canPick` is false so `needsPick` is false and the button is
+  live; and `forty_balls_summary` is derived on READ, so the hole's result
+  recomputes against the stored count. Tapping a row opens the keypad on a
+  past hole like any other game.
+
+So nothing needed building. What was wrong is that the app **said the
+opposite**: a settled hole drew only `Settled — the group has moved on, so
+this hole's count is fixed at 2`, which reads as the whole hole being closed.
+It now names what is fixed (`Count settled`) and says a wrong score can still
+be corrected.
+
+**The picker's own action row is dead code.** `onEditScores`, `onNext` and
+`onBack` are all optional and the single construction site passes none of
+them, so `_actions()` and the header's `Edit scores` have never rendered —
+the screen uses its own pager for 40 Balls rather than the picker's. Worth
+removing with the next thing that touches that file; left alone here because
+the request was about a rule, not a tidy.
