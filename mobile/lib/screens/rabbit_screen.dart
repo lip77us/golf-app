@@ -154,12 +154,14 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
         hole,
         queued: context.read<RoundProvider>().localPendingByHole,
         pending: _pending,
+        clearedSentinel: _kCleared,
       );
 
   /// True once any score has been entered (saved or pending) — gates the
   /// app-bar Exit (✕) on a single-foursome casual round.
   bool get _hasAnyScore {
-    if (_pending.isNotEmpty) return true;
+    if (_pending.values
+        .any((h) => h.values.any((v) => v != _kCleared))) return true;
     final rp = context.read<RoundProvider>();
     final sc = rp.scorecard;
     if (sc != null) {
@@ -183,14 +185,22 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
   bool _allScored(List<Membership> players, Map<int, int> scores) =>
       players.every((m) => scores.containsKey(m.player.id));
 
+  /// Stored in [_pending] for a CLEARED score: dropped from the effective
+  /// scores so the box reads blank, and sent as a **null gross** so the
+  /// server deletes the row.
+  ///
+  /// It used to REMOVE the pending entry instead, which clears a score the
+  /// phone has not sent yet and does nothing at all to one the server
+  /// already holds — the merge still carried the saved value, so the box
+  /// never changed. Reported as "clear does not appear to do anything"
+  /// (Paul, 31 Oct 2026). The sync path was always ready for this: the local
+  /// DB skips a queued clear so it cannot re-show as an overlay, and
+  /// `submitHole` is typed `int?` with `gross_score null = clear`.
+  static const int _kCleared = -1;
+
   void _selectScore(Membership player, int score, int hole) {
     setState(() {
-      if (score == -1) {
-        _pending[hole]?.remove(player.player.id);
-        if (_pending[hole]?.isEmpty ?? false) _pending.remove(hole);
-      } else {
-        _pending.putIfAbsent(hole, () => <int, int>{})[player.player.id] = score;
-      }
+      _pending.putIfAbsent(hole, () => <int, int>{})[player.player.id] = score;
     });
   }
 
@@ -204,7 +214,7 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
     final wasAllScored =
         sc != null && _allScored(players, _effectiveScores(sc, hole));
     _selectScore(m, score, hole);
-    if (sc == null || score <= 0) return;
+    if (sc == null) return;
     if (wasAllScored) {
       // Editing an already-complete (past) hole: there's no save+advance step
       // for a correction, so persist it immediately — otherwise the change is
@@ -222,6 +232,9 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
       _saveHole(ctx, hole, players);
       return;
     }
+    // A clear on a hole that was NOT complete has nothing to save yet — the
+    // box blanks and the group carries on entering.
+    if (score <= 0) return;
     // **A tray game saves and STAYS.** The tray IS the end of the hole —
     // what it did to the rabbit, and what takes over — and its forward button
     // is the advance. Auto-advance would carry the scorer straight past it,
@@ -369,7 +382,10 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
     final edits = _pending[hole];
     if (edits == null || edits.isEmpty) return;
     final scores = edits.entries
-        .map((e) => {'player_id': e.key, 'gross_score': e.value})
+        .map((e) => {
+              'player_id': e.key,
+              'gross_score': e.value == _kCleared ? null : e.value,
+            })
         .toList();
     final rp = context.read<RoundProvider>();
     final ok = await rp.submitHole(
@@ -408,7 +424,10 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
     final pendingForHole = _pending[_selectedHole];
     if (pendingForHole != null && pendingForHole.isNotEmpty) {
       final scores = pendingForHole.entries
-          .map((e) => {'player_id': e.key, 'gross_score': e.value})
+          .map((e) => {
+                'player_id': e.key,
+                'gross_score': e.value == _kCleared ? null : e.value,
+              })
           .toList();
       final ok = await rp.submitHole(
         foursomeId: widget.foursomeId, holeNumber: _selectedHole, scores: scores);
@@ -839,9 +858,15 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
             card: card,
             nextHole: nextHole,
             gettingResult: _pending[_selectedHole]?.isNotEmpty ?? false,
+            // **It picks nobody.** It used to open on `players.first`, so
+            // coming back to fix one golfer's score put the keypad on
+            // another and a quick tap changed the wrong man's number. The
+            // tray stays up saying to tap a score, and that tap is the
+            // selection — the card above was always the real control.
+            picking: _trayEditing,
             onEdit: () => setState(() {
-              _trayEditing = true;
-              _editingPlayerId = players.first.player.id;
+              _trayEditing = !_trayEditing;
+              _editingPlayerId = null;
             }),
             onPrev: prevHole == null ? null : _retreat,
             onNext: nextHole == null ? null : _advance,
@@ -904,7 +929,11 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
               // it, and `gross_score` has `min_value=1`, so the server
               // refused the WHOLE hole and the sync queue dropped it as a
               // permanent 4xx. Score entry's keypad has always passed −1.
-              onClear: () => _selectScore(m, -1, _selectedHole),
+              // Through `_handleScore`, so a clear on a hole that was
+              // already complete POSTS like any other edit to one — the
+              // server deletes the row rather than the clear living on this
+              // screen until it is navigated away from.
+              onClear: () => _handleScore(ctx, m, _kCleared, players),
             ),
             _pager(ctx, rp, players, allDone, isComplete,
                    prevHole, nextHole),

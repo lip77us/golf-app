@@ -216,6 +216,18 @@ void main() {
       expect(neutral.color, isNot(owned.color));
     });
 
+    testWidgets('Edit scores asks which golfer rather than choosing', (t) async {
+      final card = _card('rabbit_hole8_loose');
+      await _pump(t, RabbitHoleTray(
+          card: card, nextHole: 9, onEdit: () {}, picking: true));
+      final text = _allText(t);
+      // The summary stays up — you can see the hole you are about to change.
+      expect(text, contains('P loses it'));
+      expect(text, contains('Tap a score above to change it'));
+      expect(text, contains('Done'));
+      expect(text.contains('Edit scores'), isFalse);
+    });
+
     testWidgets('a won rabbit names the money and the next one', (t) async {
       final card = _card('rabbit_hole10_won_early');
       await _pump(t, RabbitHoleTray(card: card, nextHole: 11, onEdit: () {}));

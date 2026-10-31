@@ -24,8 +24,12 @@ void main() {
     for (final e in files.entries) {
       test('every _trayEditing = true in ${e.key} sits under onEdit', () {
         final src = File(e.value).readAsStringSync();
+        // Anything that can turn it ON — Rabbit's Edit toggles it, so a
+        // pattern looking only for `= true` would silently find nothing and
+        // pass about a file it had stopped checking.
         final starts = <int>[];
-        for (final m in RegExp(r'_trayEditing\s*=\s*true').allMatches(src)) {
+        for (final m in RegExp(r'_trayEditing\s*=\s*(?:true|!_trayEditing)')
+            .allMatches(src)) {
           starts.add(m.start);
         }
         expect(starts, isNotEmpty, reason: 'the session flag moved');
@@ -43,6 +47,18 @@ void main() {
         }
       });
     }
+
+    test('Edit scores picks nobody', () {
+      // It opened on `players.first`, so coming back to fix one golfer's
+      // score put the keypad on another (Paul, 31 Oct 2026).
+      final src = File(files['rabbit']!).readAsStringSync();
+      final at = src.indexOf('onEdit: () => setState(() {');
+      expect(at, greaterThan(0));
+      final body = src.substring(at, src.indexOf('}),', at));
+      expect(body, contains('_editingPlayerId = null'));
+      expect(body.contains('players.first'), isFalse,
+          reason: 'the session must not guess a golfer');
+    });
 
     test('the Rabbit tray gate asks only about the cursor', () {
       // A session always has a golfer under the keypad, so asking about the

@@ -1277,7 +1277,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// app-bar Exit (✕) on casual rounds: before any score, the back arrow
   /// returns to the launch page (to edit config/tees); after, ✕ exits.
   bool get _hasAnyScore {
-    if (_pending.isNotEmpty) return true;
+    if (_pending.keys.any(_hasRealPending)) return true;
     final rp = context.read<RoundProvider>();
     // Saved scores in the loaded scorecard — reflects a just-saved hole even
     // before the round detail (foursome.hasAnyScore) reloads.
@@ -1305,16 +1305,25 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     return result;
   }
 
+  /// A clear STORES [_kClearedScore] rather than removing the entry.
+  ///
+  /// Removing it clears a score the phone has not sent yet and does nothing
+  /// at all to one the server already holds — the merge still carries the
+  /// saved value, so the box never changes. Reported on Rabbit as "clear does
+  /// not appear to do anything" (Paul, 31 Oct 2026); this screen's Clear had
+  /// the identical no-op. Everything else for it was already here — the
+  /// sentinel, its merge filter, both payload mappings and the Banker strip's
+  /// — and only the writer was missing.
   void _selectScore(Membership player, int score, int hole) {
     setState(() {
-      if (score == -1) {
-        _pending[hole]?.remove(player.player.id);
-        if (_pending[hole]?.isEmpty ?? false) _pending.remove(hole);
-      } else {
-        _pending.putIfAbsent(hole, () => <int, int>{})[player.player.id] = score;
-      }
+      _pending.putIfAbsent(hole, () => <int, int>{})[player.player.id] = score;
     });
   }
+
+  /// Pending entries for [hole] that are real scores — a map holding only
+  /// clears is not "something typed".
+  bool _hasRealPending(int hole) =>
+      (_pending[hole] ?? const {}).values.any((v) => v != _kClearedScore);
 
 
 
@@ -3055,7 +3064,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                   ? null
                   : () => _openSixesTeamPicker(rp, six.nextMatch!.number),
               gettingResult: rp.trayResultPending(_selectedHole) ||
-                  (_pending[_selectedHole]?.isNotEmpty ?? false),
+                  _hasRealPending(_selectedHole),
               notSynced: rp.trayHoleUnsynced(_selectedHole),
               onEdit: () => setState(() {
                 _trayEditing = true;
@@ -3070,7 +3079,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               skins    : games.contains('skins') ? rp.skinsSummary : null,
               playerCount: players.length,
               gettingResult: rp.annandaleResultPending(_selectedHole) ||
-                  (_pending[_selectedHole]?.isNotEmpty ?? false),
+                  _hasRealPending(_selectedHole),
               notSynced: rp.annandaleHoleUnsynced(_selectedHole),
               onEdit   : () => setState(() {
                 _trayEditing = true;
@@ -3325,8 +3334,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     }
 
     // Last hole in play order.
-    final pendingHere = (_pending[_selectedHole]?.isNotEmpty ?? false) ||
-                       false;
+    // **Raw, not `_hasRealPending`.** This asks whether there is something to
+    // SAVE, and a clear is something to save — it has to reach the server as
+    // a null gross. The other three readers ask whether something was typed,
+    // which a clear is not.
+    final pendingHere = _pending[_selectedHole]?.isNotEmpty ?? false;
 
     if (pendingHere) {
       return FilledButton.icon(
@@ -3723,13 +3735,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                   // Counts what is on the card OR just typed, so "N to go"
                   // ticks down as the group enters rather than only after a
                   // save.
-                  scoredCount: players
-                      .where((m) =>
-                          (_pending[_selectedHole]?[m.player.id] ??
-                              sc.holeData(_selectedHole)
-                                  ?.scoreFor(m.player.id)
-                                  ?.grossScore) != null)
-                      .length,
+                  scoredCount: players.where((m) {
+                    final typed = _pending[_selectedHole]?[m.player.id];
+                    if (typed == _kClearedScore) return false;  // cleared
+                    return (typed ??
+                            sc.holeData(_selectedHole)
+                                ?.scoreFor(m.player.id)
+                                ?.grossScore) !=
+                        null;
+                  }).length,
                   fieldSize: players.length,
                   // What has been typed on this hole but not posted, so the
                   // card below fills in as the group calls their numbers.

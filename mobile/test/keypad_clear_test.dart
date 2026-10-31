@@ -38,10 +38,23 @@ void main() {
         expect(end, greaterThan(onClear), reason: 'the argument list moved');
         final body = src.substring(onClear, end);
 
-        final m = RegExp(r'_selectScore\([^,]+,\s*(-?\d+),').firstMatch(body);
+        // Either handler is fine — Rabbit routes its clear through
+        // `_handleScore` so a complete hole posts the deletion — and the
+        // value may be a named constant, which is resolved from the file's
+        // own declaration rather than assumed.
+        // `_selectScore` takes the score second, `_handleScore` third.
+        final m = RegExp(
+                r'_(?:select|handle)Score\((?:[^,()]+,\s*){1,2}(-?\d+|_k\w+)\s*,')
+            .firstMatch(body);
         expect(m, isNotNull,
-            reason: 'onClear must call _selectScore with a literal');
-        cleared[e.key] = m!.group(1)!;
+            reason: 'onClear must pass the clear value to a score handler');
+        var value = m!.group(1)!;
+        if (value.startsWith('_k')) {
+          final decl = RegExp('const int $value = (-?\\d+);').firstMatch(src);
+          expect(decl, isNotNull, reason: '$value is not declared here');
+          value = decl!.group(1)!;
+        }
+        cleared[e.key] = value;
 
         expect(cleared[e.key], '-1',
             reason: 'a clear must not be written as a score');

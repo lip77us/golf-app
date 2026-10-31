@@ -8134,3 +8134,56 @@ Fixtures regenerated (`REGEN_RABBIT_FIXTURES=1`). Tests:
 `TheChipReportsTheRabbitTests` (`scoring/tests/test_rabbit.py`, 8 — both the
 tied hole and the broken tie landing on `net 4 v 6`) and the `tray` group in
 `mobile/test/rabbit_entry_test.dart`.
+
+### Clear did nothing, and Edit guessed a golfer
+
+Two from the same hole (Paul, 31 Oct 2026). Both are about a design that was
+half-built.
+
+#### `_selectScore(-1)` removed the entry instead of storing a clear
+
+*"Clear does not appear to do anything."* Removing the pending entry clears a
+score the phone has not sent yet and does **nothing at all** to one the
+server already holds: the merge still carries the saved value, so the box
+never changes.
+
+**Everything else for this was already here.** `submitHole` is typed
+`List<Map<String, int?>>` with `gross_score null = clear`;
+`LocalDatabase.pendingForFoursome` skips a queued clear so it cannot re-show
+as an overlay; `SingleScoreSerializer` takes a null gross and the view
+deletes the row; and score entry had `_kClearedScore`, its
+`effectiveScores(clearedSentinel:)` filter, both payload mappings and the
+Banker strip's filter. **Only the writer was missing**, on both screens — so
+`_kClearedScore` had a docstring describing behaviour nothing could produce.
+
+A clear now STORES the sentinel. Four readers on score entry had to learn it,
+and the split between them is the part worth keeping:
+
+- `_hasAnyScore`, the two trays' `gettingResult`, and Banker's `scoredCount`
+  ask **whether something was typed** — a clear is not, so they use
+  `_hasRealPending`.
+- `pendingHere` asks **whether there is something to SAVE** — a clear is,
+  because it has to reach the server as a null gross — so it stays raw.
+
+**Rabbit's Clear routes through `_handleScore`**, so a clear on an
+already-complete hole posts immediately like any other edit to one; score
+entry keeps its own model, where the pager's Save is what persists an edit.
+
+#### `Edit scores` opened on `players.first`
+
+*"It does not move off the first golfer unless I select the second golfer. Is
+that by design?"* The **staying** is — that is the session, and it is what
+stops a mis-tap sending you back through the tray. Opening on card order was
+not a decision anybody made, and it is a hazard rather than a preference: you
+come back to fix Jim's score, press Edit, and a quick tap changes Paul's.
+
+It picks nobody now. The tray **stays up** in a picking state — `Done` where
+`Edit scores` was, and a line saying to tap a score — rather than being
+replaced, so the hole you are about to change is still on screen while you
+choose. The card above was always the real control; the button had been
+duplicating it and guessing.
+
+**The guard had stopped checking.** `every _trayEditing = true sits under
+onEdit` matched a literal `= true`, and Rabbit's Edit now toggles — so the
+pattern found nothing and the test passed about a file it was no longer
+examining. It matches anything that can turn the flag ON.

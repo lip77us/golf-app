@@ -399,6 +399,19 @@ class RabbitHoleTray extends StatelessWidget {
   /// Saved on the phone, not yet at the server.
   final bool notSynced;
 
+  /// `Edit scores` has been pressed and no golfer is chosen yet.
+  ///
+  /// **The button used to pick one for you** — `players.first`, card order —
+  /// so coming back to fix Jim's score opened the keypad on Paul, and a
+  /// quick tap changed the wrong man's number (Paul, 31 Oct 2026: *"it does
+  /// not move off the first golfer unless I select the second golfer. Is
+  /// that by design?"*). The staying IS by design; the guess was not.
+  ///
+  /// The tray stays up rather than being replaced, so the hole you are about
+  /// to change is still on screen while you choose — and the card above is
+  /// already tappable, which is the selection.
+  final bool picking;
+
   const RabbitHoleTray({
     super.key,
     required this.card,
@@ -408,6 +421,7 @@ class RabbitHoleTray extends StatelessWidget {
     this.onNext,
     this.gettingResult = false,
     this.notSynced = false,
+    this.picking = false,
   });
 
   Color _colourOf(int? pid) {
@@ -443,9 +457,15 @@ class RabbitHoleTray extends StatelessWidget {
               style: TextButton.styleFrom(
                   foregroundColor: Halved.brightMint,
                   minimumSize: const Size(44, 40)),
-              child: const Text('Edit scores'),
+              child: Text(picking ? 'Done' : 'Edit scores'),
             ),
           ]),
+          if (picking)
+            const Padding(
+              padding: EdgeInsets.only(top: 2, bottom: 2),
+              child: Text('Tap a score above to change it',
+                  style: TextStyle(color: Halved.brightMint, fontSize: 12)),
+            ),
           _labelRow(
             card.rabbit.isExtra
                 ? 'HOLE ${card.hole} · EXTRA RABBIT'
