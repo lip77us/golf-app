@@ -226,7 +226,7 @@ class _SurvivorSetupScreenState extends State<SurvivorSetupScreen> {
   /// The Zombie Option, with the three cases that actually differ.
   ///
   /// The base "How Survivor works" block below stays plain Survivor — it does
-  /// not change with the toggle, because the elimination and decider rules do
+  /// not change with the toggle, because The Island and The Duel rules do
   /// not. What changes is only what the eliminated player can still do.
   Widget _zombieCard(ThemeData theme) {
     const plum = Halved.zombie;
@@ -248,12 +248,12 @@ class _SurvivorSetupScreenState extends State<SurvivorSetupScreen> {
           title: Text(
             _zombieOption
                 ? 'On — the knocked-out player keeps playing'
-                : 'Off — the knocked-out player sits out the decider',
+                : 'Off — the knocked-out player sits out the Duel',
             style: theme.textTheme.bodyMedium
                 ?.copyWith(fontWeight: FontWeight.w600),
           ),
           subtitle: Text(
-            'He must go LOW OUTRIGHT on a decider hole to come back in. '
+            'He must go LOW OUTRIGHT on a Duel hole to come back in. '
             'A tie for low is not enough.',
             style: theme.textTheme.bodySmall?.copyWith(color: muted),
           ),
@@ -273,7 +273,7 @@ class _SurvivorSetupScreenState extends State<SurvivorSetupScreen> {
         for (final (z, a, b, result) in const [
           (4, 5, 6, 'Zombie back in · B goes to Zombieville. Two alive, one '
                     'chasing, and the same Survivor keeps running.'),
-          (4, 6, 6, 'Zombie back in · the deciders tie, so there is nobody to '
+          (4, 6, 6, 'Zombie back in · the Duel ties, so there is nobody to '
                     'send out. All three alive again.'),
           (5, 5, 6, 'Zombie tied for low, not low outright — he stays out. A '
                     'wins the Survivor and it pays.'),

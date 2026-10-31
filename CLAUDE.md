@@ -8494,8 +8494,25 @@ a real name, so keeping `finals` would have left the app with **three** words
 for one phase: `decider` stored, `The Duel` on every board, `finals` on the
 standing row.
 
-**Still saying the old names**, per the packet's own list: the lock screen
-Live Activities, the Survivor setup screen and the game guide.
+**The lock screen needed NOTHING, and the packet was wrong to list it.**
+Asked directly (31 Oct 2026), and checked rather than assumed: the Survivor
+card never prints either word. Its state slot reports the ROSTER — `3 IN`,
+`2 IN`, `LOW GETS / YOU BACK IN`, `SAM IS THE ZOMBIE` — because on that
+surface the question is who is still in, not what the hole is called. The
+only two hits in `live_activity_survivor.py` are comments. A test pins that
+it still names no phase, since "outstanding" was the wrong answer once and
+would be a real regression if the card ever started.
+
+**The setup screen DID**, and it is the case the server could not reach: copy
+that spells a phase out on its own, in the Zombie rules (`sits out the Duel`,
+`LOW OUTRIGHT on a Duel hole`, `the Duel ties`). A guard now walks every
+string literal on the three Survivor screens, comments excluded — the
+comments and the stored slugs they describe legitimately still say `decider`.
+
+**The website guide is the one left**, and deliberately: 25 occurrences
+including the page `<title>`, the meta description, `og:title` and the
+JSON-LD headline, which are search copy. That is an SEO change plus a manual
+zip deploy, not a string sweep.
 
 Fixtures regenerated. A 1px overflow turned up in the tray's hole line —
 `Hole 10 · The Island` beside a long chip — and the fix is the label

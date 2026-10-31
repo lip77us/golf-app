@@ -178,6 +178,7 @@ void main() {
   });
 
   _screenGuards();
+  _oneNameForThePhase();
 }
 
 /// What a dedicated play screen LOSES when its entry card is swapped out.
@@ -244,6 +245,53 @@ void _screenGuards() {
     test('a clear is sent as a null gross, not a score of zero', () {
       expect(src, contains('_kCleared ? null'));
       expect(src, contains('clearedSentinel: _kCleared'));
+    });
+  });
+}
+
+/// One name for the phase, on every surface that names it.
+///
+/// The rename reached the server's words for free, because every phase word
+/// a golfer sees is written in `services/survivor.py` (31 Oct 2026). What
+/// does NOT come for free is copy that spells a phase out on its own — the
+/// setup screen's Zombie rules and the score screen's legend — so those are
+/// checked here rather than assumed.
+void _oneNameForThePhase() {
+  group('no screen still says the old names', () {
+    const screens = [
+      'lib/screens/survivor_setup_screen.dart',
+      'lib/screens/survivor_screen.dart',
+      'lib/utils/survivor_standing.dart',
+    ];
+
+    for (final f in screens) {
+      test('${f.split('/').last} names The Island and The Duel', () {
+        final src = File(f).readAsStringSync();
+        // String literals only — the comments explaining the rename, and the
+        // stored slugs they describe, legitimately still say `decider`.
+        for (final m in RegExp(r"'[^'\n]*'").allMatches(src)) {
+          final lit = m.group(0)!;
+          expect(lit.toLowerCase().contains('decider'), isFalse,
+              reason: '$f still shows $lit');
+          expect(lit.toLowerCase().contains('elimination hole'), isFalse,
+              reason: '$f still shows $lit');
+        }
+      });
+    }
+
+    test('the lock screen names no phase at all', () {
+      // Its state slot reports the ROSTER — `3 IN`, `2 IN`, `LOW GETS / YOU
+      // BACK IN` — so the rename needed nothing there. Pinned because the
+      // packet listed it as outstanding and it is not.
+      final src =
+          File('../services/live_activity_survivor.py').readAsStringSync();
+      for (final m in RegExp(r"'[^'\n]*'").allMatches(src)) {
+        final lit = m.group(0)!;
+        expect(lit.toLowerCase().contains('decider'), isFalse,
+            reason: 'the card now names a phase: $lit');
+        expect(lit.toLowerCase().contains('elimination'), isFalse,
+            reason: 'the card now names a phase: $lit');
+      }
     });
   });
 }
