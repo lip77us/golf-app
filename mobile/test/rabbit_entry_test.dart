@@ -294,6 +294,30 @@ void main() {
       expect(src.substring(kp, at), contains('onDone:'));
     });
 
+    test('the keypad does not take the pager away', () {
+      // A hole with nothing entered returned the keypad and NO pager at all,
+      // so a group that opened on hole 7 had no way back to 6 (Paul, 30 Oct
+      // 2026). The tray is the one thing that replaces that row — it carries
+      // its own arrows. Anchored on the fallback return, which is the next
+      // thing in the method.
+      final at = src.indexOf('final m = _keypadMember(');
+      final end = src.indexOf('return SafeArea(child: _pager(', at);
+      expect(at, greaterThan(0));
+      expect(end, greaterThan(at), reason: 'the fallback return moved');
+      expect(src.substring(at, end), contains('_pager('),
+          reason: 'the keypad branch must draw the pager beneath it');
+    });
+
+    test('the round is completed by a button that is not called Done', () {
+      // The keypad grows its own `Done` during an edit session, and two of
+      // them stacked on the last hole — one ending the round.
+      final at = src.indexOf('Widget _pager(');
+      expect(at, greaterThan(0));
+      final body = src.substring(at);
+      expect(body, contains('_finishRound('));
+      expect(body.contains("label: const Text('Done')"), isFalse);
+    });
+
     test('auto-advance does not carry the scorer past the tray', () {
       // The tray IS the end of the hole; its forward button is the advance.
       final at = src.indexOf('autoAdvanceHole');

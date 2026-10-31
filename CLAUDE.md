@@ -7951,3 +7951,31 @@ promise — pick a row, give it a number, the natural next scorer resumes.
 Both screens carry it (Rabbit's own screen, and score entry for Sixes and
 Annandale), with a source guard each — anchored on `onScore`'s own body, and
 both checked by putting the old line back.
+
+### The keypad took the pager with it
+
+*"I am on hole 7 to start and don't see a way back to 6."* (30 Oct 2026.)
+
+`rabbit_screen._buildBottomNav` returned the tray, OR the keypad, OR the
+pager — one of three. So a hole with nothing entered drew the keypad and **no
+arrows at all**: the pager's own ‹ was in a branch that could not be reached
+while a score was being entered, and the keypad has never had one. The way
+back existed only once the hole was complete, in the tray.
+
+**Score entry never had this** — there the keypad is a SIBLING of the pager
+row in a Column, so both draw. The pager is a method now and the keypad
+branch renders it beneath, which is the same shape. The tray stays exclusive:
+it carries its own arrows, and its forward button can name the next RABBIT
+where a generic pager cannot.
+
+**`Complete Round`, not `Done`.** The keypad grows its own `Done` during an
+edit session, so on the last hole there would have been two of them stacked,
+one ending the round. Score entry has always named this button in full.
+
+Also removed: the `pinned_hole_grid` / `nine_totals` imports and `_fmtMoney`,
+dead since `_RabbitGrid` came out.
+
+Tests: two source guards in the `the screen keeps what a dedicated screen
+loses` group (`mobile/test/rabbit_entry_test.dart`), the first anchored on
+the fallback return rather than a character count, both checked by making
+them fail.

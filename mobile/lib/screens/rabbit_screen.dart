@@ -39,15 +39,7 @@ import '../widgets/forty_balls_keypad.dart';
 import '../utils/match_handicap.dart';
 import '../utils/play_order.dart';
 import '../utils/round_complete.dart';
-import '../widgets/pinned_hole_grid.dart';
 import '../widgets/combo_tee_chip.dart';
-import '../utils/nine_totals.dart';
-
-String _fmtMoney(double v) {
-  if (v == 0) return '—';
-  final sign = v > 0 ? '+' : '−';
-  return '$sign\$${v.abs().toStringAsFixed(2)}';
-}
 
 /// Handicap strokes a player receives on a hole, read straight from the Rabbit
 /// summary.  This is the ONLY allocation-faithful source: a per-segment
@@ -838,88 +830,110 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
       final m = _keypadMember(players, scores);
       if (m != null) {
         return SafeArea(
-          child: FortyBallsKeypad(
-            playerName: m.player.name,
-            // HIS par, not the hole's — on mixed tees the hole is a 4 for one
-            // golfer and a 5 for the next.
-            par: sc.holeData(_selectedHole)
-                    ?.scoreFor(m.player.id)?.par ?? (card.par ?? 4),
-            // The strokes the RABBIT issues, which a strokes-off game spreads
-            // across its legs — not the round's stored allocation.
-            strokes: card.players
-                .where((p) => p.playerId == m.player.id)
-                .map((p) => p.strokes)
-                .firstOrNull ?? 0,
-            netStyle: ctx.watch<SettingsProvider>().netStyleEntry,
-            onDone: _trayEditing
-                ? () => setState(() {
-                      _trayEditing = false;
-                      _editingPlayerId = null;
-                    })
-                : null,
-            onScore: (n) {
-              _handleScore(ctx, m, n, players);
-              // **An edit is a SESSION, not one score.** The flag used to
-              // clear the moment a key landed, so `Edit scores` let you
-              // change exactly one and the tray came straight back (Paul,
-              // 30 Oct 2026). The keypad stays on the golfer just edited —
-              // a mis-tap is corrected in place — and another row is one tap
-              // away. `Done` is the way out.
-              if (!_trayEditing && _editingPlayerId != null) {
-                setState(() => _editingPlayerId = null);
-              }
-              // **The hole is POSTED on its last score.** The tray reports
-              // the SERVER's result, so a hole left unsent raises a tray with
-              // nothing in it — the bug Annandale and then Sixes both hit.
-              final now = _effectiveScores(sc, _selectedHole);
-              if (n > 0 && _allScored(players, now)) {
-                final hole = _selectedHole;
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (!mounted || _selectedHole != hole) return;
-                  if (context.read<RoundProvider>().submitting) return;
-                  _saveHole(ctx, hole, players);
-                });
-              }
-            },
-            onClear: () => _selectScore(m, 0, _selectedHole),
-          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            FortyBallsKeypad(
+              playerName: m.player.name,
+              // HIS par, not the hole's — on mixed tees the hole is a 4 for one
+              // golfer and a 5 for the next.
+              par: sc.holeData(_selectedHole)
+                      ?.scoreFor(m.player.id)?.par ?? (card.par ?? 4),
+              // The strokes the RABBIT issues, which a strokes-off game spreads
+              // across its legs — not the round's stored allocation.
+              strokes: card.players
+                  .where((p) => p.playerId == m.player.id)
+                  .map((p) => p.strokes)
+                  .firstOrNull ?? 0,
+              netStyle: ctx.watch<SettingsProvider>().netStyleEntry,
+              onDone: _trayEditing
+                  ? () => setState(() {
+                        _trayEditing = false;
+                        _editingPlayerId = null;
+                      })
+                  : null,
+              onScore: (n) {
+                _handleScore(ctx, m, n, players);
+                // **An edit is a SESSION, not one score.** The flag used to
+                // clear the moment a key landed, so `Edit scores` let you
+                // change exactly one and the tray came straight back (Paul,
+                // 30 Oct 2026). The keypad stays on the golfer just edited —
+                // a mis-tap is corrected in place — and another row is one tap
+                // away. `Done` is the way out.
+                if (!_trayEditing && _editingPlayerId != null) {
+                  setState(() => _editingPlayerId = null);
+                }
+                // **The hole is POSTED on its last score.** The tray reports
+                // the SERVER's result, so a hole left unsent raises a tray with
+                // nothing in it — the bug Annandale and then Sixes both hit.
+                final now = _effectiveScores(sc, _selectedHole);
+                if (n > 0 && _allScored(players, now)) {
+                  final hole = _selectedHole;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted || _selectedHole != hole) return;
+                    if (context.read<RoundProvider>().submitting) return;
+                    _saveHole(ctx, hole, players);
+                  });
+                }
+              },
+              onClear: () => _selectScore(m, 0, _selectedHole),
+            ),
+            _pager(ctx, rp, players, allDone, isComplete,
+                   prevHole, nextHole),
+          ]),
         );
       }
     }
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-        child: Row(children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: prevHole != null ? _retreat : null,
-              icon: const Icon(Icons.chevron_left, size: 20),
-              label: Text(prevHole != null ? 'Hole $prevHole' : 'Hole'),
-            ),
+    return SafeArea(child: _pager(ctx, rp, players, allDone, isComplete,
+                                  prevHole, nextHole));
+  }
+
+  /// The hole pager — `‹ Hole N` and `Hole N ›`.
+  ///
+  /// **It draws UNDER the keypad as well as on its own.** It used to be an
+  /// ALTERNATIVE to it, so a hole with nothing entered returned the keypad
+  /// and no pager at all — a group that opened on hole 7 had no way back to
+  /// 6 (Paul, 30 Oct 2026). The tray is the one thing that replaces this
+  /// row: it carries its own arrows, and its forward button can name the
+  /// next RABBIT where this one cannot. Same shape as score entry, where
+  /// the keypad has always been a SIBLING of this row rather than a
+  /// substitute for it.
+  Widget _pager(BuildContext ctx, RoundProvider rp, List<Membership> players,
+                bool allDone, bool isComplete, int? prevHole, int? nextHole) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: Row(children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: prevHole != null ? _retreat : null,
+            icon: const Icon(Icons.chevron_left, size: 20),
+            label: Text(prevHole != null ? 'Hole $prevHole' : 'Hole'),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: nextHole == null || isComplete
-                ? FilledButton.icon(
-                    onPressed: rp.submitting ? null : () => _finishRound(ctx, players),
-                    icon: const Icon(Icons.emoji_events, size: 20),
-                    label: const Text('Done'),
-                  )
-                : FilledButton.icon(
-                    onPressed: (allDone && !rp.submitting)
-                        ? () => _saveAndAdvance(ctx, players) : null,
-                    icon: rp.submitting
-                        ? const SizedBox(width: 16, height: 16,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.chevron_right, size: 20),
-                    label: Text(rp.submitting ? 'Saving…' : 'Hole $nextHole'),
-                    iconAlignment: IconAlignment.end,
-                  ),
-          ),
-        ]),
-      ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: nextHole == null || isComplete
+              ? FilledButton.icon(
+                  onPressed: rp.submitting ? null : () => _finishRound(ctx, players),
+                  icon: const Icon(Icons.emoji_events, size: 20),
+                  // **`Complete Round`, not `Done`** — the keypad above this
+                  // row grows its own `Done` during an edit session, and two
+                  // of them stacked on the last hole, one of which ends the
+                  // round. Score entry has always named this one in full.
+                  label: const Text('Complete Round'),
+                )
+              : FilledButton.icon(
+                  onPressed: (allDone && !rp.submitting)
+                      ? () => _saveAndAdvance(ctx, players) : null,
+                  icon: rp.submitting
+                      ? const SizedBox(width: 16, height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.chevron_right, size: 20),
+                  label: Text(rp.submitting ? 'Saving…' : 'Hole $nextHole'),
+                  iconAlignment: IconAlignment.end,
+                ),
+        ),
+      ]),
     );
   }
 }
