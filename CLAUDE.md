@@ -8013,3 +8013,29 @@ Not done here, because five raw `_pending` readers on that screen
 (`_pending.isNotEmpty`, two `gettingResult` flags, `pendingHere`, Banker's
 `scoredCount`) would then see a −1 and have to be audited. The server already
 supports it: a null `gross_score` deletes the row.
+
+### A tap started an edit session
+
+*"When I click on a empty white square it lets me fill in the score, but
+never advances to the next golfer… I entered a 6, clicked on the 6 and put in
+a 5. Now I lost auto advance."* (30 Oct 2026.) One cause for both.
+
+`RabbitPlayersCard.onTapPlayer` set `_editingPlayerId` **and**
+`_trayEditing`. That was harmless when it was written: `_trayEditing` meant
+only "do not draw the tray", which `_editingPlayerId` already did on its own,
+so the second assignment did nothing. **Then `Edit scores` became a session**
+— the keypad stays until Done — and the flag gained a second meaning that
+this line silently inherited. Tapping any box pinned the keypad to that
+golfer for the rest of the hole, so nothing ever moved on.
+
+A tap is a ONE-SHOT and only `Edit scores` is a session. Score entry has only
+ever set the flag from a tray's `onEdit`; Rabbit was the one screen that
+conflated them.
+
+**The lesson is the flag, not the handler.** A boolean that gained a second
+meaning had three writers and only two were revisited, and the one that was
+missed read correctly at its call site. So
+`mobile/test/tray_editing_session_test.dart` checks the rule **at every
+assignment** in both screens — the nearest handler named above a
+`_trayEditing = true` must be `onEdit` — rather than at the handler that
+happened to be wrong. Both halves were checked by putting the old line back.

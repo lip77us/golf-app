@@ -672,10 +672,17 @@ class _RabbitScreenState extends State<RabbitScreen> with SpotsCaptureMixin {
                 activePlayerId: isComplete
                     ? null
                     : _keypadMember(players, scores)?.player.id,
-                onTapPlayer: (pid) => setState(() {
-                  _editingPlayerId = pid;
-                  _trayEditing = true;
-                }),
+                // **A tap is a ONE-SHOT, and must not start a session.**
+                // It set `_trayEditing` too, which was harmless while that
+                // flag only suppressed the tray — and `_editingPlayerId`
+                // already does that on its own. Once `Edit scores` became a
+                // session (30 Oct 2026) the flag gained a second meaning,
+                // "stay on this golfer until Done", and this line silently
+                // inherited it: tapping any box pinned the keypad for the
+                // rest of the hole, so nothing advanced to the next golfer.
+                // Score entry has only ever set it from a tray's `onEdit`.
+                onTapPlayer: (pid) =>
+                    setState(() => _editingPlayerId = pid),
                 rowExtras: (p) => _rowExtras(rp, players, p.playerId)
                     ?? const SizedBox.shrink(),
               ),
