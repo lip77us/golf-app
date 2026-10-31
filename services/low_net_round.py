@@ -39,6 +39,27 @@ from core.handicap_math import round_half_up
 # Internal helper
 # ---------------------------------------------------------------------------
 
+def cap_in_force(round_obj, handicap_mode, net_percent, force_cap=False) -> bool:
+    """Is the net-double-bogey cap in force for this round and mode?
+
+    Casually the cap only applies at full Net (100%): it is meaningless for
+    Gross and was judged too surprising under a reduced allowance, so it is
+    ignored outside Net-100% regardless of the stored round flag. An
+    individual-play tournament passes ``force_cap`` and gets it at every
+    allowance — never in Gross, where the board is meant to show the real card.
+
+    **One writer**, because two surfaces ask it: the totals builder, which
+    applies it, and :func:`stroke_play_hole_card`, which has to tell the
+    keypad the ceiling a golfer is typing against. A second copy of this test
+    is how the score screen comes to offer a maximum the engine does not
+    enforce.
+    """
+    return bool(
+        handicap_mode == HandicapMode.NET
+        and (force_cap
+             or (bool(round_obj.net_max_double_bogey) and net_percent == 100)))
+
+
 def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
                             participant_ids=None, force_cap=False):
     """
@@ -58,15 +79,8 @@ def _build_ln_player_totals(round_obj, handicap_mode, net_percent,
     Net-100%-only behaviour.
     """
     _subset = set(participant_ids) if participant_ids else None
-    # Casually the cap only applies at full Net (100%): it's meaningless for
-    # Gross and was judged too surprising under a reduced allowance, so it's
-    # ignored outside Net-100% regardless of the stored round flag. An
-    # individual-play tournament passes force_cap and gets it at every
-    # allowance — never in Gross, where the board is meant to show the real card.
-    cap_enabled = (handicap_mode == HandicapMode.NET
-                   and (force_cap
-                        or (bool(round_obj.net_max_double_bogey)
-                            and net_percent == 100)))
+    cap_enabled = cap_in_force(round_obj, handicap_mode, net_percent,
+                               force_cap=force_cap)
 
     foursomes = list(
         Foursome.objects
@@ -586,3 +600,222 @@ def low_net_round_summary(round_obj) -> dict:
         'primary_mode' : primary_key,
         'modes'        : modes,
     }
+
+
+# ---------------------------------------------------------------------------
+# Score entry — one hole
+# ---------------------------------------------------------------------------
+
+def _first_name(name: str) -> str:
+    return (name or '').strip().split(' ')[0] or (name or '')
+
+
+def stroke_play_hole_card(foursome, hole: int) -> dict:
+    """Everything the Stroke Play score-entry tray draws for ONE hole.
+
+    `~/Downloads/handoff-stroke-play`. Built from
+    :func:`low_net_round_standings` — **the board the tray's own places open
+    through** — rather than from a second walk over the scores. The totals,
+    the ranks, the per-hole net and the cap are the engine's; what is derived
+    here is the one fact the engine has no reason to answer, which is where
+    this hole left each golfer against where he stood before it.
+
+    **A place is about everybody, so the field is the whole ROUND**, not this
+    card. The packet writes it as "casual rounds: positions count within your
+    own group only" — which is the same thing, because a casual round is one
+    group. Where it is not (a multi-group casual round), ranking the group
+    alone would put a golfer 2nd on the tray and 5th on the board his pill
+    opens, which is the mistake :func:`field_standing` carries a paragraph
+    about.
+
+    Returns `{}` when the round plays no Stroke Play, so a caller can test
+    the key.
+    """
+    round_obj = foursome.round
+    if 'low_net_round' not in (round_obj.active_games or []):
+        return {}
+
+    try:
+        config  = round_obj.low_net_config
+        hmode   = config.handicap_mode
+        npct    = config.net_percent
+    except Exception:
+        hmode, npct = HandicapMode.NET, 100
+    cap = cap_in_force(round_obj, hmode, npct)
+
+    rows = {r['player_id']: r for r in low_net_round_standings(round_obj)}
+    if not rows:
+        return {}
+
+    from services.hole_plan import play_order as _play_order
+    order = _play_order(round_obj, foursome) or list(range(1, 19))
+
+    members = [m for m in foursome.memberships.all() if not m.player.is_phantom]
+    here_ids = [m.player_id for m in members if m.player_id in rows]
+    if not here_ids:
+        return {}
+
+    # ── This hole, per golfer on this card ───────────────────────────────────
+    # `strokes` comes from the scored hole when there is one and from the
+    # PROSPECTIVE plan when there is not — which is the case that matters,
+    # because the keypad is coded against par plus the strokes before a
+    # number is typed.
+    par_here = None
+    players = []
+    for m in members:
+        r = rows.get(m.player_id)
+        if r is None:
+            continue
+        h = (r.get('holes') or {}).get(hole)
+        plan = r.get('stroke_plan') or {}
+        strokes = (h or {}).get('strokes')
+        if strokes is None:
+            strokes = plan.get(hole, plan.get(str(hole), 0))
+        par = (h or {}).get('par')
+        if par is None:
+            par = _rep_par(m, hole)
+        if par_here is None:
+            par_here = par
+        gross = (h or {}).get('gross')
+        # The hole dict's two adjusted figures, and they are easy to read the
+        # wrong way round: `net` is the UNCAPPED adjusted score and `capped`
+        # is the one the total is built from. Both are already net of the
+        # strokes, so the counted figure is `capped` as it stands.
+        counted = (h or {}).get('capped')
+        players.append({
+            'player_id'      : m.player_id,
+            'name'           : m.player.name,
+            'first'          : _first_name(m.player.name),
+            'short'          : (m.player.short_name or '').strip() or m.player.name,
+            'course_handicap': m.course_handicap,
+            'par'            : par,
+            'strokes'        : strokes or 0,
+            'gross'          : gross,
+            # The counted net — post-cap, which is what the total is built
+            # from. A capped hole therefore shows a net BELOW gross minus
+            # strokes, and `capped` is what explains it.
+            'net'            : counted,
+            'capped'         : bool(h and h.get('capped') != h.get('net')),
+            # The gross ceiling this golfer is typing against, for the
+            # keypad's `max N`. Null when the cap is not in force — a number
+            # there would be a maximum nothing enforces.
+            'cap_max'        : (par + 2 + (strokes or 0)) if cap and par is not None else None,
+        })
+
+    # ── Places, before and after ─────────────────────────────────────────────
+    # Everybody who has started, with this hole's contribution removed from
+    # the golfers on THIS card who have one. Nobody else moved.
+    after  = {pid: r['net_to_par'] for pid, r in rows.items()
+              if r.get('holes_played')}
+    before = dict(after)
+    for p in players:
+        pid, g = p['player_id'], p['gross']
+        if g is None or pid not in after:
+            continue
+        r = rows[pid]
+        if (r.get('holes_played') or 0) <= 1:
+            # His first hole: he was not on the board before it, so there is
+            # no place to have moved from.
+            before.pop(pid, None)
+            continue
+        h = r['holes'][hole]
+        before[pid] = after[pid] - (h['capped'] - h['par'])
+
+    def _place(table, pid):
+        if pid not in table:
+            return None, False
+        v = table[pid]
+        lower = sum(1 for x in table.values() if x < v)
+        same  = sum(1 for x in table.values() if x == v)
+        return lower + 1, same > 1
+
+    final = bool(order) and hole == order[-1]
+    standing = []
+    for p in sorted(players,
+                    key=lambda p: (1, 0) if rows[p['player_id']]['net_to_par'] is None
+                    else (0, rows[p['player_id']]['net_to_par'])):
+        pid = p['player_id']
+        r = rows[pid]
+        pa, tied = _place(after, pid)
+        pb, _    = _place(before, pid)
+        standing.append({
+            'player_id' : pid,
+            'name'      : p['name'],
+            'short'     : p['short'],
+            'place'     : pa,
+            'place_text': None if pa is None else ('T' if tied else '') + str(pa),
+            # Places GAINED. Null on the last hole, where the packet drops the
+            # arrow — the round is over and there is nowhere left to move —
+            # and null for a golfer who had no place to move from.
+            'moved'     : None if (final or pa is None or pb is None) else pb - pa,
+            'to_par'    : r['net_to_par'],
+            'thru'      : r.get('holes_played') or 0,
+            'gross'     : p['gross'],
+            'net'       : p['net'],
+            'capped'    : p['capped'],
+            'strokes'   : p['strokes'],
+            'par'       : p['par'],
+        })
+
+    # ── The cap, in words ────────────────────────────────────────────────────
+    # The server writes them because the cap is a RULE: the card keeps the
+    # score the golfer made and the total counts the ceiling, which is two
+    # facts about one number and the thing a group argues about.
+    cap_notes = []
+    for p in players:
+        if not p['capped'] or p['gross'] is None or p['cap_max'] is None:
+            continue
+        # Stated in GROSS, because that is the number the golfer typed and
+        # the one he will argue about. `cap_max` is the same ceiling the
+        # engine applied, read back the other way.
+        cap_notes.append(
+            f"{p['first']}’s {p['gross']} counts as {p['cap_max']}, net "
+            f"double bogey. The card keeps the {p['gross']}.")
+
+    # ── The leader, when he is not on this card ──────────────────────────────
+    # A leader line naming a golfer three rows above is the one thing the tray
+    # cannot work out; naming one who is ON the card would be a repeat.
+    leader = None
+    started = [r for r in rows.values() if r.get('holes_played')]
+    if started:
+        top = min(started, key=lambda r: r['net_to_par'])
+        if top['player_id'] not in here_ids:
+            leader = {
+                'name'  : top['player_name'],
+                'to_par': top['net_to_par'],
+                'thru'  : top.get('holes_played') or 0,
+            }
+
+    return {
+        'hole'         : hole,
+        'par'          : par_here,
+        'handicap_mode': hmode,
+        'net_percent'  : npct,
+        'show_net'     : hmode != HandicapMode.GROSS,
+        'cap'          : cap,
+        'final'        : final,
+        'group'        : len(here_ids),
+        'field'        : len(rows),
+        'players'      : players,
+        'standing'     : standing,
+        'cap_notes'    : cap_notes,
+        'leader'       : leader,
+    }
+
+
+def _rep_par(membership, hole):
+    """The par the ENGINE caps against, for a hole with no score yet.
+
+    `_build_ln_player_totals` takes one par per foursome off the first
+    membership that has a tee, so the ceiling reported to the keypad has to
+    come from the same place or it would offer a maximum the total does not
+    enforce.
+    """
+    fs = membership.foursome
+    first = next((m for m in fs.memberships.all() if m.tee_id is not None), None)
+    if first is None:
+        return None
+    try:
+        return first.tee.hole(hole).get('par')
+    except StopIteration:
+        return None

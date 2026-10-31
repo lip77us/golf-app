@@ -1,0 +1,135 @@
+{
+  "hole": 4,
+  "par": 5,
+  "handicap_mode": "net",
+  "net_percent": 100,
+  "show_net": true,
+  "cap": true,
+  "final": false,
+  "group": 4,
+  "field": 5,
+  "players": [
+    {
+      "player_id": 9,
+      "name": "Paul Lipkin",
+      "first": "Paul",
+      "short": "PL",
+      "course_handicap": 8,
+      "par": 5,
+      "strokes": 0,
+      "gross": 5,
+      "net": 5,
+      "capped": false,
+      "cap_max": 7
+    },
+    {
+      "player_id": 10,
+      "name": "Dave Kim",
+      "first": "Dave",
+      "short": "DK",
+      "course_handicap": 12,
+      "par": 5,
+      "strokes": 1,
+      "gross": 6,
+      "net": 5,
+      "capped": false,
+      "cap_max": 8
+    },
+    {
+      "player_id": 11,
+      "name": "Sam Reid",
+      "first": "Sam",
+      "short": "SR",
+      "course_handicap": 15,
+      "par": 5,
+      "strokes": 1,
+      "gross": 5,
+      "net": 4,
+      "capped": false,
+      "cap_max": 8
+    },
+    {
+      "player_id": 12,
+      "name": "Mike Ruiz",
+      "first": "Mike",
+      "short": "MR",
+      "course_handicap": 18,
+      "par": 5,
+      "strokes": 1,
+      "gross": 12,
+      "net": 7,
+      "capped": true,
+      "cap_max": 8
+    }
+  ],
+  "standing": [
+    {
+      "player_id": 9,
+      "name": "Paul Lipkin",
+      "short": "PL",
+      "place": 2,
+      "place_text": "T2",
+      "moved": 0,
+      "to_par": -1,
+      "thru": 4,
+      "gross": 5,
+      "net": 5,
+      "capped": false,
+      "strokes": 0,
+      "par": 5
+    },
+    {
+      "player_id": 11,
+      "name": "Sam Reid",
+      "short": "SR",
+      "place": 2,
+      "place_text": "T2",
+      "moved": 1,
+      "to_par": -1,
+      "thru": 4,
+      "gross": 5,
+      "net": 4,
+      "capped": false,
+      "strokes": 1,
+      "par": 5
+    },
+    {
+      "player_id": 10,
+      "name": "Dave Kim",
+      "short": "DK",
+      "place": 4,
+      "place_text": "4",
+      "moved": 0,
+      "to_par": 1,
+      "thru": 4,
+      "gross": 6,
+      "net": 5,
+      "capped": false,
+      "strokes": 1,
+      "par": 5
+    },
+    {
+      "player_id": 12,
+      "name": "Mike Ruiz",
+      "short": "MR",
+      "place": 5,
+      "place_text": "5",
+      "moved": -1,
+      "to_par": 3,
+      "thru": 4,
+      "gross": 12,
+      "net": 7,
+      "capped": true,
+      "strokes": 1,
+      "par": 5
+    }
+  ],
+  "cap_notes": [
+    "Mike\u2019s 12 counts as 8, net double bogey. The card keeps the 12."
+  ],
+  "leader": {
+    "name": "Ben Ortiz",
+    "to_par": -7,
+    "thru": 6
+  }
+}

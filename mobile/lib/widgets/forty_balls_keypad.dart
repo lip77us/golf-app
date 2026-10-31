@@ -196,6 +196,16 @@ class FortyBallsKeypad extends StatefulWidget {
   /// caller — draws nothing and keeps the old one-shot behaviour.
   final VoidCallback? onDone;
 
+  /// The highest GROSS that counts on this hole, when something caps it —
+  /// Stroke Play's net double bogey. Shown as `· max 7`, because a golfer
+  /// about to type a 10 should know before he does that the total will count
+  /// seven and the card will keep the ten.
+  ///
+  /// Named for the FACT rather than the game, and null everywhere else: a
+  /// number here when nothing enforces one would be a maximum the engine
+  /// does not apply.
+  final int? capMax;
+
   const FortyBallsKeypad({
     super.key,
     required this.playerName,
@@ -205,6 +215,7 @@ class FortyBallsKeypad extends StatefulWidget {
     required this.onClear,
     this.netStyle = false,
     this.onDone,
+    this.capMax,
   });
 
   @override
@@ -259,7 +270,11 @@ class _FortyBallsKeypadState extends State<FortyBallsKeypad> {
           child: Text(
             _typing
                 ? 'Type a score of 10 or more'
-                : '${_strokeWord(widget.strokes)} · par ${widget.par}',
+                : [
+                    _strokeWord(widget.strokes),
+                    'par ${widget.par}',
+                    if (widget.capMax != null) 'max ${widget.capMax}',
+                  ].join(' · '),
             style: const TextStyle(fontSize: 12, color: Halved.muted),
             overflow: TextOverflow.ellipsis,
           ),

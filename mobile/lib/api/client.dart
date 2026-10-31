@@ -2016,6 +2016,18 @@ class ApiClient {
   /// `sixes_hole`, so this is for a hole the screen opens without posting —
   /// scrolling back, or picking up a round somebody else is scoring.
   /// Returns null when Sixes is not set up on this foursome.
+  /// GET /api/foursomes/{id}/stroke-play/hole/{hole}/
+  ///
+  /// One hole's Stroke Play entry card. A save brings the same shape back
+  /// with it, so this is for a hole the screen opens without posting.
+  Future<StrokePlayHoleCard?> getStrokePlayHoleCard(
+      int foursomeId, int hole) async {
+    final data = await _get('/foursomes/$foursomeId/stroke-play/hole/$hole/');
+    final map = (data as Map).cast<String, dynamic>();
+    if (map.isEmpty) return null;
+    return StrokePlayHoleCard.fromJson(map);
+  }
+
   Future<SixesHoleCard?> getSixesHoleCard(int foursomeId, int hole) async {
     final data = await _get('/foursomes/$foursomeId/sixes/hole/$hole/');
     final map = (data as Map).cast<String, dynamic>();

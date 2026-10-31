@@ -1,0 +1,133 @@
+{
+  "hole": 3,
+  "par": 3,
+  "handicap_mode": "net",
+  "net_percent": 100,
+  "show_net": true,
+  "cap": true,
+  "final": false,
+  "group": 4,
+  "field": 5,
+  "players": [
+    {
+      "player_id": 9,
+      "name": "Paul Lipkin",
+      "first": "Paul",
+      "short": "PL",
+      "course_handicap": 8,
+      "par": 3,
+      "strokes": 0,
+      "gross": 3,
+      "net": 3,
+      "capped": false,
+      "cap_max": 5
+    },
+    {
+      "player_id": 10,
+      "name": "Dave Kim",
+      "first": "Dave",
+      "short": "DK",
+      "course_handicap": 12,
+      "par": 3,
+      "strokes": 0,
+      "gross": 5,
+      "net": 5,
+      "capped": false,
+      "cap_max": 5
+    },
+    {
+      "player_id": 11,
+      "name": "Sam Reid",
+      "first": "Sam",
+      "short": "SR",
+      "course_handicap": 15,
+      "par": 3,
+      "strokes": 1,
+      "gross": 4,
+      "net": 3,
+      "capped": false,
+      "cap_max": 6
+    },
+    {
+      "player_id": 12,
+      "name": "Mike Ruiz",
+      "first": "Mike",
+      "short": "MR",
+      "course_handicap": 18,
+      "par": 3,
+      "strokes": 1,
+      "gross": 4,
+      "net": 3,
+      "capped": false,
+      "cap_max": 6
+    }
+  ],
+  "standing": [
+    {
+      "player_id": 9,
+      "name": "Paul Lipkin",
+      "short": "PL",
+      "place": 2,
+      "place_text": "2",
+      "moved": 0,
+      "to_par": -1,
+      "thru": 3,
+      "gross": 3,
+      "net": 3,
+      "capped": false,
+      "strokes": 0,
+      "par": 3
+    },
+    {
+      "player_id": 11,
+      "name": "Sam Reid",
+      "short": "SR",
+      "place": 3,
+      "place_text": "3",
+      "moved": 1,
+      "to_par": 0,
+      "thru": 3,
+      "gross": 4,
+      "net": 3,
+      "capped": false,
+      "strokes": 1,
+      "par": 3
+    },
+    {
+      "player_id": 10,
+      "name": "Dave Kim",
+      "short": "DK",
+      "place": 4,
+      "place_text": "T4",
+      "moved": -2,
+      "to_par": 1,
+      "thru": 3,
+      "gross": 5,
+      "net": 5,
+      "capped": false,
+      "strokes": 0,
+      "par": 3
+    },
+    {
+      "player_id": 12,
+      "name": "Mike Ruiz",
+      "short": "MR",
+      "place": 4,
+      "place_text": "T4",
+      "moved": 1,
+      "to_par": 1,
+      "thru": 3,
+      "gross": 4,
+      "net": 3,
+      "capped": false,
+      "strokes": 1,
+      "par": 3
+    }
+  ],
+  "cap_notes": [],
+  "leader": {
+    "name": "Ben Ortiz",
+    "to_par": -7,
+    "thru": 6
+  }
+}

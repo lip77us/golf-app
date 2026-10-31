@@ -10050,3 +10050,213 @@ class SurvivorHoleCard {
                 (j['next'] as Map).cast<String, dynamic>()),
       );
 }
+
+// ── Stroke Play score entry (`~/Downloads/handoff-stroke-play`) ──────────────
+
+/// One golfer on the hole being entered.
+class StrokePlayHolePlayer {
+  final int playerId;
+  final String name;
+  final String first;
+  final String short;
+  final int? courseHandicap;
+  final int? par;
+  final int strokes;
+  final int? gross;
+
+  /// The COUNTED net — post-cap, which is what the total is built from. On a
+  /// capped hole it sits below gross minus strokes, and [capped] is what
+  /// explains it.
+  final int? net;
+  final bool capped;
+
+  /// The gross ceiling this golfer is typing against, for the keypad's
+  /// `max N`. Null when the cap is not in force — a number there would be a
+  /// maximum nothing enforces.
+  final int? capMax;
+
+  const StrokePlayHolePlayer({
+    required this.playerId,
+    required this.name,
+    required this.first,
+    required this.short,
+    required this.courseHandicap,
+    required this.par,
+    required this.strokes,
+    required this.gross,
+    required this.net,
+    required this.capped,
+    required this.capMax,
+  });
+
+  factory StrokePlayHolePlayer.fromJson(Map<String, dynamic> j) =>
+      StrokePlayHolePlayer(
+        playerId: (j['player_id'] as num?)?.toInt() ?? 0,
+        name: (j['name'] as String?) ?? '',
+        first: (j['first'] as String?) ?? '',
+        short: (j['short'] as String?) ?? '',
+        courseHandicap: (j['course_handicap'] as num?)?.toInt(),
+        par: (j['par'] as num?)?.toInt(),
+        strokes: (j['strokes'] as num?)?.toInt() ?? 0,
+        gross: (j['gross'] as num?)?.toInt(),
+        net: (j['net'] as num?)?.toInt(),
+        capped: j['capped'] as bool? ?? false,
+        capMax: (j['cap_max'] as num?)?.toInt(),
+      );
+}
+
+/// One row of the tray's mini leaderboard: where this hole left a golfer.
+class StrokePlayStandingRow {
+  final int playerId;
+  final String name;
+  final String short;
+
+  /// Place in the FIELD, and the server's own `T2` for a shared one. Null
+  /// before a golfer has teed off — he is not on the board yet.
+  final int? place;
+  final String placeText;
+
+  /// Places GAINED on this hole. Null on the last hole, where the round is
+  /// over and there is nowhere left to move, and null for a golfer who had
+  /// no place to move from.
+  final int? moved;
+
+  final int? toPar;
+  final int thru;
+  final int? gross;
+  final int? net;
+  final bool capped;
+  final int strokes;
+  final int? par;
+
+  const StrokePlayStandingRow({
+    required this.playerId,
+    required this.name,
+    required this.short,
+    required this.place,
+    required this.placeText,
+    required this.moved,
+    required this.toPar,
+    required this.thru,
+    required this.gross,
+    required this.net,
+    required this.capped,
+    required this.strokes,
+    required this.par,
+  });
+
+  factory StrokePlayStandingRow.fromJson(Map<String, dynamic> j) =>
+      StrokePlayStandingRow(
+        playerId: (j['player_id'] as num?)?.toInt() ?? 0,
+        name: (j['name'] as String?) ?? '',
+        short: (j['short'] as String?) ?? '',
+        place: (j['place'] as num?)?.toInt(),
+        placeText: (j['place_text'] as String?) ?? '',
+        moved: (j['moved'] as num?)?.toInt(),
+        toPar: (j['to_par'] as num?)?.toInt(),
+        thru: (j['thru'] as num?)?.toInt() ?? 0,
+        gross: (j['gross'] as num?)?.toInt(),
+        net: (j['net'] as num?)?.toInt(),
+        capped: j['capped'] as bool? ?? false,
+        strokes: (j['strokes'] as num?)?.toInt() ?? 0,
+        par: (j['par'] as num?)?.toInt(),
+      );
+}
+
+/// The leader of the field, when he is not on this card.
+class StrokePlayLeader {
+  final String name;
+  final int? toPar;
+  final int thru;
+
+  const StrokePlayLeader(
+      {required this.name, required this.toPar, required this.thru});
+
+  factory StrokePlayLeader.fromJson(Map<String, dynamic> j) =>
+      StrokePlayLeader(
+        name: (j['name'] as String?) ?? '',
+        toPar: (j['to_par'] as num?)?.toInt(),
+        thru: (j['thru'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// Everything the Stroke Play score-entry tray draws for ONE hole.
+class StrokePlayHoleCard {
+  final int hole;
+  final int? par;
+  final String handicapMode;
+  final int netPercent;
+  final bool showNet;
+
+  /// The net double bogey maximum is in force.
+  final bool cap;
+
+  /// The last hole in the group's play order.
+  final bool isFinal;
+
+  /// Golfers on this card, and golfers on the whole board.
+  final int group;
+  final int field;
+
+  /// Card order — the order the rows are entered in.
+  final List<StrokePlayHolePlayer> players;
+
+  /// Tray order — by total, best first.
+  final List<StrokePlayStandingRow> standing;
+
+  /// The cap, in words. The server writes them because the cap is a rule.
+  final List<String> capNotes;
+  final StrokePlayLeader? leader;
+
+  const StrokePlayHoleCard({
+    required this.hole,
+    required this.par,
+    required this.handicapMode,
+    required this.netPercent,
+    required this.showNet,
+    required this.cap,
+    required this.isFinal,
+    required this.group,
+    required this.field,
+    required this.players,
+    required this.standing,
+    required this.capNotes,
+    required this.leader,
+  });
+
+  StrokePlayHolePlayer? player(int pid) {
+    for (final p in players) {
+      if (p.playerId == pid) return p;
+    }
+    return null;
+  }
+
+  factory StrokePlayHoleCard.fromJson(Map<String, dynamic> j) =>
+      StrokePlayHoleCard(
+        hole: (j['hole'] as num?)?.toInt() ?? 0,
+        par: (j['par'] as num?)?.toInt(),
+        handicapMode: (j['handicap_mode'] as String?) ?? 'net',
+        netPercent: (j['net_percent'] as num?)?.toInt() ?? 100,
+        showNet: j['show_net'] as bool? ?? true,
+        cap: j['cap'] as bool? ?? false,
+        isFinal: j['final'] as bool? ?? false,
+        group: (j['group'] as num?)?.toInt() ?? 0,
+        field: (j['field'] as num?)?.toInt() ?? 0,
+        players: ((j['players'] as List?) ?? const [])
+            .map((e) => StrokePlayHolePlayer.fromJson(
+                (e as Map).cast<String, dynamic>()))
+            .toList(),
+        standing: ((j['standing'] as List?) ?? const [])
+            .map((e) => StrokePlayStandingRow.fromJson(
+                (e as Map).cast<String, dynamic>()))
+            .toList(),
+        capNotes: [
+          for (final n in (j['cap_notes'] as List?) ?? const [])
+            if (n is String) n,
+        ],
+        leader: j['leader'] == null
+            ? null
+            : StrokePlayLeader.fromJson(
+                (j['leader'] as Map).cast<String, dynamic>()),
+      );
+}

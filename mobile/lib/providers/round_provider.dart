@@ -137,6 +137,7 @@ class RoundProvider extends ChangeNotifier {
   /// The same, per hole, for Rabbit.
   final Map<int, RabbitHoleCard> _rabbitHoles = {};
   final Map<int, SurvivorHoleCard> _survivorHoles = {};
+  final Map<int, StrokePlayHoleCard> _strokePlayHoles = {};
   Points531Summary? _points531Summary;
   VegasSummary?    _vegasSummary;
   FourballSummary? _fourballSummary;
@@ -207,6 +208,7 @@ class RoundProvider extends ChangeNotifier {
   SixesHoleCard?    sixesHole(int hole)    => _sixesHoles[hole];
   RabbitHoleCard?   rabbitHole(int hole)   => _rabbitHoles[hole];
   SurvivorHoleCard? survivorHole(int hole)  => _survivorHoles[hole];
+  StrokePlayHoleCard? strokePlayHole(int hole) => _strokePlayHoles[hole];
   Points531Summary? get points531Summary   => _points531Summary;
   VegasSummary?     get vegasSummary        => _vegasSummary;
   FourballSummary?  get fourballSummary     => _fourballSummary;
@@ -281,6 +283,7 @@ class RoundProvider extends ChangeNotifier {
     _scorecard               = null;
     _sixesSummary            = null;
     _sixesHoles.clear();
+    _strokePlayHoles.clear();
     _rabbitHoles.clear();
     _survivorHoles.clear();
     _points531Summary        = null;
@@ -420,6 +423,7 @@ class RoundProvider extends ChangeNotifier {
       _tripleCupSummary = null;
       _sixesSummary     = null;
       _sixesHoles.clear();
+      _strokePlayHoles.clear();
       _rabbitHoles.clear();
       _survivorHoles.clear();
       _points531Summary = null;
@@ -482,12 +486,13 @@ class RoundProvider extends ChangeNotifier {
       // Before the enqueue, because the enqueue starts the drain and a fast
       // connection could answer before the next line runs.
       // Every game whose TRAY reports the server's result for the hole —
-      // Annandale Friday and Sixes. A hold that only knew about Annandale
-      // left the Sixes tray free to draw the card from before this score.
+      // Annandale Friday, Sixes, Rabbit, Survivor and Stroke Play. A hold
+      // that only knew about Annandale left the Sixes tray free to draw the
+      // card from before this score.
       if (foursomeId == _activeFoursomeId &&
           (_annandaleFridaySummary != null
            || _sixesHoles.isNotEmpty || _rabbitHoles.isNotEmpty
-           || _survivorHoles.isNotEmpty)) {
+           || _survivorHoles.isNotEmpty || _strokePlayHoles.isNotEmpty)) {
         _annandaleResults.hold(holeNumber);
       }
 
@@ -819,6 +824,23 @@ class RoundProvider extends ChangeNotifier {
       // Offline — keep whatever is on screen.
     } catch (e) {
       debugPrint('loadSixesHole error: $e');
+    }
+  }
+
+  /// Fetch one hole's Stroke Play card. Silent on failure, for the reason
+  /// the Sixes one is: a card that cannot be fetched must not stop a group
+  /// entering scores.
+  Future<void> loadStrokePlayHole(int foursomeId, int hole) async {
+    try {
+      final card = await _client.getStrokePlayHoleCard(foursomeId, hole);
+      if (card != null) {
+        _strokePlayHoles[hole] = card;
+        notifyListeners();
+      }
+    } on NetworkException {
+      // Offline — keep whatever is on screen.
+    } catch (e) {
+      debugPrint('loadStrokePlayHole error: $e');
     }
   }
 
@@ -1419,6 +1441,17 @@ class RoundProvider extends ChangeNotifier {
     if (rab is Map<String, dynamic>) {
       _rabbitHoles.clear();          // same staleness — see `sixes_hole`
       _rabbitHoles[holeNumber] = RabbitHoleCard.fromJson(rab);
+      _annandaleResults.answer(holeNumber);
+      notifyListeners();
+    }
+
+    final sp = response['stroke_play_hole'];
+    if (sp is Map<String, dynamic>) {
+      // Same staleness as the others, and sharper here: a posted hole moves
+      // the PLACES of golfers in other groups too, so every held card is
+      // describing a board that has changed.
+      _strokePlayHoles.clear();
+      _strokePlayHoles[holeNumber] = StrokePlayHoleCard.fromJson(sp);
       _annandaleResults.answer(holeNumber);
       notifyListeners();
     }

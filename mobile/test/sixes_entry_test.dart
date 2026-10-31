@@ -364,7 +364,14 @@ void main() {
       // Two sets of arrows at the bottom is what a phone showed. The design
       // has the tray overlaying that row, and the tray's forward button can
       // name the next MATCH — so the generic one is the half that goes.
-      expect(src, contains('if (!sixTray)'));
+      //
+      // Anchored on the pager's own padding rather than on the literal
+      // condition: the gate grew `&& !spTray` the day Stroke Play got a
+      // tray, and a guard that fails for a widening reports an edit rather
+      // than a regression.
+      final at = src.indexOf('padding: const EdgeInsets.fromLTRB(12, 4, 12, 8)');
+      expect(at, greaterThan(0), reason: 'the pager row moved');
+      expect(src.substring(at - 120, at), contains('!sixTray'));
     });
 
     test('the Sixes tray waits for the SERVER, not just the local queue', () {

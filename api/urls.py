@@ -141,6 +141,7 @@ urlpatterns = [
     # ---- Sixes ----
     path('foursomes/<int:pk>/sixes/',              views.SixesResultView.as_view(),     name='api-sixes-result'),
     path('foursomes/<int:pk>/sixes/hole/<int:hole>/', views.SixesHoleCardView.as_view(), name='api-sixes-hole'),
+    path('foursomes/<int:pk>/stroke-play/hole/<int:hole>/', views.StrokePlayHoleCardView.as_view(), name='api-stroke-play-hole'),
     path('foursomes/<int:pk>/sixes/setup/',        views.SixesSetupView.as_view(),      name='api-sixes-setup'),
     path('foursomes/<int:pk>/sixes/extra-teams/',  views.SixesExtraTeamsView.as_view(), name='api-sixes-extra-teams'),
     path('foursomes/<int:pk>/sixes/segment-teams/', views.SixesSegmentTeamsView.as_view(), name='api-sixes-segment-teams'),

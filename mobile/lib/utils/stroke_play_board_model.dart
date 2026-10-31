@@ -19,6 +19,17 @@
 /// and which nine a hole belongs to.
 library;
 
+/// `E` for level, a sign otherwise, an em dash for nothing played.
+///
+/// Here rather than on the board because the score-entry tray reports the
+/// same figure in the same words, and two spellings of `E` is how one board
+/// comes to say `EVEN`.
+String strokeToPar(int? v) {
+  if (v == null) return '—';
+  if (v == 0) return 'E';
+  return v > 0 ? '+$v' : '$v';
+}
+
 /// A round column.
 ///
 /// Empty on a one-round board, which shows `Thru · Gross · Tot` instead.

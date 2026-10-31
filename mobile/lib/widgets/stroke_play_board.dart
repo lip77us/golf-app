@@ -352,13 +352,6 @@ class _Row extends StatelessWidget {
   }
 }
 
-/// `E` for level, a sign otherwise, an em dash for nothing played.
-String strokeToPar(int? v) {
-  if (v == null) return '—';
-  if (v == 0) return 'E';
-  return v > 0 ? '+$v' : '$v';
-}
-
 /// One golfer's hole-by-hole card, in place.
 ///
 /// A tab per round, the live one selected, with a dot on it. One round

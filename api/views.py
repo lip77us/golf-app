@@ -6067,7 +6067,8 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
     fetching when the key is missing.
     """
     active = set(foursome.round.active_games or []) | set(foursome.active_games or [])
-    wants = {'annandale_friday', 'sixes', 'rabbit', 'survivor'} & active
+    wants = {'annandale_friday', 'sixes', 'rabbit', 'survivor',
+             'low_net_round'} & active
     if not wants:
         return {}
     from services.skins import skins_summary
@@ -6098,6 +6099,13 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
                 card = survivor_hole_card(foursome, hole_number)
                 if card:
                     out['survivor_hole'] = card
+            # …and Stroke Play's, which reports the hole AND where it left
+            # each golfer on the board.
+            if 'low_net_round' in wants and hole_number:
+                from services.low_net_round import stroke_play_hole_card
+                card = stroke_play_hole_card(foursome, hole_number)
+                if card:
+                    out['stroke_play_hole'] = card
             if 'skins' in active:
                 out['skins'] = skins_summary(foursome)
     except Exception:
@@ -8071,6 +8079,20 @@ class RabbitHoleCardView(APIView):
         foursome = foursome_for_scorer(request.user, pk)
         from services.rabbit import rabbit_hole_card
         return Response(rabbit_hole_card(foursome, int(hole)))
+
+
+class StrokePlayHoleCardView(APIView):
+    """GET /api/foursomes/{id}/stroke-play/hole/{hole}/
+
+    One hole's score-entry card. The POST that saves a score returns the same
+    shape under `stroke_play_hole`, so this is only for a hole the screen
+    opens without posting — scrolling back, or picking up a round somebody
+    else is scoring.
+    """
+    def get(self, request, pk, hole):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.low_net_round import stroke_play_hole_card
+        return Response(stroke_play_hole_card(foursome, int(hole)))
 
 
 class SixesHoleCardView(APIView):

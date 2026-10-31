@@ -45,6 +45,7 @@ import '../utils/play_order.dart';
 import '../api/client.dart' show NetworkException;
 import '../widgets/annandale_friday.dart';
 import '../widgets/sixes_entry.dart';
+import '../widgets/stroke_play_entry.dart';
 import '../widgets/reveal_on_mount.dart';
 import '../widgets/error_view.dart' show friendlyError;
 import '../widgets/forty_balls_keypad.dart';
@@ -186,6 +187,15 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           .where((p) => p.playerId == m.player.id)
           .map((p) => p.strokes)
           .firstOrNull;
+      if (s != null) return s;
+    }
+
+    // **Stroke Play states them for the hole as well**, and it has to: the
+    // game carries its OWN handicap mode and allowance, so a gross Stroke
+    // Play round inside a net round would otherwise show the round's dots.
+    final sp = _strokePlayCard(rp);
+    if (sp != null) {
+      final s = sp.player(m.player.id)?.strokes;
       if (s != null) return s;
     }
 
@@ -385,6 +395,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // opens without posting.
     if (games.contains(GameIds.sixes) || configured.contains(GameIds.sixes)) {
       futures.add(rp.loadSixesHole(widget.foursomeId, _selectedHole));
+    }
+    // Stroke Play's card is per hole too, for the same reason.
+    if (games.contains(GameIds.strokePlay) ||
+        configured.contains(GameIds.strokePlay)) {
+      futures.add(rp.loadStrokePlayHole(widget.foursomeId, _selectedHole));
     }
     // Banker's strip sits under the entry card and has to be there on first
     // paint — the hole's three bets were agreed on the tee, and a screen that
@@ -1477,13 +1492,21 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         // Sixes enters on the keypad as of `handoff-sixes-score-entry`. It
         // is the primary test rather than membership of `games`, because a
         // round can carry Sixes as a side game without its screen.
-        primary == GameIds.sixes;
+        primary == GameIds.sixes ||
+        // Stroke Play, per `~/Downloads/handoff-stroke-play`. The primary
+        // test again: Stroke Play is also the overlay the server emits for
+        // every individual-ball round, and a Nassau round must not have its
+        // entry changed by it.
+        primary == GameIds.strokePlay;
   }
 
-  /// This hole ends in a TRAY — Annandale Friday's or Sixes'. Those read the
-  /// server's result for the hole, so the scorer stays on it to see one.
+  /// This hole ends in a TRAY — Annandale Friday's, Sixes' or Stroke Play's.
+  /// Those read the server's result for the hole, so the scorer stays on it
+  /// to see one.
   bool _raisesTray(RoundProvider rp) =>
-      rp.annandaleFridaySummary != null || _sixesCard(rp) != null;
+      rp.annandaleFridaySummary != null ||
+      _sixesCard(rp) != null ||
+      _strokePlayCard(rp) != null;
 
   /// The hole we have asked the server for; see `_ensureSixesCard`.
   int? _sixesCardAsked;
@@ -1515,6 +1538,37 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       return null;
     }
     return rp.sixesHole(_selectedHole);
+  }
+
+  /// The hole we have asked the server for; see `_ensureStrokePlayCard`.
+  int? _strokePlayCardAsked;
+
+  /// **Make sure the hole on screen has a Stroke Play card.** Same gap Sixes
+  /// and Rabbit both showed on a phone: a save drops every other hole's card
+  /// because they can be stale, and that races the fetch the forward button
+  /// started — so without this the keypad is simply not drawn.
+  void _ensureStrokePlayCard(RoundProvider rp) {
+    if (!_activeGames(rp.round).contains(GameIds.strokePlay)) return;
+    if (rp.strokePlayHole(_selectedHole) != null) {
+      _strokePlayCardAsked = null;
+      return;
+    }
+    if (_strokePlayCardAsked == _selectedHole) return;
+    _strokePlayCardAsked = _selectedHole;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<RoundProvider>()
+          .loadStrokePlayHole(widget.foursomeId, _selectedHole);
+    });
+  }
+
+  /// The Stroke Play card for the hole on screen, when it is the primary.
+  StrokePlayHoleCard? _strokePlayCard(RoundProvider rp) {
+    final games = _activeGames(rp.round);
+    if (resolvePrimary(rp.round?.primaryGame, games) != GameIds.strokePlay) {
+      return null;
+    }
+    return rp.strokePlayHole(_selectedHole);
   }
 
   /// A hole tray stays down while the scorer has asked to edit — "Edit
@@ -3037,6 +3091,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final sixTray =
         six != null && fbActive && allDone && !sixBand && _editHotPid == null;
 
+    // **Stroke Play.** Same tray, and the thing it reports is a PLACE —
+    // which is the one fact this card cannot work out for itself.
+    _ensureStrokePlayCard(rp);
+    final spCard = _strokePlayCard(rp);
+    final spTray =
+        spCard != null && fbActive && allDone && _editHotPid == null;
+
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -3088,6 +3149,29 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 _editHotPid = null;
               }),
             )
+          else if (spTray)
+            StrokePlayHoleTray(
+              card: spCard,
+              // While this tray is up it IS the bottom bar — the pager below
+              // is hidden, so these are the only arrows on screen, and on
+              // the last hole the forward button is Complete Round.
+              nextHole: _nextHoleInOrder(rp),
+              onPrev: _prevHoleInOrder(rp) == null ? null : _retreat,
+              onNext: rp.submitting
+                  ? null
+                  : (_nextHoleInOrder(rp) == null
+                      ? () => _completeRound(ctx, players, par)
+                      : _advance),
+              gettingResult: rp.trayResultPending(_selectedHole) ||
+                  _hasRealPending(_selectedHole),
+              notSynced: rp.trayHoleUnsynced(_selectedHole),
+              // Picks nobody — see the Sixes tray above.
+              picking: _trayEditing,
+              onEdit: () => setState(() {
+                _trayEditing = !_trayEditing;
+                _editHotPid = null;
+              }),
+            )
           else if (afTray)
             AnnandaleHoleTray(
               summary  : af,
@@ -3119,6 +3203,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               par       : sc.holeData(_selectedHole)
                       ?.scoreFor(fbMember.player.id)?.par ?? par,
               strokes   : _keypadStrokes(fbMember, sc),
+              // The net double bogey ceiling, when Stroke Play is in force.
+              // Null everywhere else, so no other game grows a maximum.
+              capMax    : spCard?.player(fbMember.player.id)?.capMax,
               onDone    : _trayEditing
                   ? () => setState(() {
                         _trayEditing = false;
@@ -3150,7 +3237,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 // its count. An edit to a complete hole posts too, or the
                 // tray would describe the number that was just replaced.
                 if (n > 0 && !_fortyBallsRound(rp) &&
-                    (af != null || six != null)) {
+                    (af != null || six != null || spCard != null)) {
                   final hole = _selectedHole;
                   final now = _effectiveScores(sc, hole);
                   if (_allScored(players, now, hole)) {
@@ -3209,7 +3296,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           // hole. Two pagers at the bottom is what a phone showed; the design
           // has the tray overlaying this row, so this is the half that goes
           // (Paul, 30 Oct 2026).
-          if (!sixTray)
+          if (!sixTray && !spTray)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             child: Column(children: [
