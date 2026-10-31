@@ -681,7 +681,7 @@ class SurvivorHoleCardTests(TestCase):
         self._play(1, 4, 5, 6)                    # Cal out
         c = self._card(2)
         self.assertEqual(c['role'], 'decider')
-        self.assertEqual(c['phase_chip'], 'Decider')
+        self.assertEqual(c['phase_chip'], 'The Duel')
         self.assertIsNone(c['result'], 'the hole is not played yet')
         alive = [p['short'] for p in c['players'] if p['is_alive']]
         self.assertEqual(sorted(alive), sorted([self.sn['Ann'], self.sn['Ben']]))
@@ -699,7 +699,7 @@ class SurvivorHoleCardTests(TestCase):
     def test_a_fresh_survivor_has_no_zombieville_section(self):
         c = self._card(1)
         self.assertEqual([s['key'] for s in c['sections']], ['in_play'])
-        self.assertEqual(c['phase_chip'], 'Elimination')
+        self.assertEqual(c['phase_chip'], 'The Island')
 
     def test_the_decider_chip_names_the_pair_and_the_pot(self):
         self._play(1, 4, 5, 6)
@@ -741,15 +741,15 @@ class SurvivorHoleCardTests(TestCase):
         self.assertEqual(r['event'], 'no_elimination')
         self.assertEqual(r['chip'], 'Tie for worst')
         self.assertEqual(r['chip_nets'], '')
-        self.assertEqual(r['standing_right'], 'Elimination')
+        self.assertEqual(r['standing_right'], 'The Island')
 
     def test_a_halved_decider_carries_and_says_who_is_chasing(self):
         self._play(1, 4, 5, 6)                    # Cal out
         self._play(2, 4, 4, 6)                    # deciders tie
         r = self._card(2)['result']
         self.assertEqual(r['event'], 'carried')
-        self.assertEqual(r['chip'], 'Decider halved')
-        self.assertEqual(r['standing_right'], 'Decider')
+        self.assertEqual(r['chip'], 'Duel halved')
+        self.assertEqual(r['standing_right'], 'The Duel')
         self.assertIn(self.sn['Cal'], r['line_rest'])
 
     def test_a_zombie_coming_back_sends_a_decider_out(self):
@@ -937,6 +937,6 @@ class SurvivorFixtureRegenTests(TestCase):
         card = self._card(11)
         r = card['result']
         self.assertEqual(r['event'], 'resurrected')
-        self.assertEqual(r['standing_right'], 'Decider')
+        self.assertEqual(r['standing_right'], 'The Duel')
         self.assertIn('Zombieville', r['line_rest'])
         self._write('survivor_hole11_swap.json', card)

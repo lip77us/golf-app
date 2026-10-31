@@ -11,12 +11,12 @@
     "stake": 5.0
   },
   "role": "decider",
-  "phase_chip": "Decider",
+  "phase_chip": "The Duel",
   "phase_note": "PL v DK \u00b7 $15 pot",
   "sections": [
     {
       "key": "in_play",
-      "title": "Decider \u00b7 PL v DK",
+      "title": "The Duel \u00b7 PL v DK",
       "note": "low takes it",
       "player_ids": [
         1,
@@ -73,7 +73,7 @@
   "zombie_option": true,
   "result": {
     "event": "won",
-    "phase_word": "decider",
+    "phase_word": "The Duel",
     "chip": "PL takes it",
     "chip_nets": "net 4 v 5",
     "chip_player_id": 1,
@@ -94,6 +94,6 @@
     "start_hole": 12,
     "pot": 15.0,
     "title": "Survivor 6 from 12 \u00b7 all three in",
-    "note": "Elimination first: the worst score outright goes out."
+    "note": "The Island first: the worst score outright goes out."
   }
 }

@@ -11,12 +11,12 @@
     "stake": 5.0
   },
   "role": "decider",
-  "phase_chip": "Decider",
+  "phase_chip": "The Duel",
   "phase_note": "PL v DK \u00b7 $15 pot",
   "sections": [
     {
       "key": "in_play",
-      "title": "Decider \u00b7 PL v DK",
+      "title": "The Duel \u00b7 PL v DK",
       "note": "low takes it",
       "player_ids": [
         1,

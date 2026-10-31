@@ -36,7 +36,7 @@ void main() {
       await _pump(t, SurvivorHoleHeader(card: _card('survivor_hole11_decider')));
       final text = _allText(t);
       expect(text, contains('11'));
-      expect(text, contains('Decider'));
+      expect(text, contains('The Duel'));
       // The pair is named on a decider — a bare pot says nothing about who
       // is playing for it.
       expect(text, contains('\$15 pot'));
@@ -46,7 +46,7 @@ void main() {
     testWidgets('an elimination names no pair', (t) async {
       await _pump(t, SurvivorHoleHeader(card: _card('survivor_hole10_out')));
       final text = _allText(t);
-      expect(text, contains('Elimination'));
+      expect(text, contains('The Island'));
       expect(text.contains(' v '), isFalse);
     });
   });
@@ -56,7 +56,7 @@ void main() {
       await _pump(t, SurvivorPlayersCard(
           card: _card('survivor_hole11_decider'), netStyle: true));
       final text = _allText(t);
-      expect(text, contains('DECIDER · PL V DK'));
+      expect(text, contains('THE DUEL · PL V DK'));
       expect(text, contains('LOW TAKES IT'));
       expect(text, contains('ZOMBIEVILLE'));
       expect(text, contains('LOW OUTRIGHT COMES BACK'));
@@ -67,7 +67,7 @@ void main() {
       await _pump(t, SurvivorPlayersCard(
           card: _card('survivor_hole10_out'), netStyle: true));
       final text = _allText(t);
-      expect(text, contains('ELIMINATION · ALL THREE IN'));
+      expect(text, contains('THE ISLAND · ALL THREE IN'));
       expect(text.contains('ZOMBIEVILLE'), isFalse);
     });
 
@@ -128,7 +128,7 @@ void main() {
       expect(text, contains('SR low outright'));
       expect(text, contains('SR is back in.'));
       expect(text, contains('goes to Zombieville'));
-      expect(text, contains('Decider'));
+      expect(text, contains('The Duel'));
     });
 
     testWidgets('the sentences are the SERVER\'s, verbatim', (t) async {

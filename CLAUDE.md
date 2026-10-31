@@ -8459,3 +8459,45 @@ strokes that golfer was getting.
 **Sixes' scorecard came off score entry** with them. Same widget and same
 payload as the leaderboard's, so it was the third screen drawing a board's
 card under a tray that leaves no room to read it.
+
+### Survivor's phases are The Island and The Duel
+
+`~/Downloads/handoff-survivor-names` (31 Oct 2026): a copy-only rename, no
+logic, layout or money change. **Elimination → The Island**, **Decider → The
+Duel**, Zombieville unchanged. The names do not change with the Zombie option,
+which is the point of having them — a golfer learns one word for the phase he
+is in.
+
+**The stored roles do not move.** `SurvivorHoleResult.role` is still
+`elimination` / `decider` / `final`: those values are in every row already
+written and are what the client branches on, so renaming them would orphan
+the history to rename a label. Only `ROLE_CHOICES`' labels change
+(`games/0103`, SQL empty, no row touched) — the same call the Hot Spot → Hot
+Seat rename made.
+
+**It was almost entirely a server change, and that is the one-writer rule
+paying out.** Every phase word a golfer sees is written in
+`services/survivor.py` — the chips, the section bands, the standing line's
+right slot and the three sentences — so the score-entry screen, its tray and
+the boards all followed with no client edit at all.
+
+Three strings the packet does not list were changed anyway, because leaving
+them is the inconsistency the rename exists to remove: the leaderboard's live
+row (`$out is the Zombie — The Duel`), the score screen's legend (`an Island
+hole`), and `survivor_standing`'s `finals`.
+
+**`finals` is the interesting one.** It was INVENTED there, with a recorded
+reason: `decider` describes the hole's job and was the wrong register for a
+row reporting where the reader stands. That reasoning was right and is why
+the row still does not print the raw slug — what changed is that there is now
+a real name, so keeping `finals` would have left the app with **three** words
+for one phase: `decider` stored, `The Duel` on every board, `finals` on the
+standing row.
+
+**Still saying the old names**, per the packet's own list: the lock screen
+Live Activities, the Survivor setup screen and the game guide.
+
+Fixtures regenerated. A 1px overflow turned up in the tray's hole line —
+`Hole 10 · The Island` beside a long chip — and the fix is the label
+yielding, not the chip: the chip still takes the rest of the row, and the
+label is the half that can ellipsise without losing a fact.

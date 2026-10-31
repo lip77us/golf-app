@@ -155,11 +155,15 @@ SurvivorStanding? survivorStanding(SurvivorSummary? summary, int? playerId,
   // Two left. Now whether the reader is one of them IS the question, so the
   // word leads and the phase follows it.
   //
-  // `finals`, not the engine's `decider`: the reader's question is whether he
-  // made it, and *the finals* is how a golfer says that. `decider` describes
-  // the hole's job, which was the right word on a banner explaining the rules
-  // and the wrong one on a row reporting where he stands.
-  const phase = 'finals';
+  // **`The Duel`** — the group's own name for the phase (31 Oct 2026).
+  //
+  // This said `finals`, invented here because the engine's `decider`
+  // describes the hole's JOB and was the wrong register for a row reporting
+  // where the reader stands. That reasoning was right and is why this is
+  // still not the raw slug; what has changed is that there is now a real
+  // name, so keeping `finals` would leave the app with THREE words for one
+  // phase — `decider` stored, `The Duel` on every board, `finals` here.
+  const phase = 'The Duel';
 
   // **A resurrection outranks the state it produced.** He is alive, but on
   // this hole the news is that he came back — and the Survivor carries on

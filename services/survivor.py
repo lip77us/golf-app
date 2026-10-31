@@ -5,11 +5,13 @@ Survivor calculator — a three-player "horse race".
 
 A Survivor runs in two phases:
 
-* **Elimination** — all three play; the strictly WORST score is knocked out.
+* **The Island** (stored `elimination`) — all three play; the strictly WORST
+  score is knocked out.
   If the two worst scores tie, nobody goes and the elimination repeats on the
   next hole with all three still in.  (A tie for *low* is irrelevant here —
   only the bottom of the board matters.)
-* **Decider** — the surviving two play head-to-head; the strictly LOWER score
+* **The Duel** (stored `decider`) — the surviving two play head-to-head; the
+  strictly LOWER score
   wins the Survivor.  A tie carries the same two to the next hole.
 
 The moment a Survivor is decided a fresh one starts on the very next hole with
@@ -649,14 +651,23 @@ def survivor_summary(foursome) -> dict:
 # Score entry — one hole
 # ---------------------------------------------------------------------------
 
+# **The Island** and **The Duel** — the group's own names for the two phases
+# (`~/Downloads/handoff-survivor-names`, 31 Oct 2026). The STORED role is
+# still `elimination` / `decider`: those values are in every
+# `SurvivorHoleResult` row and are what the client branches on, so renaming
+# them would orphan the history to rename a label. Same call the Hot Spot →
+# Hot Seat rename made.
+#
+# The names do not change with the Zombie option, which is the point of
+# having them: a golfer learns one word for the phase he is in.
 _PHASE_WORD = {
-    SurvivorHoleResult.ELIMINATION: 'elimination',
-    SurvivorHoleResult.DECIDER    : 'decider',
+    SurvivorHoleResult.ELIMINATION: 'The Island',
+    SurvivorHoleResult.DECIDER    : 'The Duel',
     SurvivorHoleResult.FINAL      : 'last hole',
 }
 _PHASE_CHIP = {
-    SurvivorHoleResult.ELIMINATION: 'Elimination',
-    SurvivorHoleResult.DECIDER    : 'Decider',
+    SurvivorHoleResult.ELIMINATION: 'The Island',
+    SurvivorHoleResult.DECIDER    : 'The Duel',
     SurvivorHoleResult.FINAL      : 'Last hole',
 }
 
@@ -734,10 +745,10 @@ def survivor_hole_card(foursome, hole: int) -> dict:
     alive_names = ' v '.join(short_of.get(p) or '' for p in in_play)
     sections = [{
         'key'   : 'in_play',
-        'title' : (f'Decider · {alive_names}' if role == SurvivorHoleResult.DECIDER
+        'title' : (f'The Duel · {alive_names}' if role == SurvivorHoleResult.DECIDER
                    else 'Last hole · what is standing'
                    if role == SurvivorHoleResult.FINAL
-                   else 'Elimination · all three in'),
+                   else 'The Island · all three in'),
         'note'  : ('low takes it' if role == SurvivorHoleResult.DECIDER
                    else 'low takes it' if role == SurvivorHoleResult.FINAL
                    else 'worst goes out'),
@@ -768,7 +779,7 @@ def survivor_hole_card(foursome, hole: int) -> dict:
             'stake'    : stake,
         },
         'role'       : role,
-        'phase_chip' : _PHASE_CHIP.get(role, 'Elimination'),
+        'phase_chip' : _PHASE_CHIP.get(role, 'The Island'),
         'phase_note' : (f'{alive_names} · ${pot:.0f} pot'
                         if role == SurvivorHoleResult.DECIDER
                         else f'${pot:.0f} pot'),
@@ -797,7 +808,7 @@ def survivor_hole_card(foursome, hole: int) -> dict:
                 'pot'       : pot,
                 'title'     : f'Survivor {(sv_index or 0) + 1} from {nxt} '
                               f'· all three in',
-                'note'      : 'Elimination first: the worst score outright '
+                'note'      : 'The Island first: the worst score outright '
                               'goes out.',
             }
     return card
@@ -845,7 +856,7 @@ def _survivor_hole_result(here, role, players, in_play, out_now,
     elif event == SurvivorHoleResult.NO_ELIMINATION:
         chip, nets = 'Tie for worst', ''
     else:                                        # CARRIED
-        chip, nets = 'Decider halved', ''
+        chip, nets = 'Duel halved', ''
 
     # ── Line 2: the standing AFTER the hole ─────────────────────────────────
     def span(pid, text):
@@ -880,12 +891,12 @@ def _survivor_hole_result(here, role, players, in_play, out_now,
                         if p['player_id'] != out]
         if len(after_in) > 2:
             segs  = [span(None, 'All three in')]
-            money = 'Elimination'
+            money = 'The Island'
         else:
             segs  = [span(after_in[0], short_of.get(after_in[0])),
                      span(None, ' v '),
                      span(after_in[1], short_of.get(after_in[1]))]
-            money = 'Decider'
+            money = 'The Duel'
 
     # ── Line 3: what happened, and what it costs ────────────────────────────
     nxt_hole = None
@@ -906,16 +917,16 @@ def _survivor_hole_result(here, role, players, in_play, out_now,
         rest = f"${stake:.0f} from each of the other two"
     elif event == SurvivorHoleResult.CARRIED:
         lead = ''
-        rest = (f'A tie carries. Decider again on {nxt_hole}, '
+        rest = (f'A tie carries. The Duel again on {nxt_hole}, '
                 f'{short_of.get(chaser)} still chasing.')
     elif event == SurvivorHoleResult.RESURRECTED and out is not None:
         lead = f'{short_of.get(back)} is back in.'
-        rest = (f'{short_of.get(out)} had the higher decider score and goes '
-                f'to Zombieville. Decider on {nxt_hole}.')
+        rest = (f'{short_of.get(out)} had the higher score in the Duel and '
+                f'goes to Zombieville. The Duel on {nxt_hole}.')
     elif event == SurvivorHoleResult.RESURRECTED:
         lead = f'{short_of.get(back)} is back in.'
-        rest = (f'The deciders tied, so nobody goes out. '
-                f'Elimination on {nxt_hole}.')
+        rest = (f'The Duel tied, so nobody goes out. '
+                f'The Island on {nxt_hole}.')
     elif event == SurvivorHoleResult.ELIMINATED:
         lead = f'{short_of.get(out)} goes to Zombieville.'
         rest = (f'A low score outright on {nxt_hole} brings '
@@ -924,7 +935,7 @@ def _survivor_hole_result(here, role, players, in_play, out_now,
                 else f'{short_of.get(out)} is out of this Survivor.')
     elif event == SurvivorHoleResult.NO_ELIMINATION:
         lead = ''
-        rest = f'Nobody goes out. Elimination again on {nxt_hole}.'
+        rest = f'Nobody goes out. The Island again on {nxt_hole}.'
     elif event == SurvivorHoleResult.SPLIT:
         lead = ''
         rest = (f'Hole {here["hole"]} settles what is standing. '

@@ -479,18 +479,27 @@ class SurvivorHoleTray extends StatelessWidget {
             // The chip gets the row's slack, not the label — three characters
             // and a number against a sentence (Rabbit, 30 Oct 2026).
             Row(children: [
-              Text.rich(
-                TextSpan(children: [
-                  TextSpan(
-                      text: 'Hole ${card.hole}',
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16)),
-                  TextSpan(
-                      text: ' · ${r.phaseWord}',
-                      style: const TextStyle(color: _dim, fontSize: 14)),
-                ]),
+              // **Flexible, so the chip is never squeezed past its own
+              // padding.** The chip still gets the room — it takes the rest
+              // of the row — but with a fixed label a long phase name and a
+              // long chip together overflowed by a pixel, and the label is
+              // the half that can ellipsise without losing a fact.
+              Flexible(
+                child: Text.rich(
+                  TextSpan(children: [
+                    TextSpan(
+                        text: 'Hole ${card.hole}',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16)),
+                    TextSpan(
+                        text: ' · ${r.phaseWord}',
+                        style: const TextStyle(color: _dim, fontSize: 14)),
+                  ]),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(

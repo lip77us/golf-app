@@ -11,12 +11,12 @@
     "stake": 5.0
   },
   "role": "elimination",
-  "phase_chip": "Elimination",
+  "phase_chip": "The Island",
   "phase_note": "$15 pot",
   "sections": [
     {
       "key": "in_play",
-      "title": "Elimination \u00b7 all three in",
+      "title": "The Island \u00b7 all three in",
       "note": "worst goes out",
       "player_ids": [
         1,
@@ -66,7 +66,7 @@
   "zombie_option": true,
   "result": {
     "event": "eliminated",
-    "phase_word": "elimination",
+    "phase_word": "The Island",
     "chip": "SR out",
     "chip_nets": "net 6, worst",
     "chip_player_id": 3,
@@ -76,7 +76,7 @@
         "text": "All three in"
       }
     ],
-    "standing_right": "Elimination",
+    "standing_right": "The Island",
     "right_is_money": false,
     "line_lead": "SR goes to Zombieville.",
     "line_rest": "A low score outright on 11 brings SR back.",

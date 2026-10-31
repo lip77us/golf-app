@@ -4,7 +4,7 @@
 ///
 /// **The row inverts when two are left.** While all three are in, `Alive` is
 /// true of everybody and says nothing, so the row reports what the HOLE does;
-/// once it is down to two, being in the finals is the whole question. That
+/// once it is down to two, being in the Duel is the whole question. That
 /// inversion is the main subject here, along with the two rules that decide
 /// the word: the state is read at the hole on screen, and a Zombie is not
 /// merely out.
@@ -91,7 +91,7 @@ void main() {
 
     test('and it is grey, because it is not about him', () {
       // Mint would read as *you are fine*, which is not what it says. The
-      // colour arrives when the finals do, which makes its arrival mean
+      // colour arrives when the Duel does, which makes its arrival mean
       // something.
       expect(_st(_summary(holes: [_hole(1)]))!.tint, SurvivorTint.none);
     });
@@ -111,26 +111,27 @@ void main() {
   });
 
   group('**once two are left it inverts**', () {
-    test('being in the finals is now the whole question', () {
+    test('being in the Duel is now the whole question', () {
       final s = _summary(holes: [_hole(1, out: [_c])]);
       final st = _st(s)!;
-      expect(st.standing, 'Alive · finals');
+      expect(st.standing, 'Alive · The Duel');
       expect(st.tint, SurvivorTint.alive);
     });
 
-    test('**finals, not the engine\'s decider**', () {
-      // `decider` describes the hole's JOB, which was the right word on a
-      // banner explaining the rules and the wrong one on a row reporting where
-      // the reader stands. A golfer says he made the finals.
+    test('**the group\'s name, not the engine\'s slug**', () {
+      // `decider` describes the hole's JOB and was the wrong register for a
+      // row reporting where the reader stands. This said `finals` for that
+      // reason; The Duel is the same answer now that the group has a name
+      // for it, and it is the ONE name every other surface uses.
       final s = _summary(holes: [_hole(1, out: [_c])]);
       expect(_st(s)!.standing.contains('decider'), isFalse);
     });
 
     test('and the last hole does not rename it', () {
-      // It is still the finals, played on the last hole. The tie rule that
+      // It is still the Duel, played on the last hole. The tie rule that
       // makes it different is a legend fact, not a 27px one.
       final s = _summary(holes: [_hole(1, out: [_c])]);
-      expect(_st(s, last: true)!.standing, 'Alive · finals');
+      expect(_st(s, last: true)!.standing, 'Alive · The Duel');
     });
   });
 
@@ -140,7 +141,7 @@ void main() {
       // saves its reds for the HOLE that did it — an event, not a state.
       final s = _summary(holes: [_hole(1, out: [_me])]);
       final st = _st(s)!;
-      expect(st.standing, 'Out · finals');
+      expect(st.standing, 'Out · The Duel');
       expect(st.tint, SurvivorTint.none);
     });
 
@@ -149,14 +150,14 @@ void main() {
       // back in. The same plum the player row wears.
       final s = _summary(holes: [_hole(1, out: [_me])], zombie: true);
       final st = _st(s)!;
-      expect(st.standing, 'Zombie · finals');
+      expect(st.standing, 'Zombie · The Duel');
       expect(st.tint, SurvivorTint.zombie);
     });
 
     test('somebody ELSE being the Zombie leaves the reader alive', () {
       final s = _summary(holes: [_hole(1, out: [_c])], zombie: true);
       final st = _st(s)!;
-      expect(st.standing, 'Alive · finals');
+      expect(st.standing, 'Alive · The Duel');
       expect(st.tint, SurvivorTint.alive);
     });
 
@@ -167,7 +168,7 @@ void main() {
       final s = _summary(
         holes: [_hole(1, out: [_c], resurrected: _me)], zombie: true);
       final st = _st(s)!;
-      expect(st.standing, 'Back in · finals');
+      expect(st.standing, 'Back in · The Duel');
       expect(st.tint, SurvivorTint.alive);
     });
   });
@@ -181,7 +182,7 @@ void main() {
           _hole(2, survivor: 2),
         ],
         currentSurvivor: 2);
-      expect(_st(s, hole: 1)!.standing, 'Out · finals');
+      expect(_st(s, hole: 1)!.standing, 'Out · The Duel');
       expect(_st(s, hole: 2)!.standing, 'Low golfer out');
     });
 
@@ -197,8 +198,8 @@ void main() {
         ],
         zombie: true,
         currentAlive: [_me, _b], currentZombieId: _c);
-      expect(_st(s, hole: 2)!.standing, 'Alive · finals');
-      expect(_st(s, who: _c, hole: 2)!.standing, 'Zombie · finals');
+      expect(_st(s, hole: 2)!.standing, 'Alive · The Duel');
+      expect(_st(s, who: _c, hole: 2)!.standing, 'Zombie · The Duel');
     });
 
     test('the state read returns what the screen tints its rows with', () {

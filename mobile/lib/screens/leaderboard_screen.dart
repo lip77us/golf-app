@@ -4259,10 +4259,15 @@ class _SurvivorGroupCardState extends State<_SurvivorGroupCard> {
                 default:
                   // A live Survivor with the option on names its Zombie: he is
                   // the reason it might still swing.
+                  // **The Duel**, the group's own name for the phase (31
+                  // Oct 2026). Not in the packet's list, which covers the
+                  // score-entry screen and the live card — but leaving one
+                  // `decider` here is the inconsistency the rename exists to
+                  // remove.
                   label = out == null
                       ? 'Everyone still in'
-                      : (zombieOn ? '$out is the Zombie — decider'
-                                  : '$out out — decider');
+                      : (zombieOn ? '$out is the Zombie — The Duel'
+                                  : '$out out — The Duel');
                   color = zombieOn && out != null
                       ? Halved.zombie : theme.colorScheme.onSurfaceVariant;
               }

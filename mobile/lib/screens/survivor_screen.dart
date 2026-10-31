@@ -796,7 +796,7 @@ class _SurvivorScreenState extends State<SurvivorScreen> with SpotsCaptureMixin 
                   child: Text('OUT', style: theme.textTheme.labelSmall
                       ?.copyWith(fontSize: 9, fontWeight: FontWeight.bold))),
                 'Knocked out',
-                'This player had the worst score on an elimination hole, so they are out of the CURRENT Survivor — their row greys out and their score no longer counts. They are back in as soon as the next Survivor starts.'),
+                'This player had the worst score on an Island hole, so they are out of the CURRENT Survivor — their row greys out and their score no longer counts. They are back in as soon as the next Survivor starts.'),
             row(Text('-8 •', style: theme.textTheme.labelMedium
                   ?.copyWith(fontWeight: FontWeight.bold)),
                 'Handicap',

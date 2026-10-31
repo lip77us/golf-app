@@ -3837,8 +3837,13 @@ class SurvivorHoleResult(models.Model):
     ELIMINATION = 'elimination'
     DECIDER     = 'decider'
     FINAL       = 'final'
+    # **The stored values are history; the labels are the name.** The group
+    # calls these The Island and The Duel (31 Oct 2026). Renaming the VALUES
+    # would orphan every row already written and the client branches that
+    # read them, so only the labels move — the same call the Hot Spot → Hot
+    # Seat rename made.
     ROLE_CHOICES = [
-        (ELIMINATION, 'Elimination'), (DECIDER, 'Decider'), (FINAL, 'Final hole'),
+        (ELIMINATION, 'The Island'), (DECIDER, 'The Duel'), (FINAL, 'Final hole'),
     ]
 
     ELIMINATED     = 'eliminated'
