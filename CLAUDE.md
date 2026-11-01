@@ -1998,6 +1998,56 @@ be a second ordering authority and the two would eventually disagree.
 the cent, so a three-way tie over $200 pays $66.67 each and invents a cent.
 Flights make it likelier, since small flights tie more often.
 
+### A / B / C / D stays — stored flight labels are DECLINED
+
+`flight_label` derives the letter from the position (`1 -> 'A'`) and the
+header renders `'$label FLIGHT'`. There is no name field, and a TD mirroring
+an event cut elsewhere cannot make the board say what his other system says.
+
+Raised with Paul the night before Castlewood (1 Nov 2026), whose Golf Genius
+flights are named **CH / F1 / F2**, and declined on the spot: *"A - D are good
+because they dont contridict the CH, 1, 2 and 3 that I have in golf genius."*
+
+Which is the better argument than the feature. Letters and the other system's
+names are DIFFERENT VOCABULARY, so nobody can mistake one for the other — `A`
+is unambiguously this app's board and `CH` is unambiguously Golf Genius's. A
+stored label would make them identical strings in two systems that can drift
+apart, and then a mismatch reads as a bug rather than as two names for one
+flight.
+
+**Do not add a label field.** If the letters ever do collide with something,
+the fix is to say what the letters MEAN somewhere on the board, not to rename
+them.
+
+### Explicit flight assignment — the gap that is real
+
+The same evening exposed one that was not declined: **`assign_flights` only
+cuts equal sizes**, so an uneven cut made elsewhere cannot be mirrored, and
+there is no writer that takes an assignment outright.
+
+Castlewood wanted **18 / 18 / 18 / 6** — three indexed flights plus a flight
+for the six golfers with no official handicap — and no amount of
+`n_flights` + `unindexed` produces it: naming the six drops them out of the
+SIZING and appends them to the bottom flight, so four flights over 54 indexed
+golfers gives 14/14/13/**19**, not 18/18/18/**6**. Naming them makes the
+bottom flight bigger, which is the opposite of a flight OF them.
+
+**Everything downstream already handles it.** `rank_in_flights` groups by
+whatever flight each golfer is in, restarts ranks at 1 inside it, and
+apportions each flight's purse by `len(by_flight[f])` — so uneven flights
+rank and pay correctly today. The missing piece is only the writer:
+`set_flights_explicit(tournament, {player_id: flight_no})`, refusing unless
+every golfer in the field is named (`flight_map` silently defaults an unnamed
+golfer to the BOTTOM flight, and the cut is money) and unless the flight
+numbers are contiguous from 1.
+
+Written by hand into production for that event, with plain ORM over
+`railway ssh`, because **Railway runs the DEPLOYED code** — a new service
+function is no use the night before a tee time with commits unpushed. The
+write asserted the shape was exactly 18/18/18/6 BEFORE opening its
+transaction, so an index nudged across a line by a re-import would have
+written nothing rather than a cut nobody chose.
+
 ---
 
 ## Release tags
