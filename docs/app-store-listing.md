@@ -1,4 +1,4 @@
-# App Store listing copy — Halved (v2.13.0)
+# Store listing copy — Halved (v2.13.0)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
@@ -9,6 +9,10 @@ service, a screen and a play screen but no `GameMeta`**, so it is not
 offerable and must not be listed. Check `game_catalog.dart` rather than the
 services directory — this list had been missing 40 Balls and Better Ball since
 they were release headlines.
+
+**App Store copy is everything above `## Google Play`; the Play half is its
+own section further down.** They are different fields with different limits
+and the Android build omits two features, so the two are never the same text.
 
 ## Submitting 2.13.0 — everything that changes
 
@@ -96,6 +100,49 @@ ALSO
   and if the course database cannot be reached, the list says so
 • The greenie's full rule now reads on the setup screens: on the green from the
   tee, closest to the hole, and a par
+
+## Google Play — What's new
+
+**500 characters per language, per release.** Far shorter than the App Store's
+What's New, so this is a different object rather than a trim of it: name the
+games and stop. The audience is the closed test — people who know what a Sixes
+match is.
+
+**Two features are deliberately never named here**, and both would do damage:
+
+- **Courses near me.** iOS only; `nearMeOffered` gates it off for Android until
+  the manifest line and the Play Data-safety answers land together. Naming it
+  sends testers hunting a pill that is not there, and invites a Data-safety
+  question about a permission the build does not request.
+- **The lock-screen cards.** Those are iOS Live Activities. Android's
+  equivalent is a notification behind `ANDROID_BOARD=1`, which is off.
+
+**Set the release NAME too** — internal only, defaults to the version code.
+`2.13.0 (61)` reads better than `61` when you are working out which upload was
+which.
+
+### 2.13.0+61 — closed track, 1 Nov 2026 (486 chars)
+
+New game — Annandale Friday: five or six golfers, three better-ball Nassaus at once.
+
+Score entry is rebuilt on Sixes, Rabbit, Survivor and Stroke Play — a big keypad, and the hole's result the moment the last score is in.
+
+New boards for Skins, Stroke Play, Points, Rabbit, Sequoya and Nassau, each naming the rules you agreed to on the first tee.
+
+Skins can require a minimum score and let birdies steal. Spots and junk are named, not just counted.
+
+Tell me anything that reads wrong.
+
+**The closing line earns its characters.** The production-access application
+rested on *"53 of 128 code changes came from tester reports"*, and Google asked
+specifically about feedback — so a note that asks for it is building the
+evidence for the next application. **Production access was NOT granted on the
+11 Oct 2026 application**, so there will be a next one.
+
+**219 commits since the previous Android artifact** (`2.11.0+48`, 11 Oct 2026),
+which is why this went to the closed track rather than being promoted: no
+Android phone had opened Annandale Friday, the rebuilt boards or the
+keypad-and-tray score entry.
 
 ## Promotional text — previous (2.12.1, 161 chars; never public)
 New: Courses near me — tap once and the courses closest to you are listed nearest first. Halved asks for your location only on that tap, never in the background.
