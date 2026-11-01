@@ -8721,3 +8721,17 @@ two bug tests were checked by putting the old code back.
 and `handicap_strokes` — so they tested the board against what somebody
 thought the server sends, which is how the capped-net bug survived a suite
 that covered the card. They use the real keys now.
+
+## Slack activity feed — `services/activity_feed.py`
+
+Private channel **#halved-users** in LipApps (Paul + Ryan). One incoming webhook,
+`SLACK_ACTIVITY_WEBHOOK_URL` on Railway; empty = off. Posts a signup, a round's
+first real score and a round completing. A round gets two lines because many
+casual rounds are played and never closed. A signup carries name, user id and
+device, best effort. **No phone or email** (Paul, 1 Nov 2026): the privacy policy
+lists who receives them and Slack is not on the list.
+Delivery runs after commit and off the request, and a failure logs only the
+exception type because an httpx message can carry the URL, which is a credential.
+Sign-in rarely knows the name, so profile setup posts a second message.
+Device comes from `platform` on `/auth/otp/verify/` (sent from the next build on),
+else a push token, which only helps Android because iOS tokens never register.

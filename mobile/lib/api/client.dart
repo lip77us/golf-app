@@ -239,6 +239,7 @@ class ApiClient {
       'phone': phone,
       'code':  code,
       if (name != null) 'name': name,
+      'platform': Platform.isIOS ? 'ios' : 'android',
     });
     return AuthResult.fromJson(data as Map<String, dynamic>);
   }

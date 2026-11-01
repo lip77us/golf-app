@@ -1528,6 +1528,11 @@ class OtpVerifyView(APIView):
             return Response({'detail': str(exc)},
                             status=status.HTTP_400_BAD_REQUEST)
 
+        if is_new:
+            from services import activity_feed
+            activity_feed.user_registered(
+                user, platform=request.data.get('platform'))
+
         token, _ = Token.objects.get_or_create(user=user)
         body = {
             'token':            token.key,
@@ -1829,9 +1834,14 @@ class PlayerDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         before_index = player.handicap_index
+        before_name = player.name
         ser = PlayerSerializer(player, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
         player = ser.save()
+        from services import activity_feed
+        if (is_own and before_name == activity_feed.DEFAULT_PLAYER_NAME
+                and player.name != before_name):
+            activity_feed.profile_completed(request.user, player)
         # Editing a CANONICAL profile (a real account member, Player.user set)
         # propagates the new index to friends' login-less copies; editing a
         # friend's copy (no linked user) stays local.
@@ -6171,6 +6181,19 @@ class ScoreSubmitView(APIView):
         if errors:
             return Response({'detail': errors}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Asked before this post writes anything. Two groups posting their first
+        # hole in the same instant can both read True, and the cost of that is
+        # one repeated line in a Slack channel.
+        from services import activity_feed
+        first_score = (
+            activity_feed.enabled()
+            and any(s['gross_score'] is not None for s in scores)
+            and not HoleScore.objects.filter(
+                foursome__round_id=foursome.round_id,
+                player__is_phantom=False,
+            ).exists()
+        )
+
         for s in scores:
             pid         = s['player_id']
             gross       = s['gross_score']
@@ -6275,6 +6298,9 @@ class ScoreSubmitView(APIView):
         transaction.on_commit(lambda: run_off_request(
             _emit, label=f'score events f{foursome_id} h{hole_number}'))
 
+        if first_score:
+            activity_feed.round_started(foursome.round)
+
         # **No leaderboard here.** It cost 137 queries and most of the response
         # and no client has ever read it: both callers discard this body.
         return Response({
@@ -6360,6 +6386,8 @@ class RoundCompleteView(APIView):
             maybe_notify_round_complete(round_obj)
             from services.messaging_events import emit_round_complete
             emit_round_complete(round_obj)
+            from services import activity_feed
+            activity_feed.round_finished(round_obj)
 
         # Finalise cup points whenever this is called — partial-round
         # calls still want their group's points reflected on the live
