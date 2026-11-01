@@ -74,9 +74,9 @@ golfer on it strands nobody.
 
 The practical cost: a login-less golfer can only be in the pool at 4 per
 Halved card-mate, even when his scores are coming from a tournament round
-somebody else is keeping. At Castlewood that was 23 of 60 on the app, so the
-cap bit at 92 of 60 golfers and happened not to matter — but it would on a
-field with fewer members.
+somebody else is keeping. Castlewood had 23 of 60 on the app, so the cap sat
+at 92 seats against a field of 60 and never bit — but it would on a field
+with fewer members.
 
 **Note the server never had this rule.** `valid_participant_ids` wants
 host-round member OR on-app and says nothing about card-mates, so this is
