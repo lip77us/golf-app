@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/widgets/keyboard_done_bar.dart';
@@ -57,5 +59,29 @@ void main() {
     await t.pumpAndSettle();
 
     expect(node.hasFocus, isFalse);
+  });
+
+  // Dragging the transcript is the one escape that is discoverable FROM the
+  // field, because the composer's return key is `newline` and cannot dismiss.
+  //
+  // Counted rather than string-matched: a third list added to this screen
+  // fails here until it carries the behaviour too, which is the shape a guard
+  // has to have to keep working. (A fixed-string guard that reports an edit
+  // rather than a regression is one that gets deleted — see CLAUDE.md.)
+  test('every list on the round feed dismisses the keyboard on drag', () {
+    final src =
+        File('lib/screens/round_feed_screen.dart').readAsStringSync();
+
+    final lists = RegExp(r'ListView(\.\w+)?\(').allMatches(src).length;
+    final dismiss =
+        RegExp(r'keyboardDismissBehavior:\s*\n?\s*'
+               r'ScrollViewKeyboardDismissBehavior\.onDrag')
+            .allMatches(src).length;
+
+    expect(lists, greaterThan(0), reason: 'anchor: the screen has lists');
+    expect(dismiss, lists,
+        reason: '$lists list(s) on the round feed but $dismiss set '
+                'keyboardDismissBehavior.onDrag — a list the keyboard cannot '
+                'be dragged off is a field with no escape');
   });
 }

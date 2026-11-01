@@ -278,8 +278,13 @@ drawn over the composer again.
 deciding rather than assuming: making the return key `send` fixes the dead key
 AND dismisses the keyboard, but removes the ability to type a line break in a
 message. Worth doing if the diagnosis is confirmed; not worth trading
-blind. Adding `keyboardDismissBehavior: onDrag` to the two transcript lists
-costs nothing and could go in on its own.
+blind.
+
+**The zero-cost half DID go in** (Paul, 1 Nov 2026): both transcript lists now
+carry `keyboardDismissBehavior: onDrag`, so dragging the messages puts the
+keyboard away — the one escape discoverable from the field, and the answer four
+other screens already use. It removes nothing, so it needed no decision. The
+dead return key is still dead.
 
 **What to capture next time it happens**, in this order — the first two
 discriminate between the two candidate causes:

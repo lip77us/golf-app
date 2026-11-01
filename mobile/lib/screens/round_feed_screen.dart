@@ -135,6 +135,7 @@ class _RoundFeedScreenState extends State<RoundFeedScreen> {
       return RefreshIndicator(
         onRefresh: () => mp.refresh(),
         child: ListView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           children: const [
             SizedBox(height: 120),
             Icon(Icons.sms_outlined, size: 56, color: Colors.grey),
@@ -158,6 +159,12 @@ class _RoundFeedScreenState extends State<RoundFeedScreen> {
       onRefresh: () => mp.refresh(),
       child: ListView.builder(
         controller: _scrollCtrl,
+        // Drag the transcript to put the keyboard away. The composer's return
+        // key is `newline`, so it cannot dismiss — which left the two GLOBAL
+        // escapes (KeyboardDismissal's tap-anywhere and its Done bar) as the
+        // only ways out, neither discoverable from the field. Four other
+        // screens already answer this the same way.
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
         itemCount: msgs.length,
         itemBuilder: (_, i) {
