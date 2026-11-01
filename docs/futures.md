@@ -5,6 +5,100 @@ park something; move it into a real plan/doc when we pick it up.
 
 ---
 
+## Field games for SOME of the groups (3 or 4 foursomes in a side game)
+
+**Why:** asked for directly (Paul, 1 Nov 2026) the night before Castlewood —
+he wanted to play 40 Balls with two or three of his groups and found there is
+no way to arrange it. A 14-group event has one set of groups who want a group
+game and twelve who do not.
+
+**The distinction that matters, and it is already half-built.** The app has
+two kinds of game on a round:
+
+* **Per-foursome games** — skins, Nassau, Sixes, spots, rabbit … — are stored
+  on the FOURSOME (`Foursome.active_games`, read alongside the round's in
+  `_hole_tray_summaries` and `FoursomeSerializer.get_configured_games`). These
+  already work for a subset of groups. Nothing to do.
+* **Field games** — the one-pool family, Irish Rumble / Better Ball / Hot Seat
+  / 40 Balls — are round-level and have no subset notion at all. These are the
+  request.
+
+**What blocks 40 Balls specifically**, measured rather than guessed:
+
+1. `FortyBallsConfig` is a `OneToOneField(Round)` — no participant or group
+   list anywhere in it.
+2. `forty_balls_summary` builds a row for EVERY `Foursome` in the round, and a
+   group that never picks a count sits at level par (`total` 0) in the middle
+   of the ranking until the very end, where `dq = left > capacity` finally
+   drops it. So the board is misleading all day rather than just untidy.
+3. The pool is `entry_fee × every real golfer in the round`
+   (`group_field.field_pool`), not the groups playing.
+4. **The one that makes it unusable:** `_fortyBallsRound` is round-level, so
+   every group gets the ball-count picker and `needsPick` holds the next-hole
+   button until it picks. Turning 40 Balls on for a 14-group event forces all
+   fourteen to spend balls on every hole.
+
+**Approach when we build it.** The cheapest shape is almost certainly to make
+these games read `Foursome.active_games` the way the per-foursome family
+already does — a participating-groups set rather than a new concept — and then
+scope four things to it: the board's row set, the pool, the DQ rule, and the
+score-entry gate. The config stays round-level (one stake, one table); what
+becomes per-group is who is IN.
+
+Worth deciding at the same time: a group that opts in late, and whether the
+pool is `entry_fee × golfers in participating groups` (almost certainly yes,
+since that is what `field_pool` means one level down).
+
+**What we did instead, for the record:** nothing. He dropped the side game
+rather than run it for everybody, which is the right call and also the
+evidence that the gap is worth closing.
+
+---
+
+## Tournament setup in the TD console (big screen)
+
+**Why:** Paul, 1 Nov 2026 — *"I think the next tournament setup I will do in
+the TD web page is this one. Would be easier with a big screen."* Setting up
+60 golfers in four flights across fifteen foursomes is laptop work, and the
+console exists precisely because that is true of the night before an event.
+
+**Current state:** `console/` has sign-in, the Golf Genius roster import, the
+course library / editor and custom tees. It has **no tournament setup at
+all** — creating an event, the field, the draw, the championship and its
+payouts are mobile-only (`new_round_wizard.dart`, the two championship setup
+screens).
+
+**Approach:** this is a big surface and the wizard is the spec rather than the
+thing to port — it carries decisions (the eight honest steps, money where it
+is charged, the derived step list) that a web version should keep. The natural
+first slice is the part that is worst on a phone and already has its data in
+the console: **the field and the draw**, since the roster import is there and
+a fifteen-foursome draw is a table.
+
+Flights would be the second slice, and it has a prerequisite in its own entry
+below.
+
+---
+
+## Explicit flight assignment, and why it is not just an uneven cut
+
+Split out of the Castlewood evening (see the Flights section in `CLAUDE.md`
+for the full account). `assign_flights` cuts equal sizes only, so a cut made
+in another system cannot be mirrored, and **naming the no-index golfers makes
+the bottom flight BIGGER rather than making a flight of them** — four flights
+over 54 indexed golfers with six guessed gives 14/14/13/19, not 18/18/18/6.
+
+The useful half: `rank_in_flights` is already size-agnostic — it groups by
+whatever flight a golfer is in, restarts ranks at 1, and apportions each
+flight's purse by `len(by_flight[f])`. Uneven flights rank and pay correctly
+today. **Only the writer is missing**, and the shape it needs is in CLAUDE.md
+along with the two things it has to refuse.
+
+Castlewood's cut was written by hand over `railway ssh`. Doing that twice is
+the signal to build it.
+
+---
+
 ## Cross-account "courses I've played" in the recents quick-pick (viral hook)
 
 **Why:** growth. When a friend who has the app runs a game and invites you to
