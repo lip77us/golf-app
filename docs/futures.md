@@ -237,3 +237,55 @@ figure per RANK, so a tie can lose or invent a cent (already noted under
 Flights in CLAUDE.md). Small divisions tie more often than one big field, so
 divisions make it likelier — `split_to_cents` is the fix and the shape change
 is the work.
+
+---
+
+## The stuck keyboard on Round chat — diagnosed, not fixed, not reproduced
+
+Reported 1 Nov 2026: *"I went to send a message and then got stuck in the app
+with the keypad showing. The done button did nothing. I had to exit the app to
+close the keyboard."* Paul could not reproduce it afterwards and parked it, so
+this is the diagnosis waiting for the next sighting rather than a fix.
+
+**What is provable from the code**, and is a real defect whether or not it is
+the reported one: the Round chat composer
+(`screens/round_feed_screen.dart`, `_Composer`) is the **only field in the app
+set to `TextInputAction.newline`**, so its bottom-right key is `return` and
+inserts a line break. On an empty or one-line message that is indistinguishable
+from a dead button — and Paul confirmed he pressed *the keyboard's own key*. He
+reached the screen from a score screen, which is where the `RoundChatButton`
+lives, so "a score screen" in the report is where he started.
+
+**The screen has no dismissal of its own.** No `keyboardDismissBehavior`
+(four other screens already use `onDrag`), no `onTapOutside`, no unfocus after
+a send. Both escapes are global and neither is discoverable from the field:
+`KeyboardDismissal`'s tap-anywhere, and its grey Done bar.
+
+**That bar has broken on this exact screen twice before** — it covered the
+composer at Ranch Solano (17 Sep 2026), and again when a MediaQuery nested
+below the wrapper threw the inflated inset away. Round chat is its repeat
+offender, which is the reason to suspect it a third time.
+
+**What was tried and did NOT reproduce it:** a widget test driving the global
+Done bar against a composer configured exactly like this one, newline key
+included, releases focus correctly (`mobile/test/round_chat_keyboard_test.dart`,
+kept as a guard). So the bar's mechanism is sound in isolation; if it failed on
+the real screen the cause is something that host does not model — the pushed
+route, the 25-second poll rebuilding the screen under it, or the bar being
+drawn over the composer again.
+
+**A fix was written and reverted**, because it carries a cost that wants
+deciding rather than assuming: making the return key `send` fixes the dead key
+AND dismisses the keyboard, but removes the ability to type a line break in a
+message. Worth doing if the diagnosis is confirmed; not worth trading
+blind. Adding `keyboardDismissBehavior: onDrag` to the two transcript lists
+costs nothing and could go in on its own.
+
+**What to capture next time it happens**, in this order — the first two
+discriminate between the two candidate causes:
+1. Was the grey **Done bar** visible on top of the keyboard, or was the
+   composer sitting where it should have been?
+2. Did the bottom-right key read `return` or `Done`?
+3. A screenshot. The two prior rounds of this were both settled by one
+   (`CLAUDE.md`: *"Ask for the screenshot earlier"*).
+4. Whether tapping the message transcript dismissed it.
