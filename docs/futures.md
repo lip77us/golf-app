@@ -55,6 +55,43 @@ evidence that the gap is worth closing.
 
 ---
 
+## The card-mate rule blocks a pool whose scores come from elsewhere
+
+**Why:** found the night before Castlewood (1 Nov 2026) while planning a
+Multi-Group Skins pool fed by a linked tournament round.
+
+`utils/skins_cards.cardsProblem` refuses a draw where any card has nobody on
+Halved — *"somebody has to keep their score — put them in a group with a
+golfer who is."* That is the right rule when the pool round IS where the
+scores are entered, which is the flow it was written for.
+
+It is the wrong rule for a **linked** pool. There the host round's cards are
+deliberately empty: `_resolve_participant_memberships` binds each golfer to
+the source round where he has the most scores, so a login-less golfer parked
+in the host round is scored in the round that was linked, by whoever scores
+THAT round. Nobody keeps score on the host card, so a card with no Halved
+golfer on it strands nobody.
+
+The practical cost: a login-less golfer can only be in the pool at 4 per
+Halved card-mate, even when his scores are coming from a tournament round
+somebody else is keeping. At Castlewood that was 23 of 60 on the app, so the
+cap bit at 92 of 60 golfers and happened not to matter — but it would on a
+field with fewer members.
+
+**Note the server never had this rule.** `valid_participant_ids` wants
+host-round member OR on-app and says nothing about card-mates, so this is
+the picker being stricter than the engine — the same shape as the grey-out
+that `canJoinPool` replaced in Oct 2026.
+
+**Approach:** the rule needs to know whether the host round will be scored at
+all, which it cannot know at create time (the link comes after). Options,
+cheapest first: relax it once the round HAS a linked source (the Groups
+screen is reachable from the hub afterwards); or ask outright on the picker
+whether the scores come from somewhere else; or drop the card-mate test for a
+round whose primary is `multi_skins` and warn instead of refusing.
+
+---
+
 ## Tournament setup in the TD console (big screen)
 
 **Why:** Paul, 1 Nov 2026 — *"I think the next tournament setup I will do in
