@@ -252,6 +252,7 @@ urlpatterns = [
     path('tournaments/<int:pk>/dream-round/',       views.TournamentDreamRoundView.as_view(),      name='api-dream-round'),
     path('rounds/<int:pk>/pink-ball/setup/',      views.PinkBallSetupView.as_view(),          name='api-pink-ball-setup'),
     path('foursomes/<int:pk>/pink-ball/order/',   views.PinkBallFoursomeOrderView.as_view(),  name='api-pink-ball-order'),
+    path('foursomes/<int:pk>/pink-ball/lost/',    views.PinkBallLostView.as_view(),           name='api-pink-ball-lost'),
 
     # ---- Team Tournament (Ryder Cup) ----
     path('tournaments/<int:pk>/team-tournament/setup/',                                          views.TeamTournamentSetupView.as_view(),        name='api-team-tournament-setup'),

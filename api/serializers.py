@@ -2315,6 +2315,19 @@ class SpotsTallySerializer(serializers.Serializer):
     entries     = SpotsTallyEntrySerializer(many=True, min_length=1)
 
 
+class PinkBallLostSerializer(serializers.Serializer):
+    """Mark the ball lost on one hole, or put it back.
+
+    `lost` is REQUIRED rather than defaulting to True, because this route is
+    the only one that can clear the flag and a default would make the undo the
+    easiest thing to send by accident. The score POST's own `pink_ball_lost`
+    stays set-only for the opposite reason: every shipped build sends a false
+    on every hole.
+    """
+    hole_number = serializers.IntegerField(min_value=1, max_value=18)
+    lost        = serializers.BooleanField()
+
+
 class SpotsGreenieSerializer(serializers.Serializer):
     """Who took the greenie on a par 3 — or that nobody did.
 

@@ -205,3 +205,70 @@ class TheStoredNetBelongsToTheRealCarrierTests(_Base):
                 hole_number=hole).net_score
             self.assertEqual(self.row(hole).net_score, want,
                              msg=f'hole {hole}')
+
+
+class TheUndoRouteTests(_Base):
+    """`POST /foursomes/{id}/pink-ball/lost/` — the only way to CLEAR the flag.
+
+    The score POST stays set-only because every shipped build sends a false on
+    every hole; this route is explicit, so only a client that knows about it
+    can put the ball back.
+    """
+
+    def lost(self, hole, value):
+        return self.api.post(
+            f'/api/foursomes/{self.fs.id}/pink-ball/lost/',
+            {'hole_number': hole, 'lost': value}, format='json')
+
+    def test_it_marks_the_ball_lost(self):
+        r = self.lost(8, True)
+        self.assertEqual(r.status_code, 200, r.data)
+        self.assertTrue(self.row(8).ball_lost)
+
+    def test_it_files_the_loss_against_the_group_s_first_name(self):
+        self.lost(8, True)
+        self.assertEqual(self.row(8).pink_ball_player_id, self.order[0])
+
+    def test_it_puts_the_ball_back(self):
+        self.lost(8, True)
+        self.assertTrue(self.row(8).ball_lost)
+        r = self.lost(8, False)
+        self.assertEqual(r.status_code, 200, r.data)
+        self.assertFalse(self.row(8).ball_lost,
+                         'the undo is the whole reason this route exists')
+
+    def test_it_reports_the_ball_state_back(self):
+        """The switch reads the server's answer rather than its own optimism."""
+        ball = self.lost(8, True).data['ball']
+        self.assertFalse(ball['alive'])
+        self.assertEqual(ball['lost_on_hole'], 8)
+        self.assertTrue(ball['lost_here'])
+        self.assertEqual(ball['game_name'], 'Devil Ball')
+
+        ball = self.lost(8, False).data['ball']
+        self.assertTrue(ball['alive'])
+        self.assertIsNone(ball['lost_on_hole'])
+        self.assertEqual(ball['carrier_id'], self.order[0])
+
+    def test_lost_is_required_not_defaulted(self):
+        """A default would make the undo the easiest thing to send by mistake."""
+        r = self.api.post(
+            f'/api/foursomes/{self.fs.id}/pink-ball/lost/',
+            {'hole_number': 8}, format='json')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('lost', r.data)
+
+    def test_a_hole_the_group_does_not_play_is_refused(self):
+        # Nine holes off the 8th: the group plays 8..16, so the 3rd is not
+        # one of its holes even though it is a real hole on the card.
+        self.round.num_holes = 9
+        self.round.save(update_fields=['num_holes'])
+        r = self.lost(3, True)
+        self.assertEqual(r.status_code, 400, r.data)
+
+    def test_a_round_not_playing_the_ball_game_is_refused(self):
+        self.round.active_games = ['low_net_round']
+        self.round.save(update_fields=['active_games'])
+        r = self.lost(8, True)
+        self.assertEqual(r.status_code, 400, r.data)
+        self.assertIn('not playing', str(r.data).lower())

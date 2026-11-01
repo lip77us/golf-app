@@ -277,3 +277,86 @@ class StrokePlayFixtureRegenTests(_Base):
         card = self.card(1)
         self.assertTrue(all(p['gross'] is None for p in card['players']))
         self._write('stroke_play_hole1_empty.json', card)
+
+
+class TheSideGameBlocksTests(_Base):
+    """`handoff-stroke-play-side-games`: the card carries what the group's
+    field-wide side games add, and NOTHING when they are not being played.
+
+    Both blocks are `None` rather than empty, because the row has to draw no
+    badge and the strip has to say nothing — an empty one reads as a value
+    that failed to load.
+    """
+
+    def test_neither_block_appears_on_a_plain_stroke_play_round(self):
+        card = self.card()
+        self.assertIsNone(card['ball'])
+        self.assertIsNone(card['rumble'])
+
+    def test_the_keys_are_always_present(self):
+        """A missing key and a null one are different things to a client."""
+        card = self.card()
+        self.assertIn('ball', card)
+        self.assertIn('rumble', card)
+
+
+class TheRumbleStripTests(_Base):
+    """How many balls count on this hole — the group strip's one number."""
+
+    def setUp(self):
+        super().setUp()
+        from games.models import IrishRumbleConfig
+        self.round.active_games = ['low_net_round', 'irish_rumble']
+        self.round.save(update_fields=['active_games'])
+        IrishRumbleConfig.objects.create(
+            round=self.round, variant='custom',
+            segments=[{'start_hole': 1, 'end_hole': 9, 'balls_to_count': 2},
+                      {'start_hole': 10, 'end_hole': 18, 'balls_to_count': 4}],
+        )
+
+    def test_it_reads_the_segment_the_hole_falls_in(self):
+        self.assertEqual(self.card(4)['rumble']['count'], 2)
+        self.assertEqual(self.card(12)['rumble']['count'], 4)
+
+    def test_all_count_is_the_group_s_size_not_a_literal_four(self):
+        """The design draws "[4] all count"; the test is that it is the SIZE."""
+        front = self.card(4)['rumble']
+        back  = self.card(12)['rumble']
+        self.assertEqual(front['of'], 4)
+        self.assertFalse(front['all_count'])
+        self.assertTrue(back['all_count'])
+
+    def test_a_hole_in_no_segment_says_nothing(self):
+        from games.models import IrishRumbleConfig
+        cfg = IrishRumbleConfig.objects.get(round=self.round)
+        cfg.segments = [{'start_hole': 10, 'end_hole': 18,
+                         'balls_to_count': 3}]
+        cfg.save(update_fields=['segments'])
+        # Re-fetch: `balls_on_hole` reads `round_obj.irish_rumble_config`, a
+        # CACHED reverse relation, so the card would otherwise answer from the
+        # segments this test just replaced. Harmless in the app, where each
+        # request builds the card from a fresh fetch — the same stale-related
+        # -object trap `setup_solo` hit.
+        self.fs = type(self.fs).objects.get(pk=self.fs.pk)
+        self.assertIsNone(self.card(4)['rumble'],
+                          'guessing a count the calculator would not use is '
+                          'worse than an empty strip')
+
+    def test_the_count_is_capped_to_the_group(self):
+        """A three-ball cannot play four balls, and the strip must not say so.
+
+        `counting_players` is the same figure `calculate_irish_rumble` caps
+        with, so the strip and the money cannot disagree.
+        """
+        from services.irish_rumble import counting_players
+        m = self.fs.memberships.order_by('-id').first()
+        pid = m.player_id
+        m.delete()
+        from scoring.models import HoleScore
+        HoleScore.objects.filter(foursome=self.fs, player_id=pid).delete()
+
+        self.fs.refresh_from_db()
+        self.assertEqual(counting_players(self.fs), 3, 'fixture: a three-ball')
+        back = self.card(12)['rumble']
+        self.assertEqual(back['count'], 3, 'capped from the configured 4')
+        self.assertTrue(back['all_count'])

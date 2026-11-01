@@ -145,6 +145,41 @@ class IrishRumbleExcluded(GroupGameExcluded):
     """
 
 
+def counting_players(foursome) -> int:
+    """How many balls a group HAS — the cap on ``balls_to_count``.
+
+    **The phantom counts.** A three-ball playing Irish Rumble borrows a fourth
+    ball and that ball is as eligible as any, which is what
+    ``calculate_irish_rumble`` has always done. (``IrishRumbleConfig``'s
+    docstring says "phantom excluded from count"; it describes something else
+    and does not match this. The engine is the ruling.)
+
+    Extracted so the group strip on score entry and the calculator cannot
+    disagree about how many balls a short group plays.
+    """
+    return (foursome.memberships.filter(player__is_phantom=False).count()
+            + (1 if foursome.has_phantom else 0))
+
+
+def balls_on_hole(round_obj, foursome, hole_number: int) -> int | None:
+    """Balls that count for this group on this hole, capped to its size.
+
+    ``None`` when the game is not configured or the hole falls in no segment —
+    a caller showing this on screen must say nothing rather than guess.
+
+    Segments are stored by hole NUMBER (``start_hole``..``end_hole``), which is
+    how the TD sets them and is deliberately not play order: a segment is a
+    stretch of the card, not a stretch of the group's round.
+    """
+    config = getattr(round_obj, 'irish_rumble_config', None)
+    if config is None or not config.segments:
+        return None
+    for seg in config.segments:
+        if seg['start_hole'] <= hole_number <= seg['end_hole']:
+            return min(int(seg['balls_to_count']), counting_players(foursome))
+    return None
+
+
 def refuse_if_better_ball(round_obj) -> None:
     """Deprecated: the shared guard, under the old name.
 
@@ -643,12 +678,9 @@ def calculate_irish_rumble(round_obj) -> list:
     # Build the capped score index for the whole round
     score_index = _build_ir_score_index(round_obj, handicap_mode, net_percent)
 
-    # Player counts per foursome (including phantom)
-    player_counts = {
-        fs.pk: fs.memberships.filter(player__is_phantom=False).count()
-               + (1 if fs.has_phantom else 0)
-        for fs in foursomes
-    }
+    # Player counts per foursome (including phantom) — see counting_players,
+    # which the score screen's group strip reads too.
+    player_counts = {fs.pk: counting_players(fs) for fs in foursomes}
 
     IrishRumbleSegmentResult.objects.filter(round=round_obj).delete()
     saved = []

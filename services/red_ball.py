@@ -100,6 +100,59 @@ def carrier_on_hole(order: list, holes: list, hole_number: int):
     return carrier_at(order, holes.index(hole_number))
 
 
+def ball_on_hole(foursome, hole: int) -> dict | None:
+    """The ball game on this hole: who carries it, and whether it is alive.
+
+    `None` when the round does not play it, so the row draws no badge and the
+    tray offers no switch rather than showing an empty one.
+
+    **The carrier comes from `carrier_on_hole`**, which is the one place the
+    rotation rule lives — index 0 is the group's first tee, which on a shotgun
+    is not hole 1. `api/views.py` once subscripted the order by hole number
+    instead and filed losses against the wrong golfer all round
+    (`api/test_pink_ball_lost.py`).
+
+    `lost_on_hole` is read the way the engine reads it: the FIRST hole in the
+    group's play order carrying the flag, because a ball is lost once.
+    """
+    rnd = foursome.round
+    if 'pink_ball' not in (rnd.active_games or []):
+        return None
+    config = getattr(rnd, 'pink_ball_config', None)
+    if config is None:
+        return None
+
+    from services.hole_plan import play_order
+
+    holes = play_order(rnd, foursome)
+    lost_rows = {
+        r.hole_number for r in PinkBallHoleResult.objects.filter(
+            foursome=foursome, ball_lost=True)
+    }
+    # Earliest in PLAY order, not the lowest number — off a shotgun the two
+    # disagree and the group's own round is what "lost first" means.
+    lost_on = next((h for h in holes if h in lost_rows), None)
+
+    carrier_pk = carrier_on_hole(foursome.pink_ball_order or [], holes, hole)
+    carrier = None
+    if carrier_pk is not None:
+        carrier = next((m.player for m in foursome.memberships.all()
+                        if m.player_id == carrier_pk), None)
+
+    alive = lost_on is None
+    # Once it is gone the badge goes with it: a carrier on a dead ball is a
+    # name with nothing attached to it.
+    return {
+        'game_name'   : config.display_name,
+        'alive'       : alive,
+        'lost_on_hole': lost_on,
+        'lost_here'   : lost_on == hole,
+        'carrier_id'  : carrier_pk if alive else None,
+        'carrier_short': (carrier.short_name or carrier.name) if (
+            alive and carrier is not None) else None,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Record a single hole
 # ---------------------------------------------------------------------------

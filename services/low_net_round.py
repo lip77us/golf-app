@@ -814,7 +814,44 @@ def stroke_play_hole_card(foursome, hole: int) -> dict:
         'standing'     : standing,
         'cap_notes'    : cap_notes,
         'leader'       : leader,
+        'ball'         : ball_on_hole(foursome, hole),
+        'rumble'       : _rumble_block(foursome, hole),
     }
+
+
+def ball_on_hole(foursome, hole: int):
+    """Thin re-export so this module's own readers find it.
+
+    The ball's facts live in `services.red_ball`, which owns the rotation and
+    the death — Stroke Play only draws them.
+    """
+    from services.red_ball import ball_on_hole as _impl
+    return _impl(foursome, hole)
+
+
+def _rumble_block(foursome, hole: int) -> dict | None:
+    """How many of the group's balls count on this hole.
+
+    `None` when the round does not play Irish Rumble, or when the hole falls
+    in no segment — the strip says nothing rather than guessing a number the
+    calculator would not use.
+
+    `all_count` is what the design draws as "[4] all count": the count has
+    reached the group's size, so nobody's ball is idle. Read off
+    `counting_players`, the same figure the calculator caps with, so a
+    three-ball borrowing a fourth reads the same in both places.
+    """
+    rnd = foursome.round
+    if 'irish_rumble' not in (rnd.active_games or []):
+        return None
+
+    from services.irish_rumble import balls_on_hole, counting_players
+
+    count = balls_on_hole(rnd, foursome, hole)
+    if count is None:
+        return None
+    size = counting_players(foursome)
+    return {'count': count, 'of': size, 'all_count': count >= size}
 
 
 def _rep_par(membership, hole):

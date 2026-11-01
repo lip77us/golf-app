@@ -11787,6 +11787,60 @@ class CourseFindView(APIView):
         return Response({'courses': out[:60], 'upstream': upstream})
 
 
+class PinkBallLostView(APIView):
+    """
+    POST /api/foursomes/{id}/pink-ball/lost/
+        Body: {"hole_number": 12, "lost": true}
+
+    The ball game ends for this group on that hole — or, with `lost: false`,
+    it does not after all. The packet's switch can be undone until the group
+    leaves the hole, and that undo is why this route exists: the flag also
+    rides on the score POST, but only ever to SET, because every shipped build
+    sends `pink_ball_lost: false` on every ordinary hole and honouring that
+    would un-lose a ball whenever somebody corrected a score.
+
+    Writes through `services.red_ball.record_hole`, the one place the rotation
+    rule lives, so the row is filed against the carrier whose hole it actually
+    is (`api/test_pink_ball_lost.py`).
+    """
+
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(request.user, pk)
+        from api.serializers import PinkBallLostSerializer
+        ser = PinkBallLostSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        hole = ser.validated_data['hole_number']
+        lost = ser.validated_data['lost']
+
+        rnd = foursome.round
+        if 'pink_ball' not in (rnd.active_games or []):
+            return Response(
+                {'detail': 'This round is not playing the ball game.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        from services.hole_plan import play_order
+        from services.red_ball import carrier_on_hole, record_hole
+
+        holes = play_order(rnd, foursome)
+        carrier_pk = carrier_on_hole(
+            foursome.pink_ball_order or [], holes, hole)
+        if carrier_pk is None:
+            return Response(
+                {'detail': f'Hole {hole} is not one this group plays.'},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        hs = HoleScore.objects.filter(
+            foursome=foursome, player_id=carrier_pk, hole_number=hole).first()
+        record_hole(rnd, foursome, hole,
+                    net_score=hs.net_score if hs else None, ball_lost=lost)
+        _recalculate_games(foursome)
+
+        # The ball's own module, not the Stroke Play card — that card returns
+        # {} on a round with no Stroke Play, and the ball game stands on its own.
+        from services.red_ball import ball_on_hole
+        return Response({'ball': ball_on_hole(foursome, hole)})
+
+
 class PinkBallFoursomeOrderView(APIView):
     """
     POST /api/foursomes/{id}/pink-ball/order/
