@@ -6244,28 +6244,37 @@ class ScoreSubmitView(APIView):
             except Exception:
                 pass  # never block score submission due to phantom propagation
 
-        # Pink ball lost flag
+        # Pink ball lost flag.
+        #
+        # **Through `record_hole`, which is the one place the rotation rule
+        # lives.** This block used to hand-roll the row with
+        # `pink_order[hole_number - 1]` — indexing the rotation by hole NUMBER
+        # where the rule is the hole's POSITION in the group's own play order.
+        # On a shotgun the two differ, so the loss was filed against the wrong
+        # carrier and carried the wrong golfer's net: exactly the bug
+        # `services/red_ball.py` fixed and whose test file documents at length
+        # (`RotationDivergenceTests`), reintroduced here because this was a
+        # second writer of the same row.
+        #
+        # Still SET-ONLY. Every shipped client sends `pink_ball_lost: false` on
+        # every ordinary score post, so honouring a false here would silently
+        # un-lose a ball the moment somebody edited a score on that hole. The
+        # undo is its own route (`PinkBallLostView`), which only a client that
+        # knows about it can call.
         if pink_ball_lost and 'pink_ball' in (foursome.round.active_games or []):
-            from games.models import PinkBallHoleResult
+            from services.hole_plan import play_order as _pb_play_order
+            from services.red_ball import carrier_on_hole, record_hole
             pink_order = foursome.pink_ball_order or []
-            if hole_number <= len(pink_order):
-                pink_pid  = pink_order[hole_number - 1]
-                pink_hs   = HoleScore.objects.filter(
-                    foursome=foursome, player_id=pink_pid, hole_number=hole_number
+            carrier_pk = carrier_on_hole(
+                pink_order, _pb_play_order(foursome.round, foursome), hole_number)
+            if carrier_pk is not None:
+                pink_hs = HoleScore.objects.filter(
+                    foursome=foursome, player_id=carrier_pk,
+                    hole_number=hole_number,
                 ).first()
-                pbhr, _   = PinkBallHoleResult.objects.get_or_create(
-                    round       = foursome.round,
-                    foursome    = foursome,
-                    hole_number = hole_number,
-                    defaults    = {
-                        'pink_ball_player_id': pink_pid,
-                        'net_score': pink_hs.net_score if pink_hs else None,
-                    },
-                )
-                pbhr.ball_lost = True
-                if pink_hs:
-                    pbhr.net_score = pink_hs.net_score
-                pbhr.save()
+                record_hole(foursome.round, foursome, hole_number,
+                            net_score=pink_hs.net_score if pink_hs else None,
+                            ball_lost=True)
 
         _recalculate_games(foursome)
 

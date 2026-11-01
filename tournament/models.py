@@ -378,9 +378,19 @@ class Round(models.Model):
 class Foursome(models.Model):
     """
     One group of 2–4 players (padded to 4 with a phantom if 3-some).
-    pink_ball_order stores a JSON list of player PKs in hole order:
-        [player_id_hole1, player_id_hole2, ..., player_id_hole18]
     group_number is 1-based (Group 1, Group 2, ...).
+
+    ``pink_ball_order`` is a JSON list of player PKs, 18 long as written by
+    ``PinkBallFoursomeOrderView`` — but indexed by the hole's **POSITION in
+    this group's play order**, NOT by hole number. Index 0 is the group's
+    first tee, which on a shotgun is not hole 1.
+
+    This docstring used to read "[player_id_hole1, ..., player_id_hole18]",
+    which is the same thing only on a round starting at the 1st — and
+    `api/views.py` took it at its word and filed a lost ball against the
+    wrong carrier on every shotgun round. **`services.red_ball.carrier_on_hole`
+    is the one place the rule lives**; read the field through it rather than
+    subscripting it.
     """
     round               = models.ForeignKey(Round, on_delete=models.CASCADE, related_name='foursomes')
     group_number        = models.PositiveSmallIntegerField()
@@ -394,7 +404,13 @@ class Foursome(models.Model):
                         )
     pink_ball_order     = models.JSONField(
                             default=list,
-                            help_text="Ordered list of player PKs for pink ball rotation."
+                            help_text=(
+                                "Player PKs for the pink ball rotation, "
+                                "indexed by position in the group's play "
+                                "order — index 0 is the group's first tee. "
+                                "Read it through "
+                                "services.red_ball.carrier_on_hole."
+                            )
                         )
     # Hot Spot's anchor rotation.  Unlike pink_ball_order, which stores one
     # entry PER HOLE, this is the ORDER ONLY — a list of the group's real
