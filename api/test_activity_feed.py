@@ -144,6 +144,7 @@ class RoundTests(ActivityFeedBase):
             }, format='json')
         self.assertEqual(r.status_code, 200, r.content)
 
+    @override_settings(PUBLIC_BASE_URL='https://link.example/')
     def test_only_the_first_score_announces_the_start(self):
         self._post(1)
         self._post(2)
@@ -154,7 +155,8 @@ class RoundTests(ActivityFeedBase):
                 ':golf: Round started', 'Name: Paul', 'Course: Tilden Park',
                 'Games: Stroke Play, Skins',
                 'Players: 3 (2 on Halved, 1 not)',
-                'Golfers: Paul, Jim, Guest']))
+                'Golfers: Paul, Jim, Guest',
+                f'Watch: https://link.example/watch/{self.round.watch_token}/']))
 
     def test_completing_announces_once(self):
         for _ in range(2):
@@ -162,6 +164,7 @@ class RoundTests(ActivityFeedBase):
                 self.api.post(f'/api/rounds/{self.round.id}/complete/', {}, format='json')
         self.assertEqual(len(self.texts()), 1)
         self.assertIn('Round finished', self.texts()[0])
+        self.assertNotIn('Watch:', self.texts()[0])
 
     def test_a_failed_post_does_not_touch_the_score(self):
         self.post.side_effect = RuntimeError('boom')

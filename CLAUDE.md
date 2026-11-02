@@ -8923,7 +8923,8 @@ arithmetic rather than a handicap calculation.
 Private channel **#halved-users** in LipApps (Paul + Ryan). One incoming webhook,
 `SLACK_ACTIVITY_WEBHOOK_URL` on Railway; empty = off. Posts a signup, a round's
 first real score and a round completing. A round gets two lines because many
-casual rounds are played and never closed. A signup carries name, user id and
+casual rounds are played and never closed. The start also carries the round's
+watch link, so the message can be followed live. A signup carries name, user id and
 device, best effort. **No phone or email** (Paul, 1 Nov 2026): the privacy policy
 lists who receives them and Slack is not on the list.
 Delivery runs after commit and off the request, and a failure logs only the

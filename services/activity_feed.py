@@ -172,9 +172,16 @@ def profile_completed(user, player):
         ':bust_in_silhouette: Profile updated', user, player))
 
 
+def _watch_url(round_obj) -> str:
+    base = (getattr(settings, 'PUBLIC_BASE_URL', '') or '').rstrip('/')
+    return f'{base}/watch/{round_obj.watch_token}/'
+
+
 def round_started(round_obj):
-    _safely('round start',
-            lambda: round_message(round_obj, ':golf: Round started'))
+    _safely('round start', lambda: '\n'.join([
+        round_message(round_obj, ':golf: Round started'),
+        f'Watch: {_watch_url(round_obj)}',
+    ]))
 
 
 def round_finished(round_obj):
