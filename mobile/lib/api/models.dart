@@ -10180,6 +10180,84 @@ class StrokePlayLeader {
       );
 }
 
+/// The ball game on this hole: who carries it, and whether it is still a
+/// thing. Null on a round that does not play it.
+///
+/// **[liveHere] is the one gate** for both the row's badge and the tray's
+/// switch, because they answer one question: does this hole carry the ball.
+/// It is true while the ball is alive AND on the hole it was lost on — the
+/// loss is undoable until the group leaves that hole, so the switch has to
+/// stay and the carrier's badge with it. Composing `alive || lostHere` on the
+/// phone would be a second copy of a rule `services/red_ball.py` already
+/// states.
+class BallOnHole {
+  /// The organiser's name for it — "Pink Ball", "Devil Ball", up to 16 chars.
+  final String gameName;
+
+  /// Nobody has lost it yet, anywhere in this group's round.
+  final bool alive;
+
+  /// This hole draws the ball: see the class comment.
+  final bool liveHere;
+
+  /// The hole it was lost on, in this group's own play order. Null while
+  /// alive.
+  final int? lostOnHole;
+
+  /// It was lost on THIS hole — the switch reads on, and can be turned back.
+  final bool lostHere;
+
+  /// Who carries it on this hole. Null once the ball is gone.
+  final int? carrierId;
+  final String? carrierShort;
+
+  const BallOnHole({
+    required this.gameName,
+    required this.alive,
+    required this.liveHere,
+    required this.lostOnHole,
+    required this.lostHere,
+    required this.carrierId,
+    required this.carrierShort,
+  });
+
+  factory BallOnHole.fromJson(Map<String, dynamic> j) => BallOnHole(
+        gameName: (j['game_name'] as String?) ?? '',
+        alive: j['alive'] as bool? ?? false,
+        // An older server sent no `live_here`; `alive` is what it meant.
+        liveHere: j['live_here'] as bool? ?? (j['alive'] as bool? ?? false),
+        lostOnHole: (j['lost_on_hole'] as num?)?.toInt(),
+        lostHere: j['lost_here'] as bool? ?? false,
+        carrierId: (j['carrier_id'] as num?)?.toInt(),
+        carrierShort: j['carrier_short'] as String?,
+      );
+}
+
+/// How many of the group's balls count on this hole — Irish Rumble's one
+/// number, drawn on the group strip. Null when the round does not play it, or
+/// when the hole falls in no segment: the strip says nothing rather than
+/// guessing a count the calculator would not use.
+class RumbleOnHole {
+  final int count;
+
+  /// The group's size as the CALCULATOR counts it — a three-ball borrowing a
+  /// fourth reads 4, the same figure the cap uses.
+  final int of;
+
+  /// The count has reached that size, so no ball is idle. What the design
+  /// draws as "[4] all count".
+  final bool allCount;
+
+  const RumbleOnHole(
+      {required this.count, required this.of, required this.allCount});
+
+  factory RumbleOnHole.fromJson(Map<String, dynamic> j) => RumbleOnHole(
+        count: (j['count'] as num?)?.toInt() ?? 0,
+        of: (j['of'] as num?)?.toInt() ?? 0,
+        allCount: j['all_count'] as bool? ?? false,
+      );
+}
+
 /// Everything the Stroke Play score-entry tray draws for ONE hole.
 class StrokePlayHoleCard {
   final int hole;
@@ -10208,6 +10286,12 @@ class StrokePlayHoleCard {
   final List<String> capNotes;
   final StrokePlayLeader? leader;
 
+  /// The field-wide side games this group also carries, and nothing else
+  /// about them: side game RESULTS are not on score entry, they have their
+  /// own leaderboard tabs. Both null when the round does not play them.
+  final BallOnHole? ball;
+  final RumbleOnHole? rumble;
+
   const StrokePlayHoleCard({
     required this.hole,
     required this.par,
@@ -10222,6 +10306,8 @@ class StrokePlayHoleCard {
     required this.standing,
     required this.capNotes,
     required this.leader,
+    this.ball,
+    this.rumble,
   });
 
   StrokePlayHolePlayer? player(int pid) {
@@ -10230,6 +10316,31 @@ class StrokePlayHoleCard {
     }
     return null;
   }
+
+  /// The same card with the ball game's state replaced.
+  ///
+  /// Losing the ball changes nothing else on this card — Stroke Play ranks on
+  /// the scores either way — so the switch patches the one block from the
+  /// server's own answer rather than refetching the hole. That is also what
+  /// closes the window where the toggle would sit on its old value waiting
+  /// for a request it does not need.
+  StrokePlayHoleCard withBall(BallOnHole? b) => StrokePlayHoleCard(
+        hole: hole,
+        par: par,
+        handicapMode: handicapMode,
+        netPercent: netPercent,
+        showNet: showNet,
+        cap: cap,
+        isFinal: isFinal,
+        group: group,
+        field: field,
+        players: players,
+        standing: standing,
+        capNotes: capNotes,
+        leader: leader,
+        ball: b,
+        rumble: rumble,
+      );
 
   factory StrokePlayHoleCard.fromJson(Map<String, dynamic> j) =>
       StrokePlayHoleCard(
@@ -10258,5 +10369,12 @@ class StrokePlayHoleCard {
             ? null
             : StrokePlayLeader.fromJson(
                 (j['leader'] as Map).cast<String, dynamic>()),
+        ball: j['ball'] == null
+            ? null
+            : BallOnHole.fromJson((j['ball'] as Map).cast<String, dynamic>()),
+        rumble: j['rumble'] == null
+            ? null
+            : RumbleOnHole.fromJson(
+                (j['rumble'] as Map).cast<String, dynamic>()),
       );
 }

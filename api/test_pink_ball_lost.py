@@ -250,6 +250,31 @@ class TheUndoRouteTests(_Base):
         self.assertIsNone(ball['lost_on_hole'])
         self.assertEqual(ball['carrier_id'], self.order[0])
 
+    def test_the_badge_survives_on_the_hole_the_ball_was_lost_on(self):
+        """The switch says "lost on 8"; the row has to still say whose.
+
+        `live_here` is what both read, and it is true on this hole precisely
+        because the loss is undoable here. Taking the carrier off the moment
+        the switch flips erases the fact that explains the switch.
+        """
+        ball = self.lost(8, True).data['ball']
+        self.assertTrue(ball['live_here'])
+        self.assertEqual(ball['carrier_id'], self.order[0],
+                         'the carrier is who the loss is filed against')
+        self.assertIsNotNone(ball['carrier_short'])
+
+    def test_from_the_next_hole_on_there_is_no_ball(self):
+        """Lost on 8, and the group plays 9 next (shotgun start 8)."""
+        self.lost(8, True)
+        from services.red_ball import ball_on_hole
+        nxt = ball_on_hole(self.fs, 9)
+        self.assertFalse(nxt['alive'])
+        self.assertFalse(nxt['live_here'],
+                         'no badge and no switch from here on')
+        self.assertIsNone(nxt['carrier_id'])
+        self.assertEqual(nxt['lost_on_hole'], 8,
+                         'it still says WHERE, which the leaderboard reads')
+
     def test_lost_is_required_not_defaulted(self):
         """A default would make the undo the easiest thing to send by mistake."""
         r = self.api.post(

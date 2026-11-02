@@ -38,7 +38,9 @@ StrokePlayHoleTray _tray(StrokePlayHoleCard card,
         {int? nextHole = 4,
         bool gettingResult = false,
         bool notSynced = false,
-        bool picking = false}) =>
+        bool picking = false,
+        void Function(bool)? onBallLost,
+        bool? ballLostPending}) =>
     StrokePlayHoleTray(
       card: card,
       nextHole: nextHole,
@@ -48,9 +50,102 @@ StrokePlayHoleTray _tray(StrokePlayHoleCard card,
       gettingResult: gettingResult,
       notSynced: notSynced,
       picking: picking,
+      onBallLost: onBallLost,
+      ballLostPending: ballLostPending,
     );
 
+/// The side-games card, with the ball in whatever state the test needs.
+StrokePlayHoleCard _withBall(
+        {bool alive = true,
+        bool liveHere = true,
+        bool lostHere = false,
+        int? lostOn}) =>
+    _card('stroke_play_hole4_side_games').withBall(BallOnHole.fromJson({
+      'game_name': 'Pink Ball',
+      'alive': alive,
+      'live_here': liveHere,
+      'lost_on_hole': lostOn,
+      'lost_here': lostHere,
+      // Whichever golfer the fixture's rotation landed on — the tray draws
+      // the game and the hole, never a pk.
+      'carrier_id': _card('stroke_play_hole4_side_games').ball!.carrierId,
+      'carrier_short': 'SR',
+    }));
+
 void main() {
+  group('the lost ball switch', () {
+    testWidgets('names the game and the hole, and what turning it on does',
+        (t) async {
+      await _pump(t, _tray(_withBall(), onBallLost: (_) {}));
+      final text = _allText(t);
+      expect(text, contains('Pink Ball lost on 4'));
+      expect(text, contains('Ends Pink Ball for the group'));
+    });
+
+    testWidgets('once on, it says Stroke Play is untouched', (t) async {
+      // That is the reassurance a group wants at the moment it loses the
+      // ball: the round they are actually being ranked on is intact.
+      await _pump(
+          t, _tray(_withBall(alive: false, lostHere: true, lostOn: 4),
+              onBallLost: (_) {}));
+      expect(_allText(t),
+          contains('Over for the group. Scores still count for Stroke Play.'));
+    });
+
+    testWidgets('there is no switch once the ball is gone', (t) async {
+      // From the NEXT hole on: `liveHere` false. The one gate, and it is the
+      // server's — the row's badge reads the same field.
+      await _pump(
+          t, _tray(_withBall(alive: false, liveHere: false, lostOn: 4),
+              onBallLost: (_) {}));
+      expect(_allText(t), isNot(contains('Pink Ball')));
+    });
+
+    testWidgets('and none at all on a round with no ball game', (t) async {
+      await _pump(t, _tray(_card('stroke_play_hole3'), onBallLost: (_) {}));
+      expect(_allText(t), isNot(contains('lost on')));
+    });
+
+    testWidgets('a tap reports the OPPOSITE of what is showing', (t) async {
+      bool? got;
+      await _pump(t, _tray(_withBall(), onBallLost: (v) => got = v));
+      await t.tap(find.text('Pink Ball lost on 4'));
+      await t.pumpAndSettle();
+      expect(got, isTrue);
+
+      got = null;
+      await _pump(
+          t,
+          _tray(_withBall(alive: false, lostHere: true, lostOn: 4),
+              onBallLost: (v) => got = v));
+      await t.tap(find.text('Pink Ball lost on 4'));
+      await t.pumpAndSettle();
+      expect(got, isFalse, reason: 'the undo is the point of the route');
+    });
+
+    testWidgets('the value in flight wins over the card', (t) async {
+      // Otherwise the toggle sits on its old value waiting for the server and
+      // reads as broken.
+      await _pump(t,
+          _tray(_withBall(), onBallLost: (_) {}, ballLostPending: true));
+      expect(_allText(t),
+          contains('Over for the group. Scores still count for Stroke Play.'));
+    });
+
+    testWidgets('it is drawn even while the board is stale', (t) async {
+      // The switch is about the HOLE, not about the places. A scorer who has
+      // just lost a ball should not have to wait for a sync to say so.
+      await _pump(t,
+          _tray(_withBall(), onBallLost: (_) {}, notSynced: true));
+      expect(_allText(t), contains('Pink Ball lost on 4'));
+    });
+
+    testWidgets('no switch when nothing can act on it', (t) async {
+      await _pump(t, _tray(_withBall()));
+      expect(_allText(t), isNot(contains('lost on')));
+    });
+  });
+
   group('the board', () {
     testWidgets('names every golfer, his place and his total', (t) async {
       await _pump(t, _tray(_card('stroke_play_hole3')));
@@ -271,6 +366,32 @@ void main() {
   // scorecard live — so it inherits all of it rather than losing it the way
   // a dedicated screen would. What these guard is the wiring that broke on
   // Annandale Friday and then AGAIN on Sixes the day each joined the keypad.
+  group('one carrier badge, both screens', () {
+    // The ball badge was drawn two different ways for one fact — a
+    // secondary-coloured pill on Pink Ball's own play screen, the design's
+    // deep-pine one with the ball on score entry. *The games with their own
+    // play screen are the ones that get missed*, so this is checked at both.
+    for (final f in const [
+      'lib/screens/score_entry_screen.dart',
+      'lib/screens/pink_ball_screen.dart',
+    ]) {
+      test('$f draws the shared BallBadge', () {
+        final src = File(f).readAsStringSync();
+        expect(src, contains('BallBadge('));
+        expect(src, contains("widgets/side_game_marks.dart"));
+      });
+    }
+
+    test('the row draws the Rumble strip', () {
+      // Nothing is entered for Irish Rumble. This strip is the whole of what
+      // the game needs on score entry, so a screen without it plays the game
+      // with no way to know how many balls count.
+      final src = File('lib/screens/score_entry_screen.dart')
+          .readAsStringSync();
+      expect(src, contains('RumbleCountStrip('));
+    });
+  });
+
   group('the screen wires it', () {
     final src = File('lib/screens/score_entry_screen.dart').readAsStringSync();
 
@@ -292,6 +413,37 @@ void main() {
       expect(at, greaterThan(0), reason: '_keypadStrokes stopped asking');
       expect(src.substring(at, src.indexOf('return', at)), contains('strokes'));
       expect(src, contains('capMax    : spCard?.player('));
+    });
+
+    test('the switch is wired, and reads the value in flight', () {
+      // A switch the screen draws and never posts looks identical until
+      // somebody plays a round. Bounded to the tray's own argument list.
+      final at = src.indexOf('StrokePlayHoleTray(');
+      expect(at, greaterThan(0));
+      final args = src.substring(at, src.indexOf('\n            )', at));
+      expect(args, contains('onBallLost:'));
+      expect(args, contains('ballLostPending:'));
+      expect(src, contains('.setPinkBallLost(widget.foursomeId'));
+    });
+
+    test('the pending value is keyed to the hole it belongs to', () {
+      // The scorer can move on while the request is in flight, and a bare
+      // bool would show the NEXT hole's switch a loss from the one behind it.
+      final at = src.indexOf('_ballLostPending?.hole');
+      expect(at, greaterThan(0),
+          reason: 'the pending value stopped carrying its hole');
+      expect(src.substring(at, src.indexOf(';', at)),
+          contains('== _selectedHole'));
+    });
+
+    test('both side-game blocks reach the hole card', () {
+      // The badge and the strip are the whole of what these games add to
+      // score entry; the card cannot draw either without being handed them.
+      final at = src.indexOf('_HoleScoreCard(');
+      expect(at, greaterThan(0));
+      final args = src.substring(at, src.indexOf('\n              ),', at));
+      expect(args, contains('ball:'));
+      expect(args, contains('rumble:'));
     });
 
     test('the screen hides its own pager under the tray', () {

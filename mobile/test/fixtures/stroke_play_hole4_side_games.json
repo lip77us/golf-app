@@ -1,0 +1,143 @@
+{
+  "hole": 4,
+  "par": 5,
+  "handicap_mode": "net",
+  "net_percent": 100,
+  "show_net": true,
+  "cap": true,
+  "final": false,
+  "group": 4,
+  "field": 4,
+  "players": [
+    {
+      "player_id": 9,
+      "name": "Paul Lipkin",
+      "first": "Paul",
+      "short": "PL",
+      "course_handicap": 8,
+      "par": 5,
+      "strokes": 0,
+      "gross": null,
+      "net": null,
+      "capped": false,
+      "cap_max": 7
+    },
+    {
+      "player_id": 10,
+      "name": "Dave Kim",
+      "first": "Dave",
+      "short": "DK",
+      "course_handicap": 12,
+      "par": 5,
+      "strokes": 1,
+      "gross": null,
+      "net": null,
+      "capped": false,
+      "cap_max": 8
+    },
+    {
+      "player_id": 11,
+      "name": "Sam Reid",
+      "first": "Sam",
+      "short": "SR",
+      "course_handicap": 15,
+      "par": 5,
+      "strokes": 1,
+      "gross": null,
+      "net": null,
+      "capped": false,
+      "cap_max": 8
+    },
+    {
+      "player_id": 12,
+      "name": "Mike Ruiz",
+      "first": "Mike",
+      "short": "MR",
+      "course_handicap": 18,
+      "par": 5,
+      "strokes": 1,
+      "gross": null,
+      "net": null,
+      "capped": false,
+      "cap_max": 8
+    }
+  ],
+  "standing": [
+    {
+      "player_id": 9,
+      "name": "Paul Lipkin",
+      "short": "PL",
+      "place": 1,
+      "place_text": "1",
+      "moved": 0,
+      "to_par": -1,
+      "thru": 3,
+      "gross": null,
+      "net": null,
+      "capped": false,
+      "strokes": 0,
+      "par": 5
+    },
+    {
+      "player_id": 11,
+      "name": "Sam Reid",
+      "short": "SR",
+      "place": 2,
+      "place_text": "2",
+      "moved": 0,
+      "to_par": 0,
+      "thru": 3,
+      "gross": null,
+      "net": null,
+      "capped": false,
+      "strokes": 1,
+      "par": 5
+    },
+    {
+      "player_id": 10,
+      "name": "Dave Kim",
+      "short": "DK",
+      "place": 3,
+      "place_text": "T3",
+      "moved": 0,
+      "to_par": 1,
+      "thru": 3,
+      "gross": null,
+      "net": null,
+      "capped": false,
+      "strokes": 1,
+      "par": 5
+    },
+    {
+      "player_id": 12,
+      "name": "Mike Ruiz",
+      "short": "MR",
+      "place": 3,
+      "place_text": "T3",
+      "moved": 0,
+      "to_par": 1,
+      "thru": 3,
+      "gross": null,
+      "net": null,
+      "capped": false,
+      "strokes": 1,
+      "par": 5
+    }
+  ],
+  "cap_notes": [],
+  "leader": null,
+  "ball": {
+    "game_name": "Pink Ball",
+    "alive": true,
+    "live_here": true,
+    "lost_on_hole": null,
+    "lost_here": false,
+    "carrier_id": 11,
+    "carrier_short": "SR"
+  },
+  "rumble": {
+    "count": 2,
+    "of": 4,
+    "all_count": false
+  }
+}

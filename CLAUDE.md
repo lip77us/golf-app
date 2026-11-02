@@ -8722,6 +8722,105 @@ and `handicap_strokes` — so they tested the board against what somebody
 thought the server sends, which is how the capped-net bug survived a suite
 that covered the card. They use the real keys now.
 
+## Side games on Stroke Play score entry — `design_handoff_stroke_play_side_games`
+
+A tournament group plays Stroke Play and carries side games the whole FIELD is
+in. The packet's rule is what shapes the whole build: those games add only
+what the app cannot work out itself, and **no side game RESULTS appear on
+score entry at all** — each keeps its own leaderboard tab.
+
+So three games, and two marks:
+
+| | on the card |
+|---|---|
+| the ball game | a badge on the carrier's row, and a switch in the dark tray |
+| Irish Rumble | a strip saying how many of the group's balls count here — nothing is entered |
+| Spots | **nothing**, see below |
+
+`widgets/side_game_marks.dart` (`BallBadge`, `RumbleCountStrip`), the switch in
+`StrokePlayHoleTray`, both blocks on `stroke_play_hole_card`.
+
+### `live_here` is ONE gate, and the badge survives the loss
+
+The badge and the switch answer one question — *does this hole carry the
+ball* — so they read one field, and it is the server's
+(`services.red_ball.ball_on_hole`). It is true while the ball is alive AND on
+the hole it was lost on, because **the loss is undoable until the group leaves
+that hole**: the switch has to stay, and the carrier's badge with it.
+
+`carrier_id` used to be nulled the moment the ball died, on the reasoning that
+*"a carrier on a dead ball is a name with nothing attached to it"* — right
+about hole 13 and wrong about hole 12, where the switch says `Pink Ball lost
+on 12` and the row was the only thing saying whose. From the next hole on,
+`live_here` is false and there is no badge and no switch.
+
+### The badge was drawn two ways for one fact
+
+`pink_ball_screen` had its own carrier pill — secondary-coloured, no ball on
+it — while this packet draws the design's deep-pine one with a golf ball.
+Both screens use `BallBadge` now, and a source test checks each, because *the
+games with their own play screen are the ones that get missed* (the combo-tee
+chip, Spots capture and the scorecard grids each shipped on the generic screen
+first).
+
+**Deep pine, because carrying the ball is a ROLE and not a result** — the same
+reading Hot Seat's gold anchor gets on the same row, and the reason it must
+not borrow the win green. The ball is three circles (white, the pill's ground,
+white): on deep pine a plain white dot is a list bullet.
+
+### The switch patches one block instead of refetching the hole
+
+`setPinkBallLost` returns the ball's state and `StrokePlayHoleCard.withBall`
+replaces that block. Losing the ball ranks nobody differently, so there is
+nothing else on the card to refresh — and it closes the window where the
+toggle would sit on its old value waiting for a request it does not need.
+
+The in-flight value **carries its hole** (`({int hole, bool lost})?`): the
+scorer can move on while the POST is out, and a bare bool would show the next
+hole's switch a loss that belongs to the one behind it.
+
+The route exists for the undo. The flag also rides the score POST, but only
+ever to SET — every shipped build sends `pink_ball_lost: false` on every
+ordinary hole, so honouring that would un-lose a ball whenever somebody
+corrected a score.
+
+### Spots needed NOTHING, and that is a decision
+
+The packet draws a `− N +` stepper in a 74px column and says a spot is "a
+count, not a type". **That is Spots v1, which was retired**: the group now
+ticks which spots it is playing before the round and the row opens a tick
+sheet (`SpotsButton`, under the name). Building the stepper would take the
+names back off and make the app the authority on which spots exist, which the
+checklist exists to avoid. Confirmed with Paul; recorded in the widget's own
+library doc so the next reader does not "finish" the handoff by building it.
+
+### Where the marks come from, and the one gap
+
+They are read off the Stroke Play card but **NOT gated on Stroke Play being
+the primary** (`_sideGameMarks`), the same reading Hot Seat's anchor gets: who
+has the ball changes every hole and the group needs to know whatever the
+round's headline game is. `_strokePlayCard` stays primary-gated, because that
+governs the TRAY, which must not take over a Skins round.
+
+The card is fetched whenever Stroke Play is active at all, which is every
+individual-ball round. **A round with no Stroke Play has no transport for
+these blocks** — no other game's hole card carries them — so the badge and the
+strip are absent there, and the lost-ball switch, which lives on the Stroke
+Play tray, is absent with it. Pink Ball as a PRIMARY has its own screen and
+its own switch; Pink Ball as a side game of a Skins round has neither. Not
+fixed here: it is a server-side spread across every other hole card.
+
+Tests: `mobile/test/side_game_marks_test.dart` (10, against the real fixture
+`stroke_play_hole4_side_games.json`, written by
+`REGEN_STROKE_PLAY_FIXTURES=1`), the `lost ball switch` and `one carrier
+badge, both screens` groups in `mobile/test/stroke_play_entry_test.dart`
+(42 total), and the two `live_here` cases in `api/test_pink_ball_lost.py`
+(18). Every guard checked by making it fail.
+
+**The fixture is chosen so a wrong subscript cannot pass**: hole 4 is the
+group's fourth, so the rotation is on the LAST name in the order rather than
+index 0 — the same reason the Sixes anchor test hands in its pairs.
+
 ## Slack activity feed — `services/activity_feed.py`
 
 Private channel **#halved-users** in LipApps (Paul + Ryan). One incoming webhook,

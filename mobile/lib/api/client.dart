@@ -2029,6 +2029,25 @@ class ApiClient {
     return StrokePlayHoleCard.fromJson(map);
   }
 
+  /// POST /api/foursomes/{id}/pink-ball/lost/
+  ///
+  /// The ball game ends for this group on [hole] — or, with `lost: false`, it
+  /// does not after all. The undo is the whole reason this route exists: the
+  /// flag also rides on the score POST, but only ever to SET, because every
+  /// shipped build sends `pink_ball_lost: false` on every ordinary hole and
+  /// honouring that would un-lose a ball whenever somebody fixed a score.
+  ///
+  /// Returns the ball's state afterwards, so the switch reads the server's
+  /// answer rather than its own optimism.
+  Future<BallOnHole?> setPinkBallLost(int foursomeId,
+      {required int hole, required bool lost}) async {
+    final data = await _post('/foursomes/$foursomeId/pink-ball/lost/',
+        {'hole_number': hole, 'lost': lost});
+    final map = (data as Map).cast<String, dynamic>();
+    if (map['ball'] == null) return null;
+    return BallOnHole.fromJson((map['ball'] as Map).cast<String, dynamic>());
+  }
+
   Future<SixesHoleCard?> getSixesHoleCard(int foursomeId, int hole) async {
     final data = await _get('/foursomes/$foursomeId/sixes/hole/$hole/');
     final map = (data as Map).cast<String, dynamic>();

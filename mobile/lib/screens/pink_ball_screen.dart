@@ -32,6 +32,7 @@ import '../widgets/inline_score_picker.dart';
 import '../widgets/net_score_button.dart';
 import '../widgets/round_chat_button.dart';
 import '../widgets/combo_tee_chip.dart';
+import '../widgets/side_game_marks.dart';
 
 
 class PinkBallScreen extends StatefulWidget {
@@ -1171,24 +1172,14 @@ class _PlayerScoreRow extends StatelessWidget {
                 ),
               ),
             ),
+            // **The shared badge** (`widgets/side_game_marks.dart`). This
+            // screen drew its own — a secondary-coloured pill with no ball on
+            // it — while score entry drew the design's deep-pine one with the
+            // ball, for the identical fact. A golfer who learns the mark on
+            // one screen must meet the same mark on the other.
             if (isCarrier && !ballAlreadyLost) ...[
               const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 6, vertical: 1),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.secondary,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  gameName,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.onSecondary,
-                  ),
-                ),
-              ),
+              BallBadge(gameName: gameName),
             ],
           ]),
         ),

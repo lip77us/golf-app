@@ -279,6 +279,57 @@ class StrokePlayFixtureRegenTests(_Base):
         self._write('stroke_play_hole1_empty.json', card)
 
 
+class SideGameFixtureRegenTests(_Base):
+    """The fixture `mobile/test/side_game_marks_test.dart` and the tray's own
+    switch test draw. Regenerate with `REGEN_STROKE_PLAY_FIXTURES=1`.
+
+    It needs both side games AND a carrier, which the plain Stroke Play
+    fixtures have no reason to carry — the Dart would otherwise be tested
+    against a ball block somebody typed by hand.
+    """
+
+    def _write(self, name, card):
+        import json, os, pathlib
+        if os.environ.get('REGEN_STROKE_PLAY_FIXTURES') != '1':
+            return
+        path = (pathlib.Path(__file__).resolve().parents[2]
+                / 'mobile' / 'test' / 'fixtures' / name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(card, indent=2, default=str) + '\n')
+
+    def test_regenerate_side_games(self):
+        from games.models import IrishRumbleConfig, PinkBallConfig
+        self.round.active_games = ['low_net_round', 'pink_ball',
+                                   'irish_rumble']
+        self.round.save(update_fields=['active_games'])
+        PinkBallConfig.objects.create(round=self.round,
+                                      game_name='Pink Ball')
+        IrishRumbleConfig.objects.create(
+            round=self.round, variant='custom',
+            segments=[{'start_hole': 1, 'end_hole': 9, 'balls_to_count': 2},
+                      {'start_hole': 10, 'end_hole': 18,
+                       'balls_to_count': 4}],
+        )
+        order = [self.pid(n) for n in ('Mike', 'Dave', 'Paul', 'Sam')]
+        self.fs.pink_ball_order = order
+        self.fs.save(update_fields=['pink_ball_order'])
+        self.fs = type(self.fs).objects.get(pk=self.fs.pk)
+
+        self.post(1, [('Paul', 4), ('Dave', 5), ('Sam', 5), ('Mike', 6)])
+        self.post(2, [('Paul', 5), ('Dave', 4), ('Sam', 5), ('Mike', 5)])
+        self.post(3, [('Paul', 3), ('Dave', 5), ('Sam', 4), ('Mike', 4)])
+
+        # Hole 4 is the group's 4th, so the rotation is back on Sam — the one
+        # golfer who is NOT first in the order, which is what makes the badge
+        # test about the rotation rather than about index 0.
+        card = self.card(4)
+        self.assertEqual(card['ball']['carrier_id'], order[3])
+        self.assertTrue(card['ball']['live_here'])
+        self.assertEqual(card['rumble'], {'count': 2, 'of': 4,
+                                          'all_count': False})
+        self._write('stroke_play_hole4_side_games.json', card)
+
+
 class TheSideGameBlocksTests(_Base):
     """`handoff-stroke-play-side-games`: the card carries what the group's
     field-wide side games add, and NOTHING when they are not being played.

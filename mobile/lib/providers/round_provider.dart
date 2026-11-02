@@ -844,6 +844,17 @@ class RoundProvider extends ChangeNotifier {
     }
   }
 
+  /// The ball game's state on one hole, after the lost-ball switch was
+  /// flipped. Patched from the server's own answer — see
+  /// `StrokePlayHoleCard.withBall`. A no-op when that hole is not held, which
+  /// is the case where the card is already on its way.
+  void setStrokePlayBall(int hole, BallOnHole? ball) {
+    final card = _strokePlayHoles[hole];
+    if (card == null) return;
+    _strokePlayHoles[hole] = card.withBall(ball);
+    notifyListeners();
+  }
+
   /// Fetch one hole's Rabbit card. Silent on failure: a card that cannot be
   /// fetched must not stop a group entering scores.
   Future<void> loadRabbitHole(int foursomeId, int hole) async {

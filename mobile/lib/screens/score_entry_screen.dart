@@ -41,6 +41,7 @@ import '../widgets/banker_entry_strip.dart';
 import '../widgets/triple_cup_pairings.dart';
 import '../widgets/standing_ribbon.dart';
 import '../widgets/stroke_play_progress_grid.dart';
+import '../widgets/side_game_marks.dart';
 import '../utils/play_order.dart';
 import '../api/client.dart' show NetworkException;
 import '../widgets/annandale_friday.dart';
@@ -1571,6 +1572,25 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     return rp.strokePlayHole(_selectedHole);
   }
 
+  /// The field-wide side games on the hole on screen: the ball game's carrier
+  /// and Irish Rumble's count.
+  ///
+  /// **Read off the Stroke Play card but NOT gated on it being the primary**,
+  /// the same reading Hot Seat's anchor gets: who has the ball changes every
+  /// hole and the group needs to know whose it is whatever the round's
+  /// headline game is. `_strokePlayCard` is primary-gated on purpose — that
+  /// governs the TRAY, which must not take over a Skins round — and these two
+  /// blocks are facts about the hole rather than a result.
+  ///
+  /// The card is fetched whenever Stroke Play is active at all (see
+  /// `_ensureStrokePlayCard`), which is every individual-ball round. A round
+  /// with no Stroke Play has no transport for these blocks yet; no other
+  /// game's hole card carries them.
+  StrokePlayHoleCard? _sideGameMarks(RoundProvider rp) =>
+      _activeGames(rp.round).contains(GameIds.strokePlay)
+          ? rp.strokePlayHole(_selectedHole)
+          : null;
+
   /// A hole tray stays down while the scorer has asked to edit — "Edit
   /// scores" reopens the keypad on the hole's first golfer.
   ///
@@ -1578,6 +1598,37 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// fact: two would be two names for the same state, and the second would
   /// eventually be the one somebody forgot to clear.
   bool _trayEditing = false;
+
+  /// The lost-ball switch has been flipped and the server has not answered.
+  ///
+  /// It carries the HOLE as well as the value: the scorer can move on while
+  /// the request is in flight, and a bare bool would then show the next
+  /// hole's switch a loss that belongs to the one behind it.
+  ({int hole, bool lost})? _ballLostPending;
+
+  /// Lose the ball — or put it back. The undo is the point: it stands until
+  /// the group leaves the hole, which is why this has its own route rather
+  /// than riding the score POST (that flag can only ever SET, because every
+  /// shipped build sends `false` on every ordinary hole).
+  Future<void> _setBallLost(RoundProvider rp, bool lost) async {
+    final hole = _selectedHole;
+    setState(() => _ballLostPending = (hole: hole, lost: lost));
+    try {
+      final ball = await context.read<AuthProvider>().client
+          .setPinkBallLost(widget.foursomeId, hole: hole, lost: lost);
+      rp.setStrokePlayBall(hole, ball);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyError(e))));
+    } finally {
+      // Back to reading the card, whichever way it went: on success the card
+      // now holds the server's answer, and on failure the switch has to
+      // return to what the server actually believes rather than keep showing
+      // a loss that was never filed.
+      if (mounted) setState(() => _ballLostPending = null);
+    }
+  }
 
   Future<void> _afPress(RoundProvider rp, AnnandaleFridayMatch m,
       int startHole) async {
@@ -3171,6 +3222,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 _trayEditing = !_trayEditing;
                 _editHotPid = null;
               }),
+              onBallLost: (lost) => _setBallLost(rp, lost),
+              ballLostPending: _ballLostPending?.hole == _selectedHole
+                  ? _ballLostPending!.lost
+                  : null,
             )
           else if (afTray)
             AnnandaleHoleTray(
@@ -3623,6 +3678,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                     ? (rp.hotSpotHole(widget.foursomeId, _selectedHole)
                         ?['anchor_id'] as int?)
                     : null,
+                ball:   _sideGameMarks(rp)?.ball,
+                rumble: _sideGameMarks(rp)?.rumble,
                 holeData:        holeData,
                 holeNumber:      _selectedHole,
                 courseName:      rp.round?.course.name ?? '',
@@ -4064,8 +4121,18 @@ class _HoleScoreCard extends StatelessWidget {
   /// inches apart, is worse than either.
   final bool useKeypad;
 
+  /// The field's ball game on this hole, and Irish Rumble's count — the two
+  /// things a field-wide side game adds to the card
+  /// (`handoff_stroke_play_side_games`). Both null when the round does not
+  /// play them, which is what makes the badge and the strip absent rather
+  /// than empty.
+  final BallOnHole?   ball;
+  final RumbleOnHole? rumble;
+
   const _HoleScoreCard({
     this.fortyBallsNet,
+    this.ball,
+    this.rumble,
     this.useKeypad = false,
     this.solo = false,
     this.anchorId,
@@ -4726,6 +4793,14 @@ class _HoleScoreCard extends StatelessWidget {
             ),
           ),
 
+          // Irish Rumble: how many of the group's balls count here. Nothing
+          // is entered for it — this strip is the whole of what the game
+          // needs on score entry, and it is drawn only when the server sends
+          // a count (see `RumbleCountStrip`).
+          if (rumble != null)
+            RumbleCountStrip(
+                count: rumble!.count, allCount: rumble!.allCount),
+
           // Nassau hole outcome banner
           if (nassauHole != null && nassauHole.winner != null)
             _NassauHoleOutcome(hole: nassauHole, nassau: nassau!),
@@ -4783,6 +4858,14 @@ class _HoleScoreCard extends StatelessWidget {
                 comboTee:            m.comboTeeOnHole(holeNumber),
                 isAnchor:            anchorId != null &&
                                      anchorId == m.player.id,
+                // `liveHere`, not `alive`: on the hole the ball was lost on
+                // the switch is still there to be undone, so the row has to
+                // still say whose ball it was.
+                ballGame:            (ball != null &&
+                                      ball!.liveHere &&
+                                      ball!.carrierId == m.player.id)
+                    ? ball!.gameName
+                    : null,
                 strokesOnThisHole:   matchStrok,
                 teamLabel:           _teamLabelFor(m.player.id),
                 nameColor:           _nameColorFor(m, holeNumber),
@@ -5576,6 +5659,14 @@ class _PlayerRow extends StatelessWidget {
   /// names is not where anybody looks for which of four men it is. Reported
   /// from the course on the 2nd tee: "I don't know who is in the hot spot".
   final bool          isAnchor;
+  /// This golfer carries the field's ball game on THIS hole — the pill reads
+  /// the organiser's own name for it. Null on every other row, and on every
+  /// row once the ball is gone.
+  ///
+  /// **On the row, for the reason Hot Seat's anchor is**: the carrier changes
+  /// every hole, and a banner over a card full of names is not where anybody
+  /// looks for which of four men it is.
+  final String?       ballGame;
   final VoidCallback? onTap;
   final int           strokesOnThisHole;
   final String?       teamLabel;
@@ -5616,6 +5707,7 @@ class _PlayerRow extends StatelessWidget {
     required this.par,
     this.comboTee,
     this.isAnchor = false,
+    this.ballGame,
     this.onTap,
     this.strokesOnThisHole = 0,
     this.teamLabel,
@@ -5778,6 +5870,10 @@ class _PlayerRow extends StatelessWidget {
                       ),
                     ),
                   ),
+                ],
+                if (ballGame != null) ...[
+                  const SizedBox(width: 6),
+                  BallBadge(gameName: ballGame!),
                 ],
                 if (withdrawn) ...[
                   const SizedBox(width: 6),

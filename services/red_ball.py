@@ -140,16 +140,25 @@ def ball_on_hole(foursome, hole: int) -> dict | None:
                         if m.player_id == carrier_pk), None)
 
     alive = lost_on is None
-    # Once it is gone the badge goes with it: a carrier on a dead ball is a
-    # name with nothing attached to it.
+    # **`live_here` is the one gate the screen reads**, for the badge AND the
+    # switch, because they answer one question: does this hole carry the ball.
+    # Alive, or this IS the hole it died on — the loss is undoable until the
+    # group leaves the hole, so the switch has to stay, and the carrier's
+    # badge with it. Taking the badge off the instant the switch flips erases
+    # the one fact that explains the switch: whose ball it was.
+    #
+    # From the NEXT hole on, nothing: `alive` is false and this is not the
+    # hole, so no badge and no switch.
+    live_here = alive or lost_on == hole
     return {
         'game_name'   : config.display_name,
         'alive'       : alive,
+        'live_here'   : live_here,
         'lost_on_hole': lost_on,
         'lost_here'   : lost_on == hole,
-        'carrier_id'  : carrier_pk if alive else None,
+        'carrier_id'  : carrier_pk if live_here else None,
         'carrier_short': (carrier.short_name or carrier.name) if (
-            alive and carrier is not None) else None,
+            live_here and carrier is not None) else None,
     }
 
 

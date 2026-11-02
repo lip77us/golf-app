@@ -31,6 +31,11 @@ const Color _panel = Color(0xFF14312A);
 /// this tray, so it cannot be read as a state.
 const Color _capAmber = Color(0xFFF2B84B);
 
+/// The lost ball switch, on. A DIFFERENT amber from the cap's, deliberately:
+/// the cap is a figure the engine adjusted and this is a game the group has
+/// ended, and the two can sit on the tray at once.
+const Color _lostAmber = Color(0xFFF2A86E);
+
 // ── the score mark, on a dark tray ───────────────────────────────────────────
 
 /// A score in scorecard notation, sized and coloured for a DARK tray.
@@ -144,6 +149,16 @@ class StrokePlayHoleTray extends StatelessWidget {
   /// `Edit scores` pressed and no golfer chosen yet — see [TrayEditHeader].
   final bool picking;
 
+  /// The ball game is lost — or unlost — on this hole. Null when the group
+  /// does not play one, which is what keeps the switch off the tray rather
+  /// than showing a dead one.
+  final void Function(bool lost)? onBallLost;
+
+  /// The switch has been flipped and the server has not answered yet. Null
+  /// reads the card's own state; non-null is the value in flight, so the
+  /// toggle moves under the thumb instead of looking broken.
+  final bool? ballLostPending;
+
   const StrokePlayHoleTray({
     super.key,
     required this.card,
@@ -154,6 +169,8 @@ class StrokePlayHoleTray extends StatelessWidget {
     this.gettingResult = false,
     this.notSynced = false,
     this.picking = false,
+    this.onBallLost,
+    this.ballLostPending,
   });
 
   bool get _stale => gettingResult || notSynced;
@@ -204,6 +221,16 @@ class StrokePlayHoleTray extends StatelessWidget {
           if (!_stale && card.leader != null) ...[
             const SizedBox(height: 8),
             _leaderLine(card.leader!),
+          ],
+          // **The one side-game control on this tray, and there are no side
+          // game RESULTS at all** — each game keeps its own leaderboard tab.
+          // Drawn even while the board is stale: the switch is about the hole
+          // rather than about the places, and a scorer who has just lost a
+          // ball should not have to wait for a sync to say so.
+          if (card.ball != null && card.ball!.liveHere &&
+              onBallLost != null) ...[
+            const SizedBox(height: 9),
+            _lostSwitch(card.ball!),
           ],
           const SizedBox(height: 12),
           _buttons(),
@@ -403,6 +430,75 @@ class StrokePlayHoleTray extends StatelessWidget {
           Text(l.thru >= 18 ? 'final' : 'thru ${l.thru}',
               style: const TextStyle(color: _dim, fontSize: 12.5)),
         ]),
+      );
+
+  /// "{Game} lost on {hole}", with a sub-line saying what that does.
+  ///
+  /// It stays on the hole it was lost on so the loss can be taken back — the
+  /// whole reason `setPinkBallLost` exists as its own route. From the next
+  /// hole on the server reports `liveHere: false` and there is no switch.
+  Widget _lostSwitch(BallOnHole ball) {
+    final on = ballLostPending ?? ball.lostHere;
+    return Material(
+      color: _panel,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => onBallLost!(!on),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(11, 10, 11, 10),
+          child: Row(children: [
+            _toggle(on),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('${ball.gameName} lost on ${card.hole}',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 1),
+                  Text(
+                    on
+                        // It names Stroke Play because that is the reassurance
+                        // a group wants at the moment it loses the ball: the
+                        // round they are actually being ranked on is intact.
+                        ? 'Over for the group. Scores still count for '
+                            'Stroke Play.'
+                        : 'Ends ${ball.gameName} for the group',
+                    style: const TextStyle(color: _dim, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _toggle(bool on) => AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 38,
+        height: 22,
+        decoration: BoxDecoration(
+          color: on ? _lostAmber : const Color(0x33FFFFFF),
+          borderRadius: BorderRadius.circular(11),
+        ),
+        child: AnimatedAlign(
+          duration: const Duration(milliseconds: 200),
+          alignment: on ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            margin: const EdgeInsets.all(2),
+            width: 18,
+            height: 18,
+            decoration: const BoxDecoration(
+                shape: BoxShape.circle, color: Colors.white),
+          ),
+        ),
       );
 
   Widget _buttons() {
