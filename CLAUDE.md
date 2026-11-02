@@ -8821,6 +8821,103 @@ badge, both screens` groups in `mobile/test/stroke_play_entry_test.dart`
 group's fourth, so the rotation is on the LAST name in the order rather than
 index 0 — the same reason the Sixes anchor test hands in its pairs.
 
+## The personal lock screens were a place in the wrong field
+
+Asked, 2 Nov 2026: *"Does stroke play Lock screen take into account
+Flights?"* It did not, and neither did Stableford.
+
+Both personal cards headline the reader's own figure and then qualify it: a
+place, a gap to first, the golfer who is leading, and (Stroke Play) the field
+size in the footer. Every one of those is measured against a POPULATION, and
+both read the round's own `results` — the whole field. So on an event cut into
+flights all four answered the wrong question at once, and a golfer leading B
+flight was shown `4TH` behind a leader he is not playing against.
+
+**The reason it hid is the vocabulary.** The packet (`~/Downloads/handoff-lock-
+screens 2/personal/`) uses "flight" for the FOUR-ACROSS STRIP and for its own
+"flighted states", so `live_activity_stroke_play.py` said the word eleven
+times and its sign-off header literally read `FLIGHT COMPLETE` — about a
+population it had never looked up. Anyone reading it, me included, would
+conclude flights were handled. `stroke_play_strip`, docstringed *"The flight
+frame"*, has no production caller at all.
+
+**And it was live:** `UNSHIPPED_KINDS = {'foursome'}`, `hasLiveActivity: true`
+in the catalog, `stroke_play` in the Swift `known` set. `primary_game()` falls
+back to `active_games[0]` on a tournament round, so any flighted event with
+`low_net_round` or `stableford` first builds one. Not reachable locally — the
+one flighted tournament plays skins — so it had never run.
+
+### `services.flights.flight_field(round_obj, rows, player_id, *, rank_key)`
+
+`(rows, label)`: the rows narrowed to the reader's flight, with ranks
+**recomputed inside it**, and the flight's letter. One shared function rather
+than a copy per card, because two cards in one packet answering *"which
+golfers am I ranked against"* two ways is how they come to disagree — the
+`gross_to_par` lesson, which this file already records three times.
+
+- **Label `''` means the whole field**, which is every casual round, every
+  uncut tournament and every watcher. Unflighted is the same code path, so a
+  board that is not flighted stays on exactly the path it was already on. It
+  is a letter-or-nothing rather than a boolean beside a number because the
+  label is also what every caller branches its WORDING on.
+- **A watcher gets the whole field.** He is in no flight; narrowing to one he
+  is not in would be a card about somebody else — the same rule that gives
+  him no stroke band and no bold column.
+- **Rows are shallow-copied before the rank is written.** `results` is the
+  leaderboard's own list (and the same object as `modes[primary]['results']`),
+  so a card must not re-rank the board it is reading.
+- `rank_key` is the tie test, passed in for the same reason `rank_in_flights`
+  takes one: net-to-par for Low Net, points for Stableford, and that is the
+  only thing the two differ by.
+
+**`ranked_positions(rows, key)`** came out of `rank_in_flights._ranked` in the
+same commit. *Ties share a rank and the next rank skips by the size of the
+tie* now has ONE writer, because it decides three numbers — a board's display
+rank, the prize rank beside it, and the place a lock screen headlines — and
+money hangs off two of them. Worth knowing: `api/test_flights.py` does not
+catch a `rank += 1` mutant of that walk; the new pure test does.
+
+### The wording
+
+- **The flight goes in the FOOTER, not the header** — `B FLIGHT 3` where it
+  said `FIELD 6` (`_field_label`). That slot exists to say what the place is a
+  place IN, which is the question; the header already carries the game and the
+  mode, and a third fact there is one line two groups read differently. A test
+  pins the header to `STROKE PLAY · <MODE>` exactly.
+- **`FLIGHT COMPLETE` → `B FLIGHT COMPLETE` / `ROUND COMPLETE`.** The locked
+  corner's one exception has to be true; Stableford's already said
+  `ROUND COMPLETE` and now names the flight too.
+- `Field of 14 settled` → `B flight of 3 settled`, and the sign-off's
+  `2nd of 14` is now the flight count.
+- `stroke_play_strip`'s docstring stops calling itself the flight frame and
+  says it has no production caller.
+
+### The money, which is the one seam left
+
+**The place is the flight's; the payout is the ROUND's own table, and that is
+not flighted** — `_rank_standings` / `stableford_summary` pay it over the
+whole field. Stroke Play already said only `collect at the desk`, naming no
+amount, so it needed nothing. **Stableford named a figure**, and
+`1st of 3 · collect $60` reads as the one having produced the other, so on a
+flighted event it drops to `collect at the desk` and keeps the amount
+unflighted. What is true either way is that he is owed something.
+
+Flight money proper is the CHAMPIONSHIP's (`low_net_championship` /
+`stableford_championship`, with its scaled purse and best-N-of-M counting),
+and no card shows it. **A per-round card structurally cannot**: that is a
+different population over a different number of rounds. Zero tournament
+rounds carry a round-level `LowNetRoundConfig` locally, so the seam is narrow
+— but "unlikely" is how the shotgun bugs survived.
+
+Tests: `scoring/tests/test_live_activity_flights.py` (25) — a six-golfer,
+two-group, two-flight fixture built so the two readings DIFFER on every slot
+at once (Dan Hill is 4th of six and 1st of three). Mutating `flight_field` to
+a no-op fails 16 of the 25 and leaves exactly the nine that should pass
+unflighted. **The memberships all play off scratch while the INDEXES are
+1/2/3 and 14/15/16**: the cut reads `Player.handicap_index` and the scoring
+reads the membership, so net equals gross and every expected figure is
+arithmetic rather than a handicap calculation.
+
 ## Slack activity feed — `services/activity_feed.py`
 
 Private channel **#halved-users** in LipApps (Paul + Ryan). One incoming webhook,

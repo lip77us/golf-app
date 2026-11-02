@@ -12,6 +12,26 @@ CASUAL state; the flighted states headline the PLACE with the score beside it
 One of three cards with **no sides**, so nothing on it is blue or orange. The
 headline is the reader's own figure, in mint.
 
+## The place is a place IN something, and on a flighted event that is the flight
+
+Every figure here is measured against a population: the place, the strokes to
+first, the golfer named as leading, the field size in the footer. All four read
+the round's `results`, which is the whole field — so on an event cut into
+flights every one of them was answering the wrong question, and a golfer
+leading B flight was shown `9TH` behind a leader he is not playing against.
+
+The card narrows to the reader's own flight (`services.flights.flight_field`)
+and names it, because **each flight ranks and pays within itself**. Unflighted
+rounds take the same path with an empty label and are byte-for-byte what they
+were.
+
+**Note what "flight" means where it appears below.** The packet uses the word
+for the four-across strip as well, which is a layout and not this; and the
+paragraph above is the packet's own vocabulary, where "the flighted states"
+names a treatment this module applies to the SIGN-OFF rather than to a
+flighted event. Everything added for Halved's Flights says `flight_field`,
+`_field_label` or carries a letter.
+
 **It pushes nothing.** One group, everything witnessed.
 
 **The money slot fills exactly once, at the end** — a place payout resolves on
@@ -64,6 +84,38 @@ def _results(summary):
     game from the leaderboard.
     """
     return summary.get('results') or []
+
+
+def _rank_key(row):
+    """The tie test for this board: net-to-par alone.
+
+    NOT the sort — `results` arrives sorted on (has played, net-to-par) and
+    two golfers level on net-to-par share a rank even though one has played
+    more holes. `services.flights.ranked_positions` is where that distinction
+    is explained; this is the Low Net half of it.
+
+    `None` is the unplayed row, which sorts last and groups with the other
+    unplayed rows — the same thing the leaderboard's own walk does, where they
+    all compare as level.
+    """
+    return row.get('net_to_par')
+
+
+def _flight(round_obj, results, player_id):
+    """`(results, label)` narrowed to the reader's flight. Label '' = whole
+    field, which is every casual round and every uncut tournament."""
+    from services.flights import flight_field
+    return flight_field(round_obj, results, player_id, rank_key=_rank_key)
+
+
+def _field_label(flight: str, size: int) -> str:
+    """`FIELD 14`, or `B FLIGHT 14` — the slot that says what the place is IN.
+
+    The letter leads because golfers say "I'm in B" (`services.flights
+    .flight_label`), and the count stays either way: a flight of fourteen and
+    a flight of four are not the same afternoon.
+    """
+    return f'{flight} FLIGHT {size}' if flight else f'FIELD {size}'
 
 
 def _row_for(results, player_id):
@@ -128,6 +180,9 @@ def stroke_play_activity_state(round_obj, foursome, *, player_id=None,
     if not results:
         return {}
 
+    # Narrowed BEFORE `mine` is resolved, because every slot below is measured
+    # against this list and `_sides` / `_state_slot` compare rows by identity.
+    results, flight = _flight(round_obj, results, player_id)
     mine = _row_for(results, player_id)
     mode = summary.get('primary_mode') or summary.get('handicap_mode') or 'net'
     played = thru or 0
@@ -150,15 +205,19 @@ def stroke_play_activity_state(round_obj, foursome, *, player_id=None,
         'state' : _state_slot(results, mine),
         'pips'  : [],
         'final' : None,
-        # The field size is the one thing the footer's left half is for here:
-        # a place means nothing without knowing what it is a place in.
-        **_footer(round_obj, foursome, player_id, played, len(results)),
+        # The field is the one thing the footer's left half is for here: a
+        # place means nothing without knowing what it is a place in — which is
+        # also why it is the slot that names the flight rather than the
+        # header. The header already carries the game and the mode; a third
+        # fact there is one line two groups read differently.
+        **_footer(round_obj, foursome, player_id, played,
+                  _field_label(flight, len(results))),
         'thru'  : thru_line(played, gross_to_par(
             summary.get('scorecard') or summary, player_id)),
     }
 
 
-def _footer(round_obj, foursome, player_id, played, field_size) -> dict:
+def _footer(round_obj, foursome, player_id, played, field) -> dict:
     """The footer, and the Dream Round's one claim on this card.
 
     **The Dream Round takes the QUIET SLOT while it has news** — the same rule the
@@ -166,12 +225,15 @@ def _footer(round_obj, foursome, player_id, played, field_size) -> dict:
     right, into the slot beside it, so it stays on screen exactly as the packet
     requires. When there is no news, the footer is byte-for-byte what it was.
 
+    `field` arrives composed (`_field_label`) rather than as a size, so the two
+    slots it can land in cannot disagree about whether it names a flight.
+
     The line is composed server-side (`live_activity_dream_round.footer_line`), and
     the STRUCTURED block rides alongside it so a later Swift build can draw the
     `DREAM ROUND` label at its own weight without the two ever disagreeing about
     which pool is being named.
     """
-    plain = {'footer': {'context': f'FIELD {field_size}', 'money': ''}}
+    plain = {'footer': {'context': field, 'money': ''}}
 
     tournament = getattr(round_obj, 'tournament', None)
     if tournament is None:
@@ -199,25 +261,34 @@ def _footer(round_obj, foursome, player_id, played, field_size) -> dict:
         # server-side. An installed build that does not know `label` draws the
         # line untagged rather than dropping it — which is why the tag and the
         # text are never the same string.
-        'footer': {'context': line, 'money': f'FIELD {field_size}',
+        'footer': {'context': line, 'money': field,
                    'label': 'DREAM ROUND'},
         'dream_round': block,
     }
 
 
 def stroke_play_strip(round_obj, *, player_id=None) -> list:
-    """The flight frame — **the alternative, not the default.**
+    """The four-across frame — **the alternative, not the default**, and it has
+    no production caller.
 
-    It buys *whether the gap above is one bad hole or four*, and it only works
-    where the reader is mid-table: leading a flight of fourteen, the three
-    columns beside him say nothing.
+    The packet calls this the flight frame, meaning the four columns rather
+    than Halved's Flights. It buys *whether the gap above is one bad hole or
+    four*, and it only works where the reader is mid-table: leading a field of
+    fourteen, the three columns beside him say nothing.
 
-    The qualifier goes UNDER the figure rather than beside the name, because in
-    a flight the reader is comparing positions against different amounts of
-    golf played and the pair only means something read together.
+    The qualifier goes UNDER the figure rather than beside the name, because
+    the reader is comparing positions against different amounts of golf played
+    and the pair only means something read together.
+
+    It takes the same narrowing as the card. A strip showing the top four of a
+    whole flighted field would put three golfers beside the reader that he is
+    not ranked against — the defect this is the alternative TO, one layout
+    over.
     """
     from services.low_net_round import low_net_round_summary
-    results = _results(low_net_round_summary(round_obj))[:4]
+    rows, _flight_label = _flight(
+        round_obj, _results(low_net_round_summary(round_obj)), player_id)
+    results = rows[:4]
     return [
         strip_column(
             name=r.get('name', ''),
@@ -233,7 +304,7 @@ def stroke_play_strip(round_obj, *, player_id=None) -> list:
 
 
 def stroke_play_final_state(round_obj, foursome, *, player_id=None) -> dict:
-    """Flight sign-off — **the place becomes the headline.**
+    """Sign-off — **the place becomes the headline.**
 
     The running card headlines the score because that is what the golfer is
     doing something about. When there is nothing left to do about it, the
@@ -251,6 +322,7 @@ def stroke_play_final_state(round_obj, foursome, *, player_id=None) -> dict:
     results = _results(summary)
     if not results:
         return {}
+    results, flight = _flight(round_obj, results, player_id)
     mine = _row_for(results, player_id)
     if mine is None:
         return {}
@@ -273,9 +345,14 @@ def stroke_play_final_state(round_obj, foursome, *, player_id=None) -> dict:
     else:
         placed = f'{_ordinal(rank).lower()} of {len(results)}'
 
-    # A flight settles at the desk, not between two golfers — there is no
-    # transfer to name, and inventing one would send somebody looking for a
+    # A place prize settles at the desk, not between two golfers — there is
+    # no transfer to name, and inventing one would send somebody looking for a
     # man who does not owe him anything.
+    #
+    # **It names no amount and no place on purpose.** The payout on the row is
+    # the ROUND's own table, which is not flighted — `_rank_standings` pays it
+    # over the whole field — so a figure here would be a flight place beside a
+    # whole-field prize. What is true either way is that he is owed something.
     if float(mine.get('payout') or 0):
         placed += ' · collect at the desk'
 
@@ -287,7 +364,12 @@ def stroke_play_final_state(round_obj, foursome, *, player_id=None) -> dict:
     return {
         'kind'  : KIND,
         'header': {'game': f'STROKE PLAY · {_MODE_LABEL.get(mode, mode.upper())}',
-                   'segment': 'FLIGHT COMPLETE'},
+                   # The locked corner's one exception, and it has to be TRUE:
+                   # `FLIGHT COMPLETE` on an uncut round named something the
+                   # event does not have, and read as a feature that was
+                   # handled.
+                   'segment': (f'{flight} FLIGHT COMPLETE' if flight
+                               else 'ROUND COMPLETE')},
         'who'   : mine.get('name', ''),
         'closed': True,
         'number': {'text': _ordinal(rank) if rank else '', 'colour': 'mint'},
@@ -296,8 +378,10 @@ def stroke_play_final_state(round_obj, foursome, *, player_id=None) -> dict:
                    'to_play': _MODE_LABEL.get(mode, mode.upper())},
         'pips'  : [],
         'final' : None,
-        'footer': {'context': f'Field of {len(results)} settled · '
-                              f'dismisses in 5 min',
+        'footer': {'context': (
+            f'{flight} flight of {len(results)} settled · dismisses in 5 min'
+            if flight else
+            f'Field of {len(results)} settled · dismisses in 5 min'),
                    'money': ''},
         # **`GROSS 79`, not `THRU 18 · +5`.** The locked corner is the round
         # behind you, and on a net card that has been the gross all along —

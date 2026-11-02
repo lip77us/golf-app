@@ -78,6 +78,30 @@ def flight_sizes(assignment: dict, n_flights: int) -> list:
 # Ranking
 # ---------------------------------------------------------------------------
 
+def ranked_positions(rows, key) -> list:
+    """``[rank, ...]`` for `rows` ALREADY in board order.
+
+    **Ties share a rank and the next rank skips by the size of the tie** — a
+    T2 pair is followed by 4th, never 3rd.
+
+    One writer, because the same rule decides three different numbers: the
+    display rank on a board, the prize rank beside it, and the place a lock
+    screen headlines. Three walks of it is three chances for one of them to
+    split a tie the other two share, and money hangs off two of the three.
+
+    `key` is the TIE TEST, which is not the sort — Low Net sorts on
+    (net-to-par, −holes played) and ranks on net-to-par alone. See
+    :func:`rank_in_flights`, where collapsing the two was called out as a real
+    bug for exactly that reason.
+    """
+    out, rank = [], 1
+    for i, row in enumerate(rows):
+        if i > 0 and key(row) != key(rows[i - 1]):
+            rank = i + 1
+        out.append(rank)
+    return out
+
+
 def apportion(total_cents: int, weights) -> list:
     """Divide `total_cents` by `weights` so the parts sum EXACTLY to it.
 
@@ -185,13 +209,10 @@ def rank_in_flights(aggregated, *, sort_key, rank_key, flight_of, payouts_cfg,
     eligible = set(aggregated) if eligible is None else set(eligible)
 
     def _ranked(rows):
-        """Ties share a rank; the next rank skips by the size of the tie."""
-        out, rank = [], 1
-        for i, (pid, data) in enumerate(rows):
-            if i > 0 and rank_key((pid, data)) != rank_key(rows[i - 1]):
-                rank = i + 1
-            out.append((pid, data, rank))
-        return out
+        """Ties share a rank; the next rank skips by the size of the tie —
+        :func:`ranked_positions`, which is the one writer of that rule."""
+        return [(pid, data, rank) for (pid, data), rank
+                in zip(rows, ranked_positions(rows, rank_key))]
 
     by_flight: dict = {}
     for pid, data in aggregated.items():
@@ -391,6 +412,50 @@ _LETTERS = 'ABCDEFGH'
 def flight_label(flight: int) -> str:
     """1 -> 'A'. Golfers say "I'm in B", not "I'm in flight 2"."""
     return _LETTERS[flight - 1] if 1 <= flight <= len(_LETTERS) else str(flight)
+
+
+def flight_field(round_obj, rows, player_id, *, rank_key):
+    """``(rows, label)`` — the field a card's place is a place IN, and its letter.
+
+    A lock screen headlines a PLACE, and on a flighted event a place against
+    the whole field is a place nobody is paid for: each flight ranks and pays
+    within itself (:func:`rank_in_flights`), so the only population the number
+    can honestly be measured against is the reader's own flight.
+
+    Unflighted — a casual round, a tournament with no cut, a watcher — returns
+    `rows` untouched and an EMPTY label, so every board that is not flighted
+    stays on exactly the path it was already on rather than acquiring a second
+    one. The label is what every caller branches its wording on, which is why
+    it is a letter-or-nothing rather than a boolean beside a number.
+
+    **A watcher gets the whole field.** He is in no flight, and narrowing to
+    one he is not in would be a card about somebody else — the same rule that
+    gives a watcher no stroke band and no bold column.
+
+    **Ranks are RECOMPUTED inside the flight.** The wire rows carry the
+    whole-round rank, and reading that unchanged is what had the card telling
+    a golfer leading B flight that he was 9th. Rows are shallow-copied before
+    the rank is written, because `results` is the leaderboard's own list and a
+    card must not re-rank the board it is reading.
+
+    `rank_key` is the tie test for this board — net-to-par for Low Net, points
+    for Stableford — and is passed in for the same reason
+    :func:`rank_in_flights` takes one: it is the only thing the two differ by.
+    """
+    tournament = getattr(round_obj, 'tournament', None)
+    if tournament is None or player_id is None:
+        return list(rows), ''
+    assignment = flight_map(tournament)
+    mine = assignment.get(player_id)
+    if not mine:
+        return list(rows), ''
+    kept = [dict(r) for r in rows
+            if assignment.get(r.get('player_id')) == mine]
+    if not kept:
+        return list(rows), ''
+    for row, rank in zip(kept, ranked_positions(kept, rank_key)):
+        row['rank'] = rank
+    return kept, flight_label(mine)
 
 
 def cut_index_map(tournament) -> dict:

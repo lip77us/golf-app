@@ -15,6 +15,18 @@ It is one of three cards in the set with **no sides** — a personal
 accumulation against a table — so nothing on it is blue or orange, which mean
 *sides* everywhere else. The headline is the reader's own total, in mint.
 
+## The place is a place IN something, and on a flighted event that is the flight
+
+The place IS the money here, and on an event cut into flights the money is the
+flight's: each flight ranks and pays within itself. So the place, the points to
+first, the golfer named as leading and the `of N` on the sign-off all narrow to
+the reader's own flight (`services.flights.flight_field`). Unflighted rounds
+take the same path with an empty label and are byte-for-byte what they were.
+
+The same defect sat on the Stroke Play card, which is why the narrowing is one
+shared function rather than a copy in each: two cards in one packet answering
+"which golfers am I ranked against" two ways is how they come to disagree.
+
 **It pushes nothing.** One group, everything witnessed, and a total changing is
 the sum being restated rather than an event.
 
@@ -57,6 +69,21 @@ def _ordinal(n: int) -> str:
     if n in (11, 12, 13):
         return f'{n}TH'
     return f'{n}{ {1: "ST", 2: "ND", 3: "RD"}.get(n % 10, "TH") }'.replace(' ', '')
+
+
+def _rank_key(row):
+    """The tie test for this board: points, which `results` is already ordered
+    by. Two golfers level on points share a rank — see
+    `services.flights.ranked_positions` for why the tie test is not the sort.
+    """
+    return row.get('total_points')
+
+
+def _flight(round_obj, results, player_id):
+    """`(results, label)` narrowed to the reader's flight. Label '' = whole
+    field, which is every casual round and every uncut tournament."""
+    from services.flights import flight_field
+    return flight_field(round_obj, results, player_id, rank_key=_rank_key)
 
 
 def _row_for(results, player_id):
@@ -141,6 +168,9 @@ def stableford_activity_state(round_obj, foursome, *, player_id=None,
     if not results:
         return {}
 
+    # Narrowed BEFORE `mine` is resolved: every slot below is measured against
+    # this list, and `_sides` / `_state_slot` compare rows by identity.
+    results, _flight_label = _flight(round_obj, results, player_id)
     mine = _row_for(results, player_id)
     modified = _is_modified(summary.get('table'))
 
@@ -182,9 +212,15 @@ def stableford_strip(round_obj, *, player_id=None) -> list:
     three clear of third is being told two different things, and only the field
     says both. Four in a four-man group is the ceiling; a five-some or a field
     of twelve cannot use it.
+
+    It takes the same narrowing as the card, so the four columns are four
+    golfers the reader is actually ranked against.
     """
     from services.stableford import stableford_summary
-    results = (stableford_summary(round_obj).get('results') or [])[:4]
+    rows, _flight_label = _flight(
+        round_obj, stableford_summary(round_obj).get('results') or [],
+        player_id)
+    results = rows[:4]
     return [
         strip_column(
             name=r.get('player_name', ''),
@@ -229,6 +265,7 @@ def stableford_final_state(round_obj, foursome, *, player_id=None) -> dict:
     results = summary.get('results') or []
     if not results:
         return {}
+    results, flight = _flight(round_obj, results, player_id)
     mine = _row_for(results, player_id)
     if mine is None:
         return {}
@@ -257,9 +294,18 @@ def stableford_final_state(round_obj, foursome, *, player_id=None) -> dict:
     # **A pool pays the pot, not a person.** The ante was already in, so there
     # is nobody to collect from — the same reason Skins' final says what was
     # divided rather than inventing a settle instruction.
+    #
+    # **On a flighted event it names no figure**, because the place beside it
+    # and the money are about two different competitions: the place is this
+    # flight's, and `payout` is the ROUND's own table, paid over the whole
+    # field by `stableford_summary` and not flighted. `1st of 14 · collect
+    # $60` reads as the one having produced the other, and a golfer leading
+    # his flight with no round prize would read the absence the same way. What
+    # is true either way is that he is owed something.
     payout = float(mine.get('payout') or 0)
     if payout:
-        placed += f' · collect ${payout:,.0f}'
+        placed += (' · collect at the desk' if flight
+                   else f' · collect ${payout:,.0f}')
 
     return {
         'kind'  : KIND,
@@ -267,7 +313,11 @@ def stableford_final_state(round_obj, foursome, *, player_id=None) -> dict:
             'game': 'STABLEFORD' + (' · MODIFIED'
                                     if _is_modified(summary.get('table'))
                                     else ''),
-            'segment': 'ROUND COMPLETE',
+            # `ROUND COMPLETE` on an uncut event; on a flighted one the
+            # round is not what settled — his flight is, and it is the
+            # population every figure beside it was measured against.
+            'segment': (f'{flight} FLIGHT COMPLETE' if flight
+                        else 'ROUND COMPLETE'),
         },
         'who'   : mine.get('player_name', ''),
         'closed': True,
