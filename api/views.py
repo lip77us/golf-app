@@ -4349,6 +4349,11 @@ class SharedRoundsView(APIView):
 
         results = []
         seen_rounds = set()
+        # Tournament rows are built FIRST (they suppress round rows) and
+        # appended LAST, so the response keeps its long-standing order:
+        # rounds, then tournaments.
+        t_rows: list = []
+        shown_t: set = set()
 
         def _round_row(r):
             """One watched ROUND.
@@ -4390,9 +4395,64 @@ class SharedRoundsView(APIView):
                 'tournament_id':   t.id if t else None,
                 'tournament_name': t.name if t else None,
                 'round_number':    r.round_number if t else None,
+                # A Foursome Play round carries NO round-level games, so the
+                # generic board builds no tabs and falls through to
+                # "No championship games configured" over an event that is
+                # configured fine. `utils/round_leaderboard_route.dart` is the
+                # one place that decision lives, and it needs this to make it
+                # — the watcher path could not ask before.
+                'is_team_play_round': _is_team_play_round(r),
             }
 
-        # 1. Casual rounds I'm a WATCHER of.
+        # **The tournaments read FIRST, because they suppress round rows.**
+        #
+        # A tournament watch link deliberately writes TWO `Watcher` rows — one
+        # for the round, one for the tournament — because `tournament_for_reader`
+        # checks `Watcher.objects.filter(tournament_id=...)`, which a round row
+        # can never satisfy (the 11 Oct 2026 "No such tournament" fix).
+        #
+        # That was invisible while the two rows surfaced on DIFFERENT lists.
+        # Then `belongsUnderTournaments` (`isTournament || tournamentId != null`)
+        # moved watched tournament ROUNDS under Tournaments so a TD's watcher
+        # would stop finding a 40 Balls round under Rounds — and both rows
+        # started matching it. Reported 2 Nov 2026 as two identical Observing
+        # cards for one event, told apart only by `· Round 1`.
+        #
+        # Each fix is right alone. The collision is resolved here rather than
+        # on the phone because it is one line on the server and reaches every
+        # installed build at once.
+        watch_t_ids = list(
+            Watcher.objects.filter(phone=my_phone, tournament__isnull=False)
+            .values_list('tournament_id', flat=True))
+
+        # 1. Tournaments I'm a WATCHER of (whole-event, read-only).
+        if watch_t_ids:
+            for t in (
+                Tournament.objects.filter(id__in=watch_t_ids)
+                .exclude(account=request.user.account)
+                .select_related('account')
+                .prefetch_related('rounds__course')
+            ):
+                rounds = list(t.rounds.all())
+                t_status = ('complete'
+                            if rounds and all(rr.status == 'complete' for rr in rounds)
+                            else 'in_progress')
+                t_date = max((rr.date for rr in rounds if rr.date), default=None)
+                if not _status_ok(t_status) or not _recent_enough(t_status, t_date):
+                    continue
+                t_rows.append({
+                    'id':            t.id,
+                    'date':          rounds[0].date if rounds else None,
+                    'course_name':   rounds[0].course.name if rounds else '',
+                    'status':        t_status,
+                    'active_games':  t.active_games,
+                    'group_label':   t.name,
+                    'your_name':     None,
+                    'is_tournament': True,
+                })
+                shown_t.add(t.id)
+
+        # 2. Casual rounds I'm a WATCHER of.
         watch_round_ids = list(
             Watcher.objects.filter(phone=my_phone, round__isnull=False)
             .values_list('round_id', flat=True))
@@ -4409,38 +4469,25 @@ class SharedRoundsView(APIView):
                         or not _status_ok(r.status)
                         or not _recent_enough(r.status, r.date)):
                     continue
+                # The tournament row supersedes this one — see above. The
+                # EVENT's board is the right destination, and the round is
+                # reachable from it. A round watched WITHOUT its tournament
+                # (somebody sent one round's link) still surfaces, which is
+                # the case `belongsUnderTournaments` was added for.
+                #
+                # **`shown_t`, not `watch_t_ids`** — suppress only against a
+                # tournament row that was actually EMITTED. The two lists are
+                # filtered separately, so `?status=complete` on a live event
+                # drops the tournament row while keeping a finished round's;
+                # suppressing on the watch alone would have left that golfer
+                # looking at nothing.
+                if r.tournament_id and r.tournament_id in shown_t:
+                    seen_rounds.add(r.id)
+                    continue
                 results.append(_round_row(r))
                 seen_rounds.add(r.id)
 
-        # 2. Tournaments I'm a WATCHER of (whole-event, read-only).
-        watch_t_ids = list(
-            Watcher.objects.filter(phone=my_phone, tournament__isnull=False)
-            .values_list('tournament_id', flat=True))
-        if watch_t_ids:
-            for t in (
-                Tournament.objects.filter(id__in=watch_t_ids)
-                .exclude(account=request.user.account)
-                .select_related('account')
-                .prefetch_related('rounds__course')
-            ):
-                rounds = list(t.rounds.all())
-                t_status = ('complete'
-                            if rounds and all(rr.status == 'complete' for rr in rounds)
-                            else 'in_progress')
-                t_date = max((rr.date for rr in rounds if rr.date), default=None)
-                if not _status_ok(t_status) or not _recent_enough(t_status, t_date):
-                    continue
-                results.append({
-                    'id':            t.id,
-                    'date':          rounds[0].date if rounds else None,
-                    'course_name':   rounds[0].course.name if rounds else '',
-                    'status':        t_status,
-                    'active_games':  t.active_games,
-                    'group_label':   t.name,
-                    'your_name':     None,
-                    'is_tournament': True,
-                })
-        return Response(results)
+        return Response(results + t_rows)
 
 
 class ScoringForMeView(APIView):

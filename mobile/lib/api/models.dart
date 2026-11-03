@@ -811,6 +811,12 @@ class SharedRoundSummary {
   final String? tournamentName;
   final int?    roundNumber;
 
+  /// A Foursome Play round, whose board is the tournament's team table.
+  /// Read ONLY through `roundLeaderboardRoute` — the generic round board
+  /// builds its tabs from the round's games, a Foursome Play round has none,
+  /// and it falls through to "No championship games configured".
+  final bool    isTeamPlayRound;
+
   /// Where this row belongs: the Tournaments list, or Casual Rounds.
   ///
   /// The one place the two screens ask, so they cannot drift into showing a
@@ -841,6 +847,7 @@ class SharedRoundSummary {
     this.tournamentId,
     this.tournamentName,
     this.roundNumber,
+    this.isTeamPlayRound = false,
   });
 
   factory SharedRoundSummary.fromJson(Map<String, dynamic> j) =>
@@ -860,6 +867,7 @@ class SharedRoundSummary {
         tournamentId:   j['tournament_id'] as int?,
         tournamentName: j['tournament_name'] as String?,
         roundNumber:    j['round_number'] as int?,
+        isTeamPlayRound: j['is_team_play_round'] as bool? ?? false,
       );
 }
 

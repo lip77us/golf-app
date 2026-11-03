@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../screens/tournament_leaderboard_screen.dart';
+import 'round_leaderboard_route.dart';
 
 /// Open a round shared with me (a tournament / multi-group skins game a friend
 /// or TD added me to). First calls `join` — which idempotently mirrors the TD
@@ -48,6 +49,18 @@ Future<void> openWatchedRound(
           tournamentId: r.id, tournamentName: r.groupLabel),
     ));
   } else {
-    nav.pushNamed('/leaderboard', arguments: r.id);
+    // **Through the shared helper, not `/leaderboard` by hand.** A Foursome
+    // Play round carries no round-level games, so the generic board finds no
+    // tabs and draws "No championship games configured" over an event that is
+    // configured fine. That was fixed on 30 Oct 2026 for the round hub and
+    // this third caller slipped past, because the guard written with it only
+    // read `round_screen.dart` — the same "reachable from one screen and not
+    // the other" shape this repo keeps hitting.
+    final dest = roundLeaderboardRoute(
+      roundId         : r.id,
+      isTeamPlayRound : r.isTeamPlayRound,
+      tournamentId    : r.tournamentId,
+    );
+    nav.pushNamed(dest.route, arguments: dest.arguments);
   }
 }

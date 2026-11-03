@@ -9084,3 +9084,62 @@ exception type because an httpx message can carry the URL, which is a credential
 Sign-in rarely knows the name, so profile setup posts a second message.
 Device comes from `platform` on `/auth/otp/verify/` (sent from the next build on),
 else a push token, which only helps Android because iOS tokens never register.
+
+## One event, one Observing card — and the third leaderboard caller
+
+Reported from Castlewood, 2 Nov 2026: *"there were two versions of the
+tournament that both watchers saw."* Two identical cards, told apart only by
+`· Round 1`.
+
+**Two correct fixes collided.** A tournament watch link writes **two
+`Watcher` rows** — one round, one tournament — because `tournament_for_reader`
+filters on `Watcher.tournament_id`, which a round row can never satisfy (the
+11 Oct "No such tournament" fix). That was invisible while the two rows
+surfaced on different lists. Then `belongsUnderTournaments`
+(`isTournament || tournamentId != null`) moved watched tournament ROUNDS under
+Tournaments, so a TD's watcher would stop hunting a 40 Balls round under
+Rounds — and both rows started matching the same list.
+
+`SharedRoundsView` now builds the tournament rows **first** and drops a round
+row whose tournament is already shown. Resolved on the server because it is
+one line there and reaches every installed build at once.
+
+- **Suppressed against `shown_t`, not `watch_t_ids`** — only a tournament row
+  actually EMITTED. The two lists filter separately, so `?status=complete` on
+  a live event drops the tournament row while keeping a finished round's;
+  suppressing on the watch alone would leave that golfer looking at nothing.
+- **A round watched WITHOUT its tournament still surfaces** (somebody sent one
+  round's link), which is the case `belongsUnderTournaments` exists for.
+- The response keeps its long-standing order — rounds, then tournaments — so
+  the rows are built first and appended last.
+
+### `openWatchedRound` was the third caller to push a board by hand
+
+Found in the same file and fixed with it. `utils/shared_round.dart` pushed
+`/leaderboard` directly, so a watcher opening a **Foursome Play** round got
+*"No championship games configured"* — the exact bug
+`utils/round_leaderboard_route.dart` was extracted for on 30 Oct, whose own
+docstring already says *"a screen-private helper is only shared by the call
+sites that happen to be in that screen."* The guard written with it read only
+`round_screen.dart`, so it could say nothing about this one.
+
+`_round_row` now carries **`is_team_play_round`**, because the helper takes
+FACTS and the watcher path had no way to ask. The guard is a LOOP over every
+file that opens a round board, so the next caller fails there rather than
+shipping.
+
+**Not swept: the nine dedicated play screens**, which push `/leaderboard`
+directly and are right to — Wolf, Points 5-3-1, Rabbit, Survivor, Skins,
+Nassau, Triple Nassau, Quota Nassau and Sequoya 3s are casual games on one
+foursome and can never be a Foursome Play round. Same reasoning the force-
+complete flow records for `completeRound`.
+
+**Still unexplained: the second card was reported BLANK.** The data says it
+should draw — tournament 71 carries `low_net` and a championship config — so
+the likeliest reading is that the championship was unconfigured when the
+watchers looked, which is the `_NotSetUpYet` state rather than a defect. Only
+the duplicate was fixed.
+
+Tests: `OneEventIsOneObservingCardTests` (`api/test_shared_rounds.py`, 6 —
+both halves mutation-verified) and the widened `every caller goes through it`
+group in `mobile/test/round_leaderboard_route_test.dart`.

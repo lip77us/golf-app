@@ -45,6 +45,32 @@ void main() {
     });
   });
 
+  group('every caller goes through it', () {
+    // **Widened after a THIRD caller was found**, 3 Nov 2026: a watcher
+    // opening an Observing card went through `openWatchedRound`, which pushed
+    // `/leaderboard` by hand. The guard written on 30 Oct read only
+    // `round_screen.dart`, so it could say nothing about it — the same
+    // "reachable from one screen and not the other" shape this repo keeps
+    // hitting. Every file that opens a round board is listed here, so the
+    // next one fails rather than ships.
+    const openers = [
+      'lib/screens/round_screen.dart',
+      'lib/utils/shared_round.dart',
+    ];
+
+    for (final path in openers) {
+      test('$path pushes no leaderboard route by hand', () {
+        final src = File(path).readAsStringSync();
+        for (final literal in ["'/leaderboard'", "'/team-play-leaderboard'"]) {
+          expect(src.contains('pushNamed($literal'), isFalse,
+              reason: '$literal is pushed directly in $path');
+        }
+        expect(src, contains('roundLeaderboardRoute('),
+            reason: '$path opens a round board without the shared decision');
+      });
+    }
+  });
+
   group('one place decides it', () {
     final src = File('lib/screens/round_screen.dart').readAsStringSync();
 

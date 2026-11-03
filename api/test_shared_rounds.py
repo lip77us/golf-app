@@ -223,3 +223,102 @@ class AWatchedTournamentRoundNamesItsEventTests(TestCase):
         self.round_a.tournament = t
         self.round_a.save(update_fields=['tournament'])
         self.assertEqual(self._row()['id'], self.round_a.id)
+
+
+class OneEventIsOneObservingCardTests(TestCase):
+    """A tournament watch link produced TWO Observing cards for one event.
+
+    Reported 2 Nov 2026 off a Castlewood tournament: two identical rows under
+    Observing, told apart only by the `· Round 1` on one of them.
+
+    Two correct fixes collided. `WatchTokenResolveView` writes **two**
+    `Watcher` rows for a tournament link — the round's and the tournament's —
+    because `tournament_for_reader` filters on `tournament_id`, which a round
+    row can never satisfy (11 Oct 2026). That was invisible while the two rows
+    surfaced on different LISTS; then `belongsUnderTournaments` moved watched
+    tournament rounds under Tournaments (20 Oct 2026) and both started
+    matching it.
+
+    The tournament row wins: the event's board is the right destination and
+    the round is reachable from it.
+    """
+
+    def setUp(self):
+        self.acct_a = Account.objects.create(name='TPSGC')
+        self.course = Course.objects.create(account=self.acct_a, name='Castlewood')
+        self.tourn = Tournament.objects.create(
+            account=self.acct_a, name='TPSGC Castlewood Hill',
+            start_date=timezone.now().date(), active_games=['low_net'],
+        )
+        self.round_a = Round.objects.create(
+            account=self.acct_a, course=self.course, status='in_progress',
+            tournament=self.tourn, round_number=1, active_games=[],
+        )
+        self.acct_b, self.user_b = _user_with_phone(
+            'Watcher Co', 'wendy', '+15105550199')
+        self.client = APIClient()
+        self.client.force_authenticate(self.user_b)
+        self.url = reverse('api-shared-rounds')
+
+    def _watch_the_link(self):
+        """Exactly what `WatchTokenResolveView` writes for a tournament link."""
+        Watcher.objects.create(round=self.round_a, tournament=None,
+                               phone='+15105550199', name='W')
+        Watcher.objects.create(round=None, tournament=self.tourn,
+                               phone='+15105550199', name='W')
+
+    def test_a_tournament_link_gives_one_card_not_two(self):
+        self._watch_the_link()
+        rows = self.client.get(self.url).data
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0]['is_tournament'])
+        self.assertEqual(rows[0]['id'], self.tourn.id)
+
+    def test_a_round_watched_WITHOUT_its_tournament_still_shows(self):
+        """Somebody sent one round's link. That is the case
+        `belongsUnderTournaments` was added for and it must not regress."""
+        Watcher.objects.create(round=self.round_a, tournament=None,
+                               phone='+15105550199', name='W')
+        rows = self.client.get(self.url).data
+        self.assertEqual(len(rows), 1, rows)
+        self.assertFalse(rows[0]['is_tournament'])
+        self.assertEqual(rows[0]['id'], self.round_a.id)
+        self.assertEqual(rows[0]['tournament_id'], self.tourn.id)
+
+    def test_the_round_is_suppressed_only_when_the_event_row_is_SHOWN(self):
+        """`shown_t`, not the watch list.
+
+        The two halves are filtered separately, so a status filter can drop
+        the tournament row while keeping the round's. Suppressing on the watch
+        alone would leave the golfer looking at nothing.
+        """
+        self.round_a.status = 'complete'
+        self.round_a.save(update_fields=['status'])
+        Round.objects.create(          # a second, still-live round
+            account=self.acct_a, course=self.course, status='in_progress',
+            tournament=self.tourn, round_number=2, active_games=[],
+        )
+        self._watch_the_link()
+        # The event reads in_progress, so ?status=complete drops its row…
+        rows = self.client.get(self.url, {'status': 'complete'}).data
+        # …and the finished round must survive rather than vanish with it.
+        self.assertEqual(len(rows), 1, rows)
+        self.assertFalse(rows[0]['is_tournament'])
+        self.assertEqual(rows[0]['id'], self.round_a.id)
+
+    def test_a_casual_watch_is_untouched(self):
+        _, casual = _watched_round(
+            'Other Club', 'Tilden', '+15105550199', status='in_progress')
+        self._watch_the_link()
+        rows = self.client.get(self.url).data
+        self.assertEqual({r['id'] for r in rows}, {self.tourn.id, casual.id})
+
+    def test_rounds_still_come_before_tournaments(self):
+        """The response order is long-standing; building the tournament rows
+        first must not reorder what the lists draw."""
+        _, casual = _watched_round(
+            'Other Club', 'Tilden', '+15105550199', status='in_progress')
+        self._watch_the_link()
+        rows = self.client.get(self.url).data
+        self.assertFalse(rows[0]['is_tournament'])
+        self.assertTrue(rows[-1]['is_tournament'])
