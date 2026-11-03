@@ -9143,3 +9143,143 @@ the duplicate was fixed.
 Tests: `OneEventIsOneObservingCardTests` (`api/test_shared_rounds.py`, 6 —
 both halves mutation-verified) and the widened `every caller goes through it`
 group in `mobile/test/round_leaderboard_route_test.dart`.
+
+## The sparse skins pool — a tournament side game, on the draw you already have
+
+Paul, 3 Nov 2026, after a 60-player event: *"The whole concept for a
+multi-group skins side game needs to change… all of the grouping info is in
+the 60 person tournament and there is no need to make me redo the groupings as
+an independent round."*
+
+**`MultiSkinsGame` was already exactly this** and had been since it was
+written: a `OneToOne` on the ROUND with an EXPLICIT roster, whose model
+docstring says each player "opts in individually" and "may belong to any
+foursome in this round". That is a sparse side game, twenty of sixty,
+described precisely. What was missing is that `multi_skins` carried
+`casual: true` and not `tournament: true`, so it appeared in no tournament
+picker and the only way to run one was to build a separate casual round and
+re-enter the draw by hand.
+
+**The whole watch-link apparatus is for a CASUAL pool and is not needed here.**
+Pasting `/watch/<token>/`, `MultiSkinsLinkedRound`, the overlap preview and the
+phone matching exist because a casual pool's participants play in *independent
+rounds* that have to be linked in. A tournament round already holds the whole
+field, so the scores are already on the cards the groups are keeping. Nothing
+is linked and nothing is re-grouped.
+
+So the feature is one catalog flag plus the rules that make a tournament
+different — and every one of those is about **not touching the TD's draw.**
+
+### `reconcile_pool_seating` does nothing on a tournament round
+
+The one genuinely dangerous part. On a casual round it prunes scoreless SOLO
+groups, because there it made those seats itself for a participant who turned
+out to play in a linked round. In a tournament a group of one is a real
+pairing — an odd field, a withdrawal — and the golfer in it is usually NOT in
+the pool, which is exactly the condition the prune reads as *dropped from the
+roster*. **Setting up a skins pool in a 60-player event would have deleted
+every scoreless solo group in it.** Seating is as wrong the other way: a new
+`Foursome` appended to a tournament round is a group nobody drew, with no tee
+time.
+
+### The roster is this round's own golfers, and three rules follow
+
+`valid_participant_ids` keeps a tournament pool to round members, and
+`not_in_round_ids` + the view REFUSE an outsider by name rather than dropping
+him silently — a TD who deliberately ticked somebody would otherwise save,
+find the name gone and have nothing to read. The on-app clause is the casual
+rule: an outsider there plays in his own round and that is how his scores are
+found. In a tournament he would ante into a pool he has no card in, could
+never win a skin and could never stop paying.
+
+On the client, keyed on one flag (`_isTournamentRound`):
+- **Nobody is ticked by default.** Sparse is the point; the casual default
+  stays all, because there the pool IS the round.
+- **Every seated golfer is eligible** — the "needs somebody on Halved on his
+  card" rule is about a casual multi-group round where each card needs its own
+  scorer. Paul's own distinction: *when skins is attached to groups that
+  already exist the group already has a scorer and the question does not
+  arise.* The server always agreed; the client was the stricter one.
+- **No "Add golfers" section**, and the hub's **"Groups & golfers" button is
+  hidden** — its re-grouping half goes through `setup_round`, which deletes
+  every foursome and rebuilds it.
+
+Plus what 60 names need: a search box above 12 golfers, All/None, rows banded
+by group in draw order, and `_cardMates`/`_groupOf` hoisted out of the row
+builder, where each was walking the whole draw once per row.
+
+### It settles with the tournament (Paul's call)
+
+`_skins_pool_pots` — **the only pot in `tournament_settlement` the whole field
+does not enter.** Every other one charges everybody who played; this one reads
+the roster. `OneToOne` on the round, so it appears once per round and a
+two-day event collects and pays twice, exactly as the group games do. Only the
+pool the round HOSTS: a tournament round can also be LINKED into a casual pool
+elsewhere, and that money belongs to that round's organiser.
+
+**Nobody is charged until a skin has been won.** Every hole tying is a real
+outcome of a pool with no carryover and it awards nothing, so twenty antes
+against no prize would show each golfer −$20 with no offsetting winner — not a
+pot, and it would block Settle. Round skins applies the same rule per segment,
+and its comment says why.
+
+### Two defects found on the way
+
+**The whole-dollar share.** `payout` was `round(share, 2)`, so three winners
+out of $400 took $133.33 each and the board promised $400. Now through
+`services.skins._whole_dollar_shares`, the same helper round skins settles
+with — done in the ENGINE because the settlement reads these figures and a pot
+that does not balance blocks Settle.
+
+**...and that helper INVENTS money if nobody has won.** It spreads a target
+across shares that already sum to it; handed all-zeros and a $60 pool it
+floored everything to nothing, found $60 unassigned and handed a dollar to each
+golfer in turn. Found by accident — a test fixture that set the pool up before
+playing the holes — and it is pinned now, because the settlement pot skips that
+case before the summary matters, so nothing else would reach it. Round skins is
+safe from the other end.
+
+### 82 queries a score, now 43 and flat in the size of the pool
+
+Measured at 15 groups and 20 participants, the way the team-play slowdown was,
+because the pool recomputes on **every posted score**. Three causes, none in
+shared code: `_pool_gross_and_pars` read the gross with ONE QUERY PER
+PARTICIPANT; `_resolve_participant_memberships` is three round-wide queries and
+one pass asked for it twice; and `build_score_index` reads each foursome's
+round for the net-double-bogey flag, which was a query per group until the
+membership map started prefetching `foursome__round`.
+
+Now **flat in participants** — 20 in the pool and 60 in it cost the same — and
+linear only in the number of GROUPS holding one, about two queries each,
+because `build_score_index` is per foursome by design. `PoolQueryCostTests`
+pins the ceiling AND the flatness, and the flatness is the one that matters: a
+per-participant query reintroduced anywhere below `recalc_pools_for_round`
+fails there and nowhere else.
+
+**A batched `build_score_index` would help every game in the app** and is its
+own piece of work.
+
+### Not done
+
+- **The two bugs Paul reported in the casual group mover** — the list does not
+  scroll, so the bottom groups cannot be adjusted, and a dialog with no escape
+  loses every golfer added when you back out of the wizard. Left alone on his
+  say-so ("we should leave that for now"), because that flow is the one this
+  supersedes for a tournament. **They are still live for a casual pool.**
+- **Not renamed to "Skins pool"**, tempting as that is inside a tournament:
+  the server's leaderboard label, the hub card and the screen title all say
+  Multi-Group Skins and a rename has to move all of them at once. The
+  settlement pot label follows the leaderboard's.
+- **Golfers joining themselves** — Paul chose TD-ticks. Self-join needs an
+  endpoint, a golfer-facing screen and a rule for when joining closes.
+- The pool shows on the ROUND's leaderboard, not the tournament board, which
+  is where Irish Rumble and 40 Balls already live.
+- **Sparse 40 Balls is next**, and it is a different shape: 40 Balls ranks
+  GROUPS, so sparse there means a subset of the groups rather than of the
+  golfers.
+
+Tests: `api/test_tournament_skins_pool.py` (10), `SparseSkinsPoolTests`
+(`scoring/tests/test_tournament_settlement.py`, 6),
+`mobile/test/tournament_skins_pool_test.dart` (11), and two in
+`scoring/tests/test_multi_skins.py` for the money. Every guard was checked by
+making it fail.

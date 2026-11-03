@@ -285,6 +285,61 @@ def _group_game_pots(tournament):
     return pots
 
 
+def _skins_pool_pots(tournament):
+    """
+    The round-level skins pool — **the one pot in here that is not entered by
+    the whole field.**
+
+    Every other pot charges everybody who played: a group game ranks all the
+    groups, the championship is the event. A skins pool is SPARSE — the TD
+    ticks who is in, twenty of sixty at twenty dollars — so the entries are
+    the participants and nobody else. That is the only thing that makes it
+    different, and it is why it reads the roster rather than
+    `_real_player_ids`.
+
+    `MultiSkinsGame` is a `OneToOne` on the round, so this appears once per
+    round and a two-day event running one each day collects and pays twice,
+    exactly as the group games do.
+
+    Only the pool this round HOSTS. A tournament round can also be LINKED
+    into a casual pool hosted elsewhere (somebody pasted its watch link); that
+    pool's money belongs to that round's organiser and has no business in this
+    tournament's cash-out.
+
+    A pool with no stake is skipped rather than drawn empty: a no-money game
+    is a real state here (the setup screen has an explicit $0 opt-in) and a
+    pot with nothing in and nothing out is a line that invites the question of
+    where the money went.
+    """
+    from services.multi_skins import multi_skins_summary
+
+    pots = []
+    for round_obj in tournament.rounds.order_by('round_number'):
+        if getattr(round_obj, 'multi_skins_game', None) is None:
+            continue
+        summary = multi_skins_summary(round_obj)
+        players = summary.get('players') or []
+        ante    = float((summary.get('money') or {}).get('bet_unit') or 0)
+        if not players or ante <= 0:
+            continue
+        # **Nobody is charged until a skin has been won.** Every hole tying
+        # is a real outcome of a pool with no carryover, and it awards
+        # nothing — so collecting twenty antes against no prize would show
+        # each golfer -$20 with no offsetting winner, which is not a pot and
+        # would block Settle. Round skins applies the same rule per segment.
+        if not any((row.get('skins_won') or 0) for row in players):
+            continue
+        n   = round_obj.round_number
+        pot = _Pot('multi_skins', f'Multi-Group Skins · R{n}', n)
+        pot.enter([row['player_id'] for row in players], ante)
+        for row in players:
+            won = row.get('skins_won') or 0
+            pot.pay(row['player_id'], row.get('payout') or 0,
+                    detail=('1 skin' if won == 1 else f'{won} skins'))
+        pots.append(pot)
+    return pots
+
+
 def _foursome_id_for_group(round_obj, group_number):
     fs = round_obj.foursomes.filter(group_number=group_number).first()
     return fs.id if fs else None
@@ -447,6 +502,7 @@ def tournament_settlement(tournament) -> dict:
     pots = [p for p in [champ] if p is not None]
     pots += _mini_singles_pots(tournament, carved)
     pots += _group_game_pots(tournament)
+    pots += _skins_pool_pots(tournament)
     pots += _dream_round_pots(tournament, field_ids)
     day_bet = _day_bet_pot(tournament)
     if day_bet is not None:

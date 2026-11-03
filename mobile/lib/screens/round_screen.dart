@@ -277,7 +277,11 @@ class _RoundScreenState extends State<RoundScreen> {
                 ListTile(
                   leading: const Icon(Icons.attach_money),
                   title: const Text('Multi-Group Skins'),
-                  subtitle: const Text('Round-level pool across all groups'),
+                  // Not "across all groups": in a tournament it is played by
+                  // whoever is in it, which is the whole point of it there.
+                  subtitle: Text(round.hasSkinsPool
+                      ? 'One pool across the groups'
+                      : 'Tick who is in to set it up'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).pushNamed(
                     '/multi-skins', arguments: widget.roundId,
@@ -297,7 +301,13 @@ class _RoundScreenState extends State<RoundScreen> {
                           arguments: {'id': widget.roundId, 'returnToHub': true},
                         ).then((_) => _reloadRound()),
                         icon: const Icon(Icons.tune, size: 18),
-                        label: const Text('Edit configuration'),
+                        // *Set up* before it is configured and *Edit*
+                        // after. The switch and the roster are two separate
+                        // moves — a TD can turn the pool on in the create
+                        // wizard, before there is a field to tick.
+                        label: Text(round.hasSkinsPool
+                            ? 'Edit configuration'
+                            : 'Set up the pool'),
                       ),
                     ),
                   ),
@@ -307,7 +317,15 @@ class _RoundScreenState extends State<RoundScreen> {
                 // and a golfer turning up on the first tee could not be taken
                 // at all unless he was already on Halved (the pool roster
                 // above seats an on-app golfer; it cannot seat a guest).
-                if (!isComplete)
+                //
+                // **Casual only.** That screen re-grouping half goes through
+                // `setup_round`, which deletes every foursome in the round
+                // and rebuilds it — on a tournament round that is the TD's
+                // DRAW, with his pairings and his tee times in it, and the
+                // way to change it is Edit Groups. The pool does not need it
+                // either: a tournament round already holds the whole field,
+                // which is the whole reason it is only a roster here.
+                if (!isComplete && !isTournamentRound)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                     child: SizedBox(

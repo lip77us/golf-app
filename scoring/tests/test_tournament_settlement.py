@@ -84,6 +84,10 @@ class SettlementBase(TestCase):
         if getattr(round_obj, 'irish_rumble_config', None) is not None:
             from services.irish_rumble import calculate_irish_rumble
             calculate_irish_rumble(round_obj)
+        # The skins pool persists its per-hole winners too, and the score
+        # endpoint recomputes every pool a round hosts or is linked into.
+        from services.multi_skins import recalc_pools_for_round
+        recalc_pools_for_round(round_obj)
 
     def _close(self):
         for r in self.rounds:
@@ -533,3 +537,116 @@ class ProvisionalChecksTests(TestCase):
         self.assertFalse(data['provisional'])
         joined = ' '.join(data['blocking'])
         self.assertIn('payout table', joined)
+
+
+class SparseSkinsPoolTests(SettlementBase):
+    """A skins pool inside a tournament — the one pot the whole field does
+    not enter.
+
+    The TD ticks who is in; their scores come off the cards their groups are
+    already keeping, so there is no second round to set up and no re-grouping.
+    Three of eight here, deliberately spanning BOTH groups, because a pool
+    that sat inside one foursome would be a foursome's own side bet and would
+    be settling in the wrong place.
+    """
+
+    def _pool(self, round_obj, names, ante=20.00, **kw):
+        from services.multi_skins import (
+            calculate_multi_skins, setup_multi_skins,
+        )
+        ids = [self.players[self.NAMES.index(n)].id for n in names]
+        setup_multi_skins(round_obj, participant_ids=ids,
+                          handicap_mode='net', bet_unit=ante, **kw)
+        calculate_multi_skins(round_obj)
+        return ids
+
+    def test_only_the_participants_pay_in(self):
+        ids = self._pool(self.rounds[0], ['Petersen', 'Gunst', 'Brown'])
+        self._play(self.rounds[0])
+        self._play(self.rounds[1])
+        self._close()
+
+        pot = self._by_key(tournament_settlement(self.tourn))['multi_skins·1']
+        # Three antes, not eight. The pool is the only sparse pot in here.
+        self.assertEqual(pot['entries_in'], 60.0)
+        self.assertTrue(pot['balanced'], pot)
+
+        # And nobody else is charged: the five golfers who are not in the
+        # pool carry no entry line for it.
+        # A golfer's own lines name the game by its LABEL — there is no key
+        # per line, because the receipt reads these as sentences.
+        charged = set()
+        for g in tournament_settlement(self.tourn)['golfers']:
+            for line in g.get('entries', []):
+                if line['game'] == 'Multi-Group Skins · R1':
+                    charged.add(g['player_id'])
+        self.assertEqual(charged, set(ids))
+
+    def test_it_spans_the_groups_and_pays_the_skins_won(self):
+        self._pool(self.rounds[0], ['Petersen', 'Gunst', 'Brown'])
+        self._play(self.rounds[0])
+
+        from services.multi_skins import multi_skins_summary
+        summary = multi_skins_summary(self.rounds[0])
+        # Petersen pars everything; the other two bogey the early holes, so
+        # he takes those outright and the rest die in a three-way tie.
+        won = {p['short_name']: p['skins_won'] for p in summary['players']}
+        self.assertGreater(won['Peter'], 0, won)
+        self.assertEqual(sum(won.values()), summary['money']['total_skins'])
+        # Two different groups contributed scores to one pool.
+        self.assertEqual(
+            len({p['group_number'] for p in summary['players']}), 2)
+
+        self._play(self.rounds[1])
+        self._close()
+        pot = self._by_key(tournament_settlement(self.tourn))['multi_skins·1']
+        self.assertEqual(pot['prizes_out'], 60.0)
+
+    def test_a_pool_appears_once_per_round(self):
+        self._pool(self.rounds[0], ['Petersen', 'Gunst', 'Brown'])
+        self._pool(self.rounds[1], ['Petersen', 'Gunst', 'Brown'], ante=5.00)
+        self._play(self.rounds[0])
+        self._play(self.rounds[1])
+        self._close()
+
+        keys = self._by_key(tournament_settlement(self.tourn))
+        self.assertIn('multi_skins·1', keys)
+        self.assertIn('multi_skins·2', keys)
+        self.assertEqual(keys['multi_skins·2']['entries_in'], 15.0)
+
+    def test_a_no_money_pool_draws_no_pot(self):
+        """$0 is an explicit opt-in on the setup screen, so it is a real
+        state — and a pot with nothing in and nothing out is a line that
+        invites the question of where the money went."""
+        self._pool(self.rounds[0], ['Petersen', 'Gunst', 'Brown'], ante=0)
+        self._play(self.rounds[0])
+        self._play(self.rounds[1])
+        self._close()
+
+        keys = self._by_key(tournament_settlement(self.tourn))
+        self.assertNotIn('multi_skins·1', keys)
+
+    def test_everything_still_sums_to_zero(self):
+        self._pool(self.rounds[0], ['Petersen', 'Gunst', 'Brown'])
+        self._play(self.rounds[0])
+        self._play(self.rounds[1])
+        self._close()
+
+        s = tournament_settlement(self.tourn)
+        self.assertTrue(s['sum_zero'],
+                        (s['total_collected'], s['total_paid']))
+        self.assertTrue(s['can_settle'], s['blocking'])
+
+    def test_a_foursome_skins_game_is_still_out_of_scope(self):
+        """The round-level pool is the TD's; a group's own skins is not.
+        Both are called skins, so the distinction is worth pinning."""
+        from games.models import SkinsGame
+        SkinsGame.objects.create(foursome=self.rounds[0].foursomes.first())
+        self._pool(self.rounds[0], ['Petersen', 'Gunst', 'Brown'])
+        self._play(self.rounds[0])
+        self._play(self.rounds[1])
+        self._close()
+
+        keys = [g['key'] for g in tournament_settlement(self.tourn)['games']]
+        self.assertIn('multi_skins', keys)
+        self.assertNotIn('skins', keys)

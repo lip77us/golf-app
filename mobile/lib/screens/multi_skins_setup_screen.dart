@@ -59,6 +59,15 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
   /// player_id → checked
   final Map<int, bool> _participants = {};
 
+  /// Narrows the roster. A 60-player tournament field is a scroll, and the
+  /// TD is looking for named golfers rather than reading the list.
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _query = '';
+
+  /// True on a tournament round, which changes three things about this
+  /// screen — see [_isTournamentRound].
+  bool _isTournament = false;
+
   /// Connected (on-app) golfers NOT in this round — they ante into the pool but
   /// play in their own round, which the host links to this pool from its hub
   /// (docs/multi-skins-cross-round.md). Only Halved members can be matched
@@ -86,8 +95,29 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
   @override
   void dispose() {
     _betCtrl.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
+
+  /// **A tournament pool is a different question from a casual one**, and
+  /// three things follow from it:
+  ///
+  /// 1. *Nobody is ticked by default.* A casual pool is the round's whole
+  ///    point, so everybody is in; a tournament pool is SPARSE — twenty of
+  ///    sixty — and defaulting to all would mean unticking forty.
+  /// 2. *Every seated golfer is eligible.* The "needs somebody on Halved on
+  ///    his card" rule is about a CASUAL multi-group round, where each card
+  ///    needs its own scorer. A tournament group already has one, which is
+  ///    Paul's own distinction: *when skins is attached to groups that
+  ///    already exist the group already has a scorer and the question does
+  ///    not arise.* The server has always agreed — `valid_participant_ids`
+  ///    admits host-round members, login-less included.
+  /// 3. *No golfer from outside the round.* That section exists for a pool
+  ///    whose other participants play in their own rounds and link in by
+  ///    watch link. A tournament round holds the whole field, so an outsider
+  ///    would ante into a pool he has no card in — and the server refuses
+  ///    him.
+  bool get _isTournamentRound => _isTournament;
 
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
@@ -107,6 +137,8 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
       // eligible. Fetch first so the roster defaults + gating below can use it.
       // Best-effort: a failed fetch leaves _onAppIds empty (nothing eligible),
       // and hides the external section.
+      _isTournament =
+          context.read<RoundProvider>().round?.tournamentId != null;
       final memberIds = _allMemberships.map((m) => m.player.id).toSet();
       try {
         final all = await client.getPlayers();
@@ -131,10 +163,15 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
       // members "(login-less OK)".
       final existingIds = _summary!.players.map((p) => p.playerId).toSet();
       final mates = _cardMates;
+      // Default: everybody on a casual round, NOBODY on a tournament one.
+      // See `_isTournamentRound` — sparse is the point there, and ticking
+      // sixty so the TD can untick forty is the wrong way round.
+      final defaultOn = !_isTournament;
       for (final m in _allMemberships) {
         final eligible = _canJoin(m.player.id, mates);
         _participants[m.player.id] = eligible &&
-            (existingIds.isEmpty ? true : existingIds.contains(m.player.id));
+            (existingIds.isEmpty ? defaultOn
+                                 : existingIds.contains(m.player.id));
       }
       for (final g in _externalGolfers) {
         _participants[g.id] = existingIds.contains(g.id);
@@ -196,11 +233,48 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
     return out;
   }
 
-  bool _canJoin(int playerId, Map<int, List<int>> mates) => canJoinPool(
+  bool _canJoin(int playerId, Map<int, List<int>> mates) =>
+      // In a tournament the groups already exist and already have a scorer,
+      // so the card-mate rule has nothing to decide — point 2 of
+      // `_isTournamentRound`.
+      _isTournament ||
+      canJoinPool(
         isOnApp: _onAppIds.contains(playerId),
         cardMatesOnApp:
             (mates[playerId] ?? const []).map(_onAppIds.contains),
       );
+
+  /// The roster in the order a TD reads a draw — by group, then by name. A
+  /// casual pool keeps card order, which is how its own screens list it.
+  List<Membership> get _rosterInOrder {
+    final out = [..._allMemberships];
+    if (_isTournament) {
+      final g = _groupOf;
+      out.sort((a, b) {
+        final ga = g[a.player.id] ?? 1 << 20;
+        final gb = g[b.player.id] ?? 1 << 20;
+        return ga != gb
+            ? ga.compareTo(gb)
+            : a.player.name.toLowerCase().compareTo(b.player.name.toLowerCase());
+      });
+    }
+    return out;
+  }
+
+  bool _matchesQuery(String name) =>
+      _query.isEmpty || name.toLowerCase().contains(_query);
+
+  void _setAll(bool on) => setState(() {
+        final mates = _cardMates;
+        for (final m in _allMemberships) {
+          _participants[m.player.id] = on && _canJoin(m.player.id, mates);
+        }
+        if (!on) {
+          for (final g in _externalGolfers) {
+            _participants[g.id] = false;
+          }
+        }
+      });
 
   List<Membership> get _allMemberships {
     final rp = context.read<RoundProvider>();
@@ -300,8 +374,13 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text('Round-level skins pool. Lowest score on each hole wins '
-                  '1 skin; tied holes die (no carryover).',
+              Text(
+                  _isTournamentRound
+                      ? 'A skins pool across the groups, played by whoever '
+                          'is in it. Lowest score on each hole wins 1 skin; '
+                          'tied holes die (no carryover).'
+                      : 'Round-level skins pool. Lowest score on each hole '
+                          'wins 1 skin; tied holes die (no carryover).',
                   style: Theme.of(context).textTheme.bodyMedium),
               const SizedBox(height: 16),
 
@@ -371,40 +450,136 @@ class _MultiSkinsSetupScreenState extends State<MultiSkinsSetupScreen> {
               // is anteing in, which is a question about golfers; who shares
               // a card is the Groups screen's. A guest's row names his card
               // because for him the two questions meet.
-              Text('Participants',
-                  style: Theme.of(context).textTheme.titleSmall),
+              Row(children: [
+                Expanded(
+                  child: Text(
+                    _isTournamentRound
+                        // The field size is the thing that makes it sparse,
+                        // so both numbers are in the heading.
+                        ? 'In the pool — $_participantCount of '
+                            '${_allMemberships.length}'
+                        : 'Participants',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                // Plain words, because "Select all" on a filtered list is
+                // ambiguous and these act on the WHOLE field either way.
+                TextButton(
+                    onPressed: () => _setAll(true), child: const Text('All')),
+                TextButton(
+                    onPressed: () => _setAll(false), child: const Text('None')),
+              ]),
+              if (_isTournamentRound) ...[
+                Text(
+                  'Tick whoever is in. Their scores come off the cards their '
+                  'groups are already keeping — there is nothing else to set '
+                  'up and no re-grouping to do.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 8),
+              ],
+              // A field this size is searched, not read.
+              if (_allMemberships.length > 12)
+                TextField(
+                  controller: _searchCtrl,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    hintText: 'Find a golfer',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () => setState(() {
+                              _searchCtrl.clear();
+                              _query = '';
+                            }),
+                          ),
+                  ),
+                  onChanged: (v) =>
+                      setState(() => _query = v.trim().toLowerCase()),
+                ),
               const SizedBox(height: 4),
-              for (final m in _allMemberships)
-                Builder(builder: (_) {
-                  final mates = _cardMates;
-                  final onApp = _onAppIds.contains(m.player.id);
+              // Hoisted out of the rows: both of these walk every foursome,
+              // and inside a 60-row builder that is 60 walks of the draw.
+              ...(() {
+                final mates   = _cardMates;
+                final groupOf = _groupOf;
+                final rows    = [
+                  for (final m in _rosterInOrder)
+                    if (_matchesQuery(m.player.name)) m,
+                ];
+                if (rows.isEmpty) {
+                  return <Widget>[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text('Nobody in this round matches “$_query”.',
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ),
+                  ];
+                }
+                int? lastGroup;
+                final out = <Widget>[];
+                for (final m in rows) {
+                  final onApp   = _onAppIds.contains(m.player.id);
                   final canJoin = _canJoin(m.player.id, mates);
-                  final group = _groupOf[m.player.id];
-                  return CheckboxListTile(
+                  final group   = groupOf[m.player.id];
+                  // Grouped by card in a tournament, because that is how a
+                  // draw is read and how the TD knows who he is looking at.
+                  // Suppressed while searching: a one-row band per match is
+                  // noise, and the row's own line names the group.
+                  if (_isTournamentRound && _query.isEmpty &&
+                      group != lastGroup) {
+                    lastGroup = group;
+                    out.add(Padding(
+                      padding: const EdgeInsets.only(top: 10, bottom: 2),
+                      child: Text('Group ${group ?? '?'}',
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelMedium
+                              ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant)),
+                    ));
+                  }
+                  out.add(CheckboxListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                     title: Text(m.player.name),
                     // A guest says WHO keeps his score, because that is the
                     // whole question about him — and when nobody does, it
                     // says that instead of "not on Halved", which sounds like
-                    // a fact about him rather than something fixable.
-                    subtitle: Text(onApp
-                        ? 'Index ${m.player.handicapIndex}'
-                        : canJoin
-                            ? 'Index ${m.player.handicapIndex} · scored on '
-                                'Group ${group ?? '?'}\'s card'
-                            : 'Needs somebody on Halved on his card — see '
-                                'Groups'),
+                    // a fact about him rather than something fixable. In a
+                    // tournament nobody is in that state, so the line is the
+                    // index and his group.
+                    subtitle: Text(_isTournamentRound
+                        ? 'Index ${m.player.handicapIndex} · Group '
+                            '${group ?? '?'}'
+                        : onApp
+                            ? 'Index ${m.player.handicapIndex}'
+                            : canJoin
+                                ? 'Index ${m.player.handicapIndex} · scored '
+                                    'on Group ${group ?? '?'}\'s card'
+                                : 'Needs somebody on Halved on his card — '
+                                    'see Groups'),
                     value: canJoin && (_participants[m.player.id] ?? false),
                     onChanged: canJoin
                         ? (v) => setState(() {
                               _participants[m.player.id] = v ?? false;
                             })
                         : null,
-                  );
-                }),
+                  ));
+                }
+                return out;
+              })(),
               // ── Other Halved golfers (each gets their own group of one) ────
-              if (_externalGolfers.isNotEmpty) ...[
+              // Never in a tournament: the field is already here, and a
+              // golfer from outside it would ante into a pool he has no card
+              // in. The server refuses him by name.
+              if (!_isTournamentRound && _externalGolfers.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.only(top: 16, bottom: 2),
                   child: Text('Add golfers',

@@ -692,8 +692,27 @@ const List<GameMeta> kGameCatalog = [
   ),
   GameMeta(
     id          : GameIds.multiSkins,
+    // NOT renamed to "Skins pool", tempting as that is inside a tournament:
+    // the server's leaderboard label, the hub card and the screen title all
+    // say this, and a rename has to move all of them at once.
     displayName : 'Multi-Group Skins',
+    blurb     : "One skins pool across the groups, played by whoever is in "
+                "it — tick the names and their scores come off the cards "
+                "their groups are already keeping. Low score on a hole takes "
+                "the skin; any tie kills it.",
+    moneyNote : "Everyone in pays the same ante and the pool splits by skins "
+                "won. The ante and the roster are set on the Skins pool "
+                "screen.",
     casual      : true,
+    // **A tournament round is where this makes the most sense**, and it took
+    // until Nov 2026 to be offered there. The model has always been a
+    // round-level pool with an EXPLICIT roster whose golfers "may belong to
+    // any foursome in this round" — which is a SPARSE side game, twenty of
+    // sixty, described exactly. The watch-link machinery below is only for a
+    // CASUAL pool, whose participants play in separate rounds that have to be
+    // linked in; a tournament round already holds the whole field, so there
+    // is nothing to link and no re-grouping to do.
+    tournament  : true,
     // A round-wide pool is its own thing — no per-foursome side games.
     // (Using it AS a side game on another primary needs cross-group score
     // linkage, which is deferred.)

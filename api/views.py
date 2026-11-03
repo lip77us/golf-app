@@ -9392,8 +9392,24 @@ class MultiSkinsSetupView(APIView):
 
         from services.multi_skins import (
             setup_multi_skins, calculate_multi_skins, multi_skins_summary,
-            not_on_app_ids,
+            not_in_round_ids, not_on_app_ids,
         )
+        # **A tournament pool's roster is this round's own golfers.** The
+        # on-app clause below is for a CASUAL pool, whose other participants
+        # play in their own rounds and are linked in by watch link — that is
+        # how their scores are found. A tournament round already holds the
+        # whole field, so an outsider would ante into a pool he has no card
+        # in, and seating him would mean appending a group to the TD's draw.
+        if round_obj.tournament_id:
+            outside = not_in_round_ids(round_obj, d['participant_ids'])
+            if outside:
+                return Response(
+                    {'detail': 'A skins pool in a tournament is played by '
+                               'golfers in this round — their scores come '
+                               'off the cards their groups are already '
+                               'keeping. Add them to a group first.',
+                     'not_in_round_ids': outside},
+                    status=status.HTTP_400_BAD_REQUEST)
         # A golfer from OUTSIDE this round is found in his own round by
         # phone, so he has to be on Halved. One seated in THIS round is found
         # by his membership and needs no match — see `not_on_app_ids`, which

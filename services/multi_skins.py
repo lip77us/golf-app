@@ -129,7 +129,11 @@ def _resolve_participant_memberships(game: MultiSkinsGame) -> dict:
     memberships = (
         FoursomeMembership.objects
         .filter(foursome__round_id__in=source_ids, player__is_phantom=False)
-        .select_related('player', 'player__user', 'foursome', 'tee')
+        # `foursome__round` is not decoration: `build_score_index` reads the
+        # round's net-double-bogey flag off every foursome it is handed, so
+        # without it a 15-group round paid a query per group just for that.
+        .select_related('player', 'player__user', 'foursome',
+                        'foursome__round', 'tee')
     )
 
     candidates: dict = defaultdict(list)   # canon_id -> [membership]
@@ -264,6 +268,22 @@ def reconcile_pool_seating(game: MultiSkinsGame, handicap_allowance: float = 1.0
 
     Only ever deletes a group of ONE real player with NO scores, so a real
     playing group (the TD's foursome, a shared group) and history are safe.
+
+    **It does nothing at all on a TOURNAMENT round**, and that is the one rule
+    in here that is about safety rather than tidiness. A tournament round's
+    foursomes are the TD's DRAW: the groups are his pairings and his tee
+    times, so a scoreless group of one is a real pairing rather than a seat
+    this function made, and pruning it would quietly delete a golfer from the
+    field. Setting up a sparse skins pool in a 60-player event would have
+    taken out every scoreless solo group in it.
+
+    Seating is just as wrong the other way — a new `Foursome` appended to a
+    tournament round is a group nobody drew, with no tee time. It cannot
+    arise either, because `valid_participant_ids` keeps a tournament pool's
+    roster to golfers already in the round, so every participant is already
+    seated and there is nothing to reconcile. The guard is here as well
+    because the two rules are enforced in different functions and only one of
+    them is reached by every caller.
     """
     from django.db.models import Max
     from scoring.handicap import par_adjusted_playing_handicap
@@ -271,6 +291,8 @@ def reconcile_pool_seating(game: MultiSkinsGame, handicap_allowance: float = 1.0
     from tournament.models import Foursome, FoursomeMembership
 
     round_obj = game.round
+    if round_obj.tournament_id:
+        return
     host_id   = round_obj.id
     part_ids  = set(game.participants.values_list('id', flat=True))
     src       = _participant_source_rounds(game)
@@ -317,10 +339,24 @@ def reconcile_pool_seating(game: MultiSkinsGame, handicap_allowance: float = 1.0
 
 def valid_participant_ids(round_obj, participant_ids: list[int]) -> list[int]:
     """Filter participant_ids to those eligible for this pool: host-round
-    members (login-less OK) OR on-app Halved members (phone matches a User)."""
+    members (login-less OK) OR on-app Halved members (phone matches a User).
+
+    **On a TOURNAMENT round the roster is the round's own golfers and nobody
+    else.** The on-app clause exists for a CASUAL pool, where the other
+    participants play in their own rounds and are linked in by pasting the
+    host's watch link — it is how a federated pool finds their scores at all.
+    A tournament round already holds the whole field, so an outside golfer
+    there would ante into a pool he has no card in: he can never win a skin
+    and can never stop paying. He would also have to be SEATED to be scored,
+    and seating him means appending a group to the TD's draw.
+    """
     from accounts.models import User
 
     host_ids = set(_round_player_ids(round_obj))
+    if round_obj.tournament_id:
+        seen_t: set = set()
+        return [p for p in participant_ids
+                if p in host_ids and not (p in seen_t or seen_t.add(p))]
     keep: list[int] = []
     to_check = [pid for pid in participant_ids if pid not in host_ids]
     players = {p.id: p for p in Player.objects.filter(id__in=to_check)
@@ -398,6 +434,21 @@ def not_on_app_ids(participant_ids: list[int], round_obj=None) -> list[int]:
     return bad
 
 
+def not_in_round_ids(round_obj, participant_ids: list[int]) -> list[int]:
+    """Participant ids that are not playing in this round.
+
+    Only asked of a TOURNAMENT round, where `valid_participant_ids` keeps the
+    roster to the round's own golfers. It filters SILENTLY, which is right for
+    a stale id and wrong for a TD who deliberately ticked somebody: he would
+    save, see the name gone and have nothing to read. So the boundary refuses
+    and names them, and the service stays the backstop.
+    """
+    seated = set(_round_player_ids(round_obj))
+    seen: set = set()
+    return [p for p in participant_ids
+            if p not in seated and not (p in seen or seen.add(p))]
+
+
 def pool_overlap(game: MultiSkinsGame, round_obj) -> list[int]:
     """
     Canonical participant ids that are present in `round_obj` (matched by
@@ -433,7 +484,8 @@ def pool_overlap(game: MultiSkinsGame, round_obj) -> list[int]:
 # Score index across every source round (keyed by canonical participant id)
 # ---------------------------------------------------------------------------
 
-def _build_pool_score_index(game: MultiSkinsGame) -> dict:
+def _build_pool_score_index(game: MultiSkinsGame,
+                            member_by_canon: dict | None = None) -> dict:
     """
     Return {canonical_participant_id: {hole_number: adjusted_score}} unioned
     across the host + every linked round.
@@ -443,7 +495,8 @@ def _build_pool_score_index(game: MultiSkinsGame) -> dict:
     Strokes-Off-Low: anchored on the lowest participant handicap, applied
     using each player's own tee.
     """
-    member_by_canon = _resolve_participant_memberships(game)
+    if member_by_canon is None:
+        member_by_canon = _resolve_participant_memberships(game)
     if not member_by_canon:
         return {}
 
@@ -521,17 +574,27 @@ def _build_pool_so_index(game: MultiSkinsGame, member_by_canon: dict) -> dict:
 # Calculator
 # ---------------------------------------------------------------------------
 
-def _pool_gross_and_pars(game) -> tuple:
+def _pool_gross_and_pars(game, members: dict | None = None) -> tuple:
     """({cid: {hole: gross}}, {cid: {hole: par}}) keyed by CANONICAL id.
 
     The validation rules need gross and par, which the pool score index does
     not carry.  Both are read through `_resolve_participant_memberships`, so a
     golfer is measured against the card he actually played on -- his own tee in
     his own round, which in a cross-round pool is not the host's.
+
+    `members` is the already-resolved map when the caller has one. Resolving
+    it costs three round-wide queries, and one pass used to do it three times.
+
+    **The gross rows are ONE query**, keyed on the exact (foursome, player)
+    pairs. It was one query per participant, which is invisible in a
+    four-handed casual pool and twenty queries on every posted score in a
+    sixty-player tournament.
     """
-    members = _resolve_participant_memberships(game)
+    if members is None:
+        members = _resolve_participant_memberships(game)
     gross: dict = {}
     pars: dict = {}
+    want: dict = {}          # (foursome_id, player_id) -> canonical id
     for cid, m in members.items():
         if m is None:
             continue
@@ -540,11 +603,23 @@ def _pool_gross_and_pars(game) -> tuple:
             for h in ((m.tee.holes or []) if m.tee_id else [])
             if h.get('number')
         }
-        rows = HoleScore.objects.filter(
-            foursome_id=m.foursome_id, player_id=m.player_id,
-        ).only('hole_number', 'gross_score')
-        gross[cid] = {r.hole_number: r.gross_score for r in rows
-                      if r.gross_score is not None}
+        gross[cid] = {}
+        want[(m.foursome_id, m.player_id)] = cid
+    if not want:
+        return gross, pars
+    for r in (
+        HoleScore.objects
+        .filter(foursome_id__in={fs for fs, _ in want},
+                player_id__in={pl for _, pl in want})
+        .exclude(gross_score=None)
+        .values('foursome_id', 'player_id', 'hole_number', 'gross_score')
+    ):
+        # The pair filter is a product, so a golfer who also appears in
+        # another source foursome would match there too — `want` is what
+        # keeps each canonical id reading only the card he is bound to.
+        cid = want.get((r['foursome_id'], r['player_id']))
+        if cid is not None:
+            gross[cid][r['hole_number']] = r['gross_score']
     return gross, pars
 
 
@@ -559,8 +634,11 @@ def _calculate_game(game: MultiSkinsGame) -> list:
         game.save(update_fields=['status'])
         return []
 
-    score_index = _build_pool_score_index(game)   # keyed by canonical id
-    gross_index, par_index = _pool_gross_and_pars(game)
+    # Resolved ONCE and handed down. It is three round-wide queries, and
+    # this pass asked for it twice before.
+    members     = _resolve_participant_memberships(game)
+    score_index = _build_pool_score_index(game, members)   # canonical ids
+    gross_index, par_index = _pool_gross_and_pars(game, members)
 
     rows         = []
     fully_scored = 0
@@ -702,7 +780,7 @@ def _summary_for_game(game: MultiSkinsGame) -> dict:
             skins_won[hr.winner_id] += 1
 
     # Adjusted (net-per-hole) + raw gross indexes, keyed by canonical id.
-    score_index = _build_pool_score_index(game)
+    score_index = _build_pool_score_index(game, member_by_canon)
 
     inv_src = {m.player_id: cid for cid, m in member_by_canon.items()}
     source_round_ids = {r.id for r in _pool_source_rounds(game)}
@@ -743,12 +821,34 @@ def _summary_for_game(game: MultiSkinsGame) -> dict:
             return round_half_up(max(0, phcp - low_phcp) * npct / 100)
         return round_half_up(phcp * npct / 100)   # NET
 
+    # Whole dollars, and they still add up — the same helper round skins
+    # settles through, for the reason its docstring gives: `round(share, 2)`
+    # pays $133.33 three times out of $400 and the board promises $400.
+    # Done HERE rather than on the board, because the tournament settlement
+    # reads these same figures and a pot that does not balance blocks Settle.
+    from services.skins import _whole_dollar_shares
+    if grand_total > 0:
+        payout_by_cid = _whole_dollar_shares(
+            {cid: skins_won[cid] / grand_total * pool
+             for cid in participant_ids},
+            pool,
+        )
+    else:
+        # **Nothing awarded yet, so nothing is paid — and the helper must not
+        # be asked.** It distributes a target across shares that already sum
+        # to it; handed all-zeros and a $60 pool it would floor everything to
+        # nothing, find $60 unassigned and hand a dollar to each golfer in
+        # turn. Round skins avoids this from the other end (it does not
+        # charge a segment's ante until a skin is won, which is the same
+        # rule): a pot that collects and distributes nothing is not a pot.
+        payout_by_cid = {cid: 0.0 for cid in participant_ids}
+
     players_out: list = []
     for cid in participant_ids:
         p      = canon_players[cid]
         m      = member_by_canon.get(cid)
         won    = skins_won[cid]
-        payout = (won / grand_total * pool) if grand_total > 0 else 0.0
+        payout = payout_by_cid.get(cid, 0.0)
         players_out.append({
             'player_id'    : cid,
             'name'         : p.name,

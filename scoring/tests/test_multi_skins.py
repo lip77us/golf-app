@@ -199,9 +199,77 @@ class MultiSkinsTests(TestCase):
         assert s['money']['pool']        == 20.0,  s['money']
         assert s['money']['total_skins'] == 3,     s['money']
         payouts = {p['name']: p['payout'] for p in s['players']}
-        # A1: 2/3 × 20 = 13.33;  B1: 1/3 × 20 = 6.67
-        assert abs(payouts['A1'] - 13.33) < 0.01, payouts
-        assert abs(payouts['B1'] -  6.67) < 0.01, payouts
+        # **Whole dollars, and they still sum to the pool.** 2/3 and 1/3 of
+        # $20 are 13.33 and 6.67, which happen to add up here — three equal
+        # shares of $400 do not, and the pool now feeds a settlement pot that
+        # has to balance. `_whole_dollar_shares` floors and hands the
+        # remainder to the largest fraction, so A1's .33 takes the dollar.
+        assert payouts == {'A1': 13.0, 'B1': 7.0}, payouts
+        assert sum(payouts.values()) == s['money']['pool']
+
+    def test_a_pool_that_awards_nothing_pays_nothing(self):
+        """Every hole tied — a real outcome, since the pool has no carryover.
+
+        Found by accident while wiring the tournament settlement pot, and
+        worth its own test because the failure INVENTED money:
+        `_whole_dollar_shares` spreads a target across shares that already sum
+        to it, so handed all-zeros and a $20 pool it floored everything to
+        nothing, found $20 unassigned and handed a dollar to each golfer in
+        turn. Round skins avoids it from the other end — it does not charge a
+        segment's ante until a skin is won.
+        """
+        from services.multi_skins import setup_multi_skins
+        setup_multi_skins(
+            self.round,
+            participant_ids=[self.pid['A1'], self.pid['B1']],
+            handicap_mode='gross',
+            bet_unit=10.00,
+        )
+        for hn in (1, 2, 3):
+            submit_hole(self.g1, hn, [
+                (self.pid['A1'], 4), (self.pid['A2'], 4),
+                (self.pid['A3'], 4), (self.pid['A4'], 4),
+            ])
+            submit_hole(self.g2, hn, [
+                (self.pid['B1'], 4), (self.pid['B2'], 4),
+                (self.pid['B3'], 4), (self.pid['B4'], 4),
+            ])
+        calculate_multi_skins(self.round)
+        s = multi_skins_summary(self.round)
+        assert s['money']['total_skins'] == 0, s['money']
+        payouts = {p['name']: p['payout'] for p in s['players']}
+        assert payouts == {'A1': 0.0, 'B1': 0.0}, payouts
+
+    def test_the_shares_add_up_when_they_do_not_divide(self):
+        """Three equal shares of a pool that does not divide by three.
+
+        The case the per-share rounding got wrong: $30 three ways is $10
+        each, so it had to be a pool that does NOT divide. Two participants
+        at $25 is a $50 pool; one golfer winning 2 of 3 skins takes 33.33
+        and the other 16.67, which sum to $50 — so this asserts the sum
+        rather than a figure, which is the promise that matters.
+        """
+        from services.multi_skins import setup_multi_skins
+        setup_multi_skins(
+            self.round,
+            participant_ids=[self.pid['A1'], self.pid['B1']],
+            handicap_mode='gross',
+            bet_unit=25.00,
+        )
+        for hn, a1, b1 in [(1, 3, 4), (2, 4, 3), (3, 3, 4)]:
+            submit_hole(self.g1, hn, [
+                (self.pid['A1'], a1), (self.pid['A2'], 4),
+                (self.pid['A3'], 4),  (self.pid['A4'], 4),
+            ])
+            submit_hole(self.g2, hn, [
+                (self.pid['B1'], b1), (self.pid['B2'], 4),
+                (self.pid['B3'], 4),  (self.pid['B4'], 4),
+            ])
+        calculate_multi_skins(self.round)
+        s = multi_skins_summary(self.round)
+        payouts = {p['name']: p['payout'] for p in s['players']}
+        assert sum(payouts.values()) == s['money']['pool'] == 50.0, payouts
+        assert all(v == int(v) for v in payouts.values()), payouts
 
 
 class MultiSkinsCrossRoundTests(TestCase):

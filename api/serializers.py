@@ -767,6 +767,7 @@ class RoundSerializer(serializers.ModelSerializer):
     is_cup_round   = serializers.SerializerMethodField()
     is_final_round = serializers.SerializerMethodField()
     has_day_bet    = serializers.SerializerMethodField()
+    has_skins_pool = serializers.SerializerMethodField()
     can_regroup    = serializers.SerializerMethodField()
     # True when this round belongs to a Team Play tournament. The card and the
     # board are different enough — one number a hole, or four with a count —
@@ -834,6 +835,23 @@ class RoundSerializer(serializers.ModelSerializer):
         nobody is playing.
         """
         return getattr(obj, 'day_bet_config', None) is not None
+
+    def get_has_skins_pool(self, obj) -> bool:
+        """Whether this round's skins pool has a roster yet.
+
+        `multi_skins` in `active_games` says the round is playing one; this
+        says it has been set up. Same split as `has_day_bet`, and the hub
+        needs both for the same reason: a side game is switched on and
+        configured in two separate moves, so the button has to read *Set up*
+        before it reads *Edit*. The pool is ROUND-level, which is why it
+        cannot ride in a foursome's `configured_games`.
+        """
+        # The row's existence is the answer, like `has_day_bet` — turning
+        # the switch on only adds the slug to `active_games`, so a game row
+        # means somebody has been through the setup screen. Asking
+        # `participants.exists()` as well would be a SECOND query per round
+        # on a list that serialises many.
+        return getattr(obj, 'multi_skins_game', None) is not None
 
     def get_is_final_round(self, obj) -> bool:
         """True when this is the last round of a multi-round tournament.
@@ -1039,6 +1057,7 @@ class RoundSerializer(serializers.ModelSerializer):
             'num_holes', 'starting_hole',
             'scramble_config', 'notes', 'foursomes',
             'is_cup_round', 'is_final_round', 'has_day_bet',
+            'has_skins_pool',
             'can_regroup',
             'is_team_play_round', 'team_play',
             'ir_balls_config', 'can_manage',

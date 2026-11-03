@@ -1224,6 +1224,13 @@ class Round {
   /// off this, so turning the switch off on the side games screen takes the
   /// button with it instead of leaving a route into a bet nobody is playing.
   final bool hasDayBet;
+
+  /// Whether the round-level skins pool has a roster yet.
+  /// `activeGames` contains `multi_skins` says the round is playing one;
+  /// this says it is set up, so the hub's button can read *Set up* before
+  /// it reads *Edit*. Round-level, so it cannot ride in a foursome's
+  /// `configuredGames`.
+  final bool hasSkinsPool;
   final List<Foursome> foursomes;
   /// True when this round has been configured via CupRoundSetupScreen
   /// (i.e. a RyderCupRoundConfig exists on the backend).
@@ -1293,6 +1300,7 @@ class Round {
     this.isCupRound    = false,
     this.isFinalRound  = false,
     this.hasDayBet     = false,
+    this.hasSkinsPool  = false,
     this.isTeamPlayRound = false,
     this.teamPlayFormat,
     this.teamPlaySize,
@@ -1325,6 +1333,7 @@ class Round {
         isCupRound:   j['is_cup_round']  as bool?   ?? false,
         isFinalRound: j['is_final_round'] as bool? ?? false,
         hasDayBet:    j['has_day_bet'] as bool? ?? false,
+        hasSkinsPool: j['has_skins_pool'] as bool? ?? false,
         isTeamPlayRound: j['is_team_play_round'] as bool? ?? false,
         teamPlayFormat: (j['team_play'] as Map?)?['format'] as String?,
         teamPlaySize  : (j['team_play'] as Map?)?['team_size'] as int?,
