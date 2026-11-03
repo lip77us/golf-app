@@ -2,7 +2,6 @@
 name = "golf-app"
 version = "0.1.0"
 description = ""
-package-mode = false
 authors = [
     {name = "lip77us",email = "paul@lipkin.us"}
 ]
@@ -19,6 +18,15 @@ dependencies = [
     "httpx[http2] (>=0.27.0,<1.0.0)"
 ]
 
+
+# This is a Django app, not a library — there is no `golf_app` package to
+# install, so `poetry install` must not try. **It belongs in [tool.poetry],
+# not [project]**: `package-mode` is Poetry's own key and PEP 621 has no such
+# field, so the copy that sat under [project] was read by nothing and every
+# `poetry install` ended in "No file/folder found for package golf-app" and
+# an exit code of 1 — after installing everything correctly.
+[tool.poetry]
+package-mode = false
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

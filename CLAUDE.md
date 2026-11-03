@@ -6274,6 +6274,46 @@ keychain or Xcode accounts, the archive builds and the export fails with
 `No signing certificate "iOS Distribution" found` — distribute the
 `build/ios/archive/Runner.xcarchive` from Xcode's Organizer instead.
 
+## Django 6.1 — the cap, and the two days the suite tested the wrong one
+
+**Pinned, locked, deployed and TESTED on Django 6.1.2 / DRF 3.18.3** as of
+3 Nov 2026: `pyproject.toml`, `poetry.lock`, `requirements.txt` and the
+Railway container all agree, and the full suite (4037) is green against it.
+
+**Do not re-add a `<6.1` cap.** One existed, and the reason was real: Django
+6.1 removed `cc_delim_re`, which DRF imported at module load, so prod crashed
+at boot rather than failing a test. DRF 3.18.3 no longer imports it, which is
+what let the cap come off (`90b879c6`, PR #6). A `manage.py check` is enough
+to see it — the crash is an import, not a request.
+
+### The lock landing is not the upgrade
+
+The cap came off on 1 Nov and the local venv was not updated until the 3rd.
+For two days every green run — including a 3846-test suite that shipped a
+commit — executed against **6.0.4 / 3.17.1**, a different Django minor from
+the one production was serving. Nothing announced it; `manage.py test` does
+not care what the lock says.
+
+So the upgrade is `poetry install`, and the check is the pair of versions:
+
+```bash
+poetry install && python -c "import django, rest_framework; \
+    print(django.get_version(), rest_framework.VERSION)"
+```
+
+Sampled under `-W always::DeprecationWarning`, 6.1 raises no
+`RemovedInDjango62Warning` anywhere in this codebase.
+
+### `package-mode` belongs in `[tool.poetry]`
+
+It was set under `[project]`, where **nothing reads it** — `package-mode` is
+Poetry's own key and PEP 621 has no such field. So every `poetry install`
+installed all seven packages correctly and then ended in `No file/folder
+found for package golf-app` with **exit code 1**, which is the shape that
+quietly fails a CI step or a deploy script while looking like a real error
+about dependencies. Moved, and `poetry check`, `poetry check --lock` and
+`poetry install` all exit 0.
+
 ## The skins board — one widget, every skins leaderboard
 
 Built from `~/Downloads/handoff-skins-leaderboard` (28 Oct 2026), whose first
