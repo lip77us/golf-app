@@ -35,7 +35,7 @@ batch started. That is what prompted the whole re-delivery.*
 ### 2 · Links relative, with a trailing slash
 `/games/skins/` — not `https://halved.golf/games/skins`.
 
-Absolute is merely verbose; **unslashed is wrong**, because Cloudflare Pages
+Absolute is merely verbose; **unslashed is wrong**, because Cloudflare
 answers the slashless form with a redirect. Three packets arrived with eight
 or nine such anchors each.
 

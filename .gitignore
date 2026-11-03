@@ -52,3 +52,9 @@ htmlcov/
 
 # Built website bundle for Cloudflare upload (regenerate via website/build-zip.sh)
 halved-site.zip
+
+# wrangler's local cache (holds the Cloudflare account id)
+.wrangler/
+
+# the built site (build-zip.sh); the sources beside it are what we keep
+website/dist/

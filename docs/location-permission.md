@@ -340,7 +340,7 @@ mention.
    **upload the zip.** The policy must be LIVE before the build is
    submitted — App Review reads the URL on the listing, and a policy that
    does not mention location against a binary that asks for it is a 5.1.1
-   finding. `build-zip.sh` only zips; the Cloudflare Pages upload is by
+   finding. `build-zip.sh` only builds; the Cloudflare deploy is by
    hand, so this one is Paul's.
 5. ~~Answer App Privacy per §3.~~ **Done** — Coarse Location declared in App
    Store Connect. Still to do: **ship a build that contains the feature.**

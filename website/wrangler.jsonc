@@ -1,0 +1,19 @@
+{
+  // halved.golf is a Cloudflare WORKER with static assets, not a Pages
+  // project — `wrangler pages ...` lists nothing for this account and will
+  // send you looking for a project that does not exist.
+  //
+  // Deploy:  ./build-zip.sh && npx wrangler deploy
+  "name": "halved",
+
+  // Pinned, not drifting. The dashboard uploader stamped this with whatever
+  // day you happened to upload on; an assets-only Worker runs no code, so the
+  // date is inert — but a deploy that silently moves a runtime setting is not
+  // the deploy anybody asked for. Change it deliberately or not at all.
+  "compatibility_date": "2026-10-30",
+
+  // Built by build-zip.sh, gitignored. Never point this at `.` — that would
+  // publish build-seo.py, build-guides.py and seo-manifest.json, which the
+  // exclusion list exists to keep off the live site.
+  "assets": { "directory": "./dist" }
+}

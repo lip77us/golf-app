@@ -1035,7 +1035,7 @@ contact `info@halved.golf`. App Store listing name is **"Halved Golf"**
 (standalone "Halved" was taken; in-app/home-screen name stays "Halved").
 
 Source of truth is `docs/privacy-policy.html`; `website/privacy.html` is the
-published page and `build-zip.sh` ships it to Cloudflare Pages, so editing the
+published page and `build-zip.sh` builds it for deploy, so editing the
 two together is the whole update — there is no copy step into another repo.
 
 **The GitHub Pages copy at `lip77us/halved-legal` is UNPUBLISHED** (9 Oct 2026,
@@ -4905,7 +4905,9 @@ Tests: `ThruTests` (`scoring/tests/test_forty_balls.py`, 7) and the five in
 
 ## Website SEO pipeline — `website/build-seo.py`
 
-halved.golf is static HTML zipped to Cloudflare Pages (`website/build-zip.sh`).
+halved.golf is static HTML deployed to a Cloudflare WORKER with static
+assets (`website/build-zip.sh`, `website/wrangler.jsonc` — **not** Pages;
+see "The site is a Worker" below).
 `build-seo.py` runs inside `build-zip.sh` before zipping and **aborts the zip on
 audit errors**. Standard library only. `./build-seo.py --check` writes nothing
 and fails if anything is stale or wrong (for CI).
@@ -4946,6 +4948,71 @@ and fails if anything is stale or wrong (for CI).
   50–165, redirecting links, orphan pages.
 - No `aggregateRating` in the app schema on purpose — never fabricate ratings;
   Google's app rich result needs real review data.
+
+## The site is a Worker, and the deploy is one command
+
+```bash
+cd website && ./build-zip.sh && npx wrangler deploy
+```
+
+`build-zip.sh` runs the SEO audit (which aborts on errors), writes **`dist/`**
+for wrangler and the same artifact as a zip for the dashboard;
+`website/wrangler.jsonc` carries the name, the pinned compatibility date and
+the assets directory, so the deploy takes no flags.
+
+### It is NOT Cloudflare Pages, which cost an afternoon
+
+This file said "Cloudflare Pages" in two places and `docs/` in two more. It is
+a **Worker with static assets** — `halved`, on account
+`8663d0ce6009578b10964cfe2e633eb5`. The consequences of believing the old note:
+
+* **`npx wrangler pages project list` returns NOTHING**, with no error, on a
+  correctly authenticated account that has `pages (write)`. That reads as an
+  auth problem and is not one — there simply are no Pages projects. The
+  disambiguator is `npx wrangler whoami`, which prints the account list and
+  the token scopes.
+* The dashboard's own upload banner says *"we recommend using **wrangler
+  deploy**"* — the **Workers** command. `wrangler pages deploy` is a different
+  product. That banner was on screen the whole time and is the tell.
+* Workers Static Assets serves `_redirects` and `_headers` and emits
+  `cache-control: public, max-age=0, must-revalidate`, exactly like Pages —
+  so nothing about the live site distinguishes them from the outside.
+
+### The real deployment log
+
+```bash
+npx wrangler deployments list --name halved
+npx wrangler versions view <version-id> --name halved   # compatibility date
+```
+
+That is what settled 3 Nov 2026: the dashboard uploader had been reporting
+success for several uploads while the last real deployment was **4 days
+earlier**. Ten deployments existed, all `Source: Upload`, none from that day.
+A deployment is the only thing that has a log, so "is there a log file?" and
+"did it deploy?" are the same question.
+
+### Three traps in the pipeline, all found the same day
+
+* **`.wrangler/` must stay out of the artifact.** Wrangler writes its cache
+  into whatever directory it runs from, so one `wrangler` command inside
+  `website/` put `.wrangler/cache/wrangler-account.json` — the account id — in
+  the zip. Excluded in `build-zip.sh` and `.gitignore` rather than deleted and
+  hoped for, because the next command recreates it.
+* **`dist/` is removed BEFORE `build-seo.py`, not after.** It is a byte-copy
+  of the site inside `website/`, so a stale one doubles every page: the audit
+  counted 60 instead of 30 and failed with 95 duplicate-title errors.
+* **Never point `assets` at `.`** — that publishes `build-seo.py`,
+  `build-guides.py` and `seo-manifest.json`. `dist/` exists so the exclusion
+  list is applied once and the deploy cannot bypass it.
+
+### The workers.dev copy is harmless, and not by luck
+
+`halved.paul-866.workers.dev` serves the whole site at 200. Every page there
+declares `<link rel="canonical" href="https://halved.golf/...">`, so search
+engines consolidate — the canonicalisation work in `build-seo.py` was already
+covering a duplicate nobody had noticed. Disabling the workers.dev route would
+also do it, at the cost of the one URL that proves a deploy landed before DNS
+is involved.
 
 ## Solo games — one golfer, and the opponent is par
 
