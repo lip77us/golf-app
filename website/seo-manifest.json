@@ -9,6 +9,11 @@
   "published": "2026-09-26",
   "modified": "2026-10-07"
  },
+ "games/annandale-friday/index.html": {
+  "hash": "028ea2fadd6624b5",
+  "published": "2026-11-03",
+  "modified": "2026-11-03"
+ },
  "games/banker/index.html": {
   "hash": "c6eed6a1324efedd",
   "published": "2026-09-13",
@@ -30,9 +35,9 @@
   "modified": "2026-10-15"
  },
  "games/index.html": {
-  "hash": "7dfefe2747443eb4",
+  "hash": "d3dbbc5f635ceaaf",
   "published": "2026-09-13",
-  "modified": "2026-10-16"
+  "modified": "2026-11-03"
  },
  "games/irish-rumble/index.html": {
   "hash": "0e764847c704cd76",
@@ -128,11 +133,6 @@
   "hash": "b3b65cea2e9f85af",
   "published": "2026-06-08",
   "modified": "2026-10-15"
- },
- "preview/annandale-friday/index.html": {
-  "hash": "fb68e9d8d5f532c4",
-  "published": "2026-10-29",
-  "modified": "2026-10-29"
  },
  "privacy.html": {
   "hash": "fc299525eb68ed4f",

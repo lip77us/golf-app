@@ -7384,8 +7384,53 @@ Tests: `scoring/tests/test_live_activity_annandale_friday.py` (23). Not yet
 seen on a device: the card is type-checked, not measured against the ~160pt
 ceiling the packet puts it at 127.
 
-Still to do: the watch page, and moving the guide from `/preview/` to
-`/games/` LAST.
+Still to do: the watch page.
+
+#### The guide moved to `/games/`, and the copy was two days stale
+
+The game shipped in **2.13.0**, so on 3 Nov 2026 the guide left `/preview/`
+for `/games/annandale-friday/`: out of `NOINDEX`, into the sitemap, a card on
+the hub between Triple Nassau and Spots (`5 OR 6 PLAYERS · three Nassaus`),
+and a 301 from the old path. The old directory is **deleted** rather than
+left behind — Cloudflare serves a matching static file, so leaving it would
+shadow the rule and keep an unlisted duplicate live. That 301 is not a
+rename passing a ranking on, because the page was `noindex` and linked from
+nowhere; it is there because the link was texted to golfers by hand.
+
+**`build-guides.py` was NOT re-run, deliberately.** It regenerates
+`games/index.html` from whatever `design-reference` directory it is pointed
+at, and no directory on this machine holds all 23 guides — the Annandale
+guide's own `.dc.html` source is gone. Running it would rebuild the hub from
+a partial set. The card was hand-written to match its neighbours exactly
+(a test-free claim, so it was diffed structurally against the Triple Nassau
+card and checked in a browser at 375px). Same call the Hot Seat rename made.
+
+**The guide was written on 29 Oct and the game changed on the 30th**, which
+is the real lesson: a page parked in `/preview/` goes stale silently, because
+nothing links to it and no audit reads its prose. Five blocks still described
+an unbuilt game — *"Halved doesn't score this one yet"*, three feature cards
+in future tense, and a closing line calling the page *"the design it will be
+built from"* — and a sixth documented a **loss cap**, which `setup_annandale_
+friday` hardcodes to `None` and the setup screen has no control for. All six
+were rewritten against the engine rather than against the handoff; the cap
+card became *"What you can lose"*, which keeps the true half (exposure is per
+Nassau, so two Nassaus is twice the stake) and states Paul's own reason for
+having no cap.
+
+Checked and correct, so left alone: the skins block's *"a gross birdie beats
+a net birdie, but not a net eagle"* matches `services/skin_rules.py` exactly,
+including the net-eagle carve-out that module records as a wording somebody
+had already got wrong once.
+
+**`NOINDEX` is now empty**, and the rule it documented is kept in the script:
+an unlisted guide has to live under `/preview/`, because anything under
+`/games/` is fed into the hub's CollectionPage ItemList, which that set does
+not gate.
+
+**Not added to the homepage's game strip.** It lists 18 of 23 and is missing
+Sixes and Stableford, so it is a curated row rather than a full index —
+adding a brand-new five-or-six-player game while Sixes is absent would read
+as odder than leaving it. Worth a pass of its own.
 
 ## Two from a scramble on the course — the board and the selector
 

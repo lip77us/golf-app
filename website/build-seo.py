@@ -74,14 +74,20 @@ DESCRIPTIONS = {
 }
 
 # Pages to keep out of search and out of the sitemap, by file path.
-NOINDEX = {
-    # Unlisted: a how-to for a game that is not in the app yet, sent to one
-    # golfer as a link. Out of search, out of the sitemap, linked from
-    # nowhere. NOTE it lives under /preview/ rather than /games/ on
-    # purpose — anything under /games/ is a 'guide' and gets fed into the
-    # hub's CollectionPage ItemList, which this set does NOT gate.
-    'preview/annandale-friday/index.html',
-}
+#
+# **Empty, and the one entry it held is worth recording.** Annandale Friday's
+# guide lived at `preview/annandale-friday/index.html` while the game was not
+# in the app yet — out of search, out of the sitemap, linked from nowhere, and
+# sent to one golfer as a link. It shipped in 2.13.0, so on 3 Nov 2026 it moved
+# to `/games/annandale-friday/` and came out of here.
+#
+# The rule that governed WHERE it sat still holds for the next unlisted guide:
+# it has to live under `/preview/` rather than `/games/`, because anything
+# under `/games/` is a 'guide' and gets fed into the hub's CollectionPage
+# ItemList — which this set does NOT gate. Listing a `/games/` page here would
+# keep it out of search while still advertising it from the hub's structured
+# data, which is the opposite of unlisted.
+NOINDEX: set = set()
 
 # **Search-tool ownership codes**, emitted on the homepage only (every service
 # checks the homepage). Paste the `content` value each tool gives you — the
