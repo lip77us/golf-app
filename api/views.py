@@ -6411,7 +6411,7 @@ class ScoreSubmitView(APIView):
         # one repeated line in a Slack channel.
         from services import activity_feed
         first_score = (
-            activity_feed.enabled()
+            activity_feed.rounds_enabled()
             and any(s['gross_score'] is not None for s in scores)
             and not HoleScore.objects.filter(
                 foursome__round_id=foursome.round_id,
@@ -6563,7 +6563,7 @@ class FoursomeCardView(APIView):
 
         from services import activity_feed
         first_score = (
-            activity_feed.enabled()
+            activity_feed.rounds_enabled()
             and any(r['gross_score'] is not None for r in rows)
             and not HoleScore.objects.filter(
                 foursome__round_id=foursome.round_id,

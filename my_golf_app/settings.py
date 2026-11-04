@@ -152,9 +152,12 @@ COURSE_REPORT_EMAIL = os.environ.get('COURSE_REPORT_EMAIL', 'info@halved.golf')
 COURSE_IMPORT_ALERT_EMAIL = os.environ.get('COURSE_IMPORT_ALERT_EMAIL',
                                            COURSE_REPORT_EMAIL)
 
-# Slack incoming webhook for the operator's activity channel (signups, rounds
-# started and finished).  Empty = off.  The URL is a credential: env only.
+# Slack incoming webhooks for the operator's feeds.  The URLs are credentials:
+# env only.  ACTIVITY = accounts (signups, profiles) -> #halved-users; empty =
+# off.  ROUNDS = rounds started and finished -> #halved-activity; empty falls
+# back to the ACTIVITY webhook.
 SLACK_ACTIVITY_WEBHOOK_URL = os.environ.get('SLACK_ACTIVITY_WEBHOOK_URL', '')
+SLACK_ROUNDS_WEBHOOK_URL = os.environ.get('SLACK_ROUNDS_WEBHOOK_URL', '')
 
 ROOT_URLCONF = 'my_golf_app.urls'
 

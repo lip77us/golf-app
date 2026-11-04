@@ -1,7 +1,15 @@
-"""Tell the operator's Slack channel who signed up and who is playing.
+"""Tell the operator's Slack channels who signed up and who is playing.
 
-Posts to one Slack incoming webhook (``SLACK_ACTIVITY_WEBHOOK_URL``).  Unset is
-off, so local servers and tests say nothing.
+Two incoming webhooks, one per channel (Paul, 3 Nov 2026):
+
+* ``SLACK_ACTIVITY_WEBHOOK_URL`` — accounts: a new signup and its profile
+  (#halved-users).
+* ``SLACK_ROUNDS_WEBHOOK_URL`` — rounds started and finished
+  (#halved-activity).  **Unset falls back to the accounts webhook**, so the
+  rounds keep arriving in the old channel until the new URL is configured
+  rather than going silent.
+
+Both unset is off, so local servers and tests say nothing.
 
 Three moments, and the round gets two of them on purpose: **a round is announced
 at its first real score as well as when it completes**, because plenty of casual
@@ -31,12 +39,27 @@ MAX_NAMED_GOLFERS = 6
 DEFAULT_PLAYER_NAME = 'New Golfer'
 
 
-def _webhook_url() -> str:
-    return (getattr(settings, 'SLACK_ACTIVITY_WEBHOOK_URL', '') or '').strip()
+ACCOUNTS = 'accounts'
+ROUNDS = 'rounds'
 
 
-def enabled() -> bool:
-    return bool(_webhook_url())
+def _setting(name) -> str:
+    return (getattr(settings, name, '') or '').strip()
+
+
+def _webhook_url(feed: str = ACCOUNTS) -> str:
+    accounts = _setting('SLACK_ACTIVITY_WEBHOOK_URL')
+    if feed == ROUNDS:
+        return _setting('SLACK_ROUNDS_WEBHOOK_URL') or accounts
+    return accounts
+
+
+def enabled(feed: str = ACCOUNTS) -> bool:
+    return bool(_webhook_url(feed))
+
+
+def rounds_enabled() -> bool:
+    return enabled(ROUNDS)
 
 
 def _esc(text) -> str:
@@ -52,8 +75,8 @@ def _deliver(url: str, text: str):
         logger.warning('activity feed post failed: %s', type(exc).__name__)
 
 
-def _announce(text: str):
-    url = _webhook_url()
+def _announce(text: str, feed: str = ACCOUNTS):
+    url = _webhook_url(feed)
     if not url:
         return
     transaction.on_commit(lambda: run_off_request(
@@ -125,11 +148,11 @@ def round_message(round_obj, headline: str) -> str:
     return '\n'.join(lines)
 
 
-def _safely(what, compose):
-    if not enabled():
+def _safely(what, compose, feed: str = ACCOUNTS):
+    if not enabled(feed):
         return
     try:
-        _announce(compose())
+        _announce(compose(), feed)
     except Exception:
         logger.exception('activity feed could not compose %s', what)
 
@@ -181,9 +204,10 @@ def round_started(round_obj):
     _safely('round start', lambda: '\n'.join([
         round_message(round_obj, ':golf: Round started'),
         f'Watch: {_watch_url(round_obj)}',
-    ]))
+    ]), ROUNDS)
 
 
 def round_finished(round_obj):
     _safely('round finish',
-            lambda: round_message(round_obj, ':checkered_flag: Round finished'))
+            lambda: round_message(round_obj, ':checkered_flag: Round finished'),
+            ROUNDS)

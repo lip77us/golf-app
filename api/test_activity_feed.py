@@ -13,6 +13,7 @@ from services import activity_feed
 from tournament.models import Foursome, FoursomeMembership, Round
 
 URL = 'https://hooks.slack.example/T/B/secret'
+ROUNDS_URL = 'https://hooks.slack.example/T/R/rounds-secret'
 
 
 def _run_inline(fn, *, label=''):
@@ -174,6 +175,39 @@ class RoundTests(ActivityFeedBase):
     def test_unset_is_off(self):
         self._post(1)
         self.assertEqual(self.texts(), [])
+
+
+    def urls(self):
+        return [c.args[0] for c in self.post.call_args_list]
+
+    @override_settings(SLACK_ROUNDS_WEBHOOK_URL=ROUNDS_URL)
+    def test_rounds_go_to_their_own_channel(self):
+        self._post(1)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.api.post(f'/api/rounds/{self.round.id}/complete/', {}, format='json')
+        self.assertEqual(self.urls(), [ROUNDS_URL, ROUNDS_URL])
+
+    def test_rounds_fall_back_to_the_users_channel_when_unset(self):
+        self._post(1)
+        self.assertEqual(self.urls(), [URL])
+
+    @override_settings(SLACK_ACTIVITY_WEBHOOK_URL='',
+                       SLACK_ROUNDS_WEBHOOK_URL=ROUNDS_URL)
+    def test_rounds_post_with_only_the_rounds_webhook(self):
+        self._post(1)
+        self.assertEqual(self.urls(), [ROUNDS_URL])
+
+
+@override_settings(SLACK_ROUNDS_WEBHOOK_URL=ROUNDS_URL)
+class SignupStaysInUsersChannelTests(ActivityFeedBase):
+    def test_a_signup_does_not_go_to_the_rounds_channel(self):
+        with patch('accounts.otp.PhoneOTP.check_code', return_value=True), \
+                self.captureOnCommitCallbacks(execute=True):
+            self.api.post('/api/auth/otp/verify/',
+                          {'phone': '4155550123', 'code': '123456'},
+                          format='json')
+        urls = [c.args[0] for c in self.post.call_args_list]
+        self.assertEqual(urls, [URL])
 
 
 class FailureLogTests(TestCase):

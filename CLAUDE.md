@@ -9072,9 +9072,12 @@ arithmetic rather than a handicap calculation.
 
 ## Slack activity feed — `services/activity_feed.py`
 
-Private channel **#halved-users** in LipApps (Paul + Ryan). One incoming webhook,
-`SLACK_ACTIVITY_WEBHOOK_URL` on Railway; empty = off. Posts a signup, a round's
-first real score and a round completing. A round gets two lines because many
+Two private channels in LipApps (Paul + Ryan), split 3 Nov 2026, one incoming
+webhook each on Railway: **#halved-users** ← `SLACK_ACTIVITY_WEBHOOK_URL`
+(signups and profile updates; empty = off) and **#halved-activity** ←
+`SLACK_ROUNDS_WEBHOOK_URL` (a round's first real score and a round completing;
+**empty falls back to the users webhook**, so rounds never go silent while the
+second URL is being set up). A round gets two lines because many
 casual rounds are played and never closed. The start also carries the round's
 watch link, so the message can be followed live. A signup carries name, user id and
 device, best effort. **No phone or email** (Paul, 1 Nov 2026): the privacy policy
