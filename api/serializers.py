@@ -528,6 +528,22 @@ class FoursomeSerializer(serializers.ModelSerializer):
     # foursome — lets the app show Enter Scores + Edit Tees for a cross-account
     # scorer's own group while hiding TD config elsewhere.
     you_score        = serializers.SerializerMethodField()
+    # False only for a group a SPARSE 40 Balls has left out, so the ball
+    # picker does not come up for a group that is not playing for it.
+    plays_forty_balls = serializers.SerializerMethodField()
+
+    def get_plays_forty_balls(self, obj) -> bool:
+        """Is this group in the round's 40 Balls pool?
+
+        **True whenever there is no narrowing**, which is every round before
+        sparse participation — so the shipped client is unchanged and a round
+        with the game active but not yet configured still offers the picker,
+        exactly as it did. The client must not derive this: the answer is a
+        row in a join table it does not hold.
+        """
+        from services.group_field import plays_pool_game
+        cfg = getattr(obj.round, 'forty_balls_config', None)
+        return plays_pool_game(obj, cfg)
 
     def get_you_score(self, obj) -> bool:
         request = self.context.get('request')
@@ -753,6 +769,8 @@ class FoursomeSerializer(serializers.ModelSerializer):
             'pink_ball_order', 'active_games', 'configured_games',
             'tee_time', 'memberships', 'has_any_score', 'you_score',
             'setup_editable', 'setup_edit_note',
+            # Sparse 40 Balls: false only for a group left out of the pool.
+            'plays_forty_balls',
             # Scoring on paper: this group enters nothing of its own and the
             # TD transcribes the card. Declared by him, not derived — see
             # `Foursome.paper_card`.
@@ -2158,6 +2176,17 @@ class FortyBallsSetupSerializer(serializers.Serializer):
                         max_digits=8, decimal_places=2, default='0.00')
     payouts       = serializers.ListField(
                         child=serializers.DictField(), default=list)
+    #: **Which groups are playing. Absent means leave it alone; `[]` means the
+    #: whole field.**
+    #:
+    #: The distinction is load-bearing rather than tidy: every shipped build
+    #: sends no `group_ids` at all, so absent HAS to mean "unchanged" or a TD
+    #: editing the entry fee from an older phone would silently widen a
+    #: four-group pool back to all fifteen and charge eleven groups that are
+    #: not playing.
+    group_ids     = serializers.ListField(
+                        child=serializers.IntegerField(), required=False,
+                        allow_null=True, default=None)
 
     def validate_net_percent(self, v):
         if v % 5:

@@ -1477,8 +1477,26 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// 40 Balls does not finish with its scores either: the group still has to
   /// say how many of the nets count, and the pager holds it there until it
   /// does.
-  bool _fortyBallsRound(RoundProvider rp) =>
-      _activeGames(rp.round).contains('forty_balls');
+  ///
+  /// **And that THIS group is in the pool.** 40 Balls can be played by four
+  /// of a sixty-player event's fifteen groups, and a group that is not in it
+  /// has no balls to count — so it enters on the ordinary inline picker and
+  /// is never shown the ball control. The server answers it
+  /// (`Foursome.plays_forty_balls`); a client deriving it would need a row in
+  /// a join table it does not hold.
+  ///
+  /// This is the ONE place the question is asked. It was five, and four of
+  /// them read `active_games` alone — which is the shape that leaves a
+  /// control reachable from one screen and not another.
+  bool _fortyBallsRound(RoundProvider rp) {
+    if (!_activeGames(rp.round).contains('forty_balls')) return false;
+    final round = rp.round;
+    if (round == null || round.foursomes.isEmpty) return true;
+    return round.foursomes
+        .firstWhere((f) => f.id == widget.foursomeId,
+            orElse: () => round.foursomes.first)
+        .playsFortyBalls;
+  }
 
   /// Rounds that enter scores on the keypad rather than the inline picker:
   /// 40 Balls, where it began, and Annandale Friday, whose packet asks for
@@ -1488,7 +1506,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   bool _keypadRound(RoundProvider rp) {
     final games = _activeGames(rp.round);
     final primary = resolvePrimary(rp.round?.primaryGame, games);
-    return games.contains('forty_balls') ||
+    return _fortyBallsRound(rp) ||
         primary == GameIds.annandaleFriday ||
         // Sixes enters on the keypad as of `handoff-sixes-score-entry`. It
         // is the primary test rather than membership of `games`, because a
@@ -3661,7 +3679,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 annandaleSummary:
                     _activeGames(rp.round).contains('annandale_friday')
                         ? rp.annandaleFridaySummary : null,
-                fortyBallsNet: _activeGames(rp.round).contains('forty_balls')
+                fortyBallsNet: _fortyBallsRound(rp)
                                && _fbState?.hole == _selectedHole
                     ? _fbState?.net
                     : null,
@@ -3976,7 +3994,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 // hole might have changed — a save bumps the scorecard's
                 // identity, and moving hole changes the hole.
                 fortyBallsFoursomeId:
-                    games.contains('forty_balls') ? widget.foursomeId : null,
+                    _fortyBallsRound(rp) ? widget.foursomeId : null,
                 fortyBallsToken: '${_selectedHole}:'
                     '${rp.scorecard?.holeData(_selectedHole)?.scores.length}',
                 onFortyBallsState: (st) {
@@ -3990,7 +4008,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                     _flushFortyBalls(st.hole);
                   }
                 },
-                fortyBallsLocalNets: games.contains('forty_balls')
+                fortyBallsLocalNets: _fortyBallsRound(rp)
                     ? _fbLocalNets(sc, players, _selectedHole)
                     : const {},
                 fortyBallsPending: _fbPending[_selectedHole],
@@ -6534,8 +6552,11 @@ class _GameStatusSection extends StatelessWidget {
         // the group chooses having seen its nets, so the card sits directly
         // under the scores it is choosing between, and the scorecard goes
         // under IT rather than between the two.
-        if (games.contains('forty_balls') &&
-            fortyBallsFoursomeId != null) ...[
+        // `fortyBallsFoursomeId` is the whole question: the screen sets it
+        // only when the round is playing 40 Balls AND this group is in the
+        // pool. Re-reading `active_games` here was a second answer to one
+        // question, which is how the two come to disagree.
+        if (fortyBallsFoursomeId != null) ...[
           FortyBallsPickerCard(
             foursomeId  : fortyBallsFoursomeId!,
             hole        : currentHole,

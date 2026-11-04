@@ -754,8 +754,19 @@ void main() {
       final src = File('lib/screens/score_entry_screen.dart').readAsStringSync();
       expect(src.contains('FortyBallsPickerCard('), isTrue,
           reason: 'score entry must render the picker — it IS the game');
-      expect(src.contains("games.contains('forty_balls')"), isTrue,
-          reason: 'and only when the round plays it');
+      // **Re-anchored** when sparse 40 Balls arrived: the gate used to be a
+      // literal `games.contains('forty_balls')` in five places and is now
+      // the one `_fortyBallsRound`, which also asks whether THIS group is in
+      // the pool. The claim is the same — the picker draws only for a group
+      // that is playing — and `fortyBallsFoursomeId` is where that answer
+      // reaches the card.
+      expect(src.contains('fortyBallsFoursomeId != null'), isTrue,
+          reason: 'and only when this group plays it');
+      expect(
+          RegExp(r'fortyBallsFoursomeId:\s*\n?\s*_fortyBallsRound\(rp\)')
+              .hasMatch(src),
+          isTrue,
+          reason: 'and that id comes from the one gate');
     });
 
     test('both ENTRY-POINT widgets are reached from a screen', () {
@@ -859,9 +870,10 @@ void main() {
           isTrue,
           reason: 'the inline picker is still drawn under the keypad');
 
-      // It is 40 Balls' control, not every round's.
+      // It is 40 Balls' control, not every round's — and, since sparse
+      // 40 Balls, not a control for a group that is not in the pool.
       final at = src.indexOf('FortyBallsKeypad(');
-      expect(src.substring(0, at).contains("games.contains('forty_balls')"),
+      expect(src.substring(0, at).contains('_fortyBallsRound(rp)'),
           isTrue, reason: 'the keypad is not gated on the game');
     });
 

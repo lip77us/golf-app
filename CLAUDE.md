@@ -9411,3 +9411,121 @@ eighteen numbers, not seventy-two.
 Tests: `api/test_paper_card.py` (21 — including the two that document the pool
 trap) and `mobile/test/paper_card_test.dart` (18). Every guard checked by
 making it fail.
+
+## Sparse 40 Balls — a subset of the GROUPS
+
+Paul's "next" after the sparse skins pool (3 Nov 2026), and confirmed before
+building: *"sparse 40 balls is a subset of the groups."* That is the whole
+difference from the skins pool, which is a subset of the GOLFERS — 40 Balls
+ranks groups, so the dimension follows the game.
+
+`FortyBallsConfig.groups` (M2M to `Foursome`, `games/0104`), and **empty means
+EVERY group in the round.** That is the `ANDROID_BOARD_PHONES` reading and it
+is load-bearing twice over: every round played before this is the whole field,
+so a narrowing that defaulted to nobody would blank an existing board the
+moment the column arrived, and it makes the unflighted case the same code
+path rather than a second one that can drift.
+
+### `services/group_field.pool_foursomes(round, config)`
+
+Shared rather than written into 40 Balls, and **duck-typed on a `groups`
+relation** — so Irish Rumble, Better Ball and Hot Seat answer "the whole
+field" today and adopt sparse participation by adding the field and nothing
+else. Beside it: `plays_pool_game(foursome, config)` for the one-group
+question, and `not_in_round_group_ids` for the refusal.
+
+### Absent is not `[]`, and the distinction is the money
+
+`group_ids` **absent** means leave the pool alone; `[]` means the whole field.
+Every shipped build sends no `group_ids` at all, so absent HAS to mean
+unchanged — otherwise a TD editing the entry fee from an older phone would
+silently widen a four-group pool back to all fifteen and charge eleven groups
+that are not playing. The client always sends one, because it always knows
+which it means.
+
+### A group may LEAVE at any time and may only JOIN while it can still play
+
+Removing one is clean: the pool is derived on every read, so it stops being
+ranked and stops being charged. A group added with four holes left owes forty
+balls into room for sixteen, which is the DQ state — and a TD who ticked a box
+and watched the group appear already out would have nothing to read. So the
+join is refused with a 409 naming the group, and the whole POST is refused
+before anything is written.
+
+**`group_card`'s `dq` cannot answer that question**, which is worth recording
+because it looks as though it should: that flag is about the budget not coming
+out given the picks already MADE, and a group that has counted nothing has
+every hole still pending — so a group fourteen holes into a round reads
+perfectly healthy there. `forty_balls.joining_state()` asks at the first hole
+nothing has overtaken (`_is_locked` read forwards), which is the hole the
+group would actually be standing on.
+
+### What narrows
+
+- **The board** — cards for the playing groups only, plus `n_field_groups` and
+  `sparse` so it can say `4 of 15 groups` instead of leaving a reader of a
+  sixty-player event wondering where the other eleven went.
+- **The pool** — `fee × the golfers IN it`. A group that is not playing is not
+  charged, and a test pins that the board's own `pool` is exactly what
+  settlement collects.
+- **Settlement** (`_group_game_pots`) — the entrants are the golfers of the
+  groups **the BOARD reports**, not `_real_player_ids(round)`. That is
+  behaviour-preserving for every other round, because the board lists every
+  group, scored or not, DQ'd or not — and a DQ'd group did enter, which is
+  exactly why the entry is read off the rows rather than off the ranking. It
+  covers all four one-pool games in one change.
+- **`set_count`** — refused for a left-out group, in the SERVICE so every
+  caller is covered, with `FortyBallsNotPlaying` named apart from
+  `FortyBallsLocked` (a locked hole is a group that has moved ON; this one was
+  never in). 400 rather than 409: re-reading will not change the answer.
+- **`num_players` on the setup GET** — the golfers in the POOL. This one is
+  easy to miss and it is the money: the payout card multiplies the entry by
+  it, so the field's count would have a TD setting a table against a pot twice
+  the size of the one that will be collected.
+
+### The client is TOLD, and the gate was in five places
+
+`FoursomeSerializer.plays_forty_balls` — false only for a group a sparse pool
+has left out. The client cannot derive it; the answer is a row in a join table
+it does not hold. It defaults **true** in `Foursome.fromJson`, so an older
+server behaves exactly as it did, and it is true on a round where the game is
+active but not yet configured, where the picker has always shown.
+
+Score entry asked `active_games.contains('forty_balls')` in **five** places,
+four of them raw. They all go through `_fortyBallsRound(rp)` now — one answer,
+which also drops the ball control, the keypad, the net badge and the local-net
+map for a group that is out. The redundant second reading beside
+`fortyBallsFoursomeId != null` is gone: that id IS the question.
+
+**Two guards in `forty_balls_test.dart` broke on the rewording rather than on
+a regression** (the sixth and seventh in this repo's history), because both
+asserted the literal `games.contains('forty_balls')`. Re-anchored on
+`_fortyBallsRound` and on the id, keeping the claim.
+
+### The setup screen: ONE card, not two
+
+The Budget card and the field list the same groups, so the budget row IS the
+row you tick — two drawings of one thing is how they come to disagree.
+`Which groups are playing · 4 of 15`, All groups / None, each row naming its
+golfers **in full** (`Group 7` alone tells a TD nothing about which of fifteen
+he is ticking — Hot Seat's order sheet made the same call). A left-out row
+reads `not playing` rather than `40 balls`. The pool is computed from the
+SELECTION on the client, because the TD is still ticking and a figure read off
+the payload would be the old pool.
+
+**Two groups is the floor**, said in the Save button: 40 Balls ranks groups
+against each other, so one group is a pot it pays back to itself.
+
+### Not done
+- The other three one-pool games. The seam is there (`pool_foursomes` is
+  duck-typed); each needs its own M2M, `group_ids` and setup card.
+- A payout table that **scales to the collected pool**, which sparse makes
+  easier to get wrong: narrowing shrinks the pot and the TD's table does not
+  follow, so an unbalanced pot blocks Settle. The day bet already has
+  `scale_to_pool`; 40 Balls has never had it, which is pre-existing — the
+  setup screen's live pool figure is what keeps it honest for now.
+
+Tests: `api/test_forty_balls_sparse.py` (28), `Sparse40BallsPotTests`
+(`scoring/tests/test_tournament_settlement.py`, 6) and
+`mobile/test/forty_balls_sparse_test.dart` (17). Every guard was checked by
+making it fail.

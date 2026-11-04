@@ -92,8 +92,16 @@ class _FortyBallsBoardState extends State<FortyBallsBoard> {
     return Row(children: [
       Text('$mode · best balls', style: muted),
       Text('   ·   ', style: muted),
-      Text('$budget a group', style: muted),
-      const Spacer(),
+      // **Which groups, when it is not all of them.** A side game between
+      // four of a sixty-player event's fifteen groups otherwise leaves a
+      // reader wondering where the other eleven went.
+      Expanded(
+        child: Text(
+            _s.sparse
+                ? '${_s.nGroups} of ${_s.nFieldGroups} groups'
+                : '$budget a group',
+            style: muted, overflow: TextOverflow.ellipsis),
+      ),
       Text('Pool \$${_s.pool.toStringAsFixed(0)}',
           style: theme.textTheme.bodySmall
               ?.copyWith(fontWeight: FontWeight.bold)),

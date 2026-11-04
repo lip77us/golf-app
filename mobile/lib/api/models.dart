@@ -1152,6 +1152,15 @@ class Foursome {
   /// no scores yet might be on paper or might just be slow, and the first is
   /// his job while the second sorts itself out.
   final bool paperCard;
+
+  /// **False only for a group a SPARSE 40 Balls has left out**, so the ball
+  /// picker does not come up for a group that is not playing for it.
+  ///
+  /// Defaults TRUE, which is the answer on every round with no narrowing —
+  /// including a round where the game is active but not yet configured, where
+  /// the picker has always shown. A server that sends nothing therefore
+  /// behaves exactly as it did.
+  final bool playsFortyBalls;
   final String shotgunSlot;
 
   const Foursome({
@@ -1170,6 +1179,7 @@ class Foursome {
     this.youScore        = false,
     this.startingHole,
     this.paperCard       = false,
+    this.playsFortyBalls = true,
     this.shotgunSlot     = '',
   });
 
@@ -1187,6 +1197,7 @@ class Foursome {
         setupEditNote:   (j['setup_edit_note'] as String?)?.trim() ?? '',
         youScore:        j['you_score'] as bool? ?? false,
         paperCard:       j['paper_card'] as bool? ?? false,
+        playsFortyBalls: j['plays_forty_balls'] as bool? ?? true,
         startingHole:    j['starting_hole'] as int?,
         shotgunSlot:     (j['shotgun_slot'] as String?)?.trim() ?? '',
         memberships:     (j['memberships'] as List? ?? [])
@@ -8972,12 +8983,20 @@ class FortyBallsSummary {
   final double pool;
   final List<Map<String, dynamic>> payouts;
   final int    nGroups;
+  /// Every group in the ROUND, which on a sparse pool is more than [nGroups].
+  /// Zero from a server that predates it, which is what [sparse] falls back
+  /// on rather than inferring a narrowing from a missing field.
+  final int    nFieldGroups;
+  /// 40 Balls is being played by a SUBSET of the round's groups — a side game
+  /// between four of a sixty-player event's fifteen.
+  final bool   sparse;
   final List<FortyBallsGroup> results;
 
   const FortyBallsSummary({
     required this.handicapMode, required this.netPercent,
     required this.netMaxDoubleBogey, required this.entryFee,
     required this.pool, required this.payouts, required this.nGroups,
+    this.nFieldGroups = 0, this.sparse = false,
     required this.results,
   });
 
@@ -8991,6 +9010,8 @@ class FortyBallsSummary {
         payouts     : ((j['payouts'] as List?) ?? const [])
             .map((p) => Map<String, dynamic>.from(p as Map)).toList(),
         nGroups     : (j['n_groups'] as num?)?.toInt() ?? 0,
+        nFieldGroups: (j['n_field_groups'] as num?)?.toInt() ?? 0,
+        sparse      : j['sparse'] as bool? ?? false,
         results     : ((j['results'] as List?) ?? const [])
             .map((r) => FortyBallsGroup.fromJson(
                 Map<String, dynamic>.from(r as Map)))

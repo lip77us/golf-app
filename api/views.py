@@ -10159,21 +10159,85 @@ class FortyBallsSetupView(APIView):
         return FortyBallsHoleCount.objects.filter(
             foursome__round=round_obj).exists()
 
+    @staticmethod
+    def _joining_too_late(round_obj, cfg, group_ids) -> list:
+        """Refusal lines for groups that would be ADDED with no room left.
+
+        **A group may leave at any time and may only join while it can still
+        spend its budget.** Removing one is clean — the pool is derived on
+        every read, so it stops being ranked and stops being charged. A group
+        added with four holes left owes forty balls into room for sixteen,
+        which is exactly the DQ state, and a TD who ticked a box and watched
+        the group appear already out would have nothing to read.
+
+        Tested by asking the engine's own picker state rather than by a rule
+        of its own, and asked BEFORE anything is written: nothing it reads
+        depends on the pool, so this needs no transaction and the POST cannot
+        half-land.
+
+        Returns [] when every join is legal, which is every join before the
+        round starts.
+        """
+        from services.forty_balls import group_size, joining_state
+
+        field  = {fs.pk: fs for fs in round_obj.foursomes.all()}
+        wanted = {g for g in group_ids if g in field}
+        held   = (set(cfg.groups.values_list('pk', flat=True))
+                  if cfg is not None else set())
+        # An empty narrowing IS the whole field, both before and after — so
+        # "newly in" is measured against what the pool actually held, never
+        # against the id list.
+        was_in = held or set(field)
+        now_in = wanted or set(field)
+
+        refused = []
+        for pk in sorted(now_in - was_in):
+            fs = field[pk]
+            if not group_size(fs):
+                continue
+            st = joining_state(fs)
+            if st['dq']:
+                refused.append(
+                    f"{fs.display_name} owes {st['left']} balls with room "
+                    f"for {st['capacity']}")
+        return refused
+
     def _dict(self, round_obj, cfg):
         from services.forty_balls import budget, group_size
+        from services.group_field import pool_foursomes
+        # Which groups are PLAYING — a subset in a sixty-player event, the
+        # whole field everywhere else. Reported per group rather than as a
+        # separate id list so the screen draws the field it is narrowing.
+        in_pool = {fs.pk for fs in pool_foursomes(round_obj, cfg)}
         groups = [
             {'foursome_id' : fs.pk,
              'group_number': fs.group_number,
              'size'        : group_size(fs),
-             'budget'      : budget(fs)}
+             'budget'      : budget(fs),
+             'in_pool'     : fs.pk in in_pool,
+             'label'       : fs.display_name,
+             # **Full names here**, short ones everywhere else. This asks a
+             # TD which of fifteen groups he means before anybody has hit a
+             # shot, and `P Lip` over `P Lee` is a coin toss — the same call
+             # Hot Seat's order sheet makes.
+             'players'     : ', '.join(
+                 m.player.name for m in fs.memberships.all()
+                 if not m.player.is_phantom)}
             for fs in round_obj.foursomes.order_by('group_number')
         ]
         locked = self._picked(round_obj)
         base = {
+            'sparse'       : any(not g['in_pool'] for g in groups),
+            'n_in_pool'    : sum(1 for g in groups if g['in_pool']),
             # The setup card reads the budgets off Groups & tees and states
             # them; the TD sets nothing here.
             'groups'     : groups,
-            'num_players': sum(g['size'] for g in groups),
+            # **The golfers in the POOL, not in the round** — this is what
+            # the payout card multiplies the entry by, so on a sparse pool
+            # the field's count would have the TD setting a table against a
+            # pot twice the size of the one that will be collected.
+            # Identical on a full field, which is every round before this.
+            'num_players': sum(g['size'] for g in groups if g['in_pool']),
             # **The scoring half is spent once the first count is picked.**
             # The money is not: an entry fee is not something a hole was
             # played against, so it stays open all round.
@@ -10239,6 +10303,30 @@ class FortyBallsSetupView(APIView):
                         'so how a score is measured cannot change now. The '
                         'entry and the payouts still can.'},
                     status=status.HTTP_409_CONFLICT)
+        # **Which groups are playing.** `None` means the request said nothing
+        # about it — every shipped build — so the pool is left exactly as it
+        # is; `[]` means the whole field.
+        group_ids = d.get('group_ids')
+        if group_ids is not None:
+            from services.group_field import not_in_round_group_ids
+            strays = not_in_round_group_ids(round_obj, group_ids)
+            if strays:
+                return Response(
+                    {'detail':
+                        f'{len(strays)} of those groups are not in this '
+                        f'round, so they cannot be in its 40 Balls pool.',
+                     'group_ids': strays},
+                    status=status.HTTP_400_BAD_REQUEST)
+            late = self._joining_too_late(round_obj, existing, group_ids)
+            if late:
+                return Response(
+                    {'detail':
+                        'Added too late: ' + '; '.join(late) +
+                        '. A group gets ten balls a golfer and the holes it '
+                        'has left cannot absorb them, so it would be out of '
+                        '40 Balls the moment it joined.'},
+                    status=status.HTTP_409_CONFLICT)
+
         cfg, _ = FortyBallsConfig.objects.update_or_create(
             round=round_obj,
             defaults={
@@ -10249,6 +10337,9 @@ class FortyBallsSetupView(APIView):
                 'payouts'      : d['payouts'],
             },
         )
+        if group_ids is not None:
+            field = set(round_obj.foursomes.values_list('pk', flat=True))
+            cfg.groups.set([g for g in dict.fromkeys(group_ids) if g in field])
         # Turning ITSELF on stays: configuring a game is how 40 Balls is
         # started, and `test_post_saves_and_turns_the_game_on` pins it. What
         # went is turning its PEERS off — it used to strip Irish Rumble and
@@ -10295,13 +10386,22 @@ class FortyBallsCountView(APIView):
     def post(self, request, pk):
         foursome = foursome_for_scorer(request.user, pk)
         from api.serializers import FortyBallsCountSerializer
-        from services.forty_balls import (FortyBallsLocked, group_card,
+        from services.forty_balls import (FortyBallsLocked,
+                                          FortyBallsNotPlaying, group_card,
                                           hole_state, set_count)
         ser = FortyBallsCountSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
         try:
             set_count(foursome, d['hole_number'], d['count'])
+        except FortyBallsNotPlaying as e:
+            # 400 rather than 409: this is not the round having moved on, it
+            # is a group that was never in the pool, so re-reading will not
+            # change the answer. Caught separately because neither exception
+            # catches the other — `except` on a subclass does not catch the
+            # base, and this codebase has already paid for that once.
+            return Response({'detail': str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)
         except FortyBallsLocked as e:
             # 409, not 400: the body was well formed and the refusal is about
             # the round's state, which is a different thing for a client to

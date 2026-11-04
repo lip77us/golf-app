@@ -93,6 +93,17 @@ class FortyBallsLocked(Exception):
     """A count was submitted for a hole that is no longer the group's to pick."""
 
 
+class FortyBallsNotPlaying(Exception):
+    """A count was submitted by a group a sparse 40 Balls has left out.
+
+    Named apart from :class:`FortyBallsLocked` rather than subclassing it:
+    a locked hole is a group that has moved ON and a left-out group was never
+    in, so one name for both would make every traceback ambiguous — the
+    `BankerSetupLocked` / `BankerLocked` split, for the same reason. The view
+    catches both; neither catches the other.
+    """
+
+
 # ---------------------------------------------------------------------------
 # The group
 # ---------------------------------------------------------------------------
@@ -352,6 +363,33 @@ def hole_state(foursome, hole_number: int) -> dict:
     }
 
 
+def joining_state(foursome) -> dict:
+    """The picker's state at the first hole a group could still count on.
+
+    For a group that has been playing all along that is simply where it is.
+    What it is FOR is the other case: a group added to a sparse pool part way
+    through a round, which has forty balls to place and can only place them on
+    holes that are not already settled behind it.
+
+    **`group_card`'s `dq` cannot answer this**, which is worth knowing because
+    it looks as though it should. That flag is about the budget not coming out
+    given the picks already MADE, and a group that has counted nothing has
+    every hole still pending — so a group fourteen holes into a round reads
+    perfectly healthy there while in fact being able to count on four.
+
+    The first open hole is the first one no later hole has overtaken, which is
+    `_is_locked`'s own rule read forwards. A hole with scores is open if
+    nothing after it has any: that is the hole the group is standing on.
+    """
+    holes = play_order(foursome.round, foursome)
+    config = _config(foursome.round)
+    nets, _pars = _scores_for(foursome, config)
+    touched = [h for h in holes if nets.get(h)]
+    first_open = next((h for h in holes if not _is_locked(h, holes, touched)),
+                      holes[-1] if holes else 1)
+    return hole_state(foursome, first_open)
+
+
 def _is_locked(hole_number, holes, scored) -> bool:
     """A hole is settled once a LATER one has scores.
 
@@ -376,6 +414,15 @@ def _is_locked(hole_number, holes, scored) -> bool:
 
 def set_count(foursome, hole_number: int, count: int) -> FortyBallsHoleCount:
     """Record the group's pick, and fill in anything it no longer chooses."""
+    from services.group_field import plays_pool_game
+    if not plays_pool_game(foursome, _config(foursome.round)):
+        # Checked FIRST and in the service, so every caller is covered and the
+        # refusal costs nothing: a group that is not in the pool has no budget
+        # to reason about, so `hole_state` below would be answering about a
+        # game it is not playing.
+        raise FortyBallsNotPlaying(
+            'This group is not in the 40 Balls pool for this round, so it has '
+            'no balls to count. Its scores still count for everything else.')
     state = hole_state(foursome, hole_number)
     if state['dq']:
         raise FortyBallsLocked(
@@ -593,8 +640,12 @@ def forty_balls_summary(round_obj) -> dict:
         return {}
 
     scored = scored_holes_by_foursome(round_obj)
-    cards = [group_card(fs, scored) for fs in
-             Foursome.objects.filter(round=round_obj).order_by('group_number')]
+    # **The pool's own field, which may be a subset of the round's groups.**
+    # A sixty-player event can run 40 Balls between four of its fifteen
+    # groups; the groups left out keep scoring and simply have no card here.
+    from services.group_field import pool_foursomes
+    playing = pool_foursomes(round_obj, config)
+    cards = [group_card(fs, scored) for fs in playing]
     cards = [c for c in cards if c['group_size'] > 0]
 
     live = [c for c in cards if not c['dq']]
@@ -635,7 +686,11 @@ def forty_balls_summary(round_obj) -> dict:
                         'split_ways': c['group_size']})
 
     fee = float(config.entry_fee)
+    # The pool is the golfers IN it, so narrowing the field narrows the pot —
+    # a group that is not playing is not charged, and the board's own total is
+    # what settlement enters.
     golfers = sum(c['group_size'] for c in cards)
+    n_field = Foursome.objects.filter(round=round_obj).count()
     return {
         'handicap_mode': config.handicap_mode,
         'net_percent'  : config.net_percent,
@@ -645,5 +700,9 @@ def forty_balls_summary(round_obj) -> dict:
         'payouts'      : [{'place': p['place'], 'amount': float(p['amount'])}
                           for p in (config.payouts or [])],
         'n_groups'     : len(cards),
+        # So the board can say "4 of 15 groups" rather than leave a reader of
+        # a sixty-player event wondering where the other eleven went.
+        'n_field_groups': n_field,
+        'sparse'       : len(playing) < n_field,
         'results'      : results,
     }

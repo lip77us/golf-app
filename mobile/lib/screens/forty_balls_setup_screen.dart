@@ -49,8 +49,23 @@ class _FortyBallsSetupScreenState extends State<FortyBallsSetupScreen> {
   /// working out whether 100% is his number or ours.
   bool   _scoringTouched = false;
 
-  int _numPlayers = 0;
   List<Map<String, dynamic>> _groups = const [];
+
+  /// **Which groups are playing.** A sixty-player event run on paper in
+  /// another system can still have a 40 Balls side game between four of its
+  /// fifteen groups, played on the draw the event already has.
+  ///
+  /// Seeded from the server's own `in_pool`, which answers "every group" on a
+  /// round with no narrowing — so what this screen shows is what the server
+  /// will do, and on an unconfigured round that is the whole field.
+  Set<int> _inPool = {};
+
+  /// The golfers in the POOL, not in the round. The payout card multiplies
+  /// the entry by this, so it has to move as the TD ticks — which is why it
+  /// is computed here rather than read off the payload.
+  int get _numPlayers => _groups
+      .where((g) => _inPool.contains(g['foursome_id'] as int))
+      .fold(0, (n, g) => n + (g['size'] as int? ?? 0));
 
   /// **Spent once the first count is picked.** A group chose 2 balls on the
   /// 1st having looked at four nets; change the allowance, the mode or the cap
@@ -93,10 +108,13 @@ class _FortyBallsSetupScreenState extends State<FortyBallsSetupScreen> {
           .getFortyBallsSetup(widget.roundId);
       if (!mounted) return;
       setState(() {
-        _numPlayers = cfg['num_players'] as int? ?? 0;
         _groups = ((cfg['groups'] as List?) ?? const [])
             .map((g) => Map<String, dynamic>.from(g as Map))
             .toList();
+        _inPool = {
+          for (final g in _groups)
+            if (g['in_pool'] as bool? ?? true) g['foursome_id'] as int
+        };
         _mode = cfg['handicap_mode'] as String? ?? 'net';
         _netPercent = cfg['net_percent'] as int? ?? 100;
         _cap = cfg['net_max_double_bogey'] as bool? ?? true;
@@ -124,6 +142,10 @@ class _FortyBallsSetupScreenState extends State<FortyBallsSetupScreen> {
 
   String? get _blocker {
     if (_groups.isEmpty) return 'Set the groups first';
+    // **Two is the floor**: 40 Balls ranks groups against each other, so one
+    // group is a pot it pays back to itself. Said in the button rather than
+    // greyed out silently.
+    if (_inPool.length < 2) return 'Pick at least two groups';
     if (_fee <= 0) return 'Set the entry';
     return null;
   }
@@ -137,6 +159,12 @@ class _FortyBallsSetupScreenState extends State<FortyBallsSetupScreen> {
         netPercent       : _netPercent,
         netMaxDoubleBogey: _cap,
         entryFee         : _fee,
+        // Always sent, even when it is the whole field: the server reads an
+        // ABSENT list as "leave the pool alone" and `[]` as the field, and
+        // this screen always knows which it means.
+        groupIds: _inPool.length == _groups.length
+            ? const <int>[]
+            : _inPool.toList(),
         payouts: [
           for (var i = 0; i < _numPayouts; i++)
             {'place': i + 1,
@@ -237,11 +265,33 @@ class _FortyBallsSetupScreenState extends State<FortyBallsSetupScreen> {
         ),
         const SizedBox(height: 16),
 
+        // **One card, not two.** The budget and the field list the same
+        // groups, and two drawings of one thing is how they come to disagree
+        // — so the budget row IS the row you tick.
         _Card(
-          title: 'Budget',
-          trailing: 'follows the group size',
+          title: 'Which groups are playing',
+          trailing: '${_inPool.length} of ${_groups.length}',
           child: Column(children: [
-            for (final g in _groups) _budgetRow(g),
+            if (_groups.length > 1)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(spacing: 8, children: [
+                  TextButton(
+                      onPressed: _inPool.length == _groups.length
+                          ? null
+                          : () => setState(() => _inPool = {
+                                for (final g in _groups)
+                                  g['foursome_id'] as int
+                              }),
+                      child: const Text('All groups')),
+                  TextButton(
+                      onPressed: _inPool.isEmpty
+                          ? null
+                          : () => setState(() => _inPool = {}),
+                      child: const Text('None')),
+                ]),
+              ),
+            for (final g in _groups) _groupRow(g),
             if (_groups.isEmpty)
               Text('No groups yet — set them on Groups & tees.',
                   style: theme.textTheme.bodySmall
@@ -250,8 +300,12 @@ class _FortyBallsSetupScreenState extends State<FortyBallsSetupScreen> {
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'You set no balls. A foursome counts 40 over the round, a '
-                'threesome 30, and a group can count nothing on a hole.',
+                _inPool.length == _groups.length
+                    ? 'You set no balls. A foursome counts 40 over the round, '
+                      'a threesome 30, and a group can count nothing on a '
+                      'hole.'
+                    : 'The groups left out keep scoring — they are out of '
+                      '40 Balls, not out of the round, and they pay no entry.',
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
@@ -413,30 +467,70 @@ class _FortyBallsSetupScreenState extends State<FortyBallsSetupScreen> {
     );
   }
 
-  Widget _budgetRow(Map<String, dynamic> g) {
+  /// One group: in or out, its golfers, its budget.
+  ///
+  /// **The golfers are named in full.** This asks a TD which of fifteen
+  /// groups he means before anybody has hit a shot, and `Group 7` on its own
+  /// tells him nothing — the same call Hot Seat's order sheet makes about
+  /// short names.
+  Widget _groupRow(Map<String, dynamic> g) {
     final theme = Theme.of(context);
+    final id   = g['foursome_id'] as int;
     final size = g['size'] as int? ?? 0;
-    final b = g['budget'] as int? ?? 0;
-    // `72 possible, so 32 to spare` — the slack a group starts with, which is
-    // the number the picker counts down.
-    final possible = size * 18;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [
-        SizedBox(
-          width: 74,
-          child: Text('Group ${g['group_number']}',
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(fontWeight: FontWeight.w600)),
-        ),
-        Text('$b balls',
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(fontWeight: FontWeight.bold)),
-        const Spacer(),
-        Text('up to $size a hole · $possible possible · ${possible - b} spare',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-      ]),
+    final b    = g['budget'] as int? ?? 0;
+    final inPool = _inPool.contains(id);
+    final names  = (g['players'] as String? ?? '').trim();
+    final only   = _groups.length < 2;
+    return InkWell(
+      onTap: only
+          ? null
+          : () => setState(() {
+                inPool ? _inPool.remove(id) : _inPool.add(id);
+              }),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          if (!only)
+            SizedBox(
+              width: 40, height: 40,
+              child: Checkbox(
+                value: inPool,
+                onChanged: (v) => setState(() {
+                  v == true ? _inPool.add(id) : _inPool.remove(id);
+                }),
+              ),
+            ),
+          Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(g['label'] as String? ?? 'Group ${g['group_number']}',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: inPool
+                              ? null
+                              : theme.colorScheme.onSurfaceVariant)),
+                  if (names.isNotEmpty)
+                    Text(names,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant)),
+                ]),
+          ),
+          const SizedBox(width: 8),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text(inPool ? '$b balls' : 'not playing',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: inPool ? null : theme.colorScheme.onSurfaceVariant)),
+            if (inPool)
+              // `up to 4 a hole · 32 spare` — the slack a group starts with,
+              // which is the number the picker counts down.
+              Text('up to $size a hole · ${size * 18 - b} spare',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          ]),
+        ]),
+      ),
     );
   }
 }

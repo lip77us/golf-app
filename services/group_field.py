@@ -293,3 +293,55 @@ def refuse_if_another_one_pool_game(round_obj, this_game) -> None:
         f'This round is already running {named}. '
         f'{GameType(this_game).label} ranks the same groups into the same '
         f'pool, so a round runs one of them — turn {named} off first.')
+
+
+# ── who is in the pool ─────────────────────────────────────────────────────
+
+def pool_foursomes(round_obj, config) -> list:
+    """The groups a group game is played by, in group order.
+
+    **An empty narrowing means EVERY group in the round**, which is what every
+    round played before sparse participation and is therefore the degenerate
+    case rather than a second code path. A narrowing that defaulted to nobody
+    would blank an existing round's board the moment the column arrived —
+    the `ANDROID_BOARD_PHONES` reading, for the same reason.
+
+    `config` is duck-typed on a `groups` relation, so a game that has not
+    grown one yet answers "the whole field" and needs no branch here. 40 Balls
+    is the only one with it today; the other three of
+    :data:`ONE_POOL_GAMES` adopt it by adding the field and nothing else.
+
+    A group with no real golfers is left in — the callers that care about size
+    already filter on it, and dropping it here would make this answer two
+    questions.
+    """
+    field = list(Foursome.objects.filter(round=round_obj)
+                 .order_by('group_number'))
+    rel = getattr(config, 'groups', None) if config is not None else None
+    if rel is None:
+        return field
+    chosen = set(rel.values_list('pk', flat=True))
+    if not chosen:
+        return field
+    return [fs for fs in field if fs.pk in chosen]
+
+
+def plays_pool_game(foursome, config) -> bool:
+    """Is this one group in that game's field? Empty narrowing ⇒ yes."""
+    rel = getattr(config, 'groups', None) if config is not None else None
+    if rel is None:
+        return True
+    chosen = set(rel.values_list('pk', flat=True))
+    return (not chosen) or foursome.pk in chosen
+
+
+def not_in_round_group_ids(round_obj, group_ids) -> list:
+    """Of `group_ids`, the ones that are not groups of this round.
+
+    Refused by NAME rather than dropped silently, the same call the sparse
+    skins pool makes: a TD who ticked something and then found it gone has
+    nothing to read.
+    """
+    mine = set(Foursome.objects.filter(round=round_obj)
+               .values_list('pk', flat=True))
+    return [g for g in dict.fromkeys(group_ids) if g not in mine]

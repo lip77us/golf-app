@@ -247,8 +247,25 @@ def _group_game_pots(tournament):
             summary = _one_pool_summary(slug, round_obj)
             name = label or summary.get('name') or slug
             pot = _Pot(slug, f'{name} · R{n}', n)
-            pot.enter(players, float(summary.get('entry_fee') or 0))
-            for row in summary.get(rows_key) or []:
+            rows = summary.get(rows_key) or []
+            # **The entrants are the golfers of the groups the BOARD reports**,
+            # not every golfer in the round. 40 Balls may be played by four of
+            # a sixty-player event's fifteen groups, and a group that is not
+            # playing must not be charged.
+            #
+            # Behaviour-preserving for a full field, which is every other
+            # round: the board lists every group, scored or not, DQ'd or not
+            # — and a DQ'd group did enter, which is exactly why the entry is
+            # read off the rows rather than off the ranking.
+            entrants = []
+            for row in rows:
+                fs_id = row.get('foursome_id')
+                if fs_id is None and row.get('group_number') is not None:
+                    fs_id = _foursome_id_for_group(round_obj,
+                                                   row['group_number'])
+                entrants.extend(_group_member_ids(round_obj, fs_id))
+            pot.enter(entrants, float(summary.get('entry_fee') or 0))
+            for row in rows:
                 share = row.get('per_person_payout') or 0
                 if not share:
                     continue

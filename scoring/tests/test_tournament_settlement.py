@@ -650,3 +650,136 @@ class SparseSkinsPoolTests(SettlementBase):
         keys = [g['key'] for g in tournament_settlement(self.tourn)['games']]
         self.assertIn('multi_skins', keys)
         self.assertNotIn('skins', keys)
+
+
+class Sparse40BallsPotTests(SettlementBase):
+    """**40 Balls between a subset of the GROUPS.**
+
+    The other sparse pot in here is the skins pool, and the two are sparse in
+    different dimensions: skins ranks golfers, so a subset there is a subset of
+    the field's golfers; 40 Balls ranks groups, so a subset is a subset of the
+    groups. What they share is that the entry follows the board — a group that
+    is not playing is not charged.
+    """
+
+    def _forty_balls(self, round_obj, group_numbers=None, fee='10.00',
+                     first=None):
+        """`first` is the 1st prize; left out it is the whole pool, so the pot
+        balances and the test is about WHO paid rather than about a table the
+        TD set against the wrong field."""
+        from games.models import FortyBallsConfig
+        from services.group_field import pool_foursomes
+        cfg = FortyBallsConfig.objects.create(
+            round=round_obj, entry_fee=Decimal(fee), payouts=[])
+        if group_numbers is not None:
+            cfg.groups.set(round_obj.foursomes.filter(
+                group_number__in=group_numbers))
+        if first is None:
+            golfers = sum(
+                fs.memberships.filter(player__is_phantom=False).count()
+                for fs in pool_foursomes(round_obj, cfg))
+            first = float(Decimal(fee)) * golfers
+        cfg.payouts = [{'place': 1, 'amount': first}]
+        cfg.save(update_fields=['payouts'])
+        round_obj.active_games = (list(round_obj.active_games or [])
+                                  + ['forty_balls'])
+        round_obj.save(update_fields=['active_games'])
+        return cfg
+
+    def _spend_the_budget(self, round_obj):
+        """A legal 40-ball plan for every playing group, written straight to
+        the table: `set_count` is the group picking as it plays, and this
+        fixture has already played the round.
+
+        **It has to spend the budget EXACTLY.** Two a hole is 36 of 40, which
+        leaves four balls owed with no holes to put them on — the DQ state —
+        and a DQ'd group takes no prize, so the pot would collect and pay
+        nothing. 2 × 16 + 4 × 2 = 40.
+        """
+        from games.models import FortyBallsHoleCount
+        from services.group_field import pool_foursomes
+        for fs in pool_foursomes(round_obj, round_obj.forty_balls_config):
+            for h in (hh['number'] for hh in DEFAULT_HOLES):
+                FortyBallsHoleCount.objects.create(
+                    foursome=fs, hole_number=h, count=4 if h > 16 else 2)
+
+    def test_only_the_playing_groups_pay_in(self):
+        self._forty_balls(self.rounds[0], group_numbers=[1])
+        self._play(self.rounds[0])
+        self._play(self.rounds[1])
+        self._close()
+
+        pot = self._by_key(tournament_settlement(self.tourn))['forty_balls·1']
+        # Four antes, not eight.
+        self.assertEqual(pot['entries_in'], 40.0)
+
+    def test_the_golfers_charged_are_the_ones_in_the_groups(self):
+        self._forty_balls(self.rounds[0], group_numbers=[1])
+        self._play(self.rounds[0])
+        self._play(self.rounds[1])
+        self._close()
+
+        playing = {
+            m.player_id for m in
+            self.rounds[0].foursomes.get(group_number=1).memberships.all()}
+        charged = set()
+        for g in tournament_settlement(self.tourn)['golfers']:
+            for line in g.get('entries', []):
+                if line['game'] == '40 Balls · R1':
+                    charged.add(g['player_id'])
+        self.assertEqual(charged, playing)
+
+    def test_a_full_field_is_unchanged(self):
+        """The whole point of empty-means-all: the shipped behaviour is the
+        degenerate case, so it cannot drift."""
+        self._forty_balls(self.rounds[0])
+        self._play(self.rounds[0])
+        self._play(self.rounds[1])
+        self._close()
+
+        pot = self._by_key(tournament_settlement(self.tourn))['forty_balls·1']
+        self.assertEqual(pot['entries_in'], 80.0)
+
+    def test_the_prize_pays_the_groups_and_the_pot_balances(self):
+        self._forty_balls(self.rounds[0], group_numbers=[1, 2])
+        self._play(self.rounds[0])
+        self._spend_the_budget(self.rounds[0])
+        self._play(self.rounds[1])
+        self._close()
+
+        pot = self._by_key(tournament_settlement(self.tourn))['forty_balls·1']
+        self.assertEqual(pot['entries_in'], 80.0)
+        self.assertEqual(pot['prizes_out'], 80.0)
+        self.assertTrue(pot['balanced'], pot)
+
+    def test_a_group_that_has_not_teed_off_still_paid_its_entry(self):
+        """Which is why the entrants are read off the BOARD's rows rather than
+        off the ranking: an unranked row is a group that entered."""
+        from services.forty_balls import forty_balls_summary
+        self._forty_balls(self.rounds[0], group_numbers=[1, 2])
+        # Only group 1 plays.
+        fs1 = self.rounds[0].foursomes.get(group_number=1)
+        members = list(fs1.memberships.select_related('player'))
+        for h in DEFAULT_HOLES:
+            submit_hole(fs1, h['number'],
+                        [(m.player, h['par']) for m in members])
+        # Both groups are on the board — the one that has not teed off
+        # included, which is the row the entry is read off.
+        rows = forty_balls_summary(self.rounds[0])['results']
+        self.assertEqual(len(rows), 2)
+
+        self._play(self.rounds[1])
+        self._close()
+        pot = self._by_key(tournament_settlement(self.tourn))['forty_balls·1']
+        self.assertEqual(pot['entries_in'], 80.0)
+
+    def test_the_board_s_own_pool_matches_what_settlement_collects(self):
+        """Two readings of one number is how they come to disagree."""
+        from services.forty_balls import forty_balls_summary
+        self._forty_balls(self.rounds[0], group_numbers=[2])
+        self._play(self.rounds[0])
+        self._play(self.rounds[1])
+        self._close()
+        board = forty_balls_summary(self.rounds[0])['pool']
+        pot = self._by_key(tournament_settlement(self.tourn))['forty_balls·1']
+        self.assertEqual(board, pot['entries_in'])

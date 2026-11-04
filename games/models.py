@@ -4274,6 +4274,25 @@ class FortyBallsConfig(models.Model):
                             default=list,
                             help_text="[{'place': 1, 'amount': 150.00}, …]")
 
+    #: **Which groups are playing — empty means EVERY group in the round.**
+    #:
+    #: A sixty-player event run on paper in another system can still have a
+    #: 40 Balls side game between four of its fifteen groups, and the draw it
+    #: is played on is the tournament's own. So participation narrows the
+    #: FIELD, not the golfers: 40 Balls ranks groups, so a subset of the
+    #: groups is what sparse means here, where the skins pool's subset is of
+    #: the golfers.
+    #:
+    #: Empty = all, for the reason `ANDROID_BOARD_PHONES` is: every round
+    #: played before this is the whole field, and a narrowing that defaulted
+    #: to nobody would make an existing round's board go blank the moment the
+    #: column arrived. It also means the unflighted case is the same code
+    #: path, which is what stops the two drifting apart.
+    groups            = models.ManyToManyField(
+                            'tournament.Foursome', blank=True,
+                            related_name='forty_balls_pools',
+                            help_text='Empty = every group in the round.')
+
     class Meta:
         verbose_name = '40 Balls Config'
 

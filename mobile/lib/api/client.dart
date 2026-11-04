@@ -976,6 +976,10 @@ class ApiClient {
     required bool                       netMaxDoubleBogey,
     required double                     entryFee,
     required List<Map<String, dynamic>> payouts,
+    /// Which groups are playing. **`[]` is the whole field; OMIT it to leave
+    /// the pool alone** — the server reads an absent list as "unchanged", so
+    /// a caller that has no opinion must not send one.
+    List<int>?                          groupIds,
   }) async {
     final data = await _post('/rounds/$roundId/forty-balls/setup/', {
       'handicap_mode'        : handicapMode,
@@ -983,6 +987,7 @@ class ApiClient {
       'net_max_double_bogey' : netMaxDoubleBogey,
       'entry_fee'            : entryFee.toStringAsFixed(2),
       'payouts'              : payouts,
+      if (groupIds != null) 'group_ids': groupIds,
     });
     return Map<String, dynamic>.from(data as Map);
   }
