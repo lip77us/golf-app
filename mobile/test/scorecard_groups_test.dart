@@ -127,4 +127,111 @@ void main() {
         {1: 1, 5: 1});
     expect(find.text('needs a scorer'), findsNothing);
   });
+
+  // ── The move sheet, from a 60-golfer pool (3 Nov 2026) ──────────────────
+  //
+  // "The group mover does not scroll and so the bottom groups could not be
+  // adjusted", and "I got stuck in a dialog without an esc". Everyone starts
+  // on his own card, so the destination list is as long as the field.
+
+  group('the move sheet', () {
+    // The destination list itself. The cards BEHIND the sheet carry the same
+    // "Group N" headings — a bottom sheet is not opaque, so they stay in the
+    // tree — and an unscoped finder picks whichever comes first.
+    Finder inSheet(Finder f) =>
+        find.descendant(of: find.byType(ListView), matching: f);
+
+    Future<Map<int, int>?> pumpMany(WidgetTester t, {int n = 20}) async {
+      // A phone, not the 800x600 test window: whether a tile is reachable is
+      // a question about a real screen.
+      await t.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      final players = [
+        for (var i = 1; i <= n; i++)
+          _p(i, 'Golfer ${i.toString().padLeft(2, '0')}'),
+      ];
+      return _pump(t, players, {for (var i = 1; i <= n; i++) i: i});
+    }
+
+    testWidgets('scrolls, so the bottom group can be reached', (t) async {
+      Map<int, int>? out;
+      await t.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      final players = [
+        for (var i = 1; i <= 20; i++)
+          _p(i, 'Golfer ${i.toString().padLeft(2, '0')}'),
+      ];
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: ScorecardGroups(
+              players: players,
+              groups: {for (var i = 1; i <= 20; i++) i: i},
+              onChanged: (next) => out = next,
+            ),
+          ),
+        ),
+      ));
+      await t.tap(find.text('Move').first);
+      await t.pumpAndSettle();
+
+      // The list is the sheet's content, so the list is what scrolls.
+      final list = find.descendant(
+          of: find.byType(ListView), matching: find.byType(Scrollable));
+      expect(list, findsOneWidget);
+      // scrollUntilVisible is satisfied as soon as the tile is BUILT, which
+      // a ListView does for a cache extent beyond the viewport — so it can
+      // stop with the tile still off-screen and untappable. ensureVisible is
+      // what actually brings it in, and is what a thumb does.
+      await t.scrollUntilVisible(inSheet(find.text('Group 20')), 200,
+          scrollable: list);
+      await t.ensureVisible(inSheet(find.text('Group 20')));
+      await t.pumpAndSettle();
+      await t.tap(inSheet(find.text('Group 20')));
+      await t.pumpAndSettle();
+
+      // Golfer 1 is on the last card now — the move the old sheet could not
+      // make, because the tile was past the fold of a Column.
+      expect(out![1], out![20]);
+    });
+
+    testWidgets('has a visible way out that changes nothing', (t) async {
+      final out = await pumpMany(t);
+      expect(out, isNull);
+      await t.tap(find.text('Move').first);
+      await t.pumpAndSettle();
+      expect(find.text('Cancel'), findsOneWidget);
+      await t.tap(find.text('Cancel'));
+      await t.pumpAndSettle();
+      expect(find.text('Move Golfer 01'), findsNothing);
+    });
+
+    testWidgets('offers a search once the list is long', (t) async {
+      await pumpMany(t);
+      await t.tap(find.text('Move').first);
+      await t.pumpAndSettle();
+      await t.enterText(find.byType(TextField), 'Golfer 17');
+      await t.pumpAndSettle();
+      expect(inSheet(find.text('Group 17')), findsOneWidget);
+      expect(inSheet(find.text('Group 18')), findsNothing);
+    });
+
+    testWidgets('and no search when the whole list fits', (t) async {
+      await _pump(t, _eight, _fourOneOneTwo);
+      await t.tap(find.text('Move').last);
+      await t.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing);
+    });
+
+    testWidgets('puts a card of his own ABOVE the groups', (t) async {
+      // Below a 59-tile list it is exactly as unreachable as the bottom group
+      // was, and it is not a group.
+      await _pump(t, _eight, _fourOneOneTwo);
+      await t.tap(find.text('Move').first);      // Ann, on the foursome
+      await t.pumpAndSettle();
+      final own = t.getTopLeft(find.text('A card of his own')).dy;
+      final first = t.getTopLeft(inSheet(find.text('Group 2'))).dy;
+      expect(own, lessThan(first));
+    });
+  });
 }

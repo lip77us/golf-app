@@ -139,16 +139,38 @@ class _RoundGroupsScreenState extends State<RoundGroupsScreen> {
     final picked = await showModalBottomSheet<PlayerProfile>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => SafeArea(
+      builder: (ctx) => ConstrainedBox(
+        // Capped rather than sized to a 128-golfer roster: a sheet that fills
+        // the screen leaves no barrier to tap, which is how somebody ends up
+        // escaping with the back arrow (see `widgets/scorecard_groups.dart`).
+        constraints:
+            BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.75),
+        child: SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const SizedBox(height: 12),
-          Text('Add a golfer',
-              style: Theme.of(ctx).textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 4),
-          Text('He goes on a card of his own.',
-              style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 8, 0),
+            child: Row(children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Add a golfer',
+                        style: Theme.of(ctx).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                    Text('He goes on a card of his own.',
+                        style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+              // An explicit way out, the same as the move sheet's.
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+            ]),
+          ),
           const SizedBox(height: 8),
           Flexible(
             child: ListView(
@@ -164,6 +186,7 @@ class _RoundGroupsScreenState extends State<RoundGroupsScreen> {
             ),
           ),
         ]),
+        ),
       ),
     );
     if (picked == null || !mounted) return;

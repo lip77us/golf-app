@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../theme/halved_brand.dart';
 import '../utils/create_casual_round.dart';
+import '../utils/discard_draft.dart';
 import '../utils/skins_cards.dart';
 import '../widgets/scorecard_groups.dart';
 import '../utils/roster_sections.dart';
@@ -32,6 +33,16 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
   bool _loading = true;
   Object? _error;
   bool _creating = false;
+
+  /// The selection the screen made for ITSELF on load — the logged-in golfer.
+  /// Backing out with only that picked loses nothing, so it is not "work" and
+  /// earns no confirmation.
+  Set<int> _seeded = {};
+
+  /// Somebody was created inline during this visit. They are written to the
+  /// roster as they are created, which is the one thing the discard prompt can
+  /// honestly reassure about.
+  bool _addedGolfers = false;
 
   List<CourseInfo> _courses = [];
   List<TeeInfo> _tees = [];
@@ -256,6 +267,10 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           // disabled until _selectedCourse is set by a real tap.
         }
 
+        // What the screen picked by itself, so a back-out from an untouched
+        // wizard is silent while one with real work in it is not.
+        _seeded = _playerTees.keys.toSet();
+
         _loading = false;
       });
     } catch (e) {
@@ -369,6 +384,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       }
       // A golfer pulled back off Halved may already be on the shortlist.
       if (created.isFavorite) _favoriteIds.add(created.id);
+      _addedGolfers = true;
     });
     if (_selectedCourse != null) {
       _onPlayerToggle(created.id, true);
@@ -922,6 +938,44 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
       context.read<AuthProvider>().player != null &&
       _playerTees.containsKey(context.read<AuthProvider>().player!.id);
 
+  /// Is there anything in this wizard worth asking about before it closes?
+  ///
+  /// The logged-in golfer is ticked on load by the screen itself, so that
+  /// alone is not work — otherwise opening the wizard and immediately
+  /// changing your mind would be challenged.
+  bool get _hasWork =>
+      _selectedCourse != null ||
+      _primaryGame != null ||
+      !_setEq(_playerTees.keys.toSet(), _seeded);
+
+  static bool _setEq(Set<int> a, Set<int> b) =>
+      a.length == b.length && a.containsAll(b);
+
+  /// Every way out of this wizard, in one place.
+  ///
+  /// The app bar's arrow used to pop the ROUTE, so a golfer looking for a way
+  /// out of the move sheet closed the whole wizard and lost his draft
+  /// (reported 3 Nov 2026). It steps BACK through the wizard now, which is
+  /// what `new_round_wizard.dart` and `setup_round_players_screen.dart` have
+  /// always done — this screen was the one with two back affordances that
+  /// meant different things.
+  Future<void> _back() async {
+    if (_creating) return;
+    if (_step > 0) {
+      setState(() {
+        // Back has to undo the jump, or a solo round lands on the step Next
+        // skipped.
+        _step = (_skipPlayerStep && _step == _teeStep) ? 0 : _step - 1;
+      });
+      return;
+    }
+    if (_hasWork &&
+        !await confirmDiscardDraft(context, addedGolfers: _addedGolfers)) {
+      return;
+    }
+    if (mounted) Navigator.of(context).pop();
+  }
+
   bool get _hasGroupsStep => _multiGroup;
   int get _groupsStep => _hasGroupsStep ? 2 : -1;
   int get _teeStep => _hasGroupsStep ? 3 : 2;
@@ -933,9 +987,15 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         : _step == 1
             ? 'Players'
             : (_step == _groupsStep ? 'Groups' : 'Tees');
-    return Scaffold(
+    return PopScope(
+      // Catches the system/swipe back as well as the arrow, so neither can
+      // drop the draft on the floor.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) { if (!didPop) _back(); },
+      child: Scaffold(
       backgroundColor: Halved.surface,
       appBar: AppBar(
+        leading: BackButton(onPressed: _back),
         backgroundColor: Halved.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
@@ -950,6 +1010,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
         // the golfer search or an inline add-a-golfer field is open.
         if (!_loading && _error == null) _buildNav(),
       ]),
+      ),
     );
   }
 
@@ -962,15 +1023,7 @@ class _CasualRoundScreenState extends State<CasualRoundScreen> {
           children: [
             if (_step > 0)
               OutlinedButton(
-                onPressed: _creating
-                    ? null
-                    : () => setState(() {
-                          // Back has to undo the jump, or a solo round lands
-                          // on the step Next skipped.
-                          _step = (_skipPlayerStep && _step == _teeStep)
-                              ? 0
-                              : _step - 1;
-                        }),
+                onPressed: _creating ? null : _back,
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Halved.pine,
                   side: const BorderSide(color: Halved.pine, width: 1.5),

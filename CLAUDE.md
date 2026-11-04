@@ -9618,3 +9618,83 @@ save. Verified against round 572 itself, not only against fixtures.
 Tests: `api/test_stroke_with_skins.py` (16) and
 `mobile/test/stroke_with_skins_test.dart` (12). Every guard was checked by
 making it fail.
+
+## The casual group mover — a list that would not scroll, and a way out that ended the wizard
+
+Both reported from a 60-golfer Multi-Group Skins round (3 Nov 2026) and left
+until the tournament side game was built, because a tournament pool does not
+go near this flow:
+
+> *"1) The group mover does not scroll and so the bottom groups could not be
+> adjusted. 2) I got stuck in a dialog without an esc and the only option was
+> back arrow which ended the wizard and I lost all of the players that I had
+> added."*
+
+**They are one sequence.** The sheet he could not finish is the sheet he could
+not get out of.
+
+### The sheet — `widgets/scorecard_groups.dart`
+
+Everyone starts on his own card, because most of a pool is spread across the
+field and the work is saying which few play together — so the destination list
+is as long as the field: **59 tiles for a 60-man pool.** The sheet was a plain
+`Column`, which does not scroll: it overflows its box and every tile past the
+fold is simply unreachable. The list is the sheet's whole content, so the list
+is what has to scroll (`isScrollControlled` + a `Flexible` `ListView`, capped
+at three quarters of the screen rather than sized to its contents).
+
+Three things came with it, each about the same failure:
+
+- **Cancel.** Tapping the barrier always dismissed it, but a sheet with no
+  visible way out is one people escape with the back arrow.
+- **"A card of his own" is pinned ABOVE the list.** It is not a group, and
+  anything below a 59-tile list is exactly as unreachable as the bottom group
+  was.
+- **A search above eight destinations**, matching the group label or any
+  golfer on it. Eight is roughly what a half-screen sheet fits; the sparse 40
+  Balls card reaches the same conclusion at twelve, where the rows are golfers
+  rather than groups.
+
+The hub's own **Add a golfer** sheet (`round_groups_screen.dart`) already had
+the scroll and gained the Cancel and the cap: same flow one screen over, with
+a 128-golfer roster behind it.
+
+### The arrow — `casual_round_screen.dart`
+
+**The casual wizard's app bar arrow popped the ROUTE.**
+`new_round_wizard.dart` and `setup_round_players_screen.dart` have both had
+`PopScope(canPop: false)` + `leading: BackButton(onPressed: _back)` since they
+were written, so their arrow steps back through the wizard. This screen was the
+one with two back affordances that meant different things, and the bigger one
+threw the draft away — the repo's own *reachable from one screen and not the
+other*, with the escape hatch as the thing that was missing.
+
+It steps now, through **one** `_back()` that the in-body Back button shares, so
+the two cannot drift apart again; a test pins that `_step - 1` appears exactly
+once in the file. The system/swipe back goes through it too.
+
+**Leaving from step 0 asks first** (`utils/discard_draft.dart`), and only when
+there is something to lose: the logged-in golfer is ticked on load by the
+screen itself, so `_hasWork` compares the selection against that seeded set —
+otherwise opening the wizard and immediately changing your mind would be
+challenged.
+
+**The prompt reassures about added golfers only when some were added.** A
+golfer created inline is written to the roster as he is created, so he really
+did survive, which is the exact thing Paul thought he had lost. Said on every
+back-out it would be noise.
+
+**Not done:** the draft itself is not persisted. With the arrow stepping and
+the prompt in place there is no accidental way to lose it, and keeping a
+half-built round across app launches is a feature rather than a fix.
+
+**One test lesson:** `scrollUntilVisible` is satisfied as soon as the tile is
+**built**, and a `ListView` builds a cache extent beyond the viewport — so it
+stops with the tile still off-screen and the tap then misses with
+*"would not hit test on the specified widget"*. `ensureVisible` is what
+actually brings it in, and is what a thumb does.
+
+Tests: the `move sheet` group in `mobile/test/scorecard_groups_test.dart` (5)
+and `mobile/test/wizard_back_test.dart` (12 — the prompt as a widget test, the
+wiring as source guards across all four wizards). Every one was checked by
+making it fail.
