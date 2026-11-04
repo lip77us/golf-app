@@ -1250,6 +1250,20 @@ class Round {
   /// it reads *Edit*. Round-level, so it cannot ride in a foursome's
   /// `configuredGames`.
   final bool hasSkinsPool;
+
+  /// **The game this round is SCORED on and does not say it is playing** —
+  /// `low_net_round` or `stableford` on an individual-play tournament round,
+  /// null on every casual round.
+  ///
+  /// An individual-play tournament sets its scoring method once, on the
+  /// tournament, so the ROUND's [activeGames] carries only its side games. A
+  /// stroke-play round with a Multi-Group Skins pool therefore reads as a
+  /// skins round to anything that asks the round what it is playing — which
+  /// is how it got the pool's standings card, the pool as its primary game,
+  /// and no stroke-play entry at all.
+  ///
+  /// Null from a server that predates it, so an older server is unchanged.
+  final String? scoringGame;
   final List<Foursome> foursomes;
   /// True when this round has been configured via CupRoundSetupScreen
   /// (i.e. a RyderCupRoundConfig exists on the backend).
@@ -1320,6 +1334,7 @@ class Round {
     this.isFinalRound  = false,
     this.hasDayBet     = false,
     this.hasSkinsPool  = false,
+    this.scoringGame,
     this.isTeamPlayRound = false,
     this.teamPlayFormat,
     this.teamPlaySize,
@@ -1353,6 +1368,7 @@ class Round {
         isFinalRound: j['is_final_round'] as bool? ?? false,
         hasDayBet:    j['has_day_bet'] as bool? ?? false,
         hasSkinsPool: j['has_skins_pool'] as bool? ?? false,
+        scoringGame: j['scoring_game'] as String?,
         isTeamPlayRound: j['is_team_play_round'] as bool? ?? false,
         teamPlayFormat: (j['team_play'] as Map?)?['format'] as String?,
         teamPlaySize  : (j['team_play'] as Map?)?['team_size'] as int?,

@@ -9529,3 +9529,92 @@ Tests: `api/test_forty_balls_sparse.py` (28), `Sparse40BallsPotTests`
 (`scoring/tests/test_tournament_settlement.py`, 6) and
 `mobile/test/forty_balls_sparse_test.dart` (17). Every guard was checked by
 making it fail.
+
+## Stroke With Skins — the round that did not know what it was scored on
+
+Reported 4 Nov 2026 from a tournament of that name: *"For stroke with Multi
+Group Skins, lets remove the skins section from the score entry screen. Also
+didn't we start to rework stroke play with the new score entry model? I like
+the fast score entry option."*
+
+**Two complaints, one cause.** The Stroke Play rework
+(`~/Downloads/handoff-stroke-play`) was built — keypad, dark tray, hole card,
+board — and on this round it was unreachable, while the skins pool's standings
+card had taken the screen. Round 572's data says why in one line:
+
+```
+Tournament.scoring_method = 'stroke'   Round.active_games = ['multi_skins']
+```
+
+**An individual-play tournament sets its scoring method ONCE, on the
+tournament**, and the round carries only its side games. So every gate in
+`score_entry_screen` — which all read `_activeGames` — was told the round was
+playing a skins pool, and `primaryGameOf` agreed:
+
+- the pool resolved as PRIMARY, so `if (primaryGame == 'multi_skins')` drew
+  the standings card;
+- `_keypadRound` wants `primary == strokePlay`, so no keypad;
+- `_strokePlayCard` is primary-gated, so no tray;
+- and `stroke_play_hole_card` **and** `_hole_tray_summaries` each gated on
+  `'low_net_round' in active_games`, so the server shipped nothing either.
+
+**The leaderboard never had this problem.** `_build_leaderboard` emits the
+Stroke Play block for every individual-ball round whatever `active_games`
+says — that `elif` has been there for a long time. Score entry had no
+equivalent, which is the whole gap.
+
+### Two fixes, each stating a rule
+
+**1. A round-wide pool never owns score entry.** `primaryGameOf`'s first loop
+returns the first game that is not side-game-eligible, and Multi-Group Skins
+is not — so it won. But it reads the scores each group's OWN game produced, so
+it cannot be the game that produces them. The loop now skips an `acrossGroups`
+game, and `_kSidePrimaryPriority` **has listed `multiSkins` last since it was
+written**, which only makes sense if the loop skips it: the list was written
+for this and the loop was never taught. A pool-ONLY round still lands on it,
+from that list, which is the one case where it really is all there is.
+
+`canBeSideGame` was deliberately NOT flipped. That would start offering the
+pool as a side game in the casual picker, which needs the deferred
+cross-round linkage — a much broader change than the bug.
+
+**Behaviour change worth knowing:** a LEGACY casual round with no stored
+primary running the pool plus another game now resolves to the other game
+(`['multi_skins','sixes']` → Sixes). That is the right reading — Sixes owns
+the teams and the segments — and anything made through the picker stores its
+primary, so `resolvePrimary` is unaffected.
+
+**2. The round says what it is SCORED on.**
+`services/low_net_round.unstated_scoring_game(round)` → `low_net_round` /
+`stableford` on an individual-play tournament round, **None on every casual
+round** (one that plays stroke play puts it in `active_games`, and that path
+works). None for a cup or Foursome Play event, and for a team-ball round where
+no golfer has a ball of his own — the same exclusion the board's tab makes.
+
+It is **not** the board's question and must not be fused with it: the board
+asks *does this round get a Stroke Play tab*, true of nearly every round; this
+asks *what is MISSING from `active_games`*. `plays_low_net_round(round)` is
+the one writer of "Stroke Play is this round's game", because the hole card
+and the hole tray both ask and a round where they disagreed would ship a tray
+with no card in it.
+
+- `RoundSerializer.scoring_game` carries it. **Sent rather than derived** — the
+  answer is the TOURNAMENT's `scoring_method`, which a round payload does not
+  hold.
+- `Round.scoringGame` on the client, null from an older server.
+- Folded in by **`_activeGames` in score entry**, not by `Round.activeGames`:
+  that reaches every gate on that screen and nothing else in the app. The
+  hub's Configure buttons and the pickers are about games somebody CHOSE,
+  which is a different question — putting it in `activeGames` would have the
+  hub offering *Configure Stroke Play* on a tournament round whose
+  championship owns it.
+
+### What the round does now
+`['multi_skins']` + `scoring_game: 'low_net_round'` ⇒ primary is Stroke Play ⇒
+the skins standings card is gone from entry (the pool keeps its leaderboard
+tab), the keypad and the dark tray are on, and the tray's card ships with the
+save. Verified against round 572 itself, not only against fixtures.
+
+Tests: `api/test_stroke_with_skins.py` (16) and
+`mobile/test/stroke_with_skins_test.dart` (12). Every guard was checked by
+making it fail.

@@ -646,7 +646,7 @@ def stroke_play_hole_card(foursome, hole: int) -> dict:
     the key.
     """
     round_obj = foursome.round
-    if 'low_net_round' not in (round_obj.active_games or []):
+    if not plays_low_net_round(round_obj):
         return {}
 
     try:
@@ -870,3 +870,63 @@ def _rep_par(membership, hole):
         return first.tee.hole(hole).get('par')
     except StopIteration:
         return None
+
+
+# ---------------------------------------------------------------------------
+# What a tournament round is SCORED on, when nothing in its games says so
+# ---------------------------------------------------------------------------
+
+def plays_low_net_round(round_obj) -> bool:
+    """Stroke Play is this round's own game.
+
+    Named in `active_games` — the casual path — **or** the scoring method of
+    the individual-play tournament it belongs to, which names it nowhere on
+    the round. One function because two callers ask it (the hole card and the
+    hole tray) and a round where they disagreed would ship a tray with no
+    card in it.
+    """
+    if 'low_net_round' in (round_obj.active_games or []):
+        return True
+    return unstated_scoring_game(round_obj) == 'low_net_round'
+
+
+def unstated_scoring_game(round_obj) -> str | None:
+    """The game this round is scored on and does not say it is playing.
+
+    **An individual-play tournament sets its scoring method ONCE, on the
+    tournament** (`stroke` or `stableford`), and the ROUND's `active_games`
+    carries only its side games. So a tournament round running stroke play
+    with a Multi-Group Skins pool stores `['multi_skins']` — and anything that
+    asks the round what it is playing gets "a skins pool".
+
+    The LEADERBOARD never had this problem: `_build_leaderboard` emits the
+    Stroke Play block for every individual-ball round whatever `active_games`
+    says. **Score entry did**, which is how a stroke round with a pool got the
+    pool's standings card, the pool as its primary game, and no stroke-play
+    entry at all — no keypad, no hole tray, no ribbon. Reported from a
+    tournament called "Stroke With Skins" (Paul, 4 Nov 2026).
+
+    This is deliberately NOT the board's question and must not be fused with
+    it. The board asks "does this round get a Stroke Play tab", which is true
+    of nearly every round including every casual one. This asks "what is
+    MISSING from `active_games`", and the answer for a casual round is
+    nothing: one that plays stroke play puts `low_net_round` in the list, and
+    that path works.
+
+    None when: no tournament, a cup or Foursome Play event (both keep their
+    own per-round scoring), a team-ball round where no golfer has a ball of
+    his own, or the game is already named.
+    """
+    t = getattr(round_obj, 'tournament', None)
+    if t is None or not t.is_individual_play:
+        return None
+    if getattr(t, 'is_team_play', False):
+        return None
+    games = set(round_obj.active_games or [])
+    # Team-ball formats have no per-golfer ball, so there is no individual
+    # score to be scored ON — the same exclusion the board's Stroke Play tab
+    # makes, for the same reason.
+    if games & {'triple_cup', 'scramble', 'team_play'}:
+        return None
+    slug = 'stableford' if t.scoring_method == 'stableford' else 'low_net_round'
+    return None if slug in games else slug

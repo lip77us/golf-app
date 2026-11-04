@@ -1137,10 +1137,19 @@ String? primaryGameOf(Iterable<String> active) {
   final list = active.toList();
   if (list.isEmpty) return null;
   bool sideOnly(String g) => _kGameById[g]?.sideGameOnly ?? false;
+  // **A round-wide pool never owns score entry.** Multi-Group Skins reads
+  // the scores each group's OWN game produced, so it cannot be the game that
+  // produces them — and `_kSidePrimaryPriority` below has listed it last
+  // since it was written, which only makes sense if this loop skips it. The
+  // loop was never taught, so a tournament round running stroke play with a
+  // pool resolved to the POOL: the skins standings card in score entry, no
+  // keypad, no tray. A pool-only round still lands on it, from the priority
+  // list, which is the one case where it really is all there is.
+  bool acrossGroups(String g) => _kGameById[g]?.acrossGroups ?? false;
   // Prefer an entry-owning game (not side-game-eligible). A side-game-only
   // add-on (Spots) is never a primary.
   for (final g in list) {
-    if (!canBeSideGame(g) && !sideOnly(g)) return g;
+    if (!canBeSideGame(g) && !sideOnly(g) && !acrossGroups(g)) return g;
   }
   // All side-game types — pick by priority, else the first non-add-on.
   for (final p in _kSidePrimaryPriority) {

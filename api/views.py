@@ -6216,6 +6216,13 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
     fetching when the key is missing.
     """
     active = set(foursome.round.active_games or []) | set(foursome.active_games or [])
+    # **What a tournament round is scored on, when its games do not say.** A
+    # stroke-play event's rounds carry only their SIDE games, so the tray's
+    # own gate would never fire on the round the tray is for.
+    from services.low_net_round import unstated_scoring_game
+    scored_on = unstated_scoring_game(foursome.round)
+    if scored_on:
+        active.add(scored_on)
     wants = {'annandale_friday', 'sixes', 'rabbit', 'survivor',
              'low_net_round'} & active
     if not wants:

@@ -358,8 +358,20 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     if (round.isCupRound && fsGames.isNotEmpty) {
       return fsGames.toList();
     }
-    // Regular rounds: union of round-level and foursome-level games.
-    return {...rdGames, ...fsGames}.toList();
+    // Regular rounds: union of round-level and foursome-level games, PLUS
+    // what the round is scored on when its games do not say.
+    //
+    // **An individual-play tournament sets its scoring method once, on the
+    // tournament**, so a stroke-play round carrying a Multi-Group Skins pool
+    // stores `['multi_skins']` alone — and every gate on this screen reads
+    // this list. That round got the pool's standings card, the pool as its
+    // primary game, and no stroke-play entry at all: no keypad, no hole
+    // tray, no ribbon. Added HERE rather than to `Round.activeGames` so it
+    // reaches every gate on this screen and nothing else in the app — the
+    // hub's Configure buttons and the pickers are about games somebody
+    // CHOSE, which is a different question.
+    final scored = round.scoringGame;
+    return {...rdGames, ...fsGames, if (scored != null) scored}.toList();
   }
 
   /// Games already configured for this foursome (bracket / game-model row exists).

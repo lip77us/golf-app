@@ -790,6 +790,10 @@ class RoundSerializer(serializers.ModelSerializer):
     is_final_round = serializers.SerializerMethodField()
     has_day_bet    = serializers.SerializerMethodField()
     has_skins_pool = serializers.SerializerMethodField()
+    # The game this round is SCORED on and does not say it is playing — an
+    # individual-play tournament sets its method once, on the tournament, so
+    # the round's own `active_games` carries only its side games.
+    scoring_game   = serializers.SerializerMethodField()
     can_regroup    = serializers.SerializerMethodField()
     # True when this round belongs to a Team Play tournament. The card and the
     # board are different enough — one number a hole, or four with a count —
@@ -857,6 +861,18 @@ class RoundSerializer(serializers.ModelSerializer):
         nobody is playing.
         """
         return getattr(obj, 'day_bet_config', None) is not None
+
+    def get_scoring_game(self, obj):
+        """`low_net_round` / `stableford` on a tournament round, else null.
+
+        Sent rather than derived, because the answer is the TOURNAMENT's
+        `scoring_method` and a round payload does not carry it. Null on every
+        casual round, where a round that plays stroke play says so in
+        `active_games` — see `low_net_round.unstated_scoring_game` for why
+        this is not the leaderboard's question.
+        """
+        from services.low_net_round import unstated_scoring_game
+        return unstated_scoring_game(obj)
 
     def get_has_skins_pool(self, obj) -> bool:
         """Whether this round's skins pool has a roster yet.
@@ -1080,6 +1096,8 @@ class RoundSerializer(serializers.ModelSerializer):
             'scramble_config', 'notes', 'foursomes',
             'is_cup_round', 'is_final_round', 'has_day_bet',
             'has_skins_pool',
+            # What this round is scored on when its games do not say.
+            'scoring_game',
             'can_regroup',
             'is_team_play_round', 'team_play',
             'ir_balls_config', 'can_manage',
