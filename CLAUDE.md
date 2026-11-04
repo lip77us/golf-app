@@ -9655,9 +9655,47 @@ Three things came with it, each about the same failure:
   Balls card reaches the same conclusion at twelve, where the rows are golfers
   rather than groups.
 
-The hub's own **Add a golfer** sheet (`round_groups_screen.dart`) already had
-the scroll and gained the Cancel and the cap: same flow one screen over, with
-a 128-golfer roster behind it.
+#### ...and then the sheet beside it — `widgets/pick_sheet.dart`
+
+The next report was the hub's own **Add a golfer**: *"add a golfer is just the
+list with no search. tough with 200 players in my membership"* (4 Nov 2026).
+That one already scrolled, and had just been given the Cancel and the cap —
+what it did not have was the search, because the search had been written into
+the move sheet.
+
+**Writing the same four things a second time is what says it is the wrong
+shape**, the lesson `TrayEditHeader` came out of. `pickFromSheet` owns all
+four and both sheets go through it:
+
+- **`isScrollControlled`**, which matters most because it is a FLAG at the
+  call site and a call site forgets flags. Without it a sheet is capped at
+  9/16 of the screen and a `Column` inside does not scroll, it OVERFLOWS:
+  every row past the fold unreachable, and nothing looking broken. That was
+  the original bug.
+- the height cap, so there is always a barrier to tap;
+- **Cancel**;
+- the search, past eight rows.
+
+Three rules the generic version had to state outright:
+
+- **A pinned row is OUTSIDE the scroll**, not merely first in the list. One
+  that starts at the top of a 200-row list is gone the moment somebody
+  scrolls, which is exactly when they still want it.
+- **A row that cannot be chosen still answers the search.** Hiding a full
+  group would read as the group not existing, which sends somebody looking
+  for it.
+- **`searchText` per row**: a group's subtitle carries SHORT names — four full
+  ones do not fit — so the search reads the full ones, or a golfer cannot be
+  found by his own name.
+
+**A mutation test that passes is not always a passing test.** The first
+version of the pinned-row test put the pinned rows at the head of the filtered
+list and passed, because "above the first group" and "survives the search"
+were both still true. It scrolls the list and checks the pinned row has not
+moved now, which is the property that was actually wanted.
+
+Tests: `mobile/test/pick_sheet_test.dart` (10), including the two source
+guards that neither caller builds a sheet of its own.
 
 ### The arrow — `casual_round_screen.dart`
 

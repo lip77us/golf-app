@@ -20,6 +20,7 @@ import '../api/models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/round_provider.dart';
 import '../utils/skins_cards.dart';
+import '../widgets/pick_sheet.dart';
 import '../widgets/error_view.dart';
 import '../widgets/golf_app_bar.dart';
 import '../widgets/golf_primary_button.dart';
@@ -136,58 +137,24 @@ class _RoundGroupsScreenState extends State<RoundGroupsScreen> {
         content: Text('Everybody on your roster is already in this round.')));
       return;
     }
-    final picked = await showModalBottomSheet<PlayerProfile>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => ConstrainedBox(
-        // Capped rather than sized to a 128-golfer roster: a sheet that fills
-        // the screen leaves no barrier to tap, which is how somebody ends up
-        // escaping with the back arrow (see `widgets/scorecard_groups.dart`).
-        constraints:
-            BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.75),
-        child: SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 8, 0),
-            child: Row(children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Add a golfer',
-                        style: Theme.of(ctx).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700)),
-                    Text('He goes on a card of his own.',
-                        style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
-                  ],
-                ),
-              ),
-              // An explicit way out, the same as the move sheet's.
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Cancel'),
-              ),
-            ]),
+    // 200 golfers is not a scroll anybody finishes (Paul, 4 Nov 2026), so
+    // this goes through the shared sheet: it owns the search, the scroll, the
+    // height cap and the Cancel. See `widgets/pick_sheet.dart`.
+    final picked = await pickFromSheet<PlayerProfile>(
+      context,
+      title: 'Add a golfer',
+      subtitle: 'He goes on a card of his own.',
+      searchHint: 'Search your golfers',
+      emptyText: (q) => 'Nobody called "$q" is on your roster, '
+          'or they are already in this round.',
+      options: [
+        for (final p in choices)
+          PickOption(
+            value: p,
+            title: p.name,
+            subtitle: 'Index ${p.handicapIndex}',
           ),
-          const SizedBox(height: 8),
-          Flexible(
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                for (final p in choices)
-                  ListTile(
-                    title: Text(p.name),
-                    subtitle: Text('Index ${p.handicapIndex}'),
-                    onTap: () => Navigator.of(ctx).pop(p),
-                  ),
-              ],
-            ),
-          ),
-        ]),
-        ),
-      ),
+      ],
     );
     if (picked == null || !mounted) return;
     setState(() => _saving = true);

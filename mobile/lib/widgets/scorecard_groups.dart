@@ -19,6 +19,7 @@ import '../api/models.dart';
 import '../theme/halved_brand.dart';
 import '../utils/skins_cards.dart';
 import 'halved_mark.dart';
+import 'pick_sheet.dart';
 
 class ScorecardGroups extends StatelessWidget {
   /// The golfers in the round, in roster order.
@@ -129,190 +130,60 @@ class ScorecardGroups extends StatelessWidget {
   /// A sheet rather than a dropdown: the `G1 / G2` picker this replaces said
   /// nothing about who was already there, which is the only thing a golfer
   /// deciding this cares about.
+  ///
+  /// Reported from a 60-golfer pool (3 Nov 2026): *"The group mover does not
+  /// scroll and so the bottom groups could not be adjusted"*, and *"I got
+  /// stuck in a dialog without an esc"*. Everyone starts on his own card,
+  /// because most of a pool is spread across the field — so this list is as
+  /// long as the field, 59 rows for a 60-man pool, and it was a `Column`,
+  /// which overflows rather than scrolling. [pickFromSheet] owns the scroll,
+  /// the cap, the Cancel and the search now, so the next long list cannot be
+  /// built without them.
+  ///
+  /// **A card of his own is PINNED**: it is not a group, and anything below a
+  /// 59-row list is exactly as unreachable as the bottom group was.
   Future<void> _move(BuildContext context, int id, int from,
       Map<int, PlayerProfile> byId, Map<int, List<int>> cards) async {
-    final target = await showModalBottomSheet<int>(
-      context: context,
-      // The list IS the sheet's content and it is as long as the field, so it
-      // has to be free to take the height it needs — see [_MoveSheet].
-      isScrollControlled: true,
-      builder: (ctx) => _MoveSheet(
-        name: byId[id]?.name ?? 'golfer',
-        from: from,
-        cards: cards,
-        byId: byId,
-      ),
+    // Every card except the one he is already on, labelled by POSITION — the
+    // stored numbers have gaps.
+    final destinations = <PickOption<int>>[
+      for (final (i, e) in cards.entries.indexed)
+        if (e.key != from)
+          PickOption(
+            value: e.key,
+            title: 'Group ${i + 1}',
+            // Short names: a card holds four, and four full names do not fit
+            // a subtitle. The search is what finds a golfer, so it reads the
+            // full ones.
+            subtitle: e.value
+                .map((p) => byId[p]?.displayShort ?? '?')
+                .join(', '),
+            searchText: e.value.map((p) => byId[p]?.name ?? '').join(' '),
+            enabled: e.value.length < kMaxCardSize,
+            trailing:
+                e.value.length >= kMaxCardSize ? const Text('Full') : null,
+          ),
+    ];
+    final target = await pickFromSheet<int>(
+      context,
+      title: 'Move ${byId[id]?.name ?? 'golfer'}',
+      options: destinations,
+      pinned: [
+        // Only offered when it would change something — a golfer already
+        // alone has nowhere new to go.
+        if ((cards[from]?.length ?? 0) > 1)
+          const PickOption(
+            value: -1,
+            title: 'A card of his own',
+            leading: Icon(Icons.add),
+          ),
+      ],
+      searchHint: 'Find a group or a golfer',
+      emptyText: (q) => 'No group has a golfer called "$q".',
     );
     if (target == null) return;
     final next = Map<int, int>.from(groups);
     next[id] = target == -1 ? nextFreeCard(groups.values) : target;
     onChanged(next);
-  }
-}
-
-/// Above this many destinations the sheet offers a search box. A sheet is
-/// about half a phone, so eight tiles is roughly what fits; past that, the
-/// scroll on its own is a long one. (The sparse 40 Balls card draws the same
-/// conclusion at twelve, where the rows are golfers rather than groups.)
-const int _kSearchAbove = 8;
-
-/// Where to move a golfer: another group, or a card of his own.
-///
-/// Reported from a 60-golfer pool (3 Nov 2026): *"The group mover does not
-/// scroll and so the bottom groups could not be adjusted"*, and *"I got stuck
-/// in a dialog without an esc and the only option was back arrow which ended
-/// the wizard"*. Both are this sheet, and three things were wrong with it.
-///
-/// **It could not scroll.** Everyone starts on his own card, because most of
-/// a pool is spread across the field — so the destination list is as long as
-/// the field, 59 tiles for a 60-man pool. The old sheet was a plain `Column`,
-/// which does not scroll: it overflows its box and every tile past the fold
-/// is simply unreachable. The list is the sheet's whole content, so the list
-/// is what has to scroll, and the sheet is capped at three quarters of the
-/// screen rather than sized to its contents.
-///
-/// **There was no visible way out.** Tapping the barrier always dismissed it,
-/// but a sheet with no Cancel is one people escape with the back arrow — and
-/// in the create-round wizard that arrow used to end the wizard. The fix to
-/// that is in `casual_round_screen.dart`; the missing Cancel is what sent him
-/// looking for it.
-///
-/// **A card of his own was at the BOTTOM.** It is pinned above the list now:
-/// it is not a group, and anything below a 59-tile list is exactly as
-/// unreachable as the bottom group was.
-class _MoveSheet extends StatefulWidget {
-  final String name;
-
-  /// The stored number of the card he is on — the one destination not offered.
-  final int from;
-
-  /// Stored group number → the ids on it, in group order.
-  final Map<int, List<int>> cards;
-
-  final Map<int, PlayerProfile> byId;
-
-  const _MoveSheet({
-    required this.name,
-    required this.from,
-    required this.cards,
-    required this.byId,
-  });
-
-  @override
-  State<_MoveSheet> createState() => _MoveSheetState();
-}
-
-class _MoveSheetState extends State<_MoveSheet> {
-  final TextEditingController _ctrl = TextEditingController();
-  String _query = '';
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  /// Who is on a card. Short names, deliberately: a card holds four, and four
-  /// full names do not fit a subtitle. The search is what finds a golfer.
-  String _namesOn(List<int> ids) =>
-      ids.map((p) => widget.byId[p]?.displayShort ?? '?').join(', ');
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final media = MediaQuery.of(context);
-
-    // Every card except the one he is already on, carrying its DISPLAY label
-    // (position, not the stored number — the numbers have gaps).
-    final all = <({int label, int number, List<int> ids})>[
-      for (final (i, e) in widget.cards.entries.indexed)
-        if (e.key != widget.from) (label: i + 1, number: e.key, ids: e.value),
-    ];
-    final q = _query.trim().toLowerCase();
-    final shown = q.isEmpty
-        ? all
-        : [
-            for (final c in all)
-              if ('group ${c.label}'.contains(q) ||
-                  c.ids.any((p) =>
-                      (widget.byId[p]?.name ?? '').toLowerCase().contains(q)))
-                c,
-          ];
-
-    return Padding(
-      // isScrollControlled lets the sheet clear the soft keyboard, which the
-      // search field needs.
-      padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: media.size.height * 0.75),
-        child: SafeArea(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 8, 0),
-              child: Row(children: [
-                Expanded(
-                  child: Text('Move ${widget.name}',
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700)),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-              ]),
-            ),
-            // Only offered when it would change something — a golfer already
-            // alone has nowhere new to go.
-            if ((widget.cards[widget.from]?.length ?? 0) > 1)
-              ListTile(
-                leading: const Icon(Icons.add),
-                title: const Text('A card of his own'),
-                onTap: () => Navigator.of(context).pop(-1),
-              ),
-            if (all.length > _kSearchAbove)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                child: TextField(
-                  controller: _ctrl,
-                  onChanged: (v) => setState(() => _query = v),
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    prefixIcon: Icon(Icons.search),
-                    hintText: 'Find a group or a golfer',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ),
-            if (shown.isEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: Text('No group has a golfer called "$_query".',
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-              )
-            else
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: shown.length,
-                  itemBuilder: (_, i) {
-                    final c = shown[i];
-                    final full = c.ids.length >= kMaxCardSize;
-                    return ListTile(
-                      enabled: !full,
-                      title: Text('Group ${c.label}'),
-                      subtitle: Text(_namesOn(c.ids)),
-                      trailing: full ? const Text('Full') : null,
-                      onTap: () => Navigator.of(context).pop(c.number),
-                    );
-                  },
-                ),
-              ),
-            const SizedBox(height: 8),
-          ]),
-        ),
-      ),
-    );
   }
 }
