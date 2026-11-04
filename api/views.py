@@ -48,6 +48,7 @@ Match Play
 
 import logging
 import re
+from collections import defaultdict
 
 from django.conf import settings
 from django.contrib.auth import authenticate
@@ -1242,7 +1243,69 @@ def _build_leaderboard(round_obj: Round) -> dict:
     # services/game_settings.py for why the stake is not among them.
     game_settings.attach(games)
 
+    progress = _field_progress(round_obj, foursomes)
+    if progress is not None:
+        # Not a game, so it is skipped by `_leaderboard_active_games` the way
+        # `settlement` and `receipt` are — an older client that tabs off the
+        # key set must not draw it as a junk tab.
+        games['field_progress'] = progress
+
     return games
+
+
+def _field_progress(round_obj, foursomes) -> dict | None:
+    """What the board is MISSING — which groups are not in yet, and which of
+    them are on paper.
+
+    Paul, 3 Nov 2026, of a 60-player event run in Golf Genius on paper: *"In
+    the Ryder Cup, there were a number of groups not using the app and it
+    would have been nice to enter the scores as they came in so the group on
+    the course had an accurate leaderboard."* The board was not wrong, it was
+    INCOMPLETE — and nothing on it said so, which is worse than a gap you can
+    see, because a golfer reads a position he is not actually in.
+
+    `paper_card` and "no scores yet" are deliberately reported separately. A
+    group that is behind might be on paper or might just be slow; the first is
+    the TD's job and the second sorts itself out, and a reader wants to know
+    which. A paper group that IS fully in needs no flag at all — how its card
+    reached the app stops mattering the moment it is there.
+
+    None on a single-group round, where there is no field to be missing from.
+    """
+    if len(foursomes) < 2:
+        return None
+    from services.group_field import holes_thru, scored_holes_by_foursome
+    from services.hole_plan import play_order
+
+    scored  = scored_holes_by_foursome(round_obj)
+    rows    = []
+    done    = 0
+    paper   = 0
+    for fs in foursomes:
+        expected = len(play_order(round_obj, fs)) or 18
+        thru     = holes_thru(round_obj, fs, scored.get(fs.id, set())) or 0
+        if fs.paper_card:
+            paper += 1
+        if thru >= expected:
+            done += 1
+            continue
+        rows.append({
+            'foursome_id' : fs.id,
+            'group_number': fs.group_number,
+            'name'        : fs.display_name,
+            'thru'        : thru,
+            'expected'    : expected,
+            'paper_card'  : fs.paper_card,
+        })
+    rows.sort(key=lambda r: (not r['paper_card'], r['thru'],
+                             r['group_number']))
+    return {
+        'groups'        : len(foursomes),
+        'complete'      : done,
+        'paper'         : paper,
+        'paper_awaiting': sum(1 for r in rows if r['paper_card']),
+        'awaiting'      : rows,
+    }
 
 
 def _summary_is_so(summ) -> bool:
@@ -1308,7 +1371,10 @@ def _leaderboard_active_games(round_obj, games_dict: dict) -> list:
         # 'receipt' is a capability flag, not a game either — it tells the
         # client whether to offer the casual receipt at all. Same reasoning,
         # same skip: a client that doesn't know the key must not render it.
-        if key in ('settlement', 'receipt'):
+        # 'field_progress' is what the board is MISSING — which groups are
+        # not in yet and which of them are on paper. A fact about the round,
+        # not a competition, so it skips for the same reason.
+        if key in ('settlement', 'receipt', 'field_progress'):
             continue
         if key not in active:
             active.append(key)
@@ -5530,6 +5596,32 @@ class ScorerDesignateView(APIView):
                          'scorer_player_ids': scorer_ids})
 
 
+class PaperCardView(APIView):
+    """
+    POST /api/foursomes/<pk>/paper-card/
+    Body: {"paper_card": true}
+
+    The TD marks a group as scoring on PAPER — it will not enter its own
+    scores, so he transcribes the card. Own-account only: it is a statement
+    about how the TD is running his event, not something a group decides for
+    itself.
+
+    It is DECLARED rather than derived, and that is the point. A group with no
+    scores yet might be on paper or might just be slow, and those are
+    different facts — the first is the TD's job and the second sorts itself
+    out. Deriving it from "has no on-app golfer" would be wrong the other way
+    too: a group can be all app users and still hand in a paper card.
+    """
+    def post(self, request, pk):
+        foursome = account_get_or_404(Foursome, request.user.account, pk=pk)
+        flag = bool(request.data.get('paper_card', True))
+        if flag != foursome.paper_card:
+            foursome.paper_card = flag
+            foursome.save(update_fields=['paper_card'])
+        return Response({'foursome_id': foursome.id,
+                         'paper_card': foursome.paper_card})
+
+
 class RoundSetupView(APIView):
     """
     POST /api/rounds/{id}/setup/
@@ -6171,6 +6263,92 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
     return out
 
 
+def _round_has_cross_foursome_phantom(round_obj) -> bool:
+    """Whether any phantom in this round is fed by another group's golfer.
+
+    Asked ONCE so `propagate_phantom_score` is not called at all on a round
+    that has no such phantom — which is most of them. It costs two queries a
+    score, invisible on one hole and 200 on a transcribed card.
+    """
+    from scoring.phantom import CROSS_FOURSOME_ALGORITHM_ID
+    return FoursomeMembership.objects.filter(
+        foursome__round=round_obj,
+        player__is_phantom=True,
+        phantom_algorithm=CROSS_FOURSOME_ALGORITHM_ID,
+    ).exists()
+
+
+def _write_hole_scores(foursome, membership_map, hole_number, scores,
+                       has_phantoms: bool | None = None) -> dict:
+    """Write one hole's gross scores and propagate to any phantom.
+
+    **Extracted so there is one writer**, because a second copy of this would
+    be a second copy of the handicap allocation — a per-player stroke index
+    off that player's own tee, scaled for a partial round — and this codebase
+    has the scars from exactly that shape (`record_hole`'s rotation, the four
+    `gross_total` traversals). The per-hole endpoint calls it once; the
+    whole-card endpoint calls it per hole and recalculates once at the end.
+
+    Returns {foursome_id: Foursome} for every OTHER foursome whose phantom
+    this donor feeds, so the caller can refresh their stored results.
+    """
+    from scoring.phantom import propagate_phantom_score
+
+    for s in scores:
+        pid         = s['player_id']
+        gross       = s['gross_score']
+        m           = membership_map[pid]
+
+        # gross_score=None → CLEAR this player's score on this hole. The
+        # client only sends this for the trailing/current hole, so the round
+        # stays a contiguous run (no mid-round gap). Deleting the row (rather
+        # than nulling gross) keeps "scored?" checks simple everywhere.
+        if gross is None:
+            HoleScore.objects.filter(
+                foursome=foursome, player_id=pid, hole_number=hole_number,
+            ).delete()
+            continue
+
+        # Per-player SI: pulled from THIS player's tee, not a shared one.
+        player_hole_info = m.tee.hole(hole_number)
+        stroke_index     = player_hole_info.get('stroke_index', 18)
+        # Pass hole_number so a partial round scales + re-ranks the handicap.
+        hcp_strokes = m.handicap_strokes_on_hole(stroke_index, hole_number)
+
+        hs, _ = HoleScore.objects.get_or_create(
+            foursome    = foursome,
+            player_id   = pid,
+            hole_number = hole_number,
+            defaults    = {'handicap_strokes': hcp_strokes},
+        )
+        hs.gross_score      = gross
+        hs.handicap_strokes = hcp_strokes
+        hs.save()
+
+    # Propagate scores to any cross-foursome phantom in the same round.
+    # A real player's gross score may be the donor for a phantom in another
+    # foursome — if so, write the phantom's HoleScore now so the Nassau
+    # calculator picks it up. Collect the affected phantom foursomes so the
+    # caller can recalc THEIRS — otherwise a donor change (incl. a
+    # retroactive edit/clear) refreshes only the phantom's raw score, and
+    # that foursome's stored result stays stale until it posts again (which
+    # may be never, if it's finished).
+    phantom_foursomes: dict = {}   # id -> Foursome
+    if has_phantoms is None:
+        has_phantoms = _round_has_cross_foursome_phantom(foursome.round)
+    if not has_phantoms:
+        return phantom_foursomes
+    for s in scores:
+        try:
+            for fs in propagate_phantom_score(
+                foursome.round, hole_number, s['player_id'], s['gross_score']
+            ):
+                phantom_foursomes[fs.id] = fs
+        except Exception:
+            pass  # never block score submission due to phantom propagation
+    return phantom_foursomes
+
+
 class ScoreSubmitView(APIView):
     """
     POST /api/foursomes/{id}/scores/
@@ -6241,55 +6419,8 @@ class ScoreSubmitView(APIView):
             ).exists()
         )
 
-        for s in scores:
-            pid         = s['player_id']
-            gross       = s['gross_score']
-            m           = membership_map[pid]
-
-            # gross_score=None → CLEAR this player's score on this hole. The
-            # client only sends this for the trailing/current hole, so the round
-            # stays a contiguous run (no mid-round gap). Deleting the row (rather
-            # than nulling gross) keeps "scored?" checks simple everywhere.
-            if gross is None:
-                HoleScore.objects.filter(
-                    foursome=foursome, player_id=pid, hole_number=hole_number,
-                ).delete()
-                continue
-
-            # Per-player SI: pulled from THIS player's tee, not a shared one.
-            player_hole_info = m.tee.hole(hole_number)
-            stroke_index     = player_hole_info.get('stroke_index', 18)
-            # Pass hole_number so a partial round scales + re-ranks the handicap.
-            hcp_strokes = m.handicap_strokes_on_hole(stroke_index, hole_number)
-
-            hs, _ = HoleScore.objects.get_or_create(
-                foursome    = foursome,
-                player_id   = pid,
-                hole_number = hole_number,
-                defaults    = {'handicap_strokes': hcp_strokes},
-            )
-            hs.gross_score      = gross
-            hs.handicap_strokes = hcp_strokes
-            hs.save()
-
-        # Propagate scores to any cross-foursome phantom in the same round.
-        # A real player's gross score may be the donor for a phantom in another
-        # foursome — if so, write the phantom's HoleScore now so the Nassau
-        # calculator picks it up. Collect the affected phantom foursomes so we
-        # can recalc THEIR games below — otherwise a donor change (incl. a
-        # retroactive edit/clear) refreshes only the phantom's raw score, and
-        # that foursome's stored result stays stale until it posts again (which
-        # may be never, if it's finished).
-        from scoring.phantom import propagate_phantom_score
-        phantom_foursomes: dict = {}   # id -> Foursome
-        for s in scores:
-            try:
-                for fs in propagate_phantom_score(
-                    foursome.round, hole_number, s['player_id'], s['gross_score']
-                ):
-                    phantom_foursomes[fs.id] = fs
-            except Exception:
-                pass  # never block score submission due to phantom propagation
+        phantom_foursomes = _write_hole_scores(
+            foursome, membership_map, hole_number, scores)
 
         # Pink ball lost flag.
         #
@@ -6363,6 +6494,112 @@ class ScoreSubmitView(APIView):
             'scorecard': _build_scorecard(foursome),
             **_hole_tray_summaries(foursome, hole_number),
         })
+
+
+class FoursomeCardView(APIView):
+    """
+    POST /api/foursomes/{id}/card/ — a whole paper scorecard in one request.
+
+    Body: {"scores": [{"player_id": 12, "hole_number": 1, "gross_score": 5}, …]}
+
+    **Why this exists.** A 60-player event run in Golf Genius on paper has
+    groups that are not using Halved at all, and the TD is the only person who
+    can get their scores in — so the group still on the course is reading a
+    leaderboard that is missing a third of the field. He could already do it:
+    `foursome_for_scorer` gives him every foursome in his own round and the hub
+    has always drawn him an Enter Scores button on each one. What he could not
+    do is do it QUICKLY — the per-hole endpoint means eighteen requests per
+    card, each recalculating every game in the round, which on a round with a
+    skins pool is some 800 queries for one card.
+
+    So: the same writer, looped over the holes, and **one recalculation at the
+    end.**
+
+    **A partial card is the normal case**, not an error. Transcribing for a
+    skins pool means entering the pool's golfers and leaving their partners
+    alone. Note what that costs in the pool: a hole counts only once EVERY
+    participant has a score on it, so a participant left blank removes that
+    hole from the pool for everybody, including the golfers who entered it
+    themselves. Enter a pool member's card in full or not at all.
+
+    **It announces nothing.** `emit_score_events` is per hole, so a card
+    entered after the group has finished would fire a burst of eighteen — a
+    birdie alert for a putt holed two hours ago is noise, and the result
+    announcements would all land at once. The round-started line is the one
+    exception, because the round really did start.
+    """
+
+    @transaction.atomic
+    def post(self, request, pk):
+        foursome = foursome_for_scorer(
+            request.user, pk,
+            base=Foursome.objects
+                    .select_related('round__course')
+                    .prefetch_related('memberships__player'),
+        )
+        from api.serializers import FoursomeCardSerializer
+        ser = FoursomeCardSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        rows = ser.validated_data['scores']
+
+        membership_map = {m.player_id: m
+                          for m in foursome.memberships.select_related('tee')}
+
+        # Same two refusals the per-hole endpoint makes, and for the same
+        # reason: stroke index and par come off each golfer's OWN tee.
+        missing_tee = [pid for pid, m in membership_map.items()
+                       if m.tee_id is None]
+        if missing_tee:
+            return Response(
+                {'detail': f'Players missing tee assignment: {missing_tee}'},
+                status=status.HTTP_400_BAD_REQUEST)
+        strangers = sorted({r['player_id'] for r in rows
+                            if r['player_id'] not in membership_map})
+        if strangers:
+            return Response(
+                {'detail': [f'Player {pid} is not in this foursome.'
+                            for pid in strangers]},
+                status=status.HTTP_400_BAD_REQUEST)
+
+        from services import activity_feed
+        first_score = (
+            activity_feed.enabled()
+            and any(r['gross_score'] is not None for r in rows)
+            and not HoleScore.objects.filter(
+                foursome__round_id=foursome.round_id,
+                player__is_phantom=False,
+            ).exists()
+        )
+
+        by_hole: dict = defaultdict(list)
+        for r in rows:
+            by_hole[r['hole_number']].append(
+                {'player_id': r['player_id'], 'gross_score': r['gross_score']})
+
+        phantom_foursomes: dict = {}
+        # Asked once for the whole card rather than once per hole.
+        has_phantoms = _round_has_cross_foursome_phantom(foursome.round)
+        for hole_number in sorted(by_hole):
+            phantom_foursomes.update(_write_hole_scores(
+                foursome, membership_map, hole_number, by_hole[hole_number],
+                has_phantoms=has_phantoms))
+
+        # ONCE, which is the whole point of the endpoint.
+        _recalculate_games(foursome)
+        for fs in phantom_foursomes.values():
+            if fs.id != foursome.id:
+                try:
+                    _recalculate_games(fs)
+                except Exception:
+                    pass
+
+        if first_score:
+            activity_feed.round_started(foursome.round)
+
+        return Response({
+            'holes_written': len(rows),
+            'scorecard'    : _build_scorecard(foursome),
+        }, status=status.HTTP_201_CREATED)
 
 
 # ---------------------------------------------------------------------------

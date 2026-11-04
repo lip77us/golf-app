@@ -125,7 +125,9 @@ urlpatterns = [
     path('foursomes/<int:pk>/phantom/init/', views.PhantomInitView.as_view(),         name='phantom-init'),
     path('foursomes/<int:pk>/scorecard/',    views.ScorecardView.as_view(),           name='api-scorecard'),
     path('foursomes/<int:pk>/scorer/',       views.ScorerDesignateView.as_view(),     name='api-foursome-scorer'),
+    path('foursomes/<int:pk>/paper-card/',   views.PaperCardView.as_view(),           name='api-foursome-paper-card'),
     path('foursomes/<int:pk>/scores/',       views.ScoreSubmitView.as_view(),         name='api-score-submit'),
+    path('foursomes/<int:pk>/card/',         views.FoursomeCardView.as_view(),        name='api-foursome-card'),
 
     # ---- Nassau ----
     path('foursomes/<int:pk>/nassau/',        views.NassauResultView.as_view(), name='api-nassau-result'),

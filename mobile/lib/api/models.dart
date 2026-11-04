@@ -1146,6 +1146,12 @@ class Foursome {
   /// starting_hole), and a display-only tee-slot label ("A"/"B") shown as
   /// "7A"/"7B" when two groups share a hole.
   final int? startingHole;
+
+  /// This group is scoring on PAPER — it will never enter its own scores, so
+  /// the TD transcribes the card. Declared by him, not derived: a group with
+  /// no scores yet might be on paper or might just be slow, and the first is
+  /// his job while the second sorts itself out.
+  final bool paperCard;
   final String shotgunSlot;
 
   const Foursome({
@@ -1163,6 +1169,7 @@ class Foursome {
     this.setupEditNote   = '',
     this.youScore        = false,
     this.startingHole,
+    this.paperCard       = false,
     this.shotgunSlot     = '',
   });
 
@@ -1179,6 +1186,7 @@ class Foursome {
         setupEditable:   j['setup_editable'] as bool? ?? true,
         setupEditNote:   (j['setup_edit_note'] as String?)?.trim() ?? '',
         youScore:        j['you_score'] as bool? ?? false,
+        paperCard:       j['paper_card'] as bool? ?? false,
         startingHole:    j['starting_hole'] as int?,
         shotgunSlot:     (j['shotgun_slot'] as String?)?.trim() ?? '',
         memberships:     (j['memberships'] as List? ?? [])

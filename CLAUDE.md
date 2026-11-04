@@ -9283,3 +9283,128 @@ Tests: `api/test_tournament_skins_pool.py` (10), `SparseSkinsPoolTests`
 `mobile/test/tournament_skins_pool_test.dart` (11), and two in
 `scoring/tests/test_multi_skins.py` for the money. Every guard was checked by
 making it fail.
+
+## Paper cards — the mixed event, where only some of the field is on the app
+
+Paul, 3 Nov 2026: *"The truth of this 60 person tournament is that it is run
+in golf genius with physical scorecards and some players choose not to use
+halved… In the Ryder Cup, there were a number of groups not using the app and
+it would have been nice to enter the scores as they came in so the group on
+the course had an accurate leaderboard."*
+
+He said it breaks the model. **It barely touches it.** `foursome_for_scorer`
+resolves own-account first, so the TD has always been authorised for every
+foursome in his own round, and `canEdit = canManage || …` has always drawn him
+an Enter Scores button on every group card. What was missing was **speed and
+legibility**, not permission.
+
+### `POST /api/foursomes/{id}/card/` — a whole card in one request
+
+The per-hole endpoint is eighteen requests a card, each recalculating every
+game in the round; on a round with a skins pool that is some 800 queries for
+one card, and eight paper groups is a hundred and forty-four screen
+transitions through the hole-by-hole flow. So: the same writer, looped over
+the holes, and **one recalculation at the end.** Measured, with a pool active:
+~860 against ~1600 for the eighteen posts it replaces, and the factor is what
+the test asserts rather than a ceiling — the ceiling moves with the games a
+round is playing.
+
+**`_write_hole_scores` was extracted so there is ONE writer.** A second copy
+would be a second copy of the handicap allocation — a per-player stroke index
+off that golfer's own tee, scaled for a partial round — and this codebase has
+the scars from exactly that shape (`record_hole`'s rotation, four
+`gross_total` traversals, three `gross_to_par`s one of which failed
+invisibly). A source test forbids the card view holding a write of its own,
+and an INDEPENDENT oracle checks the strokes against
+`handicap_strokes_on_hole` directly. The first version of that test wrote the
+card and re-posted every hole through `/scores/` expecting nothing to move,
+which cannot fail — both paths call the same function.
+
+**The body is FLAT** — (player, hole, gross) triples — because a partial card
+is the normal case, not an error: transcribing for a skins pool means entering
+the pool's golfers and leaving their partners alone.
+
+**It announces nothing.** `emit_score_events` is per hole, so a card typed in
+after the group finished would fire a burst of eighteen; a birdie alert for a
+putt holed two hours ago is noise. The round-started Slack line is the one
+exception, because the round really did start.
+
+Also fixed along the way: `propagate_phantom_score` was called per score and
+costs two queries whether or not the round HAS a cross-foursome phantom.
+`_round_has_cross_foursome_phantom` is asked once — which took ~140 queries
+off a card and helps the per-hole endpoint too.
+
+### What the board is missing — `field_progress`
+
+`Foursome.paper_card` (`tournament/0084`) plus a `field_progress` block on the
+round leaderboard: how many groups, how many are in, which are still out and
+how far round each got.
+
+**Paper and merely-behind are reported SEPARATELY, and that is the point.** A
+group with no scores might be on paper or might just be slow; the first is the
+TD's job and the second sorts itself out, and a reader wants to know which.
+`paper_card` is therefore DECLARED, not derived — deriving it from "has no
+on-app golfer" would also be wrong the other way, since a group can be all app
+users and still hand in a card. A paper group that IS fully in gets no flag at
+all: how its card reached the app stops mattering the moment it is there.
+
+The bar is **silent once the field is in**, names the groups while there are
+four or fewer (a list of eleven is not something anybody reads, and the count
+already said it), and leads with paper. It is a top-level banner beside Final
+Results, not a tab — `field_progress` is skipped by
+`_leaderboard_active_games` exactly as `settlement` and `receipt` are, so an
+older client cannot draw it as a junk tab.
+
+`FieldProgressBar` is in `widgets/` so the real thing can be tested; the first
+version of its test reimplemented its logic in the test file, which proves
+nothing.
+
+### The screen: a whole card, because that is the shape of the paper
+
+`screens/enter_card_screen.dart`, reached from **Type in the card** on every
+group card (not only the ones marked paper — a card handed over mid-round is
+the commonest case and nobody has marked anything). Nine holes down each
+column, OUT / IN / TOTAL, a pad at the bottom, and one Save covering every
+golfer typed on the visit: the TD types a column, taps the next name, types
+that one, saves once.
+
+**`+10` is an explicit key, not a timer.** Digits 1–9 write and advance, which
+is every score a transcriber meets; 10 and up are one extra tap rather than an
+ambiguity about whether a `1` is a 1 or the start of a 12. **Skip** leaves a
+hole blank and moves on. A nine subtotal is an em dash until the nine is
+whole, the rule every card in this app uses.
+
+### "Just the holes that matter" does NOT work — and this is why
+
+Paul's own ideal was to look at the card and the leaderboard and enter only
+the holes that could change the skins. **It collapses the pool.** A skins hole
+counts only once EVERY participant has a score on it — right for a live pool,
+since you cannot award a skin before everybody has played the hole — so a pool
+member left half-entered removes those holes from the pool **for everybody,
+including the golfers who entered them themselves.**
+
+`ThePoolCostOfAPartialCardTests` is the proof: an app golfer enters his whole
+card, his paper pool-mate gets one hole, and **one** skin resolves out of
+eighteen. Enter a pool member's card in full or not at all. The screen says so
+beside the golfers it applies to — marked `$`, and the note turns amber the
+moment one of them is part-entered.
+
+The entry screen is the answer to the thing the shortcut was for: only the
+POOL MEMBERS of a paper group need typing, so a group with one pool member is
+eighteen numbers, not seventy-two.
+
+### Not done
+
+- **A rule that would make the shortcut legal.** If a paper group's card were
+  marked *entered*, a hole could count once every participant either has a
+  score or sits in a group the TD has closed off — the TD asserting "I looked
+  at the card; he did not matter on the holes I left blank." It is a real
+  semantic change to the skins engine and it depends on his discipline, so it
+  wants asking for after the entry screen has been used in anger.
+- The bar is on the ROUND's leaderboard. A tournament-wide version would have
+  to decide what "the field" means across rounds.
+- `paper_card` is not surfaced in settlement or on the watch page.
+
+Tests: `api/test_paper_card.py` (21 — including the two that document the pool
+trap) and `mobile/test/paper_card_test.dart` (18). Every guard checked by
+making it fail.

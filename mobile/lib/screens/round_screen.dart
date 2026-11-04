@@ -17,6 +17,7 @@ import '../utils/match_handicap.dart';
 import '../utils/round_complete.dart';
 import '../utils/primary_handicap.dart';
 import '../utils/skins_pool_link.dart';
+import '../theme/halved_brand.dart';
 
 /// Handicap label for the hub. Shows the Course Handicap and, when it differs,
 /// the **Playing Handicap the player actually plays to** — the strokes received
@@ -1914,6 +1915,30 @@ class _FoursomeCard extends StatelessWidget {
   /// round default) + an optional tee-slot label. The scoring engines read
   /// foursome.starting_hole via play order, so the group immediately plays its
   /// wrapped sequence.
+  /// Mark this group as scoring on PAPER, or unmark it.
+  ///
+  /// No confirmation: it is a label, it is reversible from the same menu, and
+  /// it changes nothing that has been scored.
+  Future<void> _togglePaperCard(BuildContext context) async {
+    final want = !foursome.paperCard;
+    try {
+      await context.read<AuthProvider>().client
+          .setPaperCard(foursome.id, want);
+      onGamesChanged();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(want
+            ? '${foursome.label} is on paper — enter the card when it '
+                'comes in.'
+            : '${foursome.label} is no longer marked as paper.'),
+      ));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyError(e))));
+    }
+  }
+
   Future<void> _setStartingHole(BuildContext context, Foursome fs) async {
     int? hole = fs.startingHole;
     final slotCtrl = TextEditingController(text: fs.shotgunSlot);
@@ -2097,6 +2122,19 @@ class _FoursomeCard extends StatelessWidget {
               Text(foursome.teeTime!,
                   style: theme.textTheme.bodySmall),
             ],
+            // Scoring on paper — the TD's own label, so he can see at a
+            // glance which cards are his to type in. `caution` rather than
+            // the error red: a paper group is a legitimate state, not a
+            // mistake.
+            if (foursome.paperCard) ...[
+              const SizedBox(width: 8),
+              Icon(Icons.description_outlined,
+                  size: 14, color: Halved.caution),
+              const SizedBox(width: 2),
+              Text('On paper',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: Halved.caution)),
+            ],
             // Shotgun start assignment — "Starts 7A".
             if (foursome.startingHole != null) ...[
               const SizedBox(width: 8),
@@ -2158,6 +2196,9 @@ class _FoursomeCard extends StatelessWidget {
                     case 'move_player':
                       _showMovePlayerSheet(context);
                       break;
+                    case 'paper_card':
+                      _togglePaperCard(context);
+                      break;
                   }
                 },
                 itemBuilder: (_) => [
@@ -2218,6 +2259,28 @@ class _FoursomeCard extends StatelessWidget {
                                 : theme.colorScheme.onSurfaceVariant),
                         const SizedBox(width: 12),
                         const Flexible(child: Text('Set starting hole')),
+                      ]),
+                    ),
+                  // **A group that is not using the app at all.** The real
+                  // shape of a big event: 60 golfers run in Golf Genius on
+                  // paper, some groups with Halved and some without. Nobody
+                  // in a paper group will ever enter a score, so marking it
+                  // says on the leaderboard what the board is missing — and
+                  // tells a reader WHY that group is behind, which "no scores
+                  // yet" cannot.
+                  if (canManage)
+                    PopupMenuItem(
+                      value: 'paper_card',
+                      child: Row(children: [
+                        Icon(Icons.description_outlined, size: 18,
+                            color: foursome.paperCard
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurfaceVariant),
+                        const SizedBox(width: 12),
+                        Flexible(
+                            child: Text(foursome.paperCard
+                                ? 'Not on paper after all'
+                                : 'Scoring on paper')),
                       ]),
                     ),
                 ],
@@ -2386,6 +2449,31 @@ class _FoursomeCard extends StatelessWidget {
                 ),
               ),
             ),
+            // **Typing in a paper card.** A whole card on one screen rather
+            // than eighteen passes through the hole-by-hole flow, which is
+            // what made transcribing eight paper groups impractical.
+            //
+            // The TD could always enter another group's scores — the server
+            // has always authorised him and the button above has always been
+            // drawn for him. What he could not do is do it quickly.
+            //
+            // Offered on EVERY group, not only the ones marked paper: a card
+            // handed to him mid-round is the commonest case and nobody has
+            // marked anything. On a complete round it is the way to correct a
+            // card that went in wrong.
+            if (canManage) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context)
+                      .pushNamed('/enter-card', arguments: foursome.id)
+                      .then((_) => onGamesChanged()),
+                  icon: const Icon(Icons.description_outlined, size: 18),
+                  label: const Text('Type in the card'),
+                ),
+              ),
+            ],
             // Tees & Handicaps — the tee each golfer plays, and a forced
             // playing handicap for a card someone else manages (Golf Genius,
             // a club sheet).

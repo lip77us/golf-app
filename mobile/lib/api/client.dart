@@ -1333,6 +1333,25 @@ class ApiClient {
         {'player_id': playerId, 'is_scorer': isScorer});
   }
 
+  /// The TD marks a group as scoring on PAPER — it will enter nothing of its
+  /// own and he transcribes the card. Own-account only, server-side.
+  Future<void> setPaperCard(int foursomeId, bool on) async {
+    await _post('/foursomes/$foursomeId/paper-card/', {'paper_card': on});
+  }
+
+  /// A whole paper scorecard in ONE request.
+  ///
+  /// `rows` are flat (player, hole, gross) triples, because a PARTIAL card is
+  /// the normal case here: transcribing for a skins pool means entering the
+  /// pool's golfers and leaving their partners alone. The server writes them
+  /// through the same writer the per-hole endpoint uses and recalculates once
+  /// at the end, which is the whole reason this is not eighteen posts.
+  Future<Map<String, dynamic>> postFoursomeCard(
+      int foursomeId, List<Map<String, int?>> rows) async {
+    final data = await _post('/foursomes/$foursomeId/card/', {'scores': rows});
+    return (data as Map).cast<String, dynamic>();
+  }
+
   /// Permanently delete a casual round.  Only the creator may call this;
   /// the server returns 403 for anyone else.
   Future<void> deleteCasualRound(int roundId) async {

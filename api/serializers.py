@@ -753,6 +753,10 @@ class FoursomeSerializer(serializers.ModelSerializer):
             'pink_ball_order', 'active_games', 'configured_games',
             'tee_time', 'memberships', 'has_any_score', 'you_score',
             'setup_editable', 'setup_edit_note',
+            # Scoring on paper: this group enters nothing of its own and the
+            # TD transcribes the card. Declared by him, not derived — see
+            # `Foursome.paper_card`.
+            'paper_card',
             # Shotgun start (see docs/hole-flexibility.md): this group's per-group
             # starting hole (null = inherit the round's) + a display-only tee-slot
             # label (e.g. "A"/"B") rendered as "7A"/"7B" on a shared hole.
@@ -1236,6 +1240,36 @@ class ScoreSubmitSerializer(serializers.Serializer):
         player_ids = [s['player_id'] for s in value]
         if len(player_ids) != len(set(player_ids)):
             raise serializers.ValidationError("Duplicate player_id in scores list.")
+        return value
+
+
+class CardScoreSerializer(serializers.Serializer):
+    """One golfer's gross on one hole, for the whole-card endpoint."""
+    player_id   = serializers.IntegerField()
+    hole_number = serializers.IntegerField(min_value=1, max_value=18)
+    gross_score = serializers.IntegerField(
+        min_value=1, max_value=20, allow_null=True)
+
+
+class FoursomeCardSerializer(serializers.Serializer):
+    """A whole paper scorecard, transcribed in one request.
+
+    Deliberately FLAT — (player, hole, gross) triples rather than a card per
+    golfer — because a partial card is the normal case here, not an error: a
+    TD transcribing for a skins pool enters the pool's golfers and leaves the
+    rest of the group alone.
+    """
+    scores = CardScoreSerializer(many=True, min_length=1, max_length=18 * 8)
+
+    def validate_scores(self, value):
+        seen = set()
+        for row in value:
+            key = (row['player_id'], row['hole_number'])
+            if key in seen:
+                raise serializers.ValidationError(
+                    f"Hole {row['hole_number']} appears twice for player "
+                    f"{row['player_id']}.")
+            seen.add(key)
         return value
 
 

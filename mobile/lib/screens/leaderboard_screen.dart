@@ -25,6 +25,7 @@ import '../providers/settings_provider.dart';
 import '../utils/route_observer.dart';
 import '../utils/golf_colors.dart';
 import '../theme/halved_brand.dart';
+import '../widgets/field_progress_bar.dart';
 import '../widgets/stroke_play_strip.dart';
 import '../widgets/borrowed_fourth.dart';
 import 'share_scorecard_screen.dart';
@@ -620,6 +621,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen>
               ]),
             ),
           ),
+
+        // **What the board is MISSING.** Reported of a 60-player Ryder Cup
+        // run on paper: a third of the field was not using the app, so the
+        // board was not wrong, it was INCOMPLETE — and nothing on it said
+        // so, which is worse than a gap you can see, because a golfer reads
+        // a position he is not actually in.
+        FieldProgressBar(data: lb.games['field_progress']?.data),
 
         // Settlement is TOURNAMENT-scoped, so a tournament round's board has
         // no settlement tab and never will. Without this line the screen just
@@ -10566,3 +10574,4 @@ class _HotSpotCard extends StatelessWidget {
         ],
       );
 }
+

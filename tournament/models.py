@@ -475,6 +475,29 @@ class Foursome(models.Model):
                             ),
                         )
 
+    # A group that is not using the app at all.
+    #
+    # The real shape of a big event: 60 golfers run in Golf Genius on paper
+    # scorecards, where some groups have Halved and some do not. Nobody in a
+    # paper group will ever enter a score, so the TD is the only route in --
+    # and until he types the card, the group still on the course is reading a
+    # leaderboard missing part of the field.
+    #
+    # It is DECLARED, not derived, and the distinction is the point. A group
+    # with no scores yet might be on paper or might just be slow, and those
+    # are different facts: the first is the TD's job and the second will sort
+    # itself out. Deriving it from "has no on-app golfer" would also be wrong
+    # the other way -- a group can be all app users and still hand in paper.
+    paper_card          = models.BooleanField(
+                            default=False,
+                            help_text=(
+                                "This group is scoring on paper and will not "
+                                "enter its own scores; the TD transcribes the "
+                                "card. Flags it on the leaderboard so a "
+                                "reader knows what the board is missing."
+                            ),
+                        )
+
     class Meta:
         unique_together = ('round', 'group_number')
         ordering = ['group_number']
