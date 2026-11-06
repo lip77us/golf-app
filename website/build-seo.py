@@ -721,6 +721,76 @@ def resolve(page_path, href, files):
     return 'broken', p, None
 
 
+def hidden_attr_conflicts(text):
+    """Elements whose `hidden` attribute their own CSS overrides.
+
+    The `hidden` attribute hides an element through a UA rule of
+    `display:none`, which **any** author `display` declaration beats. So
+
+        .menu-sheet{position:fixed;inset:0;z-index:150;opacity:0;display:flex}
+        <div class="menu-sheet" hidden>
+
+    leaves a full-screen, invisible, CLICK-CATCHING overlay over the page, and
+    clicks land on whatever that element contains. The homepage shipped exactly
+    that from 13 Sep to 6 Nov 2026: the closed mobile menu swallowed every
+    footer click and sent some of them to its own `mailto:`, which is how it
+    was finally reported — *"the bottom of the web site should be links, but
+    they just bring up an email"*.
+
+    Nothing else here could see it. The links were valid, the markup was right,
+    the audit passed, and the JS was correct (it toggles `hidden` properly).
+    Only the cascade was wrong, and only a click revealed it.
+
+    The fix is a rule that lets `hidden` win — `.menu-sheet[hidden]{display:none}`,
+    or a site-wide `[hidden]{display:none}`, either of which satisfies this.
+
+    An ERROR: it breaks the page for every visitor and is invisible to a reader
+    who does not click.
+    """
+    styles = ' '.join(re.findall(r'<style[^>]*>(.*?)</style>', text, re.S))
+    if not styles:
+        return []
+
+    # Inner rules only. An `@media(...){ ... }` prelude cannot match because
+    # its body contains braces, so the scan simply finds the rules inside it —
+    # which is what we want, since a display set anywhere is a display set.
+    rules = re.findall(r'([^{}]+)\{([^{}]*)\}', styles)
+
+    # Any rule that lets `hidden` win, for any selector, clears the page: a
+    # site-wide `[hidden]{display:none}` is a legitimate single fix.
+    def hides(body):
+        return re.search(r'display\s*:\s*none', body) is not None
+    overrides = {sel.strip() for sel, body in rules
+                 if '[hidden]' in sel and hides(body)}
+    if any(sel.replace(' ', '') == '[hidden]' for sel in overrides):
+        return []
+
+    out = []
+    for cls in sorted(set(re.findall(
+            r'<[^>]*\bclass="([^"]*)"[^>]*\bhidden(?=[\s/>])', text)
+            + re.findall(
+            r'<[^>]*\bhidden(?=[\s/>])[^>]*\bclass="([^"]*)"', text))):
+        for name in cls.split():
+            if any(re.search(r'\.%s\b' % re.escape(name), sel)
+                   for sel in overrides):
+                continue
+            for sel, body in rules:
+                if '[hidden]' in sel:
+                    continue
+                if not re.search(r'\.%s\b' % re.escape(name), sel):
+                    continue
+                m = re.search(r'display\s*:\s*([a-z-]+)', body)
+                if m and m.group(1) != 'none':
+                    out.append(
+                        '.%s sets display:%s but carries the `hidden` '
+                        'attribute — `hidden` loses, so the element stays laid '
+                        'out and keeps catching clicks. Add '
+                        '.%s[hidden]{display:none}'
+                        % (name, m.group(1), name))
+                    break
+    return out
+
+
 def audit(pages, sitemap_xml):
     """pages: {rel: final html}. Returns [(level, rel, message)]."""
     files = set(pages)
@@ -751,6 +821,9 @@ def audit(pages, sitemap_xml):
         if re.search(r'<script src="[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}'
                      r'-[0-9a-f]{4}-[0-9a-f]{12}"', text):
             err('design-tool runtime <script src="<uuid>"> — it 404s')
+
+        for m in hidden_attr_conflicts(text):
+            err(m)
 
         if not p.title:
             err('no <title>')
