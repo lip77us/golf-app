@@ -1078,8 +1078,16 @@ or more decimal places as Precise Location whatever accuracy iOS granted.
 GolfCourseAPI now receives that coarse position on a proximity lookup, which
 is why §4 of the policy no longer claims we send it no personal information.
 `NSLocationWhenInUseUsageDescription` + `NSLocationDefaultAccuracyReduced`
-are the only two keys, `UIBackgroundModes` is untouched, and **Android is
-gated off** (`nearMeOffered`) until its manifest line and the Play
+are the keys that carry the decision, and there is a THIRD —
+`NSLocationAlwaysAndWhenInUseUsageDescription`, added for ITMS-90683 and
+inert, because `geolocator_apple` branches `if (when-in-use present) … else
+if (always present)` so the always branch is dead while the first key is
+there. **The pair is an invariant**: remove the when-in-use key and the app
+silently starts requesting ALWAYS. `build-ipa.sh` fails the build if either
+key is missing or if `UIBackgroundModes` grows `location`; the full reasoning
+is `docs/location-permission.md`. (This sentence said "the only two keys" for
+a fortnight, which is why it carries its own warning.) `UIBackgroundModes`
+holds `remote-notification` alone, and **Android is gated off** (`nearMeOffered`) until its manifest line and the Play
 Data-safety answers land together. The whole record, including the exact
 policy text, is `docs/location-permission.md`.
 
@@ -9736,3 +9744,88 @@ Tests: the `move sheet` group in `mobile/test/scorecard_groups_test.dart` (5)
 and `mobile/test/wizard_back_test.dart` (12 — the prompt as a widget test, the
 wiring as source guards across all four wizards). Every one was checked by
 making it fail.
+
+## The signup notice carries the phone — and the policy had to move first
+
+Paul, 6 Nov 2026: *"I also want to send the phone number to the slack channel
+list the new registrant. I think we need to update the privacy policy to
+reflect that."* Then, unprompted: *"The phone number is only used for internal
+Halved Support on the Slack Channel."*
+
+**This reverses his own 1 Nov call** (`services/activity_feed.py` carried the
+reason in as many words: *"No phone, no email. The privacy policy lists who
+receives them and Slack is not on the list."*). The reversal is reasonable on
+its own terms — a new account IS a phone number and almost nothing else, since
+the name arrives later from profile setup, so a notice without it is a row to
+go and look up rather than a person to help — and he identified the real
+dependency himself in the same sentence.
+
+**It goes on the SIGNUP alone.** `profile_completed` fires minutes later about
+the same person and would repeat the number for no new information; the round
+messages never carry one. Email stays out at every moment: there is nothing it
+answers that the user id does not.
+
+### The sentence this falsified
+
+Section 11 of the policy read **"We share it only with our SMS delivery
+provider solely to send your login codes."** That is the kind of absolute a
+feature makes untrue without touching it, and grepping for `phone` across the
+policy is what found it — not reading section 4, which is where the new
+disclosure went. **Both halves are the change**: a disclosure added in one
+section while another still claims exclusivity is worse than no disclosure,
+because the document then contradicts itself.
+
+Section 4 gained an `Our own operations channel` bullet naming what reaches it
+(the number, the name if given, the account id, the device) and what does not
+(the round notes carry no phone numbers or email addresses), and **both
+sections now state the purpose limitation in Paul's own terms** — internal
+Halved support, not marketing, not a list, not passed on. A disclosure with no
+stated purpose is a wider permission than the one he gave.
+
+**Edit both copies.** `docs/privacy-policy.html` is the source of truth and
+`website/privacy.html` is what is served; they differ only by the generated
+SEO block, so the same anchored replacement applies to each. One published
+copy contradicting the repo's is the GitHub Pages mistake recorded above, one
+directory over. `Last updated` moves; `Effective date` does not — section 10
+promises exactly the first and the location change set that precedent.
+
+### `TheChannelIsDisclosedTests`
+
+A docstring is the only link between a Python module and a legal document in
+another language, so it is exactly the link that rots. Three tests read the
+policy from disk and assert the channel, the number, the purpose limitation
+and the absence of the falsified sentence — in **both** files.
+
+**They collapse whitespace before matching.** An assertion that depends on
+where the HTML happens to wrap reports a reflow as a regression, and a guard
+that cries wolf gets deleted; five fixed-string guards broke in one session in
+this repo for exactly that. Mutation-checked in both directions: deleting the
+section-4 bullet fails three, and taking `with_phone` back off the signup
+fails two.
+
+**App Privacy does not move**, which is worth knowing rather than re-deriving:
+Apple's *App Functionality* purpose covers customer support by its own
+definition, so a number already declared under Contact Info → Phone Number,
+used to identify an account and help that golfer, adds no data type and no new
+purpose. Nothing here is advertising, analytics or tracking.
+
+**Still true and worth not confusing with this:** the operator LOG carries no
+phone (`test_the_log_carries_no_phone`). The course-import note above explains
+the split — a retained platform log that anyone with Railway access reads is
+not the same object as a notice about one person — and Slack is the second
+kind. That is the argument this change rests on; if the channel ever becomes a
+place numbers are kept and searched rather than read and acted on, the
+argument is gone and so is the basis.
+
+### 2.14.0+62
+
+Bumped with it. `docs/app-store-listing.md` opens on a `Submitting 2.14.0`
+table, promo text and What's New — and names what 2.13.0 already shipped, so
+the par-selector and completed-round-leaderboard fixes are not re-announced
+(both landed on 30 Oct, the same day as the tag, and `git merge-base
+--is-ancestor` is what settles which side of it a commit fell).
+
+**The policy page has to be live before the build is submitted** — review
+reads the listing URL, and a binary that sends a number somewhere the page
+does not mention is a 5.1.1 finding. Same sequencing 2.13.0 needed for
+location: `cd website && ./build-zip.sh && npx wrangler deploy`.

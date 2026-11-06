@@ -44,14 +44,29 @@ class SignupTests(ActivityFeedBase):
                                  {'phone': phone, 'code': '123456', **extra},
                                  format='json')
 
-    def test_a_new_account_is_announced_without_its_phone(self):
+    def test_a_new_account_is_announced_with_its_phone(self):
+        # Paul, 6 Nov 2026, reversing the 1 Nov call: a new account IS a phone
+        # number and little else, so the number is what makes the notice
+        # actionable. Disclosed in section 4 of the privacy policy, which is
+        # the constraint on this — see TheChannelIsDisclosedTests below.
         self.assertEqual(self._verify('4155550123', name='Jim <B>').status_code, 200)
         user = get_user_model().objects.get(username='+14155550123')
         self.assertEqual(len(self.texts()), 1)
         self.assertEqual(self.texts()[0], '\n'.join([
             ':wave: New Halved account', 'Name: Jim &lt;B&gt;',
-            f'User: {user.id}', 'Device: unknown']))
-        self.assertNotIn('555', self.texts()[0])
+            'Phone: +14155550123', f'User: {user.id}', 'Device: unknown']))
+
+    def test_a_user_without_one_says_so_rather_than_None(self):
+        # A legacy password-only login has no phone. `None` in a channel read
+        # by two people is indistinguishable from a bug.
+        user = get_user_model().objects.create_user(
+            username='legacy', password='x', account=self.account_for_legacy())
+        with self.captureOnCommitCallbacks(execute=True):
+            activity_feed.user_registered(user)
+        self.assertIn('Phone: not given', self.texts()[0])
+
+    def account_for_legacy(self):
+        return Account.objects.create(name='Legacy Feed')
 
     def test_the_client_states_its_device(self):
         self._verify('4155550123', platform='ios')
@@ -88,6 +103,19 @@ class SignupTests(ActivityFeedBase):
         self.assertEqual(r.status_code, 200)
         self.assertIn('Name: Jim Reid', self.texts()[0])
         self.assertNotIn('jim@example.com', self.texts()[0])
+
+    def test_the_profile_update_does_not_repeat_it(self):
+        # It lands minutes later about the same person; a second copy of the
+        # number is a disclosure that buys nothing.
+        body = self._verify('4155550123').json()
+        self.post.reset_mock()
+        self.api.credentials(HTTP_AUTHORIZATION=f"Token {body['token']}")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.api.patch(f"/api/players/{body['player']['id']}/",
+                           {'name': 'Jim Reid'}, format='json')
+        self.assertIn('Name: Jim Reid', self.texts()[0])
+        self.assertNotIn('4155550123', self.texts()[0])
+        self.assertNotIn('Phone', self.texts()[0])
 
     def test_the_log_carries_no_phone(self):
         with self.assertNoLogs('services.activity_feed', 'INFO'):
@@ -217,3 +245,60 @@ class FailureLogTests(TestCase):
                 self.assertLogs('services.activity_feed', 'WARNING') as logs:
             activity_feed._deliver(URL, 'x')
         self.assertNotIn('secret', ''.join(logs.output))
+
+
+class TheChannelIsDisclosedTests(TestCase):
+    """The privacy policy is the constraint on what the feed may carry.
+
+    `services/activity_feed.py` says so in its docstring, and a docstring is
+    the only link between a Python module and a legal document in another
+    language — so it is exactly the link that rots. Section 4 of the policy
+    discloses the channel and the number; section 11 used to say flatly that
+    the number went to the SMS provider ALONE, which this feature made untrue.
+
+    Both files are checked because `docs/privacy-policy.html` is the source of
+    truth and `website/privacy.html` is what is actually served: a published
+    policy that contradicts the one in the repo is the GitHub Pages mistake
+    recorded in CLAUDE.md, one directory over.
+    """
+
+    FILES = ('docs/privacy-policy.html', 'website/privacy.html')
+
+    def _policy(self, path):
+        """The policy as one run of text.
+
+        Whitespace is collapsed on purpose: an assertion that depends on where
+        the HTML happens to wrap reports a reflow as a regression, and a guard
+        that cries wolf gets deleted. Five of those broke in one session in
+        this repo.
+        """
+        import re
+        from pathlib import Path
+        from django.conf import settings
+        return re.sub(r'\s+', ' ',
+                      Path(settings.BASE_DIR, path).read_text())
+
+    def test_section_4_discloses_the_channel_and_the_number(self):
+        for f in self.FILES:
+            text = self._policy(f)
+            self.assertIn('operations channel', text, f)
+            self.assertIn('your mobile number', text, f)
+
+    def test_the_number_is_limited_to_internal_support(self):
+        # Paul, 6 Nov 2026: "The phone number is only used for internal Halved
+        # Support on the Slack Channel." A disclosure without a stated purpose
+        # is a wider permission than the one he gave.
+        for f in self.FILES:
+            text = self._policy(f)
+            self.assertIn('internal Halved support', text, f)
+            self.assertIn('not used for marketing', text, f)
+
+    def test_section_11_no_longer_claims_the_sms_provider_is_the_only_one(self):
+        # The exact sentence this feature falsified.
+        for f in self.FILES:
+            self.assertNotIn('We share it only with our SMS delivery',
+                             self._policy(f), f)
+
+    def test_the_round_notes_are_still_described_as_carrying_no_contact(self):
+        for f in self.FILES:
+            self.assertIn('no phone numbers or email', self._policy(f), f)

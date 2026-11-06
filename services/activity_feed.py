@@ -15,8 +15,27 @@ Three moments, and the round gets two of them on purpose: **a round is announced
 at its first real score as well as when it completes**, because plenty of casual
 rounds are played and never closed, and creating a round proves nothing.
 
-* **No phone, no email (Paul, 1 Nov 2026).**  The privacy policy lists who
-  receives them and Slack is not on the list.  The user id finds the row.
+* **The signup carries the PHONE.  Nothing else carries contact details.**
+  (Paul, 6 Nov 2026, reversing his own 1 Nov call.)  A new account IS a phone
+  number and almost nothing else — the name arrives later, from profile setup —
+  so the number is what makes the notice actionable instead of a row to go and
+  look up.
+
+  **It is for internal Halved support and nothing else** (Paul, 6 Nov 2026):
+  identifying the account so the golfer can be helped.  Not marketing, not a
+  list, not passed on — which is what section 4 of the policy now states, in
+  those words.
+
+  It goes on the SIGNUP alone.  ``profile_completed`` lands minutes later about
+  the same person and would repeat the number for no new information, and the
+  round messages never carry one.  Email stays out at every moment: there is
+  nothing it answers that the user id does not.
+
+  **The constraint is the privacy policy, not this module.**  Section 4
+  discloses the channel and what reaches it, and section 11's flat *"we share
+  it only with our SMS delivery provider"* was amended in the same commit
+  because this change made it untrue.  A third message that wants a number
+  amends the policy first.
 * **Never raises and never makes a golfer wait.**  The caller is a sign-in or a
   score; delivery runs off the request, after the commit, so a rolled-back score
   announces nothing.
@@ -169,14 +188,24 @@ def _device(user, platform=None) -> str:
     return {'ios': 'iOS', 'android': 'Android'}.get(platform, 'unknown')
 
 
-def _user_message(headline, user, player, platform=None) -> str:
+def _user_message(headline, user, player, platform=None,
+                  *, with_phone=False) -> str:
+    """The shared shape.  [with_phone] is the signup's alone — see the module
+    docstring for why, and the privacy policy for what permits it."""
     name = player.name if player else DEFAULT_PLAYER_NAME
-    return '\n'.join([
+    lines = [
         headline,
         f'Name: {"not given" if name == DEFAULT_PLAYER_NAME else _esc(name)}',
+    ]
+    if with_phone:
+        # E.164 as stored, so it pastes straight into a lookup. A legacy
+        # password-only user has none; say so rather than printing None.
+        lines.append(f'Phone: {_esc(user.phone) if user.phone else "not given"}')
+    lines += [
         f'User: {user.id}',
         f'Device: {_device(user, platform)}',
-    ])
+    ]
+    return '\n'.join(lines)
 
 
 def user_registered(user, platform=None):
@@ -184,7 +213,8 @@ def user_registered(user, platform=None):
     def compose():
         from core.models import Player
         return _user_message(':wave: New Halved account', user,
-                             Player.objects.filter(user=user).first(), platform)
+                             Player.objects.filter(user=user).first(), platform,
+                             with_phone=True)
     _safely('signup', compose)
 
 

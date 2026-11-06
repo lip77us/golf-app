@@ -1,4 +1,4 @@
-# Store listing copy — Halved (v2.13.0)
+# Store listing copy — Halved (v2.14.0)
 
 Reference for App Store Connect metadata. Keep gambling-trigger words OUT
 (no "bet/wager/gambling/winnings/real money"); use "stakes/scoring/settle up".
@@ -13,6 +13,100 @@ they were release headlines.
 **App Store copy is everything above `## Google Play`; the Play half is its
 own section further down.** They are different fields with different limits
 and the Android build omits two features, so the two are never the same text.
+
+## Submitting 2.14.0 — everything that changes
+
+| Field | 2.14.0 |
+| --- | --- |
+| What's New | NEW — below |
+| Promotional text | NEW — below (editable later without review) |
+| **Privacy policy page** | **CHANGED — must be live BEFORE you submit.** See below |
+| App Privacy | unchanged — reasoning below, and it is worth reading once |
+| Description | unchanged — still 3,888 of 4,000, same call as 2.13.0 |
+| Name · Subtitle · Keywords · Privacy URL · Support URL · Category | unchanged since 2.11.0 |
+
+**The privacy policy changed and the page has to be live first.** 6 Nov 2026:
+the new-signup notice to the operator's own Slack channel now carries the
+golfer's phone number, so section 4 discloses the channel and what reaches
+it, and section 11's flat *"we share it only with our SMS delivery provider"*
+was amended because this made it untrue. Both say the number is there for
+**internal Halved support only** — not marketing, not a list, not passed on.
+Deploy is `cd website && ./build-zip.sh && npx wrangler deploy`. Review reads
+the listing URL, and a binary that sends a number somewhere the page does not
+mention is a 5.1.1 finding — the same sequencing 2.13.0 needed for location.
+
+**App Privacy does NOT move, and the reason is worth stating.** Apple's
+*App Functionality* purpose covers customer support by its own definition, so
+using a number already declared under Contact Info → Phone Number to identify
+an account and help that golfer adds no data type and no new purpose. Nothing
+here is advertising, analytics or tracking. **Confirm once in App Store
+Connect** that Phone Number is declared with App Functionality among its
+purposes; if it somehow is not, that is the correction rather than a new
+entry.
+
+**What 2.13.0 already shipped, so do not re-announce it:** the leaderboard
+after completing a Foursome Play round, picking par being visible on the
+course, Rabbit's carry, a side game's own stake, the skins-value reading, the
+big-field speed-up and the sync-warning fix. All of those are in 2.13.0's
+What's New below.
+
+**2.13.0 did reach the App Store**, so this What's New carries one version's
+work rather than two.
+
+## Promotional text (170 max, editable without review) — 2.14.0, 158 chars
+New: a bigger keypad and a result box that tells you what the hole just did — now on Sixes, Rabbit, Survivor and Stroke Play. Plus type in a whole paper card.
+
+## What's New (v2.14.0)
+
+A NEW WAY TO ENTER SCORES. The keypad is bigger, it marks birdies and bogeys
+as you go, and it knows which holes you get a stroke on. When the last score
+goes in, a box rises to tell you what the hole actually did — who won it, what
+it did to the match, where you stand now — instead of leaving you to work it
+out. Tap "Edit scores" and stay there until you are done, rather than fixing
+one number at a time. This is the same move to a new design we started with
+the boards: it is now on SIXES, RABBIT, SURVIVOR and STROKE PLAY, and more
+games will follow.
+
+SIXES: THE GROUP PICKS THE TEAMS. When a match finishes, the next pairing is
+yours to make. Spin for it, or set it by hand from the two pairings that keep
+everybody partnering everybody — and the card tells you who you are playing
+with next, on the hole it changes.
+
+TYPE IN A WHOLE CARD. For a group that scored on paper: open the card, type
+nine holes down one column, tap the next name, and save the lot in one go.
+The round's leaderboard now also says how much of the field is in and which
+groups are still out, so you can see what is left to collect.
+
+A SKINS POOL INSIDE A TOURNAMENT. A skins game can now run across a
+tournament's own groups. Tick who is in from the draw you already made —
+twenty of sixty if that is the game — and the scores those golfers are already
+entering feed the pool. No second round to set up and no groups to re-enter.
+
+40 BALLS FOR SOME OF THE GROUPS. Choose which groups are playing it. The
+board shows only those, the pot counts only those, and nobody else is charged.
+
+STROKE PLAY BOARD. Rebuilt: rank, the golfer, the round columns, the total and
+the prize, with a tap to open any golfer's own eighteen holes. A multi-round
+event shows the rounds that count and strikes through the ones that do not.
+Prize money reads as projected until the last group is in.
+
+ALSO
+• Your course handicap now sits beside your index on the Skins, Stroke Play,
+  Points, Rabbit and Nassau boards, so a net score can be checked
+• Survivor's phases have names: The Island, where somebody goes out, and The
+  Duel between the two left standing
+• A tournament director can close a round when groups never entered a score,
+  and is told which groups those are
+• Clear now clears a score instead of leaving a zero behind
+• Remove a round somebody invited you to and never played, from your own list
+• Choosing who shares a scorecard works with a long list: it scrolls, and
+  both it and "Add a golfer" have a search
+• A round you were invited to WATCH shows once, not twice
+• Round chat: drag the messages down to put the keyboard away
+• A skins pool pays whole dollars that add up to the pot
+• The rules a round is played under read the same on every board
+
+---
 
 ## Submitting 2.13.0 — everything that changes
 
