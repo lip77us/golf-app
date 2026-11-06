@@ -43,6 +43,7 @@ nav.top{position:fixed;top:0;left:0;right:0;z-index:300;backdrop-filter:blur(14p
 .nav-burger[aria-expanded="true"] span:last-child{transform:translateY(-4px) rotate(-45deg)}
 @media(max-width:820px){.nav-links,.nav-cta{display:none}.nav-burger{display:flex}}
 .menu-sheet{position:fixed;inset:0;z-index:150;background:var(--pine);display:flex;flex-direction:column;justify-content:space-between;padding:86px 22px 28px;opacity:0;transform:translateY(-8px);transition:opacity .2s ease,transform .2s ease}
+.menu-sheet[hidden]{display:none}
 .menu-sheet.is-open{opacity:1;transform:none}
 .menu-items{display:flex;flex-direction:column}
 .menu-items a{display:flex;align-items:center;justify-content:space-between;min-height:56px;font-size:19px;color:var(--cream);border-bottom:1px solid var(--line)}
