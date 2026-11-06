@@ -60,6 +60,14 @@ fi
 #    exactly that way with this script's "Raised" line in the log. `--no-pub`
 #    is what keeps the edit: dependencies were resolved by the `pub get`
 #    above, so there is nothing for the build to resolve.
+# Clear the export directory BEFORE building. `flutter clean` does this for
+# us, but `--no-clean` does not — and a failed export then leaves the PREVIOUS
+# release's IPA sitting in the folder you drag into Transporter. Removing it
+# first means a broken run leaves nothing to upload by mistake, which is the
+# same reason `website/build-zip.sh` removes `dist/` before it builds rather
+# than after.
+rm -rf build/ios/ipa
+
 flutter build ipa --no-pub
 
 # Re-check AFTER the archive: if the build regenerated the package despite the
@@ -117,6 +125,58 @@ if /usr/libexec/PlistBuddy -c 'Print :UIBackgroundModes' "$plist" 2>/dev/null \
   fail=1
 fi
 
+# 4. The IPA that came out is the version that went in.
+#
+#    Two ways it can fail to be, and neither looks like a failure:
+#
+#      * the export did not run at all (signing is Xcode CLOUD-MANAGED — there
+#        is no distribution certificate in the login keychain — so a shell with
+#        no Xcode account session archives fine and exports nothing);
+#      * `manageAppVersionAndBuildNumber` is true in the export options, so the
+#        build number is not ours to assume.
+#
+#    Read it out of the artifact rather than from `DistributionSummary.plist`
+#    beside it: the IPA is what Transporter uploads, and a sidecar describing
+#    it is one remove from the thing.
+want=$(grep '^version:' pubspec.yaml | sed 's/^version:[[:space:]]*//')
+want_short="${want%%+*}"
+want_build="${want##*+}"
+
+shopt -s nullglob
+ipas=(build/ios/ipa/*.ipa)
+if [[ ${#ipas[@]} -eq 0 ]]; then
+  echo "FAIL: no IPA in build/ios/ipa — the archive built and the export did"
+  echo "      not run. Signing here is Xcode cloud-managed, so the export"
+  echo "      needs Xcode signed in to the developer account: run this from"
+  echo "      your own Terminal, or distribute"
+  echo "      build/ios/archive/Runner.xcarchive from Xcode's Organizer."
+  exit 1
+elif [[ ${#ipas[@]} -gt 1 ]]; then
+  echo "FAIL: ${#ipas[@]} IPAs in build/ios/ipa — cannot say which is this"
+  echo "      build. Remove the directory and run again."
+  printf '      %s\n' "${ipas[@]}"
+  exit 1
+fi
+ipa="${ipas[0]}"
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+unzip -o -q "$ipa" 'Payload/*.app/Info.plist' -d "$tmp"
+inner=$(find "$tmp/Payload" -maxdepth 2 -name Info.plist | head -1)
+if [[ -z "$inner" ]]; then
+  echo "FAIL: no Payload/*.app/Info.plist inside $ipa"
+  exit 1
+fi
+got_short=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$inner")
+got_build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$inner")
+if [[ "$got_short" != "$want_short" || "$got_build" != "$want_build" ]]; then
+  echo "FAIL: $ipa is $got_short+$got_build, pubspec says $want_short+$want_build."
+  echo "      Do not upload it. Either the export failed and this is an older"
+  echo "      release, or App Store Connect renumbered the build."
+  exit 1
+fi
+
 [[ $fail -eq 0 ]] || exit 1
 echo "OK: when-in-use + always strings present, no background location mode."
-ls -la build/ios/ipa/*.ipa
+echo "OK: $(basename "$ipa") is $got_short ($got_build) — ready for Transporter."
+ls -la "$ipa"

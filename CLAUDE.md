@@ -6344,10 +6344,52 @@ fix, `SwiftPackageManager.updateMinimumDeployment`, reads the Runner's
 `IPHONEOS_DEPLOYMENT_TARGET` — 15.0 — but only rewrites the exact string
 `.iOS("13.0")`, before the regeneration that undoes it.)
 
-**The export step needs Xcode's signing.** From a shell with no access to the
-keychain or Xcode accounts, the archive builds and the export fails with
-`No signing certificate "iOS Distribution" found` — distribute the
-`build/ios/archive/Runner.xcarchive` from Xcode's Organizer instead.
+### It DOES produce an IPA for Transporter — the note here said otherwise
+
+This said *"the export step needs Xcode's signing … distribute the
+`build/ios/archive/Runner.xcarchive` from Xcode's Organizer instead"*, which
+reads as though the script stops at the archive. It does not: it ends with
+`ls build/ios/ipa/*.ipa`, exported `method: app-store-connect`, and that file
+is what Transporter takes. 2.13.0+60 was exported by this script — the
+`DistributionSummary.plist` and `Packaging.log` beside it are
+`xcodebuild -exportArchive` output, where Organizer writes to a folder you
+choose.
+
+**Signing is Xcode CLOUD-MANAGED, which is the fact the old note was groping
+at.** Checked 6 Nov 2026: the login keychain is unlocked (`no-timeout`) and
+holds exactly one identity, `Apple Development: Paul Lipkin` — there is **no
+distribution certificate on the machine at all**, while 2.13.0+60 was signed
+with cert `1228117C…` under *iOS Team Store Provisioning Profile:
+us.lipkin.golfapp*, whose private key stays in Apple's custody. So the export
+needs Xcode's signed-in ACCOUNT SESSION, not a local certificate.
+`security find-identity` finding nothing is therefore expected and is not the
+problem; a sandboxed session lacking the account session is. Organizer is the
+fallback, not the route.
+
+**`manageAppVersionAndBuildNumber` is true** in `ios/ExportOptions.plist`, so
+the build number is not ours to assume on the way out.
+
+### The guard at the end, and the trap it closes
+
+A failed export used to leave the PREVIOUS release's IPA in the folder you
+drag into Transporter — `flutter clean` removes it, `--no-clean` does not —
+so a broken run presented a perfectly valid IPA of the last version. Same
+shape as `flutter build ios --simulator` failing and exiting 0, which cost
+twenty minutes driving a four-month-old app.
+
+Two halves, and both are needed: `rm -rf build/ios/ipa` **before** the build
+(the `website/dist/` rule — remove it first, not after), and a check that the
+IPA which came out carries `pubspec.yaml`'s version. It reads
+`Payload/*.app/Info.plist` **out of the artifact** rather than the sidecar
+`DistributionSummary.plist`, because the IPA is what gets uploaded and a file
+describing it is one remove from the thing.
+
+Exercised in all four states rather than argued (extract the block and run it
+against a prepared directory — the real tree held a stale 2.13.0+60 while
+`pubspec` said 2.14.0+62, which is case one for free): a version mismatch, no
+IPA at all, two IPAs, and the match that prints
+`Halved.ipa is 2.14.0 (62) — ready for Transporter`. The no-IPA message names
+cloud signing as the cause, since that is the one a reader will be looking at.
 
 ## Django 6.1 — the cap, and the two days the suite tested the wrong one
 
