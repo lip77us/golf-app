@@ -1029,10 +1029,48 @@ candidates for trademark / App Store / domain conflicts:
   is a dialog title and not a wordmark; leave it.
 
 ### Privacy policy (Guideline 5.1.1 / App Privacy) — PUBLISHED
-Live at **https://halved.golf/privacy**, which is what App Store Connect →
-App Information → Privacy Policy URL points at. Publisher = Paul Lipkin,
-contact `info@halved.golf`. App Store listing name is **"Halved Golf"**
-(standalone "Halved" was taken; in-app/home-screen name stays "Halved").
+Live at **https://halved.golf/privacy**. Publisher = Paul Lipkin, contact
+`info@halved.golf`. App Store listing name is **"Halved Golf"** (standalone
+"Halved" was taken; in-app/home-screen name stays "Halved").
+
+#### App Store Connect holds the URL in TWO fields, and the one that matters
+#### is not the one this note used to name
+
+Found by Paul on 7 Nov 2026, mid-submission. This paragraph read *"which is
+what App Store Connect → App Information → Privacy Policy URL points at"* —
+one field, named confidently — and on that basis nobody looked at the other
+one for a month. **Check both whenever either changes:**
+
+| where | held | |
+| --- | --- | --- |
+| App Information → Privacy Policy URL | `halved.golf/privacy` | correct |
+| **App Privacy → Privacy Policy URL** | `lip77us.github.io/halved-legal/privacy.html` | **404, and it is the one the PUBLIC page serves** |
+
+**The App Privacy field is the public one.** Verified rather than assumed —
+the live product page was scraped for every privacy URL it exposes and
+returned exactly one, the dead GitHub Pages path:
+
+```sh
+curl -s -A 'Mozilla/5.0' -L https://apps.apple.com/app/id6768284628 \
+  | grep -oiE 'lip77us\.github\.io[^"'"'"' <]*|halved\.golf/privacy[^"'"'"' <]*' | sort -u
+```
+
+So from **9 Oct 2026**, when Pages was unpublished (deliberately — see below),
+the only privacy link on a live App Store listing was a 404. **2.13.0 was
+submitted and approved in that state**, which is worth knowing in both
+directions: a dead policy URL is not a certain rejection, and review catching
+it is not what protects you.
+
+**Changing it does NOT reset the review clock.** It is app-level metadata, not
+part of a version's reviewable set — editable at any time, in effect
+immediately, no binary, no change to queue position. That is the point of the
+field: Apple expects it kept current between releases. Glance at the version
+status after saving to confirm nothing moved. **Waiting for approval is the
+riskier option**, not the safer one: it leaves the 404 in front of the
+reviewer who is about to click it, and in front of real users meanwhile.
+
+**The fix is the URL, never re-publishing Pages** — for the reason two
+paragraphs down, which is that the GitHub copy is no longer a copy.
 
 Source of truth is `docs/privacy-policy.html`; `website/privacy.html` is the
 published page and `build-zip.sh` builds it for deploy, so editing the
