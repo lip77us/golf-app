@@ -3954,7 +3954,19 @@ class TournamentReceiptView(APIView):
         from services.settlement_receipt import receipt_payload
         tournament = tournament_for_reader(request.user, pk)
         note = (request.query_params.get('note') or '').strip()
-        return Response(receipt_payload(tournament, note=note))
+        # The D1 ticket (settle-up handoff §4 Group C) alongside the text
+        # payload this endpoint has always returned.  Built here rather than
+        # on a hook of its own because this is where the TD arrives once the
+        # pools balance, and `build_field_receipt` is idempotent — a second
+        # open returns the first receipt rather than minting a code.
+        from services.receipt_field import build_field_receipt
+        from services.receipt_build import receipt_url
+        _d1 = build_field_receipt(tournament, scorer=_scorer_player(request))
+        payload = receipt_payload(tournament, note=note)
+        payload['receipt'] = ({'code': _d1.code,
+                               'url': receipt_url(_d1.code),
+                               'payload': _d1.payload} if _d1 else None)
+        return Response(payload)
 
     def post(self, request, pk):
         from tournament.models import SettlementSend
