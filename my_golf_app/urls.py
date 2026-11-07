@@ -98,6 +98,8 @@ urlpatterns = [
     # ordering (and the same reason) as /watch/<token>/card.png above.
     path('r/<str:code>/card.png', receipt_views.receipt_card_png,
          name='receipt-card'),
+    path('api/receipts/<str:code>/', receipt_views.receipt_json,
+         name='receipt-json'),
     path('r/<str:code>/', receipt_views.receipt_page, name='receipt-page'),
 
     # Public invite landing page — shared by the in-app "Invite Friends" button.

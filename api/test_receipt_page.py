@@ -242,3 +242,52 @@ class RouteTests(TestCase):
         self.assertEqual(
             self.client.get(reverse('receipt-page',
                                     args=[self.receipt.code])).status_code, 200)
+
+
+class ReceiptJsonTests(TestCase):
+    """GET /api/receipts/<code>/ — what the app opens from a push."""
+
+    def setUp(self):
+        self.round = make_round()
+        self.receipt = Receipt.objects.create(
+            payload=dict(CASUAL, recipients={'push': [1], 'text': [2],
+                                             'none': [3]},
+                         note='Paul has it in Halved.'),
+            settled_at='2026-11-04T14:58:00+00:00', round=self.round)
+
+    def test_it_serves_the_frozen_payload(self):
+        resp = self.client.get(f'/api/receipts/{self.receipt.code}/')
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body['code'], self.receipt.code)
+        self.assertIn(f'/r/{self.receipt.code}/', body['url'])
+        self.assertEqual(body['payload']['title'], 'Nassau + Skins')
+        self.assertEqual(len(body['payload']['nets']), 4)
+
+    def test_it_does_not_hand_out_the_scorers_working_list(self):
+        """`recipients` is player ids and `note` is who still needs a text —
+        the SCORER's list, not part of the document. A golfer opening his own
+        receipt has no use for them, and a public endpoint should hand back
+        the smallest true thing."""
+        payload = self.client.get(
+            f'/api/receipts/{self.receipt.code}/').json()['payload']
+        self.assertNotIn('recipients', payload)
+        self.assertNotIn('note', payload)
+
+    def test_no_phone_number_is_anywhere_in_it(self):
+        """The receipt is served publicly, so a phone in it would be a phone
+        on the internet. The app resolves them from the round instead."""
+        import json
+        body = json.dumps(self.client.get(
+            f'/api/receipts/{self.receipt.code}/').json())
+        self.assertNotIn('phone', body.lower())
+
+    def test_an_unknown_code_is_a_404(self):
+        self.assertEqual(
+            self.client.get('/api/receipts/ZZZZZZZZ/').status_code, 404)
+
+    def test_it_needs_no_sign_in(self):
+        """Possession-gated like the page: §1 pushes this link to golfers and
+        texts it to ones who have no account at all."""
+        self.assertEqual(self.client.get(
+            f'/api/receipts/{self.receipt.code}/').status_code, 200)

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../main.dart' show navigatorKey, gDeepLinkReady;
 import '../providers/auth_provider.dart';
+import '../screens/receipt_screen.dart';
 import '../screens/tournament_leaderboard_screen.dart';
 
 /// Handles incoming universal links — taps on https://link.halved.golf/watch/<token>/
@@ -29,6 +30,7 @@ class DeepLinkService {
   VoidCallback? _authListener;
 
   String? _pendingToken;
+  String? _pendingReceipt;
   int _flushAttempts = 0;
 
   DeepLinkService(this.auth);
@@ -51,8 +53,20 @@ class DeepLinkService {
   }
 
   void _capture(Uri uri) {
-    // Expect .../watch/<token>/  (accepts extra path segments defensively).
     final segs = uri.pathSegments;
+
+    // .../r/<code>/ — a settled receipt (settle-up handoff §1).  The push
+    // sent at Finish round carries this link, so without it the tap arrives
+    // and lands nowhere.
+    final r = segs.indexOf('r');
+    if (r >= 0 && r + 1 < segs.length && segs[r + 1].trim().isNotEmpty) {
+      _pendingReceipt = segs[r + 1].trim();
+      _flushAttempts = 0;
+      _flush();
+      return;
+    }
+
+    // Expect .../watch/<token>/  (accepts extra path segments defensively).
     final i = segs.indexOf('watch');
     if (i < 0 || i + 1 >= segs.length) {
       return;
@@ -66,7 +80,8 @@ class DeepLinkService {
 
   Future<void> _flush() async {
     final token = _pendingToken;
-    if (token == null) return;
+    final receiptCode = _pendingReceipt;
+    if (token == null && receiptCode == null) return;
 
     // Not signed in yet — the saved session may still be restoring, or the user
     // hasn't logged in. Keep the token stashed; the auth listener retries once
@@ -82,6 +97,18 @@ class DeepLinkService {
       return;
     }
 
+    if (receiptCode != null) {
+      _pendingReceipt = null;   // consume — don't double-navigate
+      try {
+        final receipt = await auth.client.getReceipt(receiptCode);
+        navigatorKey.currentState?.push(MaterialPageRoute(
+          builder: (_) => ReceiptScreen(receipt: receipt),
+        ));
+      } catch (_) {/* unknown code — the web page is the fallback */}
+      return;
+    }
+
+    if (token == null) return;
     _pendingToken = null;   // consume — don't double-navigate
     try {
       final res          = await auth.client.resolveWatchToken(token);

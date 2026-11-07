@@ -577,6 +577,16 @@ class ApiClient {
     return data as Map<String, dynamic>;
   }
 
+  /// A settled receipt by its short code (settle-up handoff §1).
+  ///
+  /// Possession-gated like the watch page: the link is texted to golfers who
+  /// are not in the app and pushed to ones who are, and neither has an
+  /// account this round could be authorised against.
+  Future<ReceiptTicket> getReceipt(String code) async {
+    final data = await _get('/receipts/$code/');
+    return ReceiptTicket.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
   /// Tees available at a foursome's COURSE (for the tee-box editor). Sourced
   /// from the round's course, not the viewer's account — so a cross-account
   /// scorer (TD or designated scorer) gets the right options.

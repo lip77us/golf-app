@@ -5608,6 +5608,144 @@ class NassauPhantomDonorHole {
 }
 
 /// Phantom info attached to a NassauSummary when a cross-foursome phantom
+
+/// A settled receipt — the §3 contract from the settle-up handoff.
+///
+/// **It is rendered, never computed.** The server freezes the payload at
+/// Finish round and every surface draws the same object; a client that
+/// re-derived a net or a transfer would be a second opinion about money, and
+/// the two would eventually disagree in front of four golfers.
+class ReceiptTicket {
+  final String code;
+  final String url;
+  final String title;
+  final String sub;
+  final List<ReceiptChip> nets;
+  final List<ReceiptTransfer> pays;
+  final String paysLabel;
+  final List<ReceiptSection> games;
+  /// Who has it in Halved, who gets a text, who gets nothing — the server's
+  /// own sentence, so the screen cannot word it differently from the rule.
+  final String note;
+  /// Player ids. `text` is the ONLY list the composer uses.
+  final List<int> pushIds;
+  final List<int> textIds;
+  final List<int> noneIds;
+
+  const ReceiptTicket({
+    required this.code,
+    required this.url,
+    required this.title,
+    required this.sub,
+    required this.nets,
+    required this.pays,
+    required this.paysLabel,
+    required this.games,
+    required this.note,
+    required this.pushIds,
+    required this.textIds,
+    required this.noneIds,
+  });
+
+  static List<int> _ids(dynamic v) =>
+      (v as List?)?.map((e) => (e as num).toInt()).toList() ?? const [];
+
+  factory ReceiptTicket.fromJson(Map<String, dynamic> j) {
+    final payload = Map<String, dynamic>.from(
+        (j['payload'] as Map?) ?? const {});
+    final recipients = Map<String, dynamic>.from(
+        (payload['recipients'] as Map?) ?? const {});
+    return ReceiptTicket(
+      code: j['code'] as String? ?? payload['code'] as String? ?? '',
+      url: j['url'] as String? ?? '',
+      title: payload['title'] as String? ?? '',
+      sub: payload['sub'] as String? ?? '',
+      nets: ((payload['nets'] as List?) ?? const [])
+          .map((e) => ReceiptChip.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(),
+      pays: ((payload['pays'] as List?) ?? const [])
+          .map((e) =>
+              ReceiptTransfer.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(),
+      // §3's default, applied here so no surface has to know it.
+      paysLabel: (payload['paysLabel'] as String?)?.trim().isNotEmpty == true
+          ? payload['paysLabel'] as String
+          : 'Simplest way to settle',
+      games: ((payload['games'] as List?) ?? const [])
+          .map((e) =>
+              ReceiptSection.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(),
+      note: payload['note'] as String? ?? '',
+      pushIds: _ids(recipients['push']),
+      textIds: _ids(recipients['text']),
+      noneIds: _ids(recipients['none']),
+    );
+  }
+}
+
+/// One golfer's (or one team's) net, as a chip.
+class ReceiptChip {
+  final int? golferId;
+  final String name;
+  /// Integer CENTS. The whole money model is cents end to end (§2.1).
+  final int net;
+  final String caption;
+
+  const ReceiptChip({
+    this.golferId,
+    required this.name,
+    required this.net,
+    required this.caption,
+  });
+
+  factory ReceiptChip.fromJson(Map<String, dynamic> j) => ReceiptChip(
+        golferId: (j['golferId'] as num?)?.toInt(),
+        name: j['name'] as String? ?? '',
+        net: (j['net'] as num?)?.toInt() ?? 0,
+        caption: j['caption'] as String? ?? '',
+      );
+}
+
+/// One handover. [amount] is cents, or a pre-formatted string like "2 x $80"
+/// when one prize is split several ways (§3 types it `Cents | string`).
+class ReceiptTransfer {
+  final String from;
+  final String to;
+  final int? amountCents;
+  final String? amountText;
+
+  const ReceiptTransfer({
+    required this.from,
+    required this.to,
+    this.amountCents,
+    this.amountText,
+  });
+
+  factory ReceiptTransfer.fromJson(Map<String, dynamic> j) {
+    final raw = j['amount'];
+    return ReceiptTransfer(
+      from: j['from'] as String? ?? '',
+      to: j['to'] as String? ?? '',
+      amountCents: raw is num ? raw.toInt() : null,
+      amountText: raw is String ? raw : null,
+    );
+  }
+}
+
+class ReceiptSection {
+  final String label;
+  final List<List<String>> rows;
+
+  const ReceiptSection({required this.label, required this.rows});
+
+  factory ReceiptSection.fromJson(Map<String, dynamic> j) => ReceiptSection(
+        label: j['label'] as String? ?? '',
+        rows: ((j['rows'] as List?) ?? const [])
+            .map((r) => (r as List).map((c) => '$c').toList())
+            .toList(),
+      );
+}
+
 /// is active (Four Ball, one team has 3 players across all foursomes).
 class NassauPhantomInfo {
   final int                              phantomPlayerId;
@@ -5697,6 +5835,10 @@ class Leaderboard {
   /// the client must not offer a button that would be ignored, and a scorer
   /// forcing it is the exact hazard the wait exists to prevent.
   final bool canForceComplete;
+  /// The settled receipt, when Finish round produced one.
+  /// Null when there was nothing to settle — a real answer,
+  /// not a missing one.
+  final ReceiptTicket? receipt;
 
   const Leaderboard({
     required this.roundId,
@@ -5715,6 +5857,7 @@ class Leaderboard {
     this.accountName,
     this.groupsOutstanding = const [],
     this.canForceComplete = false,
+    this.receipt,
   });
 
   factory Leaderboard.fromJson(Map<String, dynamic> j) {
@@ -5748,6 +5891,10 @@ class Leaderboard {
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList(),
       canForceComplete: j['can_force_complete'] as bool? ?? false,
+      receipt: j['receipt'] == null
+          ? null
+          : ReceiptTicket.fromJson(
+              Map<String, dynamic>.from(j['receipt'] as Map)),
     );
   }
 }

@@ -323,6 +323,10 @@ class _SequoyaThreesScreenState extends State<SequoyaThreesScreen>
             () => _finishRound(ctx, players));
         return;
       }
+      // Round over (settle-up handoff §1) before the board: the receipt
+      // is what the group acts on, the leaderboard is what it reads.
+      if (mounted) await showRoundOverIfAny(ctx, lb);
+      if (!mounted) return;
       Navigator.of(ctx).pushReplacementNamed('/leaderboard', arguments: roundId);
     }
   }

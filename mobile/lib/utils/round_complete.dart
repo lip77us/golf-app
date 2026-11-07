@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../api/models.dart';
 import '../providers/round_provider.dart';
+import '../screens/round_over_screen.dart';
 
 /// Confirmation dialog shown before completing a round (which locks scores).
 ///
@@ -167,7 +168,11 @@ Future<Leaderboard?> completeRoundOrOfferForce(
     ));
     return null;
   }
-  if (lb.status == 'complete' || !context.mounted) return lb;
+  if (lb.status == 'complete') {
+    if (context.mounted) await _openRoundOver(context, lb);
+    return lb;
+  }
+  if (!context.mounted) return lb;
 
   if (!lb.canForceComplete) {
     messenger.showSnackBar(const SnackBar(
@@ -186,6 +191,7 @@ Future<Leaderboard?> completeRoundOrOfferForce(
   final forced = await rp.completeRound(roundId, force: true);
   if (forced?.status == 'complete') {
     messenger.showSnackBar(const SnackBar(content: Text('Round closed.')));
+    if (context.mounted) await _openRoundOver(context, forced!);
   } else if (forced == null) {
     messenger.showSnackBar(SnackBar(
       content: Text(rp.error ?? 'Could not close the round.'),
@@ -193,6 +199,41 @@ Future<Leaderboard?> completeRoundOrOfferForce(
     ));
   }
   return forced ?? lb;
+}
+
+
+/// Round over, when Finish round settled something — for the screens that
+/// complete a round WITHOUT the force flow.
+///
+/// The nine dedicated play screens call `completeRound` directly and are
+/// right to: Wolf, Points 5-3-1, Rabbit, Survivor, Skins, Nassau, Triple
+/// Nassau, Quota Nassau and Sequoya 3s are casual games on one foursome,
+/// which the server completes on the first call, so there is no force to
+/// offer. **But they are exactly the rounds that produce a receipt**, so
+/// skipping Round over there would have left it reachable from the generic
+/// screen and from none of the nine — the failure the note below is about.
+Future<void> showRoundOverIfAny(BuildContext context, Leaderboard? lb) async {
+  if (lb == null || lb.status != 'complete') return;
+  await _openRoundOver(context, lb);
+}
+
+
+/// Round over, when Finish round settled something.
+///
+/// **Here rather than in each caller.** Four screens close a round and a
+/// receipt reachable from one of them is this codebase's most repeated
+/// failure — the casual receipt no round could open, the setup-edit button
+/// gated on the rule it replaced, the force itself. Every caller already
+/// goes through this function, so this is where it belongs.
+///
+/// A null receipt is a real answer, not a missing one: nothing settled, so
+/// there is nothing to show.
+Future<void> _openRoundOver(BuildContext context, Leaderboard lb) async {
+  final receipt = lb.receipt;
+  if (receipt == null || !context.mounted) return;
+  await Navigator.of(context).push(MaterialPageRoute(
+    builder: (_) => RoundOverScreen(receipt: receipt),
+  ));
 }
 
 

@@ -11,7 +11,7 @@ this app is derived on read; a receipt is the opposite, and
 :class:`tournament.models.Receipt` carries the reason.
 """
 from django.conf import settings
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.urls import reverse
 
 from services.receipt_ticket import receipt_page_html
@@ -57,3 +57,27 @@ def receipt_card_png(request, code: str):
     resp = HttpResponse(png, content_type='image/png')
     resp['Cache-Control'] = 'public, max-age=86400'
     return resp
+
+
+def receipt_json(request, code: str):
+    """GET /api/receipts/<code>/ — the frozen payload, for the app.
+
+    **Possession-gated like the page**, and for the same reason: §1 texts the
+    link to golfers who are not in the app and pushes it to ones who are, and
+    neither has an account this round could be authorised against.
+
+    **It strips `recipients`.**  Those are player ids and they are the
+    scorer's working list — who still needs a text — not part of the
+    document.  A golfer opening his own receipt has no use for them, and a
+    public endpoint should hand back the smallest true thing.
+    """
+    receipt = _receipt(code)
+    payload = dict(receipt.payload or {})
+    payload.pop('recipients', None)
+    payload.pop('note', None)
+    return JsonResponse({
+        'code': receipt.code,
+        'url': request.build_absolute_uri(
+            reverse('receipt-page', args=[code])),
+        'payload': payload,
+    })
