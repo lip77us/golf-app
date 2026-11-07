@@ -35,6 +35,9 @@ NOTIFICATION_CATEGORIES = {
     'watch_invite':   True,   # someone invited you to watch their round/tournament
     'chat':           True,   # human chat (currently unused — no chat push yet)
     'board':          True,   # the Android lock-screen board, per hole
+    # The settle-up receipt.  Its OWN category: muting round-complete
+    # must not mute the money, which is the push a golfer waits for.
+    'receipt':        True,
 }
 
 

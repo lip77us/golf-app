@@ -6613,6 +6613,28 @@ class FoursomeCardView(APIView):
 # Round completion
 # ---------------------------------------------------------------------------
 
+def _scorer_player(request):
+    """The golfer tapping Finish round, for the receipt's stamp.
+
+    His own ``Player`` row, not the account's — a receipt says who settled it,
+    and in a shared account that is a person rather than a tenant.
+    """
+    from core.models import Player
+    return Player.objects.filter(user=request.user).first()
+
+
+def _receipt_block(round_obj) -> dict | None:
+    """The frozen payload plus its link, or None."""
+    from tournament.models import Receipt
+    from services.receipt_build import receipt_url
+    receipt = Receipt.objects.filter(round=round_obj).first()
+    if not receipt:
+        return None
+    return {'code': receipt.code,
+            'url': receipt_url(receipt.code),
+            'payload': receipt.payload}
+
+
 class RoundCompleteView(APIView):
     """
     POST /api/rounds/{id}/complete/
@@ -6688,6 +6710,15 @@ class RoundCompleteView(APIView):
             emit_round_complete(round_obj)
             from services import activity_feed
             activity_feed.round_finished(round_obj)
+            # Settle up (handoff step 3): freeze the money into a Receipt and
+            # push it to the golfers who are on Halved.  Inside the same block
+            # as the status flip, so it happens exactly when the round ends
+            # and exactly once — this branch is already guarded on the round
+            # not being complete, which is what makes Finish round idempotent.
+            # It never raises; a round must close whatever happens to the
+            # document.
+            from services.receipt_build import settle_round
+            receipt = settle_round(round_obj, scorer=_scorer_player(request))
 
         # Finalise cup points whenever this is called — partial-round
         # calls still want their group's points reflected on the live
@@ -6719,6 +6750,10 @@ class RoundCompleteView(APIView):
             # Whether this caller may force it — the client must not offer a
             # button that will be ignored.
             'can_force_complete': is_td and not all_done and not single_foursome,
+            # Round over (handoff §1) is drawn from this.  Null when there is
+            # nothing to settle, which is a real answer rather than an empty
+            # ticket: everyone square, or a game that paid nobody.
+            'receipt': _receipt_block(round_obj),
         })
 
     @staticmethod
