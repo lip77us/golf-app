@@ -21,13 +21,22 @@ from core.models import RoundStatus
 # Money — formatted once, in one place (rule 2)
 # ---------------------------------------------------------------------------
 
-def money(value, plain: bool = False) -> str:
+def money(value, plain: bool = False, sign: bool = False) -> str:
     """
     The one money formatter. Two formatters means two answers.
 
     `plain=False` is for the screen and uses a real minus sign (U+2212), which
     aligns under a proportional font. `plain=True` is for SMS and uses ASCII
     '-' / '+' — see sms_segments() for why an SMS must stay inside GSM-7.
+
+    `sign=True` adds the leading '+' to a positive, which the D1 receipt ticket
+    wants (`~/Downloads/design_handoff_settle_up` §2.4: "+$26, −$18 … $0 when
+    level"). It is a FLAG rather than a second function for the reason this
+    docstring already gives — and it defaults off, so the thirty-odd existing
+    callers keep the bare `$26` they render today. `plain=True` has always
+    signed positives, because an SMS has no colour to carry the direction.
+
+    `$0` is never signed: level is a direction, not a gain.
     """
     v = Decimal(str(value or 0))
     neg = v < 0
@@ -37,7 +46,9 @@ def money(value, plain: bool = False) -> str:
         body = body[:-3]
     if plain:
         return ('-$' if neg else '+$') + body
-    return ('−$' if neg else '$') + body
+    if neg:
+        return '−$' + body
+    return ('+$' if sign and amt else '$') + body
 
 
 # ---------------------------------------------------------------------------
