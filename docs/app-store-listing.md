@@ -10,6 +10,14 @@ offerable and must not be listed. Check `game_catalog.dart` rather than the
 services directory — this list had been missing 40 Balls and Better Ball since
 they were release headlines.
 
+**Three offerable casual games are deliberately not named**, checked 6 Nov
+2026 by sweeping every `GameMeta` with `enabled` and `casual` against the
+description: **Singles Match** (the list's "Match Play" bullet is a different
+catalog entry, and reads as covering it), **One-Round Triple Cup** (covered by
+"One-round team cup") and **Mini Singles Bracket** (covered by TOURNAMENTS'
+"Singles"). At 16 characters of headroom none of them fits anyway. Re-run that
+sweep rather than reading this line, which is only true of today's catalog.
+
 **App Store copy is everything above `## Google Play`; the Play half is its
 own section further down.** They are different fields with different limits
 and the Android build omits two features, so the two are never the same text.
@@ -22,7 +30,7 @@ and the Android build omits two features, so the two are never the same text.
 | Promotional text | NEW — below (editable later without review) |
 | **Privacy policy page** | **CHANGED — must be live BEFORE you submit.** See below |
 | App Privacy | unchanged — reasoning below, and it is worth reading once |
-| Description | unchanged — still 3,888 of 4,000, same call as 2.13.0 |
+| Description | **CHANGED** — 3,984 of 4,000. Four edits, below |
 | Name · Subtitle · Keywords · Privacy URL · Support URL · Category | unchanged since 2.11.0 |
 
 **The privacy policy changed and the page has to be live first.** 6 Nov 2026:
@@ -553,7 +561,7 @@ rotating.
 New: Survivor — worst score is knocked out, and the last two standing duel for
 the hole. Plus fully developed tournaments for singles, pairs, foursomes and teams.
 
-## Description (4000 max) — CURRENT, going up with 2.12.0 (3,888 chars)
+## Description (4000 max) — CURRENT, going up with 2.14.0 (3,984 chars)
 
 **One living section, not one per version.** Unlike What's New and the
 promotional text there is no history kept here: this is the description, and
@@ -568,25 +576,39 @@ golfer would look for and not find — and **Paul ruled on 16 Oct 2026 that a
 one-putt is not a spot at all: "too easy to achieve"**, which is the real
 reason it is not in `SPOT_META` and never was.
 
-**3,888 of 4,000, measured rather than added up.** The file had carried
-3,864, which was two out — the count only matters against the 4,000 ceiling,
-but a figure nobody re-measures drifts. Re-measure from this file with:
+**3,984 of 4,000, measured rather than added up — 16 characters of
+headroom.** That is the tightest this has ever been: the next game bullet
+does not fit without cutting something, so measure BEFORE adding one.
+
+**The command this file used to carry measured ITSELF.** It did
+`s.index('Halved keeps score for the games')`, which matches the copy of that
+string inside the command on this very line — 19 lines above the description —
+so it swept up the prose below it and reported 4,961 for a 3,888-character
+description. Anchor on the line, not on a substring of the whole file:
 
 ```sh
-python3 -c "import re,pathlib;s=pathlib.Path('docs/app-store-listing.md').read_text();i=s.index('Halved keeps score for the games');print(len(s[i:i+re.search(chr(10)+'## ',s[i:]).start()].rstrip()))"
+python3 -c "import pathlib;L=pathlib.Path('docs/app-store-listing.md').read_text().split(chr(10));i=next(n for n,l in enumerate(L) if l.startswith('Halved keeps score for the games'));j=next(n for n in range(i,len(L)) if L[n].startswith('## '));print(len(chr(10).join(L[i:j]).rstrip()))"
 ```
 
 **The website still says it**, in about eight places including the indexed
 title and meta description of `/games/spots/`. Not changed here — that is
 public SEO copy and a separate decision.
 
-Changed since 2.11.0, in three separate lots:Changed since 2.11.0, in three separate lots:
+Changed since 2.11.0, in four separate lots, newest first:
+* **2.14.0** — four changes, from the ASO pass (6 Nov 2026): the **Annandale
+  Friday** bullet (it shipped in 2.13.0 and the list never caught up —
+  `casual: true`, `canBePrimary: true`, `sizes: {5, 6}`, and `enabled`
+  defaults true, so it is offerable); **Courses near me** named in FIND YOUR
+  COURSE FAST ("the ten closest" is `_NEAR_ME_LIMIT = 10` exactly, and
+  "nearest first" is the sort that code comments itself); and two tightenings
+  that lose no claim — the team-events sentence and SETTLE UP's last line.
+  Nothing was removed;
 * **Hot Spot is now Hot Seat** (15 Oct 2026) — the game is unchanged, and
-  the new name is the same eight characters, so the count below still holds.
+  the new name is the same eight characters, so it moved no count.
   The bullet is the only place the description names it. The What's New and
   promotional texts ABOVE keep the old name: they are a record of what was
   actually submitted, not living copy;
-* this release — Multi-Group Skins now reads "in whatever groups you are
+* 2.12.0 — Multi-Group Skins now reads "in whatever groups you are
   playing in", and the solo games got a line;
 * `be43d72`, after the 2.11.0 copy was written — the headline games it had
   been missing since 2.9.1 went back in (Hot Spot, 40 Balls, Better Ball,
@@ -617,6 +639,8 @@ GAMES YOU CAN PLAY
 • Honors — win a hole outright and you hold the honor, scoring every hole
   until somebody takes it off you
 • Triple Nassau — three golfers, every pair playing its own match
+• Annandale Friday — five or six golfers on one card, split into teams that
+  play three better-ball Nassaus
 • Nassau Nine — one match over the holes you actually play, with presses: the
   Nassau for a nine-hole or back-nine round
 • Points 5-3-1
@@ -652,13 +676,13 @@ once, and multi-round events — with live leaderboards, team cup play, and
 formats like Irish Rumble, Pink Ball, and Singles. Dream Round takes the best
 score on every hole number across the whole event and makes one card of them;
 Road Trip plays several courses over several days with the best rounds
-counting, scored to par so a hard course is not a penalty. Team events run small teams
-or two-golfer pairs against the whole field on one board, each format with the
-allowance it is actually played off.
+counting, scored to par so a hard course is not a penalty. Team events put small teams
+or pairs against the whole field on one board, each with its own allowance.
 
 FIND YOUR COURSE FAST
-Just start typing a course name and pick it from one list — your own courses, a
-shared catalog, and a full course database, all in a single search.
+Start typing a course name and pick it from one list — your own courses, a
+shared catalog, and a full course database, all in a single search. Or tap
+Courses near me for the ten closest, nearest first.
 
 HANDICAPS YOUR WAY
 Score net (with an adjustable handicap percentage), gross, or
@@ -668,8 +692,8 @@ handicap is never a mystery.
 
 SETTLE UP
 At the end of the round, the Settlement tab nets every game into one summary and
-shows exactly who owes whom — plus the fewest payments to square up. Settle in
-seconds, with no spreadsheets and no napkin math.
+shows exactly who owes whom — plus the fewest payments to square up. No
+spreadsheets, no napkin math.
 
 Halved is built for friendly play among friends. It tracks informal stakes for
 scoring purposes only and does not process payments.
