@@ -41,10 +41,19 @@ from services.settlement_receipt import money
 
 logger = logging.getLogger(__name__)
 
-#: ``{game_key: callable(round_obj, per_game_entry, names) -> (label, value)}``
-#: Steps 4 to 6 fill this.  Registering one here is the ONLY thing a game has
-#: to do to get its own language onto every receipt surface at once.
+#: ``{game_key: callable(round_obj, per_game_entry, names) -> [[label, value]]}``
+#: Registering one here is the ONLY thing a game has to do to get its own
+#: language onto every receipt surface at once.
+#:
+#: It returns a LIST because §4's summaries are not all one row: Sequoya 3s
+#: states its matches and its bets separately, and Banker gives every golfer a
+#: line of his own.
 GAME_SUMMARY: dict = {}
+
+#: ``{game_key: callable(round_obj, player_ids) -> {player_id: str}}`` for §3's
+#: caption override.  The default is "{gross} · net {net}"; a game whose unit
+#: is not strokes says so here ("9 pts · v. target +3", "banked 4 · bet +$290").
+GAME_CAPTION: dict = {}
 
 #: ``{game_key: callable(round_obj) -> str}`` for §3's ``stakeLabel``
 #: ("$10 a match", "$2 a skin"), which composes the ``sub`` line.
@@ -93,8 +102,15 @@ def _summary_rows(round_obj, per_game: list, names: dict) -> list:
     for entry in per_game:
         fn = GAME_SUMMARY.get(entry['game'])
         if fn:
-            rows.append(list(fn(round_obj, entry, names)))
-            continue
+            try:
+                for row in fn(round_obj, entry, names) or []:
+                    rows.append(list(row))
+                continue
+            except Exception:
+                # A formatter is presentation. If one breaks, the round still
+                # settles and the money is still right — the fallback below
+                # says who it moved to.
+                logger.exception('receipt: %s summary failed', entry['game'])
         # Fallback: who the money moved to, biggest first. True, checkable,
         # and replaced the moment that game registers its own language.
         #
@@ -138,6 +154,20 @@ def _captions(round_obj, player_ids) -> dict:
     return out
 
 
+def _load_formatters():
+    """Import the per-game formatters so they register themselves.
+
+    Done here rather than at module import because they import the game
+    services, which import models — and this module is imported from
+    ``api.views`` at request time, where a circular import would be a 500 on
+    Finish round rather than a missing row.
+    """
+    try:
+        import services.receipt_games  # noqa: F401
+    except Exception:
+        logger.exception('receipt: formatters failed to load')
+
+
 def build_round_receipt(round_obj, *, scorer=None):
     """Freeze this round's money into a Receipt.  ``None`` when there is none.
 
@@ -146,6 +176,7 @@ def build_round_receipt(round_obj, *, scorer=None):
     not be composed is a worse failure than a missing link.
     """
     from tournament.models import Receipt
+    _load_formatters()
     try:
         if round_obj.tournament_id:
             return None                       # Group C, at tournament settle
@@ -184,6 +215,15 @@ def build_round_receipt(round_obj, *, scorer=None):
 
         transfers = for_display(settle(nets, order=order))
         captions = _captions(round_obj, order)
+        for entry in per_game:
+            fn = GAME_CAPTION.get(entry['game'])
+            if not fn:
+                continue
+            try:
+                captions.update({k: v for k, v in
+                                 (fn(round_obj, order) or {}).items() if v})
+            except Exception:
+                logger.exception('receipt: %s caption failed', entry['game'])
 
         payload = {
             'title': ' + '.join(e['label'] for e in per_game),

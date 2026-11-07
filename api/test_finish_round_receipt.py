@@ -70,24 +70,43 @@ class BuildTests(TestCase):
         self.assertIn(rnd.date.strftime('%b'), sub)
 
     def test_the_fallback_stake_does_not_invent_a_unit(self):
-        """Until a game registers §3's stakeLabel the unit is not known here.
-        Guessing printed "$5 a point" on a skins round — true of the figure
-        and false of the game."""
+        """Until a game registers §3's stakeLabel the unit is not known, so
+        the generic line says the stake and no unit.  Guessing printed
+        "$5 a point" on a skins round — true of the figure, false of the game.
+
+        Exercised against a game with NO formatter rather than a real one:
+        every Group A game has registered a stake label now, so using one of
+        them would test the formatter instead of the fallback it is here for.
+        """
+        from services.receipt_build import _sub
         rnd, fs, ids = _skins_round()
-        sub = build_round_receipt(rnd).payload['sub']
+        sub = _sub(rnd, [{'game': 'not_a_real_game', 'label': 'X',
+                          'nets': {}}])
         self.assertIn('stake', sub)
         self.assertNotIn('a point', sub)
-        self.assertNotIn('a skin', sub)
 
     def test_the_fallback_row_names_a_whole_group(self):
         """Capping at three dropped the fourth golfer of a four-ball with
         nothing saying so, which reads as a bug rather than a summary."""
+        from services.receipt_build import _summary_rows
         rnd, fs, ids = _skins_round()
-        row = build_round_receipt(rnd).payload['games'][0]['rows'][0]
-        named = [n['name'] for n in build_round_receipt(rnd).payload['nets']
-                 if n['net']]
-        for name in named:
-            self.assertIn(name, row[1], f'{name} was dropped from the row')
+        names = {pid: {'short_name': f'P{pid}'} for pid in ids}
+        entry = {'game': 'not_a_real_game', 'label': 'X',
+                 'nets': {pid: (10 if i == 0 else -3) for i, pid in enumerate(ids)}}
+        value = _summary_rows(rnd, [entry], names)[0][1]
+        for pid in ids:
+            self.assertIn(f'P{pid}', value, f'{pid} was dropped from the row')
+
+    def test_the_fallback_collapses_past_four(self):
+        """It never truncates silently — the same rule the preview's "13 more"
+        follows."""
+        from services.receipt_build import _summary_rows
+        rnd, fs, ids = _skins_round()
+        nets = {i: (100 if i == 1 else -10) for i in range(1, 12)}
+        names = {i: {'short_name': f'G{i}'} for i in nets}
+        value = _summary_rows(rnd, [{'game': 'not_a_real_game', 'label': 'X',
+                                     'nets': nets}], names)[0][1]
+        self.assertIn('more', value)
 
     def test_a_caption_is_gross_and_net(self):
         """§3's default, read off the stored card rather than recomputed — it

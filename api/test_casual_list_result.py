@@ -85,11 +85,15 @@ class CasualListResultTests(TestCase):
         self.assertEqual(item['my_player_id'], self.me.id)
 
     def test_round_with_no_nettable_game_has_null_net(self):
-        # A Nassau round isn't in the settlement engine → my_net stays null even
-        # when completed (the card simply shows no money).
+        # A round whose game the settlement engine does not net → my_net stays
+        # null even when completed (the card simply shows no money).
+        #
+        # This used `nassau`, which became nettable with the settle-up receipt.
+        # Cup play is scored in POINTS, so it is a game that will never settle
+        # money rather than one that had simply not been wired up.
         rnd = Round.objects.create(
             account=self.account, course=self.course, status='complete',
-            active_games=['nassau'], primary_game='nassau',
+            active_games=['triple_cup'], primary_game='triple_cup',
         )
         fs = Foursome.objects.create(round=rnd, group_number=1)
         for p in (self.me, self.pal):

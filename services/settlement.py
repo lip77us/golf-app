@@ -28,6 +28,12 @@ NETTABLE = {
     'skins', 'spots', 'points_531', 'wolf', 'sixes', 'fourball',
     'low_net_round', 'stableford', 'match_play', 'triple_nassau',
     'annandale_friday',
+    # Added with the settle-up receipt (handoff §4 Group A), which lists all
+    # three as "the engine already produces a zero-sum ledger".  It did; it
+    # had simply never been wired in here, so 11 of 40 completed casual rounds
+    # in the local database — 5 Nassau, 3 Survivor, 3 Rabbit — could produce
+    # no settlement and no receipt at all.
+    'nassau', 'rabbit', 'survivor',
 }
 
 _LABELS = {
@@ -37,7 +43,17 @@ _LABELS = {
     'match_play': 'Singles Bracket', 'triple_nassau': 'Triple Nassau',
     'annandale_friday': 'Annandale Friday',
     'sequoya_threes': 'Sequoya 3s',
+    'nassau': 'Nassau', 'rabbit': 'Rabbit', 'survivor': 'Survivor',
 }
+
+
+def _is_cup_round(round_obj) -> bool:
+    """A team-cup round plays for POINTS, so its matches settle no money."""
+    try:
+        _ = round_obj.ryder_cup_config
+        return True
+    except Exception:
+        return False
 
 
 def _pid_nets_for_game(game_key, round_obj, foursomes):
@@ -49,6 +65,50 @@ def _pid_nets_for_game(game_key, round_obj, foursomes):
         for fs in foursomes:
             for p in skins_summary(fs).get('players', []):
                 out[p['player_id']] += p.get('net', p.get('payout', 0)) or 0
+
+    elif game_key == 'nassau':
+        from services.nassau import nassau_summary
+        for fs in foursomes:
+            # §4: "Cup Nassau plays for points, not money, so it gets no
+            # receipt."  A cup match is scored for the team board; netting it
+            # here would invent dollars nobody played for.
+            if _is_cup_round(fs.round):
+                continue
+            s = nassau_summary(fs)
+            if not s:
+                continue
+            # CAPPED, never `total`.  The loss cap is per side, and `total` is
+            # the uncapped sum — settling on it pays out past the cap.  This
+            # exact slip was a real money bug in Annandale Friday, whose
+            # comment says so at the one other place this figure is read.
+            total = float(s.get('payouts', {}).get('total_capped') or 0)
+            if not total:
+                continue
+            # `total` is from team1's perspective and each golfer is paid it
+            # (§4: "stake x result for each bet, paid to each player"), so the
+            # sides must be the same size for the ledger to balance.  Nassau
+            # is 1v1 or 2v2, so they are; an uneven split would be a different
+            # game and is skipped rather than silently unbalanced.
+            t1 = [pl['player_id'] for pl in s.get('teams', {}).get('team1', [])]
+            t2 = [pl['player_id'] for pl in s.get('teams', {}).get('team2', [])]
+            if not t1 or len(t1) != len(t2):
+                continue
+            for pid in t1:
+                out[pid] += total
+            for pid in t2:
+                out[pid] -= total
+
+    elif game_key == 'rabbit':
+        from services.rabbit import rabbit_summary
+        for fs in foursomes:
+            for p in (rabbit_summary(fs) or {}).get('players', []):
+                out[p['player_id']] += p.get('money', 0) or 0
+
+    elif game_key == 'survivor':
+        from services.survivor import survivor_summary
+        for fs in foursomes:
+            for p in (survivor_summary(fs) or {}).get('players', []):
+                out[p['player_id']] += p.get('money', 0) or 0
 
     elif game_key == 'spots':
         from services.spots import spots_summary

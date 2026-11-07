@@ -125,10 +125,14 @@ class SettlementTests(TestCase):
         self.assertIsNone(round_settlement(rnd))
 
     def test_uncovered_game_reported(self):
-        # Two nettable games (skins + spots) produce a tab; a team game (nassau)
-        # rides along as uncovered. (Needs 2+ nettable now that the tab is
-        # cross-game only.)
-        self.round.active_games = ['skins', 'spots', 'nassau']
+        # Two nettable games (skins + spots) produce a tab; an uncovered game
+        # rides along. (Needs 2+ nettable now that the tab is cross-game only.)
+        #
+        # `triple_cup`, not `nassau`: Nassau became nettable with the settle-up
+        # receipt, and this test is about the UNCOVERED case, so it needs a
+        # game that will never net rather than one that had not been wired up
+        # yet.  Cup play is scored in points, so it never settles money.
+        self.round.active_games = ['skins', 'spots', 'triple_cup']
         self.round.save(update_fields=['active_games'])
         setup_skins(self.fs)
         setup_spots(self.fs, bet_unit=Decimal('1'),
@@ -139,7 +143,7 @@ class SettlementTests(TestCase):
         calculate_skins(self.fs)
         tally_spots(self.fs, 1, [{'player_id': self.pid['A'], 'count': 1}])
         s = round_settlement(self.round)
-        self.assertIn('nassau', s['uncovered_games'])
+        self.assertIn('triple_cup', s['uncovered_games'])
         self.assertEqual({g['game'] for g in s['per_game']}, {'skins', 'spots'})
 
 
@@ -341,10 +345,11 @@ class CasualReceiptTests(TestCase):
 
     def test_games_that_cannot_be_netted_are_named(self):
         """The omission would otherwise read as a bug."""
-        self.round.active_games = ['skins', 'nassau']
+        # `triple_cup` rather than `nassau` — see test_uncovered_game_reported.
+        self.round.active_games = ['skins', 'triple_cup']
         self.round.save(update_fields=['active_games'])
         note = self._payload()['excluded_note']
-        self.assertIn('nassau', note)
+        self.assertIn('triple_cup', note)
 
     def test_a_round_that_settles_to_nothing_has_no_receipt(self):
         """A game can run and pay nobody. "+$0 to collect" is not a smaller
