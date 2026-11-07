@@ -1905,6 +1905,76 @@ class ThreadRead(models.Model):
         ]
 
 
+class Receipt(models.Model):
+    """A settled receipt, frozen, addressable at ``halved.golf/r/<code>``.
+
+    Built from ``~/Downloads/design_handoff_settle_up``.
+
+    **The payload is FROZEN, and that is the point of storing it.**  Every
+    other board in this app is derived on read, deliberately — correct a score
+    and the money moves.  A receipt is the opposite: §1 stamps it "Final ·
+    settled 2:58 PM by Paul Kelly", and it is texted to people who are not in
+    the app and cannot be told it changed.  A link that quietly says something
+    different next week is worse than no link.  So the Receipt contract (§3) is
+    written once at Finish round and served verbatim afterwards.
+
+    That is also why there is no ``updated_at``: nothing updates it.  A round
+    reopened and re-settled gets a NEW receipt with a new code, so the old link
+    keeps saying what the golfers were shown.
+
+    Exactly one of ``round`` / ``tournament`` is set, the same split
+    :class:`SettlementSend` carries and for the same reason — a casual round
+    telling four golfers who pays whom and a tournament handing back money a TD
+    held are different documents, but "this is the receipt, at this code" is
+    one fact about both.
+    """
+
+    code       = models.CharField(max_length=16, unique=True, db_index=True)
+    tournament = models.ForeignKey('tournament.Tournament', null=True, blank=True,
+                                   on_delete=models.CASCADE,
+                                   related_name='receipts')
+    round      = models.ForeignKey('tournament.Round', null=True, blank=True,
+                                   on_delete=models.CASCADE,
+                                   related_name='receipts')
+    # The §3 Receipt contract, exactly as the surfaces consume it.
+    payload    = models.JSONField(default=dict)
+    scorer     = models.ForeignKey('core.Player', null=True, blank=True,
+                                   on_delete=models.SET_NULL,
+                                   related_name='receipts_scored')
+    settled_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(tournament__isnull=False, round__isnull=True)
+                    | models.Q(tournament__isnull=True, round__isnull=False)
+                ),
+                name='receipt_exactly_one_parent',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Receipt {self.code}'
+
+    def save(self, *args, **kwargs):
+        # Lazily mint the code, the same base32-ish scheme as
+        # Round.watch_token and User.invite_code: 8 chars, no 0/1/I/O, so it
+        # survives being read down a phone or typed off a screenshot.
+        if not self.code:
+            import secrets
+            import string
+            alphabet = string.ascii_uppercase + '23456789'
+            while True:
+                candidate = ''.join(secrets.choice(alphabet) for _ in range(8))
+                if not Receipt.objects.filter(code=candidate).exists():
+                    self.code = candidate
+                    break
+        super().save(*args, **kwargs)
+
+
 class SettlementSend(models.Model):
     """A record that a settlement receipt actually left the app.
 

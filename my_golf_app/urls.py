@@ -22,6 +22,7 @@ from django.views.decorators.cache import cache_control
 
 from api import watch_views
 from api import invite_views
+from api import receipt_views
 
 
 @cache_control(max_age=3600)
@@ -92,6 +93,12 @@ urlpatterns = [
     # course administration).  Mounted under one prefix so a td.halved.golf
     # subdomain can be pointed here later without touching any route.
     path('td/', include('console.urls')),
+
+    # Public settle-up receipt.  card.png BEFORE the page route, the same
+    # ordering (and the same reason) as /watch/<token>/card.png above.
+    path('r/<str:code>/card.png', receipt_views.receipt_card_png,
+         name='receipt-card'),
+    path('r/<str:code>/', receipt_views.receipt_page, name='receipt-page'),
 
     # Public invite landing page — shared by the in-app "Invite Friends" button.
     path('i/<str:code>/', invite_views.invite_landing, name='invite-landing'),
