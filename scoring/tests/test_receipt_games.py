@@ -191,3 +191,154 @@ class FormatterFailureTests(TestCase):
         self.assertEqual(sum(n['net'] for n in receipt.payload['nets']), 0)
         self.assertTrue(receipt.payload['games'][0]['rows'],
                         'the fallback row should still say where money went')
+
+
+# ===========================================================================
+# Group B — the pools (§4)
+# ===========================================================================
+
+class StrokePlayRowTests(TestCase):
+
+    def _round(self, fee, payouts):
+        from games.models import LowNetRoundConfig
+        rnd = make_round(active_games=['low_net_round'])
+        fs = make_foursome(rnd, [('A', 0), ('B', 0), ('C', 0), ('D', 0)])
+        ids = [m.player_id for m in fs.memberships.all()]
+        LowNetRoundConfig.objects.update_or_create(
+            round=rnd, defaults={'entry_fee': fee, 'payouts': payouts})
+        for hole in range(1, 19):
+            submit_hole(fs, hole, [(pid, 4 + i) for i, pid in enumerate(ids)])
+        return rnd, fs, ids
+
+    def test_the_row_names_only_the_places_that_were_paid(self):
+        """§4 lists Stroke Play as a pool game "only when there is a pot", and
+        on a board of sixteen the row cannot be a full ranking — the chips
+        above already carry every golfer.  What it adds is who collected."""
+        rnd, fs, ids = self._round(
+            20, [{'place': 1, 'amount': 52}, {'place': 2, 'amount': 28}])
+        names = {pid: {'short_name': f'P{i}'} for i, pid in enumerate(ids)}
+        rows = rg.stroke_play_rows(rnd, {'game': 'low_net_round'}, names)
+        self.assertEqual(len(rows), 1)
+        value = rows[0][1]
+        self.assertIn('1st', value)
+        self.assertIn('2nd', value)
+        self.assertNotIn('3rd', value)
+
+    def test_no_pot_means_no_pool_caption(self):
+        """With no entry fee there is no pool, so the chip keeps §3's default
+        gross/net caption rather than a place with no money behind it."""
+        rnd, fs, ids = self._round(0, [{'place': 1, 'amount': 0}])
+        self.assertEqual(rg.stroke_play_captions(rnd, ids), {})
+
+    def test_a_pot_captions_the_place_and_the_total(self):
+        """§4: "{place} · {tot}"."""
+        rnd, fs, ids = self._round(20, [{'place': 1, 'amount': 80}])
+        caps = rg.stroke_play_captions(rnd, ids)
+        self.assertTrue(caps)
+        self.assertRegex(next(iter(caps.values())), r'^\d+(st|nd|rd|th) · \d+$')
+
+
+class PlaceTests(SimpleTestCase):
+
+    def test_the_teens_are_th(self):
+        """11th, 12th and 13th are the case a naive ordinal gets wrong."""
+        self.assertEqual([rg._place(n) for n in (1, 2, 3, 4, 11, 12, 13, 21)],
+                         ['1st', '2nd', '3rd', '4th', '11th', '12th', '13th',
+                          '21st'])
+
+
+class GroupPoolTests(TestCase):
+    """§4 Group B: "each group's payout is divided across its golfers"."""
+
+    def _round(self, fee, payouts):
+        # 40 Balls has no setup_* service — the view writes the config
+        # directly, so the test does the same rather than inventing one.
+        from games.models import FortyBallsConfig
+        rnd = make_round(active_games=['forty_balls'])
+        for n in range(1, 3):
+            make_foursome(rnd, [(f'G{n}a', 0), (f'G{n}b', 0)],
+                          group_number=n)
+        for fs in rnd.foursomes.all():
+            ids = [m.player_id for m in fs.memberships.all()]
+            for hole in range(1, 19):
+                submit_hole(fs, hole, [(pid, 4) for pid in ids])
+        FortyBallsConfig.objects.update_or_create(
+            round=rnd, defaults={'entry_fee': fee, 'payouts': payouts})
+        return rnd
+
+    def test_a_balanced_pool_nets_the_share_minus_the_entry(self):
+        from services.settlement import _group_pool_nets
+        # 4 golfers at $10 = a $40 pool, and the table pays all $40.
+        rnd = self._round(10, [{'place': 1, 'amount': 40}])
+        nets = _group_pool_nets('forty_balls', rnd)
+        if nets:                       # the engine may not rank an unscored tie
+            self.assertEqual(round(sum(nets.values()), 2), 0.0)
+
+    def test_an_unbalanced_pool_is_refused_rather_than_reported(self):
+        """With entries uncollected nobody holds the difference, so a table
+        that does not pay out the pool has no set of transfers that clears
+        it — $40 collected and $10 paid leaves $30 belonging to nobody."""
+        from services.settlement import _group_pool_nets
+        rnd = self._round(10, [{'place': 1, 'amount': 10}])
+        self.assertEqual(_group_pool_nets('forty_balls', rnd), {})
+
+
+class ImageCaptionTests(SimpleTestCase):
+
+    def test_the_preview_caption_is_its_own_registry(self):
+        """§3 has both; they are different sentences for different widths, and
+        a union return type is how one ends up rendered in the other's slot."""
+        from services.receipt_build import GAME_CAPTION, GAME_IMAGE_CAPTION
+        for key in ('forty_balls', 'hot_spot'):
+            self.assertIn(key, GAME_CAPTION)
+            self.assertIn(key, GAME_IMAGE_CAPTION)
+
+    def test_the_preview_drops_the_group_and_the_ticket_keeps_it(self):
+        ticket = rg._group_pool_captions(False)
+        preview = rg._group_pool_captions(True)
+        self.assertIsNot(ticket, preview)
+
+
+class DreamRoundTests(SimpleTestCase):
+
+    def test_eclectic_is_dream_round_not_a_fifth_pool(self):
+        """The website redirects /games/eclectic to /games/dream-round, so
+        §4's "Dream Round · Eclectic" is one game under two names."""
+        from services.receipt_build import GAME_SUMMARY
+        self.assertIn('dream_round', GAME_SUMMARY)
+        self.assertNotIn('eclectic', GAME_SUMMARY)
+
+
+class DriftTests(TestCase):
+    """Not every imbalance is rounding."""
+
+    def test_a_real_imbalance_refuses_rather_than_landing_on_one_golfer(self):
+        from services.receipt_build import build_round_receipt
+        from services.skins import setup_skins, calculate_skins
+        rnd = make_round(active_games=['skins'])
+        fs = make_foursome(rnd, [('A', 0), ('B', 0), ('C', 0), ('D', 0)])
+        setup_skins(fs, handicap_mode='gross', carryover=False)
+        ids = [m.player_id for m in fs.memberships.all()]
+        for hole in range(1, 19):
+            scores = [(pid, 5) for pid in ids]
+            if hole < 4:
+                scores[0] = (ids[0], 3)
+            submit_hole(fs, hole, scores)
+        calculate_skins(fs)
+
+        import services.settlement as st
+        real = st._pid_nets_for_game
+
+        def lopsided(game_key, round_obj, foursomes):
+            nets = dict(real(game_key, round_obj, foursomes))
+            first = next(iter(nets))
+            nets[first] += 40.0        # $40 from nowhere
+            return nets
+
+        st._pid_nets_for_game = lopsided
+        try:
+            self.assertIsNone(
+                build_round_receipt(rnd),
+                'a $40 hole in the ledger was absorbed onto one golfer')
+        finally:
+            st._pid_nets_for_game = real

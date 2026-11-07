@@ -16,11 +16,22 @@ payout-mode work standardized this on services.wager.settle):
     stableford       → per_point: results[*]['payout'];
                        pool:      results[*]['payout'] − entry_fee
 
-Team games that don't expose a clean per-player net yet (Nassau, Vegas,
-Multi-Skins, Triple Cup, …) are reported under ``uncovered_games`` so the UI
-can note "not included" rather than silently dropping money.
+    forty_balls/     group pools (§4 Group B): the group's per-person share
+    hot_spot         minus the entry, refused when the table does not pay
+                     out the pool
+
+Team games that don't expose a clean per-player net yet (Vegas, Multi-Skins,
+Triple Cup, …) are reported under ``uncovered_games`` so the UI can note "not
+included" rather than silently dropping money.  **Nassau, Rabbit and Survivor
+used to be on that list and are not any more** — the settle-up receipt (§4
+Group A) wired the ledgers their engines already produced.
 """
+import logging
 from collections import defaultdict
+
+from tournament.models import FoursomeMembership
+
+logger = logging.getLogger(__name__)
 
 # Games whose per-player net we can extract today.  Anything active but not
 # here is surfaced as uncovered.
@@ -34,6 +45,9 @@ NETTABLE = {
     # in the local database — 5 Nassau, 3 Survivor, 3 Rabbit — could produce
     # no settlement and no receipt at all.
     'nassau', 'rabbit', 'survivor',
+    # Group B (§4) — the GROUP pools.  Each group's payout is divided across
+    # its golfers, and a golfer's net is his share minus his entry.
+    'forty_balls', 'hot_spot',
 }
 
 _LABELS = {
@@ -44,6 +58,7 @@ _LABELS = {
     'annandale_friday': 'Annandale Friday',
     'sequoya_threes': 'Sequoya 3s',
     'nassau': 'Nassau', 'rabbit': 'Rabbit', 'survivor': 'Survivor',
+    'forty_balls': '40 Balls', 'hot_spot': 'Hot Seat',
 }
 
 
@@ -54,6 +69,54 @@ def _is_cup_round(round_obj) -> bool:
         return True
     except Exception:
         return False
+
+
+def _group_pool_nets(game_key, round_obj) -> dict:
+    """§4 Group B: a GROUP pool, netted per golfer.
+
+    "Each group's payout is divided across its golfers", and §2.3's net is
+    ``payout − entry``.  Both halves come from the engine: the ranking, the
+    tie splitting and the per-person share are ``services.group_field``'s, and
+    re-deriving them here would be a second opinion about money — the failure
+    this codebase has collected scars from.
+
+    **It refuses an unbalanced pool rather than reporting one.**  With entries
+    uncollected there is nobody holding the difference, so a table that does
+    not pay out the pool has no set of transfers that clears it: a $120 pot
+    paying $80 leaves $40 belonging to nobody.  Returning nothing makes the
+    game read as uncovered, which is true, instead of handing the receipt a
+    ledger that cannot settle.
+    """
+    from collections import defaultdict
+    if game_key == 'forty_balls':
+        from services.forty_balls import forty_balls_summary as summary_fn
+    else:
+        from services.hot_spot import hot_spot_summary as summary_fn
+    s = summary_fn(round_obj) or {}
+    entry = float(s.get('entry_fee') or 0)
+    rows = s.get('results') or s.get('standings') or []
+    if not rows:
+        return {}
+
+    nets, members = defaultdict(float), {}
+    for m in FoursomeMembership.objects.filter(
+            foursome__round=round_obj,
+            player__is_phantom=False).select_related('player'):
+        members.setdefault(m.foursome_id, []).append(m.player_id)
+
+    for row in rows:
+        ids = members.get(row.get('foursome_id')) or []
+        share = float(row.get('per_person_payout') or 0)
+        for pid in ids:
+            nets[pid] += share - entry
+
+    total = round(sum(nets.values()), 2)
+    if total:
+        logger.warning(
+            '%s on round %s pays out %s short of its pool; not nettable',
+            game_key, round_obj.id, total)
+        return {}
+    return dict(nets)
 
 
 def _pid_nets_for_game(game_key, round_obj, foursomes):
@@ -97,6 +160,9 @@ def _pid_nets_for_game(game_key, round_obj, foursomes):
                 out[pid] += total
             for pid in t2:
                 out[pid] -= total
+
+    elif game_key in ('forty_balls', 'hot_spot'):
+        out.update(_group_pool_nets(game_key, round_obj))
 
     elif game_key == 'rabbit':
         from services.rabbit import rabbit_summary

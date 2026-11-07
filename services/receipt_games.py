@@ -512,3 +512,203 @@ def banker_stake(round_obj) -> str:
 GAME_SUMMARY['banker'] = banker_summary_rows
 GAME_CAPTION['banker'] = banker_captions
 GAME_STAKE['banker'] = banker_stake
+
+
+# ===========================================================================
+# Group B — the pools (§4)
+# ===========================================================================
+#
+# **These read the engines' payouts; they do not re-run ``settle_pool``.**
+# §4 says to "use settlePool and supply the place order and the payout table",
+# which is how you build a pool that does not exist yet.  All four of these
+# already rank, split their ties and pay — `low_net_round` through
+# `_rank_standings`, the group pools through `services.group_field`, Dream
+# Round through `rank_in_flights`.  Settling them a second time here would be
+# a second opinion about money, and the two would eventually disagree about a
+# tie or an odd cent.  ``settle_pool`` stays for a pool that has no engine.
+
+from services.receipt_build import GAME_IMAGE_CAPTION  # noqa: E402
+
+#: Suffix by LAST DIGIT. Keying the whole number gives '21th'.
+_ORDINAL = {1: 'st', 2: 'nd', 3: 'rd'}
+
+
+def _place(rank) -> str:
+    """"1st", "2nd", "11th" — a place a golfer reads, not a rank integer."""
+    if not rank:
+        return ''
+    rank = int(rank)
+    # 11th, 12th and 13th are the exception the last-digit rule gets wrong.
+    if 11 <= rank % 100 <= 13:
+        return f'{rank}th'
+    return f'{rank}{_ORDINAL.get(rank % 10, "th")}'
+
+
+# ---------------------------------------------------------------------------
+# Stroke Play — only when there is a pot
+# ---------------------------------------------------------------------------
+
+def stroke_play_rows(round_obj, entry, names):
+    """§4: ``["Stroke Play", "Kim 1st $60 · Reid 2nd $20"]``.
+
+    **Only the places that were PAID.**  §4 lists Stroke Play as a pool game
+    "only when there is a pot", and on a board of sixteen the row cannot be a
+    full ranking — the chips above already carry every golfer.  What the row
+    adds is who collected.
+
+    The place is the PRIZE rank, not the board rank: an excluded golfer holds
+    a position without being paid, so the man behind him collects 2nd while
+    standing 3rd, and printing the board rank beside the money would make the
+    two disagree on the same line.
+    """
+    from services.low_net_round import low_net_round_summary
+    s = low_net_round_summary(round_obj) or {}
+    paid = [r for r in (s.get('results') or [])
+            if (r.get('payout') or 0) and not r.get('excluded')]
+    if not paid:
+        return []
+    paid.sort(key=lambda r: (r.get('prize_rank') or r.get('rank') or 99))
+    return [['Stroke Play', ' · '.join(
+        f'{_short(names, r["player_id"])} '
+        f'{_place(r.get("prize_rank") or r.get("rank"))} '
+        f'{money(r["payout"])}' for r in paid)]]
+
+
+def stroke_play_captions(round_obj, player_ids) -> dict:
+    """§4: ``"{place} · {tot}"`` — the total it settles on, in the mode it
+    settles in, so a Gross round does not caption a net figure."""
+    from services.low_net_round import low_net_round_summary
+    s = low_net_round_summary(round_obj) or {}
+    if not float(s.get('entry_fee') or 0):
+        return {}                     # no pot: the default gross/net caption
+    out = {}
+    for r in s.get('results') or []:
+        place = _place(r.get('prize_rank') or r.get('rank'))
+        tot = r.get('total_net')
+        if place and tot is not None:
+            out[r['player_id']] = f'{place} · {tot}'
+    return out
+
+
+def stroke_play_stake(round_obj) -> str:
+    from services.low_net_round import low_net_round_summary
+    fee = float((low_net_round_summary(round_obj) or {}).get('entry_fee') or 0)
+    return f'{money(fee)} in' if fee else ''
+
+
+GAME_SUMMARY['low_net_round'] = stroke_play_rows
+GAME_CAPTION['low_net_round'] = stroke_play_captions
+GAME_STAKE['low_net_round'] = stroke_play_stake
+
+
+# ---------------------------------------------------------------------------
+# 40 Balls and Hot Seat — group pools
+# ---------------------------------------------------------------------------
+
+def _group_rows(round_obj):
+    from services.forty_balls import forty_balls_summary
+    from services.hot_spot import hot_spot_summary
+    for key, fn in (('forty_balls', forty_balls_summary),
+                    ('hot_spot', hot_spot_summary)):
+        if key in (round_obj.active_games or []):
+            s = fn(round_obj) or {}
+            yield key, s, (s.get('results') or s.get('standings') or [])
+
+
+def _group_pool_rows(label):
+    def rows(round_obj, entry, names):
+        """§4: ``["40 Balls", "Group 2 1st · $40 each"]``.
+
+        The money is stated PER GOLFER ("each") because that is what a golfer
+        collects; the group's total is the engine's intermediate figure and
+        would read as his.
+        """
+        for key, s, standings in _group_rows(round_obj):
+            if key != entry['game']:
+                continue
+            paid = [r for r in standings if (r.get('payout') or 0)]
+            if not paid:
+                return []
+            paid.sort(key=lambda r: (r.get('rank') or 99))
+            return [[label, ' · '.join(
+                f'{r.get("group", "")} {_place(r.get("rank"))} '
+                f'{money(r.get("per_person_payout") or 0)} each'
+                for r in paid)]]
+        return []
+    return rows
+
+
+def _group_pool_captions(image: bool):
+    def captions(round_obj, player_ids) -> dict:
+        """§4: ``"{place} · group {n}"`` on the ticket, ``"{place} · each"``
+        on the preview — where the chip is narrower and the group number is
+        the part a reader can do without."""
+        from tournament.models import FoursomeMembership
+        out = {}
+        for key, s, standings in _group_rows(round_obj):
+            by_fs = {r.get('foursome_id'): r for r in standings}
+            for m in FoursomeMembership.objects.filter(
+                    foursome__round=round_obj,
+                    player__is_phantom=False):
+                row = by_fs.get(m.foursome_id)
+                if not row or not row.get('rank'):
+                    continue
+                place = _place(row['rank'])
+                out[m.player_id] = (f'{place} · each' if image
+                                    else f'{place} · {row.get("group", "")}')
+        return out
+    return captions
+
+
+def _group_pool_stake(key):
+    def stake(round_obj) -> str:
+        for k, s, _ in _group_rows(round_obj):
+            if k == key and float(s.get('entry_fee') or 0):
+                return f'{money(s["entry_fee"])} in'
+        return ''
+    return stake
+
+
+for _key, _label in (('forty_balls', '40 Balls'), ('hot_spot', 'Hot Seat')):
+    GAME_SUMMARY[_key] = _group_pool_rows(_label)
+    GAME_CAPTION[_key] = _group_pool_captions(False)
+    GAME_IMAGE_CAPTION[_key] = _group_pool_captions(True)
+    GAME_STAKE[_key] = _group_pool_stake(_key)
+
+
+# ---------------------------------------------------------------------------
+# Dream Round (Eclectic)
+# ---------------------------------------------------------------------------
+#
+# **Eclectic IS Dream Round** — the website redirects `/games/eclectic` to
+# `/games/dream-round`, so §4's "Dream Round · Eclectic" is one game under two
+# names, not two pools.
+#
+# It is a MULTI-ROUND pool on a tournament, so it has no casual-round ledger
+# and nothing on the Finish round hook reaches it.  The formatter is
+# registered now so the Group C tournament assembler picks it up for free;
+# until then it will never be called.
+
+def dream_round_rows(round_obj, entry, names):
+    """§4: "the winner and their score"."""
+    from services.dream_round import dream_round_standings
+    tournament = getattr(round_obj, 'tournament', None)
+    if not tournament:
+        return []
+    rows = []
+    for pool in ('net', 'gross'):
+        try:
+            standings = dream_round_standings(tournament, pool) or []
+        except Exception:
+            continue
+        top = next((r for r in standings if (r.get('rank') or 99) == 1), None)
+        if not top:
+            continue
+        score = top.get('total') or top.get('total_net') or top.get('score')
+        rows.append([f'Dream Round {pool.title()}',
+                     f'{top.get("name", "")} {score}' if score is not None
+                     else top.get('name', '')])
+    return rows
+
+
+GAME_SUMMARY['dream_round'] = dream_round_rows

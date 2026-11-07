@@ -55,6 +55,12 @@ GAME_SUMMARY: dict = {}
 #: is not strokes says so here ("9 pts · v. target +3", "banked 4 · bet +$290").
 GAME_CAPTION: dict = {}
 
+#: Like :data:`GAME_CAPTION`, but for the PREVIEW's shorter chip (§3's
+#: ``imageCaption``).  A separate dict rather than a tuple return, because the
+#: two are different sentences for different widths and a union type is how
+#: one quietly ends up rendered in the other's slot.
+GAME_IMAGE_CAPTION: dict = {}
+
 #: ``{game_key: callable(round_obj) -> str}`` for §3's ``stakeLabel``
 #: ("$10 a match", "$2 a skin"), which composes the ``sub`` line.
 GAME_STAKE: dict = {}
@@ -62,6 +68,9 @@ GAME_STAKE: dict = {}
 #: How many golfers the unformatted fallback row names before collapsing.
 #: Four is a full group, which is the common case it must not truncate.
 _FALLBACK_MOVERS = 4
+
+#: Per golfer, the most an imbalance can be and still be rounding.
+_MAX_ROUNDING_CENTS = 1
 
 
 def _cents(dollars) -> int:
@@ -211,6 +220,20 @@ def build_round_receipt(round_obj, *, scorer=None):
             # land a cent out. Absorb it on the biggest winner rather than
             # failing the settle: a receipt that cannot be built is worse than
             # one cent, and it is visible in the chips either way.
+            #
+            # **Bounded, because not every imbalance is rounding.** A POOL
+            # whose payout table does not pay out the pool is out by real
+            # money — a 40 Balls round collecting $120 and paying $80 is $40
+            # short — and absorbing that would hand one golfer a figure
+            # nobody agreed to, silently. A cent a golfer is the most that
+            # can be rounding; past that the round says so by having no
+            # receipt rather than a wrong one.
+            if abs(drift) > len(order) * _MAX_ROUNDING_CENTS:
+                logger.error(
+                    'receipt: round %s is out by %s cents across %s golfers — '
+                    'refusing rather than absorbing it', round_obj.id, drift,
+                    len(order))
+                return None
             nets[order[0]] -= drift
 
         transfers = for_display(settle(nets, order=order))
@@ -224,6 +247,17 @@ def build_round_receipt(round_obj, *, scorer=None):
                                  (fn(round_obj, order) or {}).items() if v})
             except Exception:
                 logger.exception('receipt: %s caption failed', entry['game'])
+        image_captions = {}
+        for entry in per_game:
+            fn = GAME_IMAGE_CAPTION.get(entry['game'])
+            if not fn:
+                continue
+            try:
+                image_captions.update({k: v for k, v in
+                                       (fn(round_obj, order) or {}).items() if v})
+            except Exception:
+                logger.exception('receipt: %s image caption failed',
+                                 entry['game'])
 
         payload = {
             'title': ' + '.join(e['label'] for e in per_game),
@@ -232,7 +266,8 @@ def build_round_receipt(round_obj, *, scorer=None):
                 {'golferId': pid,
                  'name': names[pid].get('short_name') or names[pid]['name'],
                  'net': nets[pid],
-                 'caption': captions.get(pid, '')}
+                 'caption': captions.get(pid, ''),
+                 'imageCaption': image_captions.get(pid, '')}
                 for pid in sorted(order, key=lambda p: -nets[p])
             ],
             'pays': [{'from': _short(names, t.frm), 'to': _short(names, t.to),
