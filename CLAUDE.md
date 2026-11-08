@@ -10676,3 +10676,78 @@ second attempt, because the first fixture agreed with a hole-number split.
 
 **Not built:** the hole card's restyle (the match-state pill). `HoleHeader`
 is shared by eleven screens, and `card.match.state` is emitted ready for it.
+
+## Singles Match score entry — Fourball with one golfer a side
+
+`~/Downloads/handoff-singles-match-score-entry`, whose first instruction is
+the whole build: *"Build it as the Fourball score entry with one golfer a
+side. Everything in that handoff applies except the differences below."*
+
+So it is **the same card, the same model and the same tray**.
+`singles_hole_card` emits the identical dict and the Flutter side reuses
+`FourballHoleCard` and `FourballHoleTray`. What the server sends instead of
+a second widget:
+
+* **`kind`** — `best ball` or `net`, which is the tray's label
+  (`HOLE 5 · NET`).
+* **`sub`** — the line under a side's name, composed server-side. Fourball
+  says whose ball counted (`counts: Paul · Larry`); Singles says what that
+  golfer gets (`CH 12 · 1 stroke`). It REPLACED Fourball's `counts` list in
+  the same commit: a client joining names with a middot was a second place
+  that composed a sentence.
+* **singular verbs** — `Paul wins 3&2`, because the headline is the
+  server's.
+
+The tray reads `players.length == 2` for `Both scores in` (`All 2 scores in`
+is not a sentence), and the side headers stay Fourball's: with one golfer a
+side a header is a label for the name directly under it.
+
+**Singles Match is an Overall-only Nassau** (`game_type='match_18'`), so the
+card lives in `services/nassau.py` and the match state, close-out and `&M`
+are that engine's. `_singlesCard` is primary-gated harder than the others
+because a Singles Match can ride as a subset SIDE bet alongside a Sixes or
+Nassau primary (`docs/parallel-games.md`) — a side bet must not take over
+the screen's entry.
+
+### The bug underneath it: the Nassau close-out was `18 - hole`
+
+Every `decided_margin` / `decided_remaining` in `nassau_summary` asked
+`abs(margin) > 18 - hole`. **That is the shotgun shape the sweep fixed in
+six other services and left here** — in a function that had the group's play
+order in scope two lines above. Off the 13th tee, hole 18 is the SIXTH hole
+played and twelve remain after it, so a 3 UP lead there read as a close-out
+and the board said `3&0`.
+
+It decides when a match is over and the `&M` in `3&2`, so it reached the
+Nassau board, the Singles lock-screen card, Triple Nassau and Annandale
+Friday. `_rem_after` / `_rem_in_front` replace it, and **the hole-number
+filters went with them**: `front9_margin` is already null outside
+`set(order[:half])`, so `is not None` was the play-order test and
+`h['hole'] <= 9` only ever ADDED a wrong one — it excludes a
+front-nine-PLAYED hole numbered above 9.
+
+`_rem_in_front` bounds itself by the engine's own front length rather than
+the summary's `_half`, because a single match (`single_match`) has ONE bet
+over every hole and the two numbers are not the same.
+
+The card reads `decided_remaining` and takes the close-out hole straight out
+of it (`len(order) - 1 - rem`) rather than running a second comparison, so
+there is one answer to "when is this match over".
+
+### Test notes worth keeping
+
+* **The match-play walk stops at the first unscored hole in play order**, so
+  a test about hole 2 has to play hole 1. `_halve_the_first` does, and halves
+  it with EQUAL GROSS — hole 1 of the default card is SI 7, so Paul's four
+  strokes (SI 1–4) do not fall there, and the obvious `5 v 4` is a Jim win.
+* `course_handicap` is on the summary's **teams** block; the scorecard block
+  carries `phcp_in_play`, which is a different number.
+
+Tests: `scoring/tests/test_singles_hole_card.py` (21),
+`api/test_singles_hole_card.py` (6), `mobile/test/singles_entry_test.dart`
+(16), and `CloseOutFollowsPlayOrderTests` in `scoring/tests/test_nassau.py`
+(3) for the engine fix. Every guard mutation-checked.
+
+**Open, from the handoff:** it assumes one bet on the match. If presses or
+front/back bets are ever offered on a Singles Match, this tray needs
+Nassau's press bars — the engine already has them.

@@ -1537,7 +1537,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         // Las Vegas, per `~/Downloads/handoff-vegas-score-entry`.
         primary == GameIds.vegas ||
         // Fourball, per `~/Downloads/handoff-fourball-score-entry`.
-        primary == GameIds.fourball;
+        primary == GameIds.fourball ||
+        // Singles Match — the same card and tray with one golfer a side
+        // (`~/Downloads/handoff-singles-match-score-entry`).
+        primary == GameIds.match18;
   }
 
   /// This hole ends in a TRAY — Annandale Friday's, Sixes' or Stroke Play's.
@@ -1548,6 +1551,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       _sixesCard(rp) != null ||
       _vegasCard(rp) != null ||
       _fourballCard(rp) != null ||
+      _singlesCard(rp) != null ||
       _strokePlayCard(rp) != null;
 
   /// The hole we have asked the server for; see `_ensureSixesCard`.
@@ -1674,6 +1678,41 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       return null;
     }
     return rp.fourballHole(_selectedHole);
+  }
+
+  /// The hole we have asked the server for; see `_ensureFourballCard`.
+  int? _singlesCardAsked;
+
+  /// **Make sure the hole on screen has a Singles Match card**, for the
+  /// reason every other one of these exists: without a card the keypad is
+  /// not drawn at all.
+  void _ensureSinglesCard(RoundProvider rp) {
+    if (!_activeGames(rp.round).contains(GameIds.match18)) return;
+    if (rp.singlesHole(_selectedHole) != null) {
+      _singlesCardAsked = null;
+      return;
+    }
+    if (_singlesCardAsked == _selectedHole) return;
+    _singlesCardAsked = _selectedHole;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<RoundProvider>()
+          .loadSinglesHole(widget.foursomeId, _selectedHole);
+    });
+  }
+
+  /// The Singles Match card for the hole on screen, when it is the primary.
+  ///
+  /// **The primary test matters more here than anywhere else**: a Singles
+  /// Match can ride as a subset SIDE bet alongside a Sixes or Nassau
+  /// primary (`docs/parallel-games.md`), and a side bet must not take over
+  /// the screen's entry.
+  FourballHoleCard? _singlesCard(RoundProvider rp) {
+    final games = _activeGames(rp.round);
+    if (resolvePrimary(rp.round?.primaryGame, games) != GameIds.match18) {
+      return null;
+    }
+    return rp.singlesHole(_selectedHole);
   }
 
   /// Golfers the scorer has marked as not scoring a hole, by hole.
@@ -3338,7 +3377,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     // can rise with three of four: past the close-out a golfer may pick up,
     // so the gate is every golfer still PLAYING rather than every golfer.
     _ensureFourballCard(rp);
-    final fourCard = _fourballCard(rp);
+    _ensureSinglesCard(rp);
+    // One tray, one card shape — a Singles Match IS the Fourball card with
+    // one golfer a side, and they can never both be the primary.
+    final fourCard = _fourballCard(rp) ?? _singlesCard(rp);
     final fourTray = fourCard != null && fbActive && _editHotPid == null &&
         _holeReady(players, scores, _selectedHole, fourCard);
 
@@ -3915,6 +3957,10 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                            rp.round?.status != 'complete',
                 vegasHole: _vegasCard(rp),
                 // Hidden past the close-out — see the field's own comment.
+                // **Fourball's alone.** A Singles Match has one golfer a
+                // side, so a header over each row would be a label saying
+                // the name directly under it — which is why its handoff
+                // takes them out.
                 fourballHole: (_fourballCard(rp)?.countsForCard ?? true)
                     ? null
                     : _fourballCard(rp),

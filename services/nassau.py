@@ -1266,6 +1266,29 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
     _half   = (len(_order) or 18) // 2
     _pos_of = {h: i for i, h in enumerate(_order)}
 
+    def _rem_after(hole: int) -> int:
+        """Holes still to play after [hole], in PLAY ORDER.
+
+        **Not `18 - hole`.** The two are the same integer only off the 1st
+        tee: a group starting on the 13th plays 13..18,1..12, so hole 18 is
+        the sixth it plays and six remain after it. This decides when a
+        match is CLOSED OUT and the `&M` in `3&2` — the shotgun sweep fixed
+        this shape in six other services and left the Nassau engine, where
+        the play order was already in scope two lines up.
+        """
+        pos = _pos_of.get(hole)
+        if pos is None or not _order:
+            return max(0, 18 - hole)
+        return len(_order) - 1 - pos
+
+    def _rem_in_front(hole: int) -> int:
+        """The same, bounded by the FIRST half — a front-nine bet is decided
+        against the holes left in its own nine, not in the round."""
+        pos = _pos_of.get(hole)
+        if pos is None or not _order:
+            return max(0, 9 - hole)
+        return max(0, _half - 1 - pos)
+
     def _press_hole_seq(p) -> list:
         """The holes a press covers, in play order: from its start hole to the
         end of its nine."""
@@ -1550,12 +1573,12 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
             'holes_played'      : holes_front,
             'decided_margin'    : next(
                 (h['front9_margin'] for h in holes_out
-                 if h['hole'] <= 9 and h['front9_margin'] is not None
-                 and abs(h['front9_margin']) > 9 - h['hole']), None),
+                 if h['front9_margin'] is not None
+                 and abs(h['front9_margin']) > _rem_in_front(h['hole'])), None),
             'decided_remaining' : next(
-                (9 - h['hole'] for h in holes_out
-                 if h['hole'] <= 9 and h['front9_margin'] is not None
-                 and abs(h['front9_margin']) > 9 - h['hole']), None),
+                (_rem_in_front(h['hole']) for h in holes_out
+                 if h['front9_margin'] is not None
+                 and abs(h['front9_margin']) > _rem_in_front(h['hole'])), None),
         },
         'back9'   : {
             'result'            : game.back9_result,
@@ -1563,12 +1586,12 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
             'holes_played'      : holes_back,
             'decided_margin'    : next(
                 (h['back9_margin'] for h in holes_out
-                 if h['hole'] > 9 and h['back9_margin'] is not None
-                 and abs(h['back9_margin']) > 18 - h['hole']), None),
+                 if h['back9_margin'] is not None
+                 and abs(h['back9_margin']) > _rem_after(h['hole'])), None),
             'decided_remaining' : next(
-                (18 - h['hole'] for h in holes_out
-                 if h['hole'] > 9 and h['back9_margin'] is not None
-                 and abs(h['back9_margin']) > 18 - h['hole']), None),
+                (_rem_after(h['hole']) for h in holes_out
+                 if h['back9_margin'] is not None
+                 and abs(h['back9_margin']) > _rem_after(h['hole'])), None),
         },
         'overall' : {
             'result'            : game.overall_result,
@@ -1577,11 +1600,11 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
             'decided_margin'    : next(
                 (h['overall_margin'] for h in holes_out
                  if h['overall_margin'] is not None
-                 and abs(h['overall_margin']) > 18 - h['hole']), None),
+                 and abs(h['overall_margin']) > _rem_after(h['hole'])), None),
             'decided_remaining' : next(
-                (18 - h['hole'] for h in holes_out
+                (_rem_after(h['hole']) for h in holes_out
                  if h['overall_margin'] is not None
-                 and abs(h['overall_margin']) > 18 - h['hole']), None),
+                 and abs(h['overall_margin']) > _rem_after(h['hole'])), None),
         },
         # ── Claremont bottom bets (null when variant != 'claremont') ──────
         # A bottom bet is a MATCH, not a points tally: it is 2 points a hole
@@ -1598,12 +1621,12 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
             'holes_played': holes_front,
             'decided_margin'    : next(
                 (h['bottom_front9_margin'] for h in holes_out
-                 if h['hole'] <= 9 and h.get('bottom_front9_margin') is not None
-                 and abs(h['bottom_front9_margin']) > (9 - h['hole']) * 2), None),
+                 if h.get('bottom_front9_margin') is not None
+                 and abs(h['bottom_front9_margin']) > (_rem_in_front(h['hole'])) * 2), None),
             'decided_remaining' : next(
-                (9 - h['hole'] for h in holes_out
-                 if h['hole'] <= 9 and h.get('bottom_front9_margin') is not None
-                 and abs(h['bottom_front9_margin']) > (9 - h['hole']) * 2), None),
+                (_rem_in_front(h['hole']) for h in holes_out
+                 if h.get('bottom_front9_margin') is not None
+                 and abs(h['bottom_front9_margin']) > (_rem_in_front(h['hole'])) * 2), None),
         } if is_claremont else None,
         'bottom_back9'   : {
             'result'  : game.bottom_back9_result,
@@ -1611,12 +1634,12 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
             'holes_played': holes_back,
             'decided_margin'    : next(
                 (h['bottom_back9_margin'] for h in holes_out
-                 if h['hole'] > 9 and h.get('bottom_back9_margin') is not None
-                 and abs(h['bottom_back9_margin']) > (18 - h['hole']) * 2), None),
+                 if h.get('bottom_back9_margin') is not None
+                 and abs(h['bottom_back9_margin']) > _rem_after(h['hole']) * 2), None),
             'decided_remaining' : next(
-                (18 - h['hole'] for h in holes_out
-                 if h['hole'] > 9 and h.get('bottom_back9_margin') is not None
-                 and abs(h['bottom_back9_margin']) > (18 - h['hole']) * 2), None),
+                (_rem_after(h['hole']) for h in holes_out
+                 if h.get('bottom_back9_margin') is not None
+                 and abs(h['bottom_back9_margin']) > _rem_after(h['hole']) * 2), None),
         } if is_claremont else None,
         'bottom_overall' : {
             'result'  : game.bottom_overall_result,
@@ -1625,11 +1648,11 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
             'decided_margin'    : next(
                 (h['bottom_overall_margin'] for h in holes_out
                  if h.get('bottom_overall_margin') is not None
-                 and abs(h['bottom_overall_margin']) > (18 - h['hole']) * 2), None),
+                 and abs(h['bottom_overall_margin']) > _rem_after(h['hole']) * 2), None),
             'decided_remaining' : next(
-                (18 - h['hole'] for h in holes_out
+                (_rem_after(h['hole']) for h in holes_out
                  if h.get('bottom_overall_margin') is not None
-                 and abs(h['bottom_overall_margin']) > (18 - h['hole']) * 2), None),
+                 and abs(h['bottom_overall_margin']) > _rem_after(h['hole']) * 2), None),
         } if is_claremont else None,
         # ── Presses ───────────────────────────────────────────────────────
         'presses'        : top_presses_out,
@@ -1676,4 +1699,238 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
         'phantom'             : _build_phantom_info(foursome, game.net_percent),
         'team1_colour'        : _team_colour(foursome, 1),
         'team2_colour'        : _team_colour(foursome, 2),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Singles Match score-entry card
+# — `~/Downloads/handoff-singles-match-score-entry`
+# ---------------------------------------------------------------------------
+
+def singles_hole_card(foursome, hole: int) -> dict:
+    """Everything the Singles Match score-entry screen draws for ONE hole.
+
+    **The Fourball card with one golfer a side**, which is what the handoff
+    asks for — the same dict, so the same Flutter tray draws both. The
+    differences it carries are `kind` (`net` rather than `best ball`) and
+    each side's `sub` line, which here is that golfer's handicap and what he
+    gets on the hole rather than whose ball counted.
+
+    Singles Match is an Overall-only Nassau (`game_type='match_18'`), so the
+    match state, the close-out and the `&M` are `nassau_summary`'s — and the
+    close-out is now read from the play order rather than `18 - hole`, which
+    is a fix this card needed and every Nassau board had been living without.
+
+    Returns `{}` when no Singles Match is set up.
+    """
+    from services.hole_plan import play_order
+    from services.player_labels import first_names
+
+    summary = nassau_summary(foursome, game_type='match_18')
+    if not summary:
+        return {}
+    teams = summary.get('teams') or {}
+    sides_in = {1: teams.get('team1') or [], 2: teams.get('team2') or []}
+    if not sides_in[1] or not sides_in[2]:
+        return {}
+
+    order = play_order(foursome.round, foursome) or list(range(1, 19))
+    if hole not in order:
+        return {}
+    pos = order.index(hole)
+
+    card = summary.get('scorecard') or {}
+    by_hole = {h['hole']: h for h in (card.get('holes') or [])}
+    row = by_hole.get(hole) or {}
+    score_of = {s['player_id']: s for s in (row.get('scores') or [])}
+    # **The course handicap is on the TEAMS block**, not the scorecard's —
+    # that one carries `phcp_in_play`, which is a different number.
+    ch_of = {p['player_id']: p.get('course_handicap')
+             for side in sides_in.values() for p in side}
+
+    members = {m.player_id: m.player
+               for m in foursome.memberships.select_related('player')
+               if not m.player.is_phantom}
+    label = first_names(
+        {p['player_id']: members[p['player_id']]
+         for side in sides_in.values() for p in side
+         if p['player_id'] in members})
+
+    per_hole = {h['hole']: h for h in (summary.get('holes') or [])}
+    entry    = per_hole.get(hole) or {}
+    winner   = entry.get('winner')
+
+    overall = summary.get('overall') or {}
+    # **The close-out is the engine's**, and its own `decided_remaining` is
+    # holes left in PLAY ORDER — so the hole it happened on comes straight
+    # back out of it rather than from a second comparison here.
+    rem_at_close = overall.get('decided_remaining')
+    closed_pos = (len(order) - 1 - rem_at_close
+                  if rem_at_close is not None else None)
+    if closed_pos is not None and not (0 <= closed_pos < len(order)):
+        closed_pos = None                     # pragma: no cover - defensive
+    finished_on = order[closed_pos] if closed_pos is not None else None
+    # A match decided on the LAST hole is not a close-out: no holes stop
+    # counting, and it takes `1 UP` rather than `1&0`. (The Fourball card
+    # learnt this the same day.)
+    closed_out = closed_pos is not None and closed_pos < len(order) - 1
+    counts_for_card = closed_out and pos > closed_pos
+
+    rows = []
+    for n in (1, 2):
+        for p in sides_in[n]:
+            pid = p['player_id']
+            sc  = score_of.get(pid) or {}
+            gross = sc.get('gross')
+            strokes = sc.get('strokes') or 0
+            rows.append({
+                'player_id'      : pid,
+                'name'           : p.get('name') or '',
+                'short'          : p.get('short_name') or '',
+                'first'          : label.get(pid, ''),
+                'course_handicap': ch_of.get(pid),
+                'strokes'        : strokes,
+                'gross'          : gross,
+                'net'            : (gross - strokes) if gross is not None
+                                   else None,
+                'side'           : n,
+                # There is no best ball to be, so nothing is ever marked.
+                'counted'        : False,
+            })
+
+    sides = []
+    for n in (1, 2):
+        p = sides_in[n][0]
+        pid = p['player_id']
+        r = next(x for x in rows if x['player_id'] == pid)
+        result = None
+        if winner == 'halved':
+            result = 'halved'
+        elif winner in ('team1', 'team2'):
+            result = 'won' if winner == f'team{n}' else 'lost'
+        if counts_for_card:
+            result = None
+        ch = r['course_handicap']
+        strokes = r['strokes']
+        bits = []
+        if ch is not None:
+            bits.append(f'CH {ch}')
+        bits.append('no stroke' if strokes == 0
+                    else f'{strokes} stroke' + ('' if strokes == 1 else 's'))
+        sides.append({
+            'side'      : n,
+            'label'     : label.get(pid, ''),
+            'player_ids': [pid],
+            'best'      : r['net'],
+            'sub'       : ' · '.join(bits),
+            'result'    : result,
+        })
+
+    scored = sum(1 for r in rows if r['gross'] is not None)
+    hole_complete = scored == len(rows)
+
+    # ── The match card ──────────────────────────────────────────────────────
+    holes_up = entry.get('overall_margin')
+    if holes_up is None:
+        prior = [per_hole[h] for h in order[:pos] if h in per_hole]
+        holes_up = next((p['overall_margin'] for p in reversed(prior)
+                         if p.get('overall_margin') is not None), 0)
+    leader = 1 if holes_up > 0 else (2 if holes_up < 0 else None)
+    margin = abs(holes_up)
+    played = len([h for h in order[:pos + 1] if h in per_hole])
+    to_play = len(order) - 1 - pos
+    lead_label = sides[leader - 1]['label'] if leader else ''
+
+    if closed_out and pos >= closed_pos:
+        to_play_at_close = overall.get('decided_remaining') or 0
+        decided = abs(overall.get('decided_margin') or margin)
+        figure = (f'{decided}&{to_play_at_close}' if to_play_at_close
+                  else f'{decided} UP')
+        # **Singular verbs** — one golfer, not a pair.
+        headline = f'{lead_label} won' if counts_for_card \
+            else f'{lead_label} wins'
+        after = list(order[closed_pos + 1:])
+        if counts_for_card:
+            line = (f'Closed out on {finished_on}. '
+                    'Scores here go on the card only.')
+        elif after:
+            span = (f'{after[0]}–{after[-1]}' if len(after) > 1
+                    else f'{after[0]}')
+            line = f'Closed out on {finished_on}. Holes {span} don’t count.'
+        else:                                 # pragma: no cover - defensive
+            line = f'Closed out on {finished_on}.'
+    elif pos == len(order) - 1 and hole in per_hole:
+        if leader is None:
+            headline, figure = 'Match halved', 'AS'
+            line = 'Level after 18 · a push'
+        else:
+            headline, figure = f'{lead_label} wins', f'{margin} UP'
+            line = f'Final after {len(order)}'
+    elif leader is None:
+        headline, figure = 'All square', 'AS'
+        line = f'thru {played} · {to_play} to play'
+    else:
+        headline, figure = lead_label, f'{margin} UP'
+        line = f'thru {played} · {to_play} to play'
+
+    if closed_out and pos >= closed_pos:
+        state = f'{headline} {figure}'
+    elif leader is None:
+        state = 'All square'
+    else:
+        state = f'{lead_label} {margin} UP'
+
+    block = (pos // 9) * 9
+    strip = []
+    for i, h in enumerate(order[block:block + 9], start=block):
+        e = per_hole.get(h)
+        res = None
+        if e and e.get('winner'):
+            res = {'team1': 'T1', 'team2': 'T2'}.get(e['winner'], 'Halved')
+        strip.append({
+            'hole'   : h,
+            'result' : res,
+            'played' : bool(e and e.get('winner')),
+            'dead'   : bool(closed_out and i > closed_pos),
+        })
+
+    bet = float(summary.get('bet_unit') or 0)
+    money = []
+    if bet:
+        for n in (1, 2):
+            amount = 0.0 if leader is None else (bet if n == leader else -bet)
+            money.append({'side': n, 'label': sides[n - 1]['label'],
+                          'amount': amount})
+        money.sort(key=lambda e: -e['amount'])
+
+    return {
+        'hole'        : hole,
+        'par'         : row.get('par'),
+        'stroke_index': row.get('stroke_index'),
+        'yards'       : None,
+        'nine'        : 'front nine' if hole <= 9 else 'back nine',
+        'thru'        : pos + 1,
+        'stake'       : bet,
+        'kind'        : 'net',
+        'players'     : rows,
+        'sides'       : sides,
+        'scored'      : scored,
+        'hole_complete': hole_complete,
+        'counts_for_card': counts_for_card,
+        'closed_out'  : closed_out,
+        'finished_on_hole': finished_on if closed_out else None,
+        'match'       : {
+            'leader'  : leader,
+            'margin'  : margin,
+            'headline': headline,
+            'figure'  : figure,
+            'line'    : line,
+            'state'   : state,
+            'is_final': (pos == len(order) - 1 and hole in per_hole)
+                        or (closed_out and pos >= closed_pos),
+        },
+        'strip'       : strip,
+        'money'       : money,
+        'round_over'  : hole_complete and pos == len(order) - 1,
+        'next_hole'   : order[pos + 1] if pos + 1 < len(order) else None,
     }

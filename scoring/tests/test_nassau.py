@@ -673,3 +673,75 @@ class LiveMoneyTests(TestCase):
         self.assertEqual(s['variant'], 'claremont')
         # Front + overall on the top, and the same two on the bottom.
         self.assertEqual(s['payouts']['live_total'], 40.0)
+
+
+class CloseOutFollowsPlayOrderTests(TestCase):
+    """A match is closed out when the lead beats the holes LEFT TO PLAY, and
+    off a shotgun that is not `18 − hole`.
+
+    The shotgun sweep fixed this shape in six other services and left the
+    Nassau engine — where the group's play order was already in scope two
+    lines above the expression that got it wrong. It decides when a match is
+    over and the `&M` in `3&2`, so it reaches the board, the lock screen and
+    the score-entry card.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course, handicap_mode='gross',
+                                net_max_double_bogey=False)
+        self.round.starting_hole = 13
+        self.round.save(update_fields=['starting_hole'])
+        self.fs = make_foursome(
+            self.round,
+            [('Paul Lipkin', 0), ('Jim Diederich', 0)],
+            tee=self.tee,
+        )
+        self.pid = {m.player.name.split()[0]: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        setup_nassau(self.fs, [self.pid['Paul']], [self.pid['Jim']],
+                     handicap_mode='gross', game_type='match_18')
+
+    def _play(self, hole, paul, jim):
+        submit_hole(self.fs, hole, [(self.pid['Paul'], paul),
+                                    (self.pid['Jim'], jim)])
+        calculate_nassau(self.fs, game_type='match_18')
+
+    def _overall(self):
+        return nassau_summary(self.fs, game_type='match_18')['overall']
+
+    def test_the_match_is_not_over_on_hole_18(self):
+        """Off the 13th, hole 18 is the SIXTH hole played and twelve remain
+        after it — so a 3 UP lead there is not a close-out, though
+        `18 - hole` says it is."""
+        order = [13, 14, 15, 16, 17, 18, 1, 2, 3, 4, 5, 6,
+                 7, 8, 9, 10, 11, 12]
+        for h in order[:3]:
+            self._play(h, 4, 5)                 # Paul 3 up thru 3
+        for h in order[3:6]:
+            self._play(h, 4, 4)                 # halved to the 18th
+        o = self._overall()
+        self.assertEqual(o['margin'], 3)
+        self.assertIsNone(o['decided_remaining'],
+                          'three up with twelve to play is not 3&12')
+
+    def test_and_IS_over_on_the_sixteenth_hole_played(self):
+        order = [13, 14, 15, 16, 17, 18, 1, 2, 3, 4, 5, 6,
+                 7, 8, 9, 10, 11, 12]
+        for h in order[:3]:
+            self._play(h, 4, 5)                 # 3 up
+        for h in order[3:16]:
+            self._play(h, 4, 4)                 # halved through the 16th
+        o = self._overall()
+        self.assertEqual(o['decided_margin'], 3)
+        self.assertEqual(o['decided_remaining'], 2)   # 3&2
+
+    def test_a_round_from_the_first_tee_is_unchanged(self):
+        self.round.starting_hole = 1
+        self.round.save(update_fields=['starting_hole'])
+        for h in (1, 2, 3):
+            self._play(h, 4, 5)
+        for h in range(4, 17):
+            self._play(h, 4, 4)
+        o = self._overall()
+        self.assertEqual((o['decided_margin'], o['decided_remaining']), (3, 2))

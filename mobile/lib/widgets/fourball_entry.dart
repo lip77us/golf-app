@@ -5,7 +5,11 @@ import '../theme/halved_brand.dart';
 import 'side_colour.dart';
 import 'tray_edit_header.dart';
 
-// Fourball score entry — `~/Downloads/handoff-fourball-score-entry`.
+// Fourball score entry — `~/Downloads/handoff-fourball-score-entry`, and
+// **Singles Match**, which its own handoff asks for as "the Fourball score
+// entry with one golfer a side". Same card, same tray; the server sends
+// `kind` (`best ball` or `net`) and each side's `sub` line, so the two
+// differ in what they SAY rather than in what draws them.
 //
 // Two pieces: the side header over each pair on the golfer card, carrying
 // that side's best ball as the two scores land, and the dark tray.
@@ -141,9 +145,14 @@ class FourballHoleTray extends StatelessWidget {
 
   /// **`3 of 4 scored` is not a failure state.** After a close-out a golfer
   /// can pick up, and the tray rises on what the group actually played.
-  String _title() => card.scored >= card.players.length
-      ? 'All ${card.players.length} scores in'
-      : '${card.scored} of ${card.players.length} scored';
+  ///
+  /// Two golfers read `Both scores in`, because `All 2 scores in` is not a
+  /// sentence.
+  String _title() {
+    final n = card.players.length;
+    if (card.scored < n) return '${card.scored} of $n scored';
+    return n == 2 ? 'Both scores in' : 'All $n scores in';
+  }
 }
 
 /// `HOLE 5 · BEST BALL` — one row a side, with whose ball counted.
@@ -154,7 +163,7 @@ class _BestBall extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _TrayLabel('Hole ${card.hole} · best ball',
+      _TrayLabel('Hole ${card.hole} · ${card.kind}',
           trailing: card.staked ? _stake(card.stake) : 'no stakes'),
       const SizedBox(height: 6),
       Container(
@@ -190,8 +199,8 @@ class _BestBall extends StatelessWidget {
                     maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: Colors.white, fontSize: 14,
                         fontWeight: FontWeight.w700)),
-                if (s.counts.isNotEmpty)
-                  Text('counts: ${s.counts.join(' · ')}',
+                if (s.sub.isNotEmpty)
+                  Text(s.sub,
                       maxLines: 1, overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           color: _secondary, fontSize: 11.5,

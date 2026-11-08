@@ -82,8 +82,9 @@ class TheHandoffsWorkedExamplesTests(_CardBase):
         self._setup()
         self._score(HOLE, paul=4, larry=5, jim=5, ryan=5)
         card = self._card()
-        self.assertEqual(card['sides'][0]['counts'], ['Paul', 'Larry'])
-        self.assertEqual(card['sides'][1]['counts'], ['Jim', 'Ryan'])
+        self.assertEqual(card['sides'][0]['sub'], 'counts: Paul · Larry')
+        self.assertEqual(card['sides'][1]['sub'], 'counts: Jim · Ryan')
+        self.assertEqual(card['kind'], 'best ball')
         counted = {r['first'] for r in card['players'] if r['counted']}
         self.assertEqual(counted, {'Paul', 'Larry', 'Jim', 'Ryan'})
 
@@ -91,8 +92,8 @@ class TheHandoffsWorkedExamplesTests(_CardBase):
         self._setup()
         self._score(HOLE, paul=4, larry=6, jim=5, ryan=7)
         card = self._card()
-        self.assertEqual(card['sides'][0]['counts'], ['Paul'])
-        self.assertEqual(card['sides'][1]['counts'], ['Jim'])
+        self.assertEqual(card['sides'][0]['sub'], 'counts: Paul')
+        self.assertEqual(card['sides'][1]['sub'], 'counts: Jim')
 
     def test_a_halved_hole(self):
         # Paul 5, Larry 5 (net 4) v Jim 4, Ryan 5 → 4 v 4.
@@ -104,7 +105,7 @@ class TheHandoffsWorkedExamplesTests(_CardBase):
                          ['halved', 'halved'])
         self.assertEqual(card['match']['headline'], 'All square')
         self.assertEqual(card['match']['figure'], 'AS')
-        self.assertEqual(card['sides'][0]['counts'], ['Larry'])
+        self.assertEqual(card['sides'][0]['sub'], 'counts: Larry')
 
     def test_clay_wins_and_the_money_follows(self):
         self._setup(bet=Decimal('20'))

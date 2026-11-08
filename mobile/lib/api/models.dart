@@ -11403,7 +11403,12 @@ class FourballHoleCard {
   /// Per golfer. 0 means no stakes.
   final double stake;
 
-  /// The group in SIDE order: side 1's two golfers, then side 2's.
+  /// What the tray's label calls the figures: `best ball`, or `net` for a
+  /// Singles Match — **the same card with one golfer a side**, which is what
+  /// its handoff asks for.
+  final String kind;
+
+  /// The group in SIDE order: side 1's golfers, then side 2's.
   final List<FourballHolePlayer> players;
 
   /// Side 1 then side 2 — the order the golfer card lists them.
@@ -11439,6 +11444,7 @@ class FourballHoleCard {
     required this.nine,
     required this.thru,
     required this.stake,
+    required this.kind,
     required this.players,
     required this.sides,
     required this.scored,
@@ -11462,6 +11468,7 @@ class FourballHoleCard {
         nine: j['nine'] as String? ?? '',
         thru: (j['thru'] as num?)?.toInt() ?? 0,
         stake: (j['stake'] as num?)?.toDouble() ?? 0,
+        kind: j['kind'] as String? ?? 'best ball',
         players: ((j['players'] as List?) ?? const [])
             .map((e) => FourballHolePlayer.fromJson(
                 (e as Map).cast<String, dynamic>()))
@@ -11490,6 +11497,11 @@ class FourballHoleCard {
       );
 
   bool get staked => stake > 0;
+
+  /// One golfer a side — a Singles Match. The tray's wording follows it:
+  /// `Both scores in`, and no side headers on the card above.
+  bool get isSingles => sides.length == 2 &&
+      sides.every((s) => s.playerIds.length == 1);
 
   FourballHolePlayer? playerById(int id) {
     for (final p in players) {
@@ -11560,8 +11572,10 @@ class FourballHoleSide {
   /// The side's best net — null until one of its two has a score.
   final int? best;
 
-  /// Whose ball it was. Two names when they tie for it.
-  final List<String> counts;
+  /// The line under the side's name, **composed by the server**: whose ball
+  /// counted in Fourball (`counts: Paul · Larry`), and what that golfer
+  /// gets on the hole in a Singles Match (`CH 12 · 1 stroke`).
+  final String sub;
 
   /// `won` · `lost` · `halved`, null until the hole settles — and null for
   /// good on a hole past the close-out.
@@ -11572,7 +11586,7 @@ class FourballHoleSide {
     required this.label,
     required this.playerIds,
     required this.best,
-    required this.counts,
+    required this.sub,
     required this.result,
   });
 
@@ -11584,9 +11598,7 @@ class FourballHoleSide {
             .map((e) => (e as num).toInt())
             .toList(),
         best: (j['best'] as num?)?.toInt(),
-        counts: ((j['counts'] as List?) ?? const [])
-            .map((e) => e as String)
-            .toList(),
+        sub: j['sub'] as String? ?? '',
         result: j['result'] as String?,
       );
 }

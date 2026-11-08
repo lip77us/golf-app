@@ -13,6 +13,7 @@ import 'package:golf_mobile/widgets/forty_balls_keypad.dart';
 /// guards are about what the shared score-entry screen has to keep doing.
 
 Map<String, dynamic> _json({
+  String kind = 'best ball',
   double stake = 20,
   int scored = 4,
   bool countsForCard = false,
@@ -28,6 +29,7 @@ Map<String, dynamic> _json({
     <String, dynamic>{
       'hole': 5, 'par': 4, 'stroke_index': 7, 'yards': 388,
       'nine': 'front nine', 'thru': 5, 'stake': stake,
+      'kind': kind,
       'players': [
         for (final p in [
           [1, 'Paul Lipkin', 'PL', 'Paul', 12, 0, gross[0], gross[0], 1, true],
@@ -44,12 +46,12 @@ Map<String, dynamic> _json({
       'sides': [
         for (final s in sides ??
             const [
-              [1, 'Paul + Larry', 4, ['Paul', 'Larry'], 'won'],
-              [2, 'Jim + Ryan', 5, ['Jim', 'Ryan'], 'lost'],
+              [1, 'Paul + Larry', 4, 'counts: Paul · Larry', 'won'],
+              [2, 'Jim + Ryan', 5, 'counts: Jim · Ryan', 'lost'],
             ])
           {'side': s[0], 'label': s[1],
            'player_ids': s[0] == 1 ? [1, 2] : [3, 4],
-           'best': s[2], 'counts': s[3], 'result': s[4]},
+           'best': s[2], 'sub': s[3], 'result': s[4]},
       ],
       'scored': scored,
       'hole_complete': scored == 4,
@@ -79,6 +81,7 @@ Map<String, dynamic> _json({
     };
 
 FourballHoleCard _card({
+  String kind = 'best ball',
   double stake = 20,
   int scored = 4,
   bool countsForCard = false,
@@ -91,7 +94,7 @@ FourballHoleCard _card({
   List<int?> gross = const [4, 5, 5, 5],
 }) =>
     FourballHoleCard.fromJson(_json(
-      stake: stake, scored: scored, countsForCard: countsForCard,
+      kind: kind, stake: stake, scored: scored, countsForCard: countsForCard,
       closedOut: closedOut, finishedOnHole: finishedOnHole, match: match,
       sides: sides, strip: strip, nextHole: nextHole, gross: gross,
     ));
@@ -144,8 +147,8 @@ void main() {
       await t.binding.setSurfaceSize(const Size(390, 300));
       addTearDown(() => t.binding.setSurfaceSize(null));
       final c = _card(sides: const [
-        [1, 'Paul + Larry', null, <String>[], null],
-        [2, 'Jim + Ryan', 5, ['Jim'], null],
+        [1, 'Paul + Larry', null, '', null],
+        [2, 'Jim + Ryan', 5, 'counts: Jim', null],
       ]);
       await t.pumpWidget(MaterialApp(
         home: Scaffold(body: FourballSideHeader(side: c.sides[0])),

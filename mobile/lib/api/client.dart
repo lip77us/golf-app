@@ -2643,6 +2643,17 @@ class ApiClient {
     );
   }
 
+  /// GET /api/foursomes/{id}/singles/hole/{hole}/
+  ///
+  /// A Singles Match is the Fourball card with one golfer a side, so it
+  /// comes back as the same shape.
+  Future<FourballHoleCard?> getSinglesHoleCard(int foursomeId, int hole) async {
+    final data = await _get('/foursomes/$foursomeId/singles/hole/$hole/');
+    final map = (data as Map).cast<String, dynamic>();
+    if (map.isEmpty) return null;
+    return FourballHoleCard.fromJson(map);
+  }
+
   /// GET /api/foursomes/{id}/fourball/hole/{hole}/
   ///
   /// Only for a hole the screen opens WITHOUT posting — a save returns the

@@ -656,7 +656,12 @@ def fourball_hole_card(foursome, hole: int) -> dict:
             'label'     : ' + '.join(label.get(pid, '') for pid in side_ids[n]),
             'player_ids': list(side_ids[n]),
             'best'      : best,
-            'counts'    : [label.get(pid, '') for pid in counts],
+            # **The line under the side's name, composed here.** Fourball
+            # says whose ball counted; Singles Match says what that golfer
+            # gets on the hole. One field so the tray renders rather than
+            # composing, and so the two games can share it.
+            'sub'       : ('counts: ' + ' · '.join(
+                label.get(pid, '') for pid in counts)) if counts else '',
             'result'    : result,
         })
 
@@ -754,6 +759,8 @@ def fourball_hole_card(foursome, hole: int) -> dict:
         'nine'        : 'front nine' if hole <= 9 else 'back nine',
         'thru'        : pos + 1,
         'stake'       : bet,
+        # What the tray's label calls the figures: `HOLE 5 · BEST BALL`.
+        'kind'        : 'best ball',
         'players'     : rows,
         'sides'       : sides,
         'scored'      : scored,
