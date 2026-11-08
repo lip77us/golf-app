@@ -230,25 +230,9 @@ def build_round_receipt(round_obj, *, scorer=None):
     try:
         if round_obj.tournament_id:
             return None                       # Group C, at tournament settle
-        # **No existing-receipt guard, deliberately.**  There used to be one,
-        # returning the first receipt found, and it silently broke the
-        # re-settle this module and the model both promise: a round reopened
-        # to fix a score was handed back its ORIGINAL payload, frozen at the
-        # wrong moment, with no way to re-freeze it.  Found while testing —
-        # a Sixes round settled before the per-match detail existed kept
-        # reporting no detail however many times it was finished again.
-        #
-        # Idempotency is the CALLER's, and always was: `RoundCompleteView`
-        # only reaches here inside `if ... and round_obj.status != 'complete'`,
-        # so a second tap of Finish round never calls this at all.  The guard
-        # was defending something that could not happen, at the cost of the
-        # thing it was meant to allow.
-        #
-        # Two rows for one settling is possible if two completes race, and is
-        # benign by construction: `Receipt.Meta.ordering` is newest-first and
-        # every reader takes `.first()`, so the newest is served and the older
-        # link keeps saying what the golfers were shown — which is the whole
-        # reason this model stores a frozen payload instead of updating one.
+        # **A receipt is minted when the MONEY CHANGES, and not otherwise.**
+        # See `_same_money` below — the comparison, and why it is this rule
+        # rather than a guard on an existing row or on the round's status.
 
         data = round_settlement(round_obj, min_games=1)
         if not data:
@@ -349,6 +333,12 @@ def build_round_receipt(round_obj, *, scorer=None):
                                  'none': recipients.none}
         payload['note'] = recipients.note
 
+        # Nothing new to say: hand back the receipt the golfers already have
+        # rather than a second code for the same figures.
+        previous = Receipt.objects.filter(round=round_obj).first()
+        if previous and _same_money(previous.payload, payload):
+            return previous
+
         receipt = Receipt.objects.create(
             round=round_obj, payload=payload, scorer=scorer,
             settled_at=timezone.now())
@@ -358,6 +348,41 @@ def build_round_receipt(round_obj, *, scorer=None):
     except Exception:
         logger.exception('receipt: could not build for round %s', round_obj.id)
         return None
+
+
+#: The parts of a payload that ARE the document.  Everything else —
+#: `settledAt`, `code`, who pressed the button, who it is being sent to — is
+#: about this particular settling rather than about the money.
+_MATERIAL = ('title', 'sub', 'nets', 'pays', 'games', 'webGames')
+
+
+def _same_money(a: dict, b: dict) -> bool:
+    """Do these two payloads say the same thing to the golfers?
+
+    **This is what decides whether a second Finish round mints a new code**,
+    and the rule took three goes to get right, so it is worth the words.
+
+    Guarding on "a receipt already exists" refused to RE-SETTLE: a round
+    reopened to fix a score was handed back its original payload with no way
+    to re-freeze it.
+
+    Guarding in the CALLER instead — only settling on the status flip —
+    looked correct because a double tap cannot flip twice.  It was wrong
+    about the case that actually happened (Tilden, 7 Nov 2026): Finish round
+    was slow, the first tap settled while the last five holes were still in
+    the phone's sync queue, and the second tap found the round already
+    complete and did nothing.  Four golfers were left with a receipt stamped
+    Final whose every figure was $10 out — it said "Settled 2 of 4" about a
+    finished round.  **A second tap is the scorer asking again, usually
+    because something has arrived since.**
+
+    So neither: settle every time, and mint only when the answer differs.
+    A double tap returns the same receipt, a re-settle after more scores
+    returns a new one, and two completes racing each other compute the same
+    payload so only one row is written — which the old comment here called
+    benign and was not.
+    """
+    return all((a or {}).get(k) == (b or {}).get(k) for k in _MATERIAL)
 
 
 def _short(names: dict, pid) -> str:

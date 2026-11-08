@@ -115,33 +115,48 @@ class BuildTests(TestCase):
         self.assertTrue(any('net' in (n['caption'] or '')
                             for n in payload['nets']))
 
-    def test_re_settling_mints_a_NEW_code_and_keeps_the_old_link(self):
-        """A round reopened to fix a score re-settles, and both this module
-        and the model promise a new receipt for it.
+    def test_re_settling_the_same_money_returns_the_same_receipt(self):
+        """An ordinary double tap must not mint a second code for figures
+        nobody has changed."""
+        rnd, fs, ids = _skins_round()
+        first = build_round_receipt(rnd)
+        self.assertEqual(build_round_receipt(rnd).code, first.code)
+        self.assertEqual(Receipt.objects.filter(round=rnd).count(), 1)
 
-        It used to return the first one found, so the payload stayed frozen at
-        the wrong moment with no way to re-freeze it.  Found in testing: a
-        Sixes round settled before the per-match detail existed kept reporting
-        no detail however many times it was finished again.
+    def test_a_changed_score_mints_a_NEW_code_and_keeps_the_old_link(self):
+        """The case the old guard refused and the newer one swallowed.
 
-        Idempotency is the CALLER's — see
-        `EndpointTests.test_completing_twice_keeps_one_receipt`, which is the
-        test that pins the promise a golfer can see.  `RoundCompleteView`
-        reaches the builder only on the status flip, so a second tap never
-        settles twice, and the guard here was refusing the re-settle while
-        defending something that could not happen.
+        Guarding on "a receipt already exists" refused to re-settle at all.
+        Guarding in the CALLER — settling only on the status flip — looked
+        right because a double tap cannot flip twice, and was wrong about
+        Tilden on 7 Nov 2026: the first tap settled while the last holes
+        were still in the sync queue, the second found the round already
+        complete, and four golfers kept a receipt stamped Final whose every
+        figure was $10 out.
         """
         rnd, fs, ids = _skins_round()
         first = build_round_receipt(rnd)
+        before = {n['name']: n['net'] for n in first.payload['nets']}
+
+        # A hole arrives late — exactly what the sync queue delivers after a
+        # slow Finish round.
+        submit_hole(fs, 18, [(ids[1], 2)] + [(p, 5) for p in ids[2:]]
+                            + [(ids[0], 5)])
+        calculate_skins(fs)
+
         second = build_round_receipt(rnd)
         self.assertNotEqual(second.code, first.code)
         self.assertEqual(Receipt.objects.filter(round=rnd).count(), 2)
+        self.assertNotEqual(
+            {n['name']: n['net'] for n in second.payload['nets']}, before,
+            'the money did not move, so this fixture proves nothing')
+
         # The old link still resolves and still says what it said — that is
         # the point of storing a frozen payload rather than updating one.
         first.refresh_from_db()
-        self.assertEqual(first.payload['code'], first.code)
-        # ...and every reader takes the NEWEST, so the round reports the
-        # re-settled figures.
+        self.assertEqual({n['name']: n['net'] for n in first.payload['nets']},
+                         before)
+        # ...and every reader takes the NEWEST.
         self.assertEqual(Receipt.objects.filter(round=rnd).first().code,
                          second.code)
 
@@ -292,27 +307,74 @@ class EndpointTests(APITestCase):
                              content_type='application/json')
         self.assertEqual(Receipt.objects.filter(round=rnd).count(), 1)
 
-    def test_reopening_and_finishing_again_re_settles(self):
-        """The round trip a scorer actually makes to fix a wrong score.
+    def test_finishing_again_corrects_a_receipt_settled_too_early(self):
+        """Tilden, 7 Nov 2026, end to end.
 
-        End to end through both endpoints, because the builder and the view
-        each hold half of the rule and only the pair of them says what a
-        golfer sees.
+        Finish round while a hole is still unsent, let it arrive, press
+        Finish round again — which is what a scorer does when the first tap
+        is slow and the dialog comes back.  The second press must fix the
+        money, and before this it did nothing at all.
         """
         self._login()
         rnd, fs, ids = _skins_round()
-        self.client.post(f'/api/rounds/{rnd.id}/complete/', {},
-                         content_type='application/json')
+        url = f'/api/rounds/{rnd.id}/complete/'
+        self.client.post(url, {}, content_type='application/json')
+        first = Receipt.objects.get(round=rnd)
+        stale = {n['name']: n['net'] for n in first.payload['nets']}
+
+        # The queue drains after the round was closed.
+        submit_hole(fs, 18, [(ids[1], 2)] + [(p, 5) for p in ids[2:]]
+                            + [(ids[0], 5)])
+        calculate_skins(fs)
+
+        r = self.client.post(url, {}, content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        fixed = Receipt.objects.filter(round=rnd).first()
+        self.assertNotEqual(fixed.code, first.code)
+        self.assertNotEqual({n['name']: n['net'] for n in fixed.payload['nets']},
+                            stale)
+        # The response hands back the one the scorer is about to be shown.
+        self.assertEqual(r.data['receipt']['code'], fixed.code)
+
+    def test_finishing_again_with_nothing_changed_keeps_one_receipt(self):
+        self._login()
+        rnd, fs, ids = _skins_round()
+        url = f'/api/rounds/{rnd.id}/complete/'
+        for _ in range(3):
+            self.client.post(url, {}, content_type='application/json')
+        self.assertEqual(Receipt.objects.filter(round=rnd).count(), 1)
+
+    def test_reopening_and_finishing_again_re_settles(self):
+        """The round trip a scorer makes to fix a wrong score."""
+        self._login()
+        rnd, fs, ids = _skins_round()
+        url = f'/api/rounds/{rnd.id}/complete/'
+        self.client.post(url, {}, content_type='application/json')
         first = Receipt.objects.get(round=rnd)
 
         self.client.post(f'/api/rounds/{rnd.id}/reopen/', {},
                          content_type='application/json')
-        r = self.client.post(f'/api/rounds/{rnd.id}/complete/', {},
-                             content_type='application/json')
+        submit_hole(fs, 4, [(ids[1], 2)] + [(p, 5) for p in ids[2:]]
+                           + [(ids[0], 5)])
+        calculate_skins(fs)
+        r = self.client.post(url, {}, content_type='application/json')
         self.assertEqual(r.status_code, 200)
         codes = list(Receipt.objects.filter(round=rnd)
                      .values_list('code', flat=True))
         self.assertEqual(len(codes), 2, codes)
-        # The response hands back the one the scorer is about to be shown.
         self.assertNotEqual(r.data['receipt']['code'], first.code)
-        self.assertEqual(r.data['receipt']['code'], codes[0])
+
+    def test_an_open_multi_group_round_is_not_settled_by_a_complete_tap(self):
+        """Settling moved outside the status flip, so this is the thing that
+        now has to hold: a Complete tap that does NOT close the round must
+        not freeze money for groups still on the course."""
+        self._login()
+        rnd, fs, ids = _skins_round()
+        from scoring.tests._helpers import make_foursome
+        make_foursome(rnd, [('Zoe', 10), ('Yan', 10)], group_number=2)
+        r = self.client.post(f'/api/rounds/{rnd.id}/complete/', {},
+                             content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        rnd.refresh_from_db()
+        self.assertNotEqual(rnd.status, 'complete')
+        self.assertEqual(Receipt.objects.filter(round=rnd).count(), 0)

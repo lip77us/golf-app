@@ -120,13 +120,18 @@ class SixesBoard extends StatelessWidget {
   SixesSummary get _s => SixesSummary.fromJson(
       (group['summary'] as Map?)?.cast<String, dynamic>() ?? const {});
 
-  /// Standard matches only. An EXTRA segment is a spawned tie-breaker and
-  /// not one of the three the format is made of, so it does not get a row in
-  /// a card whose whole shape is M1/M2/M3.
-  List<SixesMatch> get _matches => _s.segments
-      .where((s) => !s.isExtra)
-      .map(SixesMatch.new)
-      .toList();
+  /// **Extras included.** They were filtered out as "not one of the three
+  /// the format is made of" — true of the format and false of the money: an
+  /// extra has teams, holes, a result and a stake, the ledger below already
+  /// pays it (it reads the engine's own `moneyByPlayer`), and the receipt
+  /// lists it. Hiding it left a golfer looking at a settled extra on his
+  /// receipt and three matches on the board, asking what happened to the
+  /// fourth (Paul, 8 Nov 2026).
+  ///
+  /// The engine's own label says `(Match 4, extra)`, so nothing here has to
+  /// mark them.
+  List<SixesMatch> get _matches =>
+      _s.segments.map(SixesMatch.new).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -287,7 +292,11 @@ class _LiveMatchCard extends StatelessWidget {
           // this result belongs to, since the card is no longer live.
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: over
               ? [
-                  Text(match.seg.label.replaceFirst('M', 'Match '),
+                  // The label VERBATIM. `replaceFirst('M', 'Match ')` hit
+                  // the M in "Match" — the engine already writes
+                  // `Holes 11–16 (Match 3)`, so the board was drawing
+                  // `Holes 11–16 (Match atch 3)`.
+                  Text(match.seg.label,
                       style: const TextStyle(
                           fontSize: 12, color: Halved.muted)),
                   const Text('Final',

@@ -989,7 +989,15 @@ def survivor_detail(round_obj, entry, names):
             if outcome == 'no_blood':
                 value = 'No blood'          # nobody out, so nobody pays
             elif outcome == 'split':
-                value = 'Split'
+                # **Name the two who shared it.**  A split has no winner, so
+                # `winner_short` is null and "Split" on its own was the whole
+                # row — the one outcome that told a golfer nothing (Paul,
+                # 8 Nov 2026).  The payout is each share, not the pot.
+                who = ' & '.join(sv.get('split_shorts') or [])
+                value = f'{who} split' if who else 'Split'
+                share = sv.get('payout')
+                if share:
+                    value += f' · {money(share, sign=True)} each'
             elif outcome == 'killed':
                 # A Zombie takes the trophy and the money stays put.
                 value = f'{sv.get("winner_short") or ""} · killed by ' \

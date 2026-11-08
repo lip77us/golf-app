@@ -218,6 +218,14 @@ def _run_survivor(game, foursome, score_index, real_ids):
             'holes'      : list(holes),
             'eliminated' : eliminated_id,
             'winner'     : winner_id,
+            # **Who the split is between.**  A split has no winner, so
+            # `winner` is null and the only name on the record was the man
+            # who PAYS — which is how the receipt came to say "Split" and
+            # nothing else (Paul, 8 Nov 2026).  The two who share it are
+            # whoever is still alive when it closes, which only the walk
+            # knows; a reader deriving it as "everyone except the eliminated"
+            # would be assuming the game is always three-handed.
+            'split'      : list(alive) if outcome == 'split' else [],
             'outcome'    : outcome,
             'complete'   : True,
         })
@@ -558,7 +566,11 @@ def survivor_summary(foursome) -> dict:
             # The final two tied on the last hole: they split the eliminated
             # player's entry and get their own back.
             loser     = s['eliminated']
-            survivors_ = [pid for pid in real_ids if pid != loser]
+            # The walk's own answer, not "everybody except the loser" — one
+            # source, so the money and the names on the receipt cannot
+            # disagree about who shared it.
+            survivors_ = s.get('split') or [
+                pid for pid in real_ids if pid != loser]
             payout    = bet_unit / 2.0
             if loser is not None:
                 money_by_pid[loser] -= bet_unit
@@ -577,6 +589,9 @@ def survivor_summary(foursome) -> dict:
             'eliminated_short' : short(s['eliminated']) if s['eliminated'] else None,
             'winner_id'        : winner,
             'winner_short'     : short(winner) if winner else None,
+            # A split has no winner, so these are the only names on it.
+            'split_ids'        : list(s.get('split') or []),
+            'split_shorts'     : [short(pid) for pid in (s.get('split') or [])],
             'outcome'          : s['outcome'],
             'complete'         : s['complete'],
             'value'            : bet_unit,

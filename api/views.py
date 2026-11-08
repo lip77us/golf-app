@@ -6729,13 +6729,28 @@ class RoundCompleteView(APIView):
             emit_round_complete(round_obj)
             from services import activity_feed
             activity_feed.round_finished(round_obj)
-            # Settle up (handoff step 3): freeze the money into a Receipt and
-            # push it to the golfers who are on Halved.  Inside the same block
-            # as the status flip, so it happens exactly when the round ends
-            # and exactly once — this branch is already guarded on the round
-            # not being complete, which is what makes Finish round idempotent.
-            # It never raises; a round must close whatever happens to the
-            # document.
+
+        # **Settle whenever the round IS complete, not only on the flip.**
+        #
+        # Settling inside the flip branch looked right — a second tap cannot
+        # flip twice, so it could not mint twice.  What it could not do is
+        # CORRECT itself.  Tilden, 7 Nov 2026: Finish round was slow, the
+        # first tap settled while the last five holes were still in the
+        # phone's sync queue, and the second tap found the round already
+        # complete and did nothing.  Four golfers kept a receipt stamped
+        # Final whose every figure was $10 out.
+        #
+        # A second tap is the scorer asking again, usually because something
+        # has arrived since.  `build_round_receipt` mints only when the money
+        # actually differs, so an ordinary double tap still returns the same
+        # code — the idempotency lives there now, where it can tell the two
+        # cases apart.
+        #
+        # Guarded on the round being COMPLETE rather than called outright: a
+        # multi-group round whose other groups are still out must not settle
+        # on a Complete tap that did not close it.
+        receipt = None
+        if round_obj.status == 'complete':
             from services.receipt_build import settle_round
             receipt = settle_round(round_obj, scorer=_scorer_player(request))
 

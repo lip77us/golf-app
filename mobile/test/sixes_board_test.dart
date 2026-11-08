@@ -6,6 +6,7 @@
 
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:golf_mobile/api/models.dart';
 import 'package:golf_mobile/widgets/sixes_board.dart';
@@ -20,6 +21,8 @@ SixesMatch match({
   List<String> winners = const [],
   List<int> a = const [1, 2],
   List<int> b = const [3, 4],
+  int number = 1,
+  bool extra = false,
 }) {
   var margin = 0;
   final holes = <Map<String, dynamic>>[];
@@ -32,8 +35,15 @@ SixesMatch match({
     });
   }
   return SixesMatch(SixesSegment.fromJson({
-    'label': 'M1', 'start_hole': start, 'end_hole': end,
-    'is_extra': false, 'status': status, 'winner': winner,
+    // **The engine's real label**, not `M1`. The fixture used to say `M1`,
+    // which is a shape `sixes_summary` has never produced — and a board that
+    // mangled the real one (`Holes 11–16 (Match atch 3)`, via
+    // `replaceFirst('M', 'Match ')` hitting the M in "Match") passed every
+    // test here because the fixture agreed with the bug.
+    'label': 'Holes $start–$end (Match $number'
+             '${extra ? ', extra' : ''})',
+    'start_hole': start, 'end_hole': end,
+    'is_extra': extra, 'status': status, 'winner': winner,
     'team1': {'players': ['Paul', 'AD'], 'players_short': ['Paul', 'AD'],
               'player_ids': a, 'method': 'manual'},
     'team2': {'players': ['AP', 'AB'], 'players_short': ['AP', 'AB'],
@@ -179,6 +189,78 @@ void main() {
           reason: 'a stroke dot is filled, never outlined');
       expect(body.contains('Colors.transparent'), isFalse);
       expect(body, contains('Halved.brightMint'));
+    });
+  });
+
+  group('the board draws every bet', () {
+    Map<String, dynamic> seg(int n, int a, int b, String status,
+        String winner, {bool extra = false}) => {
+          'label': 'Holes $a–$b (Match $n${extra ? ', extra' : ''})',
+          'start_hole': a, 'end_hole': b, 'num_holes': b - a + 1,
+          'is_extra': extra, 'is_void': false,
+          'status': status, 'winner': winner,
+          't1_points': 0, 't2_points': 0,
+          'team1': {'players': ['Paul', 'Larry'],
+                    'players_short': ['Paul', 'Larry'],
+                    'player_ids': [1, 2], 'method': 'manual'},
+          'team2': {'players': ['Jim', 'RyanL'],
+                    'players_short': ['Jim', 'RyanL'],
+                    'player_ids': [3, 4], 'method': 'manual'},
+          'holes': [
+            for (var h = a; h <= b; h++)
+              {'hole': h, 'winner': 'Halved', 'margin': 0,
+               't1_points': 0, 't2_points': 0},
+          ],
+        };
+
+    // Tilden, 7 Nov 2026: three matches and a spawned extra on 17–18.
+    final group = <String, dynamic>{
+      '_single_group': true,
+      'summary': {
+        'segments': [
+          seg(1, 1, 4, 'complete', 'Team 1'),
+          seg(2, 5, 10, 'halved', 'Halved'),
+          seg(3, 11, 16, 'complete', 'Team 2'),
+          seg(4, 17, 18, 'halved', 'Halved', extra: true),
+        ],
+        'holes': const [],
+        'players': const [],
+        'money': {'bet_unit': 10.0, 'by_player': const []},
+      },
+    };
+
+    Future<void> pump(WidgetTester t) async {
+      await t.binding.setSurfaceSize(const Size(430, 1400));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(body: SingleChildScrollView(
+            child: SixesBoard(group: group))),
+      ));
+    }
+
+    testWidgets('an extra match gets a row', (t) async {
+      // It has teams, holes, a result and a stake, and the ledger already
+      // pays it — so a board that hid it left a golfer asking what happened
+      // to the fourth match on his receipt.
+      await pump(t);
+      expect(find.textContaining('Match 4, extra'), findsWidgets);
+    });
+
+    testWidgets('the header counts it', (t) async {
+      await pump(t);
+      expect(find.text('4 matches'), findsOneWidget);
+      expect(find.text('3 matches'), findsNothing);
+    });
+
+    testWidgets('the label is the engine\'s, verbatim', (t) async {
+      // `replaceFirst('M', 'Match ')` hit the M in "Match" and drew
+      // `Holes 11–16 (Match atch 3)`.
+      await pump(t);
+      // `atch 3)` alone would match the CORRECT label too — "Match 3)"
+      // contains it — so the assertion has to name the doubling.
+      expect(find.textContaining('Match atch'), findsNothing);
+      expect(find.textContaining('Holes 17–18 (Match 4, extra)'),
+          findsWidgets);
     });
   });
 }

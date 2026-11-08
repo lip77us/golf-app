@@ -679,6 +679,40 @@ class DetailContentTests(TestCase):
         self.assertTrue(any(' Ex · ' in l for l in labels), labels)
         self.assertTrue(all('–' in l for l in labels), labels)
 
+    def test_survivor_names_who_SPLIT_it(self):
+        """A split has no winner, so `winner_short` is null and the only name
+        on the record is the man who PAYS — which is how the receipt came to
+        say "Split" and nothing else (Paul, 8 Nov 2026).
+
+        One Survivor over all eighteen: C is out on the 1st, A and B tie
+        every hole after it, and the last hole splits C's entry between them.
+        """
+        from services.survivor import (calculate_survivor, setup_survivor,
+                                       survivor_summary)
+        rnd = make_round(active_games=['survivor'])
+        rnd.bet_unit = 5
+        rnd.save(update_fields=['bet_unit'])
+        fs = make_foursome(rnd, [('A', 0), ('B', 0), ('C', 0)])
+        ids = [m.player_id for m in fs.memberships.all()]
+        setup_survivor(fs, handicap_mode='gross', zombie_option=False)
+        for h in range(1, 19):
+            # The 1st puts C out; every hole after it is level, so the two
+            # deciders carry to the 18th and split there.
+            submit_hole(fs, h, [(ids[0], 4), (ids[1], 4),
+                                (ids[2], 5 if h == 1 else 4)])
+        calculate_survivor(fs)
+
+        sv = survivor_summary(fs)['survivors'][0]
+        self.assertEqual(sv['outcome'], 'split', 'the fixture did not split')
+        self.assertEqual(sorted(sv['split_shorts']), ['A', 'B'])
+
+        rows = GAME_DETAIL['survivor'](rnd, {'game': 'survivor'}, {})[0]['rows']
+        self.assertIn('split', rows[0][1])
+        self.assertIn('A', rows[0][1])
+        self.assertIn('B', rows[0][1])
+        # The share each, not the pot: C puts in one stake and they take half.
+        self.assertIn('$2.50', rows[0][1])
+
     def test_survivor_names_each_one_and_what_it_paid(self):
         rows = self._rows('survivor')
         self.assertTrue(rows[0][0].startswith('Survivor 1 · '), rows[0])
