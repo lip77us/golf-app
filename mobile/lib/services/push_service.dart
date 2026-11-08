@@ -14,6 +14,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/widgets.dart';
 
 import '../providers/auth_provider.dart';
+import '../utils/deep_links.dart';
 import 'sixes_live_activity.dart';
 
 class PushService {
@@ -134,10 +135,33 @@ class PushService {
   }
 
   static void _handleTap(GlobalKey<NavigatorState> navKey, RemoteMessage m) {
+    // **The receipt push goes to the receipt.**  It carries a `round_id` like
+    // every other event, so without this branch it opened the leaderboard —
+    // the money the golfer was told had settled was the one thing the tap did
+    // not show him, and the `code` the push carries was read by nothing.
+    //
+    // Routed through the deep-link queue rather than pushed here: a tap has
+    // the same cold-start problem a link does (auth still restoring, splash
+    // still up) and that queue already solves it.
+    if (m.data['type'] == 'receipt') {
+      final url = (m.data['url'] as String?)?.trim() ?? '';
+      final links = gDeepLinks;
+      if (links != null && url.isNotEmpty) {
+        final uri = Uri.tryParse(url);
+        if (uri != null) {
+          links.handleLink(uri);
+          return;
+        }
+      }
+      // No service, or a url we cannot parse: fall through to the round's
+      // board rather than swallowing the tap.  Landing somewhere related
+      // beats landing nowhere.
+    }
     final roundId = int.tryParse(m.data['round_id']?.toString() ?? '');
     if (roundId == null) return;
-    // All current events (round started/completed) carry a round id → open its
-    // read-only leaderboard, after the first frame so the navigator exists.
+    // Every other event (round started/completed) carries a round id → open
+    // its read-only leaderboard, after the first frame so the navigator
+    // exists.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       navKey.currentState?.pushNamed('/leaderboard', arguments: roundId);
     });

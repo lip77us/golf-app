@@ -31,12 +31,21 @@ def apple_app_site_association(request):
     no redirect) at BOTH /.well-known/... and the legacy root path Apple also
     probes.  Declares that the Halved app owns /watch/* on this domain, so
     tapping a https://halved.golf/watch/<token>/ link opens the app when it's
-    installed.  appID = <TeamID>.<bundleID>."""
+    installed.  appID = <TeamID>.<bundleID>.
+
+    `/r/*` — the settle-up receipt — is claimed only when
+    RECEIPT_UNIVERSAL_LINK is set, because this file applies to every
+    INSTALLED build and not just the newest.  Claiming a path the running
+    build cannot route opens the app to nothing, which is strictly worse than
+    letting Safari render the page.  The setting carries the whole reason."""
+    paths = ['/watch/*']
+    if settings.RECEIPT_UNIVERSAL_LINK:
+        paths.append('/r/*')
     return JsonResponse({
         'applinks': {
             'apps': [],
             'details': [
-                {'appID': settings.IOS_APP_ID, 'paths': ['/watch/*']},
+                {'appID': settings.IOS_APP_ID, 'paths': paths},
             ],
         },
     })

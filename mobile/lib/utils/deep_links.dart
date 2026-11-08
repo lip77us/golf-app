@@ -23,6 +23,16 @@ import '../screens/tournament_leaderboard_screen.dart';
 /// Requires the iOS Associated Domains entitlement (`applinks:link.halved.golf`)
 /// and the matching apple-app-site-association file; until those are live the
 /// link just opens the web watch page in a browser.
+/// The live service, so a link arriving by a route OTHER than the OS — a
+/// notification tap — can be fed into the same queue.
+///
+/// It matters that it is the same queue: a push tap has the identical
+/// cold-start problem a universal link does (auth still restoring, splash
+/// still up), and `_flush` is where that is already solved.  A second opener
+/// would be a second copy of the retry, and the one that is wrong is the one
+/// nobody exercises.
+DeepLinkService? gDeepLinks;
+
 class DeepLinkService {
   final AuthProvider auth;
   final AppLinks _appLinks = AppLinks();
@@ -33,7 +43,12 @@ class DeepLinkService {
   String? _pendingReceipt;
   int _flushAttempts = 0;
 
-  DeepLinkService(this.auth);
+  DeepLinkService(this.auth) {
+    gDeepLinks = this;
+  }
+
+  /// Feed a link in from somewhere other than the OS — see [gDeepLinks].
+  void handleLink(Uri uri) => _capture(uri);
 
   Future<void> start() async {
     try {

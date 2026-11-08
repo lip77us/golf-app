@@ -347,6 +347,23 @@ PUBLIC_BASE_URL    = os.environ.get(
 # DEVELOPMENT_TEAM=V5P3HRQA4G, PRODUCT_BUNDLE_IDENTIFIER=us.lipkin.golfapp.
 IOS_APP_ID         = os.environ.get('IOS_APP_ID', 'V5P3HRQA4G.us.lipkin.golfapp')
 
+# Does the association file claim `/r/*` — the settle-up receipt — as well as
+# `/watch/*`?  OFF until a build that HANDLES that path is the one people are
+# running.
+#
+# iOS reads this file for every installed build, not just the newest.  2.14.0
+# shipped without the receipt capture in `deep_links.dart`, so claiming the
+# path while that is the installed build makes a texted receipt link open the
+# app and then do NOTHING — strictly worse than Safari, which at least renders
+# the page.  Flip it once the build carrying the handler is out; iOS caches
+# the file, so it is not instant either way.
+#
+# Android needs no equivalent: its intent-filter lives in the manifest and
+# therefore ships WITH the handler, so a build that claims the path can always
+# answer it.
+RECEIPT_UNIVERSAL_LINK = os.environ.get(
+    'RECEIPT_UNIVERSAL_LINK', '').strip().lower() in ('1', 'true', 'yes')
+
 # Android App Links.  The package name is fixed at the first Play upload and can
 # never change; the fingerprints are the SHA-256 of the signing certs that may
 # claim this domain — comma-separated because there are normally TWO: the

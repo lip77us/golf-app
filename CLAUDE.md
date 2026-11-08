@@ -10086,10 +10086,15 @@ nothing.
 - **A receipt push lands on the leaderboard**, not the receipt: `_handleTap`
   routes on `round_id` and has no `type: 'receipt'` case, so the `code` it
   carries is read by nothing.
-- **Sequoya 3s, Banker and Dream Round have §4 detail specs that cannot
-  appear** — none is in `NETTABLE` and none has a branch in
-  `_pid_nets_for_game`, so those rounds settle to nothing and never reach a
-  receipt.  They need a ledger before a formatter is worth anything.
+- **Dream Round's `GAME_SUMMARY` formatter is unreachable, and always will
+  be.**  It is a TOURNAMENT-level game (`dream_round_summary(tournament)` —
+  "the one side game that spans the whole event"), so it can never appear in
+  `round_settlement`'s per-round `per_game`, which is the only thing that
+  reads those registries.  **The game itself settles fine**, through
+  `tournament_settlement._dream_round_pots`, and shows on the tournament
+  receipt — whose `_pot_rows` reads the settlement's pots rather than the
+  registries.  So this is a dead formatter, not a missing feature; an earlier
+  version of this note said it "needs a ledger", which was wrong.
 - **40 Balls and Hot Seat have no Detail in §4 at all** — their long form is
   the caption and image caption, both built.
 - Venmo / Cash App buttons are deferred by the handoff itself.

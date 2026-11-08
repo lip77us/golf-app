@@ -1144,3 +1144,112 @@ GAME_DETAIL['survivor'] = survivor_detail
 GAME_DETAIL['wolf'] = wolf_detail
 GAME_DETAIL['points_531'] = points_531_detail
 GAME_DETAIL['low_net_round'] = low_net_round_detail
+
+
+# ---------------------------------------------------------------------------
+# Sequoya 3s
+# ---------------------------------------------------------------------------
+
+def _seq_side(side) -> str:
+    return ' & '.join(p.get('short_name') or p.get('name') or ''
+                      for p in (side or []))
+
+
+def _seq_bet(match, bet) -> str:
+    """"RyanL & Paul 1 UP", "AS" — one line for a match or one of its
+    presses, from the side that won it."""
+    result = bet.get('result') or 0
+    if not result:
+        return 'AS'
+    side = _seq_side(match['side1'] if result == 1 else match['side2'])
+    margin = abs(bet.get('margin') or 0)
+    return f'{side} {margin} UP' if side else 'AS'
+
+
+def sequoya_detail(round_obj, entry, names):
+    """§4: one row per match with its press results, plus a "Called presses"
+    section.
+
+    A press is a NEW BET at the same stake rather than a doubling, so each
+    one gets its own row — that is what makes the bet count on the ticket
+    ("13 · 5 auto presses, 2 called") add up to something a golfer can check.
+    """
+    from services.sequoya_threes import sequoya_threes_summary
+    foursomes = _foursomes(round_obj)
+    multi = len(foursomes) > 1
+    out = []
+    for fs in foursomes:
+        s = sequoya_threes_summary(fs)
+        if not s:
+            continue
+        rows, called = [], []
+        for m in (s.get('matches') or []):
+            holes = _range(m.get('start_hole'), m.get('end_hole'))
+            sides = f'{_seq_side(m.get("side1"))} v {_seq_side(m.get("side2"))}'
+            rows.append([f'Match {m.get("index")} · {holes}', sides])
+            for bet in (m.get('bets') or []):
+                kind = (bet.get('kind') or '').lower()
+                if kind == 'match':
+                    rows.append(['  result', _seq_bet(m, bet)])
+                    continue
+                span = _range((bet.get('holes') or [None])[0],
+                              (bet.get('holes') or [None])[-1])
+                label = ('  auto press' if kind == 'auto_press'
+                         else '  press')
+                rows.append([f'{label} {span}', _seq_bet(m, bet)])
+                if kind != 'auto_press':
+                    # §4 asks for these a second time, together: a called
+                    # press is a decision somebody made and the argument
+                    # afterwards is about those, not the automatic ones.
+                    called.append([f'Match {m.get("index")} · {span}',
+                                   _seq_bet(m, bet)])
+        out += _ssec(_label(fs, 'Sequoya 3s · the matches', multi), rows)
+        out += _ssec(_label(fs, 'Called presses', multi), called)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Banker
+# ---------------------------------------------------------------------------
+
+def banker_detail(round_obj, entry, names):
+    """§4: "Banking · as banker", "Betting · as a player", and "The round".
+
+    Banker is the one game whose golfers each have TWO figures that can
+    disagree in sign — a man can bank badly and bet well — so the receipt
+    splits them rather than printing a net nobody can check.
+    """
+    from services.banker import banker_summary
+    foursomes = _foursomes(round_obj)
+    multi = len(foursomes) > 1
+    out = []
+    for fs in foursomes:
+        s = banker_summary(fs)
+        if not s:
+            continue
+        banking, betting = [], []
+        for p in (s.get('players') or []):
+            who = p.get('short_name') or p.get('name') or ''
+            banking.append([who, money(p.get('banking') or 0, sign=True)])
+            betting.append([who, money(p.get('betting') or 0, sign=True)])
+        out += _ssec(_label(fs, 'Banking · as banker', multi), banking)
+        out += _ssec(_label(fs, 'Betting · as a player', multi), betting)
+
+        rows = []
+        settled = s.get('bets_settled')
+        if settled:
+            rows.append(['Bets settled', str(settled)])
+        swings = s.get('biggest_swings') or []
+        if swings:
+            big = swings[0]
+            # The hole everybody remembers, and the only thing on the
+            # receipt that says which one it was.
+            rows.append([f'Biggest hole · {big.get("hole")}',
+                         f'{money(big.get("amount") or 0)} · '
+                         f'{big.get("banker") or ""} banking'])
+        out += _ssec(_label(fs, 'The round', multi), rows)
+    return out
+
+
+GAME_DETAIL['sequoya_threes'] = sequoya_detail
+GAME_DETAIL['banker'] = banker_detail

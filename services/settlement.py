@@ -48,6 +48,12 @@ NETTABLE = {
     # Group B (§4) — the GROUP pools.  Each group's payout is divided across
     # its golfers, and a golfer's net is his share minus his entry.
     'forty_balls', 'hot_spot',
+    # Both engines already produced a zero-sum per-golfer ledger and neither
+    # was wired in, so a Banker or Sequoya round settled to nothing and could
+    # never reach a receipt — their §4 detail formatters were unreachable by
+    # construction.  Verified zero-sum against every such round in the local
+    # database before being added.
+    'banker', 'sequoya_threes',
 }
 
 _LABELS = {
@@ -59,6 +65,7 @@ _LABELS = {
     'sequoya_threes': 'Sequoya 3s',
     'nassau': 'Nassau', 'rabbit': 'Rabbit', 'survivor': 'Survivor',
     'forty_balls': '40 Balls', 'hot_spot': 'Hot Seat',
+    'banker': 'Banker',
 }
 
 
@@ -206,6 +213,23 @@ def _pid_nets_for_game(game_key, round_obj, foursomes):
             s = fourball_summary(fs) or {}
             for p in (s.get('money', {}) or {}).get('by_player', []):
                 out[p['player_id']] += p.get('amount', 0) or 0
+
+    elif game_key == 'banker':
+        from services.banker import banker_summary
+        for fs in foursomes:
+            for p in (banker_summary(fs) or {}).get('players', []):
+                # `total` is banking + betting, already capped: `players[]`
+                # carries `loss_cap` and the engine clips before reporting.
+                # Decimal, so it is floated here rather than mixed.
+                out[p['player_id']] += float(p.get('total') or 0)
+
+    elif game_key == 'sequoya_threes':
+        from services.sequoya_threes import sequoya_threes_summary
+        for fs in foursomes:
+            for p in (sequoya_threes_summary(fs) or {}).get('players', []):
+                # SETTLED money, not `live_money` — the latter is what the
+                # board shows mid-round and includes bets still running.
+                out[p['player_id']] += float(p.get('money') or 0)
 
     elif game_key == 'low_net_round':
         from services.low_net_round import low_net_round_summary

@@ -380,6 +380,25 @@ def _settled_round(game):
             payouts=[{'place': 1, 'amount': 30}])
         for h in range(1, 19):
             submit_hole(fs, h, [(ids[0], 3), (ids[1], 4), (ids[2], 5)])
+    elif game == 'sequoya_threes':
+        from services.sequoya_threes import setup_sequoya_threes
+        fs = make_foursome(rnd, [('A', 0), ('B', 0), ('C', 0), ('D', 0)])
+        ids = [m.player_id for m in fs.memberships.all()]
+        setup_sequoya_threes(fs, ids[:2], handicap_mode='gross')
+        for h in range(1, 19):
+            submit_hole(fs, h, [(ids[0], 3), (ids[1], 4),
+                                (ids[2], 4), (ids[3], 5)])
+    elif game == 'banker':
+        # Setup plus scores is enough for the SHAPE: with no bets placed the
+        # banking and betting columns are zero, which is a legitimate round
+        # and still exercises every row the formatter writes.
+        from services.banker import setup_banker
+        fs = make_foursome(rnd, [('A', 0), ('B', 0), ('C', 0), ('D', 0)])
+        ids = [m.player_id for m in fs.memberships.all()]
+        setup_banker(fs, first_banker_id=ids[0], handicap_mode='gross')
+        for h in range(1, 19):
+            submit_hole(fs, h, [(ids[0], 3), (ids[1], 4),
+                                (ids[2], 4), (ids[3], 5)])
     else:
         raise AssertionError(f'no fixture for {game}')
     return rnd

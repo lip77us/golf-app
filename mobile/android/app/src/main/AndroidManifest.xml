@@ -56,6 +56,12 @@
                 <data android:scheme="https"
                       android:host="link.halved.golf"
                       android:pathPrefix="/watch/"/>
+                <!-- The settle-up receipt.  Unlike iOS this needs no feature
+                     flag: the filter ships inside the app, so a build that
+                     claims /r/ is by definition a build that can route it. -->
+                <data android:scheme="https"
+                      android:host="link.halved.golf"
+                      android:pathPrefix="/r/"/>
             </intent-filter>
         </activity>
         <!-- FCM presentation defaults. Without the icon override Android draws
