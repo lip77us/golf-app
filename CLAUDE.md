@@ -9909,3 +9909,227 @@ the par-selector and completed-round-leaderboard fixes are not re-announced
 reads the listing URL, and a binary that sends a number somewhere the page
 does not mention is a 5.1.1 finding. Same sequencing 2.13.0 needed for
 location: `cd website && ./build-zip.sh && npx wrangler deploy`.
+
+
+## Settle up — one receipt, three surfaces (`design_handoff_settle_up`)
+
+Settlement answers the TD's question: do the pools balance.  The **receipt**
+answers the golfer's: what do I owe, to whom, and what for.  It is a frozen
+document with a short code, addressable at `halved.golf/r/<code>/`.
+
+**One `Receipt` payload, rendered three ways**, and the whole point is that
+they cannot disagree:
+
+| surface | drawn by | gets |
+|---|---|---|
+| **Round over** (the scorer, in the app, after Finish round) | `widgets/receipt_ticket.dart` | the full ticket, long form |
+| **Web receipt** (anyone with the link) | `services/receipt_ticket.py` | the full ticket, long form |
+| **Preview image** (the link unfurling in the text) | `services/receipt_card.py`, 1080x1350 | capped: 4 chips, 3 transfers, the FIRST section's first 2 rows |
+
+The client renders and computes nothing.  The one rule it owns is §2.4's
+formatting (`+$26`, `−$18` with a true minus, `$0` when level), because §3's
+contract is integer CENTS and somebody has to turn them into money.
+
+### `services/settle_up.py` — the primitives
+
+`settle(nets, order=)` is the greedy "fewest handovers that clear the table",
+at most `n-1` lines.  It **raises on a ledger that does not sum to zero and on
+a non-int**, which replaced float-epsilon checks: a ledger that does not
+balance is a bug in the game that produced it, and settling it would invent or
+lose money.
+
+It **replaced three separate greedy copies**.  Those relied on a stable sort
+falling back to dict insertion order, which happened to be display order at
+every call site and said so nowhere — so `order` is a real argument, and a tie
+(two golfers down the same amount) is the ordinary ending of a four-ball.
+Emission order is greedy order; `for_display()` sorts by amount, because
+sorting for display belongs to the receipt.
+
+Also here: `combine()` (a round playing several games settles ONCE, on the
+sum), `split_cents()`, `settle_pool()`, and `classify_recipients()`.
+
+### The one text, which is why this feature could be built at all
+
+`CLAUDE.md` already recorded why the personal receipt was blocked: **Halved
+deliberately never sends golfer-facing SMS from the server.**  "Send 14
+receipts" is app-initiated bulk SMS to people who never opted in, and the
+share sheet cannot open fourteen threads.
+
+§1 answers it — **one text, from the scorer's own phone, through the system
+composer, with every recipient prefilled and the body just the link**, which
+unfurls into the card.  `halved_sms` already takes a recipient LIST, so this
+is one composer call, never a per-golfer send.  Same mechanism the invite flow
+uses, for the same TCPA and App Store reasons.
+
+`classify_recipients` (§2.5) splits the roster into `push` (on Halved),
+`text` (has a mobile, is not) and `none`, **excluding the scorer**, who is
+holding the phone that sends them.
+
+### A phone number never goes in the payload
+
+`/r/<code>/` is public, so a number in the payload is a number on the
+internet.  The client resolves phones from the ROUND it already holds, and
+`receipt_json` strips `recipients` and `note` before serving — those are the
+scorer's working list, not part of the document.
+
+### `tournament.Receipt` is FROZEN, and that is the point
+
+Every other board in this app derives on read, deliberately: correct a score
+and the money moves.  A receipt is the opposite — it is stamped "Final ·
+settled 2:58 PM by Paul Kelly" and texted to people who are not in the app and
+cannot be told it changed.  So the payload is written once at Finish round and
+served verbatim.  Migration `tournament/0085`, with the same
+exactly-one-parent constraint `SettlementSend` carries.
+
+**A round reopened and re-settled gets a NEW code**, and the old link keeps
+saying what the golfers were shown.  `Meta.ordering` is newest-first and every
+reader takes `.first()`.
+
+> **Do not add an "already has one" guard to `build_round_receipt`.**  There
+> was one; it read like idempotency and was really a refusal to re-settle, so
+> a round reopened to fix a score was handed back its original payload with no
+> way to re-freeze it.  **Idempotency is the CALLER's**: `RoundCompleteView`
+> only settles inside `status != 'complete'`, so a second tap of Finish round
+> never reaches the builder at all.  The guard was defending something that
+> cannot happen, at the cost of the thing it was meant to allow.  Found in
+> testing, when a Sixes round settled before the per-match detail existed kept
+> reporting no detail however many times it was finished again.
+
+### Registering a game — five dicts in `services/receipt_build.py`
+
+| registry | §3 field | what it answers |
+|---|---|---|
+| `GAME_SUMMARY` | `summary` | the ticket's short row(s) — "Settled 3 of 3" |
+| `GAME_DETAIL` | `detail` → `webGames` | the long form, one section per game |
+| `GAME_CAPTION` | `caption` | overrides "{gross} · net {net}" for a game not scored in strokes |
+| `GAME_IMAGE_CAPTION` | `imageCaption` | the preview's shorter chip |
+| `GAME_STAKE` | `stakeLabel` | composes `sub` — "$2 a skin" |
+
+Registering is the ONLY thing a game has to do.  An unregistered game falls
+back to naming who the money moved to, which is true and checkable rather than
+a placeholder.  All of them live in `services/receipt_games.py`.
+
+**`webGames` REPLACES `games` on the web, so it carries the short form too**,
+and it is set only when a game registers a detail — a `webGames` identical to
+`games` is noise in a stored payload the renderer already falls back from.
+
+**Every formatter reads its engine's own summary and formats.  None
+re-derives a margin, a result or a figure.**  That is the `gross_to_par` rule,
+and on a receipt it is the money.
+
+### Two traps in the detail layer
+
+**`_detail_sections` swallows a formatter's exception by design** — the money
+is settled above it and a broken row must not cost the receipt.  The cost is
+that a regression is SILENT: the section simply stops appearing.  So
+`DetailShapeTests` calls every registered formatter DIRECTLY, where a raise is
+a failure rather than a logged line.
+
+Found exactly that way: **Rabbit and Survivor report `holes` as a COUNT, not a
+list.**  Both formatters read it as a list, which is a TypeError, which was a
+log line and an empty section.  `_range()` reads `start_hole`/`end_hole`.
+
+### What `services/settlement.py` gained
+
+`NETTABLE` picked up `nassau`, `rabbit`, `survivor` (§4 lists all three as
+"the engine already produces a zero-sum ledger"; it did, and had simply never
+been wired in, so 11 of 40 completed casual rounds could produce no settlement
+at all) plus `forty_balls` and `hot_spot` as group pools via
+`_group_pool_nets`.
+
+- **Nassau settles on `payouts['total_capped']`, never `total`.**  The loss
+  cap is per side and `total` is uncapped; settling on it pays out past the
+  cap.  That exact slip was a real money bug in Annandale Friday.
+- **A cup round nets no Nassau money** (`_is_cup_round`) — §4: cup Nassau
+  plays for points, so netting it would invent dollars nobody played for.
+- `round_settlement(round_obj, min_games=1)` for the receipt; the running tab
+  keeps its default of 2.
+
+### Casual and tournament are different documents
+
+`build_round_receipt` SKIPS a tournament round and returns None.  §4 puts the
+tournament receipt in Group C — one receipt for the whole FIELD with several
+pots, built when the TD settles rather than when a round ends — and says
+foursome side bets "settle in the group and are not on this receipt".  A
+per-round hook cannot produce that.  `services/receipt_field.py` has it.
+
+### Mobile
+
+`RoundOverScreen` (the scorer's, pushed after Finish round) and
+`ReceiptScreen` (read-only, from the deep link), both drawing
+`ReceiptTicketCard`.  `utils/receipt_send.dart` builds the composer call.
+
+**`showRoundOverIfAny` is wired into ALL NINE dedicated play screens** as well
+as `completeRoundOrOfferForce`, with a source guard.  The nine call
+`completeRound` directly and are right to — a single casual foursome has no
+force to offer — and they are exactly the rounds that produce receipts, so
+Round over would otherwise have been reachable from the generic screen and
+from none of Skins, Nassau, Rabbit, Survivor, Points 5-3-1, Wolf, Triple
+Nassau, Quota Nassau or Sequoya 3s.  **The same shape this file records three
+times already**: one rule reachable from one screen and not the other.
+
+**`ReceiptTicket.fromJson` prefers `webGames`.**  It read `games`, so the app
+said "Settled 5 of 5" while the link it texts out listed every match — and the
+SERVER never agreed with it: `ticket_html` branches on `image` alone, so its
+`roundover` mode already rendered the long form.  Note the wire shape is the
+leaderboard's `{code, url, payload}` wrapper, not the payload on its own; a
+test fixture passing the payload directly parses to an empty ticket and says
+nothing.
+
+### Still open
+
+- **The deep link CANNOT FIRE on any platform.**  The live association file
+  lists `paths: ["/watch/*"]` and the Android intent-filter has
+  `pathPrefix="/watch/"`; `/r/*` is in neither, so tapping a texted link opens
+  Safari.  `ReceiptScreen` is therefore unreachable by any route.  Two lines
+  plus a deploy, and iOS caches the file.
+- **A receipt push lands on the leaderboard**, not the receipt: `_handleTap`
+  routes on `round_id` and has no `type: 'receipt'` case, so the `code` it
+  carries is read by nothing.
+- **Sequoya 3s, Banker and Dream Round have §4 detail specs that cannot
+  appear** — none is in `NETTABLE` and none has a branch in
+  `_pid_nets_for_game`, so those rounds settle to nothing and never reach a
+  receipt.  They need a ledger before a formatter is worth anything.
+- **40 Balls and Hot Seat have no Detail in §4 at all** — their long form is
+  the caption and image caption, both built.
+- Venmo / Cash App buttons are deferred by the handoff itself.
+
+Coverage, measured against the local database rather than asserted: **33 of 33
+completed casual rounds that produce a receipt carry a long form.**
+
+Tests: `scoring/tests/test_settle_up.py` (30), `api/test_receipt_page.py`
+(28), `api/test_finish_round_receipt.py` (21), `scoring/tests/test_receipt_games.py`
+(44), `scoring/tests/test_receipt_field.py` (27),
+`mobile/test/receipt_ticket_test.dart` (18).
+
+## Sixes: an early finish hands the hole to the NEXT match
+
+Not settle-up, but found and fixed in the same sitting and worth keeping.
+
+`calculate_sixes` leaves a finished match its full scheduled `end_hole` and
+starts the next one on the very next hole (`current_pos = fin_pos + 1`), so
+**the stored ranges OVERLAP** — a match won 3&2 stores 1–6 while match 2
+stores 5–10.  That is the display layer's own convention (`_played_holes`
+narrows a match to what it played) and it is common rather than exotic: 8 of
+17 sixes foursomes in the local database overlap.
+
+`sixes_hole_card` took the FIRST range covering the hole and stopped, so holes
+5 and 6 resolved to a match that was already over.  With the next match's
+sides drawn that showed the **wrong partners and the wrong standing**,
+silently; with them undrawn it reported `teams_set: True` for a match with no
+teams, so `score_entry_screen`'s "pick the teams" band — which keys off
+exactly that flag — never drew and the group scored two holes into a match
+with no sides.  Reported from the course.
+
+**The LAST segment covering the hole wins.**  Not a convenience: the
+repositioning loop assigns starts in ascending order, so that is exactly the
+partition it built.
+
+No fixture had ever produced an early finish — every hole-card test halves the
+whole of match 1, which is the one condition the bug needs.
+
+`match_result_text(seg)` was extracted while fixing it, because the receipt's
+per-match detail needs the sentence the score-entry band already writes.
+
+Tests: `AnEarlyFinishHandsTheNextHoleToTheNextMatchTests` (7), including the
+shotgun case where the match's range wraps the turn.
