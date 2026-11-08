@@ -19,6 +19,8 @@ void main() {
     'score entry': 'lib/screens/score_entry_screen.dart',
     'rabbit': 'lib/screens/rabbit_screen.dart',
     'survivor': 'lib/screens/survivor_screen.dart',
+    'points 5-3-1': 'lib/screens/points_531_screen.dart',
+    'wolf': 'lib/screens/wolf_screen.dart',
   };
 
   group('only Edit scores starts an edit session', () {
@@ -120,6 +122,43 @@ void main() {
       final body = src.substring(at, end);
       expect(body, contains('_editingPlayerId = pid'));
       expect(body.contains('_trayEditing'), isFalse);
+    });
+  });
+
+  /// **A tray game saves and STAYS.**
+  ///
+  /// The tray IS the end of the hole and its forward button is the advance,
+  /// so auto-advance carries the scorer straight past it and he never sees
+  /// the result (reported on Rabbit, 30 Oct 2026). Rabbit and Survivor were
+  /// fixed then; Points shipped without it a week later and Wolf would have
+  /// too, which is why this is checked at every screen with a tray rather
+  /// than at the one that was reported.
+  group('a tray game saves and stays', () {
+    const dedicated = <String, String>{
+      'rabbit': 'lib/screens/rabbit_screen.dart',
+      'survivor': 'lib/screens/survivor_screen.dart',
+      'points 5-3-1': 'lib/screens/points_531_screen.dart',
+      'wolf': 'lib/screens/wolf_screen.dart',
+    };
+    for (final e in dedicated.entries) {
+      test('${e.key} returns before auto-advance when it holds a card', () {
+        final src = File(e.value).readAsStringSync();
+        final guard = src.indexOf(
+            'if (_card(context.read<RoundProvider>()) != null) return;');
+        expect(guard, greaterThan(-1),
+            reason: 'no carve-out: auto-advance skips the tray');
+        final auto = src.indexOf('autoAdvanceHole', guard);
+        expect(auto, greaterThan(guard),
+            reason: 'the carve-out must come BEFORE the setting is read');
+      });
+    }
+
+    test('score entry carries the same rule in its own words', () {
+      // The universal screen checks it inside the advance block rather than
+      // before it, because one handler serves every game on that screen.
+      final src =
+          File('lib/screens/score_entry_screen.dart').readAsStringSync();
+      expect(src, contains('A tray game posts and STAYS'));
     });
   });
 }

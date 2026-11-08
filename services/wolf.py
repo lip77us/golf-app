@@ -663,6 +663,26 @@ def _tee_order(hole, wolf, real_ids, score_index, phcp_by_pid, order,
 
 
 # ---------------------------------------------------------------------------
+# Money
+# ---------------------------------------------------------------------------
+
+def _wager_config(game, bet_unit):
+    """How this game settles points into money.
+
+    Wolf points already net to zero per hole, so the vs-average baseline is 0
+    and ``settle`` reproduces points × bet_unit — but the optional
+    ``loss_cap`` (clip the losers, rescale the winners pro-rata) applies on
+    top, and that is why this is a function rather than a multiplication at
+    each call site.  **The board and the score-entry tray both go through
+    it**, so a capped round cannot settle one way on one screen and another
+    way on the next.
+    """
+    from services.wager import PER_POINT, VS_AVERAGE, WagerConfig
+    return WagerConfig(funding=PER_POINT, settlement=VS_AVERAGE,
+                       rate=Decimal(str(bet_unit)), cap=game.loss_cap)
+
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 
@@ -833,13 +853,9 @@ def wolf_summary(foursome) -> dict:
         points_total[r.player_id] += r.points
         holes_played[r.player_id] += 1
 
-    # Money via the shared wager engine. Wolf points already net to zero per
-    # hole, so the vs-average baseline is 0 and settle reproduces
-    # points × bet_unit — but now the optional loss_cap (clip losers, rescale
-    # winners pro-rata) applies too.
-    from services.wager import PER_POINT, VS_AVERAGE, WagerConfig, settle
-    cfg = WagerConfig(funding=PER_POINT, settlement=VS_AVERAGE,
-                      rate=Decimal(str(bet_unit)), cap=game.loss_cap)
+    # Money via the shared wager engine — see `_wager_config`.
+    from services.wager import settle
+    cfg = _wager_config(game, bet_unit)
     payouts = settle(
         {pid: points_total.get(pid, Decimal('0')) for pid in by_pid}, cfg)
 
@@ -913,4 +929,270 @@ def wolf_summary(foursome) -> dict:
             'bet_unit': bet_unit,
             'loss_cap': float(game.loss_cap) if game.loss_cap is not None else None,
         },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Score-entry card — `~/Downloads/handoff-wolf-score-entry`
+# ---------------------------------------------------------------------------
+
+def _wolf_labels(by_pid: dict) -> dict:
+    """``{player_id: label}`` — the FIRST name, lengthened only where two
+    golfers in the group share one.
+
+    The tray talks about golfers in running text — ``Sam's call``, ``who did
+    Sam take?``, ``Paul + Sam`` — and ``short_name`` is at most five
+    characters and auto-fills to initials, so ``PL's call`` is not a sentence.
+    A first name is.  Two Daves in one group would be, so the ambiguous ones
+    (and only those, as the settlement receipt's labels do) take a surname
+    initial: ``Dave K``.
+    """
+    first = {}
+    for pid, player in by_pid.items():
+        parts = (player.name or '').split()
+        first[pid] = parts[0] if parts else (player.short_name or '')
+    seen = {}
+    for pid, f in first.items():
+        seen.setdefault(f.lower(), []).append(pid)
+    out = {}
+    for pid, f in first.items():
+        if len(seen.get(f.lower(), [])) < 2:
+            out[pid] = f
+            continue
+        parts = (by_pid[pid].name or '').split()
+        out[pid] = f'{f} {parts[1][0]}' if len(parts) > 1 else (
+            by_pid[pid].short_name or f)
+    return out
+
+
+def _pts_label(value, each: bool) -> str:
+    """``1 pt each`` / ``3 pts`` — the call's worth, in the tray's words."""
+    v = float(value)
+    n = f'{v:g}'
+    unit = 'pt' if v == 1 else 'pts'
+    return f'{n} {unit} each' if each else f'{n} {unit}'
+
+
+def wolf_hole_card(foursome, hole: int) -> dict:
+    """Everything the Wolf score-entry screen draws for ONE hole.
+
+    Built from `wolf_summary`, never a second walk.  **Who won the hole is the
+    ENGINE's**, including the `wolf_loses_ties` option that hands a tied hole
+    to the field and the `non_wolf_bonus` that doubles the field's clean win —
+    neither of which is visible in the nets this card also carries, so
+    comparing them here would be a second opinion about the money.
+
+    Returns `{}` when the game is not set up, so a caller can test the key.
+
+    Gated on the GAME, not its status: the status stays `pending` until the
+    first hole is fully scored, so testing it returned nothing on hole 1 of a
+    fresh round — and no card means no keypad.  Points, Rabbit and Sixes each
+    hit that in turn.
+    """
+    summary = wolf_summary(foursome)
+    if not (summary.get('players') or []):
+        return {}
+
+    try:
+        game = foursome.wolf_game
+    except WolfGame.DoesNotExist:        # pragma: no cover - players implies one
+        return {}
+
+    order = _play_sequence(foursome) or list(range(1, 19))
+    if hole not in order:
+        return {}
+    pos = order.index(hole)
+
+    members  = _real_members(foursome)
+    by_pid   = {m.player_id: m.player for m in members}
+    real_ids = [m.player_id for m in members]
+    rotation = _clean_order(foursome, game.wolf_order)
+    label    = _wolf_labels(by_pid)
+    n        = len(real_ids)
+
+    per_hole = {h['hole']: h for h in (summary.get('holes') or [])}
+    entry    = per_hole.get(hole) or {}
+    wolf     = entry.get('wolf_id')
+    decision_str = entry.get('decision') or WolfHoleDecision.PENDING
+    partner_id   = entry.get('partner_id')
+
+    score_index = _score_index(game, foursome)
+    strokes_by  = wolf_player_hole_strokes(foursome, game)
+    gross_by    = {
+        r['player_id']: r['gross_score']
+        for r in (HoleScore.objects
+                  .filter(foursome=foursome, hole_number=hole,
+                          player_id__in=real_ids)
+                  .exclude(gross_score=None)
+                  .values('player_id', 'gross_score'))
+    }
+
+    # Sides come from the engine's own resolver, so an invalid partner pick
+    # degrades to Lone here exactly as it does when the hole is scored.
+    decision_row = next((d for d in game.decisions.all()
+                         if d.hole_number == hole), None)
+    wolf_side, field_side = [], []
+    if decision_row is not None and wolf is not None and \
+            decision_row.decision != WolfHoleDecision.PENDING:
+        _mode, wolf_side, field_side = _hole_sides(decision_row, wolf, real_ids)
+        # `_hole_sides` builds the field in MEMBERSHIP order, which is
+        # arbitrary and is not the order the rows above are in.  Both sides
+        # read in rotation order, so `Sam + Paul` on the tray names them the
+        # way the card names them.
+        rank = {pid: i for i, pid in enumerate(rotation)}
+        wolf_side.sort(key=lambda p: rank.get(p, 99))
+        field_side.sort(key=lambda p: rank.get(p, 99))
+    side_of = ({pid: 'wolf' for pid in wolf_side}
+               | {pid: 'field' for pid in field_side})
+
+    points_now = {e['player_id']: e.get('points')
+                  for e in (entry.get('entries') or [])}
+
+    tee = next((m.tee for m in members if m.tee_id), None)
+    geometry = tee.hole(hole) if tee else {}
+
+    rows = []
+    for pid in rotation:
+        if pid not in by_pid:
+            continue
+        m = next((x for x in members if x.player_id == pid), None)
+        rows.append({
+            'player_id'      : pid,
+            'name'           : by_pid[pid].name,
+            'short'          : by_pid[pid].short_name,
+            'first'          : label.get(pid, ''),
+            'course_handicap': m.course_handicap if m else None,
+            'strokes'        : strokes_by.get(pid, {}).get(hole, 0),
+            'gross'          : gross_by.get(pid),
+            'net'            : score_index.get(pid, {}).get(hole),
+            'side'           : side_of.get(pid),
+            'is_wolf'        : pid == wolf,
+            'is_partner'     : partner_id is not None and pid == partner_id,
+            'hole_points'    : (float(points_now[pid])
+                                if points_now.get(pid) is not None else None),
+        })
+
+    hole_complete = bool(rows) and all(r['gross'] is not None for r in rows)
+    decided   = decision_str != WolfHoleDecision.PENDING
+    needs_call = hole_complete and not decided
+
+    # **Points and money THROUGH THIS HOLE**, never the round's totals, which
+    # is what `summary['players']` carries.  A hole with four scores and no
+    # call contributes nothing, because the engine writes no row for it.
+    so_far = {pid: Decimal('0') for pid in real_ids}
+    for h in order[:pos + 1]:
+        for e in ((per_hole.get(h) or {}).get('entries') or []):
+            if e.get('points') is not None and e['player_id'] in so_far:
+                so_far[e['player_id']] += Decimal(str(e['points']))
+    bet_unit = float(foursome.round.bet_unit)
+    try:
+        from services.wager import settle
+        money_now = settle(dict(so_far), _wager_config(game, bet_unit))
+    except Exception:                    # pragma: no cover - defensive
+        money_now = {pid: Decimal('0') for pid in so_far}
+
+    standing = sorted(
+        ({'player_id'  : pid,
+          'short'      : by_pid[pid].short_name,
+          'first'      : label.get(pid, ''),
+          'side'       : side_of.get(pid),
+          'is_wolf'    : pid == wolf,
+          'hole_points': (float(points_now[pid])
+                          if points_now.get(pid) is not None else 0.0),
+          'points'     : float(so_far[pid]),
+          'money'      : float(money_now.get(pid, 0))}
+         for pid in real_ids),
+        key=lambda s: (-s['points'], s['first']))
+
+    # The two sides, the Wolf's first.  `best` is the side's best net and
+    # appears only once every golfer on it has one; `result` is read off the
+    # engine's `winning_side`, so the tie options decide it rather than a
+    # comparison made here.
+    won = entry.get('winning_side')
+    def _side(pids, key):
+        nets = [score_index.get(p, {}).get(hole) for p in pids]
+        whole = nets and all(x is not None for x in nets)
+        result = None
+        if won == 'tie':
+            result = 'halved'
+        elif won in ('wolf', 'opponents'):
+            result = 'won' if (won == 'wolf') == (key == 'wolf') else 'lost'
+        return {
+            'side'  : key,
+            'label' : ' + '.join(label.get(p, '') for p in pids),
+            'best'  : min(nets) if whole else None,
+            'result': result,
+        }
+    sides = ([_side(wolf_side, 'wolf'), _side(field_side, 'field')]
+             if decided and wolf_side else [])
+
+    # What the call is worth, in the tray's words.  Once the hole has settled
+    # this is the award the ENGINE made, so a `non_wolf_bonus` double shows as
+    # `2 pts each` rather than as the configured 1 it contradicts.
+    if decision_str == WolfHoleDecision.PARTNER:
+        awarded = max((abs(v) for v in points_now.values() if v is not None),
+                      default=None)
+        call_value = _pts_label(awarded if awarded else game.team_win_points,
+                                each=True)
+        call_label = 'partner'
+    elif decision_str == WolfHoleDecision.LONE:
+        call_value = _pts_label(game.lone_wolf_points, each=False)
+        call_label = 'Lone Wolf'
+    elif decision_str == WolfHoleDecision.BLIND:
+        call_value = _pts_label(game.blind_wolf_points, each=False)
+        call_label = 'Blind Wolf'
+    else:
+        call_value, call_label = '', ''
+
+    last_two = set(order[-2:])
+    next_hole = order[pos + 1] if pos + 1 < len(order) else None
+    next_wolf = (per_hole.get(next_hole) or {}).get('wolf_id') \
+        if next_hole else None
+
+    round_over = hole_complete and pos == len(order) - 1
+    winner = None
+    if round_over and not needs_call and standing:
+        top = standing[0]
+        winner = {
+            'player_id': top['player_id'],
+            'short'    : top['short'],
+            'first'    : top['first'],
+            'points'   : top['points'],
+            'money'    : top['money'],
+            'stake'    : bet_unit,
+        }
+
+    return {
+        'hole'        : hole,
+        'par'         : geometry.get('par') or entry.get('par'),
+        'stroke_index': geometry.get('stroke_index') or entry.get('stroke_index'),
+        'yards'       : geometry.get('yards'),
+        'nine'        : 'front nine' if hole <= 9 else 'back nine',
+        'thru'        : pos + 1,
+        'stake'       : bet_unit,
+        'wolf_id'     : wolf,
+        'wolf_short'  : by_pid[wolf].short_name if wolf in by_pid else '',
+        'wolf_first'  : label.get(wolf, ''),
+        # The 17/18 catch-up rule picked this Wolf, so the hole card says
+        # `last place, 17 & 18` where it otherwise says `tees last`.
+        'last_place_wolf': bool(n == 4 and hole in last_two
+                                and game.last_place_wolf_1718),
+        'decision'    : decision_str,
+        'partner_id'  : partner_id,
+        'partner_locked': bool(entry.get('partner_locked')),
+        'can_partner' : n == 4 and not entry.get('partner_locked'),
+        'values'      : {'team' : game.team_win_points,
+                         'lone' : game.lone_wolf_points,
+                         'blind': game.blind_wolf_points},
+        'call_label'  : call_label,
+        'call_value'  : call_value,
+        'players'     : rows,
+        'sides'       : sides,
+        'standing'    : standing,
+        'hole_complete': hole_complete,
+        'needs_call'  : needs_call,
+        'round_over'  : round_over,
+        'winner'      : winner,
+        'next_hole'   : next_hole,
+        'next_wolf_first': label.get(next_wolf, '') if next_wolf else '',
     }

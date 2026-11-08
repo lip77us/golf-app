@@ -277,6 +277,12 @@ class _Points531ScreenState extends State<Points531Screen>
         sc != null && _allScored(players, _effectiveScores(sc, hole));
     _selectScore(m, score, hole);
     if (sc == null || score <= 0 || wasAllScored) return;
+    // **A tray game saves and STAYS.** Rabbit's screen carries this
+    // carve-out and this one shipped without it, so a group with
+    // auto-advance on was carried straight past the tray and never saw the
+    // hole's 5-3-1 split at all. Found building Wolf's, which has the same
+    // shape. The keypad posts the hole itself, so nothing is left unsent.
+    if (_card(context.read<RoundProvider>()) != null) return;
     if (!context.read<SettingsProvider>().autoAdvanceHole) return;
     if (!_allScored(players, _effectiveScores(sc, hole))) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {

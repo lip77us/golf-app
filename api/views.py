@@ -6236,7 +6236,7 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
     if scored_on:
         active.add(scored_on)
     wants = {'annandale_friday', 'sixes', 'rabbit', 'survivor',
-             'low_net_round', 'points_531'} & active
+             'low_net_round', 'points_531', 'wolf'} & active
     if not wants:
         return {}
     from services.skins import skins_summary
@@ -6281,6 +6281,13 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
                 card = points_531_hole_card(foursome, hole_number)
                 if card:
                     out['points_531_hole'] = card
+            # …and Wolf's, which reports the hole's call, its sides and
+            # where the round stands AFTER it.
+            if 'wolf' in wants and hole_number:
+                from services.wolf import wolf_hole_card
+                card = wolf_hole_card(foursome, hole_number)
+                if card:
+                    out['wolf_hole'] = card
             if 'skins' in active:
                 out['skins'] = skins_summary(foursome)
     except Exception:
@@ -8478,6 +8485,19 @@ class RabbitHoleCardView(APIView):
         return Response(rabbit_hole_card(foursome, int(hole)))
 
 
+class WolfHoleCardView(APIView):
+    """GET /api/foursomes/{id}/wolf/hole/{hole}/
+
+    One hole's score-entry card. The POST that saves a score returns the same
+    shape under `wolf_hole`, and so does the one that sets the call, so this
+    is only for a hole the screen opens without posting either.
+    """
+    def get(self, request, pk, hole):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.wolf import wolf_hole_card
+        return Response(wolf_hole_card(foursome, int(hole)))
+
+
 class Points531HoleCardView(APIView):
     """GET /api/foursomes/{id}/points-531/hole/{hole}/
 
@@ -9151,7 +9171,21 @@ class WolfDecisionView(APIView):
             )
 
         calculate_wolf(foursome)
-        return Response(wolf_summary(foursome))
+        # **The card comes back with the call**, because setting one is what
+        # settles the hole: the sides, the points and the standing all move,
+        # and a second request for them only makes the group wait for figures
+        # the server has just computed. Same bargain the save makes.
+        from services.wolf import wolf_hole_card
+        payload = wolf_summary(foursome)
+        try:
+            card = wolf_hole_card(foursome, hole)
+            if card:
+                payload = {**payload, 'wolf_hole': card}
+        except Exception:        # pragma: no cover - a read-out must not
+            logger.exception(   # fail a call that was saved
+                'wolf hole card failed for foursome %s hole %s',
+                foursome.id, hole)
+        return Response(payload)
 
 
 # ---------------------------------------------------------------------------

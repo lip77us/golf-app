@@ -10825,3 +10825,292 @@ class PointsRoundWinner {
         settles: j['settles'] as String? ?? '',
       );
 }
+
+/// Everything the Wolf score-entry screen draws for one hole
+/// (`~/Downloads/handoff-wolf-score-entry`).
+///
+/// **Every figure arrives decided.**  Who won the hole is the engine's — the
+/// `wolf_loses_ties` option hands a tied hole to the field and `non_wolf_bonus`
+/// doubles the field's clean win, and neither is visible in the nets this card
+/// also carries, so comparing them here would be a second opinion about money.
+class WolfHoleCard {
+  final int hole;
+  final int? par;
+  final int? strokeIndex;
+  final int? yards;
+  final String nine;
+
+  /// Holes played counting this one, for `Thru 6 · $1 a point`.
+  final int thru;
+  final double stake;
+
+  final int? wolfId;
+  final String wolfShort;
+
+  /// The Wolf's FIRST name — the tray talks in sentences (`Sam's call`),
+  /// where a five-character `short` is not one.
+  final String wolfFirst;
+
+  /// The 17/18 catch-up rule picked this Wolf, so the hole card reads
+  /// `last place, 17 & 18` where it otherwise reads `tees last`.
+  final bool lastPlaceWolf;
+
+  /// `pending` · `partner` · `lone` · `blind`.
+  final String decision;
+  final int? partnerId;
+
+  /// The `require_lone_or_blind` rule forces this Wolf solo on this hole.
+  final bool partnerLocked;
+  final bool canPartner;
+
+  final int teamValue;
+  final int loneValue;
+  final int blindValue;
+
+  /// `partner` / `Lone Wolf` / `Blind Wolf`, and what it was worth
+  /// (`1 pt each`) — both empty until a call is made.
+  final String callLabel;
+  final String callValue;
+
+  /// The group in rotation order.
+  final List<WolfHolePlayer> players;
+
+  /// The Wolf's side first. Empty until a call is made.
+  final List<WolfHoleSide> sides;
+
+  /// The standing AFTER this hole, best first.
+  final List<WolfStandingRow> standing;
+
+  final bool holeComplete;
+
+  /// Four scores and no call — the state the dark tray exists for.
+  final bool needsCall;
+
+  final bool roundOver;
+  final WolfRoundWinner? winner;
+
+  final int? nextHole;
+  final String nextWolfFirst;
+
+  const WolfHoleCard({
+    required this.hole,
+    required this.par,
+    required this.strokeIndex,
+    required this.yards,
+    required this.nine,
+    required this.thru,
+    required this.stake,
+    required this.wolfId,
+    required this.wolfShort,
+    required this.wolfFirst,
+    required this.lastPlaceWolf,
+    required this.decision,
+    required this.partnerId,
+    required this.partnerLocked,
+    required this.canPartner,
+    required this.teamValue,
+    required this.loneValue,
+    required this.blindValue,
+    required this.callLabel,
+    required this.callValue,
+    required this.players,
+    required this.sides,
+    required this.standing,
+    required this.holeComplete,
+    required this.needsCall,
+    required this.roundOver,
+    required this.winner,
+    required this.nextHole,
+    required this.nextWolfFirst,
+  });
+
+  factory WolfHoleCard.fromJson(Map<String, dynamic> j) {
+    final values = ((j['values'] as Map?) ?? const {}).cast<String, dynamic>();
+    return WolfHoleCard(
+      hole: (j['hole'] as num?)?.toInt() ?? 0,
+      par: (j['par'] as num?)?.toInt(),
+      strokeIndex: (j['stroke_index'] as num?)?.toInt(),
+      yards: (j['yards'] as num?)?.toInt(),
+      nine: j['nine'] as String? ?? '',
+      thru: (j['thru'] as num?)?.toInt() ?? 0,
+      stake: (j['stake'] as num?)?.toDouble() ?? 0,
+      wolfId: (j['wolf_id'] as num?)?.toInt(),
+      wolfShort: j['wolf_short'] as String? ?? '',
+      wolfFirst: j['wolf_first'] as String? ?? '',
+      lastPlaceWolf: j['last_place_wolf'] as bool? ?? false,
+      decision: j['decision'] as String? ?? 'pending',
+      partnerId: (j['partner_id'] as num?)?.toInt(),
+      partnerLocked: j['partner_locked'] as bool? ?? false,
+      canPartner: j['can_partner'] as bool? ?? false,
+      teamValue: (values['team'] as num?)?.toInt() ?? 1,
+      loneValue: (values['lone'] as num?)?.toInt() ?? 3,
+      blindValue: (values['blind'] as num?)?.toInt() ?? 6,
+      callLabel: j['call_label'] as String? ?? '',
+      callValue: j['call_value'] as String? ?? '',
+      players: ((j['players'] as List?) ?? const [])
+          .map((e) => WolfHolePlayer.fromJson((e as Map).cast<String, dynamic>()))
+          .toList(),
+      sides: ((j['sides'] as List?) ?? const [])
+          .map((e) => WolfHoleSide.fromJson((e as Map).cast<String, dynamic>()))
+          .toList(),
+      standing: ((j['standing'] as List?) ?? const [])
+          .map((e) =>
+              WolfStandingRow.fromJson((e as Map).cast<String, dynamic>()))
+          .toList(),
+      holeComplete: j['hole_complete'] as bool? ?? false,
+      needsCall: j['needs_call'] as bool? ?? false,
+      roundOver: j['round_over'] as bool? ?? false,
+      winner: j['winner'] == null
+          ? null
+          : WolfRoundWinner.fromJson(
+              (j['winner'] as Map).cast<String, dynamic>()),
+      nextHole: (j['next_hole'] as num?)?.toInt(),
+      nextWolfFirst: j['next_wolf_first'] as String? ?? '',
+    );
+  }
+
+  bool get isDecided => decision != 'pending';
+
+  /// This golfer's row, or null when he is not in the group.
+  WolfHolePlayer? playerById(int id) {
+    for (final p in players) {
+      if (p.playerId == id) return p;
+    }
+    return null;
+  }
+}
+
+class WolfHolePlayer {
+  final int playerId;
+  final String name;
+  final String short;
+  final String first;
+  final int? courseHandicap;
+  final int strokes;
+  final int? gross;
+  final int? net;
+
+  /// `wolf` · `field` · null before a call is made.
+  final String? side;
+  final bool isWolf;
+  final bool isPartner;
+  final double? holePoints;
+
+  const WolfHolePlayer({
+    required this.playerId,
+    required this.name,
+    required this.short,
+    required this.first,
+    required this.courseHandicap,
+    required this.strokes,
+    required this.gross,
+    required this.net,
+    required this.side,
+    required this.isWolf,
+    required this.isPartner,
+    required this.holePoints,
+  });
+
+  factory WolfHolePlayer.fromJson(Map<String, dynamic> j) => WolfHolePlayer(
+        playerId: (j['player_id'] as num?)?.toInt() ?? 0,
+        name: j['name'] as String? ?? '',
+        short: j['short'] as String? ?? '',
+        first: j['first'] as String? ?? '',
+        courseHandicap: (j['course_handicap'] as num?)?.toInt(),
+        strokes: (j['strokes'] as num?)?.toInt() ?? 0,
+        gross: (j['gross'] as num?)?.toInt(),
+        net: (j['net'] as num?)?.toInt(),
+        side: j['side'] as String?,
+        isWolf: j['is_wolf'] as bool? ?? false,
+        isPartner: j['is_partner'] as bool? ?? false,
+        holePoints: (j['hole_points'] as num?)?.toDouble(),
+      );
+}
+
+class WolfHoleSide {
+  /// `wolf` or `field`.
+  final String side;
+
+  /// `Sam + Paul`, in rotation order.
+  final String label;
+
+  /// The side's best net — null until every golfer on it has one.
+  final int? best;
+
+  /// `won` · `lost` · `halved`, null until the hole settles.
+  final String? result;
+
+  const WolfHoleSide({
+    required this.side,
+    required this.label,
+    required this.best,
+    required this.result,
+  });
+
+  factory WolfHoleSide.fromJson(Map<String, dynamic> j) => WolfHoleSide(
+        side: j['side'] as String? ?? '',
+        label: j['label'] as String? ?? '',
+        best: (j['best'] as num?)?.toInt(),
+        result: j['result'] as String?,
+      );
+}
+
+class WolfStandingRow {
+  final int playerId;
+  final String short;
+  final String first;
+  final String? side;
+  final bool isWolf;
+  final double holePoints;
+  final double points;
+  final double money;
+
+  const WolfStandingRow({
+    required this.playerId,
+    required this.short,
+    required this.first,
+    required this.side,
+    required this.isWolf,
+    required this.holePoints,
+    required this.points,
+    required this.money,
+  });
+
+  factory WolfStandingRow.fromJson(Map<String, dynamic> j) => WolfStandingRow(
+        playerId: (j['player_id'] as num?)?.toInt() ?? 0,
+        short: j['short'] as String? ?? '',
+        first: j['first'] as String? ?? '',
+        side: j['side'] as String?,
+        isWolf: j['is_wolf'] as bool? ?? false,
+        holePoints: (j['hole_points'] as num?)?.toDouble() ?? 0,
+        points: (j['points'] as num?)?.toDouble() ?? 0,
+        money: (j['money'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+class WolfRoundWinner {
+  final int playerId;
+  final String short;
+  final String first;
+  final double points;
+  final double money;
+  final double stake;
+
+  const WolfRoundWinner({
+    required this.playerId,
+    required this.short,
+    required this.first,
+    required this.points,
+    required this.money,
+    required this.stake,
+  });
+
+  factory WolfRoundWinner.fromJson(Map<String, dynamic> j) => WolfRoundWinner(
+        playerId: (j['player_id'] as num?)?.toInt() ?? 0,
+        short: j['short'] as String? ?? '',
+        first: j['first'] as String? ?? '',
+        points: (j['points'] as num?)?.toDouble() ?? 0,
+        money: (j['money'] as num?)?.toDouble() ?? 0,
+        stake: (j['stake'] as num?)?.toDouble() ?? 0,
+      );
+}

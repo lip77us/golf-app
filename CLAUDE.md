@@ -10283,3 +10283,134 @@ nothing sets it) and the `appTitle`/`button`/`label`/`cta` fields as PAYLOAD
 keys — all four are derived from `forFun` instead, in one place per surface,
 because a payload that can disagree with itself about whether a round was
 staked is worse than one that cannot.
+
+## Wolf score entry — the call stops being a gate
+
+`~/Downloads/handoff-wolf-score-entry`. The keypad and dark tray carried to
+Wolf, on the same widgets 40 Balls, Sixes, Rabbit, Survivor, Stroke Play and
+Points already share — plus one card no other game has: the **call chips**.
+
+**The handoff's one open question, answered first.** It flags the Lone/Blind
+split as unconfirmed against the engine. `_award_points` divides the pot
+across each side, so Lone (3) is **+3 to the Wolf and −1 each** and Blind (6)
+is **+6 and −2 each** — exactly what the reference draws, and the module
+docstring already said so.
+
+### The feature is that nothing waits for the call
+
+The old screen opened a modal sheet and **`effHot = decided ? hotSpotIdx :
+-1`**: until somebody answered it, not one score could be entered. The call
+is now a row of chips above the scores, settable on the tee, after the drives
+or not at all — and if the hole fills up without one, the tray asks for it and
+the forward button stays dead (`Pick Sam's call`), because a scored hole with
+no call counts for nobody.
+
+`_WolfBar` and `_WolfChoice` are deleted. **The sheet survives, read-only**,
+reached from a `Tee order` link on the call card: it carries the hole's
+reverse-honors order and the per-hole strokes, which nothing else in the app
+shows, and deleting working UI the packet is silent about is a regression
+nobody asked for. Two controls for one decision is what the chips replace, so
+it picks nothing.
+
+`_WolfOutcomeLine` went with them — `Wolf wins the hole · pot 3`, directly
+above a tray whose two side rows say the same thing with the nets that decided
+it. Survivor's `_OutcomeLine` came off for the same reason.
+
+### `wolf_hole_card(foursome, hole)`
+
+**It renders the engine and decides nothing**, and here that is sharper than
+usual: `wolf_loses_ties` hands a tied hole to the field and `non_wolf_bonus`
+doubles the field's clean win, and **neither is visible in the nets the card
+also carries** — so comparing them would be a second opinion that looks right
+on most holes.
+
+- `call_value` reports what the hole ACTUALLY paid once it settles, so a
+  `non_wolf_bonus` double reads `2 pts each` rather than the configured `1` it
+  contradicts. Before it settles it is the configured value.
+- **The sides are ordered by ROTATION.** `_hole_sides` builds the field in
+  membership order, which is arbitrary and is not the order the rows are in,
+  so `Dave + Lee` could read either way round against a card listing them the
+  other.
+- Points and money are **through this hole**, summed from the engine's own
+  per-hole awards — `summary['players']` is the round's total, which is what
+  put a golfer on the 2nd at the 18th's figure on Points' tray. The money goes
+  through `_wager_config`, extracted here so a loss cap settles in the tray
+  exactly as it does on the board.
+- Gated on the GAME, not its status, which stays `pending` until a hole is
+  fully scored. No card means no keypad; Points, Rabbit and Sixes each hit it.
+
+Returned WITH the save under `wolf_hole`, **and with the CALL** — setting one
+is the other thing that settles a hole, so the decision POST carries the card
+rather than making the group wait for a second request.
+
+### Names are sentences here, not labels
+
+The tray talks in running text — `Sam's call`, `who did Sam take?`,
+`Paul + Sam` — and `short_name` is at most five characters and auto-fills to
+initials, so `PL's call` is not one. The card emits a **first name**,
+lengthened to `Dave K` only where two golfers in the group share one (the
+settlement receipt's rule, for the same reason). `short` is still sent for
+anything read at arm's length. This is a deliberate departure from the Sixes
+convention, which is right for a match line and wrong for a possessive.
+
+### Three departures from the reference
+
+- **The winner box is mint, not the side he was on for the 18th.** The
+  handoff's prose says "his side's light colour"; the reference's own markup
+  hardcodes the Wolf side's, and its screenshot follows the markup. Sides are
+  a property of ONE hole and change every hole, so colouring a ROUND winner by
+  the last of them says nothing.
+- **The hole and golfer cards are not restyled** — the Points call, for the
+  same reason: these rows carry the combo-tee chip, the Spots button and the
+  withdrawal long-press, and they already draw the sides.
+- **The inline picker is suppressed while the keypad is up**
+  (`showPicker: card == null`). Two full-width score pickers on one screen is
+  one too many, and the packet's golfer card has none; it stays as the
+  fallback for a hole whose card has not arrived.
+
+### Found building it: Points' tray was unreachable with auto-advance on
+
+Rabbit's screen carries a carve-out — **a tray game saves and STAYS**,
+because the tray IS the end of the hole and its forward button is the advance
+— and `points_531_screen` shipped a week later without it. A group with
+Auto-advance on was carried straight past the Points tray and never saw the
+hole's 5-3-1 split at all. Fixed, and the guard widened in
+`mobile/test/tray_editing_session_test.dart` to **every screen with a tray**
+rather than the one that was reported; that file is now the home for both
+tray-screen rules. Wolf would have shipped with the same gap.
+
+Also from the same file: `_handleScore`'s edit branch cleared the cursor
+unconditionally, which is the "blank bottom" state Rabbit reported — a session
+with no golfer under the keypad draws neither the tray nor the keypad.
+
+### A golden pass caught what a widget test could not
+
+`expectLater(..., matchesGoldenFile(...))` under `--update-goldens` renders
+the real widgets to PNGs, which is the cheapest honest look at a layout
+packet — no simulator, no build. It found two things:
+
+- **the call card's header overflowed**: `Expanded` on the name and a plain
+  `Text` on the prices, so a long first name pushed `partner 1 · Lone 3 ·
+  Blind 6` off the card. Both are `Flexible` now, the name yielding first.
+  (Pinned by a 320pt test with `Bartholomew`.)
+- **the tray said `Round over` twice**, 20pt apart — the header and the sides
+  label. The header keeps saying what it always says; the label is the one
+  that changes. Survivor's tray said its phase three times for the same
+  reason.
+
+The shot test is deliberately NOT kept: a golden of a dark tray is a
+maintenance burden that fails on any font or padding change, and what it
+found is pinned by ordinary tests.
+
+Tests: `scoring/tests/test_wolf_hole_card.py` (31 — the handoff's three
+worked calls through the real engine on par 4 / SI 5, where Dave takes no
+stroke and Sam and Lee each take one, which is the allocation a hand-written
+fixture would lose), `api/test_wolf_hole_card.py` (8 — including that the
+call returns the card) and `mobile/test/wolf_entry_test.dart` (30). Every
+guard mutation-checked.
+
+**Not built:** the handoff's restyled hole card (`376 yds` / `SI 5 · front
+nine` / the `Sam · Wolf` pill with `tees last`) — the shared `HoleHeader`
+carries those facts and is used by eleven screens, so redrawing it is a
+system-wide change rather than this packet's. The `last_place_wolf` flag the
+card already emits is what a restyle would read for `last place, 17 & 18`.

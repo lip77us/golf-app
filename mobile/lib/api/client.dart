@@ -2618,7 +2618,11 @@ class ApiClient {
   /// Record the Wolf's choice on [holeNumber].  [decision] is
   /// 'partner' | 'lone' | 'blind' | 'pending' (pending clears it).
   /// [partnerId] is required for 'partner' and ignored otherwise.
-  Future<WolfSummary> postWolfDecision(
+  /// **Returns the hole's CARD as well as the summary**, because setting the
+  /// call is what settles a hole whose scores are already in: the sides, the
+  /// points and the standing all move, and a second request for them would
+  /// only make the group wait for figures the server has just computed.
+  Future<({WolfSummary summary, WolfHoleCard? hole})> postWolfDecision(
     int foursomeId, {
     required int    holeNumber,
     required String decision,
@@ -2629,7 +2633,25 @@ class ApiClient {
       'decision'   : decision,
       if (partnerId != null) 'partner_id': partnerId,
     });
-    return WolfSummary.fromJson(data as Map<String, dynamic>);
+    final map = data as Map<String, dynamic>;
+    final card = map['wolf_hole'];
+    return (
+      summary: WolfSummary.fromJson(map),
+      hole: card is Map
+          ? WolfHoleCard.fromJson(card.cast<String, dynamic>())
+          : null,
+    );
+  }
+
+  /// GET /api/foursomes/{id}/wolf/hole/{hole}/
+  ///
+  /// Only for a hole the screen opens WITHOUT posting — a save returns the
+  /// same shape under `wolf_hole`, and so does setting the call.
+  Future<WolfHoleCard?> getWolfHoleCard(int foursomeId, int hole) async {
+    final data = await _get('/foursomes/$foursomeId/wolf/hole/$hole/');
+    final map = (data as Map).cast<String, dynamic>();
+    if (map.isEmpty) return null;
+    return WolfHoleCard.fromJson(map);
   }
 
   // ---- Rabbit ----

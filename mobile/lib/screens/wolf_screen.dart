@@ -42,6 +42,8 @@ import '../widgets/stroke_dots.dart';
 import '../utils/nine_totals.dart';
 import '../widgets/pinned_hole_grid.dart';
 import '../widgets/combo_tee_chip.dart';
+import '../widgets/forty_balls_keypad.dart';
+import '../widgets/wolf_entry.dart';
 
 /// Team accent color for a player's role on a hole. Per the color standard the
 /// Wolf side (Wolf + partner) is team 1 (blue); the opponents are team 2
@@ -90,9 +92,6 @@ Widget _winSwatch(ThemeData theme, Color c, String label) =>
               fontSize: 9.5, color: theme.colorScheme.onSurfaceVariant)),
     ]);
 
-String _fmtPoints(double v) =>
-    v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
-
 // ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
@@ -117,6 +116,15 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
   // the inline picker re-opens for that row (a completed hole has no hot-spot).
   int? _editingPlayerId;
   bool _sheetOpen       = false;
+
+  /// `Edit scores` is open: the keypad stays on the golfer just edited until
+  /// Done, rather than dropping back to the tray after one score.
+  bool _trayEditing = false;
+
+  /// The hole we have asked the server for, so a missing card is fetched
+  /// once rather than on every frame. Cleared the moment one arrives, which
+  /// is what lets the fetch run AGAIN if that card is then dropped.
+  int? _cardAsked;
   @override
   void initState() {
     super.initState();
@@ -243,10 +251,21 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
       // Editing an already-complete (past) hole: there's no save+advance step
       // for a correction, so persist it immediately — otherwise the change is
       // lost the moment the user navigates to another hole.
-      setState(() => _editingPlayerId = null);
+      //
+      // **A session keeps its cursor.** Clearing it unconditionally leaves
+      // `_trayEditing` true with no golfer being edited — a state neither
+      // the tray nor the keypad draws, so the bottom bar falls through to
+      // the bare pager (reported on Rabbit, 30 Oct 2026).
+      if (!_trayEditing) setState(() => _editingPlayerId = null);
       _saveHole(ctx, hole, players);
       return;
     }
+    // **A tray game saves and STAYS.** The tray IS the end of the hole —
+    // what the call did to it, and where that leaves the round — and its
+    // forward button is the advance. Auto-advance would carry the scorer
+    // straight past it (reported on Rabbit, whose screen has this shape).
+    // The keypad posts the hole itself, so nothing is left unsent.
+    if (_card(context.read<RoundProvider>()) != null) return;
     if (!context.read<SettingsProvider>().autoAdvanceHole) return;
     if (!_allScored(players, _effectiveScores(sc, hole))) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -283,29 +302,84 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
   void _advance() {
     final next = nextInOrder(
         _playOrder(context.read<RoundProvider>()), _selectedHole);
-    if (next != null) setState(() { _selectedHole = next; _editingPlayerId = null; });
+    if (next != null) {
+      setState(() { _selectedHole = next; _editingPlayerId = null;
+                    _trayEditing = false; });
+    }
   }
   void _retreat() {
     final prev = prevInOrder(
         _playOrder(context.read<RoundProvider>()), _selectedHole);
-    if (prev != null) setState(() { _selectedHole = prev; _editingPlayerId = null; });
+    if (prev != null) {
+      setState(() { _selectedHole = prev; _editingPlayerId = null;
+                    _trayEditing = false; });
+    }
+  }
+
+  // ── the hole card behind the keypad and the tray ────────────────────────
+
+  WolfHoleCard? _card(RoundProvider rp) {
+    final c = rp.wolfHole(_selectedHole);
+    return (c != null && c.hole == _selectedHole) ? c : null;
+  }
+
+  /// **Make sure the hole on screen has a card**, because without one the
+  /// keypad is not drawn at all.
+  ///
+  /// A save drops every other hole's card (they can be stale), and that
+  /// races the fetch the forward button started: the next hole's card can
+  /// arrive FIRST and then be thrown away by the response to a save posted
+  /// before it, leaving a screen with no keypad. This closes the race from
+  /// the other end — whenever the hole on screen has no card, one is asked
+  /// for. (Reported on Rabbit, whose screen has the identical shape.)
+  void _ensureCard(RoundProvider rp) {
+    if (_card(rp) != null) { _cardAsked = null; return; }
+    if (_cardAsked == _selectedHole) return;
+    _cardAsked = _selectedHole;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<RoundProvider>()
+          .loadWolfHole(widget.foursomeId, _selectedHole);
+    });
+  }
+
+  /// Who the keypad is on: the golfer being edited, else the first without
+  /// a score.
+  Membership? _keypadMember(List<Membership> players, Map<int, int> scores) {
+    if (_editingPlayerId != null) {
+      for (final m in players) {
+        if (m.player.id == _editingPlayerId) return m;
+      }
+    }
+    final i = _hotSpotIdx(players, scores);
+    return (i >= 0 && i < players.length) ? players[i] : null;
   }
 
   // ── Wolf decision ─────────────────────────────────────────────────────────
 
-  Future<void> _setDecision(String decision, {int? partnerId}) async {
+  /// Set (or clear) the Wolf's call for [hole], defaulting to the hole on
+  /// screen.
+  ///
+  /// **The card comes back with it**, because setting a call is the other
+  /// thing that settles a hole: the sides, the points and the standing all
+  /// move, and a second request for them would make the group wait for
+  /// figures the server has just computed.
+  Future<void> _setDecision(String decision,
+      {int? partnerId, int? hole}) async {
     if (_decisionBusy) return;
     setState(() => _decisionBusy = true);
     try {
       final client = context.read<AuthProvider>().client;
-      final summary = await client.postWolfDecision(
+      final res = await client.postWolfDecision(
         widget.foursomeId,
-        holeNumber: _selectedHole,
+        holeNumber: hole ?? _selectedHole,
         decision:   decision,
         partnerId:  partnerId,
       );
       if (!mounted) return;
-      context.read<RoundProvider>().setWolfSummary(summary);
+      final rp = context.read<RoundProvider>();
+      rp.setWolfSummary(res.summary);
+      if (res.hole != null) rp.setWolfHole(res.hole!);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -317,9 +391,14 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
     }
   }
 
-  /// Present the tee-order + partner/Lone/Blind overlay for [hole].  It
-  /// dismisses as soon as a choice is made; the choice is then persisted.
-  Future<void> _openDecisionSheet(int hole) async {
+  /// Show the hole's tee order — reverse honors, the Wolf last — and who
+  /// gets a stroke on it.
+  ///
+  /// **It no longer picks.** The call lives in the chips above the scores,
+  /// where it can be set at any point in the hole; this sheet is what is
+  /// left of the old overlay, and it is the only place the tee order is
+  /// shown at all. Two controls for one decision is what the chips replace.
+  Future<void> _openTeeOrderSheet(int hole) async {
     if (_sheetOpen) return;
     final rp = context.read<RoundProvider>();
     final summary = rp.wolfSummary;
@@ -329,7 +408,7 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
     if (holeInfo == null) return;
 
     _sheetOpen = true;
-    final choice = await showModalBottomSheet<_WolfChoice>(
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       builder: (_) => _WolfDecisionSheet(
@@ -340,17 +419,6 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
       ),
     );
     _sheetOpen = false;
-    if (choice == null || !mounted) return;
-    // Persist the choice for the hole the sheet was opened on (the user
-    // may have changed _selectedHole, so target [hole] explicitly).
-    final saved = _selectedHole;
-    _selectedHole = hole;
-    if (choice.kind == 'partner') {
-      await _setDecision('partner', partnerId: choice.partnerId);
-    } else {
-      await _setDecision(choice.kind);
-    }
-    if (mounted) _selectedHole = saved;
   }
 
   Future<void> _promptRotation() async {
@@ -779,12 +847,16 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
     final players  = _orderedPlayers(rp.round, holeInfo);
     final holeData = sc.holeData(_selectedHole);
     final scores   = _effectiveScores(sc, _selectedHole);
-    final hotSpot  = isComplete ? -1 : _hotSpotIdx(players, scores);
     final par      = holeData?.par ?? 4;
-
-    // The Wolf decision overlay is opened only when the user taps the "Choose
-    // play" bar (or the score card's decide button) — never auto-popped on
-    // landing on a hole, so the group can review the last hole's result first.
+    _ensureCard(rp);
+    final card     = _card(rp);
+    // **The hot spot no longer waits for the call.** It used to be forced to
+    // -1 until the Wolf had decided, which is what made the old sheet a gate.
+    int hotSpot = isComplete ? -1 : _hotSpotIdx(players, scores);
+    if (!isComplete && _editingPlayerId != null) {
+      final idx = players.indexWhere((p) => p.player.id == _editingPlayerId);
+      if (idx >= 0) hotSpot = idx;
+    }
 
     return Column(children: [
       Expanded(
@@ -808,13 +880,22 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
               ),
               const SizedBox(height: 12),
 
-              // ── Wolf decision panel ──
-              if (summary != null && holeInfo != null)
-                _WolfBar(
-                  hole:    holeInfo,
-                  summary: summary,
-                  busy:    _decisionBusy,
-                  onTap:   () => _openDecisionSheet(_selectedHole),
+              // ── The Wolf's call ──
+              //
+              // **Chips, not a gate.** This used to be a bar that opened a
+              // modal sheet, and until it was answered no score could be
+              // entered at all. The call can now be set on the tee, after
+              // the drives or after the scores — and if the hole fills up
+              // without one, the tray asks for it.
+              if (card != null)
+                WolfCallCard(
+                  card:  card,
+                  busy:  _decisionBusy,
+                  onCall: (decision, {int? partnerId}) => _setDecision(
+                      decision, partnerId: partnerId, hole: _selectedHole),
+                  onTeeOrder: (summary != null && holeInfo != null)
+                      ? () => _openTeeOrderSheet(_selectedHole)
+                      : null,
                 )
               else if (rp.loadingWolf)
                 const Center(child: Padding(
@@ -834,8 +915,12 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
                 summary:    summary,
                 holeInfo:   holeInfo,
                 decided:    holeInfo?.isDecided ?? false,
+                // **The keypad is the entry control when there is one.**
+                // Drawing the inline picker underneath it as well puts two
+                // full-width score pickers on one screen; it stays as the
+                // fallback for a hole whose card has not arrived.
+                showPicker: card == null,
                 editingPlayerId: _editingPlayerId,
-                onTapDecide: () => _openDecisionSheet(_selectedHole),
                 onScoreSelected: (m, s) => _handleScore(ctx, m, s, players),
                 onEditTap: (m) => setState(() => _editingPlayerId =
                     _editingPlayerId == m.player.id ? null : m.player.id),
@@ -850,10 +935,10 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
               // every other hole. The server decides which
               // holes are par 3s; it is walking the carry.
               ...greenieCards(rp, widget.foursomeId, _selectedHole),
-              if (holeInfo != null && holeInfo.isScored) ...[
-                const SizedBox(height: 12),
-                _WolfOutcomeLine(hole: holeInfo),
-              ],
+              // `_WolfOutcomeLine` was here — `Wolf wins the hole · pot 3`,
+              // directly above a tray whose two side rows say the same thing
+              // with the nets that decided it. Survivor's `_OutcomeLine` came
+              // off for the same reason.
               const SizedBox(height: 12),
 
               // ── Points grid ──
@@ -887,8 +972,119 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
     final prevHole = prevInOrder(order, _selectedHole);
     final nextHole = nextInOrder(order, _selectedHole);
 
+    // **The keypad, and the tray over the pager** — the same shape as
+    // Points, Sixes and Rabbit. While the tray is up it IS the bottom bar,
+    // because its forward button names the next hole's Wolf and finishes the
+    // round on the last one, and a generic pager can say neither. The pager
+    // still draws whenever the tray is not up, including while a result is
+    // on its way, so a slow card never strands a group.
+    final card = _card(rp);
+    if (card != null && !isComplete) {
+      // **The cursor decides.** A session always has a golfer under the
+      // keypad, so asking `_trayEditing` here as well is redundant — and
+      // redundant plus reachable is how a state nothing draws becomes
+      // reachable (Rabbit, 30 Oct 2026).
+      if (allDone && _editingPlayerId == null) {
+        return SafeArea(
+          child: WolfHoleTray(
+            card: card,
+            busy: _decisionBusy,
+            gettingResult: _pending[_selectedHole]?.isNotEmpty ?? false,
+            notSynced: rp.trayHoleUnsynced(_selectedHole),
+            picking: _trayEditing,
+            onEdit: () => setState(() {
+              _trayEditing = !_trayEditing;
+              _editingPlayerId = null;
+            }),
+            onCall: (decision, {int? partnerId}) => _setDecision(
+                decision, partnerId: partnerId, hole: _selectedHole),
+            onPrev: prevHole == null ? null : _retreat,
+            // **On the last hole the tray IS the way out**, because it
+            // covers the pager — a forward button that only advanced left
+            // the 18th a dead end (reported on Rabbit).
+            onNext: rp.submitting
+                ? null
+                : (nextHole == null
+                    ? () => _finishRound(ctx, players)
+                    : () => _saveAndAdvance(ctx, players)),
+          ),
+        );
+      }
+
+      final m = _keypadMember(players, scores);
+      if (m != null) {
+        return SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            FortyBallsKeypad(
+              playerName: m.player.name,
+              // HIS par, not the hole's — on mixed tees one golfer's 4 is
+              // another's 5.
+              par: sc.holeData(_selectedHole)
+                      ?.scoreFor(m.player.id)?.par ?? (card.par ?? 4),
+              // The strokes WOLF issues, off the low man — not the round's
+              // stored full-net allocation, which is a different number
+              // whenever the game is strokes-off.
+              strokes: card.playerById(m.player.id)?.strokes ?? 0,
+              netStyle: ctx.watch<SettingsProvider>().netStyleEntry,
+              onDone: _trayEditing
+                  ? () => setState(() {
+                        _trayEditing = false;
+                        _editingPlayerId = null;
+                      })
+                  : null,
+              onScore: (n) {
+                _handleScore(ctx, m, n, players);
+                // A TAP is a one-shot; only `Edit scores` is a session.
+                if (!_trayEditing) {
+                  setState(() => _editingPlayerId = null);
+                }
+                // **The hole is POSTED on its last score.** The tray reports
+                // the SERVER's figures, so a hole left unsent raises a tray
+                // with nothing in it — the bug Annandale and then Sixes both
+                // hit. `_handleScore` only posts when Auto-advance is on, so
+                // this covers the group that has it off.
+                final now = _effectiveScores(sc, _selectedHole);
+                if (n > 0 && _allScored(players, now)) {
+                  final hole = _selectedHole;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted || _selectedHole != hole) return;
+                    final r = context.read<RoundProvider>();
+                    if (r.submitting || (_pending[hole]?.isEmpty ?? true)) {
+                      return;
+                    }
+                    _saveHole(ctx, hole, players);
+                  });
+                }
+              },
+              // **`-1` is the clear, not `0`.** `_selectScore` reads −1 as
+              // "take this golfer out of pending" and anything else as a
+              // score, so passing 0 wrote a gross of ZERO: the row read as
+              // scored, the cursor moved on, and the hole counted complete
+              // with nothing in it (reported on Rabbit, 30 Oct 2026).
+              onClear: () => _selectScore(m, -1, _selectedHole),
+            ),
+            _pager(ctx, rp, players, allDone, isComplete, prevHole, nextHole),
+          ]),
+        );
+      }
+    }
+
     return SafeArea(
-      child: Padding(
+      child: _pager(ctx, rp, players, allDone, isComplete,
+                    prevHole, nextHole),
+    );
+  }
+
+  Widget _pager(
+    BuildContext ctx,
+    RoundProvider rp,
+    List<Membership> players,
+    bool allDone,
+    bool isComplete,
+    int? prevHole,
+    int? nextHole,
+  ) {
+    return Padding(
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
         child: Row(children: [
           Expanded(
@@ -923,7 +1119,6 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
                   ),
           ),
         ]),
-      ),
     );
   }
 }
@@ -943,115 +1138,18 @@ class _WolfScreenState extends State<WolfScreen> with SpotsCaptureMixin {
 
 // Wolf's copy already TOOK a `players` list and never read it — somebody set
 // out to fix exactly this and stopped at the parameter. It is read now.
-
-
 // ===========================================================================
-// Wolf decision — slim bar (always visible) + overlay sheet (the picker)
+// Wolf tee order — the overlay that used to pick the call
 // ===========================================================================
+//
+// `_WolfBar` and `_WolfChoice` were here: a slim bar that opened a modal
+// picker, which had to be answered before a single score could be entered.
+// The call is the chips above the scores now (`widgets/wolf_entry.dart`), so
+// what is left of the overlay is the one thing nothing else shows — the
+// hole’s reverse-honors tee order, and who gets a stroke on it.
 
-/// The choice returned by the decision overlay.
-class _WolfChoice {
-  final String kind;       // 'partner' | 'lone' | 'blind' | 'pending'
-  final int?   partnerId;
-  const _WolfChoice(this.kind, [this.partnerId]);
-}
-
-/// Slim, always-visible bar showing the Wolf and the current decision.
-/// Tapping it opens the decision overlay.  Keeps the play screen compact
-/// and visually consistent with the other score-entry screens.
-class _WolfBar extends StatelessWidget {
-  final WolfHole    hole;
-  final WolfSummary summary;
-  final bool        busy;
-  final VoidCallback onTap;
-
-  const _WolfBar({
-    required this.hole,
-    required this.summary,
-    required this.busy,
-    required this.onTap,
-  });
-
-  String _decisionLabel() {
-    switch (hole.decision) {
-      case 'lone':    return 'Lone Wolf ×${summary.loneWolfPoints}';
-      case 'blind':   return 'Blind Wolf ×${summary.blindWolfPoints}';
-      case 'partner': return 'Partner: ${hole.partnerShort ?? '?'}';
-      default:        return '';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme   = Theme.of(context);
-    final pending = !hole.isDecided;
-    final bg = pending
-        ? theme.colorScheme.primaryContainer.withOpacity(0.35)
-        : theme.colorScheme.surfaceContainerHighest.withOpacity(0.5);
-    final border = pending
-        ? theme.colorScheme.primary.withOpacity(0.6)
-        : theme.colorScheme.outline;
-
-    return InkWell(
-      onTap: busy ? null : onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: border),
-        ),
-        child: Row(children: [
-          Icon(Icons.pets, size: 18, color: theme.colorScheme.primary),
-          const SizedBox(width: 8),
-          // Left group flexes (and the Wolf name ellipsizes) first, so the
-          // decision chip on the right always shows in full.
-          Expanded(
-            child: Row(children: [
-              Text('Wolf: ', style: theme.textTheme.titleSmall),
-              Flexible(
-                child: Text(hole.wolfShort,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary)),
-              ),
-            ]),
-          ),
-          const SizedBox(width: 10),
-          if (pending) ...[
-            Text('Choose play',
-                style: theme.textTheme.labelLarge?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.bold)),
-            Icon(Icons.chevron_right, color: theme.colorScheme.primary),
-          ] else ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.secondaryContainer.withOpacity(0.6),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(_decisionLabel(),
-                  style: theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.onSecondaryContainer)),
-            ),
-            const SizedBox(width: 6),
-            Text('Change',
-                style: theme.textTheme.labelMedium
-                    ?.copyWith(color: theme.colorScheme.primary)),
-          ],
-        ]),
-      ),
-    );
-  }
-}
-
-/// The decision overlay: tee order + partner / Lone / Blind controls.
-/// It pops a [_WolfChoice] the instant a choice is made, so it dismisses
-/// itself — the caller persists the result.
+/// The hole's tee order — reverse honors, the Wolf last — and the strokes
+/// it turns on. Read-only: it picks nothing.
 class _WolfDecisionSheet extends StatelessWidget {
   final WolfHole    hole;
   final WolfSummary summary;
@@ -1102,18 +1200,11 @@ class _WolfDecisionSheet extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.primary)),
                 ),
-                const Spacer(),
-                if (decision != 'pending')
-                  TextButton(
-                    onPressed: () => Navigator.of(context)
-                        .pop(const _WolfChoice('pending')),
-                    child: const Text('Reset'),
-                  ),
               ]),
               const SizedBox(height: 2),
               Text(
                 'Tee order — worst on the last hole tees first, Wolf last.'
-                '${!_fourPlayer ? '  Go Lone or Blind.' : hole.partnerLocked ? '' : '  Take a partner, or go Lone / Blind.'}',
+                '${!_fourPlayer ? '  Go Lone or Blind.' : ''}',
                 style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant),
               ),
@@ -1139,33 +1230,13 @@ class _WolfDecisionSheet extends StatelessWidget {
 
               ...hole.teeOrder.map((s) => _teeRow(context, s, decision)),
 
-              const Divider(height: 22),
-
-              Row(children: [
-                Expanded(
-                  child: _choiceButton(context,
-                    label: 'Lone Wolf  ×${summary.loneWolfPoints}',
-                    selected: decision == 'lone',
-                    onTap: () => Navigator.of(context)
-                        .pop(const _WolfChoice('lone')),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _choiceButton(context,
-                    label: 'Blind Wolf  ×${summary.blindWolfPoints}',
-                    selected: decision == 'blind',
-                    onTap: (anyScored && decision != 'blind')
-                        ? null
-                        : () => Navigator.of(context)
-                            .pop(const _WolfChoice('blind')),
-                  ),
-                ),
-              ]),
+              // **No picker here.** The call is the chips above the scores,
+              // which can be set at any point in the hole; a second control
+              // that did the same thing differently is what they replace.
               if (anyScored && decision != 'blind')
                 Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text('Blind Wolf must be set before any scores.',
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text('Blind Wolf is called before anyone drives.',
                       style: theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant)),
                 ),
@@ -1243,80 +1314,17 @@ class _WolfDecisionSheet extends StatelessWidget {
             ],
           ]),
         ),
-        // Take-as-partner (4-player only, non-Wolf rows, not locked) — pops
-        // the sheet.  Hidden when the require-Lone/Blind rule locks this turn.
-        if (_fourPlayer && !isWolf && !hole.partnerLocked)
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              backgroundColor: isPartner
-                  ? theme.colorScheme.primaryContainer.withOpacity(0.5)
-                  : null,
-            ),
-            onPressed: () => Navigator.of(context)
-                .pop(_WolfChoice('partner', slot.playerId)),
-            child: Text(isPartner ? 'Partner ✓' : 'Take as partner',
-                style: const TextStyle(fontSize: 12)),
-          ),
+        // The "Take as partner" button was here. This sheet reports the tee
+        // order; the chips above the scores take the partner.
+        if (isPartner)
+          Text('partner',
+              style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w700)),
       ]),
     );
   }
 
-  Widget _choiceButton(BuildContext context,
-      {required String label, required bool selected, VoidCallback? onTap}) {
-    return selected
-        ? FilledButton(onPressed: onTap, child: Text(label,
-            textAlign: TextAlign.center, style: const TextStyle(fontSize: 13)))
-        : OutlinedButton(onPressed: onTap, child: Text(label,
-            textAlign: TextAlign.center, style: const TextStyle(fontSize: 13)));
-  }
-}
-
-/// Compact one-line outcome shown under the score card once a hole is
-/// decided + scored.
-class _WolfOutcomeLine extends StatelessWidget {
-  final WolfHole hole;
-  const _WolfOutcomeLine({required this.hole});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final side  = hole.winningSide;
-    String text;
-    Color color;
-    if (side == 'tie') {
-      text  = 'Halved — no points (push).';
-      color = theme.colorScheme.onSurfaceVariant;
-    } else if (side == 'wolf') {
-      text  = 'Wolf wins the hole  ·  pot ${_fmtPoints(hole.pot)}';
-      color = Colors.green.shade700;
-    } else if (side == 'opponents') {
-      text  = 'Wolf loses the hole  ·  pot ${_fmtPoints(hole.pot)}';
-      color = theme.colorScheme.error;
-    } else {
-      return const SizedBox.shrink();
-    }
-    final parts = hole.entries
-        .map((e) => '${e.shortName} ${e.points >= 0 ? '+' : ''}'
-            '${_fmtPoints(e.points)}')
-        .join('   ');
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.4)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(text, style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w600, color: color)),
-        const SizedBox(height: 2),
-        Text(parts, style: theme.textTheme.labelMedium),
-      ]),
-    );
-  }
 }
 
 // ===========================================================================
@@ -1366,8 +1374,12 @@ class _HoleScoreCard extends StatelessWidget {
   final WolfSummary?     summary;
   final WolfHole?        holeInfo;
   final bool             decided;
+
+  /// Draw the inline picker under the active row. False while the keypad is
+  /// up — two full-width score pickers on one screen is one too many — and
+  /// true as the fallback for a hole whose card has not arrived.
+  final bool             showPicker;
   final int?             editingPlayerId;   // scored row tapped for correction
-  final VoidCallback     onTapDecide;
   final void Function(Membership, int) onScoreSelected;
   final void Function(Membership) onEditTap;
   // Spots add-on (capture in this dedicated entry screen).
@@ -1387,8 +1399,8 @@ class _HoleScoreCard extends StatelessWidget {
     required this.summary,
     required this.holeInfo,
     required this.decided,
+    required this.showPicker,
     required this.editingPlayerId,
-    required this.onTapDecide,
     required this.onScoreSelected,
     required this.onEditTap,
     this.spotsActive   = false,
@@ -1438,7 +1450,13 @@ class _HoleScoreCard extends StatelessWidget {
     // The inline picker is suppressed until the Wolf has chosen
     // partner / lone / blind — scoring a hole before the Wolf acts would
     // record points against an undefined hole.
-    final effHot = decided ? hotSpotIdx : -1;
+    //
+    // **The call is no longer a gate.** `effHot` used to be forced to -1
+    // until the Wolf had decided, so a group could not enter a single score
+    // before somebody answered a modal sheet. The chips above this card can
+    // be answered at any point in the hole, and the tray asks for the call
+    // if the hole fills up without one.
+    final effHot = hotSpotIdx;
 
     return Card(
       elevation: 0,
@@ -1449,34 +1467,8 @@ class _HoleScoreCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (!decided)
-            InkWell(
-              onTap: onTapDecide,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.tertiaryContainer.withOpacity(0.35),
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(8)),
-                ),
-                child: Row(children: [
-                  Icon(Icons.touch_app_outlined, size: 18,
-                      color: theme.colorScheme.onTertiaryContainer),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Tap to set the Wolf’s play (partner, Lone, or Blind) '
-                      'before entering scores.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onTertiaryContainer),
-                    ),
-                  ),
-                  Icon(Icons.chevron_right, size: 18,
-                      color: theme.colorScheme.onTertiaryContainer),
-                ]),
-              ),
-            ),
+          // The "tap to set the Wolf's play before entering scores" banner
+          // was here. It described a rule this screen no longer has.
           if (decided)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
@@ -1509,7 +1501,6 @@ class _HoleScoreCard extends StatelessWidget {
                 isHot:     isHot,
                 strokes:   strokes,
                 role:      role,
-                dimmed:    !decided,
                 isEditing: isEditing,
                 onTap:     editable ? () => onEditTap(m) : null,
                 spotsActive:  spotsActive,
@@ -1517,7 +1508,7 @@ class _HoleScoreCard extends StatelessWidget {
                 onSpotsTap:   spotsActive ? () => onSpotsTap(m.player.id) : null,
                 spotsSheetOpen: spotsActive && spotsSheetOpen(m.player.id),
               );
-            if (isHot || isEditing) {
+            if ((isHot || isEditing) && showPicker) {
               // Active player + score entry share ONE team-coloured bounding
               // box with a white fill (matches the universal score-entry
               // screen). The picker inherits the same team colour + white fill.
@@ -1571,7 +1562,6 @@ class _PlayerRow extends StatelessWidget {
   final bool       isHot;
   final int        strokes;
   final String?    role;   // wolf | partner | opponent
-  final bool       dimmed; // greyed while awaiting the Wolf's decision
   final bool       isEditing;  // its inline picker is currently open
   final VoidCallback? onTap;
   final bool          spotsActive;
@@ -1586,7 +1576,6 @@ class _PlayerRow extends StatelessWidget {
     required this.isHot,
     required this.strokes,
     required this.role,
-    this.dimmed = false,
     this.isEditing = false,
     this.onTap,
     this.spotsActive = false,
@@ -1607,9 +1596,7 @@ class _PlayerRow extends StatelessWidget {
         : Border.all(color: teamColor ?? theme.colorScheme.outline,
             width: teamColor != null ? 1.5 : 1);
 
-    final inner = Opacity(
-      opacity: dimmed ? 0.45 : 1.0,
-      child: Container(
+    final inner = Container(
       decoration: BoxDecoration(
         // Inside the active bounding box the row is transparent so the box's
         // white fill shows through; inactive rows keep their team tint + the
@@ -1709,7 +1696,7 @@ class _PlayerRow extends StatelessWidget {
           ],
         ),
       ]),
-    ));
+    );
 
     if (onTap == null) return inner;
     return InkWell(onTap: onTap, child: inner);
