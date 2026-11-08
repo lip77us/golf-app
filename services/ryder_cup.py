@@ -602,7 +602,12 @@ def ryder_cup_summary(team_tournament: TeamTournament) -> dict:
                         'sex'           : p.sex,
                         'handicap_index': float(p.effective_handicap_index()),
                     }
-                    for p in t.players.all()
+                    # **By name.** A cup team is a ROSTER, not a side on
+                    # one card, so there is no membership order to follow —
+                    # and `TournamentTeam.players` has no ordering of its
+                    # own, so this list reshuffled between requests. A
+                    # roster a human reads is alphabetical.
+                    for p in t.players.order_by('name')
                 ],
             }
             for t in teams

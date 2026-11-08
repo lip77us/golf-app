@@ -1361,6 +1361,24 @@ def sixes_player_hole_strokes(foursome) -> dict:
 # Summary
 # ---------------------------------------------------------------------------
 
+def _side_block(team, rank, short) -> dict:
+    """One side of a Sixes match, its golfers in CARD order.
+
+    `Team.players` is a many-to-many with no ordering, so without the sort
+    a side's two names come back in whatever order the database likes —
+    `Sam + Mike` on one request and `Mike + Sam` on the next, from the same
+    rows. See `services.player_labels.card_order`.
+    """
+    from services.player_labels import in_card_order
+    players = in_card_order(team.players.all(), rank) if team else []
+    return {
+        'players'       : [p.name for p in players],
+        'players_short' : [short(p) for p in players],
+        'player_ids'    : [p.id for p in players],
+        'method'        : team.team_select_method if team else '',
+    }
+
+
 def sixes_summary(foursome) -> dict:
     """
     Return a summary dict:
@@ -1395,6 +1413,9 @@ def sixes_summary(foursome) -> dict:
         .prefetch_related('teams__players', 'hole_results__winning_team')
         .order_by('segment_number', 'start_hole')
     )
+
+    from services.player_labels import card_order
+    _rank = card_order(foursome)
 
     seg_out = []
     t1_total_wins = t2_total_wins = halves = 0
@@ -1470,11 +1491,14 @@ def sixes_summary(foursome) -> dict:
             winner_label = '—'
 
         if winning_team is not None and losing_team is not None:
+            # card-order-safe: both loops total money into a dict keyed by
+            # player id, emitted `sorted()` by amount then name.
             for p in winning_team.players.all():
                 if p.is_phantom:
                     continue
                 entry = money_totals.setdefault(p.id, {'player_id': p.id, 'name': p.name, 'amount': 0.0})
                 entry['amount'] += bet_unit
+            # card-order-safe: see above.
             for p in losing_team.players.all():
                 if p.is_phantom:
                     continue
@@ -1561,18 +1585,11 @@ def sixes_summary(foursome) -> dict:
             # for the match lines, which are read at arm's length on a
             # sunlit fairway: short_name is account-owned and editable, so
             # a group can make its own names as terse as it likes.
-            'team1'    : {
-                'players'       : [p.name for p in t1.players.all()] if t1 else [],
-                'players_short' : [_short(p) for p in t1.players.all()] if t1 else [],
-                'player_ids'    : [p.id for p in t1.players.all()] if t1 else [],
-                'method'        : t1.team_select_method if t1 else '',
-            },
-            'team2'    : {
-                'players'       : [p.name for p in t2.players.all()] if t2 else [],
-                'players_short' : [_short(p) for p in t2.players.all()] if t2 else [],
-                'player_ids'    : [p.id for p in t2.players.all()] if t2 else [],
-                'method'        : t2.team_select_method if t2 else '',
-            },
+            # **In CARD order** — `Team.players` has none of its own, so
+            # a side's two names came back in whatever order the database
+            # felt like. See `player_labels.card_order`.
+            'team1'    : _side_block(t1, _rank, _short),
+            'team2'    : _side_block(t2, _rank, _short),
             'holes'    : holes_out,
         })
 

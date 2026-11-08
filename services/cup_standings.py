@@ -47,6 +47,8 @@ GAME_MULTIPLIERS = {
 # Helpers
 # ---------------------------------------------------------------------------
 
+from services.player_labels import card_order, in_card_order
+
 def _seg_result_pts(result, pv):
     """Convert a segment result string → (t1_pts, t2_pts)."""
     if result == 'team1':  return pv, 0.0
@@ -436,12 +438,21 @@ def cup_round_live_summary(round_obj) -> dict | None:
             fs.memberships.filter(player__is_phantom=False)
             .values_list('player_id', flat=True)
         )
-        t1_names = [p.short_name for p in (t1.players.all() if t1 else []) if p.pk in fs_pids]
-        t2_names = [p.short_name for p in (t2.players.all() if t2 else []) if p.pk in fs_pids]
+        # **In CARD order** — `Team.players` has none of its own, so a
+        # side's names came back in whatever order the database felt like,
+        # and these four lists are what the cup board calls each team. See
+        # `player_labels.card_order`.
+        _rank = card_order(fs)
+        _t1 = [p for p in in_card_order(t1.players.all() if t1 else [], _rank)
+               if p.pk in fs_pids]
+        _t2 = [p for p in in_card_order(t2.players.all() if t2 else [], _rank)
+               if p.pk in fs_pids]
+        t1_names = [p.short_name for p in _t1]
+        t2_names = [p.short_name for p in _t2]
         # Full names for the cup-board card header (the card names each team
         # once up top in full, then uses shorts in the segment rows).
-        t1_names_full = [p.name for p in (t1.players.all() if t1 else []) if p.pk in fs_pids]
-        t2_names_full = [p.name for p in (t2.players.all() if t2 else []) if p.pk in fs_pids]
+        t1_names_full = [p.name for p in _t1]
+        t2_names_full = [p.name for p in _t2]
 
         if gtype == GameType.NASSAU:
             from services.nassau import nassau_summary as _ns

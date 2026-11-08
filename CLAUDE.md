@@ -11203,3 +11203,68 @@ needed bounding to `_keypadRound`'s own body.
 itself, which keeps the board (the grid, the exposure ladder, the swings)
 and is still reachable from the hub. Whether it should now be a
 leaderboard tab rather than a screen is its own question.
+## The `team.players` sweep — one writer, and a guard that catches both shapes
+
+`Team.players` is a many-to-many with **no ordering**, so every game that
+reads a side's golfers off it got them in whatever order the database liked.
+Four separate landings before anyone looked for the pattern:
+
+| | found by |
+|---|---|
+| Sixes' match-2 anchor | a test that went red when unrelated pks shifted |
+| `nassau_summary` | a fixture regenerating differently against unchanged code |
+| `fourball_summary` | a lock-screen test failing only under `--parallel 4` |
+| `sixes_summary`, `vegas_summary`, `cup_standings` | this sweep |
+
+**An unstable order is invisible to a test whose fixture agrees with it**,
+which is why three of the four were accidents. It also hides behind
+`TypeError: cannot pickle 'traceback' object`, the parallel runner's way of
+reporting an assertion it cannot send home — that names no test and no file.
+
+### `services/player_labels.card_order` / `in_card_order`
+
+The one place the rule lives. `FoursomeMembership.Meta.ordering` is `['id']`,
+so the rank is creation order — which is where the golfers sit on the card
+everywhere else in the app. An unknown id sorts **last**, so a stray cannot
+silently take the top of a side.
+
+Swept onto it: `nassau`, `fourball`, `vegas`, `sixes` (its team blocks became
+`_side_block`) and `cup_standings`' four cup-board name lists.
+
+### A cup team is a ROSTER, not a side
+
+`services/ryder_cup.py` and `api/views.py` both serialise a `TournamentTeam`'s
+twelve golfers, and `TournamentTeam` has no foursome to take an order from.
+Those read `.order_by('name')` now — a roster a human reads is alphabetical,
+and the alternative was a list that reshuffled between requests.
+
+### What is NOT swept, and why the guard names files
+
+Of 70 reads, most are id sets, membership tests or money totalled into a dict
+keyed by player id. **Those genuinely do not care**, so the guard does not ban
+the call — it looks for a NAME read near one, which is the only shape where
+the order reaches a reader. A site that is safe opts out with
+`# card-order-safe:` **and a reason**, because an exemption should be an
+argument rather than a silence.
+
+Two things the guard had to learn, each after it missed a real site:
+
+- **It scans both directions.** A comprehension reads bottom-up in source, so
+  `[{'name': p.name, …} for p in t.players.all()]` puts the name ABOVE the
+  unordered read — and a forward-only window walked straight past both cup
+  rosters.
+- **It catches the two-step shape**, `players = t.players.all()` followed by
+  `[p.name for p in players]`, not just the one-liner. The first version
+  caught only the one-liner, and a mutation proved it.
+
+It is a heuristic and says so: a name taken twenty lines later, or through a
+second variable, gets past it. What it catches is the two shapes this bug has
+actually taken, which is the point of a guard written after the fourth.
+
+Tests: `scoring/tests/test_card_order.py` (8) — the rule itself, one per game
+whose summary names a side, and the source scan. **Every fixture forces
+membership order and pk order apart** (one golfer's membership is recreated
+so its id is highest while his player pk stays lowest), because a fixture
+whose two orderings agree cannot pin which one is read — which is exactly how
+the Sixes anchor test passed against its own bug. All four games were
+mutation-checked, and so were both shapes the scan exists for.

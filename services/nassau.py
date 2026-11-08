@@ -1605,18 +1605,10 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
             in_play = round_half_up(phcp * npct / 100)
         phcp_by_pid[m.player_id] = in_play
 
-    # **A side's golfers come back in the order they sit on the card.**
-    # `team.players` is a many-to-many with no ordering, so the database
-    # returned the pair in whatever order it liked — `Sam + Mike` on one
-    # request and `Mike + Sam` on the next, from the same rows. That is the
-    # name of a SIDE, on the board, the score-entry tray, the side headers
-    # and the money rows, reordering under the reader. Same shape as the
-    # Sixes anchor, which took its anchor from set iteration.
-    #
-    # `FoursomeMembership.Meta.ordering` is `['id']`, so this is creation
-    # order — which is the order the golfers are listed everywhere else.
-    _mem_rank = {m.player_id: i
-                 for i, m in enumerate(foursome.memberships.all())}
+    # **In CARD order**, because `Team.players` has none of its own — see
+    # `player_labels.card_order`, which is the one place that rule lives.
+    from services.player_labels import card_order, in_card_order
+    _mem_rank = card_order(foursome)
 
     def _team_players(team_num):
         if team_num not in teams:
@@ -1630,8 +1622,7 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
                 'course_handicap': ch_of.get(p.id),
                 'handicap_index' : idx_of.get(p.id, ''),
             }
-            for p in sorted(teams[team_num].players.all(),
-                            key=lambda p: _mem_rank.get(p.id, 1 << 30))
+            for p in in_card_order(teams[team_num].players.all(), _mem_rank)
         ]
 
     # Scorecard grid for the leaderboard card (Nassau has no scorecard otherwise).

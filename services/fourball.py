@@ -355,19 +355,13 @@ def fourball_summary(foursome) -> dict | None:
         except ValueError:
             _holes_to_play = max(0, 18 - game.finished_on_hole)
 
-    # **A side's golfers come back in the order they sit on the card.**
-    # `team.players` is a many-to-many with no ordering, so the database
-    # returned the pair in whatever order it liked — `Dave & Paul` on one
-    # request and `Paul & Dave` on the next, from the same rows. The same
-    # shape `nassau_summary` had, found the same way: a test that passed
-    # alone and failed under `--parallel`.
-    _mem_rank = {m.player_id: i
-                 for i, m in enumerate(foursome.memberships.all())}
+    # **In CARD order**, because `Team.players` has none of its own — see
+    # `player_labels.card_order`, which is the one place that rule lives.
+    from services.player_labels import card_order, in_card_order
+    _mem_rank = card_order(foursome)
 
     def _team_block(team):
-        players = sorted(team.players.all(),
-                         key=lambda p: _mem_rank.get(p.id, 1 << 30)) \
-            if team else []
+        players = in_card_order(team.players.all(), _mem_rank) if team else []
         return {
             'players'    : [p.name for p in players],
             'short_names': [p.short_name for p in players],
@@ -397,6 +391,8 @@ def fourball_summary(foursome) -> dict | None:
     for tn, team in ((1, t1), (2, t2)):
         if not team:
             continue
+        # card-order-safe: keyed by player id and emitted `sorted()` below,
+        # so the iteration order never reaches a reader.
         for p in team.players.all():
             if p.is_phantom:
                 continue
@@ -405,9 +401,12 @@ def fourball_summary(foursome) -> dict | None:
     if game.result in ('team1', 'team2'):
         win_team  = t1 if game.result == 'team1' else t2
         lose_team = t2 if game.result == 'team1' else t1
+        # card-order-safe: both loops add into the dict above, which is
+        # keyed by player id and emitted `sorted()`.
         for p in (win_team.players.all() if win_team else []):
             if not p.is_phantom:
                 money[p.id]['amount'] += bet_amount
+        # card-order-safe: see above.
         for p in (lose_team.players.all() if lose_team else []):
             if not p.is_phantom:
                 money[p.id]['amount'] -= bet_amount
@@ -425,6 +424,8 @@ def fourball_summary(foursome) -> dict | None:
     team_of = {}
     for _tn, _tm in teams.items():
         if _tm:
+            # card-order-safe: a lookup keyed by player id. The list it
+            # feeds is built from `real_members`, which IS card order.
             for _p in _tm.players.all():
                 team_of[_p.id] = _tn
     players_out = [

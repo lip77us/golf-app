@@ -38,3 +38,41 @@ def first_names(by_pid: dict) -> dict:
         out[pid] = f'{f} {parts[1][0]}' if len(parts) > 1 else (
             by_pid[pid].short_name or f)
     return out
+
+
+# ---------------------------------------------------------------------------
+# Card order
+# ---------------------------------------------------------------------------
+
+#: A golfer not on this foursome's card sorts last rather than first, so a
+#: stray id cannot silently take the top of a side.
+_LAST = 1 << 30
+
+
+def card_order(foursome) -> dict:
+    """``{player_id: rank}`` — where each golfer sits on the CARD.
+
+    **Because `Team.players` is a many-to-many with no ordering.** Every
+    team-based game reads a side's golfers off that relation, and the
+    database returns them in whatever order it likes: `Sam + Mike` on one
+    request and `Mike + Sam` on the next, from the same rows. That is the
+    name of a SIDE, reordering under the reader on the board, the tray, the
+    side headers and the money rows.
+
+    It has now been found three times — the Sixes anchor took its anchor
+    from set iteration, `nassau_summary` and `fourball_summary` each shipped
+    it, and the second two were found only by a fixture regenerating
+    differently and a test failing under `--parallel`. An unstable order is
+    invisible to a test whose fixture agrees with it, which is why this is
+    one function rather than four sorts.
+
+    `FoursomeMembership.Meta.ordering` is `['id']`, so this is creation
+    order — the order the golfers are listed everywhere else in the app.
+    """
+    return {m.player_id: i
+            for i, m in enumerate(foursome.memberships.all())}
+
+
+def in_card_order(players, rank: dict) -> list:
+    """`players` sorted by [card_order]'s rank. See its docstring."""
+    return sorted(players, key=lambda p: rank.get(p.id, _LAST))

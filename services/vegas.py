@@ -364,12 +364,18 @@ def vegas_summary(foursome) -> dict:
 
     team_objs = {t.team_number: t for t in game.teams.prefetch_related('players')}
 
+    from services.player_labels import card_order, in_card_order
+    _rank = card_order(foursome)
+
     def team_players(n):
         t = team_objs.get(n)
         if not t:
             return []
+        # **In CARD order** — `Team.players` has none of its own, so a
+        # side's two names came back in whatever order the database felt
+        # like. See `player_labels.card_order`.
         return [{'player_id': p.id, 'name': p.name, 'short_name': p.short_name}
-                for p in t.players.all()]
+                for p in in_card_order(t.players.all(), _rank)]
 
     holes = list(game.hole_results.all())
     t1_points = sum(h.points for h in holes if h.winner == 'team1')

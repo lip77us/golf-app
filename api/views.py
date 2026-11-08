@@ -13743,7 +13743,11 @@ def _team_roster(team: TournamentTeam) -> dict:
         'short_code' : team.short_code,
         'players'    : [
             {'player_id': p.id, 'name': p.name, 'short_name': p.short_name}
-            for p in team.players.all()
+            # **By name.** A cup team is a ROSTER, not a side on one card,
+            # so there is no membership order to follow — and
+            # `TournamentTeam.players` has none of its own, so this list
+            # reshuffled between requests.
+            for p in team.players.order_by('name')
         ],
     }
 
