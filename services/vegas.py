@@ -4,8 +4,9 @@ services/vegas.py — Las Vegas (2v2) casual game.
 Each hole, a team's "number" is its two NET scores with the low score as the
 tens digit and the high as the ones (each digit capped at 9). The lower number
 wins the hole and scores the *difference* between the two numbers. A gross
-birdie either flips the opponents' digits or multiplies the points (per setup),
-and tied holes can carry. Settlement is 1-to-1 per player: each player's money
+birdie either flips the opponents' digits or multiplies the points (per setup)
+— and under `flip`, birdies on BOTH sides cancel, so nothing flips. Tied holes
+can carry. Settlement is 1-to-1 per player: each player's money
 is the running point differential × bet_unit (winners +, losers −), clipped by
 the optional per-side loss cap.
 
@@ -197,6 +198,24 @@ def _flip(num: int) -> int:
     return (num % 10) * 10 + (num // 10)
 
 
+def _best_under(gross_index, par_by_hole, player_ids, hole) -> int:
+    """How far under par a side's BEST ball was on [hole], or 0.
+
+    Module-level because the score-entry card has to ask the same question
+    the calculator does — whether a side birdied — and a second copy of this
+    would be a second opinion about whether a flip happened.
+    """
+    par = par_by_hole.get(hole)
+    if par is None:
+        return 0
+    best = 0
+    for pid in player_ids:
+        gross = gross_index.get(pid, {}).get(hole)
+        if gross is not None and (par - gross) > best:
+            best = par - gross
+    return best
+
+
 # ---------------------------------------------------------------------------
 # Calculate
 # ---------------------------------------------------------------------------
@@ -225,17 +244,6 @@ def calculate_vegas(foursome) -> list:
     gross_index = build_score_index(foursome, handicap_mode=HandicapMode.GROSS)
     par_by_hole = _par_by_hole(foursome)
 
-    def best_under(player_ids, hole):
-        par = par_by_hole.get(hole)
-        if par is None:
-            return 0
-        best = 0
-        for pid in player_ids:
-            gross = gross_index.get(pid, {}).get(hole)
-            if gross is not None and (par - gross) > best:
-                best = par - gross
-        return best
-
     rows = []
     carry = 0
     scored = 0
@@ -261,28 +269,40 @@ def calculate_vegas(foursome) -> list:
         # cap on the hole it held — the one place `49` reads as a ten.
         cap1 = max(n1a, n1b) > 9
         cap2 = max(n2a, n2b) > 9
-        birdie1 = best_under(t1_ids, hole) >= 1
-        birdie2 = best_under(t2_ids, hole) >= 1
+        birdie1 = _best_under(gross_index, par_by_hole, t1_ids, hole) >= 1
+        birdie2 = _best_under(gross_index, par_by_hole, t2_ids, hole) >= 1
         multiplier = 1
         flip1 = flip2 = False
 
         if game.birdie_mode == 'flip':
-            # Any team's birdie flips the OTHER team's number, before deciding.
-            if birdie1:
-                num2 = _flip(num2)
-                flip2 = True
-            if birdie2:
-                num1 = _flip(num1)
-                flip1 = True
+            # A team's birdie flips the OTHER team's number, before deciding —
+            # but **birdies CANCEL**: when both sides make one, nothing flips.
+            #
+            # Paul, 8 Nov 2026, settling the question
+            # `~/Downloads/handoff-vegas-score-entry` asks. This engine used
+            # to apply each flip independently, which is a different outcome
+            # rather than a wash: 35 against 38 with birdies both ways became
+            # 53 against 83, turning a 3-point hole into a 30-point one. The
+            # published guide's own reasoning for the old rule — "it usually
+            # leaves the hole roughly where it started, which is the point,
+            # you matched them" — is only true when the two sides happen to
+            # have the same digit spread, and cancelling gets there directly.
+            if birdie1 != birdie2:
+                if birdie1:
+                    num2 = _flip(num2)
+                    flip2 = True
+                else:
+                    num1 = _flip(num1)
+                    flip1 = True
 
         if num1 < num2:
             winner, diff = 'team1', num2 - num1
             if game.birdie_mode == 'multiplier':
-                multiplier = 1 + best_under(t1_ids, hole)
+                multiplier = 1 + _best_under(gross_index, par_by_hole, t1_ids, hole)
         elif num2 < num1:
             winner, diff = 'team2', num1 - num2
             if game.birdie_mode == 'multiplier':
-                multiplier = 1 + best_under(t2_ids, hole)
+                multiplier = 1 + _best_under(gross_index, par_by_hole, t2_ids, hole)
         else:
             winner, diff = 'halved', 0
 
@@ -485,11 +505,9 @@ def vegas_hole_card(foursome, hole: int) -> dict:
     **It renders the engine.**  The handoff lists three rules to confirm, and
     this is what `calculate_vegas` does with them:
 
-    * **Birdies on both sides do NOT cancel — both numbers flip.**  The
-      handoff's prose says nothing flips; the engine applies each birdie's
-      flip to the opposing number independently, and the two are different
-      outcomes (45 v 57 flips to 54 v 75, a margin of 21 where cancelling
-      leaves 12).  Reported as the engine plays it, with both sides tagged.
+    * **Birdies on both sides CANCEL**, so nothing flips (Paul, 8 Nov 2026).
+      The card says so in `note`, because a group that made two birdies and
+      saw no flip would otherwise think the app had missed one.
     * **Carries stack.**  A second tie makes the next decided hole ×3.
     * **The 9 cap is applied before the flip**, inside `_team_number` — which
       is what the reference does too.
@@ -655,17 +673,15 @@ def vegas_hole_card(foursome, hole: int) -> dict:
 
     # What this hole was worth, and what a tie makes the next one worth.
     carry_in = entry.get('carry') or 0
-    note = ''
+    bits = []
     tie_note = ''
     if winner in ('team1', 'team2'):
         mult = (carry_in + 1) if game.carryover else 1
-        bits = []
         if mult > 1:
             bits.append(f'×{mult} carried')
         if (entry.get('multiplier') or 1) > 1:
             bits.append(f"×{entry['multiplier']} birdie")
-        note = ' · '.join(bits)
-    elif winner == 'halved':
+    if winner == 'halved':
         nxt = order[pos + 1] if pos + 1 < len(order) else None
         if not game.carryover:
             tie_note = 'no points'
@@ -675,6 +691,19 @@ def vegas_hole_card(foursome, hole: int) -> dict:
         else:
             tie_note = (f'hole {nxt} pays ×{carry_in + 1}' if nxt
                         else 'nothing left to carry into')
+
+    # **Birdies cancelled**, which is a thing that HAPPENED and leaves no
+    # other mark: both flips are suppressed, so without this a group that
+    # made two birdies and saw no flip would think the app had missed one.
+    # The birdie test is the calculator's own `_best_under`, not a second
+    # reading of the same scores.
+    if game.birdie_mode == 'flip' and hole_complete:
+        par_by_hole = _par_by_hole(foursome)
+        gross_index = build_score_index(foursome, handicap_mode=HandicapMode.GROSS)
+        if all(_best_under(gross_index, par_by_hole, side_ids[n], hole) >= 1
+               for n in (1, 2)):
+            bits.append('birdies cancelled')
+    note = ' · '.join(bits)
 
     round_over = hole_complete and pos == len(order) - 1
     winner_box = None

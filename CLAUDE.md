@@ -10426,18 +10426,42 @@ Wolf's or Rabbit's.
 
 | it asks | `calculate_vegas` |
 |---|---|
-| do birdies on both sides cancel? | **No — both numbers flip.** |
+| do birdies on both sides cancel? | **Yes** — as of 8 Nov 2026, see below. |
 | do carries stack? | **Yes.** A second tie makes the next decided hole ×3. |
 | is the flip checked before or after the 9 cap? | **After**, inside `_team_number` — the same order the reference uses. |
 
-**The first is a real divergence and is NOT quietly resolved.** The handoff's
-prose says "if both sides make a birdie, nothing flips"; the engine applies
-each birdie's flip to the opposing number independently. They are different
-money, not a wash — 45 v 57 with birdies both ways becomes 54 v 75, a margin
-of 21, where cancelling leaves 12. The card reports what the engine does,
-with both sides tagged `FLIPPED`, and
-`test_birdies_on_both_sides_do_NOT_cancel` states it in as many words. **A
-rules question for Paul, not a code change**: that engine has been played.
+#### Birdies cancel — the rule changed, it did not merely get confirmed
+
+The engine used to apply **each** birdie's flip to the opposing number
+independently, which the card reported faithfully and this note recorded as
+a rules question. **Paul settled it on 8 Nov 2026: both birdies cancel,
+nothing flips.**
+
+It is not a wash either way — the gap only survives when the two sides
+happen to have the same digit spread, which is where the old reading looked
+harmless. When they differ it is large: 35 against 38 became **53 against
+83**, turning a 3-point hole into a 30-point one.
+
+**The published guide had to move with it**, and it was already wrong about
+something: `website/games/las-vegas/index.html` said *"Both numbers flip…
+it usually leaves the hole roughly where it started — which is the point.
+You matched them."* The reasoning is right and the rule it attached to was
+not; the card now says they cancel and keeps the reason. **That page is
+edited but not deployed** — `cd website && ./build-zip.sh && npx wrangler
+deploy`.
+
+`_best_under` was lifted to module level in the same change, because the
+score-entry card has to ask the same question the calculator does — whether
+a side birdied — to say `birdies cancelled`, and a second copy of that walk
+would be a second opinion about whether a flip happened. **The card says
+so** because cancelling leaves no other mark: both flips are suppressed, so
+a group that made two birdies and saw none would think the app had missed
+one.
+
+**Still true of the guide, and NOT fixed here:** its Eagle card describes
+*"flip, then double the whole hole"*, which is a house rule the app cannot
+play — `birdie_mode` is flip OR multiplier, never both. Left alone rather
+than rewritten under cover of a different decision.
 
 ### `vegas_hole_card(foursome, hole)`
 

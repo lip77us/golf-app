@@ -11,9 +11,9 @@ with the group off the low man, so Dave (4 under the low man) takes no stroke
 on it while Sam (7) and Lee (10) each take one — the handoff's own
 allocation, and the thing a hand-written fixture would quietly lose.
 
-It also answers the three rules the handoff asks to confirm. Two agree with
-what it drew; **the both-birdie case does not**, and that is recorded rather
-than papered over.
+It also covers the three rules the handoff asks to confirm — including the
+both-birdie case, which Paul settled on 8 Nov 2026 the way the handoff drew
+it: they cancel, and nothing flips.
 """
 from decimal import Decimal
 
@@ -172,27 +172,47 @@ class TheHandoffsWorkedExamplesTests(_VegasCardBase):
 class TheThreeRulesTheHandoffAsksAboutTests(_VegasCardBase):
     """Its own "to confirm with the engine" list, answered."""
 
-    def test_birdies_on_both_sides_do_NOT_cancel(self):
-        """**A real divergence from the handoff's prose**, recorded here
-        rather than silently resolved either way.
-
-        It says "if both sides make a birdie, nothing flips". The engine
-        applies each birdie's flip to the OPPOSING number independently, so
-        both flip — and the two readings are different money, not a wash:
-        here 35 v 65 is a margin of 30 where cancelling leaves 53 v 56, a
-        margin of 3.
-        """
+    def test_birdies_on_both_sides_cancel(self):
+        """The handoff's own reading, confirmed by Paul on 8 Nov 2026 and
+        now the engine's: when both sides birdie, nothing flips."""
         self._setup()
-        # Paul 3 (birdie) and Sam 3 (net 2, a gross birdie too).
+        # Paul 3 (birdie) and Sam 3 (a gross birdie too — the rule reads
+        # GROSS, so his stroke is irrelevant to whether it is one).
         self._score(HOLE, paul=3, dave=5, sam=3, lee=6)
         card = self._card()
         s1, s2 = card['sides']
-        self.assertTrue(s1['flipped'])
-        self.assertTrue(s2['flipped'])
-        self.assertEqual(s1['raw'], 35)
-        self.assertEqual(s1['number'], 53)
-        self.assertEqual(s2['raw'], 25)
-        self.assertEqual(s2['number'], 52)
+        self.assertFalse(s1['flipped'])
+        self.assertFalse(s2['flipped'])
+        self.assertEqual(s1['number'], 35)
+        self.assertEqual(s2['number'], 25)
+        self.assertEqual(card['winner'], 'team2')
+        self.assertEqual(card['points'], 10)
+
+    def test_the_card_says_the_birdies_cancelled(self):
+        """It leaves no other mark — both flips are suppressed — so a group
+        that made two birdies and saw no flip would think the app had missed
+        one."""
+        self._setup()
+        self._score(HOLE, paul=3, dave=5, sam=3, lee=6)
+        self.assertEqual(self._card()['note'], 'birdies cancelled')
+
+    def test_one_birdie_says_nothing_of_the_kind(self):
+        self._setup()
+        self._score(HOLE, paul=3, dave=5, sam=6, lee=7)
+        card = self._card()
+        self.assertEqual(card['note'], '')
+        self.assertTrue(card['sides'][1]['flipped'])
+
+    def test_it_is_a_flip_rule_and_not_a_multiplier_one(self):
+        # Under `multiplier` a birdie changes what the hole is WORTH rather
+        # than what the numbers are, so there is nothing to cancel — the
+        # winner's own birdie still doubles it.
+        self._setup(birdie_mode='multiplier')
+        self._score(HOLE, paul=3, dave=5, sam=3, lee=6)
+        card = self._card()
+        self.assertNotIn('cancelled', card['note'])
+        self.assertEqual(card['note'], '×2 birdie')
+        self.assertEqual([s['number'] for s in card['sides']], [35, 25])
 
     def test_carries_stack(self):
         self._setup(gross=True, carryover=True)

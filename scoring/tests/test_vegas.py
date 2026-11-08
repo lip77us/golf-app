@@ -2,7 +2,8 @@
 scoring/tests/test_vegas.py
 ---------------------------
 Las Vegas (2v2) engine: team numbers (low=tens/high=ones, capped at 9), lower
-number wins by the difference, flip vs multiplier birdie rules, carryover,
+number wins by the difference, flip vs multiplier birdie rules (and the
+birdies-cancel rule), carryover,
 net-double-bogey cap, and 1-to-1-per-player settlement with a loss cap.
 
 Players are handicap 0 so net == gross and the digits are controlled directly
@@ -77,14 +78,38 @@ class VegasFlipTests(VegasBase):
         self.assertEqual(h['winner'], 'team2')
         self.assertEqual(h['points'], 54 - 36)   # 18
 
-    def test_both_birdie_both_flip_can_swing(self):
+    def test_birdies_on_both_sides_cancel(self):
+        """Paul, 8 Nov 2026, settling the question the score-entry handoff
+        asks.
+
+        This used to apply each flip independently — and that is a different
+        outcome rather than a wash, because the gap only survives when the
+        two sides happen to have the same digit spread. Here they do not:
+        35 against 38 became 53 against 83, turning a 3-point hole into a
+        30-point one.
+        """
         self._setup(birdie_mode='flip')
-        # A eagles (gross 2), C birdies (gross 3). Base: t1 24 < t2 35 → t1.
-        # Both birdie → both flip: t1 42, t2 53 → still t1, by 11. (Order kept.)
+        # A birdies (gross 3 on a par 4) and C birdies too.
+        self._play(1, 3, 5, 3, 8)
+        h = self._hole(1)
+        self.assertEqual((h['team1_number'], h['team2_number']), (35, 38))
+        self.assertEqual(h['winner'], 'team1')
+        self.assertEqual(h['points'], 3)
+
+    def test_one_birdie_still_flips(self):
+        # The same shape with only A's birdie: t2's 48 reverses to 84.
+        self._setup(birdie_mode='flip')
+        self._play(1, 3, 5, 4, 8)
+        h = self._hole(1)
+        self.assertEqual((h['team1_number'], h['team2_number']), (35, 84))
+        self.assertEqual(h['points'], 49)
+
+    def test_an_eagle_against_a_birdie_cancels_too(self):
+        # Better than a birdie is still a birdie for this rule.
+        self._setup(birdie_mode='flip')
         self._play(1, 2, 4, 3, 5)
         h = self._hole(1)
-        self.assertEqual((h['team1_number'], h['team2_number']), (42, 53))
-        self.assertEqual(h['winner'], 'team1')
+        self.assertEqual((h['team1_number'], h['team2_number']), (24, 35))
         self.assertEqual(h['points'], 11)
 
     def test_three_on_a_par_three_is_par_not_a_birdie_no_flip(self):
