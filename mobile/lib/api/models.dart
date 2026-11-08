@@ -5671,7 +5671,17 @@ class ReceiptTicket {
       paysLabel: (payload['paysLabel'] as String?)?.trim().isNotEmpty == true
           ? payload['paysLabel'] as String
           : 'Simplest way to settle',
-      games: ((payload['games'] as List?) ?? const [])
+      // §3: `webGames` is the long form and falls back to `games`.
+      //
+      // Round over gets it, which is what §1 means by "the full ticket" and
+      // what the SERVER already does: `receipt_ticket.ticket_html` branches
+      // on `image` alone, so its `roundover` mode renders `webGames` too.
+      // This read was the only place the two surfaces disagreed — the app
+      // showed "Settled 5 of 5" while the link it texts out listed every
+      // match. Only the 1080x1350 preview is capped, and that cap is
+      // enforced server-side where the image is drawn.
+      games: ((payload['webGames'] as List?) ??
+              (payload['games'] as List?) ?? const [])
           .map((e) =>
               ReceiptSection.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList(),

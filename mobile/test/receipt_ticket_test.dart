@@ -53,6 +53,55 @@ ReceiptTicket _ticket({
     );
 
 void main() {
+  group('§3 the long form', () {
+    // The app and the link it texts out must not describe the same round
+    // differently. `receipt_ticket.ticket_html` branches on `image` alone, so
+    // its `roundover` mode already renders `webGames`; this read was the only
+    // place the two disagreed — the app said "Settled 5 of 5" while the page
+    // listed every match.
+    // The wire shape is the leaderboard's `{code, url, payload}` wrapper,
+    // not the payload on its own — which is what `_receipt_block` sends.
+    ReceiptTicket parse(Map<String, dynamic> extra) =>
+        ReceiptTicket.fromJson(<String, dynamic>{
+          'code': 'ABC12345',
+          'url': 'https://halved.golf/r/ABC12345/',
+          'payload': <String, dynamic>{
+            'code': 'ABC12345',
+            'title': 'Sixes',
+            'sub': 'Tilden Park GC · Nov 7 · \$3 a match',
+            'nets': <dynamic>[],
+            'pays': <dynamic>[],
+            'games': [
+              {'label': 'The games',
+               'rows': [['Sixes', 'Settled 5 of 5']]},
+            ],
+            ...extra,
+          },
+        });
+
+    test('webGames wins when the payload carries it', () {
+      final t = parse({
+        'webGames': [
+          {'label': 'The games',
+           'rows': [['Sixes', 'Settled 5 of 5']]},
+          {'label': 'Sixes · the matches',
+           'rows': [['1 · holes 1–4', 'Paul & Jim won 3&2']]},
+        ],
+      });
+      expect(t.games.map((s) => s.label),
+          ['The games', 'Sixes · the matches']);
+      expect(t.games.last.rows.first, ['1 · holes 1–4', 'Paul & Jim won 3&2']);
+    });
+
+    test('it falls back to games when there is no long form', () {
+      // Every receipt settled before the detail existed, and every game that
+      // has not registered a formatter.
+      final t = parse(const {});
+      expect(t.games.map((s) => s.label), ['The games']);
+      expect(t.games.single.rows.single, ['Sixes', 'Settled 5 of 5']);
+    });
+  });
+
   group('§2.4 money', () {
     test('the ticket signs a gain and never a level figure', () {
       // "+$26, −$18 … $0 when level" — level is a direction, not a gain.
