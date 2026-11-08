@@ -1704,6 +1704,42 @@ def sixes_summary(foursome) -> dict:
     }
 
 
+def match_result_text(seg: dict) -> str:
+    """How one Sixes match finished: "Paul & Jim won 3&2", "Halved", "Voided".
+
+    Empty while the match is still in play or has not started, so a caller can
+    test it.
+
+    **One writer.**  This was inlined in `sixes_hole_card` for its
+    `previous_match` block, and the receipt's per-match detail needs the same
+    sentence — a second copy is how the band and the receipt come to disagree
+    about a close-out, the way four `gross_total` traversals did.
+
+    Takes a SUMMARY segment, so the holes it reads are the ones the match
+    actually played (`_played_holes` has already narrowed them) rather than
+    its scheduled range, which overruns after an early finish.
+    """
+    if seg.get('is_void'):
+        return 'Voided'
+    status = (seg.get('status') or '').lower()
+    if status not in ('complete', 'halved'):
+        return ''
+    if seg.get('winner') == 'Halved':
+        return 'Halved'
+    side = seg['team1'] if seg.get('winner') == 'Team 1' else seg['team2']
+    names = ' & '.join(side.get('players_short') or [])
+    played = seg.get('holes') or []
+    if not played:
+        return names and f'{names} won' or ''
+    margin = abs(played[-1].get('margin') or 0)
+    # A match that ran to its last hole is won "1 UP"; one that closed early
+    # keeps the close-out notation it was won by.  `N&0` is not a thing
+    # anybody says, which is the same rule `margin_text` states below.
+    left = max((seg.get('num_holes') or len(played)) - len(played), 0)
+    return (f'{names} won {margin}&{left}' if left
+            else f'{names} won {margin} UP')
+
+
 def _nine_of(hole: int) -> str:
     return 'front nine' if hole <= 9 else 'back nine'
 
@@ -1884,20 +1920,10 @@ def sixes_hole_card(foursome, hole: int) -> dict:
         prev_holes = segment_holes(foursome, seg_rows[idx - 1])
         entries    = {h['hole']: h for h in (prev_sum.get('holes') or [])}
         played     = [h for h in prev_holes if h in entries]
-        last       = entries[played[-1]] if played else None
-        text = None
-        if last is not None and prev_sum['winner'] in ('Team 1', 'Team 2'):
-            side   = prev_sum['team1'] if prev_sum['winner'] == 'Team 1' \
-                     else prev_sum['team2']
-            margin = abs(last['margin'])
-            left   = len(prev_holes) - len(played)
-            # A match that ran to its last hole is "won 1 UP"; one that closed
-            # early keeps the close-out notation it was won by.
-            text = (f"{' & '.join(side['players_short'])} won "
-                    f"{margin}&{left}" if left else
-                    f"{' & '.join(side['players_short'])} won {margin} UP")
-        elif prev_sum['winner'] == 'Halved':
-            text = 'halved'
+        # None rather than '' when the match has not finished — the shipped
+        # client tests the key for null, and an empty string is a different
+        # answer to it.
+        text = match_result_text(prev_sum) or None
         previous = {
             'number'    : idx,
             'start_hole': prev_holes[0] if prev_holes else None,

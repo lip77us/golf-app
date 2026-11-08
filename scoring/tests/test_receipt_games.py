@@ -6,7 +6,13 @@ from django.test import SimpleTestCase, TestCase
 
 import services.receipt_games as rg
 from scoring.tests._helpers import make_foursome, make_round, submit_hole
-from services.receipt_build import GAME_CAPTION, GAME_STAKE, GAME_SUMMARY
+from services.receipt_build import (
+    GAME_CAPTION,
+    GAME_DETAIL,
+    GAME_STAKE,
+    GAME_SUMMARY,
+    build_round_receipt,
+)
 from services.settlement import NETTABLE, _pid_nets_for_game
 
 
@@ -159,6 +165,141 @@ class SixesRowTests(SimpleTestCase):
         so counting them promises matches nobody played for."""
         import inspect
         self.assertIn("is_void", inspect.getsource(rg.sixes_summary_rows))
+
+
+class SixesDetailTests(TestCase):
+    """§4: "Detail: one row per match: `1 · holes 1–6`, `Kim/Reid 2 UP`."
+
+    The summary row answers a different question on purpose — "Settled 3 of
+    3", which is right for a ticket one column wide.  Who won which match,
+    and against whom, is the long form, and §1 puts the long form on the web
+    receipt alone.
+
+    The fixture ends match 1 EARLY, because that is the case the stored hole
+    range gets wrong: a match won 3&2 stores 1–6 and played 1–4, and the next
+    match starts on the 5th.
+    """
+
+    def setUp(self):
+        from services.sixes import setup_sixes
+        self.round = make_round(active_games=['sixes'])
+        self.round.primary_game = 'sixes'
+        self.round.bet_unit = 5
+        self.round.save(update_fields=['primary_game', 'bet_unit'])
+        self.fs = make_foursome(
+            self.round, [('Paul', 0), ('Sam', 0), ('Dave', 0), ('Lee', 0)])
+        self.pid = {m.player.name: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        pairs = [
+            ([self.pid['Paul'], self.pid['Dave']], [self.pid['Sam'], self.pid['Lee']]),
+            ([self.pid['Paul'], self.pid['Sam']], [self.pid['Dave'], self.pid['Lee']]),
+            ([self.pid['Paul'], self.pid['Lee']], [self.pid['Dave'], self.pid['Sam']]),
+        ]
+        setup_sixes(self.fs, [
+            {'team_select_method': 'long_drive',
+             'start_hole': 1 + i * 6, 'end_hole': (i + 1) * 6,
+             'team1_player_ids': a, 'team2_player_ids': b}
+            for i, (a, b) in enumerate(pairs)], handicap_mode='gross')
+
+    def _hole(self, h, paul, sam, dave, lee):
+        submit_hole(self.fs, h, [
+            (self.pid['Paul'], paul), (self.pid['Sam'], sam),
+            (self.pid['Dave'], dave), (self.pid['Lee'], lee)])
+
+    def _play(self):
+        """Match 1 won 3&2 on the 4th; everything after it halved."""
+        from services.sixes import calculate_sixes
+        self._hole(1, 4, 4, 4, 4)
+        for h in (2, 3, 4):
+            self._hole(h, 4, 5, 4, 5)        # Paul & Dave
+        for h in range(5, 19):
+            self._hole(h, 4, 4, 4, 4)
+        calculate_sixes(self.fs)
+
+    def _rows(self):
+        self._play()
+        secs = rg.sixes_detail(self.round, {'game': 'sixes'}, {})
+        self.assertEqual(len(secs), 1)
+        self.assertEqual(secs[0]['label'], 'Sixes · the matches')
+        return secs[0]['rows']
+
+    def test_it_is_registered(self):
+        self.assertIn('sixes', GAME_DETAIL)
+
+    def test_one_row_per_match(self):
+        rows = self._rows()
+        from games.models import SixesSegment
+        self.assertEqual(len(rows),
+                         SixesSegment.objects.filter(foursome=self.fs).count())
+
+    def test_the_row_names_the_holes_the_match_PLAYED(self):
+        # The bug this guards: match 1 stores 1-6 and played 1-4, so the
+        # stored range would claim two holes for a match already over — and
+        # would overlap match 2, which starts on the 5th.
+        rows = self._rows()
+        self.assertEqual(rows[0][0], '1 · holes 1–4')
+        self.assertTrue(rows[1][0].startswith('2 · holes 5–'), rows[1][0])
+
+    def test_it_says_who_won_and_by_how_much(self):
+        rows = self._rows()
+        # Partners are joined with `&`, and the names are `short_name` — which
+        # auto-fills to initials here.  That is the Sixes convention for a
+        # side (match lines are read at arm's length), not this formatter's
+        # invention, and it is why the handoff's `Kim/Reid` is not copied
+        # literally: every other surface in the app says "Paul & Jim".
+        self.assertEqual(rows[0][1], 'P & D won 3&2')
+
+    def test_a_halved_match_says_so(self):
+        rows = self._rows()
+        self.assertIn('Halved', [r[1] for r in rows[1:]])
+
+    def test_the_extra_match_is_marked(self):
+        # Match 1's two unplayed holes become an extra, which is a real match
+        # for real money but exists only because an earlier one ended early.
+        rows = self._rows()
+        self.assertTrue(any(' Ex · ' in r[0] for r in rows),
+                        f'no extra match marked: {[r[0] for r in rows]}')
+
+    # ── the wiring: §1 puts it on the web receipt and nowhere else ────────
+
+    def test_the_receipt_carries_it_as_webGames(self):
+        self._play()
+        r = build_round_receipt(self.round)
+        labels = [s['label'] for s in r.payload['webGames']]
+        # §3: webGames REPLACES games on the web, so it leads with the short
+        # form rather than holding only the extra sections.
+        self.assertEqual(labels[0], 'The games')
+        self.assertIn('Sixes · the matches', labels)
+
+    def test_the_ticket_and_the_image_keep_the_short_form(self):
+        self._play()
+        r = build_round_receipt(self.round)
+        self.assertEqual([s['label'] for s in r.payload['games']],
+                         ['The games'])
+        value = r.payload['games'][0]['rows'][0][1]
+        self.assertTrue(value.startswith('Settled '), value)
+
+    def test_a_game_with_no_detail_formatter_sets_no_webGames(self):
+        """An unregistered game has no useful generic detail, so it gets no
+        section — and a `webGames` identical to `games` is noise in a stored
+        payload, which the renderer already falls back from."""
+        from services.rabbit import calculate_rabbit, setup_rabbit
+        rnd = make_round(active_games=['rabbit'])
+        rnd.bet_unit = 2
+        rnd.save(update_fields=['bet_unit'])
+        fs = make_foursome(rnd, [('A', 0), ('B', 0), ('C', 0)])
+        setup_rabbit(fs)
+        ids = [m.player_id for m in fs.memberships.all()]
+        for hole in range(1, 19):
+            scores = [(pid, 5) for pid in ids]
+            if hole % 3 == 0:
+                scores[0] = (ids[0], 3)
+            submit_hole(fs, hole, scores)
+        calculate_rabbit(fs)
+        self.assertNotIn('rabbit', GAME_DETAIL, 'this test picked a bad example')
+        r = build_round_receipt(rnd)
+        self.assertIsNotNone(r)
+        self.assertNotIn('webGames', r.payload)
 
 
 class FormatterFailureTests(TestCase):

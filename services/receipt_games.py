@@ -19,7 +19,12 @@ above it is the same failure with the golfer's money in it.
 """
 from __future__ import annotations
 
-from services.receipt_build import GAME_CAPTION, GAME_STAKE, GAME_SUMMARY
+from services.receipt_build import (
+    GAME_CAPTION,
+    GAME_DETAIL,
+    GAME_STAKE,
+    GAME_SUMMARY,
+)
 from services.settlement_receipt import money
 
 
@@ -364,8 +369,59 @@ def sixes_stake(round_obj) -> str:
     return ''
 
 
+def sixes_detail(round_obj, entry, names):
+    """§4: one row per match — ``["1 · holes 1–6", "Kim/Reid 2 UP"]``.
+
+    This is the question the summary row deliberately does not answer.
+    "Settled 3 of 3" is the §4 summary and is right for the ticket, which is
+    one column wide; who won which match, and against whom, is the long form
+    and belongs on the web receipt.
+
+    **The holes are the ones the match PLAYED**, taken from the summary
+    segment rather than its stored range — a match won 3&2 stores 1–6 and
+    played 1–4, and the next match starts on the 5th.  Printing the stored
+    range would claim two holes for a match that was already over.
+
+    **The result sentence comes from `match_result_text`**, the same writer
+    the score-entry band uses, so the receipt and the screen cannot disagree
+    about a close-out.
+
+    Partners are joined with ``&`` — the handoff writes ``Kim/Reid``, but
+    every other surface in this app says "Paul & Jim" and one of them reading
+    differently is worse than matching the mock.
+    """
+    from services.sixes import match_result_text, sixes_summary
+    foursomes = _foursomes(round_obj)
+    multi = len(foursomes) > 1
+    out = []
+    for fs in foursomes:
+        segs = (sixes_summary(fs) or {}).get('segments') or []
+        if not segs:
+            continue
+        rows = []
+        for n, seg in enumerate(segs, start=1):
+            played = [h['hole'] for h in (seg.get('holes') or [])]
+            if played:
+                span = (f'holes {played[0]}–{played[-1]}' if len(played) > 1
+                        else f'hole {played[0]}')
+            else:
+                span = f"holes {seg['start_hole']}–{seg['end_hole']}"
+            # The extra match is marked, the same way the handoff marks an
+            # extra rabbit `Ex`: it is a real match for real money, but it
+            # exists only because an earlier one ended early.
+            label = f'{n} Ex · {span}' if seg.get('is_extra') else f'{n} · {span}'
+            rows.append([label, match_result_text(seg) or 'Not played'])
+        if not rows:
+            continue
+        name = (f'Sixes · group {fs.group_number} · the matches' if multi
+                else 'Sixes · the matches')
+        out.append({'label': name, 'rows': rows})
+    return out
+
+
 GAME_SUMMARY['sixes'] = sixes_summary_rows
 GAME_STAKE['sixes'] = sixes_stake
+GAME_DETAIL['sixes'] = sixes_detail
 
 
 # ---------------------------------------------------------------------------

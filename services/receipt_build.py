@@ -16,11 +16,12 @@ game that ran and paid nobody, would produce four "+$0 to collect" lines and a
 link saying nothing.  The casual receipt payload already refuses that case and
 this keeps the rule in one place.
 
-**One receipt per settling.**  Finish round is explicitly idempotent, so a
-second tap must not mint a second code; the first receipt is returned
-untouched.  A round REOPENED and re-settled is a different matter and gets a
-new one — see the model, which keeps the old link saying what the golfers were
-shown.
+**One receipt per settling, and the CALLER is what makes that true.**
+`RoundCompleteView` reaches this only on the status flip, so a second tap of
+Finish round never settles twice.  A round REOPENED and re-settled is a
+different matter and gets a NEW code — see the model, which keeps the old link
+saying what the golfers were shown.  Do not add an "already has one" guard
+here: it reads like idempotency and is really a refusal to re-settle.
 
 **The per-game rows are a seam, not a stub.**  §4 gives every game its own
 summary language ("Kim 4 · Lipkin 2 · Reid 1"), which is steps 4 to 6.
@@ -49,6 +50,21 @@ logger = logging.getLogger(__name__)
 #: states its matches and its bets separately, and Banker gives every golfer a
 #: line of his own.
 GAME_SUMMARY: dict = {}
+
+#: ``{game_key: callable(round_obj, per_game_entry, names) -> [Section]}`` for
+#: §3's ``detail`` — the LONG form, which appears on the web receipt only.
+#:
+#: §1 is explicit about where it goes: the web receipt "uses ``webGames`` when
+#: present", while Round over and the preview image get the short ``games``
+#: rows.  The ticket is width-constrained and the web page is the document
+#: people keep, so a per-match or per-hole breakdown belongs there and nowhere
+#: else.
+#:
+#: A Section is ``{'label': str, 'rows': [[label, value], ...]}``.  The label
+#: NAMES THE GAME ("Sixes · the matches"), because a round playing two games
+#: puts two detail sections on one page and "The matches" alone would not say
+#: whose.
+GAME_DETAIL: dict = {}
 
 #: ``{game_key: callable(round_obj, player_ids) -> {player_id: str}}`` for §3's
 #: caption override.  The default is "{gross} · net {net}"; a game whose unit
@@ -139,6 +155,31 @@ def _summary_rows(round_obj, per_game: list, names: dict) -> list:
     return rows
 
 
+def _detail_sections(round_obj, per_game: list, names: dict) -> list:
+    """Every registered game's long-form sections, in the round's game order.
+
+    A game with no formatter contributes nothing — there is no useful generic
+    detail, and the summary row above it already says who the money moved to.
+    So an unregistered game simply has no extra section rather than a section
+    saying nothing.
+    """
+    out = []
+    for entry in per_game:
+        fn = GAME_DETAIL.get(entry['game'])
+        if not fn:
+            continue
+        try:
+            for section in fn(round_obj, entry, names) or []:
+                rows = [list(r) for r in (section.get('rows') or [])]
+                if rows:
+                    out.append({'label': section['label'], 'rows': rows})
+        except Exception:
+            # Detail is presentation. A broken formatter costs the long form,
+            # never the receipt: the money is already settled above it.
+            logger.exception('receipt: %s detail failed', entry['game'])
+    return out
+
+
 def _captions(round_obj, player_ids) -> dict:
     """§3's default caption, "{gross} · net {net}".
 
@@ -189,9 +230,25 @@ def build_round_receipt(round_obj, *, scorer=None):
     try:
         if round_obj.tournament_id:
             return None                       # Group C, at tournament settle
-        existing = Receipt.objects.filter(round=round_obj).first()
-        if existing:
-            return existing
+        # **No existing-receipt guard, deliberately.**  There used to be one,
+        # returning the first receipt found, and it silently broke the
+        # re-settle this module and the model both promise: a round reopened
+        # to fix a score was handed back its ORIGINAL payload, frozen at the
+        # wrong moment, with no way to re-freeze it.  Found while testing —
+        # a Sixes round settled before the per-match detail existed kept
+        # reporting no detail however many times it was finished again.
+        #
+        # Idempotency is the CALLER's, and always was: `RoundCompleteView`
+        # only reaches here inside `if ... and round_obj.status != 'complete'`,
+        # so a second tap of Finish round never calls this at all.  The guard
+        # was defending something that could not happen, at the cost of the
+        # thing it was meant to allow.
+        #
+        # Two rows for one settling is possible if two completes race, and is
+        # benign by construction: `Receipt.Meta.ordering` is newest-first and
+        # every reader takes `.first()`, so the newest is served and the older
+        # link keeps saying what the golfers were shown — which is the whole
+        # reason this model stores a frozen payload instead of updating one.
 
         data = round_settlement(round_obj, min_games=1)
         if not data:
@@ -259,6 +316,7 @@ def build_round_receipt(round_obj, *, scorer=None):
                 logger.exception('receipt: %s image caption failed',
                                  entry['game'])
 
+        summary_rows = _summary_rows(round_obj, per_game, names)
         payload = {
             'title': ' + '.join(e['label'] for e in per_game),
             'sub': _sub(round_obj, per_game),
@@ -272,11 +330,19 @@ def build_round_receipt(round_obj, *, scorer=None):
             ],
             'pays': [{'from': _short(names, t.frm), 'to': _short(names, t.to),
                       'amount': t.amount} for t in transfers],
-            'games': [{'label': 'The games',
-                       'rows': _summary_rows(round_obj, per_game, names)}],
+            'games': [{'label': 'The games', 'rows': summary_rows}],
             'scorer': _scorer_block(scorer),
             'settledAt': timezone.now().isoformat(),
         }
+        # §3: `webGames` REPLACES `games` on the web, so it carries the short
+        # form too — not just the extra sections. Set only when there is
+        # something extra to say; the renderer already falls back to `games`,
+        # and a key identical to it is noise in a stored payload.
+        detail = _detail_sections(round_obj, per_game, names)
+        if detail:
+            payload['webGames'] = (
+                [{'label': 'The games', 'rows': summary_rows}] + detail)
+
         recipients = _recipients(round_obj, order, names, scorer)
         payload['recipients'] = {'push': recipients.push,
                                  'text': recipients.text,

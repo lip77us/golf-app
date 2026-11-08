@@ -115,13 +115,35 @@ class BuildTests(TestCase):
         self.assertTrue(any('net' in (n['caption'] or '')
                             for n in payload['nets']))
 
-    def test_building_twice_does_not_mint_a_second_code(self):
-        """Finish round is explicitly idempotent.  A second tap minting a new
-        link would leave the first one pointing at a receipt nobody has."""
+    def test_re_settling_mints_a_NEW_code_and_keeps_the_old_link(self):
+        """A round reopened to fix a score re-settles, and both this module
+        and the model promise a new receipt for it.
+
+        It used to return the first one found, so the payload stayed frozen at
+        the wrong moment with no way to re-freeze it.  Found in testing: a
+        Sixes round settled before the per-match detail existed kept reporting
+        no detail however many times it was finished again.
+
+        Idempotency is the CALLER's — see
+        `EndpointTests.test_completing_twice_keeps_one_receipt`, which is the
+        test that pins the promise a golfer can see.  `RoundCompleteView`
+        reaches the builder only on the status flip, so a second tap never
+        settles twice, and the guard here was refusing the re-settle while
+        defending something that could not happen.
+        """
         rnd, fs, ids = _skins_round()
         first = build_round_receipt(rnd)
-        self.assertEqual(build_round_receipt(rnd).code, first.code)
-        self.assertEqual(Receipt.objects.filter(round=rnd).count(), 1)
+        second = build_round_receipt(rnd)
+        self.assertNotEqual(second.code, first.code)
+        self.assertEqual(Receipt.objects.filter(round=rnd).count(), 2)
+        # The old link still resolves and still says what it said — that is
+        # the point of storing a frozen payload rather than updating one.
+        first.refresh_from_db()
+        self.assertEqual(first.payload['code'], first.code)
+        # ...and every reader takes the NEWEST, so the round reports the
+        # re-settled figures.
+        self.assertEqual(Receipt.objects.filter(round=rnd).first().code,
+                         second.code)
 
     def test_a_round_that_settles_to_nothing_gets_none(self):
         """Everyone square: four "+$0 to collect" lines and a link saying
@@ -259,9 +281,38 @@ class EndpointTests(APITestCase):
         self.assertIn('Skins', page.content.decode())
 
     def test_completing_twice_keeps_one_receipt(self):
+        """Where idempotency actually lives.  `RoundCompleteView` only settles
+        inside `status != 'complete'`, so the second tap never reaches the
+        builder — which is why the builder itself does not need (and must not
+        have) an "already has one" guard."""
         self._login()
         rnd, fs, ids = _skins_round()
         for _ in range(2):
             self.client.post(f'/api/rounds/{rnd.id}/complete/', {},
                              content_type='application/json')
         self.assertEqual(Receipt.objects.filter(round=rnd).count(), 1)
+
+    def test_reopening_and_finishing_again_re_settles(self):
+        """The round trip a scorer actually makes to fix a wrong score.
+
+        End to end through both endpoints, because the builder and the view
+        each hold half of the rule and only the pair of them says what a
+        golfer sees.
+        """
+        self._login()
+        rnd, fs, ids = _skins_round()
+        self.client.post(f'/api/rounds/{rnd.id}/complete/', {},
+                         content_type='application/json')
+        first = Receipt.objects.get(round=rnd)
+
+        self.client.post(f'/api/rounds/{rnd.id}/reopen/', {},
+                         content_type='application/json')
+        r = self.client.post(f'/api/rounds/{rnd.id}/complete/', {},
+                             content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        codes = list(Receipt.objects.filter(round=rnd)
+                     .values_list('code', flat=True))
+        self.assertEqual(len(codes), 2, codes)
+        # The response hands back the one the scorer is about to be shown.
+        self.assertNotEqual(r.data['receipt']['code'], first.code)
+        self.assertEqual(r.data['receipt']['code'], codes[0])
