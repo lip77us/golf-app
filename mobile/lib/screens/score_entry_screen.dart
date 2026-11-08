@@ -37,6 +37,7 @@ import '../utils/skins_standing.dart';
 import '../utils/stableford_standing.dart';
 import '../utils/triple_cup_standing.dart';
 import '../utils/vegas_standing.dart';
+import '../utils/auto_post.dart';
 import '../widgets/vegas_entry.dart';
 import '../widgets/fourball_entry.dart';
 import '../widgets/banker_entry_strip.dart';
@@ -1712,6 +1713,42 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     });
   }
 
+  /// The signature of the pending scores last posted without being asked.
+  /// See `utils/auto_post.dart` for why this exists.
+  String? _autoPosted;
+
+  /// **A tray game's hole posts itself**, because the tray reports the
+  /// SERVER's result. Asked on every build rather than fired by the last
+  /// keystroke, which was a race against the hole card's own fetch.
+  void _ensureHolePosted(RoundProvider rp, List<Membership> players,
+                         Scorecard sc, int par, FourballHoleCard? four) {
+    final sig = pendingSignature(_selectedHole, _pending[_selectedHole]);
+    if (sig.isEmpty) {
+      _autoPosted = null;
+      return;
+    }
+    if (!shouldAutoPost(
+      traysHere : _raisesTray(rp),
+      fortyBalls: _fortyBallsRound(rp),
+      submitting: rp.submitting,
+      holeReady : _holeReady(
+          players, _effectiveScores(sc, _selectedHole), _selectedHole, four),
+      pendingSig: sig,
+      lastPosted: _autoPosted,
+    )) {
+      return;
+    }
+    _autoPosted = sig;
+    final hole = _selectedHole;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _selectedHole != hole) return;
+      final r = context.read<RoundProvider>();
+      if (r.submitting) return;
+      if (pendingSignature(hole, _pending[hole]) != sig) return;
+      _saveCurrentHole(context, players, par);
+    });
+  }
+
   /// The field-wide side games on the hole on screen: the ball game's carrier
   /// and Irish Rumble's count.
   ///
@@ -3305,6 +3342,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final fourTray = fourCard != null && fbActive && _editHotPid == null &&
         _holeReady(players, scores, _selectedHole, fourCard);
 
+    // Every hole that ends in a tray saves itself once it is complete.
+    _ensureHolePosted(rp, players, sc, par, fourCard);
+
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -3506,25 +3546,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 // its count. An edit to a complete hole posts too, or the
                 // tray would describe the number that was just replaced.
                 //
-                // **The gate is `_raisesTray`, not a list of games.** It was
-                // a hand-written `af || six || spCard` and Las Vegas was
-                // added to this screen without being added to it — so a
-                // Vegas hole's last score was never posted and its tray
-                // waited on a result nothing had asked for. That is the
-                // third time this exact gate has been missed, which is why
-                // it now asks the one function that means "this hole ends in
-                // a tray".
-                if (n > 0 && !_fortyBallsRound(rp) && _raisesTray(rp)) {
-                  final hole = _selectedHole;
-                  final now = _effectiveScores(sc, hole);
-                  if (_holeReady(players, now, hole, fourCard)) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (!mounted || _selectedHole != hole) return;
-                      if (context.read<RoundProvider>().submitting) return;
-                      _saveCurrentHole(context, players, par);
-                    });
-                  }
-                }
+                // **The post is NOT fired from here.** It used to be — the
+                // last score triggered the save — and that is a race, because
+                // the gate depends on a hole card this screen fetches
+                // asynchronously: a group that typed four scores before the
+                // card arrived passed the gate while it was still false and
+                // nothing came back to try again (reported from a Las Vegas
+                // round, 8 Nov 2026, sitting on `Getting result…`). It is
+                // asked on every build now — see `_ensureHolePosted`.
               },
               // `-1` is this screen's clear, not a score of minus one. It
               // also takes a pick-up mark off, because `Clear` is how a

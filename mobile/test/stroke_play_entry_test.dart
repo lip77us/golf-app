@@ -399,15 +399,17 @@ void main() {
       // Annandale's tray rose over a hole that had never been sent, and
       // Sixes repeated it because the gate still read `af != null`. A tray
       // reports the SERVER's result, so the hole has to go.
-      // **The gate is `_raisesTray`, not a list of games.** It was a
-      // hand-written `af || six || spCard`, and Las Vegas was added to this
-      // screen without being added to it — so a Vegas hole's last score was
-      // never posted. It asks the one function that means "this hole ends in
-      // a tray" now, which is also what makes the NEXT tray game free.
-      final at = src.indexOf('if (n > 0 && !_fortyBallsRound(rp)');
-      expect(at, greaterThan(0), reason: 'the post-on-last-score gate moved');
-      final gate = src.substring(at, src.indexOf('{', at + 40));
+      // **The hole posts itself, once it is complete.** The gate was a
+      // hand-written list of games and Las Vegas was added to this screen
+      // without being added to it; then the KEYSTROKE that fired it turned
+      // out to race the hole card's own fetch. It is asked on every build
+      // now (`_ensureHolePosted`), of the one function that means "this
+      // hole ends in a tray".
+      final at = src.indexOf('void _ensureHolePosted(');
+      expect(at, greaterThan(0), reason: 'the auto-post moved');
+      final gate = src.substring(at, src.indexOf('\n  }', at));
       expect(gate, contains('_raisesTray(rp)'));
+      expect(gate, contains('_saveCurrentHole('));
       // …and `_raisesTray` names this game.
       final tray = src.indexOf('bool _raisesTray(RoundProvider rp) =>');
       final body = src.substring(tray, src.indexOf(';', tray));

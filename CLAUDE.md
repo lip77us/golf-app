@@ -10625,6 +10625,31 @@ membership of `_raisesTray`.
 `_holeReady` is the companion: every golfer who is GOING to score the hole
 has. Normally that is `_allScored`; the Fourball carve-out is the only one.
 
+#### …and the gate was only half the problem — it was EDGE-triggered
+
+Reported from a Las Vegas round the same day, on a phone: the tray sat on
+`Getting result…` with all four scores on screen and the hole missing from
+the scorecard.
+
+Fixing the gate's membership was not enough, because the post was fired by
+the **last keystroke** and the gate reads a hole card the screen fetches
+**asynchronously**. A group that types four scores before the card lands
+passes the gate while it is still false, and nothing ever comes back to try
+again. Arriving at a hole clears every other hole's card, so that fetch is
+in flight on exactly the holes where this bites.
+
+So the question is asked on **every build** instead — `_ensureHolePosted`,
+over the pure `shouldAutoPost` in `utils/auto_post.dart` — and
+`pendingSignature` is what stops it being asked twice: it changes only when
+the SCORES do, so a save that fails is not retried in a loop (the snackbar
+carries the Retry) and a correction after one is posted. It is checked again
+on the other side of the frame, because the scorer can have changed a score
+in between.
+
+**The decision is pure so the race can be tested at all.** A widget test
+cannot easily stage "the card arrives after the fourth score"; a function
+that takes `traysHere` can.
+
 ### Mobile
 
 `FourballSideHeader` rides the slot Annandale's team header and Vegas' side

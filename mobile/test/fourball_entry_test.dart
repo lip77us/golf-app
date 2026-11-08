@@ -335,16 +335,16 @@ void main() {
       expect(body, contains('_fourballCard(rp)'));
     });
 
-    test('the keypad POSTS the hole, and asks _raisesTray to decide', () {
-      // It was a hand-written list of games and Las Vegas was added to this
-      // screen without being added to it, so a Vegas hole's last score was
-      // never posted. The gate asks the one function that means "this hole
-      // ends in a tray" now.
-      final at = src.indexOf('onScore   : (n) {');
-      final body = src.substring(at, src.indexOf('onClear   :', at));
-      expect(body, contains('_raisesTray(rp)'));
-      expect(body, isNot(contains('af != null || six != null')));
-      expect(body, contains('_saveCurrentHole'));
+    test('the hole posts itself once it is complete', () {
+      // See `mobile/test/auto_post_test.dart` for the decision and the race
+      // it closes; this only checks the screen asks it, with the Fourball
+      // carve-out for a golfer who picked up.
+      final at = src.indexOf('void _ensureHolePosted(');
+      expect(at, greaterThan(0));
+      final body = src.substring(at, src.indexOf('\n  }', at));
+      expect(body, contains('shouldAutoPost('));
+      expect(body, contains('_holeReady('));
+      expect(body, contains('_saveCurrentHole('));
     });
 
     test('the pager hides under the tray', () {
