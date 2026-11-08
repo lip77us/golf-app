@@ -10791,15 +10791,14 @@ the scores rather than asking how the hole was decided.
   the two halves still SUM to the headline**: the loss cap clamps the total
   and not the parts, so once it bites a split is no longer a split.
 
-### The press button is the ENGINE's answer, and it disagrees with the handoff
+### The press button is the ENGINE's answer
 
-**Flagged rather than resolved.** The handoff offers a manual press when the
-trailing side is *1 down or level*; `nassau_summary.can_press` offers it on
-ANY non-zero margin and **never at level**. So a level match shows no button
-and a side five down still sees one. That is the shipped rule and it is
-money, so the card reports it and the client never re-derives it —
-`test_the_press_button_is_the_ENGINE_s_answer` states both halves. **Worth
-putting to Paul.**
+The handoff offered a manual press when the trailing side is *1 down or
+level*; `nassau_summary.can_press` offered it on ANY non-zero margin and
+never at level. **Paul settled it the same day — see "The manual press
+window" below**, which is now the rule. The client never re-derives it
+either way: offering a button the server will refuse is how the day bet's
+off switch went missing.
 
 A press is posted at the next hole in the GROUP's play order, not `hole + 1`,
 which off a shotgun is a hole already played. `postNassauPress` comes back
@@ -10877,3 +10876,90 @@ had touched.
 It surfaces as **`TypeError: cannot pickle 'traceback' object`**, which
 names nothing and no test. The real failure is forty lines up inside the
 `RemoteTraceback`; a serial re-run is the other way to see it.
+### The manual press window — settled, and it is ONE rule
+
+Paul, 8 Nov 2026: *"press when 1 down and less than 4 down in Claremont.
+Never if there is already a press that is even or a side that is even."*
+
+Which resolves the divergence flagged above, and the two numbers are not
+two rules:
+
+> **A manual press is offered while you are down, but not yet down far
+> enough for that bet's AUTO press.**
+
+| bet | worth a hole | autos at | manual window |
+|---|---|---|---|
+| top | 1 point | 2 down | **exactly 1 down** |
+| bottom (Claremont) | 2 points | 4 points | **1, 2 or 3 points down** |
+
+The manual press exists to let you press BEFORE the auto fires, so the
+window closes exactly where the auto opens. `AUTO_BAND` is the one place
+those numbers live.
+
+**And never while anything is level** — not the bet itself ("a side that is
+even"), and not a press already running on it ("a press that is even"). A
+press you have just called has no holes yet, so it is even by definition,
+which is what stops a second being stacked on it. The shipped rule was
+`margin != 0` alone: a side five down still saw the button and a level
+match never did.
+
+### Claremont's bottom game can be pressed by hand — it never could before
+
+`NassauPress.side` has existed since Claremont shipped and `add_manual_press`
+always created a `'top'` row, so the bottom game had **auto presses only**.
+Honouring "less than 4 down in Claremont" meant building the missing half:
+
+- `add_manual_press(..., side=)`, refused outside Claremont, with the
+  duplicate check moved to `(side, start_hole)` — the two games are pressed
+  separately, so the same hole can legitimately start one of each.
+- a bottom manual branch in `calculate_nassau`'s replay, mirroring the top's,
+  and the untriggered-row recreation beside it (a press called on the 5th is
+  a row from the moment it is called, not from the moment it counts).
+- `bottom_can_press` / `bottom_press_available_nine` on the summary.
+  `can_press` / `press_available_nine` keep their names and their meaning —
+  the top — so an older client presses exactly what it always pressed.
+- `side` on `POST …/nassau/press/`, defaulting to `'top'`.
+- **Two Press buttons on a Claremont tray, one a game.** Each sits at the end
+  of its own block's Overall line, because each block is a whole bet.
+
+### Three bugs found on the way, none of them in the packet
+
+**`can_press` read the nine by HOLE NUMBER.** `last_hole < 9` → front. Off a
+shotgun from the 10th the first hole played is 10, so the group's very first
+hole offered a press on the BACK nine — the shotgun shape, in the one place
+that decides which bet a press joins. It counts positions in the play order
+now, like `add_manual_press` already did.
+
+**`calculate_nassau` was not atomic.** `@transaction.atomic` was stranded on
+`_effective_variant`, a pure read inserted between the decorator and the
+function below it — the decorator trap this file records for `setup_sixes`,
+already landed. That function opens by deleting every `NassauHoleScore` and
+`NassauPress` row and rebuilding them, so a failure part-way left a game with
+its holes gone. Moved. **Check the line above the `def` after inserting
+anything near a decorator.**
+
+**A side's two golfers came back in whatever order the database felt like.**
+`team.players` is a many-to-many with no ordering, so `Sam + Mike` on one
+request and `Mike + Sam` on the next, from the same rows — the name of a
+SIDE, reordering under the reader on the board, the tray, the side headers
+and the money rows. Same shape as the Sixes anchor, which took its anchor
+from set iteration. It reads in the foursome's membership order now, which
+is the order the golfers sit on the card everywhere else.
+
+**It was found by a fixture regenerating differently against unchanged
+code** — which is the argument for fixtures being real engine output rather
+than JSON somebody typed. The test forces membership order and pk order
+apart (Sam's membership is recreated so its id is highest while his player
+pk stays lowest), because a fixture whose two orderings agree cannot pin
+which one is read. That is the Sixes anchor lesson, applied before being
+re-learnt.
+
+Tests: `TheManualPressWindowTests` (12) and `ASideReadsInCardOrderTests` (4)
+in `scoring/tests/test_nassau_hole_card.py`, plus the two restated window
+tests. Every part of the rule mutation-checked — widening either band,
+dropping either "even" test, reverting the nine to hole numbers, and
+dropping the sort all fail. **One guard does not: the `side == 'bottom' and
+not is_claremont` refusal inside `_manual_press_state` is belt-and-braces,
+because a non-Claremont game has no bottom margins and the `margin == 0`
+test already refuses. It is kept as the only LOCAL statement of the rule,
+and says so, so nobody later "proves" it dead.**

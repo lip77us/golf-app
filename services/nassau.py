@@ -418,7 +418,8 @@ def setup_nassau(
 # ---------------------------------------------------------------------------
 
 def add_manual_press(foursome, start_hole: int,
-                     game_type: str = None) -> NassauPress:
+                     game_type: str = None,
+                     side: str = 'top') -> NassauPress:
     """
     Record a manual press called by the losing team.  The press starts on
     start_hole and runs to the end of the nine that contains start_hole.
@@ -426,11 +427,17 @@ def add_manual_press(foursome, start_hole: int,
     The winning team cannot decline — this function does not need an
     acceptance step; it immediately persists the press.
 
+    **`side` is a whole bet, not a flavour.** Claremont is two games at once
+    — the top at 1 point a hole and the bottom at 2 (low ball plus high) —
+    and each presses itself.  `'bottom'` is refused outside Claremont,
+    where that game does not exist.
+
     Raises ValueError if:
       - No NassauGame exists for this foursome.
       - The game's press_mode does not allow manual presses.
       - start_hole is not a valid active nine hole (1–18).
-      - A manual press already covers start_hole in the same nine.
+      - A manual press already covers start_hole on the same side and nine.
+      - `side` is 'bottom' and this is not a Claremont game.
 
     After creating the press row, recalculates the game so its running
     margin is populated immediately.
@@ -443,6 +450,11 @@ def add_manual_press(foursome, start_hole: int,
 
     if game.press_mode not in ('manual', 'both'):
         raise ValueError(f"Press mode '{game.press_mode}' does not allow manual presses.")
+
+    if side not in ('top', 'bottom'):
+        raise ValueError(f"side must be 'top' or 'bottom', got {side!r}.")
+    if side == 'bottom' and _effective_variant(game) != 'claremont':
+        raise ValueError('Only a Claremont game has a bottom bet to press.')
 
     if not (1 <= start_hole <= 18):
         raise ValueError(f"start_hole must be 1–18, got {start_hole}.")
@@ -458,9 +470,11 @@ def add_manual_press(foursome, start_hole: int,
     _last    = (_half - 1) if nine == 'front' else (len(_order) - 1)
     end_hole = _order[_last] if _order else (9 if nine == 'front' else 18)
 
-    # Prevent duplicate manual presses with the same start_hole
+    # Prevent duplicate manual presses with the same start_hole ON THIS SIDE.
+    # The two games are pressed separately, so the same hole can legitimately
+    # start one of each.
     if NassauPress.objects.filter(
-        game=game, press_type='manual', start_hole=start_hole
+        game=game, press_type='manual', side=side, start_hole=start_hole
     ).exists():
         raise ValueError(f"A manual press already starts on hole {start_hole}.")
 
@@ -478,6 +492,7 @@ def add_manual_press(foursome, start_hole: int,
     press = NassauPress.objects.create(
         game             = game,
         nine             = nine,
+        side             = side,
         press_type       = 'manual',
         triggered_on_hole = start_hole - 1,
         start_hole       = start_hole,
@@ -495,7 +510,8 @@ def add_manual_press(foursome, start_hole: int,
     # recalculate a different game (or none) and leave its own press unscored —
     # and the cap check above read the wrong match the same way.
     calculate_nassau(foursome, game_type)
-    return NassauPress.objects.get(game=game, press_type='manual', start_hole=start_hole)
+    return NassauPress.objects.get(game=game, press_type='manual', side=side,
+                                   start_hole=start_hole)
 
 
 # ---------------------------------------------------------------------------
@@ -538,7 +554,6 @@ def _resolve(holes_up: int) -> str:
 # Main calculator
 # ---------------------------------------------------------------------------
 
-@transaction.atomic
 def _effective_variant(game) -> str:
     """The Nassau variant that actually applies.
 
@@ -589,6 +604,7 @@ def resolve_nassau_game_type(foursome, requested=None) -> str:
     return GameType.NASSAU
 
 
+@transaction.atomic
 def calculate_nassau(foursome, game_type: str = None) -> NassauGame | None:
     """
     Recompute all NassauHoleScore rows, detect auto-presses, update manual
@@ -639,9 +655,16 @@ def calculate_nassau(foursome, game_type: str = None) -> NassauGame | None:
     is_tiebreak_2nd = effective_variant == 'tiebreak_2nd'
     needs_2nd_ball  = is_claremont or is_tiebreak_2nd
 
-    # ── Preserve top manual presses ───────────────────────────────────────
+    # ── Preserve manual presses, per SIDE ─────────────────────────────────
+    # Claremont's two games press separately — the top at 2 holes down, the
+    # bottom at 4 points — so a manual press belongs to one of them and the
+    # two lists cannot be merged.
     manual_press_starts = list(
         NassauPress.objects.filter(game=game, press_type='manual', side='top')
+        .values_list('start_hole', flat=True)
+    )
+    bot_manual_press_starts = list(
+        NassauPress.objects.filter(game=game, press_type='manual', side='bottom')
         .values_list('start_hole', flat=True)
     )
 
@@ -669,6 +692,11 @@ def calculate_nassau(foursome, game_type: str = None) -> NassauGame | None:
 
     manual_front = sorted([s for s in manual_press_starts if s in front_holes])
     manual_back  = sorted([s for s in manual_press_starts if s in back_holes])
+
+    bot_manual_front = sorted(
+        [s for s in bot_manual_press_starts if s in front_holes])
+    bot_manual_back  = sorted(
+        [s for s in bot_manual_press_starts if s in back_holes])
 
     AUTO_TOP_THRESHOLDS = frozenset({2, 4, 6, 8, -2, -4, -6, -8})
     top_front9_thresholds_fired: set = set()
@@ -903,6 +931,25 @@ def calculate_nassau(foursome, game_type: str = None) -> NassauGame | None:
                     still_bot.append(press)
             bot_active_presses = still_bot
 
+            # ── Trigger bottom manual press ───────────────────────────────
+            if manual_enabled:
+                for ms in (bot_manual_front if nine_key == 'front'
+                           else bot_manual_back):
+                    if ms == hole_num:
+                        already = any(
+                            p['press_type'] == 'manual'
+                            and p['nine'] == nine_key and p['start'] == ms
+                            for p in bot_active_presses + bot_completed_presses
+                        )
+                        if not already:
+                            bot_active_presses.append({
+                                'nine': nine_key, 'press_type': 'manual',
+                                'side': 'bottom',
+                                'trigger_hole': hole_num - 1, 'start': hole_num,
+                                'end': nine_end, 'end_pos': nine_last_pos,
+                                'margin': bot_delta_val, 'is_active': True,
+                            })
+
             # ── Trigger bottom auto-press ─────────────────────────────────
             # Fire on REACHING/CROSSING a 4-point band (±4, ±8, …), not on an
             # exact-margin match: the bottom margin moves up to ±2 per hole
@@ -1007,6 +1054,32 @@ def calculate_nassau(foursome, game_type: str = None) -> NassauGame | None:
             )
             for p in bot_completed_presses
         ]
+        # …and the ones whose first hole has not been played yet, exactly as
+        # the top side does: a press called on the 5th is a row from the
+        # moment it is called, not from the moment it starts counting.
+        bot_triggered = {
+            p['start'] for p in bot_completed_presses
+            if p['press_type'] == 'manual'
+        }
+        for ms in bot_manual_press_starts:
+            if ms not in bot_triggered:
+                ms_pos      = pos_of.get(ms)
+                ms_nine     = ('front' if (ms_pos is not None and ms_pos < half)
+                               else 'back')
+                ms_end_hole = (front_end_hole if ms_nine == 'front'
+                               else back_end_hole)
+                press_objs.append(NassauPress(
+                    game              = game,
+                    nine              = ms_nine,
+                    side              = 'bottom',
+                    press_type        = 'manual',
+                    triggered_on_hole = (order[ms_pos - 1] if ms_pos
+                                         else max(ms - 1, 0)),
+                    start_hole        = ms,
+                    end_hole          = ms_end_hole,
+                    result            = None,
+                    holes_up          = None,
+                ))
 
     NassauPress.objects.bulk_create(press_objs)
 
@@ -1123,6 +1196,8 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
         ],
         'can_press'    : bool,  # True when manual press is currently available
         'press_available_nine': str|None,  # 'front'|'back' if can_press, else None
+        'bottom_can_press'           : bool,       # Claremont bottom game
+        'bottom_press_available_nine': str|None,
     }
     """
     game_type = resolve_nassau_game_type(foursome, game_type)
@@ -1395,26 +1470,69 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
     top_total = front9_pay + back9_pay + overall_pay + top_press_total
     bot_total = bot_front9_pay + bot_back9_pay + bot_overall_pay + bot_press_total
 
-    # ── can_press: available when manual presses allowed and game active ──
-    can_press = False
-    press_available_nine = None
-    if game.press_mode in ('manual', 'both') and game.status == MatchStatus.IN_PROGRESS:
-        last_hole = holes_out[-1]['hole'] if holes_out else 0
-        if last_hole < 9:
-            if front9_margin != 0:
-                can_press = True
-                press_available_nine = 'front'
-        elif last_hole < 18:
-            if back9_margin != 0:
-                can_press = True
-                press_available_nine = 'back'
-        # Cap gate: a side that has hit the cap can't press (it would be free).
-        if can_press:
-            nine_margin = (front9_margin if press_available_nine == 'front'
-                           else back9_margin)
-            if _press_blocked_by_cap(game, top_total + bot_total, nine_margin):
-                can_press = False
-                press_available_nine = None
+    # ── can_press ─────────────────────────────────────────────────────────
+    #
+    # **A manual press is offered while you are down but not yet down far
+    # enough for that bet's AUTO press.** One rule, two numbers, because
+    # the two numbers follow from what each bet is worth a hole (Paul, 8
+    # Nov 2026):
+    #
+    #   top    — 1 point a hole, auto at 2 down  → offered at exactly 1 down
+    #   bottom — 2 points a hole, auto at 4      → offered at 1, 2 or 3 down
+    #
+    # And never while anything is level: not the bet itself ("a side that is
+    # even"), and not a press already running on it ("a press that is even").
+    # A press you have just called has no holes yet, so it is even by
+    # definition — which is what stops a second one being stacked on it.
+    #
+    # This replaces `margin != 0` alone, under which a side five down still
+    # saw the button and a level match never did.
+    AUTO_BAND = {'top': 2, 'bottom': 4}
+
+    # **The nine by POSITION, not by hole number.** Off a shotgun from the
+    # 10th the first hole played is 10, and `last_hole < 9` read that as the
+    # BACK nine — the shotgun shape the sweep fixed in six other services.
+    _played_pos = [_pos_of[h['hole']] for h in holes_out
+                   if h['hole'] in _pos_of]
+    _last_pos   = max(_played_pos) if _played_pos else -1
+    _n_order    = len(_order) or 18
+
+    def _manual_press_state(side, front_margin, back_margin, press_rows):
+        """`(can_press, nine)` for one side of the match."""
+        if game.press_mode not in ('manual', 'both'):
+            return False, None
+        if game.status != MatchStatus.IN_PROGRESS:
+            return False, None
+        # Belt-and-braces: a non-Claremont game has no bottom margins, so
+        # the `margin == 0` test below already refuses — but that is an
+        # invariant two hundred lines away, and this is the only local
+        # statement of the rule. A mutation of this line passes; do not
+        # take that as proof it is dead.
+        if side == 'bottom' and not is_claremont:
+            return False, None
+        # A press cannot start after the last hole of its nine.
+        if _last_pos < _half - 1:
+            nine, margin = 'front', front_margin
+        elif _last_pos < _n_order - 1:
+            nine, margin = 'back', back_margin
+        else:
+            return False, None
+        margin = margin or 0
+        if margin == 0 or abs(margin) >= AUTO_BAND[side]:
+            return False, None
+        # An existing press on this nine that is still level — including one
+        # called and not yet started, whose margin is None.
+        for r in press_rows:
+            if r['nine'] == nine and not r['result'] and not (r['margin'] or 0):
+                return False, None
+        if _press_blocked_by_cap(game, top_total + bot_total, margin):
+            return False, None
+        return True, nine
+
+    can_press, press_available_nine = _manual_press_state(
+        'top', front9_margin, back9_margin, top_presses_out)
+    bot_can_press, bot_press_available_nine = _manual_press_state(
+        'bottom', bot_front9_margin, bot_back9_margin, bot_presses_out)
 
     # ── LIVE money, split into the two Claremont games ────────────────────
     # One writer for both: `live_total` is their sum (clamped), and the
@@ -1487,6 +1605,19 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
             in_play = round_half_up(phcp * npct / 100)
         phcp_by_pid[m.player_id] = in_play
 
+    # **A side's golfers come back in the order they sit on the card.**
+    # `team.players` is a many-to-many with no ordering, so the database
+    # returned the pair in whatever order it liked — `Sam + Mike` on one
+    # request and `Mike + Sam` on the next, from the same rows. That is the
+    # name of a SIDE, on the board, the score-entry tray, the side headers
+    # and the money rows, reordering under the reader. Same shape as the
+    # Sixes anchor, which took its anchor from set iteration.
+    #
+    # `FoursomeMembership.Meta.ordering` is `['id']`, so this is creation
+    # order — which is the order the golfers are listed everywhere else.
+    _mem_rank = {m.player_id: i
+                 for i, m in enumerate(foursome.memberships.all())}
+
     def _team_players(team_num):
         if team_num not in teams:
             return []
@@ -1499,7 +1630,8 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
                 'course_handicap': ch_of.get(p.id),
                 'handicap_index' : idx_of.get(p.id, ''),
             }
-            for p in teams[team_num].players.all()
+            for p in sorted(teams[team_num].players.all(),
+                            key=lambda p: _mem_rank.get(p.id, 1 << 30))
         ]
 
     # Scorecard grid for the leaderboard card (Nassau has no scorecard otherwise).
@@ -1708,6 +1840,9 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
         'holes'               : holes_out,
         'can_press'           : can_press,
         'press_available_nine': press_available_nine,
+        # The Claremont bottom game presses itself, at its own band.
+        'bottom_can_press'           : bot_can_press,
+        'bottom_press_available_nine': bot_press_available_nine,
         'phantom'             : _build_phantom_info(foursome, game.net_percent),
         'team1_colour'        : _team_colour(foursome, 1),
         'team2_colour'        : _team_colour(foursome, 2),
@@ -2277,6 +2412,8 @@ def nassau_hole_card(foursome, hole: int) -> dict:
         'bottom'      : bottom,
         'can_press'   : bool(summary.get('can_press')),
         'press_nine'  : summary.get('press_available_nine'),
+        'can_press_bottom' : bool(summary.get('bottom_can_press')),
+        'press_nine_bottom': summary.get('bottom_press_available_nine'),
         'money'       : money,
         'money_note'  : money_note,
         'round_over'  : hole_complete and pos == len(order) - 1,

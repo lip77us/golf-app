@@ -12,7 +12,7 @@
   "claremont": false,
   "players": [
     {
-      "player_id": 182220,
+      "player_id": 206857,
       "name": "Paul Lipkin",
       "short": "PL",
       "first": "Paul",
@@ -24,7 +24,7 @@
       "counted": true
     },
     {
-      "player_id": 182221,
+      "player_id": 206858,
       "name": "Dave Kim",
       "short": "DK",
       "first": "Dave",
@@ -36,7 +36,7 @@
       "counted": true
     },
     {
-      "player_id": 182222,
+      "player_id": 206859,
       "name": "Sam Reid",
       "short": "SR",
       "first": "Sam",
@@ -48,7 +48,7 @@
       "counted": true
     },
     {
-      "player_id": 182223,
+      "player_id": 206860,
       "name": "Mike Nash",
       "short": "MN",
       "first": "Mike",
@@ -65,8 +65,8 @@
       "side": 1,
       "label": "Paul + Dave",
       "player_ids": [
-        182220,
-        182221
+        206857,
+        206858
       ],
       "best": 4,
       "sub": "counts: Paul \u00b7 Dave",
@@ -76,8 +76,8 @@
       "side": 2,
       "label": "Sam + Mike",
       "player_ids": [
-        182222,
-        182223
+        206859,
+        206860
       ],
       "best": 4,
       "sub": "counts: Sam",
@@ -135,6 +135,8 @@
   "bottom": null,
   "can_press": false,
   "press_nine": null,
+  "can_press_bottom": false,
+  "press_nine_bottom": null,
   "money": [
     {
       "side": 1,

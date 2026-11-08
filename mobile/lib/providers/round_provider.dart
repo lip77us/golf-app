@@ -1878,7 +1878,7 @@ class RoundProvider extends ChangeNotifier {
   /// Returns true on success.  On failure (bad state, network, etc.),
   /// [error] is set and false returned.
   Future<bool> callNassauPress(int foursomeId,
-      {required int startHole, String? gameType}) async {
+      {required int startHole, String? gameType, String side = 'top'}) async {
     _submitting = true;
     _clearError();
     notifyListeners();
@@ -1887,6 +1887,7 @@ class RoundProvider extends ChangeNotifier {
         foursomeId,
         startHole: startHole,
         gameType:  gameType,
+        side:      side,
       );
       final s = r.summary;
       _nassauByType[s.gameType] = s;

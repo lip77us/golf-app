@@ -157,31 +157,38 @@ class TheBetLinesTests(_CardBase):
         self.assertIn('P1 manual 1 UP', chips)
 
     def test_the_press_button_is_the_ENGINE_s_answer(self):
-        """**And the engine and the handoff disagree**, which is recorded
-        rather than resolved here.
+        """A manual press is offered at exactly 1 down on the top game.
 
-        The handoff offers a manual press when the trailing side is *1 down
-        or level*. `nassau_summary.can_press` offers it on ANY non-zero
-        margin and never at level — so a level match shows no button, and a
-        side five down still sees one. That is the shipped rule and it is
-        money, so the card reports it.
+        The rule (Paul, 8 Nov 2026) is that a manual press exists to let you
+        press BEFORE the auto press fires — so the window is "down, but not
+        yet down far enough to be auto-pressed". The top game is 1 point a
+        hole and autos at 2, so the window is the single value 1.
         """
         self._setup(press_mode='manual')
         self._play(1, 4, 4, 4, 4)        # all square
         self.assertFalse(self._card(1)['can_press'],
-                         'the engine does not offer a press at level')
+                         'never while the bet itself is even')
         self._play(2, 4, 4, 6, 6)
         card = self._card(2)
         self.assertTrue(card['can_press'])
         self.assertEqual(card['press_nine'], 'front')
 
+    def test_and_NOT_at_two_down_where_the_auto_press_takes_over(self):
+        self._setup(press_mode='manual')
+        self._play(1, 4, 4, 6, 6)
+        self._play(2, 4, 4, 6, 6)        # 2 up: the auto press's band
+        self.assertFalse(self._card(2)['can_press'])
+        self.assertIsNone(self._card(2)['press_nine'])
+
     def test_and_never_on_the_last_hole_of_a_nine(self):
         # A press cannot start after the last hole of its nine, which both
-        # the engine and the handoff agree on.
+        # the engine and the handoff agree on. The margin is kept at 1 so
+        # this fails for the reason it is named for.
         self._setup(press_mode='manual')
-        for h in range(1, 10):
-            self._play(h, 4, 4, 5, 5)
-        self.assertFalse(self._card(9)['can_press'])
+        self._play(1, 4, 4, 5, 5)
+        for h in range(2, 10):
+            self._play(h, 4, 4, 4, 4)
+        self.assertEqual(self._card(9)['can_press'], False)
 
     def test_a_closed_out_nine_reads_its_notation(self):
         self._setup()
@@ -350,6 +357,192 @@ class SinglesNassauTests(_CardBase):
         self.assertEqual([s['label'] for s in card['sides']], ['Paul', 'Sam'])
         self.assertEqual(card['sides'][0]['sub'], 'CH 0 · no stroke')
         self.assertEqual(card['reason'], 'net 4 v 5')
+
+
+class ASideReadsInCardOrderTests(_CardBase):
+    """`team.players` is a many-to-many with NO ordering.
+
+    So the database returned a side's two golfers in whatever order it
+    liked — `Sam + Mike` on one request and `Mike + Sam` on the next, from
+    the same rows, which is how this was found: a fixture regenerated
+    against unchanged code and came back with the pair the other way round.
+
+    That is the name of a SIDE, reordering under the reader on the board,
+    the tray, the side headers and the money rows. Same shape as the Sixes
+    anchor, which took its anchor from set iteration.
+
+    **The fixture forces membership order and pk order apart**, because a
+    test whose inputs agree with each other cannot pin which one is read —
+    that is the lesson the Sixes anchor test was rewritten for.
+    """
+
+    def setUp(self):
+        super().setUp()
+        # Sam's membership is recreated, so it now has the HIGHEST id while
+        # Sam's player pk is still below Mike's. Card order is therefore
+        # Paul, Dave, Mike, Sam — the opposite of pk order on that side.
+        from tournament.models import FoursomeMembership
+        sam = self.fs.memberships.get(player_id=self.pid['Sam'])
+        tee, ch, ph = sam.tee, sam.course_handicap, sam.playing_handicap
+        sam.delete()
+        FoursomeMembership.objects.create(
+            foursome=self.fs, player_id=self.pid['Sam'],
+            tee=tee, course_handicap=ch, playing_handicap=ph)
+        self.assertLess(self.pid['Sam'], self.pid['Mike'],
+                        'the fixture only means something while the pks '
+                        'run the other way')
+
+    def _card_order(self):
+        self._setup()
+        self._play(1, 4, 5, 5, 6)
+        return self._card(1)
+
+    def test_the_side_label_follows_the_card(self):
+        self.assertEqual([s['label'] for s in self._card_order()['sides']],
+                         ['Paul + Dave', 'Mike + Sam'])
+
+    def test_and_so_do_the_rows(self):
+        card = self._card_order()
+        self.assertEqual([p['first'] for p in card['players']],
+                         ['Paul', 'Dave', 'Mike', 'Sam'])
+
+    def test_and_the_money_rows(self):
+        card = self._card_order()
+        self.assertEqual({m['label'] for m in card['money']},
+                         {'Paul + Dave', 'Mike + Sam'})
+
+    def test_it_is_the_same_on_every_read(self):
+        """The bug was not a wrong order — it was an unstable one."""
+        self._setup()
+        self._play(1, 4, 5, 5, 6)
+        first = [s['label'] for s in self._card(1)['sides']]
+        for _ in range(4):
+            self.assertEqual([s['label'] for s in self._card(1)['sides']],
+                             first)
+
+
+class TheManualPressWindowTests(_CardBase):
+    """`can_press` — the rule Paul settled on 8 Nov 2026.
+
+    **A manual press is offered while you are down but not yet down far
+    enough for that bet's AUTO press.** One rule, two numbers, because the
+    numbers follow from what each bet is worth a hole:
+
+        top    — 1 point a hole, auto at 2 down  → offered at exactly 1 down
+        bottom — 2 points a hole, auto at 4      → offered at 1, 2 or 3 down
+
+    And never while anything is level: not the bet itself, and not a press
+    already running on it.
+    """
+
+    def _setup(self, **kw):
+        kw.setdefault('variant', 'claremont')
+        kw.setdefault('press_mode', 'manual')
+        return super()._setup(**kw)
+
+    def _bottom(self, hole, pts):
+        """Play a hole worth `pts` to the BOTTOM game, from pine's side.
+
+        +2 / -2 is both balls, +1 / -1 is one of them, 0 is level. The TOP
+        game moves with it and is not what these assert.
+        """
+        self._play(hole, *{
+            2: (4, 5, 5, 6),
+            1: (4, 6, 4, 5),
+            0: (4, 5, 4, 5),
+            -1: (5, 6, 4, 6),
+            -2: (5, 6, 4, 5),
+        }[pts])
+
+    # ── the bottom game's own window ─────────────────────────────────────
+    def test_one_point_down_can_press(self):
+        self._setup()
+        self._bottom(1, -1)
+        card = self._card(1)
+        self.assertTrue(card['can_press_bottom'])
+        self.assertEqual(card['press_nine_bottom'], 'front')
+
+    def test_and_so_can_two_and_three(self):
+        self._setup()
+        for pts, hole in ((-2, 1), (-1, 2)):
+            self._bottom(hole, pts)
+            self.assertTrue(self._card(hole)['can_press_bottom'],
+                            f'{abs(pts)} down should still offer one')
+
+    def test_but_not_FOUR_where_the_bottom_auto_fires(self):
+        self._setup()
+        self._bottom(1, -2)
+        self._bottom(2, -2)              # 4 points down
+        self.assertFalse(self._card(2)['can_press_bottom'])
+        self.assertIsNone(self._card(2)['press_nine_bottom'])
+
+    def test_nor_while_the_bottom_bet_is_even(self):
+        self._setup()
+        self._bottom(1, 0)
+        self.assertFalse(self._card(1)['can_press_bottom'])
+
+    # ── never while a press is even ──────────────────────────────────────
+    def test_a_press_just_called_blocks_a_second(self):
+        """It has no holes yet, so it is even by definition — which is what
+        stops one being stacked on another."""
+        self._setup()
+        self._bottom(1, -1)
+        self.assertTrue(self._card(1)['can_press_bottom'])
+        add_manual_press(self.fs, start_hole=2, side='bottom')
+        self.assertFalse(self._card(1)['can_press_bottom'])
+
+    def test_and_a_press_that_has_MOVED_does_not(self):
+        self._setup()
+        self._bottom(1, -1)
+        add_manual_press(self.fs, start_hole=2, side='bottom')
+        self._bottom(2, -1)              # bottom -2, press -1
+        self.assertTrue(self._card(2)['can_press_bottom'],
+                        'the press is no longer level, and 2 down is in the '
+                        'bottom window')
+
+    # ── the two games press separately ───────────────────────────────────
+    def test_a_bottom_press_lands_on_the_BOTTOM_lines(self):
+        self._setup()
+        self._bottom(1, -1)
+        add_manual_press(self.fs, start_hole=2, side='bottom')
+        card = self._card(1)
+        self.assertEqual(self._chips(card['bottom'], 'front'),
+                         ['Front \u22121', 'P1 manual starts 2'])
+        self.assertNotIn('P1 manual starts 2', self._chips(card, 'front'))
+
+    def test_and_the_same_hole_can_start_one_of_each(self):
+        self._setup()
+        self._bottom(1, -1)              # top -1 too: one ball lost
+        add_manual_press(self.fs, start_hole=2, side='top')
+        add_manual_press(self.fs, start_hole=2, side='bottom')
+        card = self._card(1)
+        self.assertIn('P1 manual starts 2', self._chips(card, 'front'))
+        self.assertIn('P1 manual starts 2',
+                      self._chips(card['bottom'], 'front'))
+
+    def test_a_plain_nassau_has_no_bottom_bet_to_press(self):
+        self.fs.memberships.all().delete()
+        self.setUp()
+        super()._setup(variant='none', press_mode='manual')
+        self._play(1, 5, 5, 4, 4)
+        self.assertTrue(self._card(1)['can_press'])
+        self.assertFalse(self._card(1)['can_press_bottom'])
+        with self.assertRaises(ValueError):
+            add_manual_press(self.fs, start_hole=2, side='bottom')
+
+    # ── the nine is by POSITION ──────────────────────────────────────────
+    def test_the_nine_offered_is_the_groups_own(self):
+        """Off a shotgun from the 10th the first hole played is 10, and the
+        old check read `last_hole < 9` — so it named the BACK nine on the
+        group's very first hole. The shotgun shape, in the one place that
+        decides which bet a press joins."""
+        self.round.starting_hole = 10
+        self.round.save(update_fields=['starting_hole'])
+        self._setup()
+        self._bottom(10, -1)
+        card = self._card(10)
+        self.assertEqual(card['press_nine_bottom'], 'front')
+        self.assertEqual(card['press_nine'], 'front')
 
 
 class ItFollowsPlayOrderTests(_CardBase):

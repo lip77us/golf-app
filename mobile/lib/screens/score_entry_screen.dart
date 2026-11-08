@@ -1919,14 +1919,17 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   /// Call a manual Nassau press, starting on the NEXT hole.
   ///
   /// **The nine is the engine's, and so is whether one is allowed at all** —
-  /// the card's `can_press` is what draws the button, and `add_manual_press`
-  /// re-checks on the way in. The start hole is the next in the GROUP's play
+  /// the card's `can_press` / `can_press_bottom` is what draws the button,
+  /// and `add_manual_press` re-checks on the way in. [side] names which of
+  /// Claremont's two games is being pressed; `'top'` on a plain Nassau,
+  /// which has only one. The start hole is the next in the GROUP's play
   /// order, not `hole + 1`, which off a shotgun is a hole the group has
   /// already played.
-  Future<void> _nassauPress(RoundProvider rp, NassauHoleCard card) async {
+  Future<void> _nassauPress(RoundProvider rp, String side) async {
     final next = _nextHoleInOrder(rp);
     if (next == null) return;
-    final ok = await rp.callNassauPress(widget.foursomeId, startHole: next);
+    final ok = await rp.callNassauPress(widget.foursomeId, startHole: next,
+                                        side: side);
     if (!mounted) return;
     if (!ok && rp.error != null) {
       ScaffoldMessenger.of(context)
@@ -3608,13 +3611,13 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                   : (_nextHoleInOrder(rp) == null
                       ? () => _completeRound(ctx, players, par)
                       : _advance),
-              // **The engine decides whether a press is on offer**, and the
-              // nine it belongs to; this only sends it. Offering a button
-              // the server will refuse is how the day bet's off switch went
-              // missing.
-              onPress: nasCard.canPress && !rp.submitting
-                  ? () => _nassauPress(rp, nasCard)
-                  : null,
+              // **The engine decides whether a press is on offer**, which
+              // game it is on and which nine it belongs to; this only
+              // sends it. Offering a button the server will refuse is how
+              // the day bet's off switch went missing.
+              onPress: rp.submitting
+                  ? null
+                  : (side) => _nassauPress(rp, side),
               pressing: rp.submitting,
               gettingResult: rp.trayResultPending(_selectedHole) ||
                   _hasRealPending(_selectedHole),

@@ -1483,11 +1483,18 @@ class NassauPressSerializer(serializers.Serializer):
 
     start_hole: hole number (1–18) at which the press begins.
     game_type:  which Nassau-family match to press (default 'nassau').
+    side:       'top' (the ordinary Nassau) or 'bottom' (Claremont's
+                2-points-a-hole game, which presses on its own band).
+                Defaults to 'top', so a client that does not send it keeps
+                pressing exactly what it always pressed.
     """
     start_hole = serializers.IntegerField(min_value=1, max_value=18)
     game_type  = serializers.ChoiceField(
         choices=['nassau', 'nassau_nine', 'match_18'],
         required=False, allow_null=True, default=None,
+    )
+    side       = serializers.ChoiceField(
+        choices=['top', 'bottom'], required=False, default='top',
     )
 
 

@@ -36,9 +36,13 @@ class NassauHoleTray extends StatelessWidget {
   final VoidCallback? onPrev;
   final VoidCallback? onNext;
 
-  /// Call a manual press, starting next hole. Null when the engine does not
-  /// offer one — which is the only thing that decides it.
-  final VoidCallback? onPress;
+  /// Call a manual press on that game, starting next hole. Null when the
+  /// engine does not offer one — which is the only thing that decides it.
+  ///
+  /// **The side is a whole bet, not a flavour.** Claremont is two games at
+  /// once and each presses itself, on its own band: the top at 1 down (it
+  /// autos at 2) and the bottom at 1–3 points down (it autos at 4).
+  final void Function(String side)? onPress;
 
   final bool gettingResult;
   final bool notSynced;
@@ -127,7 +131,7 @@ class NassauHoleTray extends StatelessWidget {
 /// Who won the hole, and every bet it moved.
 class _MatchCard extends StatelessWidget {
   final NassauHoleCard card;
-  final VoidCallback? onPress;
+  final void Function(String side)? onPress;
   final bool pressing;
   const _MatchCard({required this.card, this.onPress, this.pressing = false});
 
@@ -147,7 +151,9 @@ class _MatchCard extends StatelessWidget {
           const _SubHead('TOP', 'low v low · 1 pt · press at 2 down'),
         ],
         for (final l in card.lines)
-          _Line(line: l, card: card, onPress: onPress, pressing: pressing),
+          _Line(line: l, card: card, side: 'top',
+                canPress: card.canPress,
+                onPress: onPress, pressing: pressing),
         if (card.bottom != null) ...[
           const SizedBox(height: 10),
           const _SubHead('BOTTOM', 'low + high · 2 pts · press at 4 down'),
@@ -155,7 +161,9 @@ class _MatchCard extends StatelessWidget {
           _Balls(bottom: card.bottom!),
           const SizedBox(height: 2),
           for (final l in card.bottom!.lines)
-            _Line(line: l, card: card),
+            _Line(line: l, card: card, side: 'bottom',
+                  canPress: card.canPressBottom,
+                  onPress: onPress, pressing: pressing),
         ],
       ]),
     );
@@ -259,20 +267,25 @@ class _SubHead extends StatelessWidget {
 class _Line extends StatelessWidget {
   final NassauBetLine line;
   final NassauHoleCard card;
-  final VoidCallback? onPress;
+
+  /// Which of Claremont's two games this block is — `top` on a plain
+  /// Nassau, where there is only one.
+  final String side;
+  final bool canPress;
+  final void Function(String side)? onPress;
   final bool pressing;
-  const _Line({required this.line, required this.card, this.onPress,
-               this.pressing = false});
+  const _Line({required this.line, required this.card, required this.side,
+               required this.canPress, this.onPress, this.pressing = false});
 
   @override
   Widget build(BuildContext context) {
-    // **The Press button sits at the end of the Overall line**, which is the
-    // design's own placement and reads as the end of the list rather than as
-    // part of any one nine. The nine it presses is the engine's answer.
-    final showPress = onPress != null &&
-        line.key == 'overall' &&
-        card.canPress &&
-        !card.claremont;
+    // **The Press button sits at the end of its own block's Overall line**,
+    // which is the design's placement and reads as the end of that list
+    // rather than as part of any one nine. On Claremont there are two
+    // buttons, one a game, because the two press at different bands — and
+    // which nine either joins is the engine's answer, not this widget's.
+    final showPress =
+        onPress != null && line.key == 'overall' && canPress;
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       // **Top-aligned.** A nine with a press can wrap to two chip rows, and
@@ -298,7 +311,7 @@ class _Line extends StatelessWidget {
         ),
         if (showPress) ...[
           const SizedBox(width: 6),
-          _PressButton(onPress: onPress!, busy: pressing),
+          _PressButton(onPress: () => onPress!(side), busy: pressing),
         ],
       ]),
     );

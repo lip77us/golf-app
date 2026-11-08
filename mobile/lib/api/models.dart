@@ -5460,7 +5460,7 @@ class AnnandaleFridayMatch {
   final List<int>     side2Ids;
   final int?          side1Team;
   final int?          side2Team;
-  final bool          canPress;    // 1 down or level, manual presses on
+  final bool          canPress;    // the engine's window; see NassauHoleCard
   final NassauSummary summary;
 
   const AnnandaleFridayMatch({
@@ -11729,10 +11729,18 @@ class NassauHoleCard {
   /// The Claremont bottom game, or null.
   final NassauBottomGame? bottom;
 
-  /// A manual press is available — **the engine's answer, not the
-  /// handoff's rule.** See the card's own note.
+  /// A manual press is available on the TOP game — **the engine's answer,
+  /// never re-derived here.** It is offered at exactly 1 down: a manual
+  /// press exists to let you press BEFORE the auto press fires, and the top
+  /// game autos at 2 (Paul, 8 Nov 2026).
   final bool canPress;
   final String? pressNine;
+
+  /// The same for Claremont's bottom game, which is 2 points a hole and
+  /// autos at 4 — so its window is 1, 2 or 3 points down. A separate bet,
+  /// pressed separately; false on a plain Nassau, which has no bottom bet.
+  final bool canPressBottom;
+  final String? pressNineBottom;
 
   final List<FourballMoneyRow> money;
 
@@ -11762,6 +11770,8 @@ class NassauHoleCard {
     required this.bottom,
     required this.canPress,
     required this.pressNine,
+    required this.canPressBottom,
+    required this.pressNineBottom,
     required this.money,
     required this.moneyNote,
     required this.roundOver,
@@ -11800,6 +11810,8 @@ class NassauHoleCard {
                 (j['bottom'] as Map).cast<String, dynamic>()),
         canPress: j['can_press'] as bool? ?? false,
         pressNine: j['press_nine'] as String?,
+        canPressBottom: j['can_press_bottom'] as bool? ?? false,
+        pressNineBottom: j['press_nine_bottom'] as String?,
         money: ((j['money'] as List?) ?? const [])
             .map((e) =>
                 FourballMoneyRow.fromJson((e as Map).cast<String, dynamic>()))

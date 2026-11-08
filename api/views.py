@@ -8065,11 +8065,14 @@ class NassauSetupView(APIView):
 class NassauPressView(APIView):
     """
     POST /api/foursomes/{id}/nassau/press/
-    Body: { "start_hole": 7 }
+    Body: { "start_hole": 7, "side": "top" }
 
     Called by the losing team to declare a manual press.  The winning
     team always accepts — no pending/rejection state needed.
     Returns the updated nassau summary.
+
+    `side` is 'bottom' for Claremont's 2-points-a-hole game, which is a
+    separate bet with its own press band; it defaults to 'top'.
     """
     def post(self, request, pk):
         foursome = foursome_for_scorer(request.user, pk)
@@ -8082,7 +8085,8 @@ class NassauPressView(APIView):
         game_type  = resolve_nassau_game_type(
             foursome, ser.validated_data.get('game_type'))
         try:
-            add_manual_press(foursome, start_hole, game_type=game_type)
+            add_manual_press(foursome, start_hole, game_type=game_type,
+                             side=ser.validated_data.get('side') or 'top')
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 

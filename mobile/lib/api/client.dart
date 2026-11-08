@@ -1886,6 +1886,10 @@ class ApiClient {
   /// Losing team calls a manual press starting at [startHole].
   /// The winning team always accepts.
   ///
+  /// [side] is `'bottom'` for Claremont's 2-points-a-hole game, which is a
+  /// separate bet with its own press band. The server defaults to `'top'`,
+  /// so a build that does not send it presses exactly what it always did.
+  ///
   /// Comes back with the hole card alongside the summary, for the same
   /// reason a score POST does: calling a press is the other thing that
   /// changes what the bets read, so the tray must not have to wait on a
@@ -1894,10 +1898,12 @@ class ApiClient {
     int foursomeId, {
     required int startHole,
     String? gameType,
+    String side = 'top',
   }) async {
     final data = await _post('/foursomes/$foursomeId/nassau/press/', {
       'start_hole': startHole,
       if (gameType != null) 'game_type': gameType,
+      'side': side,
     });
     final map = (data as Map).cast<String, dynamic>();
     final card = map['nassau_hole'];

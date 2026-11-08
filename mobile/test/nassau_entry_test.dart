@@ -25,7 +25,7 @@ NassauHoleCard _card(String name, {Map<String, dynamic> over = const {}}) =>
     NassauHoleCard.fromJson({..._fixture(name), ...over});
 
 Future<void> _pump(WidgetTester t, NassauHoleCard card,
-    {VoidCallback? onPress, bool gettingResult = false,
+    {void Function(String side)? onPress, bool gettingResult = false,
      Size size = const Size(390, 900)}) async {
   await t.binding.setSurfaceSize(size);
   addTearDown(() => t.binding.setSurfaceSize(null));
@@ -201,31 +201,63 @@ void main() {
   group('the press button', () {
     testWidgets('it is offered only when the SERVER says so', (t) async {
       // The flag is the engine's whole answer — whether a manual press is
-      // allowed, and on which nine. Offering a button the server refuses is
-      // how the day bet's off switch went missing.
-      await _pump(t, _card('nassau_hole7_manual'), onPress: () {});
+      // allowed, which game it is on, and on which nine. Offering a button
+      // the server refuses is how the day bet's off switch went missing.
+      await _pump(t, _card('nassau_hole7_manual'), onPress: (_) {});
       expect(find.text('Press'), findsNothing);
 
       await _pump(t, _card('nassau_hole7_manual', over: {'can_press': true}),
-          onPress: () {});
+          onPress: (_) {});
       expect(find.text('Press'), findsOneWidget);
     });
 
-    testWidgets('it calls back', (t) async {
-      var called = 0;
+    testWidgets('it names the game it presses', (t) async {
+      final sides = <String>[];
       await _pump(t, _card('nassau_hole7_manual', over: {'can_press': true}),
-          onPress: () => called++);
+          onPress: sides.add);
       await t.tap(find.text('Press'));
       await t.pump();
-      expect(called, 1);
+      expect(sides, ['top']);
     });
 
-    testWidgets('and never on Claremont, where two games press at two '
-        'thresholds', (t) async {
+    testWidgets('Claremont offers one a game, at its own band', (t) async {
+      // Two separate bets: the top is 1 point a hole and autos at 2, the
+      // bottom is 2 points and autos at 4 — so they are rarely pressable at
+      // the same moment, and never interchangeably.
+      final sides = <String>[];
       await _pump(
-          t, _card('nassau_hole7_claremont', over: {'can_press': true}),
-          onPress: () {});
-      expect(find.text('Press'), findsNothing);
+          t,
+          _card('nassau_hole7_claremont',
+              over: {'can_press': true, 'can_press_bottom': true}),
+          onPress: sides.add);
+      expect(find.text('Press'), findsNWidgets(2));
+      // The tray scrolls when the content is taller than its cap, so the
+      // bottom game's button can start off-screen — bring it in, which is
+      // what a thumb does. A bare `tap` silently misses.
+      for (final f in [find.text('Press').first, find.text('Press').last]) {
+        await t.ensureVisible(f);
+        await t.pumpAndSettle();
+        await t.tap(f);
+      }
+      await t.pump();
+      expect(sides, ['top', 'bottom'],
+          reason: 'the first button belongs to the TOP block');
+    });
+
+    testWidgets('and only the bottom one when only it is in its window',
+        (t) async {
+      final sides = <String>[];
+      await _pump(
+          t,
+          _card('nassau_hole7_claremont',
+              over: {'can_press': false, 'can_press_bottom': true}),
+          onPress: sides.add);
+      expect(find.text('Press'), findsOneWidget);
+      await t.ensureVisible(find.text('Press'));
+      await t.pumpAndSettle();
+      await t.tap(find.text('Press'));
+      await t.pump();
+      expect(sides, ['bottom']);
     });
   });
 
