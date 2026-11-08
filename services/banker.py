@@ -648,6 +648,18 @@ def resolve_hole(game, foursome, row, gross, cut_off=frozenset()) -> dict:
         'hole_capped'  : scale is not None,
         'lines'        : lines,
         'banker_delta' : banker_delta,
+        # **What this HOLE did to each golfer**, which is the tray's left
+        # money column against the round's right one. Stated here rather
+        # than summed on a phone: the banker's figure is one number against
+        # three bets and an opponent's is signed from his own side, and a
+        # client adding those up would be a second opinion about which way
+        # a cut-off or a scaled hole points.
+        'hole_money'   : (
+            {row.banker_id: banker_delta}
+            | {l['player_id']: (l['amount'] if l['outcome'] == 'won'
+                                else -l['amount'] if l['outcome'] == 'lost'
+                                else ZERO)
+               for l in lines}),
         'resolved'     : bool(lines) and all(l['outcome'] != 'open'
                                              for l in lines),
     }
@@ -1027,6 +1039,7 @@ def banker_summary(foursome) -> dict | None:
                 'banker_delta': ZERO, 'resolved': False,
                 'exposure': ZERO, 'exposure_if_max': ZERO, 'outstanding': [],
                 'cut_off': [], 'hole_capped': False, 'scores': _scores_on(h),
+                'hole_money': {},
             })
             continue
         res = resolve_hole(game, foursome, row, gross,
@@ -1112,6 +1125,10 @@ def banker_summary(foursome) -> dict | None:
         # will then refuse — the screen and the action have to agree.
         who, tied = next_banker(game, rows[current['hole']], net, ids,
                                 cut_off=frozenset(cut_off))
+        current['low_net'] = min(
+            (net.get(p, {}).get(current['hole']) for p in ids
+             if net.get(p, {}).get(current['hole']) is not None),
+            default=None)
         if tied and who is None:
             awaiting, tie_ids = current['hole'], tied
         else:

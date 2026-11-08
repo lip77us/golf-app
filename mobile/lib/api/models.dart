@@ -8326,6 +8326,16 @@ class BankerHoleState {
   /// offering him a ladder and a double it will refuse.
   final List<int> cutOff;
 
+  /// What this HOLE did to each golfer — the tray's left money column
+  /// against the round's right one. The server's figure: the banker's is
+  /// one number against three bets and an opponent's is signed from his own
+  /// side, and a cut-off or a scaled hole changes which way they point.
+  final Map<int, double> holeMoney;
+
+  /// The low net on the hole, which is what decides the next bank. Null
+  /// until it is resolved.
+  final int? lowNet;
+
   const BankerHoleState({
     required this.hole, this.par, this.strokeIndex, required this.isPar3,
     this.bankerId,
@@ -8335,6 +8345,8 @@ class BankerHoleState {
     required this.bankerDelta, required this.resolved, required this.exposure,
     required this.exposureIfMax, required this.outstanding,
     this.cutOff = const [],
+    this.holeMoney = const {},
+    this.lowNet,
   });
 
   factory BankerHoleState.fromJson(Map<String, dynamic> j) => BankerHoleState(
@@ -8361,6 +8373,11 @@ class BankerHoleState {
         outstanding: ((j['outstanding'] as List?) ?? [])
             .map((e) => '$e').toList(),
         cutOff: ((j['cut_off'] as List?) ?? []).map((e) => e as int).toList(),
+        holeMoney: {
+          for (final e in ((j['hole_money'] as Map?) ?? const {}).entries)
+            int.parse('${e.key}'): _d(e.value),
+        },
+        lowNet: (j['low_net'] as num?)?.toInt(),
       );
 
   bool get betsIn => lines.isNotEmpty;

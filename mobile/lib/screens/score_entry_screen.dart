@@ -42,6 +42,7 @@ import '../widgets/vegas_entry.dart';
 import '../widgets/fourball_entry.dart';
 import '../widgets/nassau_entry.dart';
 import '../widgets/skins_entry.dart';
+import '../widgets/banker_entry.dart';
 import '../widgets/banker_entry_strip.dart';
 import '../widgets/triple_cup_pairings.dart';
 import '../widgets/standing_ribbon.dart';
@@ -1504,12 +1505,19 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     });
 
     if (_bankerRound(rp)) {
-      // Back to the hole's own screen to resolve it and settle the bank.
+      // **It stays here now.** This used to pop back to `banker_screen` to
+      // resolve the hole and settle the bank, which is the two-screen loop
+      // `~/Downloads/handoff-banker-score-entry` folds into one: the tray
+      // reports the three one-on-ones and its forward button opens the next
+      // hole. The summary still has to be refreshed, because the resolution
+      // is the server's.
       await context.read<SyncService>().waitUntilIdle();
       if (!mounted) return;
       await context.read<RoundProvider>().loadBanker(widget.foursomeId);
       if (!mounted) return;
-      Navigator.of(ctx).pop();
+      // A changed score re-decides the hole, so a tie pick made against the
+      // old one is no longer an answer to anything.
+      setState(() => _bankerTiePick = null);
       return;
     }
     _advance();
@@ -1577,7 +1585,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         // and it matters most here: Skins is the commonest SIDE game in the
         // app, and a side game must not take over the entry of the round's
         // own one.
-        primary == GameIds.skins;
+        primary == GameIds.skins ||
+        // Banker, per `~/Downloads/handoff-banker-score-entry`, which folds
+        // the betting into this screen: the max and the three bets on the
+        // tee, the calls in the air, then the keypad and the tray.
+        primary == GameIds.banker;
   }
 
   /// This hole ends in a TRAY — Annandale Friday's, Sixes' or Stroke Play's.
@@ -1591,6 +1603,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       _singlesCard(rp) != null ||
       _nassauCard(rp) != null ||
       _skinsCard(rp) != null ||
+      _bankerHoleOpen(rp) ||
       _strokePlayCard(rp) != null;
 
   /// The hole we have asked the server for; see `_ensureSixesCard`.
@@ -1752,6 +1765,98 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       return null;
     }
     return rp.singlesHole(_selectedHole);
+  }
+
+  /// This hole ends in Banker's tray.
+  ///
+  /// **Deliberately NOT `_bankerTrayState`**, which requires the hole to be
+  /// RESOLVED — and a hole resolves only once its scores are posted. Asking
+  /// the strict question here would have meant the hole never posted
+  /// itself, so the tray never rose, so the hole never resolved: the
+  /// shipped-and-unreachable shape, with the two halves holding each other
+  /// shut.
+  bool _bankerHoleOpen(RoundProvider rp) {
+    if (!_bankerRound(rp)) return false;
+    final h = rp.bankerSummary?.current;
+    return h != null && h.hole == _selectedHole && h.lines.isNotEmpty;
+  }
+
+  /// Banker's hole, when Banker is the primary and the hole is RESOLVED.
+  ///
+  /// **No fetch, and no `*_hole_card` endpoint.** Every other game's summary
+  /// reports the ROUND, so its tray needed a per-hole card; `banker_summary`
+  /// already answers for the hole in play (`current`) because that is the
+  /// whole subject of this game. Adding one would have been a second place
+  /// the chain and the next banker are composed.
+  BankerHoleState? _bankerTrayState(RoundProvider rp) {
+    if (!_bankerRound(rp)) return null;
+    final h = rp.bankerSummary?.current;
+    if (h == null || h.hole != _selectedHole || !h.resolved) return null;
+    return h;
+  }
+
+  /// Who the group picked on a tie for the bank, and why. Cleared whenever a
+  /// score changes — the pick belongs to a result that no longer stands.
+  int? _bankerTiePick;
+  String _bankerTieReason = 'holed-out-first';
+
+  /// The card's golfers as `(id, first)`, for the bets card and the tray.
+  List<({int id, String first})> _bankerRoster(List<Membership> players) => [
+        for (final m in players)
+          if (!m.player.isPhantom)
+            (id: m.player.id, first: m.player.name.split(' ').first),
+      ];
+
+  /// One declaration on the hole — a max, a bet, the lock, a call. **The
+  /// server owns the sequence**, so a late call comes back 409 rather than
+  /// quietly moving money after the banker teed off; this only sends it.
+  Future<void> _bankerDeclare(RoundProvider rp, {
+    double? maxBet,
+    List<Map<String, dynamic>>? bets,
+    bool? lock,
+    int? double_,
+    int? undouble,
+    bool? counter,
+  }) async {
+    setState(() => _bankerBusy = true);
+    try {
+      final s = await context.read<AuthProvider>().client.postBankerHole(
+          widget.foursomeId,
+          holeNumber: _selectedHole,
+          maxBet: maxBet, bets: bets, lock: lock,
+          double_: double_, undouble: undouble, counter: counter);
+      rp.setBankerSummary(s);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyError(e))));
+    } finally {
+      if (mounted) setState(() => _bankerBusy = false);
+    }
+  }
+
+  bool _bankerBusy = false;
+
+  /// Open the next hole, answering a tie when there is one.
+  Future<void> _bankerAdvance(RoundProvider rp) async {
+    setState(() => _bankerBusy = true);
+    try {
+      final s = await context.read<AuthProvider>().client.postBankerAdvance(
+          widget.foursomeId,
+          afterHole: _selectedHole,
+          bankerId: _bankerTiePick,
+          tieReason: _bankerTiePick == null ? null : _bankerTieReason);
+      rp.setBankerSummary(s);
+      if (!mounted) return;
+      setState(() => _bankerTiePick = null);
+      _advance();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyError(e))));
+    } finally {
+      if (mounted) setState(() => _bankerBusy = false);
+    }
   }
 
   /// The hole we have asked the server for; see `_ensureSkinsCard`.
@@ -3516,6 +3621,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final fourTray = fourCard != null && fbActive && _editHotPid == null &&
         _holeReady(players, scores, _selectedHole, fourCard);
 
+    // **Banker.** The tray rises on a RESOLVED hole rather than on four
+    // scores: three of the four numbers mean nothing until the banker's is
+    // among them, which is the strip's own long-standing rule.
+    final bkHole = _bankerTrayState(rp);
+    final bkTray = bkHole != null && fbActive && _editHotPid == null;
+
     // **Skins.** Same tray, reporting the nets that decided the hole and
     // what happened to the skin — which is the one thing a group cannot
     // work out from four numbers without knowing the carry.
@@ -3660,6 +3771,41 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               onEdit: () => setState(() {
                 _trayEditing = !_trayEditing;
                 _editHotPid = null;
+              }),
+            )
+          else if (bkTray)
+            BankerHoleTray(
+              summary: rp.bankerSummary!,
+              roster: _bankerRoster(players),
+              onPrev: _prevHoleInOrder(rp) == null ? null : _retreat,
+              // **A tie must be answered before the next hole opens** —
+              // `open_next_hole` refuses otherwise, so the button must not
+              // offer it. That is the engine's rule, read rather than
+              // re-derived.
+              onNext: (rp.submitting || _bankerBusy)
+                  ? null
+                  : (_nextHoleInOrder(rp) == null
+                      ? () => _completeRound(ctx, players, par)
+                      : (rp.bankerSummary!.awaitingTie != null &&
+                              _bankerTiePick == null)
+                          ? null
+                          : () => _bankerAdvance(rp)),
+              tiePick: _bankerTiePick,
+              onPickTie: (id, reason) => setState(() {
+                _bankerTiePick = id;
+                _bankerTieReason = reason;
+              }),
+              roundOver: _nextHoleInOrder(rp) == null,
+              nextHole: _nextHoleInOrder(rp),
+              gettingResult: rp.trayResultPending(_selectedHole) ||
+                  _hasRealPending(_selectedHole),
+              notSynced: rp.trayHoleUnsynced(_selectedHole),
+              picking: _trayEditing,
+              onEdit: () => setState(() {
+                _trayEditing = !_trayEditing;
+                _editHotPid = null;
+                // The pick belongs to a result that is about to change.
+                _bankerTiePick = null;
               }),
             )
           else if (skTray)
@@ -3849,7 +3995,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           // has the tray overlaying this row, so this is the half that goes
           // (Paul, 30 Oct 2026).
           if (!sixTray && !spTray && !vgTray && !fourTray && !nasTray
-              && !skTray)
+              && !skTray && !bkTray)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             child: Column(children: [
@@ -4180,6 +4326,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                     ? null
                     : _nassauCard(rp),
                 skinsCard: _skinsCard(rp),
+                bankerCardId:
+                    _bankerRound(rp) ? _bankerForSelectedHole(rp) : null,
                 pickedUpIds: _noScore[_selectedHole] ?? const {},
                 annandaleSummary:
                     _activeGames(rp.round).contains('annandale_friday')
@@ -4415,6 +4563,39 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                   ),
                   const SizedBox(height: 8),
                 ],
+                // **The money on the hole, above the golfers.** The max
+                // and three bets on the tee, the calls in the air — which
+                // is what this packet folds into the score screen, so the
+                // group no longer walks to another screen and back to place
+                // a bet it is about to score.
+                if (_bankerRound(rp) &&
+                    (rp.bankerSummary!.current?.hole == _selectedHole))
+                  BankerBetsCard(
+                    summary: rp.bankerSummary!,
+                    roster: _bankerRoster(players),
+                    // The engine closes the calls at the first gross; this
+                    // asks the same question of what is on screen so the
+                    // toggles dim the moment a key lands rather than after
+                    // a round trip.
+                    scoreIn: players.any((m) {
+                      final typed = _pending[_selectedHole]?[m.player.id];
+                      if (typed == _kClearedScore) return false;
+                      return (typed ??
+                              sc.holeData(_selectedHole)
+                                  ?.scoreFor(m.player.id)
+                                  ?.grossScore) != null;
+                    }),
+                    busy: _bankerBusy,
+                    onMax: (v) => _bankerDeclare(rp, maxBet: v),
+                    onBet: (pid, amt) => _bankerDeclare(rp, bets: [
+                      {'player_id': pid, 'amount': amt}
+                    ]),
+                    onLock: () => _bankerDeclare(rp, lock: true),
+                    onDouble: (pid, on) => _bankerDeclare(rp,
+                        double_: on ? pid : null,
+                        undouble: on ? null : pid),
+                    onCounter: (on) => _bankerDeclare(rp, counter: on),
+                  ),
                 BankerEntryStrip(
                   summary: rp.bankerSummary!,
                   hole: _selectedHole,
@@ -4664,6 +4845,10 @@ class _HoleScoreCard extends StatelessWidget {
   /// rather than the header pretending there is.
   final FourballHoleCard? fourballHole;
 
+  /// Who banks this hole, for the gold `BANK` tag on his row. Null on
+  /// every round but a Banker one.
+  final int? bankerCardId;
+
   /// Skins' hole card, for the worth header over the golfer card — what
   /// this hole is actually worth, which four nets cannot say without the
   /// carry. Null when Skins is not the primary.
@@ -4689,6 +4874,7 @@ class _HoleScoreCard extends StatelessWidget {
     this.fourballHole,
     this.nassauCard,
     this.skinsCard,
+    this.bankerCardId,
     this.pickedUpIds = const {},
     this.useKeypad = false,
     this.solo = false,
@@ -5450,6 +5636,8 @@ class _HoleScoreCard extends StatelessWidget {
                 comboTee:            m.comboTeeOnHole(holeNumber),
                 isAnchor:            anchorId != null &&
                                      anchorId == m.player.id,
+                isBank:              bankerCardId != null &&
+                                     bankerCardId == m.player.id,
                 // `liveHere`, not `alive`: on the hole the ball was lost on
                 // the switch is still there to be undone, so the row has to
                 // still say whose ball it was.
@@ -6253,6 +6441,12 @@ class _PlayerRow extends StatelessWidget {
   /// names is not where anybody looks for which of four men it is. Reported
   /// from the course on the 2nd tee: "I don't know who is in the hot spot".
   final bool          isAnchor;
+
+  /// He banks this hole. **The same gold as the Hot Seat anchor and for the
+  /// same reason** — it is a ROLE and not a result, so it must not borrow
+  /// the win green; and the two never appear on one row, because a round
+  /// plays one of those games.
+  final bool          isBank;
   /// This golfer carries the field's ball game on THIS hole — the pill reads
   /// the organiser's own name for it. Null on every other row, and on every
   /// row once the ball is gone.
@@ -6309,6 +6503,7 @@ class _PlayerRow extends StatelessWidget {
     required this.par,
     this.comboTee,
     this.isAnchor = false,
+    this.isBank = false,
     this.ballGame,
     this.onTap,
     this.strokesOnThisHole = 0,
@@ -6454,7 +6649,7 @@ class _PlayerRow extends StatelessWidget {
                 // anchor is whose score the hole is built from, which is a
                 // different fact from whether it was any good, so it must not
                 // borrow the win green.
-                if (isAnchor) ...[
+                if (isAnchor || isBank) ...[
                   const SizedBox(width: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -6465,7 +6660,7 @@ class _PlayerRow extends StatelessWidget {
                       border: Border.all(color: Halved.roleLine),
                     ),
                     child: Text(
-                      'HOT SEAT',
+                      isBank ? 'BANK' : 'HOT SEAT',
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: Halved.role,
                         fontWeight: FontWeight.bold,

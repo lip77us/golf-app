@@ -404,3 +404,56 @@ class FourballScorecardDotsTests(FourballBase):
         self._make_fs((0, 0, 0, 12))
         self._setup(hmode='strokes_off', net_percent=100)
         self.assertEqual(sum(self._dots(self.p[0].id).values()), 0)
+
+
+class ASideReadsInCardOrderTests(TestCase):
+    """`team.players` is a many-to-many with NO ordering.
+
+    So the database returned a side's two golfers in whatever order it liked
+    — `Dave & Paul` on one request and `Paul & Dave` on the next, from the
+    same rows. Found by a lock-screen test that passed alone and failed
+    under `--parallel`, which is the only way an unstable order shows.
+
+    `nassau_summary` had the identical bug; this is the same fix, and the
+    fixture forces membership order and pk order apart for the same reason
+    — a test whose two orderings agree cannot pin which one is read.
+    """
+
+    def setUp(self):
+        self.tee   = make_tee()
+        self.round = make_round(self.tee.course)
+        self.fs    = make_foursome(
+            self.round,
+            [('Paul Kelly', 0), ('Dave Moran', 0),
+             ('Sam Reid', 0), ('Lee Naylor', 0)],
+            tee=self.tee)
+        self.pid = {m.player.name.split()[0]: m.player_id
+                    for m in self.fs.memberships.select_related('player')}
+        # Paul's membership is recreated, so it now has the HIGHEST id while
+        # his player pk is still the lowest. Card order is therefore Dave,
+        # Sam, Lee, Paul — the opposite of pk order on his side.
+        from tournament.models import FoursomeMembership
+        m = self.fs.memberships.get(player_id=self.pid['Paul'])
+        tee, ch, ph = m.tee, m.course_handicap, m.playing_handicap
+        m.delete()
+        FoursomeMembership.objects.create(
+            foursome=self.fs, player_id=self.pid['Paul'],
+            tee=tee, course_handicap=ch, playing_handicap=ph)
+        self.assertLess(self.pid['Paul'], self.pid['Dave'],
+                        'the fixture only means something while the pks '
+                        'run the other way')
+        setup_fourball(self.fs,
+                       [self.pid['Paul'], self.pid['Dave']],
+                       [self.pid['Sam'], self.pid['Lee']],
+                       handicap_mode='gross')
+
+    def test_a_side_reads_in_card_order(self):
+        s = fourball_summary(self.fs)
+        self.assertEqual(s['team1']['players'], ['Dave Moran', 'Paul Kelly'])
+
+    def test_and_it_is_the_same_on_every_read(self):
+        """The bug was not a wrong order — it was an unstable one."""
+        first = fourball_summary(self.fs)['team1']['players']
+        for _ in range(4):
+            self.assertEqual(fourball_summary(self.fs)['team1']['players'],
+                             first)

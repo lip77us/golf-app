@@ -460,10 +460,12 @@ void main() {
     test('the screen hides its own pager under the tray', () {
       // The tray IS the bottom bar while it is up, and it carries its own
       // arrows — two sets at the bottom is what a phone showed on Sixes.
-      final at =
-          src.indexOf('padding: const EdgeInsets.fromLTRB(12, 4, 12, 8)');
-      expect(at, greaterThan(0), reason: 'the pager row moved');
-      expect(src.substring(at - 120, at), contains('!spTray'));
+      // **Anchored on the gate itself, forwards.** A backwards window of
+      // N characters is a count of the OTHER trays, so it breaks every time
+      // one is added — this one did, for Banker.
+      final at = src.indexOf('if (!sixTray');
+      expect(at, greaterThan(0), reason: 'the pager gate moved');
+      expect(src.substring(at, src.indexOf(')', at)), contains('!spTray'));
     });
 
     test('the tray finishes the round on the last hole', () {

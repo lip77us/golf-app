@@ -11083,3 +11083,123 @@ writers — `REGEN_SKINS_FIXTURES=1`), `api/test_skins_hole_card.py` (6) and
 two widget behaviours were added to the test file BECAUSE their mutations
 passed first, and one engine mutation passed for a third time against a
 single-tee fixture before the mixed-tee one was written.
+## Banker score entry — two screens folded into one
+
+`~/Downloads/handoff-banker-score-entry`, which replaces the score-entry half
+of `banker-play.html`. The betting now sits **above the golfers on the score
+screen**: the max and the three bets on the tee, the doubles and the counter
+in the air, then the keypad and the tray.
+
+**It had been a two-screen loop.** `banker_screen.dart` held the betting and
+pushed `/score-entry` for the scores; saving the last one popped back to it
+to resolve the hole. So a group placed a bet on one screen, walked to
+another to score the hole it was placed on, and was thrown back. That pop is
+gone — the tray reports the three one-on-ones and its forward button opens
+the next hole.
+
+**Onto the SHARED screen, not into `banker_screen`.** Banker already pushed
+there for scores, so it already had the sync queue, the combo-tee chip,
+Spots capture, mid-round withdrawal and the pinned grid; moving the keypad
+the other way would have lost all five. The betting card went to the keypad
+rather than the keypad to the betting card.
+
+### No `banker_hole_card`, and that is the point
+
+Every other packet needed one because its summary reports the ROUND.
+`banker_summary.current` already IS the hole — it is the whole subject of
+this game — and it carries the lines, each bet's **chain** (`$10 bet · ×2
+his double · ×2 counter = $40`, composed server-side), the outcome, the
+exposure, the tie candidates and who banks next. A card would have been a
+second place all of that is composed.
+
+Two fields were short and went onto the summary: `hole_money` (what this
+hole did to each golfer, for the tray's left column against the round's
+right one — the banker's figure is one number against three bets and an
+opponent's is signed from his own side, so a phone adding them up would be
+a second opinion about which way a cut-off or a scaled hole points) and
+`low_net` (what decides the next bank).
+
+### The gate that would have held itself shut
+
+`_raisesTray` is what makes a hole post itself. The obvious test — "the
+hole is RESOLVED" — cannot work here: **a hole resolves only once its
+scores are posted**, so the tray would never rise, so the hole would never
+resolve. `_bankerHoleOpen` asks the loose question (Banker is the primary
+and this hole has bets) and `_bankerTrayState` the strict one (resolved);
+only the second draws the tray. A guard says so, because the two are one
+character apart in a search.
+
+### What the widgets do NOT decide
+
+Which calls are open, what a bet reaches, who won each one-on-one, whether
+a tie voids it, who banks next. `services/banker.py` owns the sequence
+*precisely so it holds however the call arrives and not only when the UI
+behaves* — the view's own words — so a late double comes back 409 rather
+than quietly moving money after the banker teed off. The bets card sends
+declarations and renders answers, and it dims its own toggles at the first
+gross only so they stop responding before the round trip, not instead of it.
+
+**A tie for the bank is the one thing a phone cannot settle**, so the tray
+asks: a pill a tied golfer and an underlined `Draw`. The forward button is
+dead and reads `Confirm the banker` until one is picked, because
+`open_next_hole` refuses otherwise. `Draw` records `drawn` as the reason,
+which travels to the receipt — a hole settled by chance says so months
+later. **Editing a score clears the pick**, which answers a result that no
+longer stands.
+
+### Three things not taken from the handoff
+
+- **The lock button names what it does**, not who tees off: the app cannot
+  know when anybody swings, and naming one golfer asserts an order the
+  format does not have. `banker_screen`'s own note, kept.
+- **The max chips are the house rungs clamped to the round's band**, plus
+  the round's own ceiling when it is not one of them — so a group playing
+  to $35 is not offered a chip the server refuses. Not the exposure ladder,
+  which is the setup screen's argument about what a ROUND can cost.
+- **No gold pill on the hole card.** `HoleHeader` is shared by eleven
+  screens, and the bets card directly beneath it already says `Paul banks`
+  with a gold swatch. The banker's ROW does get the mark — the same
+  `Halved.role` gold the Hot Seat anchor wears, and for the same stated
+  reason: it is a role, never a result, so it must not borrow the win
+  green. A round plays one of those games, so the two tags never meet.
+
+### …and the same unordered side, a third time
+
+`fourball.py`'s `_team_block` read `team.players.all()` — a many-to-many
+with no ordering — so a side's two golfers came back in whatever order the
+database felt like: `Dave & Paul` on one request and `Paul & Dave` on the
+next. Identical to the `nassau_summary` bug two commits earlier, and to the
+Sixes anchor before that.
+
+**Found by a test that passes alone.** `test_the_sides_line_carries_both_
+pairings_in_full` failed only under `--parallel 4`, which is the only way
+an unstable order shows — and it surfaces as `TypeError: cannot pickle
+'traceback' object`, which names nothing. It had been doing that
+intermittently for a while; two unreproducible `FAILED (failures=1)`
+readings earlier in the same sitting were almost certainly this.
+
+The fixture forces membership order and pk order apart (Paul's membership
+is recreated so its id is highest while his player pk stays lowest),
+because a test whose two orderings agree cannot pin which one is read.
+
+**Worth a sweep**: `team.players.all()` with no `order_by` is a pattern, not
+an incident. Three games have now had it.
+
+### A ninth fixed-window guard, and the sweep it earned
+
+`src.substring(at - 120, at)` in the Sixes and Stroke Play pager tests is a
+backwards window counting the OTHER trays, so it breaks every time one is
+added — and it did, for Banker, **under a comment already complaining that
+the last widening had reported an edit as a regression**. Both are anchored
+forwards on `if (!sixTray` now.
+
+Tests: `mobile/test/banker_entry_test.dart` (30) and
+`ASideReadsInCardOrderTests` in `scoring/tests/test_fourball.py` (2). Every
+guard mutation-checked — including the keypad one, which passed first
+because `primary == GameIds.banker` appears elsewhere in that file and
+needed bounding to `_keypadRound`'s own body.
+
+**Not built:** the handoff's restyled hole card, and `banker_screen.dart`
+itself, which keeps the board (the grid, the exposure ladder, the swings)
+and is still reachable from the hub. Whether it should now be a
+leaderboard tab rather than a screen is its own question.

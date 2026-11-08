@@ -355,8 +355,19 @@ def fourball_summary(foursome) -> dict | None:
         except ValueError:
             _holes_to_play = max(0, 18 - game.finished_on_hole)
 
+    # **A side's golfers come back in the order they sit on the card.**
+    # `team.players` is a many-to-many with no ordering, so the database
+    # returned the pair in whatever order it liked — `Dave & Paul` on one
+    # request and `Paul & Dave` on the next, from the same rows. The same
+    # shape `nassau_summary` had, found the same way: a test that passed
+    # alone and failed under `--parallel`.
+    _mem_rank = {m.player_id: i
+                 for i, m in enumerate(foursome.memberships.all())}
+
     def _team_block(team):
-        players = list(team.players.all()) if team else []
+        players = sorted(team.players.all(),
+                         key=lambda p: _mem_rank.get(p.id, 1 << 30)) \
+            if team else []
         return {
             'players'    : [p.name for p in players],
             'short_names': [p.short_name for p in players],
