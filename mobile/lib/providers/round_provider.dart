@@ -136,6 +136,7 @@ class RoundProvider extends ChangeNotifier {
   final Map<int, SixesHoleCard> _sixesHoles = {};
   /// The same, per hole, for Rabbit.
   final Map<int, RabbitHoleCard> _rabbitHoles = {};
+  final Map<int, PointsHoleCard> _pointsHoles = {};
   final Map<int, SurvivorHoleCard> _survivorHoles = {};
   final Map<int, StrokePlayHoleCard> _strokePlayHoles = {};
   Points531Summary? _points531Summary;
@@ -207,6 +208,7 @@ class RoundProvider extends ChangeNotifier {
   SixesSummary?     get sixesSummary       => _sixesSummary;
   SixesHoleCard?    sixesHole(int hole)    => _sixesHoles[hole];
   RabbitHoleCard?   rabbitHole(int hole)   => _rabbitHoles[hole];
+  PointsHoleCard?   pointsHole(int hole)   => _pointsHoles[hole];
   SurvivorHoleCard? survivorHole(int hole)  => _survivorHoles[hole];
   StrokePlayHoleCard? strokePlayHole(int hole) => _strokePlayHoles[hole];
   Points531Summary? get points531Summary   => _points531Summary;
@@ -285,6 +287,7 @@ class RoundProvider extends ChangeNotifier {
     _sixesHoles.clear();
     _strokePlayHoles.clear();
     _rabbitHoles.clear();
+    _pointsHoles.clear();
     _survivorHoles.clear();
     _points531Summary        = null;
     _skinsSummary            = null;
@@ -425,6 +428,7 @@ class RoundProvider extends ChangeNotifier {
       _sixesHoles.clear();
       _strokePlayHoles.clear();
       _rabbitHoles.clear();
+    _pointsHoles.clear();
       _survivorHoles.clear();
       _points531Summary = null;
       _honorsSummary    = null;
@@ -492,6 +496,7 @@ class RoundProvider extends ChangeNotifier {
       if (foursomeId == _activeFoursomeId &&
           (_annandaleFridaySummary != null
            || _sixesHoles.isNotEmpty || _rabbitHoles.isNotEmpty
+           || _pointsHoles.isNotEmpty
            || _survivorHoles.isNotEmpty || _strokePlayHoles.isNotEmpty)) {
         _annandaleResults.hold(holeNumber);
       }
@@ -868,6 +873,22 @@ class RoundProvider extends ChangeNotifier {
       // Offline — keep whatever is on screen.
     } catch (e) {
       debugPrint('loadRabbitHole error: $e');
+    }
+  }
+
+  /// Fetch one hole's Points 5-3-1 card. Silent on failure, like Rabbit's:
+  /// a card that cannot be fetched must not stop a group entering scores.
+  Future<void> loadPointsHole(int foursomeId, int hole) async {
+    try {
+      final card = await _client.getPointsHoleCard(foursomeId, hole);
+      if (card != null) {
+        _pointsHoles[hole] = card;
+        notifyListeners();
+      }
+    } on NetworkException {
+      // Offline — keep whatever is on screen.
+    } catch (e) {
+      debugPrint('loadPointsHole error: $e');
     }
   }
 
@@ -1452,6 +1473,17 @@ class RoundProvider extends ChangeNotifier {
     if (rab is Map<String, dynamic>) {
       _rabbitHoles.clear();          // same staleness — see `sixes_hole`
       _rabbitHoles[holeNumber] = RabbitHoleCard.fromJson(rab);
+      _annandaleResults.answer(holeNumber);
+      notifyListeners();
+    }
+
+    final pts = response['points_531_hole'];
+    if (pts is Map<String, dynamic>) {
+      // Same staleness as the others: a posted hole moves the standing on
+      // every card we hold, so the rest are dropped rather than redrawn with
+      // a total that is one hole behind.
+      _pointsHoles.clear();
+      _pointsHoles[holeNumber] = PointsHoleCard.fromJson(pts);
       _annandaleResults.answer(holeNumber);
       notifyListeners();
     }

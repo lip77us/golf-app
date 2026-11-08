@@ -10597,3 +10597,204 @@ class StrokePlayHoleCard {
                 (j['rumble'] as Map).cast<String, dynamic>()),
       );
 }
+
+/// Everything the Points 5-3-1 score-entry screen draws for one hole
+/// (`~/Downloads/handoff-points-score-entry`).
+///
+/// **Every figure arrives decided.**  The 5-3-1 split, the tie rule, the
+/// target and the money are the engine's — the handoff carries an `alloc()`
+/// for its browser reference and re-deriving it here would be a second
+/// opinion about points, which on this game is the money.
+class PointsHoleCard {
+  final int hole;
+  final int? par;
+  final int? strokeIndex;
+  final int? yards;
+  final String nine;
+
+  /// Holes played counting this one, and `3 × thru` — "target 21 pts thru 7".
+  final int thru;
+  final int target;
+  final int parPerHole;
+  final double stake;
+
+  /// The group, in roster order — which is what fixes each golfer's colour.
+  final List<PointsHolePlayer> players;
+
+  /// The tray's "net to points", low net first.
+  final List<PointsHoleAward> pointsRows;
+
+  /// The standing AFTER this hole, best first.
+  final List<PointsStandingRow> standing;
+
+  final bool holeComplete;
+  final bool roundOver;
+  final PointsRoundWinner? winner;
+
+  const PointsHoleCard({
+    required this.hole,
+    required this.par,
+    required this.strokeIndex,
+    required this.yards,
+    required this.nine,
+    required this.thru,
+    required this.target,
+    required this.parPerHole,
+    required this.stake,
+    required this.players,
+    required this.pointsRows,
+    required this.standing,
+    required this.holeComplete,
+    required this.roundOver,
+    required this.winner,
+  });
+
+  factory PointsHoleCard.fromJson(Map<String, dynamic> j) => PointsHoleCard(
+        hole: (j['hole'] as num?)?.toInt() ?? 0,
+        par: (j['par'] as num?)?.toInt(),
+        strokeIndex: (j['stroke_index'] as num?)?.toInt(),
+        yards: (j['yards'] as num?)?.toInt(),
+        nine: j['nine'] as String? ?? '',
+        thru: (j['thru'] as num?)?.toInt() ?? 0,
+        target: (j['target'] as num?)?.toInt() ?? 0,
+        parPerHole: (j['par_per_hole'] as num?)?.toInt() ?? 3,
+        stake: (j['stake'] as num?)?.toDouble() ?? 0,
+        players: ((j['players'] as List?) ?? const [])
+            .map((e) =>
+                PointsHolePlayer.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(),
+        pointsRows: ((j['points_rows'] as List?) ?? const [])
+            .map((e) =>
+                PointsHoleAward.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(),
+        standing: ((j['standing'] as List?) ?? const [])
+            .map((e) => PointsStandingRow.fromJson(
+                (e as Map).cast<String, dynamic>()))
+            .toList(),
+        holeComplete: j['hole_complete'] as bool? ?? false,
+        roundOver: j['round_over'] as bool? ?? false,
+        winner: j['winner'] == null
+            ? null
+            : PointsRoundWinner.fromJson(
+                (j['winner'] as Map).cast<String, dynamic>()),
+      );
+
+  /// This golfer's row, or null when he is not in the group.
+  PointsHolePlayer? playerById(int id) {
+    for (final p in players) {
+      if (p.playerId == id) return p;
+    }
+    return null;
+  }
+}
+
+class PointsHolePlayer {
+  final int playerId;
+  final String name;
+  final String short;
+  final int? courseHandicap;
+  final int strokes;
+  final int? gross;
+  final int? net;
+  final double? points;
+
+  const PointsHolePlayer({
+    required this.playerId,
+    required this.name,
+    required this.short,
+    required this.courseHandicap,
+    required this.strokes,
+    required this.gross,
+    required this.net,
+    required this.points,
+  });
+
+  factory PointsHolePlayer.fromJson(Map<String, dynamic> j) =>
+      PointsHolePlayer(
+        playerId: (j['player_id'] as num?)?.toInt() ?? 0,
+        name: j['name'] as String? ?? '',
+        short: j['short'] as String? ?? '',
+        courseHandicap: (j['course_handicap'] as num?)?.toInt(),
+        strokes: (j['strokes'] as num?)?.toInt() ?? 0,
+        gross: (j['gross'] as num?)?.toInt(),
+        net: (j['net'] as num?)?.toInt(),
+        points: (j['points'] as num?)?.toDouble(),
+      );
+}
+
+class PointsHoleAward {
+  final int playerId;
+  final String short;
+  final int net;
+  final double points;
+
+  /// Another golfer made the same net, which is the only reason the points
+  /// are not 5, 3 or 1 — so the row has to say so.
+  final bool tied;
+
+  const PointsHoleAward({
+    required this.playerId,
+    required this.short,
+    required this.net,
+    required this.points,
+    required this.tied,
+  });
+
+  factory PointsHoleAward.fromJson(Map<String, dynamic> j) => PointsHoleAward(
+        playerId: (j['player_id'] as num?)?.toInt() ?? 0,
+        short: j['short'] as String? ?? '',
+        net: (j['net'] as num?)?.toInt() ?? 0,
+        points: (j['points'] as num?)?.toDouble() ?? 0,
+        tied: j['tied'] as bool? ?? false,
+      );
+}
+
+class PointsStandingRow {
+  final int playerId;
+  final String short;
+  final double points;
+  final double vTarget;
+  final double money;
+
+  const PointsStandingRow({
+    required this.playerId,
+    required this.short,
+    required this.points,
+    required this.vTarget,
+    required this.money,
+  });
+
+  factory PointsStandingRow.fromJson(Map<String, dynamic> j) =>
+      PointsStandingRow(
+        playerId: (j['player_id'] as num?)?.toInt() ?? 0,
+        short: j['short'] as String? ?? '',
+        points: (j['points'] as num?)?.toDouble() ?? 0,
+        vTarget: (j['v_target'] as num?)?.toDouble() ?? 0,
+        money: (j['money'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+class PointsRoundWinner {
+  final String short;
+  final double points;
+  final double money;
+  final int target;
+  final String settles;
+
+  const PointsRoundWinner({
+    required this.short,
+    required this.points,
+    required this.money,
+    required this.target,
+    required this.settles,
+  });
+
+  factory PointsRoundWinner.fromJson(Map<String, dynamic> j) =>
+      PointsRoundWinner(
+        short: j['short'] as String? ?? '',
+        points: (j['points'] as num?)?.toDouble() ?? 0,
+        money: (j['money'] as num?)?.toDouble() ?? 0,
+        target: (j['target'] as num?)?.toInt() ?? 0,
+        settles: j['settles'] as String? ?? '',
+      );
+}

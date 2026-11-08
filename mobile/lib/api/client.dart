@@ -2013,6 +2013,17 @@ class ApiClient {
   ///
   /// One hole's score-entry card. A save already returns this shape under
   /// `rabbit_hole`, so this is for a hole opened without posting.
+  /// GET /api/foursomes/{id}/points-531/hole/{hole}/
+  ///
+  /// Only for a hole the screen opens WITHOUT posting — a save returns the
+  /// same shape under `points_531_hole`.
+  Future<PointsHoleCard?> getPointsHoleCard(int foursomeId, int hole) async {
+    final data = await _get('/foursomes/$foursomeId/points-531/hole/$hole/');
+    final map = (data as Map).cast<String, dynamic>();
+    if (map.isEmpty) return null;
+    return PointsHoleCard.fromJson(map);
+  }
+
   Future<RabbitHoleCard?> getRabbitHoleCard(int foursomeId, int hole) async {
     final data = await _get('/foursomes/$foursomeId/rabbit/hole/$hole/');
     final map = (data as Map).cast<String, dynamic>();

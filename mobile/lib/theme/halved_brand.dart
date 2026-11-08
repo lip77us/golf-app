@@ -105,6 +105,31 @@ class Halved {
   /// them is three-handed. Past that it falls back to a 70% blend — close,
   /// honest about being a fallback, and a board that large should be
   /// identifying golfers by name anyway (see [golferColours]).
+  /// Golfer and side colours **on a dark tray**, in roster order.
+  ///
+  /// The light [golferTints] are for cards; on deep pine they made pine and
+  /// slate nearly the same grey, and a side you cannot tell apart is the one
+  /// thing a tray must not have.
+  ///
+  /// **Slate departs from the design references** (`#AFC0D8` in both the
+  /// Annandale and Points packets): that pale blue-grey is indistinguishable
+  /// from the tray's own label grey, so the third golfer's name and figures
+  /// read as labels. `#8FB4FF` is the same hue, clearly blue.
+  ///
+  /// One list because three trays want the same three colours — Annandale's
+  /// teams, Sixes' sides and Points' golfers — and a golfer who is mint on
+  /// one tray and orange on the next has learnt nothing.
+  /// Named as well as listed, because a `const` cannot index a list — a
+  /// caller that wants just one of them needs the name.
+  static const onDark1 = brightMint;
+  static const onDark2 = Color(0xFFF2A86E);
+  static const onDark3 = Color(0xFF8FB4FF);
+
+  static const List<Color> onDark = [onDark1, onDark2, onDark3];
+
+  /// [onDark], wrapping, for an index that may run past it.
+  static Color onDarkFor(int i) => onDark[i % onDark.length];
+
   static const List<Color> golferTints = [
     Color(0xFFB7D9CB), Color(0xFFEFCDB0), Color(0xFFC6CDD8),
   ];

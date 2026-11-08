@@ -349,6 +349,30 @@ def calculate_points_531(foursome) -> list:
 # Summary (for the leaderboard / game screen)
 # ---------------------------------------------------------------------------
 
+def _wager_config(game, bet_unit) -> WagerConfig:
+    """How this game turns points into money.
+
+    Extracted so the HOLE CARD can settle a partial total through the same
+    engine rather than re-deriving `(points - target) x stake`.  That formula
+    is right for vs-Average with no loss cap and wrong for the other three
+    settings, and a tray that disagreed with the board about money would be
+    the one thing a golfer checks it against.
+    """
+    if game.payout_style == 'pool':
+        return WagerConfig(
+            funding    = POOL,
+            settlement = PROPORTIONAL,
+            entry      = Decimal(str(bet_unit)),
+        )
+    _MODE = {'average': VS_AVERAGE, 'all': PAY_ABOVE, 'first': PAY_WINNER}
+    return WagerConfig(
+        funding    = PER_POINT,
+        settlement = _MODE.get(game.per_point_mode, VS_AVERAGE),
+        rate       = Decimal(str(bet_unit)),
+        cap        = game.loss_cap,
+    )
+
+
 def points_531_summary(foursome) -> dict:
     """
     JSON-serialisable summary of a Points 5-3-1 game.
@@ -507,20 +531,7 @@ def points_531_summary(foursome) -> dict:
     # loss_cap (clip losers, rescale winners pro-rata) applies too. The
     # payout_style / per_point_mode knobs also allow pool / pay-leader /
     # pay-above settlements on the same 5-3-1 points; bet_unit is the rate.
-    if game.payout_style == 'pool':
-        cfg = WagerConfig(
-            funding    = POOL,
-            settlement = PROPORTIONAL,
-            entry      = Decimal(str(bet_unit)),
-        )
-    else:
-        _MODE = {'average': VS_AVERAGE, 'all': PAY_ABOVE, 'first': PAY_WINNER}
-        cfg = WagerConfig(
-            funding    = PER_POINT,
-            settlement = _MODE.get(game.per_point_mode, VS_AVERAGE),
-            rate       = Decimal(str(bet_unit)),
-            cap        = game.loss_cap,
-        )
+    cfg = _wager_config(game, bet_unit)
     payouts = settle(
         {pid: points_by_pid.get(pid, Decimal('0')) for pid in by_pid},
         cfg,
@@ -636,3 +647,154 @@ def points_531_summary(foursome) -> dict:
             'per_point_mode': game.per_point_mode,
         },
     }
+
+
+def points_531_hole_card(foursome, hole: int) -> dict:
+    """Everything the Points 5-3-1 score-entry screen draws for ONE hole.
+
+    Built from `points_531_summary`, never a second walk.  **The tie split is
+    the ENGINE's** — `_allocate_hole_points` gives each run of equal nets the
+    mean of the places it covers, so two tied for low take 4 each and all
+    three tied take 3 each.  The handoff supplies an `alloc()` of its own for
+    its browser reference; re-deriving it here would be a second opinion about
+    points, which on this game is the money.
+
+    Returns `{}` when the game is not set up, so a caller can test the key.
+    """
+    summary = points_531_summary(foursome)
+    # **Gated on the GAME, not its status.**  The status stays `pending`
+    # until the first hole is fully scored, so testing it returned nothing
+    # on hole 1 of a fresh round — and no card means no keypad, which is the
+    # failure Rabbit and Sixes both hit.  A configured game with no scores
+    # still has a hole, a par, three golfers and their strokes.
+    #
+    # The unconfigured branch of `points_531_summary` returns no players at
+    # all, which is the real "there is no game here" answer.
+    players = summary.get('players') or []
+    if not players:
+        return {}
+
+    from services.hole_plan import play_order as _play_order
+    order = _play_order(foursome.round, foursome) or list(range(1, 19))
+    if hole not in order:
+        return {}
+    pos = order.index(hole)
+
+    per_hole = {h['hole']: h for h in (summary.get('holes') or [])}
+    card_holes = {h['hole']: h
+                  for h in ((summary.get('scorecard') or {}).get('holes') or [])}
+    entry = per_hole.get(hole) or {}
+    by_pid = {e['player_id']: e for e in (entry.get('entries') or [])}
+
+    tee = next((m.tee for m in foursome.memberships.all() if m.tee_id), None)
+    geometry = tee.hole(hole) if tee else {}
+    stroke_index = (card_holes.get(hole) or {}).get('stroke_index')
+
+    # **Target counts the hole in play**, which is what the reference header
+    # does: standing on the 7th it reads "target 21 pts thru 7".  Position in
+    # PLAY ORDER, not the hole number — off a shotgun the 7th hole played can
+    # be the 13th on the card, and three points a hole is about holes played.
+    par_per_hole = (summary.get('money') or {}).get('par_per_hole') or 3
+    target = par_per_hole * (pos + 1)
+
+    rows = []
+    for p in players:
+        e = by_pid.get(p['player_id']) or {}
+        gross = e.get('gross')
+        rows.append({
+            'player_id': p['player_id'],
+            'name'     : p.get('name') or '',
+            'short'    : p.get('short_name') or '',
+            'course_handicap': p.get('course_handicap'),
+            'strokes'  : e.get('strokes') or 0,
+            'gross'    : gross,
+            'net'      : e.get('net_score'),
+            'points'   : e.get('points'),
+        })
+
+    hole_complete = all(r['gross'] is not None for r in rows)
+
+    # The tray's "net to points", low net first.  A row is tied when another
+    # golfer made the same net — which is the only reason its points are not
+    # 5, 3 or 1, so the chip has to say so.
+    scored = [r for r in rows if r['net'] is not None]
+    nets = [r['net'] for r in scored]
+    points_rows = [
+        {'player_id': r['player_id'], 'short': r['short'],
+         'net': r['net'], 'points': r['points'],
+         'tied': nets.count(r['net']) > 1}
+        for r in sorted(scored, key=lambda r: r['net'])
+    ]
+
+    # **Points and money THROUGH THIS HOLE**, never the round's totals.
+    # `summary['players']` carries the finished figures, so standing on the
+    # 7th they read the 18th — which made the tray report a golfer 38 points
+    # clear of a target he had not reached yet.
+    #
+    # The points are summed from the engine's own per-hole awards and the
+    # money goes back through the game's own wager config, so a loss cap or
+    # a pay-the-leader setting settles here exactly as it does on the board.
+    so_far = {p['player_id']: Decimal('0') for p in players}
+    for h in order[:pos + 1]:
+        for e in ((per_hole.get(h) or {}).get('entries') or []):
+            if e.get('points') is not None and e['player_id'] in so_far:
+                so_far[e['player_id']] += Decimal(str(e['points']))
+    try:
+        money_now = settle(dict(so_far),
+                           _wager_config(foursome.points_531_game,
+                                         (summary.get('money') or {})
+                                         .get('bet_unit') or 0))
+    except Exception:          # pragma: no cover - defensive
+        money_now = {pid: Decimal('0') for pid in so_far}
+
+    standing = sorted(
+        ({'player_id': p['player_id'],
+          'short'    : p.get('short_name') or '',
+          'points'   : float(so_far[p['player_id']]),
+          'v_target' : float(so_far[p['player_id']]) - target,
+          'money'    : float(money_now.get(p['player_id'], 0))}
+         for p in players),
+        key=lambda s: -s['points'])
+
+    # The last hole in PLAY ORDER, once it is in, is the end of the round —
+    # the tray becomes Round over and its button finishes rather than
+    # advancing.
+    round_over = hole_complete and pos == len(order) - 1
+    winner = None
+    if round_over and standing:
+        top = standing[0]
+        winner = {
+            'short'   : top['short'],
+            'points'  : top['points'],
+            'money'   : top['money'],
+            'target'  : target,
+            'settles' : _settle_label(summary),
+        }
+
+    return {
+        'hole'        : hole,
+        'par'         : geometry.get('par') or entry.get('par'),
+        'stroke_index': stroke_index,
+        'yards'       : geometry.get('yards'),
+        'nine'        : 'front nine' if hole <= 9 else 'back nine',
+        'thru'        : pos + 1,
+        'target'      : target,
+        'par_per_hole': par_per_hole,
+        'stake'       : (summary.get('money') or {}).get('bet_unit'),
+        'players'     : rows,
+        'points_rows' : points_rows,
+        'standing'    : standing,
+        'hole_complete': hole_complete,
+        'round_over'  : round_over,
+        'winner'      : winner,
+    }
+
+
+def _settle_label(summary) -> str:
+    """The settlement mode in the words the config screen uses."""
+    money = summary.get('money') or {}
+    if (money.get('payout_style') or '') == 'pool':
+        return 'the pool'
+    return {'average': 'vs Average',
+            'all': 'Everyone above you',
+            'first': 'the leader'}.get(money.get('per_point_mode') or '', '')

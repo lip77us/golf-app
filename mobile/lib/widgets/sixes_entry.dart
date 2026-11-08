@@ -44,8 +44,8 @@ const Color kSixesSideB = Color(0xFFB45309);
 /// The same two on the dark tray, where the light pair would be mud.
 /// Lifted from Annandale Friday's tray rather than re-picked: one dark green
 /// and one dark clay across the app, or a reader learns the colour twice.
-const Color kSixesSideADark = Color(0xFF3BD89A);
-const Color kSixesSideBDark = Color(0xFFF2A86E);
+const Color kSixesSideADark = Halved.onDark1;
+const Color kSixesSideBDark = Halved.onDark2;
 
 Color sixesSideColour(int? side, {bool dark = false}) => side == 2
     ? (dark ? kSixesSideBDark : kSixesSideB)

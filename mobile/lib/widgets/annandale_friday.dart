@@ -35,9 +35,10 @@ Color annandaleTeamColour(int? team) => team == null
 /// blue-grey was indistinguishable from the tray's label grey, so the third
 /// team's names and figures looked like labels. `#8FB4FF` is the same hue,
 /// clearly blue.
-const List<Color> kAnnandaleTeamOnDark = [
-  Halved.brightMint, Color(0xFFF2A86E), Color(0xFF8FB4FF),
-];
+/// The shared dark-tray palette — see [Halved.onDark], which carries the
+/// reasoning and is what Sixes and Points draw from too.  Kept as a name
+/// because this file's callers read it.
+const List<Color> kAnnandaleTeamOnDark = Halved.onDark;
 
 Color annandaleTeamTint(int? team) => team == null
     ? Colors.white70

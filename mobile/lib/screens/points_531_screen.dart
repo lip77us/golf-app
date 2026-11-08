@@ -54,6 +54,9 @@ import '../widgets/round_chat_button.dart';
 import '../widgets/standing_ribbon.dart';
 import '../widgets/spots_capture.dart';
 import '../widgets/combo_tee_chip.dart';
+import '../widgets/forty_balls_keypad.dart';
+import '../widgets/points_entry.dart';
+import '../theme/halved_brand.dart';
 
 // ---------------------------------------------------------------------------
 // The screen
@@ -80,6 +83,19 @@ class _Points531ScreenState extends State<Points531Screen>
   /// Tap an already-scored player → they become the active row so the inline
   /// picker edits their score in place (casual score-entry model), not a modal.
   int? _editHotPid;
+
+  /// `Edit scores` is open: the keypad stays on the golfer just edited until
+  /// Done, rather than dropping back to the tray after one score.
+  bool _trayEditing = false;
+
+  /// The golfer the keypad is pinned to during an edit. A TAP is a one-shot
+  /// and sets only `_editHotPid`; only `Edit scores` opens a session.
+  int? _editingPlayerId;
+
+  /// The hole we have asked the server for, so a missing card is fetched
+  /// once rather than on every frame. Cleared the moment one arrives, which
+  /// is what lets the fetch run AGAIN if that card is then dropped.
+  int? _cardAsked;
 
   @override
   void initState() {
@@ -271,13 +287,76 @@ class _Points531ScreenState extends State<Points531Screen>
     });
   }
 
+  /// **By PLAY ORDER, not by hole number.** The two are the same integer
+  /// only off the 1st tee: a shotgun group starting on the 7th plays
+  /// 7..18,1..6, so `+1` walks it off the end of its own round and `18` is
+  /// not its last hole. The screen already had `_playOrder`; the pager was
+  /// the one thing not using it.
   void _advance() {
-    if (_selectedHole < 18) setState(() { _selectedHole++; _editHotPid = null; });
+    final next = nextInOrder(_playOrder(context.read<RoundProvider>()),
+                             _selectedHole);
+    if (next != null) {
+      setState(() { _selectedHole = next; _editHotPid = null;
+                    _editingPlayerId = null; _trayEditing = false; });
+    }
   }
 
   void _retreat() {
-    if (_selectedHole > 1) setState(() { _selectedHole--; _editHotPid = null; });
+    final prev = prevInOrder(_playOrder(context.read<RoundProvider>()),
+                             _selectedHole);
+    if (prev != null) {
+      setState(() { _selectedHole = prev; _editHotPid = null;
+                    _editingPlayerId = null; _trayEditing = false; });
+    }
   }
+
+  // ── the hole card behind the keypad and the tray ────────────────────────
+
+  PointsHoleCard? _card(RoundProvider rp) {
+    final c = rp.pointsHole(_selectedHole);
+    return (c != null && c.hole == _selectedHole) ? c : null;
+  }
+
+  /// **Make sure the hole on screen has a card**, because without one the
+  /// keypad is not drawn at all.
+  ///
+  /// A save drops every other hole's card (they can be stale), and that
+  /// races the fetch the forward button started: the next hole's card can
+  /// arrive FIRST and then be thrown away by the response to a save posted
+  /// before it, leaving a screen with no keypad. This closes the race from
+  /// the other end — whenever the hole on screen has no card, one is asked
+  /// for. (Reported on Rabbit, whose screen has the identical shape.)
+  void _ensureCard(RoundProvider rp) {
+    if (_card(rp) != null) { _cardAsked = null; return; }
+    if (_cardAsked == _selectedHole) return;
+    _cardAsked = _selectedHole;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<RoundProvider>()
+          .loadPointsHole(widget.foursomeId, _selectedHole);
+    });
+  }
+
+  /// Who the keypad is on: the golfer being edited, else the first without
+  /// a score.
+  Membership? _keypadMember(List<Membership> players, Map<int, int> scores) {
+    final pinned = _editingPlayerId ?? _editHotPid;
+    if (pinned != null) {
+      for (final m in players) {
+        if (m.player.id == pinned) return m;
+      }
+    }
+    final i = _hotSpotIdx(players, scores);
+    return (i >= 0 && i < players.length) ? players[i] : null;
+  }
+
+  /// Roster order → colour. **Roster, not the standing**, or a golfer
+  /// changes colour the moment he takes the lead and the tray stops
+  /// matching the card above it.
+  Map<int, Color> _colours(List<Membership> players) => {
+        for (var i = 0; i < players.length; i++)
+          players[i].player.id: Halved.onDarkFor(i),
+      };
 
   Future<void> _saveAndAdvance(
     BuildContext ctx,
@@ -515,47 +594,158 @@ class _Points531ScreenState extends State<Points531Screen>
     final allDone    = _allScored(players, scores);
     final isComplete = rp.round?.status == 'complete';
     final par        = sc.holeData(_selectedHole)?.par ?? 4;
+    final order      = _playOrder(rp);
+    final prevHole   = prevInOrder(order, _selectedHole);
+    final nextHole   = nextInOrder(order, _selectedHole);
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-        child: Row(children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: _selectedHole > 1 ? _retreat : null,
-              icon: const Icon(Icons.chevron_left, size: 20),
-              label: Text(
-                  _selectedHole > 1 ? 'Hole ${_selectedHole - 1}' : 'Previous'),
+    // **The keypad, and the tray over the pager** — the same shape as Sixes
+    // and Rabbit. While the tray is up it IS the bottom bar, because its
+    // forward button finishes the round on the last hole and a generic pager
+    // cannot. The pager still draws whenever the tray is not up, including
+    // while a result is on its way, so a slow card never strands a group.
+    _ensureCard(rp);
+    final card = _card(rp);
+    if (card != null && !isComplete) {
+      // **The cursor decides.** A session always has a golfer under the
+      // keypad, so asking `_trayEditing` here as well is redundant — and
+      // redundant plus reachable is how a state nothing draws becomes
+      // reachable (Rabbit, 30 Oct 2026).
+      if (allDone && _editingPlayerId == null && _editHotPid == null) {
+        return SafeArea(
+          child: PointsHoleTray(
+            card: card,
+            colours: _colours(players),
+            gettingResult: _pending[_selectedHole]?.isNotEmpty ?? false,
+            notSynced: rp.trayHoleUnsynced(_selectedHole),
+            picking: _trayEditing,
+            onEdit: () => setState(() {
+              _trayEditing = !_trayEditing;
+              _editingPlayerId = null;
+              _editHotPid = null;
+            }),
+            onPrev: prevHole == null ? null : _retreat,
+            nextHole: nextHole,
+            // **On the last hole the tray IS the way out**, because it
+            // covers the pager — a forward button that only advanced left
+            // the 18th a dead end (reported on Rabbit).
+            onNext: rp.submitting
+                ? null
+                : (nextHole == null
+                    ? () => _finishRound(ctx, players, par)
+                    : () => _saveAndAdvance(ctx, players, par)),
+          ),
+        );
+      }
+
+      final m = _keypadMember(players, scores);
+      if (m != null) {
+        return SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            FortyBallsKeypad(
+              playerName: m.player.name,
+              // HIS par, not the hole's — on mixed tees one golfer's 4 is
+              // another's 5.
+              par: sc.holeData(_selectedHole)
+                      ?.scoreFor(m.player.id)?.par ?? (card.par ?? par),
+              // The strokes POINTS issues, off the low man — not the
+              // round's stored full-net allocation, which is a different
+              // number whenever the game is strokes-off.
+              strokes: card.playerById(m.player.id)?.strokes ?? 0,
+              netStyle: ctx.watch<SettingsProvider>().netStyleEntry,
+              onDone: _trayEditing
+                  ? () => setState(() {
+                        _trayEditing = false;
+                        _editingPlayerId = null;
+                        _editHotPid = null;
+                      })
+                  : null,
+              onScore: (n) {
+                _handleScore(ctx, m, n, players, par);
+                // A TAP is a one-shot; only `Edit scores` is a session.
+                if (!_trayEditing) {
+                  setState(() { _editingPlayerId = null; _editHotPid = null; });
+                }
+                // **The hole is POSTED on its last score.** The tray reports
+                // the SERVER's figures, so a hole left unsent raises a tray
+                // with nothing in it — the bug Annandale and then Sixes both
+                // hit. `_handleScore` only posts when Auto-advance is on, so
+                // this covers the group that has it off.
+                final now = _effectiveScores(sc, _selectedHole);
+                if (n > 0 && _allScored(players, now)) {
+                  final hole = _selectedHole;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted || _selectedHole != hole) return;
+                    final r = context.read<RoundProvider>();
+                    if (r.submitting || (_pending[hole]?.isEmpty ?? true)) {
+                      return;
+                    }
+                    _saveAndAdvance(ctx, players, par, advance: false);
+                  });
+                }
+              },
+              // **`-1` is the clear, not `0`.** `_selectScore` reads −1 as
+              // "take this golfer out of pending" and anything else as a
+              // score, so passing 0 wrote a gross of ZERO: the row read as
+              // scored, the cursor moved on, and the hole counted complete
+              // with nothing in it (reported on Rabbit, 30 Oct 2026).
+              onClear: () => _selectScore(m, -1, _selectedHole),
             ),
+            _pager(ctx, rp, players, allDone, isComplete, par,
+                   prevHole, nextHole),
+          ]),
+        );
+      }
+    }
+
+    return SafeArea(child: _pager(ctx, rp, players, allDone, isComplete, par,
+                                  prevHole, nextHole));
+  }
+
+  Widget _pager(
+    BuildContext ctx,
+    RoundProvider rp,
+    List<Membership> players,
+    bool allDone,
+    bool isComplete,
+    int par,
+    int? prevHole,
+    int? nextHole,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: Row(children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: prevHole == null ? null : _retreat,
+            icon: const Icon(Icons.chevron_left, size: 20),
+            label: Text(prevHole == null ? 'Previous' : 'Hole $prevHole'),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _selectedHole == 18 || isComplete
-                ? FilledButton.icon(
-                    onPressed: rp.submitting
-                        ? null
-                        : () => _finishRound(ctx, players, par),
-                    icon: const Icon(Icons.emoji_events, size: 20),
-                    label: const Text('Done'),
-                  )
-                : FilledButton.icon(
-                    onPressed: (allDone && !rp.submitting)
-                        ? () => _saveAndAdvance(ctx, players, par)
-                        : null,
-                    icon: rp.submitting
-                        ? const SizedBox(
-                            width: 16, height: 16,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.chevron_right, size: 20),
-                    label: Text(rp.submitting
-                        ? 'Saving…'
-                        : 'Hole ${_selectedHole + 1}'),
-                    iconAlignment: IconAlignment.end,
-                  ),
-          ),
-        ]),
-      ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: nextHole == null || isComplete
+              ? FilledButton.icon(
+                  onPressed: rp.submitting
+                      ? null
+                      : () => _finishRound(ctx, players, par),
+                  icon: const Icon(Icons.emoji_events, size: 20),
+                  label: const Text('Done'),
+                )
+              : FilledButton.icon(
+                  onPressed: (allDone && !rp.submitting)
+                      ? () => _saveAndAdvance(ctx, players, par)
+                      : null,
+                  icon: rp.submitting
+                      ? const SizedBox(
+                          width: 16, height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.chevron_right, size: 20),
+                  label: Text(rp.submitting ? 'Saving…' : 'Hole $nextHole'),
+                  iconAlignment: IconAlignment.end,
+                ),
+        ),
+      ]),
     );
   }
 
