@@ -6236,7 +6236,7 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
     if scored_on:
         active.add(scored_on)
     wants = {'annandale_friday', 'sixes', 'rabbit', 'survivor',
-             'low_net_round', 'points_531', 'wolf'} & active
+             'low_net_round', 'points_531', 'wolf', 'vegas'} & active
     if not wants:
         return {}
     from services.skins import skins_summary
@@ -6288,6 +6288,13 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
                 card = wolf_hole_card(foursome, hole_number)
                 if card:
                     out['wolf_hole'] = card
+            # …and Las Vegas', which reports the two numbers, the rules
+            # that moved them and where the round stands AFTER the hole.
+            if 'vegas' in wants and hole_number:
+                from services.vegas import vegas_hole_card
+                card = vegas_hole_card(foursome, hole_number)
+                if card:
+                    out['vegas_hole'] = card
             if 'skins' in active:
                 out['skins'] = skins_summary(foursome)
     except Exception:
@@ -8483,6 +8490,19 @@ class RabbitHoleCardView(APIView):
         foursome = foursome_for_scorer(request.user, pk)
         from services.rabbit import rabbit_hole_card
         return Response(rabbit_hole_card(foursome, int(hole)))
+
+
+class VegasHoleCardView(APIView):
+    """GET /api/foursomes/{id}/vegas/hole/{hole}/
+
+    One hole's score-entry card. The POST that saves a score returns the same
+    shape under `vegas_hole`, so this is only for a hole the screen opens
+    without posting.
+    """
+    def get(self, request, pk, hole):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.vegas import vegas_hole_card
+        return Response(vegas_hole_card(foursome, int(hole)))
 
 
 class WolfHoleCardView(APIView):

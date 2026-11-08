@@ -473,3 +473,243 @@ def vegas_summary(foursome) -> dict:
                   'loss_cap': (float(game.loss_cap)
                                if game.loss_cap is not None else None)},
     }
+
+
+# ---------------------------------------------------------------------------
+# Score-entry card — `~/Downloads/handoff-vegas-score-entry`
+# ---------------------------------------------------------------------------
+
+def vegas_hole_card(foursome, hole: int) -> dict:
+    """Everything the Las Vegas score-entry screen draws for ONE hole.
+
+    **It renders the engine.**  The handoff lists three rules to confirm, and
+    this is what `calculate_vegas` does with them:
+
+    * **Birdies on both sides do NOT cancel — both numbers flip.**  The
+      handoff's prose says nothing flips; the engine applies each birdie's
+      flip to the opposing number independently, and the two are different
+      outcomes (45 v 57 flips to 54 v 75, a margin of 21 where cancelling
+      leaves 12).  Reported as the engine plays it, with both sides tagged.
+    * **Carries stack.**  A second tie makes the next decided hole ×3.
+    * **The 9 cap is applied before the flip**, inside `_team_number` — which
+      is what the reference does too.
+
+    Two numbers, deliberately:
+
+    * `raw` is the side's two nets as a number, which is what the golfer
+      card's header tag shows while the hole fills up.  Computable from the
+      nets alone, through the engine's own `_team_number`.
+    * `number` is the STORED result, after any flip.  Only the engine knows
+      it, because only the engine knows whose birdie it was.
+
+    Returns `{}` when the game is not set up, so a caller can test the key.
+    Gated on the GAME, not its status, which stays `pending` until a hole is
+    fully scored — no card means no keypad, the failure Points, Rabbit, Sixes
+    and Wolf each hit in turn.
+    """
+    from services.hole_plan import play_order
+    from services.player_labels import first_names
+    from scoring.models import HoleScore
+
+    try:
+        game = foursome.vegas_game
+    except VegasGame.DoesNotExist:
+        return {}
+
+    teams = {t.team_number: t for t in game.teams.prefetch_related('players')}
+    members = [m for m in foursome.memberships.select_related('player', 'tee')
+               if not m.player.is_phantom]
+    # **In MEMBERSHIP order**, which is the order the names appear on the
+    # card above the tray. `VegasTeam.players` is a many-to-many and comes
+    # back in whatever order the database gives, so `Paul + Dave` could read
+    # either way round against a card listing them the other — the same trap
+    # Sixes' anchor fell into when it took a side's first golfer out of a set.
+    rank = {m.player_id: i for i, m in enumerate(members)}
+    side_ids = {n: sorted((p.id for p in t.players.all()),
+                          key=lambda pid: rank.get(pid, 99))
+                for n, t in teams.items()}
+    if len(side_ids.get(1, [])) != 2 or len(side_ids.get(2, [])) != 2:
+        return {}
+
+    order = play_order(foursome.round, foursome) or list(range(1, 19))
+    if hole not in order:
+        return {}
+    pos = order.index(hole)
+    by_pid = {m.player_id: m.player for m in members}
+    label = first_names(by_pid)
+    side_of = {pid: n for n, ids in side_ids.items() for pid in ids}
+
+    net_index  = _net_index(foursome, game)
+    strokes_by = vegas_player_hole_strokes(foursome, game)
+    gross_by = {
+        r['player_id']: r['gross_score']
+        for r in (HoleScore.objects
+                  .filter(foursome=foursome, hole_number=hole,
+                          player_id__in=list(by_pid))
+                  .exclude(gross_score=None)
+                  .values('player_id', 'gross_score'))
+    }
+
+    summary  = vegas_summary(foursome)
+    per_hole = {h['hole']: h for h in (summary.get('holes') or [])}
+    entry    = per_hole.get(hole) or {}
+
+    tee = next((m.tee for m in members if m.tee_id), None)
+    geometry = tee.hole(hole) if tee else {}
+
+    # Rows in SIDE order — side 1's two golfers, then side 2's — which is the
+    # order the card above the tray draws them in, so the two read together.
+    rows = []
+    for n in (1, 2):
+        for pid in side_ids[n]:
+            m = next((x for x in members if x.player_id == pid), None)
+            rows.append({
+                'player_id'      : pid,
+                'name'           : by_pid[pid].name,
+                'short'          : by_pid[pid].short_name,
+                'first'          : label.get(pid, ''),
+                'course_handicap': m.course_handicap if m else None,
+                'strokes'        : strokes_by.get(pid, {}).get(hole, 0),
+                'gross'          : gross_by.get(pid),
+                'net'            : net_index.get(pid, {}).get(hole),
+                'side'           : n,
+            })
+
+    hole_complete = all(r['gross'] is not None for r in rows)
+    winner = entry.get('winner')
+
+    sides = []
+    for n in (1, 2):
+        nets = [net_index.get(pid, {}).get(hole) for pid in side_ids[n]]
+        whole = all(x is not None for x in nets)
+        raw = _team_number(nets[0], nets[1]) if whole else None
+        stored = entry.get(f'team{n}_number')
+        result = None
+        if winner == 'halved':
+            result = 'tied'
+        elif winner in ('team1', 'team2'):
+            result = 'won' if winner == f'team{n}' else 'lost'
+        sides.append({
+            'side'      : n,
+            'label'     : ' + '.join(label.get(pid, '') for pid in side_ids[n]),
+            'player_ids': list(side_ids[n]),
+            'nets'      : [x for x in nets if x is not None] if whole else [],
+            'raw'       : raw,
+            'number'    : stored if stored is not None else raw,
+            'flipped'   : bool(entry.get(f'team{n}_flipped')),
+            'capped'    : bool(entry.get(f'team{n}_capped')),
+            'result'    : result,
+        })
+
+    # Points **through this hole** — never the round's totals, which is what
+    # `summary['teams']` carries and what put a golfer on the 2nd at the
+    # 18th's figure on Points' tray.
+    def _totals(upto_pos):
+        t1 = t2 = 0
+        for h in order[:upto_pos + 1]:
+            e = per_hole.get(h) or {}
+            if e.get('winner') == 'team1':
+                t1 += e.get('points') or 0
+            elif e.get('winner') == 'team2':
+                t2 += e.get('points') or 0
+        return t1, t2
+
+    t1_pts, t2_pts = _totals(pos)
+    b1, b2 = _totals(pos - 1)
+    before, after = b1 - b2, t1_pts - t2_pts
+    bet_unit = float(foursome.round.bet_unit)
+
+    # Money through this hole, through the same arithmetic `vegas_summary`
+    # uses: feed each golfer twice his side's points so the vs-average
+    # baseline is the other side, then let the game's own loss cap apply — so
+    # a capped round settles in the tray exactly as it does on the board.
+    money1 = money2 = 0.0
+    if t1_pts or t2_pts:
+        cfg = wager.WagerConfig(
+            funding='per_point', settlement='vs_average',
+            rate=Decimal(str(bet_unit)), cap=game.loss_cap)
+        sides_in = {}
+        for pid in side_ids[1]:
+            sides_in[pid] = 2 * t1_pts
+        for pid in side_ids[2]:
+            sides_in[pid] = 2 * t2_pts
+        settled = wager.settle(sides_in, cfg)
+        money1 = float(settled.get(side_ids[1][0], 0))
+        money2 = float(settled.get(side_ids[2][0], 0))
+
+    hole_points = entry.get('points') or 0
+    swing = {1: 0, 2: 0}
+    if winner == 'team1':
+        swing = {1: hole_points, 2: -hole_points}
+    elif winner == 'team2':
+        swing = {1: -hole_points, 2: hole_points}
+
+    standing = sorted(
+        ({'side'       : n,
+          'label'      : sides[n - 1]['label'],
+          'hole_points': swing[n],
+          'points'     : (t1_pts - t2_pts) if n == 1 else (t2_pts - t1_pts),
+          'money'      : money1 if n == 1 else money2}
+         for n in (1, 2)),
+        key=lambda s: -s['points'])
+
+    # What this hole was worth, and what a tie makes the next one worth.
+    carry_in = entry.get('carry') or 0
+    note = ''
+    tie_note = ''
+    if winner in ('team1', 'team2'):
+        mult = (carry_in + 1) if game.carryover else 1
+        bits = []
+        if mult > 1:
+            bits.append(f'×{mult} carried')
+        if (entry.get('multiplier') or 1) > 1:
+            bits.append(f"×{entry['multiplier']} birdie")
+        note = ' · '.join(bits)
+    elif winner == 'halved':
+        nxt = order[pos + 1] if pos + 1 < len(order) else None
+        if not game.carryover:
+            tie_note = 'no points'
+        elif carry_in <= 1:
+            tie_note = (f'hole {nxt} doubles' if nxt
+                        else 'nothing left to carry into')
+        else:
+            tie_note = (f'hole {nxt} pays ×{carry_in + 1}' if nxt
+                        else 'nothing left to carry into')
+
+    round_over = hole_complete and pos == len(order) - 1
+    winner_box = None
+    if round_over and standing:
+        top = standing[0]
+        winner_box = {
+            'side'   : top['side'],
+            'label'  : top['label'],
+            'points' : top['points'],
+            'money'  : top['money'],
+            'stake'  : bet_unit,
+            'level'  : top['points'] == 0,
+        }
+
+    return {
+        'hole'        : hole,
+        'par'         : geometry.get('par'),
+        'stroke_index': geometry.get('stroke_index'),
+        'yards'       : geometry.get('yards'),
+        'nine'        : 'front nine' if hole <= 9 else 'back nine',
+        'thru'        : pos + 1,
+        'stake'       : bet_unit,
+        'carryover'   : game.carryover,
+        'birdie_mode' : game.birdie_mode,
+        'players'     : rows,
+        'sides'       : sides,
+        'winner'      : winner,
+        'points'      : hole_points,
+        'note'        : note,
+        'tie_note'    : tie_note,
+        'margin_before': before,
+        'margin_after' : after,
+        'standing'    : standing,
+        'hole_complete': hole_complete,
+        'round_over'  : round_over,
+        'winner_box'  : winner_box,
+        'next_hole'   : order[pos + 1] if pos + 1 < len(order) else None,
+    }

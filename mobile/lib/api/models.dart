@@ -11114,3 +11114,274 @@ class WolfRoundWinner {
         stake: (j['stake'] as num?)?.toDouble() ?? 0,
       );
 }
+
+/// Everything the Las Vegas score-entry screen draws for one hole
+/// (`~/Downloads/handoff-vegas-score-entry`).
+///
+/// **Every figure arrives decided.**  The numbers, the flip, the 9 cap, the
+/// carry and the money are the engine's — and the flip especially, because
+/// only the server knows whose birdie caused it.
+class VegasHoleCard {
+  final int hole;
+  final int? par;
+  final int? strokeIndex;
+  final int? yards;
+  final String nine;
+
+  /// Holes played counting this one, for `Thru 6 · 25¢ a point`.
+  final int thru;
+  final double stake;
+
+  final bool carryover;
+
+  /// `flip` or `multiplier` — the two ways a birdie can pay.
+  final String birdieMode;
+
+  /// The group in SIDE order: side 1's two golfers, then side 2's.
+  final List<VegasHolePlayer> players;
+
+  /// Side 1 then side 2 — the order the golfer card lists them, so the two
+  /// read together. (The standing below sorts by points instead.)
+  final List<VegasHoleSide> sides;
+
+  /// `team1` · `team2` · `halved`, null until the hole is scored.
+  final String? winner;
+  final int points;
+
+  /// `×2 carried` / `×3 birdie`, empty on an ordinary hole.
+  final String note;
+
+  /// `hole 8 doubles` / `no points`, empty unless the hole was tied.
+  final String tieNote;
+
+  final int marginBefore;
+  final int marginAfter;
+
+  /// Two rows, the leading side first.
+  final List<VegasStandingRow> standing;
+
+  final bool holeComplete;
+  final bool roundOver;
+  final VegasRoundWinner? winnerBox;
+  final int? nextHole;
+
+  const VegasHoleCard({
+    required this.hole,
+    required this.par,
+    required this.strokeIndex,
+    required this.yards,
+    required this.nine,
+    required this.thru,
+    required this.stake,
+    required this.carryover,
+    required this.birdieMode,
+    required this.players,
+    required this.sides,
+    required this.winner,
+    required this.points,
+    required this.note,
+    required this.tieNote,
+    required this.marginBefore,
+    required this.marginAfter,
+    required this.standing,
+    required this.holeComplete,
+    required this.roundOver,
+    required this.winnerBox,
+    required this.nextHole,
+  });
+
+  factory VegasHoleCard.fromJson(Map<String, dynamic> j) => VegasHoleCard(
+        hole: (j['hole'] as num?)?.toInt() ?? 0,
+        par: (j['par'] as num?)?.toInt(),
+        strokeIndex: (j['stroke_index'] as num?)?.toInt(),
+        yards: (j['yards'] as num?)?.toInt(),
+        nine: j['nine'] as String? ?? '',
+        thru: (j['thru'] as num?)?.toInt() ?? 0,
+        stake: (j['stake'] as num?)?.toDouble() ?? 0,
+        carryover: j['carryover'] as bool? ?? false,
+        birdieMode: j['birdie_mode'] as String? ?? 'flip',
+        players: ((j['players'] as List?) ?? const [])
+            .map((e) =>
+                VegasHolePlayer.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(),
+        sides: ((j['sides'] as List?) ?? const [])
+            .map((e) =>
+                VegasHoleSide.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(),
+        winner: j['winner'] as String?,
+        points: (j['points'] as num?)?.toInt() ?? 0,
+        note: j['note'] as String? ?? '',
+        tieNote: j['tie_note'] as String? ?? '',
+        marginBefore: (j['margin_before'] as num?)?.toInt() ?? 0,
+        marginAfter: (j['margin_after'] as num?)?.toInt() ?? 0,
+        standing: ((j['standing'] as List?) ?? const [])
+            .map((e) =>
+                VegasStandingRow.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(),
+        holeComplete: j['hole_complete'] as bool? ?? false,
+        roundOver: j['round_over'] as bool? ?? false,
+        winnerBox: j['winner_box'] == null
+            ? null
+            : VegasRoundWinner.fromJson(
+                (j['winner_box'] as Map).cast<String, dynamic>()),
+        nextHole: (j['next_hole'] as num?)?.toInt(),
+      );
+
+  VegasHolePlayer? playerById(int id) {
+    for (final p in players) {
+      if (p.playerId == id) return p;
+    }
+    return null;
+  }
+
+  /// This golfer's side, for the header strip above his row.
+  VegasHoleSide? sideOf(int playerId) {
+    for (final s in sides) {
+      if (s.playerIds.contains(playerId)) return s;
+    }
+    return null;
+  }
+}
+
+class VegasHolePlayer {
+  final int playerId;
+  final String name;
+  final String short;
+  final String first;
+  final int? courseHandicap;
+  final int strokes;
+  final int? gross;
+  final int? net;
+  final int side;
+
+  const VegasHolePlayer({
+    required this.playerId,
+    required this.name,
+    required this.short,
+    required this.first,
+    required this.courseHandicap,
+    required this.strokes,
+    required this.gross,
+    required this.net,
+    required this.side,
+  });
+
+  factory VegasHolePlayer.fromJson(Map<String, dynamic> j) => VegasHolePlayer(
+        playerId: (j['player_id'] as num?)?.toInt() ?? 0,
+        name: j['name'] as String? ?? '',
+        short: j['short'] as String? ?? '',
+        first: j['first'] as String? ?? '',
+        courseHandicap: (j['course_handicap'] as num?)?.toInt(),
+        strokes: (j['strokes'] as num?)?.toInt() ?? 0,
+        gross: (j['gross'] as num?)?.toInt(),
+        net: (j['net'] as num?)?.toInt(),
+        side: (j['side'] as num?)?.toInt() ?? 0,
+      );
+}
+
+class VegasHoleSide {
+  /// 1 or 2.
+  final int side;
+
+  /// `Paul + Dave`, in the order the card lists them.
+  final String label;
+  final List<int> playerIds;
+
+  /// The two net scores, empty until both are in.
+  final List<int> nets;
+
+  /// The side's two nets as a number — what the header tag shows while the
+  /// hole fills up. Null until both scores are in.
+  final int? raw;
+
+  /// The number AFTER any flip. The engine's, because only it knows whose
+  /// birdie caused one.
+  final int? number;
+
+  final bool flipped;
+  final bool capped;
+
+  /// `won` · `lost` · `tied`, null until the hole settles.
+  final String? result;
+
+  const VegasHoleSide({
+    required this.side,
+    required this.label,
+    required this.playerIds,
+    required this.nets,
+    required this.raw,
+    required this.number,
+    required this.flipped,
+    required this.capped,
+    required this.result,
+  });
+
+  factory VegasHoleSide.fromJson(Map<String, dynamic> j) => VegasHoleSide(
+        side: (j['side'] as num?)?.toInt() ?? 0,
+        label: j['label'] as String? ?? '',
+        playerIds: ((j['player_ids'] as List?) ?? const [])
+            .map((e) => (e as num).toInt())
+            .toList(),
+        nets: ((j['nets'] as List?) ?? const [])
+            .map((e) => (e as num).toInt())
+            .toList(),
+        raw: (j['raw'] as num?)?.toInt(),
+        number: (j['number'] as num?)?.toInt(),
+        flipped: j['flipped'] as bool? ?? false,
+        capped: j['capped'] as bool? ?? false,
+        result: j['result'] as String?,
+      );
+}
+
+class VegasStandingRow {
+  final int side;
+  final String label;
+  final int holePoints;
+  final int points;
+  final double money;
+
+  const VegasStandingRow({
+    required this.side,
+    required this.label,
+    required this.holePoints,
+    required this.points,
+    required this.money,
+  });
+
+  factory VegasStandingRow.fromJson(Map<String, dynamic> j) => VegasStandingRow(
+        side: (j['side'] as num?)?.toInt() ?? 0,
+        label: j['label'] as String? ?? '',
+        holePoints: (j['hole_points'] as num?)?.toInt() ?? 0,
+        points: (j['points'] as num?)?.toInt() ?? 0,
+        money: (j['money'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+class VegasRoundWinner {
+  final int side;
+  final String label;
+  final int points;
+  final double money;
+  final double stake;
+
+  /// Nobody won — the two sides finished level.
+  final bool level;
+
+  const VegasRoundWinner({
+    required this.side,
+    required this.label,
+    required this.points,
+    required this.money,
+    required this.stake,
+    required this.level,
+  });
+
+  factory VegasRoundWinner.fromJson(Map<String, dynamic> j) => VegasRoundWinner(
+        side: (j['side'] as num?)?.toInt() ?? 0,
+        label: j['label'] as String? ?? '',
+        points: (j['points'] as num?)?.toInt() ?? 0,
+        money: (j['money'] as num?)?.toDouble() ?? 0,
+        stake: (j['stake'] as num?)?.toDouble() ?? 0,
+        level: j['level'] as bool? ?? false,
+      );
+}

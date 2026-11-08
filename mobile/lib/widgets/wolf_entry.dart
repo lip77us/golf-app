@@ -749,9 +749,19 @@ class _TrayLabel extends StatelessWidget {
                   letterSpacing: 1.0, fontWeight: FontWeight.w700)),
         ),
         const SizedBox(width: 10),
+        // **Uppercase, like the label beside it.** The design system puts
+        // `text-transform: uppercase` on the whole row, so `25¢ A POINT` and
+        // `1 PT EACH` are headings rather than values — and a row that was
+        // half-capitalised read as two different kinds of thing.
         if (trailing != null && trailing!.isNotEmpty)
-          Text(trailing!,
-              style: const TextStyle(color: _secondary, fontSize: 11.5)),
+          Flexible(
+            child: Text(trailing!.toUpperCase(),
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                    color: _secondary, fontSize: 11.5,
+                    letterSpacing: 0.4, fontWeight: FontWeight.w700)),
+          ),
       ]);
 }
 

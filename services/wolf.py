@@ -71,6 +71,7 @@ from services.points_531 import _build_so_score_index
 from services.hole_plan import play_order as _play_order
 from scoring.handicap import build_score_index, make_strokes_fn, effective_hcp_for
 from scoring.models import HoleScore
+from services.player_labels import first_names
 
 _CENT = Decimal('0.01')
 
@@ -936,35 +937,6 @@ def wolf_summary(foursome) -> dict:
 # Score-entry card — `~/Downloads/handoff-wolf-score-entry`
 # ---------------------------------------------------------------------------
 
-def _wolf_labels(by_pid: dict) -> dict:
-    """``{player_id: label}`` — the FIRST name, lengthened only where two
-    golfers in the group share one.
-
-    The tray talks about golfers in running text — ``Sam's call``, ``who did
-    Sam take?``, ``Paul + Sam`` — and ``short_name`` is at most five
-    characters and auto-fills to initials, so ``PL's call`` is not a sentence.
-    A first name is.  Two Daves in one group would be, so the ambiguous ones
-    (and only those, as the settlement receipt's labels do) take a surname
-    initial: ``Dave K``.
-    """
-    first = {}
-    for pid, player in by_pid.items():
-        parts = (player.name or '').split()
-        first[pid] = parts[0] if parts else (player.short_name or '')
-    seen = {}
-    for pid, f in first.items():
-        seen.setdefault(f.lower(), []).append(pid)
-    out = {}
-    for pid, f in first.items():
-        if len(seen.get(f.lower(), [])) < 2:
-            out[pid] = f
-            continue
-        parts = (by_pid[pid].name or '').split()
-        out[pid] = f'{f} {parts[1][0]}' if len(parts) > 1 else (
-            by_pid[pid].short_name or f)
-    return out
-
-
 def _pts_label(value, each: bool) -> str:
     """``1 pt each`` / ``3 pts`` — the call's worth, in the tray's words."""
     v = float(value)
@@ -1007,7 +979,7 @@ def wolf_hole_card(foursome, hole: int) -> dict:
     by_pid   = {m.player_id: m.player for m in members}
     real_ids = [m.player_id for m in members]
     rotation = _clean_order(foursome, game.wolf_order)
-    label    = _wolf_labels(by_pid)
+    label    = first_names(by_pid)
     n        = len(real_ids)
 
     per_hole = {h['hole']: h for h in (summary.get('holes') or [])}

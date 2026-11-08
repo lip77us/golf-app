@@ -10414,3 +10414,113 @@ nine` / the `Sam · Wolf` pill with `tees last`) — the shared `HoleHeader`
 carries those facts and is used by eleven screens, so redrawing it is a
 system-wide change rather than this packet's. The `last_place_wolf` flag the
 card already emits is what a restyle would read for `last place, 17 & 18`.
+
+## Las Vegas score entry — the number, and the rules that move it
+
+`~/Downloads/handoff-vegas-score-entry`. The keypad and dark tray carried to
+Las Vegas, on the shared `score_entry_screen` — Vegas has no play screen of
+its own, so this is the Sixes / Annandale / Stroke Play shape rather than
+Wolf's or Rabbit's.
+
+### The handoff's three "to confirm with the engine", answered
+
+| it asks | `calculate_vegas` |
+|---|---|
+| do birdies on both sides cancel? | **No — both numbers flip.** |
+| do carries stack? | **Yes.** A second tie makes the next decided hole ×3. |
+| is the flip checked before or after the 9 cap? | **After**, inside `_team_number` — the same order the reference uses. |
+
+**The first is a real divergence and is NOT quietly resolved.** The handoff's
+prose says "if both sides make a birdie, nothing flips"; the engine applies
+each birdie's flip to the opposing number independently. They are different
+money, not a wash — 45 v 57 with birdies both ways becomes 54 v 75, a margin
+of 21, where cancelling leaves 12. The card reports what the engine does,
+with both sides tagged `FLIPPED`, and
+`test_birdies_on_both_sides_do_NOT_cancel` states it in as many words. **A
+rules question for Paul, not a code change**: that engine has been played.
+
+### `vegas_hole_card(foursome, hole)`
+
+Two numbers per side, deliberately:
+
+* **`raw`** is the side's two nets as a number, which is what the golfer
+  card's header tag shows while the hole fills up. Computable from the nets
+  through the engine's own `_team_number` — and the 9 cap IS in it, because
+  capping is part of forming the number rather than a rule applied to it.
+* **`number`** is the STORED result, after any flip. Only the engine knows
+  it, because only the engine knows whose birdie caused one. The flip is its
+  own inverse, so the pre-flip figure was unrecoverable until the Live
+  Activity work added `teamN_flipped` — that flag is what lets the tray draw
+  <s>56</s> 65 rather than asserting a swing.
+
+Everything else follows the pattern: points and money **through this hole**
+(the round's totals are what put a golfer on the 2nd at the 18th's figure on
+Points' tray), money through the same vs-average-with-a-loss-cap arithmetic
+`vegas_summary` uses, gated on the GAME rather than its status, and
+`tie_note` / `note` composed server-side (`hole 8 doubles`, `hole 3 pays ×3`,
+`×2 carried`) so no client has to learn the carry rule.
+
+**Sides are ordered by MEMBERSHIP**, not by `VegasTeam.players`, which is a
+many-to-many with no ordering — so `Paul + Dave` could read either way round
+against a card listing them the other. That is the Sixes anchor's trap, and
+pinning it needed a fixture whose membership order is deliberately built
+against the pks: over the ordinary roster the database agrees by luck and the
+guard passes against the bug.
+
+`services/player_labels.py` `first_names()` came out of Wolf's tray in the
+same commit. Second user is when a rule earns a module; the settlement
+receipt's `_field_labels` answers the opposite question (which SURNAME to
+lengthen) for its own reasons and stays where it is.
+
+### Mobile
+
+The tray is a fourth branch on `score_entry_screen`'s bottom bar beside
+Sixes', Stroke Play's and Annandale's, and everything that branch needs was
+already there: `_keypadRound` gains the primary test, `_raisesTray` gains the
+card (which is what keeps auto-advance from carrying the scorer past the
+tray), `useKeypad` already suppresses the inline picker, and the pager hides
+under it.
+
+**`VegasSideHeader` rides the slot Annandale's team header already uses** —
+one header over each pair, with the side's number filling in as its two
+scores land. That is the live half of this game: what a golfer watches in
+Vegas is the number forming.
+
+**The sides are BLUE and ORANGE, not the packet's pine and clay.**
+`docs/color-standard.md` is explicit — green, red and grey mean win, loss and
+neutral and are never a team — and the golfer rows under these headers have
+drawn Vegas blue/orange since it shipped. A header in a different colour from
+the rows it heads is worse than one in a different colour from the design. On
+the tray that makes side 1 `Halved.onDark3`, the readable blue that token
+exists for, rather than the mint every other tray uses for its first side.
+
+### What the golden pass found
+
+Rendering the real widgets to PNGs under `--update-goldens` again, which is
+the cheapest honest look at a layout packet:
+
+* **the standing's Hole and Pts columns wrapped** inside a fixed-height row.
+  A Vegas figure has no ceiling — a ×3 carried hole pays three digits and a
+  round can finish past a thousand — so they are `_Figure`, which shrinks
+  rather than wrapping or ellipsising. An ellipsis on a number is worse than
+  a small number.
+* **the tray's trailing label was not uppercased.** The design system puts
+  `text-transform: uppercase` on the whole row, so `25¢ A POINT` and
+  `1 PT EACH` are headings rather than values. **Fixed in Wolf's tray too**,
+  which was built from the same design system an hour earlier and had the
+  same miss. Points' tray keeps its lower-case trailing: different packet,
+  already shipped.
+
+### Not built
+
+The **hole card's restyle** — the deep pine number tile, the yardage line and
+the running-margin pill. `HoleHeader` is shared by eleven screens, and the
+margin pill is already on this screen as the standing ribbon
+(`utils/vegas_standing.dart`), which carries the same figure and the money
+beside it.
+
+Tests: `scoring/tests/test_vegas_hole_card.py` (27 — the handoff's worked
+examples through the real engine on par 4 / SI 5, where Dave takes no stroke
+and Sam and Lee each take one), `api/test_vegas_hole_card.py` (6) and
+`mobile/test/vegas_entry_test.dart` (22). Every guard mutation-checked; the
+side-ordering one twice, because the first version passed against the bug.

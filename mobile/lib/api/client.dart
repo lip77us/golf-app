@@ -2643,6 +2643,17 @@ class ApiClient {
     );
   }
 
+  /// GET /api/foursomes/{id}/vegas/hole/{hole}/
+  ///
+  /// Only for a hole the screen opens WITHOUT posting — a save returns the
+  /// same shape under `vegas_hole`.
+  Future<VegasHoleCard?> getVegasHoleCard(int foursomeId, int hole) async {
+    final data = await _get('/foursomes/$foursomeId/vegas/hole/$hole/');
+    final map = (data as Map).cast<String, dynamic>();
+    if (map.isEmpty) return null;
+    return VegasHoleCard.fromJson(map);
+  }
+
   /// GET /api/foursomes/{id}/wolf/hole/{hole}/
   ///
   /// Only for a hole the screen opens WITHOUT posting — a save returns the

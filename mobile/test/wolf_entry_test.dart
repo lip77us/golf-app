@@ -239,7 +239,7 @@ void main() {
     testWidgets('it names the Wolf and prices every option', (t) async {
       await _pumpTray(t, _card(decision: 'pending', needsCall: true));
       expect(find.text('HOLE 7 · SAM’S CALL'), findsOneWidget);
-      expect(find.text('who did Sam take?'), findsOneWidget);
+      expect(find.text('WHO DID SAM TAKE?'), findsOneWidget);
       expect(find.text('partner · 1 pt'), findsNWidgets(3));
       expect(find.text('3 pts'), findsOneWidget);
       expect(find.text('6 pts'), findsOneWidget);
@@ -277,7 +277,7 @@ void main() {
         (t) async {
       await _pumpTray(t, _card());
       expect(find.text('HOLE 7 · PARTNER'), findsOneWidget);
-      expect(find.text('1 pt each'), findsOneWidget);
+      expect(find.text('1 PT EACH'), findsOneWidget);
       expect(find.text('Sam + Paul'), findsOneWidget);
       expect(find.text('won'), findsOneWidget);
       expect(find.text('lost'), findsOneWidget);

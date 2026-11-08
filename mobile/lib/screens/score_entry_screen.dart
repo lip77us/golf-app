@@ -37,6 +37,7 @@ import '../utils/skins_standing.dart';
 import '../utils/stableford_standing.dart';
 import '../utils/triple_cup_standing.dart';
 import '../utils/vegas_standing.dart';
+import '../widgets/vegas_entry.dart';
 import '../widgets/banker_entry_strip.dart';
 import '../widgets/triple_cup_pairings.dart';
 import '../widgets/standing_ribbon.dart';
@@ -1528,7 +1529,9 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         // test again: Stroke Play is also the overlay the server emits for
         // every individual-ball round, and a Nassau round must not have its
         // entry changed by it.
-        primary == GameIds.strokePlay;
+        primary == GameIds.strokePlay ||
+        // Las Vegas, per `~/Downloads/handoff-vegas-score-entry`.
+        primary == GameIds.vegas;
   }
 
   /// This hole ends in a TRAY — Annandale Friday's, Sixes' or Stroke Play's.
@@ -1537,6 +1540,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
   bool _raisesTray(RoundProvider rp) =>
       rp.annandaleFridaySummary != null ||
       _sixesCard(rp) != null ||
+      _vegasCard(rp) != null ||
       _strokePlayCard(rp) != null;
 
   /// The hole we have asked the server for; see `_ensureSixesCard`.
@@ -1600,6 +1604,37 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       return null;
     }
     return rp.strokePlayHole(_selectedHole);
+  }
+
+  /// The hole we have asked the server for; see `_ensureVegasCard`.
+  int? _vegasCardAsked;
+
+  /// **Make sure the hole on screen has a Las Vegas card.** Same gap Sixes,
+  /// Rabbit and Wolf each showed on a phone: a save drops every other hole's
+  /// card because they can be stale, and that races the fetch the forward
+  /// button started — so without this the keypad is simply not drawn.
+  void _ensureVegasCard(RoundProvider rp) {
+    if (!_activeGames(rp.round).contains(GameIds.vegas)) return;
+    if (rp.vegasHole(_selectedHole) != null) {
+      _vegasCardAsked = null;
+      return;
+    }
+    if (_vegasCardAsked == _selectedHole) return;
+    _vegasCardAsked = _selectedHole;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<RoundProvider>()
+          .loadVegasHole(widget.foursomeId, _selectedHole);
+    });
+  }
+
+  /// The Las Vegas card for the hole on screen, when it is the primary.
+  VegasHoleCard? _vegasCard(RoundProvider rp) {
+    final games = _activeGames(rp.round);
+    if (resolvePrimary(rp.round?.primaryGame, games) != GameIds.vegas) {
+      return null;
+    }
+    return rp.vegasHole(_selectedHole);
   }
 
   /// The field-wide side games on the hole on screen: the ball game's carrier
@@ -3179,6 +3214,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final spTray =
         spCard != null && fbActive && allDone && _editHotPid == null;
 
+    // **Las Vegas.** Same tray again, reporting the two numbers and the
+    // rules that moved them — the flip especially, which only the server
+    // can attribute because only it knows whose birdie caused it.
+    _ensureVegasCard(rp);
+    final vgCard = _vegasCard(rp);
+    final vgTray =
+        vgCard != null && fbActive && allDone && _editHotPid == null;
+
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -3256,6 +3299,28 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               ballLostPending: _ballLostPending?.hole == _selectedHole
                   ? _ballLostPending!.lost
                   : null,
+            )
+          else if (vgTray)
+            VegasHoleTray(
+              card: vgCard,
+              // While this tray is up it IS the bottom bar — the pager below
+              // is hidden, so these are the only arrows on screen, and on
+              // the last hole the forward button is Complete Round.
+              onPrev: _prevHoleInOrder(rp) == null ? null : _retreat,
+              onNext: rp.submitting
+                  ? null
+                  : (_nextHoleInOrder(rp) == null
+                      ? () => _completeRound(ctx, players, par)
+                      : _advance),
+              gettingResult: rp.trayResultPending(_selectedHole) ||
+                  _hasRealPending(_selectedHole),
+              notSynced: rp.trayHoleUnsynced(_selectedHole),
+              // Picks nobody — see the Sixes tray above.
+              picking: _trayEditing,
+              onEdit: () => setState(() {
+                _trayEditing = !_trayEditing;
+                _editHotPid = null;
+              }),
             )
           else if (afTray)
             AnnandaleHoleTray(
@@ -3381,7 +3446,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           // hole. Two pagers at the bottom is what a phone showed; the design
           // has the tray overlaying this row, so this is the half that goes
           // (Paul, 30 Oct 2026).
-          if (!sixTray && !spTray)
+          if (!sixTray && !spTray && !vgTray)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             child: Column(children: [
@@ -3688,6 +3753,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               _HoleScoreCard(
                 useKeypad: _keypadRound(rp) &&
                            rp.round?.status != 'complete',
+                vegasHole: _vegasCard(rp),
                 annandaleSummary:
                     _activeGames(rp.round).contains('annandale_friday')
                         ? rp.annandaleFridaySummary : null,
@@ -4159,10 +4225,17 @@ class _HoleScoreCard extends StatelessWidget {
   final BallOnHole?   ball;
   final RumbleOnHole? rumble;
 
+  /// Las Vegas' hole card, for the side headers — the live half of that
+  /// game, because what a golfer watches is the number forming. Null on
+  /// every other round, which is what keeps the headers absent rather than
+  /// empty.
+  final VegasHoleCard? vegasHole;
+
   const _HoleScoreCard({
     this.fortyBallsNet,
     this.ball,
     this.rumble,
+    this.vegasHole,
     this.useKeypad = false,
     this.solo = false,
     this.anchorId,
@@ -4856,6 +4929,14 @@ class _HoleScoreCard extends StatelessWidget {
                        annandaleSummary!.teamOf(m.player.id)))
                 AnnandaleTeamHeader(
                     summary: annandaleSummary!, playerId: m.player.id),
+              // Las Vegas: the same slot, carrying the side's NUMBER as it
+              // builds — `45` once both of its scores are in, an em dash
+              // before that.
+              if (vegasHole?.sideOf(m.player.id) != null &&
+                  (idx == 0 ||
+                   vegasHole!.sideOf(players[idx - 1].player.id)?.side !=
+                       vegasHole!.sideOf(m.player.id)?.side))
+                VegasSideHeader(side: vegasHole!.sideOf(m.player.id)!),
             ];
             final gross      = scores[m.player.id];
             final isHot      = idx == hotSpotIdx;
