@@ -87,8 +87,14 @@ class NassauHoleTray extends StatelessWidget {
           // and those buttons are the ONLY pager while this tray is up.
           if (!hold)
             ConstrainedBox(
+              // **Bounded, and scrollable inside.** The cap leaves the
+              // header above and the buttons below on screen — those
+              // buttons are the ONLY pager while this tray is up — and
+              // gives the content everything else. Two four-row blocks
+              // plus a result line runs past a short phone whatever the
+              // number is, so the tail scrolls.
               constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.62),
+                  maxHeight: MediaQuery.of(context).size.height * 0.72),
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

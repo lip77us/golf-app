@@ -77,11 +77,14 @@ def _carry_origin(hole, riding):
 
 
 def _skin_worth(summary) -> float:
-    """One per-skin skin: everybody's stake, the winner's included, the same
-    figure the board quotes (`SkinsBoardData.skinWorth`). Five golfers at $5 is
-    a $25 skin that nets him $20. Against the average each golfer puts in
-    `rate / n`, so that skin is worth one rate.
+    """One skin's worth, read off the summary.
+
+    **`services.skins.skin_worth` is the one writer.** This used to derive
+    it here and `SkinsBoardData.skinWorth` derived it again in Dart, with
+    this docstring promising they agreed and nothing checking.
     """
+    if summary.get('skin_worth') is not None:
+        return float(summary['skin_worth'])
     rate = float(summary.get('per_point_rate') or 0)
     if summary.get('per_point_mode') == 'average':
         return rate

@@ -843,13 +843,19 @@ def _summary_for_game(game: MultiSkinsGame) -> dict:
         # rule): a pot that collects and distributes nothing is not a pot.
         payout_by_cid = {cid: 0.0 for cid in participant_ids}
 
+    # **A stable place in the POOL's roster, which is what a golfer's
+    # colour follows.** `players_out` is sorted by skins below, so an index
+    # into it moves the moment somebody wins one — and the board must not
+    # change a golfer's colour then, or the hole tiles stop matching the
+    # ledger swatches. Same fix as `services.skins`.
     players_out: list = []
-    for cid in participant_ids:
+    for _i, cid in enumerate(participant_ids):
         p      = canon_players[cid]
         m      = member_by_canon.get(cid)
         won    = skins_won[cid]
         payout = payout_by_cid.get(cid, 0.0)
         players_out.append({
+            'roster_index' : _i,
             'player_id'    : cid,
             'name'         : p.name,
             'short_name'   : p.short_name,

@@ -10963,3 +10963,123 @@ not is_claremont` refusal inside `_manual_press_state` is belt-and-braces,
 because a non-Claremont game has no bottom margins and the `margin == 0`
 test already refuses. It is kept as the only LOCAL statement of the rule,
 and says so, so nobody later "proves" it dead.**
+## Skins score entry — and the colour that moved when you won
+
+`~/Downloads/handoff-skins-score-entry`. The keypad and dark tray carried to
+Skins, on the shared `score_entry_screen` — a configured Skins round already
+routed there, and `/skins` is registered in `main.dart` with **nothing
+pushing it**, so `skins_screen.dart` (1368 lines) has been unreachable for
+some time. Not deleted here; worth its own look.
+
+### `services.skins.skins_hole_card(foursome, hole)`
+
+Renders the engine. The handoff's reference derives
+`net = stake × (golfers × won − total)`, which is right for per-skin with no
+junk, no withdrawal, no loss cap and no pool — and `skins_summary` already
+accounts for all four, so the card reads `net`. The `gross_to_par` rule in
+the one column that is money.
+
+Three things it derives, each for a stated reason:
+
+- **What rides.** A carried hole's stored `skins_value` is the pot INCLUDING
+  itself, so two carried holes ride as three. `SkinsBoardData.skinsRiding`
+  reads the same rule for the NEXT hole.
+- **Why the hole went that way.** A steal is "the rules changed the answer",
+  asked of `skin_rules.decide` with the steal OFF and compared — not
+  re-derived, so there is no second opinion about what a natural birdie
+  beats.
+- **`no skin` on the last hole.** The handoff asks for this to be confirmed
+  with the engine and it is: *"skins still in the pot after hole 18 … are
+  voided"*, and the settlement denominator reflects skins actually won.
+
+**Par is read from EACH GOLFER'S OWN TEE**, the way the engine reads it. The
+summary's hole `par` is one layout for the foursome, which is right when the
+question is about the hole; the birdie flag asks about the GOLFER. A
+single-tee fixture cannot tell the two apart, so that test puts Sam on a
+women's tee where the 1st is a par 5 and the same gross 4 is a birdie for
+one golfer and a par for the other.
+
+**Gated on the GAME, not its status.** `SkinsGame.status` stays pending
+until a hole is scored, and the hole the keypad opens on is by definition the
+one before that — an empty card there would mean no keypad at all.
+
+### The bug underneath: a golfer changed colour when he won a skin
+
+`skins_summary` sorts `players` by skins, and `SkinsBoardData.fromSkins`
+took `colourIndex: i` straight from that list — so the moment somebody won
+one he moved to index 0 and the whole board re-coloured. The hole tiles took
+their colour the same way.
+
+**The board's own test said this must not happen** and could not catch it:
+it fed an UNSORTED list, so it proved the model keeps the order it is GIVEN
+and nothing about the order the server sends. The same shape as the Sixes
+anchor test, and the reason that lesson is written down twice.
+
+The server now emits a stable `roster_index` (membership order, which is
+where the golfers sit on the card everywhere else) and both boards read it —
+the per-foursome one and the cross-round pool, which had it too. The test
+feeds a sorted list now, with a second one covering the older-server
+fallback.
+
+### …and two writers for what a skin is worth
+
+`live_activity_skins._skin_worth` derived it, with a docstring promising it
+was *"the same figure the board quotes"*, and `SkinsBoardData.skinWorth`
+derived it again in Dart with nothing checking the promise. The tray quotes
+the same number for the same hole, which would have made three.
+
+`services.skins.skin_worth` is the one writer, on the summary as
+`skin_worth`; both readers take it and keep their derivation as the fallback
+for an older payload. **Zero under a pool**, which has no per-skin price at
+all — one pot is divided among however many skins get won, so a figure
+quoted now stops being true the moment the next one is. The tray says
+`$5 ante` there instead.
+
+### One departure from the handoff, and it is about agreeing with the board
+
+The handoff's hole pill is `riding × stake × other golfers` — what the
+WINNER takes. The board's Up-next card already draws `riding × skinWorth`
+for the same hole, which counts the winner's own stake: $40 against $30 on
+four golfers at $5. Both are coherent; two of them one screen apart is not.
+
+The pill keeps the handoff's figure (`hole_value`, the net to the winner)
+and the ledger header keeps the board's `$5 a skin`, because the two never
+state the same number in the same words. **If that ever stops being true,
+collapse them onto `skin_worth` rather than adding a third.**
+
+### The tray
+
+Nets low to high, the winner's row lightly filled with a `2 skins` tag; the
+result line with the orange `3 ride to 8` beside it; then the ledger, one
+tick a skin with **the skins won on THIS hole outlined in mint** against the
+filled ones for the rest. Junk ticks are outlined too — junk is a share of
+the same pot, so the count beside the money has to include it or the two
+stop reconciling.
+
+**`Halved.onDark4`** is new: the dark palette had three colours and a skins
+round has four golfers, so the fourth wrapped to mint and wore the first
+golfer's. It is the lifted plum the lock screen already uses
+(`SixesActivity.plum`), not `Halved.zombie`, which is tuned for a light card
+and goes to mud on deep pine.
+
+**The hole-outcome banner and the carry chip go quiet** once the tray is up,
+the call Rabbit's grid and Survivor's outcome line got.
+
+### Two things only a render showed
+
+- **`$5 a skins`.** The stake is the price of ONE, however many are riding.
+- **A `Wrap` in a `Row` is unbounded**, so a golfer seventeen skins up ran
+  the ledger row off the card instead of onto a second line — which is
+  exactly the state this tray is in at the finish.
+
+The tray cap also moved from 62% of the screen to **72%**, on both this tray
+and Nassau's: at 62% the Skins ledger was entirely below the fold, and the
+ledger is the point of it. The buttons sit outside the box either way, which
+is what the cap is actually protecting.
+
+Tests: `scoring/tests/test_skins_hole_card.py` (27, four of them fixture
+writers — `REGEN_SKINS_FIXTURES=1`), `api/test_skins_hole_card.py` (6) and
+`mobile/test/skins_entry_test.dart` (26). Every guard mutation-checked;
+two widget behaviours were added to the test file BECAUSE their mutations
+passed first, and one engine mutation passed for a third time against a
+single-tee fixture before the mixed-tee one was written.

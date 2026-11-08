@@ -657,6 +657,28 @@ def _whole_dollar_shares(payout: dict, target: float) -> dict:
         floors[pid] += 1
     return {pid: float(v) for pid, v in floors.items()}
 
+def skin_worth(payout_style: str, per_point_mode: str, rate: float,
+               n_golfers: int) -> float:
+    """What ONE skin is worth: everybody's stake, the winner's included.
+
+    Five golfers at $5 is a $25 skin, of which the winner nets $20 — he
+    knows the $5 is his entry (Paul, 30 Oct 2026). Against the AVERAGE each
+    golfer puts in `rate / n`, so that skin is worth one rate.
+
+    **A per-skin price is the game's own `per_point_rate`, never the round's
+    `bet_unit`** — a $5 Skins pool beside a $10 Nassau read "$10 a skin"
+    until that was separated.
+
+    Zero under a pool, which has no per-skin price at all: one pot is
+    divided among however many skins get won, so every new skin makes the
+    others worth less. The board and the lock card say that out loud rather
+    than quoting a figure that would move.
+    """
+    if payout_style != 'per_point':
+        return 0.0
+    return rate if per_point_mode == 'average' else rate * max(0, n_golfers)
+
+
 def skins_summary(foursome) -> dict:
     """
     JSON-serialisable summary of a Skins game.
@@ -675,6 +697,7 @@ def skins_summary(foursome) -> dict:
                     'player_id'  : int,
                     'name'       : str,
                     'short_name' : str,
+                    'roster_index': int,  # place on the CARD, for colour
                     'skins_won'  : int,   # regular per-hole skins
                     'junk_skins' : int,   # junk skins (0 if allow_junk=False)
                     'total_skins': int,
@@ -729,6 +752,7 @@ def skins_summary(foursome) -> dict:
             'players'   : [],
             'holes'     : [],
             'money'     : {'bet_unit': bet_unit, 'pool': 0.0, 'total_skins': 0},
+            'skin_worth': 0.0,
             # The junk CATALOGUE belongs here too, not only on a configured
             # game.  Without it a first-time setup drew the junk switch with
             # NO TYPE ROWS: nothing to tick, while the screen's own gate
@@ -907,11 +931,18 @@ def skins_summary(foursome) -> dict:
             return round_half_up(max(0, phcp - low_phcp) * npct / 100)
         return round_half_up(phcp * npct / 100)   # NET
 
+    # **A stable place in the ROSTER, which is what a golfer's colour
+    # follows.** `players_out` is sorted by skins for the ledger, so an
+    # index into it moves the moment somebody wins one — and the board's
+    # own comment says a golfer must not change colour then, because the
+    # hole tiles would stop matching the ledger swatches. Membership order
+    # is the order the golfers sit on the card everywhere else.
     players_out: list = []
-    for m in real_members:
+    for i, m in enumerate(real_members):
         pid    = m.player_id
         ts     = total_skins_by_pid[pid]
         players_out.append({
+            'roster_index': i,
             'player_id'   : pid,
             'name'        : m.player.name,
             'short_name'  : m.player.short_name,
@@ -1089,6 +1120,254 @@ def skins_summary(foursome) -> dict:
         'payout_style'  : game.payout_style,
         'per_point_mode': game.per_point_mode,
         'per_point_rate': float(game.per_point_rate or 0),
+        # **What one skin is worth, stated once.** It had three readers and
+        # two writers — `live_activity_skins._skin_worth`, whose docstring
+        # promised it was "the same figure the board quotes", and
+        # `SkinsBoardData.skinWorth`, which derived it again in Dart with
+        # nothing checking the promise. Both read this now.
+        'skin_worth'    : skin_worth(game.payout_style, game.per_point_mode,
+                                     float(game.per_point_rate or 0),
+                                     len(real_members)),
         'loss_cap'      : (float(game.loss_cap)
                            if game.loss_cap is not None else None),
+    }
+
+
+def skins_hole_card(foursome, hole: int) -> dict:
+    """Everything the Skins score-entry screen draws for ONE hole.
+
+    (`~/Downloads/handoff-skins-score-entry`.)
+
+    **Every figure is the engine's.** The winner, what the hole was worth,
+    what rides on, the skins and the money all come off `skins_summary`,
+    which already accounts for the things a formula on a phone cannot: the
+    skin-validation rules, junk, a mid-round withdrawal's segmented pool,
+    pool mode and the loss cap. The handoff's reference derives
+    `net = stake × (golfers × won − total)`, which is right for per-point
+    with none of those and wrong with any of them — the same `gross_to_par`
+    lesson, in the one column that is money.
+
+    Returns `{}` when no Skins game is set up for this foursome.
+    """
+    from services.hole_plan import play_order
+    from services.player_labels import first_names
+    from services import skin_rules
+
+    # **Gated on the GAME, not its status.** `SkinsGame.status` stays
+    # pending until a hole is scored, and the hole the keypad opens on is
+    # by definition the one before that — an empty card there would mean
+    # no keypad at all, which is this repo's recurring shipped-and-
+    # unreachable shape.
+    try:
+        foursome.skins_game
+    except SkinsGame.DoesNotExist:
+        return {}
+    summary = skins_summary(foursome)
+    if not summary:
+        return {}
+
+    order = play_order(foursome.round, foursome) or list(range(1, 19))
+    if hole not in order:
+        return {}
+    pos  = order.index(hole)
+    half = len(order) // 2
+
+    by_hole = {h['hole']: h for h in (summary.get('holes') or [])}
+    row     = by_hole.get(hole) or {}
+    totals  = {p['player_id']: p for p in (summary.get('players') or [])}
+
+    members = {m.player_id: m.player
+               for m in foursome.memberships.select_related('player')
+               if not m.player.is_phantom}
+    label = first_names({pid: p for pid, p in members.items() if pid in totals})
+
+    # ── The golfers on this hole ─────────────────────────────────────────
+    scored = {s['player_id']: s for s in (row.get('scores') or [])}
+    # **Par is read from EACH GOLFER'S OWN TEE**, the same way the engine
+    # reads it — the summary's hole `par` is one layout for the foursome,
+    # which is right when the question is about the hole and wrong when it
+    # is about the golfer. The steal turns on whether HE made a birdie.
+    _, par_by_pid = _gross_and_pars(foursome, list(totals))
+    pars = {pid: (par_by_pid.get(pid) or {}).get(hole) for pid in totals}
+
+    players = []
+    for pid, t in totals.items():
+        sc = scored.get(pid) or {}
+        gross, strokes = sc.get('gross'), (sc.get('strokes') or 0)
+        net = (gross - strokes) if gross is not None else None
+        players.append({
+            'player_id'      : pid,
+            'name'           : t.get('name') or '',
+            'short'          : t.get('short_name') or '',
+            'first'          : label.get(pid, ''),
+            'roster_index'   : t.get('roster_index'),
+            'course_handicap': t.get('course_handicap'),
+            'strokes'        : strokes,
+            'gross'          : gross,
+            'net'            : net,
+            # A NATURAL birdie — the thing the steal rule turns on, and the
+            # only reason this flag exists. `is_natural_birdie` is the one
+            # writer; deriving `gross < par` here would be a second.
+            'birdie'         : skin_rules.is_natural_birdie(gross,
+                                                            pars.get(pid)),
+            'skins_won'      : t.get('skins_won') or 0,
+            'junk_skins'     : t.get('junk_skins') or 0,
+            'total_skins'    : t.get('total_skins') or 0,
+            'money'          : (t.get('payout') if summary.get('payout_style')
+                                == 'pool' else t.get('net')) or 0.0,
+        })
+    # **Nets low to high**, which is the design's order for the tray; a
+    # golfer with no score sits last, and roster order breaks every tie so
+    # the rows never swap under a thumb.
+    players.sort(key=lambda p: (p['net'] is None, p['net'] if p['net']
+                                is not None else 0, p['roster_index'] or 0))
+
+    n_scored = sum(1 for p in players if p['gross'] is not None)
+    hole_complete = n_scored == len(players) and len(players) > 0
+
+    # ── What rides on this hole ──────────────────────────────────────────
+    # A carried hole's stored `skins_value` is already the pot INCLUDING
+    # itself, so two carried holes ride as three. `SkinsBoardData
+    # .skinsRiding` reads the same rule for the NEXT hole.
+    played_before = [by_hole[h] for h in order[:pos]
+                     if h in by_hole and by_hole[h].get('scores')
+                     and any(s.get('gross') is not None
+                             for s in by_hole[h]['scores'])]
+    prev = played_before[-1] if played_before else None
+    riding = (row.get('skins_value') or 0) if row.get('skins_value') else (
+        (prev['skins_value'] + 1) if prev and prev.get('is_carry') else 1)
+    carried_in = max(0, riding - 1)
+
+    # The hole the carry run started on, for `1 carried from 6`.
+    carried_from = None
+    if carried_in:
+        run = []
+        for h in reversed(played_before):
+            if not h.get('is_carry'):
+                break
+            run.append(h['hole'])
+        carried_from = run[-1] if run else None
+
+    # ── Who took it, and why ─────────────────────────────────────────────
+    winner_id = row.get('winner_id')
+    live = [p for p in players if p['net'] is not None]
+    best = min((p['net'] for p in live), default=None)
+    tied = [p for p in live if p['net'] == best]
+
+    outcome, line = 'pending', ''
+    steal_by = None
+    if hole_complete:
+        if winner_id is not None:
+            w = next((p for p in players if p['player_id'] == winner_id), None)
+            # **A steal is "the rules changed the answer"**, asked of the
+            # one writer rather than re-derived: run `decide` with the
+            # steal off and see whether it would have tied.
+            plain = skin_rules.decide(
+                {p['player_id']: p['net'] for p in live},
+                {p['player_id']: p['gross'] for p in live},
+                pars,
+                minimum=summary.get('skin_minimum') or 'none',
+                birdie_steal=False)
+            if len(plain) > 1 and winner_id in plain and w and w['birdie']:
+                outcome  = 'steal'
+                steal_by = winner_id
+                beaten = next((p for p in tied
+                               if p['player_id'] != winner_id), None)
+                line = (f"Gross birdie steals. {w['first']}'s gross "
+                        f"{w['gross']} beats {beaten['first']}'s net "
+                        f"{beaten['net']}") if beaten else \
+                       f"Gross birdie steals for {w['first']}"
+            else:
+                outcome = 'outright'
+                s = 'skin' if riding == 1 else 'skins'
+                line = (f"{w['first']} takes {riding} {s} with net "
+                        f"{w['net']}") if w else ''
+        elif row.get('is_carry'):
+            outcome = 'carry'
+            names = ', '.join(p['first'] for p in tied)
+            line = f'Tied on net {best}: {names}'
+        else:
+            # Nobody qualified, or a tie with carryover off. Both are "the
+            # skin was not won", which is what `decide` returning [] means.
+            outcome = 'dead'
+            line = (f'Tied on net {best}: '
+                    + ', '.join(p['first'] for p in tied)) if tied else ''
+
+    # ── The ledger ───────────────────────────────────────────────────────
+    this_hole = {winner_id: riding} if winner_id is not None else {}
+    for j in (row.get('junk') or []):
+        this_hole[j['player_id']] = this_hole.get(j['player_id'], 0) + (
+            j.get('count') or 0)
+    ledger = sorted(
+        [{
+            'player_id'   : p['player_id'],
+            'first'       : p['first'],
+            'roster_index': p['roster_index'],
+            'skins_won'   : p['skins_won'],
+            'junk_skins'  : p['junk_skins'],
+            'total_skins' : p['total_skins'],
+            'this_hole'   : this_hole.get(p['player_id'], 0),
+            'money'       : p['money'],
+        } for p in players],
+        key=lambda e: (-e['total_skins'], e['first']))
+
+    money    = summary.get('money') or {}
+    is_pool  = summary.get('payout_style') != 'per_point'
+    worth    = float(summary.get('skin_worth') or 0)
+    # **What the hole is worth to whoever takes it.** Not `riding × worth`,
+    # which is the pot: the winner's own stake is already his. Zero under a
+    # pool, where one pot is divided among however many skins get won, so
+    # there is no per-skin figure that would still be true at the finish.
+    others   = max(0, len(players) - 1)
+    rate     = float(summary.get('per_point_rate') or 0)
+    to_win   = 0.0 if is_pool else riding * (
+        rate if summary.get('per_point_mode') == 'average' else rate * others)
+
+    # **What happens to the skins that were not won** — the design's
+    # orange right-hand note. Written here because the LAST hole is the
+    # case a client would get wrong: there is nowhere for them to ride, so
+    # they go unclaimed, which the engine's own module note confirms
+    # ("skins still in the pot after hole 18 … are voided").
+    rides_to = ''
+    if outcome in ('carry', 'dead'):
+        nxt_hole = order[pos + 1] if pos + 1 < len(order) else None
+        if outcome == 'carry' and nxt_hole:
+            rides_to = f'{riding + 1} ride to {nxt_hole}'
+        else:
+            rides_to = 'no skin'
+
+    played_holes = len(played_before) + (1 if hole_complete else 0)
+    won_total    = int(money.get('total_skins') or 0)
+    nxt          = order[pos + 1] if pos + 1 < len(order) else None
+
+    return {
+        'hole'         : hole,
+        'par'          : row.get('par'),
+        'stroke_index' : row.get('stroke_index'),
+        'nine'         : 'front nine' if pos < half else 'back nine',
+        'thru'         : pos + 1,
+        'stake'        : float(money.get('bet_unit') or 0),
+        'skin_worth'   : worth,
+        'is_pool'      : is_pool,
+        'carry'        : bool(summary.get('carryover')),
+        'skin_rules'   : summary.get('skin_rules') or '',
+        'players'      : players,
+        'scored'       : n_scored,
+        'hole_complete': hole_complete,
+        'riding'       : riding,
+        'carried_in'   : carried_in,
+        'carried_from' : carried_from,
+        'hole_value'   : round(to_win, 2),
+        'winner_id'    : winner_id,
+        'winner_short' : row.get('winner_short'),
+        'steal_by'     : steal_by,
+        'outcome'      : outcome,
+        'line'         : line,
+        'rides_to'     : rides_to,
+        'ledger'       : ledger,
+        'skins_won'    : won_total,
+        'holes_played' : played_holes,
+        'holes_left'   : max(0, len(order) - pos - (1 if hole_complete else 0)),
+        'round_over'   : hole_complete and pos == len(order) - 1,
+        'next_hole'    : nxt,
     }

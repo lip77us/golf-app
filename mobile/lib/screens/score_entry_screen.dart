@@ -41,6 +41,7 @@ import '../utils/auto_post.dart';
 import '../widgets/vegas_entry.dart';
 import '../widgets/fourball_entry.dart';
 import '../widgets/nassau_entry.dart';
+import '../widgets/skins_entry.dart';
 import '../widgets/banker_entry_strip.dart';
 import '../widgets/triple_cup_pairings.dart';
 import '../widgets/standing_ribbon.dart';
@@ -202,6 +203,18 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     if (sp != null) {
       final s = sp.player(m.player.id)?.strokes;
       if (s != null) return s;
+    }
+
+    // **And Skins**, which carries its own handicap mode and allowance —
+    // a strokes-off Skins inside a net round showed the low man dots he
+    // does not get.
+    final sk = _skinsCard(rp);
+    if (sk != null) {
+      final n = sk.players
+          .where((p) => p.playerId == m.player.id)
+          .map((p) => p.strokes)
+          .firstOrNull;
+      if (n != null) return n;
     }
 
     // **And Nassau, for the same reason Sixes needs it**: the game carries
@@ -1559,7 +1572,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         // test again: Nassau also rides as a subset SIDE bet
         // (`docs/parallel-games.md`), and a side bet must not change how the
         // round's own game is entered.
-        primary == GameIds.nassau;
+        primary == GameIds.nassau ||
+        // Skins, per `~/Downloads/handoff-skins-score-entry`. Primary again,
+        // and it matters most here: Skins is the commonest SIDE game in the
+        // app, and a side game must not take over the entry of the round's
+        // own one.
+        primary == GameIds.skins;
   }
 
   /// This hole ends in a TRAY — Annandale Friday's, Sixes' or Stroke Play's.
@@ -1572,6 +1590,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       _fourballCard(rp) != null ||
       _singlesCard(rp) != null ||
       _nassauCard(rp) != null ||
+      _skinsCard(rp) != null ||
       _strokePlayCard(rp) != null;
 
   /// The hole we have asked the server for; see `_ensureSixesCard`.
@@ -1733,6 +1752,42 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       return null;
     }
     return rp.singlesHole(_selectedHole);
+  }
+
+  /// The hole we have asked the server for; see `_ensureSkinsCard`.
+  int? _skinsCardAsked;
+
+  /// **Make sure the hole on screen has a Skins card**, for the reason
+  /// every other one of these exists: without a card the keypad is not
+  /// drawn at all. A save drops every other hole's card — a posted hole
+  /// decides what CARRIES — and that races the fetch the forward button
+  /// started.
+  void _ensureSkinsCard(RoundProvider rp) {
+    if (!_activeGames(rp.round).contains(GameIds.skins)) return;
+    if (rp.skinsHole(_selectedHole) != null) {
+      _skinsCardAsked = null;
+      return;
+    }
+    if (_skinsCardAsked == _selectedHole) return;
+    _skinsCardAsked = _selectedHole;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<RoundProvider>()
+          .loadSkinsHole(widget.foursomeId, _selectedHole);
+    });
+  }
+
+  /// The Skins card for the hole on screen, when Skins is the PRIMARY.
+  ///
+  /// **The primary test matters more here than anywhere else**: Skins is
+  /// the app's commonest side game, and as one it keeps its leaderboard tab
+  /// and its junk sheet while the round's own game owns the entry.
+  SkinsHoleCard? _skinsCard(RoundProvider rp) {
+    final games = _activeGames(rp.round);
+    if (resolvePrimary(rp.round?.primaryGame, games) != GameIds.skins) {
+      return null;
+    }
+    return rp.skinsHole(_selectedHole);
   }
 
   /// The hole we have asked the server for; see `_ensureNassauCard`.
@@ -3461,6 +3516,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final fourTray = fourCard != null && fbActive && _editHotPid == null &&
         _holeReady(players, scores, _selectedHole, fourCard);
 
+    // **Skins.** Same tray, reporting the nets that decided the hole and
+    // what happened to the skin — which is the one thing a group cannot
+    // work out from four numbers without knowing the carry.
+    _ensureSkinsCard(rp);
+    final skCard = _skinsCard(rp);
+    final skTray =
+        skCard != null && fbActive && allDone && _editHotPid == null;
+
     // **Nassau.** Same tray, and the one whose chips are the whole point:
     // the presses are the sharpest rules in the app, so every bet in play
     // arrives composed by the engine rather than derived here.
@@ -3589,6 +3652,28 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               onFinishNow: rp.submitting
                   ? null
                   : () => _completeRound(ctx, players, par),
+              gettingResult: rp.trayResultPending(_selectedHole) ||
+                  _hasRealPending(_selectedHole),
+              notSynced: rp.trayHoleUnsynced(_selectedHole),
+              // Picks nobody — see the Sixes tray above.
+              picking: _trayEditing,
+              onEdit: () => setState(() {
+                _trayEditing = !_trayEditing;
+                _editHotPid = null;
+              }),
+            )
+          else if (skTray)
+            SkinsHoleTray(
+              card: skCard,
+              // While this tray is up it IS the bottom bar — the pager below
+              // is hidden, so these are the only arrows on screen, and on
+              // the last hole the forward button is Complete Round.
+              onPrev: _prevHoleInOrder(rp) == null ? null : _retreat,
+              onNext: rp.submitting
+                  ? null
+                  : (_nextHoleInOrder(rp) == null
+                      ? () => _completeRound(ctx, players, par)
+                      : _advance),
               gettingResult: rp.trayResultPending(_selectedHole) ||
                   _hasRealPending(_selectedHole),
               notSynced: rp.trayHoleUnsynced(_selectedHole),
@@ -3763,7 +3848,8 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           // hole. Two pagers at the bottom is what a phone showed; the design
           // has the tray overlaying this row, so this is the half that goes
           // (Paul, 30 Oct 2026).
-          if (!sixTray && !spTray && !vgTray && !fourTray && !nasTray)
+          if (!sixTray && !spTray && !vgTray && !fourTray && !nasTray
+              && !skTray)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             child: Column(children: [
@@ -4093,6 +4179,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 nassauCard: (_nassauCard(rp)?.singles ?? true)
                     ? null
                     : _nassauCard(rp),
+                skinsCard: _skinsCard(rp),
                 pickedUpIds: _noScore[_selectedHole] ?? const {},
                 annandaleSummary:
                     _activeGames(rp.round).contains('annandale_friday')
@@ -4577,6 +4664,11 @@ class _HoleScoreCard extends StatelessWidget {
   /// rather than the header pretending there is.
   final FourballHoleCard? fourballHole;
 
+  /// Skins' hole card, for the worth header over the golfer card — what
+  /// this hole is actually worth, which four nets cannot say without the
+  /// carry. Null when Skins is not the primary.
+  final SkinsHoleCard? skinsCard;
+
   /// Nassau's hole card, for the side headers and their best-ball tags.
   ///
   /// **The same header Fourball draws**, because a Nassau side IS the same
@@ -4596,6 +4688,7 @@ class _HoleScoreCard extends StatelessWidget {
     this.vegasHole,
     this.fourballHole,
     this.nassauCard,
+    this.skinsCard,
     this.pickedUpIds = const {},
     this.useKeypad = false,
     this.solo = false,
@@ -5265,6 +5358,9 @@ class _HoleScoreCard extends StatelessWidget {
             RumbleCountStrip(
                 count: rumble!.count, allCount: rumble!.allCount),
 
+          // Skins hole outcome + carry chip — off once the tray says it,
+          // with the nets that decided it and what rides on. Rabbit's grid
+          // and Survivor's outcome line came off for the same reason.
           // Nassau hole outcome banner — off once the tray says it, which
           // it does in more words and with the reason beside it.
           if (nassauCard == null &&
@@ -5272,12 +5368,14 @@ class _HoleScoreCard extends StatelessWidget {
             _NassauHoleOutcome(hole: nassauHole, nassau: nassau!),
 
           // Skins hole outcome banner
-          if (skinsHole != null && skinsHole.winnerShort != null)
+          if (skinsCard == null &&
+              skinsHole != null && skinsHole.winnerShort != null)
             _SkinsHoleOutcome(skinsHole: skinsHole),
 
           // Carry pot chip — shown when >1 skin is on the line and hole
           // is not yet decided.
-          if (skins != null && skinsHole?.winnerId == null && carryPot > 1)
+          if (skinsCard == null &&
+              skins != null && skinsHole?.winnerId == null && carryPot > 1)
             _SkinsCarryChip(pot: carryPot),
 
           // Player rows + inline picker
@@ -5315,6 +5413,10 @@ class _HoleScoreCard extends StatelessWidget {
                        nassauCard!.sideOf(m.player.id)?.side))
                 FourballSideHeader(
                     side: nassauCard!.sideOf(m.player.id)!),
+              // Skins has no sides, so this is ONE header over the card
+              // rather than one a side: what the hole is worth.
+              if (skinsCard != null && idx == 0)
+                SkinsHoleWorth(card: skinsCard!),
             ];
             final gross      = scores[m.player.id];
             final isHot      = idx == hotSpotIdx;

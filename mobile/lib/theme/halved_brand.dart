@@ -125,7 +125,18 @@ class Halved {
   static const onDark2 = Color(0xFFF2A86E);
   static const onDark3 = Color(0xFF8FB4FF);
 
-  static const List<Color> onDark = [onDark1, onDark2, onDark3];
+  /// **The fourth, for a four-golfer tray** — Skins is the first game to
+  /// need one, and without it the fourth golfer wrapped to mint and wore
+  /// the first golfer's colour.
+  ///
+  /// The lifted plum the lock screen already uses (`SixesActivity.plum`),
+  /// not [zombie]: that one is `#6E4B8E`, which is tuned for a light card
+  /// and goes to mud on deep pine. The two never appear together — a
+  /// Survivor tray and a Skins tray cannot both be the primary — so this
+  /// is the same plum at a readable weight rather than a second one.
+  static const onDark4 = Color(0xFFC9A6E8);
+
+  static const List<Color> onDark = [onDark1, onDark2, onDark3, onDark4];
 
   /// [onDark], wrapping, for an index that may run past it.
   static Color onDarkFor(int i) => onDark[i % onDark.length];

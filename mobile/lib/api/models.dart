@@ -3104,6 +3104,12 @@ class SkinsPlayerTotal {
   final int    playerId;
   final String name;
   final String shortName;
+
+  /// Place on the CARD, which is what a golfer's colour follows — this
+  /// list is sorted by SKINS, so its index moves the moment somebody wins
+  /// one. Null from a server that does not send it; the board then falls
+  /// back to the list position, exactly as it did before.
+  final int?   rosterIndex;
   final int    skinsWon;    // regular per-hole skins
   final int    junkSkins;   // manually entered junk skins
   final int    totalSkins;  // skinsWon + junkSkins
@@ -3120,6 +3126,7 @@ class SkinsPlayerTotal {
     required this.playerId,
     required this.name,
     required this.shortName,
+    this.rosterIndex,
     required this.skinsWon,
     required this.junkSkins,
     required this.totalSkins,
@@ -3134,6 +3141,7 @@ class SkinsPlayerTotal {
         playerId:   j['player_id']   as int,
         name:       j['name']        as String? ?? '',
         shortName:  j['short_name']  as String? ?? '',
+        rosterIndex: (j['roster_index'] as num?)?.toInt(),
         skinsWon:   j['skins_won']   as int? ?? 0,
         junkSkins:  j['junk_skins']  as int? ?? 0,
         totalSkins: j['total_skins'] as int? ?? 0,
@@ -3235,6 +3243,13 @@ class SkinsSummary {
   final List<SkinsPlayerTotal> players;
   final List<SkinsHole>        holes;
   final double betUnit;
+
+  /// What ONE skin is worth, the SERVER's figure
+  /// (`services.skins.skin_worth`) — everybody's stake, the winner's
+  /// included. Null from an older server, and the board then derives it as
+  /// it always did. Zero under a pool, which has no per-skin price: one pot
+  /// is divided among however many skins get won.
+  final double? skinWorth;
   final double pool;      // num_players × bet_unit
   final int    totalSkins; // grand total skins won (denominator)
   // Payout mode (2-axis; maps to the shared wager engine).
@@ -3315,6 +3330,7 @@ class SkinsSummary {
     this.payoutStyle  = 'pool',
     this.perPointMode = 'first',
     this.perPointRate = 0.0,
+    this.skinWorth,
     this.lossCap,
     this.junkInPlay      = const [],
     this.junkSheetTypes  = const [],
@@ -3360,6 +3376,7 @@ class SkinsSummary {
       payoutStyle:  j['payout_style']?.toString()  ?? 'pool',
       perPointMode: j['per_point_mode']?.toString() ?? 'first',
       perPointRate: (j['per_point_rate'] as num?)?.toDouble() ?? 0.0,
+      skinWorth: (j['skin_worth'] as num?)?.toDouble(),
       lossCap:      (j['loss_cap'] as num?)?.toDouble(),
       scorecardHoles: (j['holes'] as List? ?? const [])
           .map((h) => Map<String, dynamic>.from(h as Map))
@@ -4527,6 +4544,10 @@ class MultiSkinsPlayerTotal {
   final int    playerId;
   final String name;
   final String shortName;
+
+  /// Place in the POOL's roster — what this golfer's colour follows. The
+  /// list is sorted by SKINS, so its index moves when somebody wins one.
+  final int?   rosterIndex;
   final int    foursomeId;
   final int    groupNumber;
   final int    skinsWon;
@@ -4542,6 +4563,7 @@ class MultiSkinsPlayerTotal {
     required this.playerId,
     required this.name,
     required this.shortName,
+    this.rosterIndex,
     required this.foursomeId,
     required this.groupNumber,
     required this.skinsWon,
@@ -4555,6 +4577,7 @@ class MultiSkinsPlayerTotal {
         playerId:    j['player_id']    as int,
         name:        j['name']         as String? ?? '',
         shortName:   j['short_name']   as String? ?? '',
+        rosterIndex: (j['roster_index'] as num?)?.toInt(),
         foursomeId:  j['foursome_id']  as int?    ?? 0,
         groupNumber: j['group_number'] as int?    ?? 0,
         skinsWon:    j['skins_won']    as int?    ?? 0,
@@ -11936,3 +11959,226 @@ class NassauBalls {
       );
 }
 
+
+/// Everything the Skins score-entry screen draws for one hole
+/// (`~/Downloads/handoff-skins-score-entry`).
+///
+/// **Every figure is the engine's.** The handoff's reference derives
+/// `net = stake × (golfers × won − total)`, which is right for per-skin with
+/// no junk, no withdrawal, no loss cap and no pool — and wrong with any of
+/// them. `skins_summary` already accounts for all four, so this renders.
+class SkinsHoleCard {
+  final int hole;
+  final int? par;
+  final int? strokeIndex;
+  final String nine;
+  final int thru;
+
+  /// The game's own per-skin rate (or the pool ante). **Never the round's
+  /// `bet_unit`**, which belongs to the primary game.
+  final double stake;
+
+  /// What ONE skin is worth: everybody's stake, the winner's included.
+  /// Zero under a pool, which has no per-skin price.
+  final double skinWorth;
+  final bool isPool;
+  final bool carry;
+
+  /// The server's phrase for the validation rules in force; empty when
+  /// neither is on.
+  final String skinRules;
+
+  /// Nets low to high, a golfer with no score last. Roster order breaks
+  /// every tie, so the rows never swap under a thumb.
+  final List<SkinsHolePlayer> players;
+
+  final int scored;
+  final bool holeComplete;
+
+  /// Skins on this hole: 1, plus anything carried in.
+  final int riding;
+  final int carriedIn;
+
+  /// The hole the carry run started on, for `1 carried from 6`.
+  final int? carriedFrom;
+
+  /// What the winner takes — `riding × stake × the other golfers`. Zero
+  /// under a pool.
+  final double holeValue;
+
+  final int? winnerId;
+  final String? winnerShort;
+
+  /// Who stole it with a natural birdie, when that is what decided it.
+  final int? stealBy;
+
+  /// `pending` · `outright` · `carry` · `steal` · `dead`.
+  final String outcome;
+
+  /// The result sentence, composed server-side.
+  final String line;
+
+  /// `3 ride to 8`, or `no skin` on the last hole, where there is nowhere
+  /// for them to go. Empty when the hole was won.
+  final String ridesTo;
+
+  /// Sorted by skins won.
+  final List<SkinsLedgerRow> ledger;
+
+  final int skinsWon;
+  final int holesPlayed;
+  final int holesLeft;
+  final bool roundOver;
+  final int? nextHole;
+
+  const SkinsHoleCard({
+    required this.hole,
+    required this.par,
+    required this.strokeIndex,
+    required this.nine,
+    required this.thru,
+    required this.stake,
+    required this.skinWorth,
+    required this.isPool,
+    required this.carry,
+    required this.skinRules,
+    required this.players,
+    required this.scored,
+    required this.holeComplete,
+    required this.riding,
+    required this.carriedIn,
+    required this.carriedFrom,
+    required this.holeValue,
+    required this.winnerId,
+    required this.winnerShort,
+    required this.stealBy,
+    required this.outcome,
+    required this.line,
+    required this.ridesTo,
+    required this.ledger,
+    required this.skinsWon,
+    required this.holesPlayed,
+    required this.holesLeft,
+    required this.roundOver,
+    required this.nextHole,
+  });
+
+  factory SkinsHoleCard.fromJson(Map<String, dynamic> j) => SkinsHoleCard(
+        hole: (j['hole'] as num?)?.toInt() ?? 0,
+        par: (j['par'] as num?)?.toInt(),
+        strokeIndex: (j['stroke_index'] as num?)?.toInt(),
+        nine: j['nine'] as String? ?? '',
+        thru: (j['thru'] as num?)?.toInt() ?? 0,
+        stake: (j['stake'] as num?)?.toDouble() ?? 0,
+        skinWorth: (j['skin_worth'] as num?)?.toDouble() ?? 0,
+        isPool: j['is_pool'] as bool? ?? false,
+        carry: j['carry'] as bool? ?? false,
+        skinRules: j['skin_rules'] as String? ?? '',
+        players: ((j['players'] as List?) ?? const [])
+            .map((e) =>
+                SkinsHolePlayer.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(),
+        scored: (j['scored'] as num?)?.toInt() ?? 0,
+        holeComplete: j['hole_complete'] as bool? ?? false,
+        riding: (j['riding'] as num?)?.toInt() ?? 1,
+        carriedIn: (j['carried_in'] as num?)?.toInt() ?? 0,
+        carriedFrom: (j['carried_from'] as num?)?.toInt(),
+        holeValue: (j['hole_value'] as num?)?.toDouble() ?? 0,
+        winnerId: (j['winner_id'] as num?)?.toInt(),
+        winnerShort: j['winner_short'] as String?,
+        stealBy: (j['steal_by'] as num?)?.toInt(),
+        outcome: j['outcome'] as String? ?? 'pending',
+        line: j['line'] as String? ?? '',
+        ridesTo: j['rides_to'] as String? ?? '',
+        ledger: ((j['ledger'] as List?) ?? const [])
+            .map((e) =>
+                SkinsLedgerRow.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(),
+        skinsWon: (j['skins_won'] as num?)?.toInt() ?? 0,
+        holesPlayed: (j['holes_played'] as num?)?.toInt() ?? 0,
+        holesLeft: (j['holes_left'] as num?)?.toInt() ?? 0,
+        roundOver: j['round_over'] as bool? ?? false,
+        nextHole: (j['next_hole'] as num?)?.toInt(),
+      );
+
+  bool get staked => stake > 0;
+}
+
+class SkinsHolePlayer {
+  final int playerId;
+  final String name;
+  final String short;
+  final String first;
+
+  /// Place on the CARD, which is what this golfer's colour follows.
+  final int? rosterIndex;
+  final int? courseHandicap;
+  final int strokes;
+  final int? gross;
+  final int? net;
+
+  /// A NATURAL birdie — the thing the steal rule turns on.
+  final bool birdie;
+
+  const SkinsHolePlayer({
+    required this.playerId,
+    required this.name,
+    required this.short,
+    required this.first,
+    required this.rosterIndex,
+    required this.courseHandicap,
+    required this.strokes,
+    required this.gross,
+    required this.net,
+    required this.birdie,
+  });
+
+  factory SkinsHolePlayer.fromJson(Map<String, dynamic> j) => SkinsHolePlayer(
+        playerId: (j['player_id'] as num?)?.toInt() ?? 0,
+        name: j['name'] as String? ?? '',
+        short: j['short'] as String? ?? '',
+        first: j['first'] as String? ?? '',
+        rosterIndex: (j['roster_index'] as num?)?.toInt(),
+        courseHandicap: (j['course_handicap'] as num?)?.toInt(),
+        strokes: (j['strokes'] as num?)?.toInt() ?? 0,
+        gross: (j['gross'] as num?)?.toInt(),
+        net: (j['net'] as num?)?.toInt(),
+        birdie: j['birdie'] as bool? ?? false,
+      );
+}
+
+class SkinsLedgerRow {
+  final int playerId;
+  final String first;
+  final int? rosterIndex;
+  final int skinsWon;
+  final int junkSkins;
+  final int totalSkins;
+
+  /// Won on THIS hole — the ticks the design draws white with a mint
+  /// outline, against the filled ones for the rest.
+  final int thisHole;
+  final double money;
+
+  const SkinsLedgerRow({
+    required this.playerId,
+    required this.first,
+    required this.rosterIndex,
+    required this.skinsWon,
+    required this.junkSkins,
+    required this.totalSkins,
+    required this.thisHole,
+    required this.money,
+  });
+
+  factory SkinsLedgerRow.fromJson(Map<String, dynamic> j) => SkinsLedgerRow(
+        playerId: (j['player_id'] as num?)?.toInt() ?? 0,
+        first: j['first'] as String? ?? '',
+        rosterIndex: (j['roster_index'] as num?)?.toInt(),
+        skinsWon: (j['skins_won'] as num?)?.toInt() ?? 0,
+        junkSkins: (j['junk_skins'] as num?)?.toInt() ?? 0,
+        totalSkins: (j['total_skins'] as num?)?.toInt() ?? 0,
+        thisHole: (j['this_hole'] as num?)?.toInt() ?? 0,
+        money: (j['money'] as num?)?.toDouble() ?? 0,
+      );
+}

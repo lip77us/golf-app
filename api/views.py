@@ -6237,7 +6237,7 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
         active.add(scored_on)
     wants = {'annandale_friday', 'sixes', 'rabbit', 'survivor',
              'low_net_round', 'points_531', 'wolf', 'vegas',
-             'fourball', 'match_18', 'nassau'} & active
+             'fourball', 'match_18', 'nassau', 'skins'} & active
     if not wants:
         return {}
     from services.skins import skins_summary
@@ -6249,6 +6249,13 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
                 summary = annandale_friday_summary(foursome)
                 if summary:
                     out['annandale_friday'] = summary
+            # Skins' tray reports ONE hole: what it was worth, who took
+            # it and what rides on.
+            if 'skins' in wants and hole_number:
+                from services.skins import skins_hole_card
+                card = skins_hole_card(foursome, hole_number)
+                if card:
+                    out['skins_hole'] = card
             # Sixes' tray reports ONE hole, so it is the card for the hole
             # just posted rather than the whole summary.
             if 'sixes' in wants and hole_number:
@@ -8541,6 +8548,18 @@ class NassauHoleCardView(APIView):
         foursome = foursome_for_scorer(request.user, pk)
         from services.nassau import nassau_hole_card
         return Response(nassau_hole_card(foursome, int(hole)))
+
+
+class SkinsHoleCardView(APIView):
+    """GET /api/foursomes/{id}/skins/hole/{hole}/
+
+    One hole's score-entry card. The POST that saves a score returns the
+    same shape under `skins_hole`.
+    """
+    def get(self, request, pk, hole):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.skins import skins_hole_card
+        return Response(skins_hole_card(foursome, int(hole)))
 
 
 class SinglesHoleCardView(APIView):

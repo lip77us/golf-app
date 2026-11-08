@@ -49,6 +49,7 @@ class SkinsBoardData {
     this.pool = 0,
     this.skinMinimum = 'none',
     this.birdieSteal = false,
+    this.serverSkinWorth,
   });
 
   final List<SkinsBoardGolfer> golfers;
@@ -62,8 +63,15 @@ class SkinsBoardData {
   /// golfers at $5 is a $25 skin, of which he nets $20 (Paul, 30 Oct 2026: he
   /// knows the $5 is his entry). Against the average each golfer puts in
   /// `rate / n`, so that skin is worth one rate.
-  double get skinWorth =>
-      perPointMode == 'average' ? stake : stake * golfers.length;
+  ///
+  /// **The SERVER's figure when it sends one** (`services.skins.skin_worth`),
+  /// because the score-entry tray quotes the same number for the same hole
+  /// and two derivations of one price is how they come to differ. The
+  /// fallback keeps an older payload drawing exactly what it drew.
+  final double? serverSkinWorth;
+
+  double get skinWorth => serverSkinWorth ??
+      (perPointMode == 'average' ? stake : stake * golfers.length);
   final bool carry;
   /// 'Net' | 'Gross' | 'Strokes off' — a label, never a calculation.
   final String basis;
@@ -164,14 +172,25 @@ class SkinsBoardData {
 
   /// The per-foursome game (casual primary, or a side-game tab).
   factory SkinsBoardData.fromSkins(SkinsSummary s) {
-    final ids = <int>[for (final p in s.players) p.playerId];
+    // A hole tile wears the WINNER's colour, which is his roster colour —
+    // not his place in a list ordered by how many skins he has won.
+    final colourOfPid = <int, int>{
+      for (var i = 0; i < s.players.length; i++)
+        s.players[i].playerId: s.players[i].rosterIndex ?? i,
+    };
     return SkinsBoardData(
       golfers: [
         for (var i = 0; i < s.players.length; i++)
           SkinsBoardGolfer(
             playerId:  s.players[i].playerId,
             name:      s.players[i].name,
-            colourIndex: i,
+            // **The server's place in the ROSTER**, because this list
+            // is sorted by SKINS: an index into it changes the moment
+            // somebody wins one, which is exactly what `a colour follows
+            // the ROSTER` says must not happen. That test fed an unsorted
+            // list, so it proved the model keeps the order it is GIVEN and
+            // nothing about the order the server sends.
+            colourIndex: s.players[i].rosterIndex ?? i,
             skinsWon:  s.players[i].skinsWon,
             junkSkins: s.players[i].junkSkins,
             money:     s.payoutStyle == 'pool'
@@ -194,13 +213,15 @@ class SkinsBoardData {
             // `skinsValue` alone is not the test: a killed hole still carries
             // the 1 that died.
             played:   h.winnerId != null || h.isCarry || h.skinsValue > 0,
-            colourOf: h.winnerId == null ? null : ids.indexOf(h.winnerId!),
+            colourOf: h.winnerId == null
+                ? null : colourOfPid[h.winnerId!],
           ),
       ],
       // A per-skin game has its OWN rate. `betUnit` is the ROUND's stake,
       // which belongs to the primary game: on an Annandale Friday with $5
       // skins the board read `$10 a skin` off the $10 Nassau.
       stake:     s.payoutStyle == 'per_point' ? s.perPointRate : s.betUnit,
+      serverSkinWorth: s.skinWorth,
       perPointMode: s.perPointMode,
       carry:     s.carryover,
       basis:     _basisLabel[s.handicapMode] ?? 'Net',
@@ -217,14 +238,18 @@ class SkinsBoardData {
   /// `showNext: false` because a pool NEVER carries — a tied hole kills the
   /// skin — so the card could only ever read "No carry · 1 skin".
   factory SkinsBoardData.fromPool(MultiSkinsSummary s) {
-    final ids = <int>[for (final p in s.players) p.playerId];
+    // Roster colour, not standings colour — see `fromSkins`.
+    final colourOfPid = <int, int>{
+      for (var i = 0; i < s.players.length; i++)
+        s.players[i].playerId: s.players[i].rosterIndex ?? i,
+    };
     return SkinsBoardData(
       golfers: [
         for (var i = 0; i < s.players.length; i++)
           SkinsBoardGolfer(
             playerId:  s.players[i].playerId,
             name:      s.players[i].name,
-            colourIndex: i,
+            colourIndex: s.players[i].rosterIndex ?? i,
             skinsWon:  s.players[i].skinsWon,
             junkSkins: 0,          // the pool has no junk
             money:     s.players[i].payout,   // a share of the pool
@@ -240,7 +265,8 @@ class SkinsBoardData {
             value:    h.winnerId == null ? 0 : 1,
             isCarry:  false,       // never
             played:   h.winnerId != null || h.isDead,
-            colourOf: h.winnerId == null ? null : ids.indexOf(h.winnerId!),
+            colourOf: h.winnerId == null
+                ? null : colourOfPid[h.winnerId!],
           ),
       ],
       stake:     s.betUnit,

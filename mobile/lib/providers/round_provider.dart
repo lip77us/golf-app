@@ -142,6 +142,7 @@ class RoundProvider extends ChangeNotifier {
   final Map<int, FourballHoleCard> _fourballHoles = {};
   final Map<int, FourballHoleCard> _singlesHoles = {};
   final Map<int, NassauHoleCard>   _nassauHoles   = {};
+  final Map<int, SkinsHoleCard>    _skinsHoles    = {};
   final Map<int, SurvivorHoleCard> _survivorHoles = {};
   final Map<int, StrokePlayHoleCard> _strokePlayHoles = {};
   Points531Summary? _points531Summary;
@@ -219,6 +220,7 @@ class RoundProvider extends ChangeNotifier {
   FourballHoleCard? fourballHole(int hole) => _fourballHoles[hole];
   FourballHoleCard? singlesHole(int hole)  => _singlesHoles[hole];
   NassauHoleCard?   nassauHole(int hole)   => _nassauHoles[hole];
+  SkinsHoleCard?    skinsHole(int hole)    => _skinsHoles[hole];
   SurvivorHoleCard? survivorHole(int hole)  => _survivorHoles[hole];
   StrokePlayHoleCard? strokePlayHole(int hole) => _strokePlayHoles[hole];
   Points531Summary? get points531Summary   => _points531Summary;
@@ -302,6 +304,7 @@ class RoundProvider extends ChangeNotifier {
     _vegasHoles.clear();
     _fourballHoles.clear();
     _nassauHoles.clear();
+    _skinsHoles.clear();
     _singlesHoles.clear();
     _survivorHoles.clear();
     _points531Summary        = null;
@@ -448,6 +451,7 @@ class RoundProvider extends ChangeNotifier {
       _vegasHoles.clear();
       _fourballHoles.clear();
     _nassauHoles.clear();
+    _skinsHoles.clear();
       _singlesHoles.clear();
       _survivorHoles.clear();
       _points531Summary = null;
@@ -518,7 +522,7 @@ class RoundProvider extends ChangeNotifier {
            || _sixesHoles.isNotEmpty || _rabbitHoles.isNotEmpty
            || _pointsHoles.isNotEmpty || _wolfHoles.isNotEmpty
            || _vegasHoles.isNotEmpty || _fourballHoles.isNotEmpty
-           || _nassauHoles.isNotEmpty
+           || _nassauHoles.isNotEmpty || _skinsHoles.isNotEmpty
            || _singlesHoles.isNotEmpty
            || _survivorHoles.isNotEmpty || _strokePlayHoles.isNotEmpty)) {
         _annandaleResults.hold(holeNumber);
@@ -1157,6 +1161,22 @@ class RoundProvider extends ChangeNotifier {
     }
   }
 
+  /// Fetch one hole's Skins card. Silent on failure, like Rabbit's: a
+  /// card that cannot be fetched must not stop a group entering scores.
+  Future<void> loadSkinsHole(int foursomeId, int hole) async {
+    try {
+      final card = await _client.getSkinsHoleCard(foursomeId, hole);
+      if (card != null) {
+        _skinsHoles[hole] = card;
+        notifyListeners();
+      }
+    } on NetworkException {
+      // Offline — keep whatever is on screen.
+    } catch (e) {
+      debugPrint('loadSkinsHole error: $e');
+    }
+  }
+
   /// Fetch one hole's Nassau card. Silent on failure, like Rabbit's: a
   /// card that cannot be fetched must not stop a group entering scores.
   Future<void> loadNassauHole(int foursomeId, int hole) async {
@@ -1610,6 +1630,16 @@ class RoundProvider extends ChangeNotifier {
       // close-out, which changes whether the LATER holes count at all.
       _fourballHoles.clear();
       _fourballHoles[holeNumber] = FourballHoleCard.fromJson(fourball);
+      _annandaleResults.answer(holeNumber);
+      notifyListeners();
+    }
+
+    final sk = response['skins_hole'];
+    if (sk is Map<String, dynamic>) {
+      // Same staleness as the others, and sharper: a posted hole decides
+      // what CARRIES, so every later card's riding count moves with it.
+      _skinsHoles.clear();
+      _skinsHoles[holeNumber] = SkinsHoleCard.fromJson(sk);
       _annandaleResults.answer(holeNumber);
       notifyListeners();
     }

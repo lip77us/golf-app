@@ -150,6 +150,7 @@ urlpatterns = [
     path('foursomes/<int:pk>/fourball/hole/<int:hole>/', views.FourballHoleCardView.as_view(), name='api-fourball-hole'),
     path('foursomes/<int:pk>/singles/hole/<int:hole>/', views.SinglesHoleCardView.as_view(), name='api-singles-hole'),
     path('foursomes/<int:pk>/nassau/hole/<int:hole>/', views.NassauHoleCardView.as_view(), name='api-nassau-hole'),
+    path('foursomes/<int:pk>/skins/hole/<int:hole>/', views.SkinsHoleCardView.as_view(), name='api-skins-hole'),
     path('foursomes/<int:pk>/sixes/setup/',        views.SixesSetupView.as_view(),      name='api-sixes-setup'),
     path('foursomes/<int:pk>/sixes/extra-teams/',  views.SixesExtraTeamsView.as_view(), name='api-sixes-extra-teams'),
     path('foursomes/<int:pk>/sixes/segment-teams/', views.SixesSegmentTeamsView.as_view(), name='api-sixes-segment-teams'),

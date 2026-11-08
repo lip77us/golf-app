@@ -15,6 +15,7 @@ SkinsSummary _skins({
   double pool = 4.0,
   double? rate,
   String perPointMode = 'first',
+  double? skinWorth,
 }) =>
     SkinsSummary.fromJson({
       'status': 'in_progress',
@@ -32,6 +33,7 @@ SkinsSummary _skins({
       'per_point_mode': perPointMode,
       'players': players,
       'holes': holes,
+      if (skinWorth != null) 'skin_worth': skinWorth,
       'money': {'bet_unit': betUnit, 'pool': pool, 'total_skins': 0},
     });
 
@@ -40,9 +42,11 @@ SkinsSummary _skins({
 /// helper that always made them equal is how the board came to show the
 /// wrong one for a pool with no test noticing.
 Map<String, dynamic> _p(int id, String name,
-        {int won = 0, int junk = 0, double net = 0, double? payout}) =>
+        {int won = 0, int junk = 0, double net = 0, double? payout,
+         int? roster}) =>
     {
       'player_id': id, 'name': name, 'short_name': name,
+      if (roster != null) 'roster_index': roster,
       'skins_won': won, 'junk_skins': junk, 'total_skins': won + junk,
       'payout': payout ?? net, 'net': net,
     };
@@ -204,13 +208,53 @@ void main() {
     test('a colour follows the ROSTER, not the standings', () {
       // Otherwise a golfer changes colour the moment he wins a skin, and the
       // hole tiles stop matching the ledger swatches.
+      //
+      // **The server sends this list SORTED BY SKINS**, so the fixture does
+      // too: Adam is three up and arrives FIRST, while his place on the
+      // card is second. An earlier version of this test fed an unsorted
+      // list, which proved the model keeps the order it is given and
+      // nothing about the order it is given — and the colour really did
+      // move when somebody won.
       final d = SkinsBoardData.fromSkins(_skins(
-        players: [_p(1, 'Zoe'), _p(2, 'Adam', won: 3)],
-        holes: [for (var h = 1; h <= 18; h++) _unplayed(h)],
+        players: [_p(2, 'Adam', won: 3, roster: 1), _p(1, 'Zoe', roster: 0)],
+        holes: [_won(1, 2), for (var h = 2; h <= 18; h++) _unplayed(h)],
       ));
       expect(d.ledger.first.name, 'Adam');
       expect(d.ledger.first.colourIndex, 1);   // still second in the roster
-      expect(d.golfers.first.colourIndex, 0);
+      expect(
+          d.golfers.firstWhere((g) => g.name == 'Zoe').colourIndex, 0);
+      // …and the hole he won wears the same colour as his ledger swatch.
+      expect(d.holes.first.colourOf, 1);
+    });
+
+    test('the per-skin price is the SERVER figure', () {
+      // The score-entry tray quotes the same number for the same hole, so
+      // one writer: `services.skins.skin_worth`. The board derived it too,
+      // with a docstring promising they agreed and nothing checking.
+      final d = SkinsBoardData.fromSkins(_skins(
+        players: [_p(1, 'Paul'), _p(2, 'Dave')],
+        holes: [for (var h = 1; h <= 18; h++) _unplayed(h)],
+        skinWorth: 99.0,
+      ));
+      expect(d.skinWorth, 99.0);
+    });
+
+    test('and it derives one when an older server sends none', () {
+      final d = SkinsBoardData.fromSkins(_skins(
+        players: [_p(1, 'Paul'), _p(2, 'Dave')],
+        holes: [for (var h = 1; h <= 18; h++) _unplayed(h)],
+      ));
+      expect(d.skinWorth, d.stake * 2);
+    });
+
+    test('without a roster index it falls back to the list position', () {
+      // An older server sends none; the board then draws exactly what it
+      // drew before rather than colouring everybody the same.
+      final d = SkinsBoardData.fromSkins(_skins(
+        players: [_p(2, 'Adam', won: 3), _p(1, 'Zoe')],
+        holes: [for (var h = 1; h <= 18; h++) _unplayed(h)],
+      ));
+      expect([for (final g in d.golfers) g.colourIndex], [0, 1]);
     });
 
     test('in a pool the column is each share, and adds up to the pool', () {

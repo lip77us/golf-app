@@ -2683,6 +2683,17 @@ class ApiClient {
     return FourballHoleCard.fromJson(map);
   }
 
+  /// GET /api/foursomes/{id}/skins/hole/{hole}/
+  ///
+  /// Only for a hole the screen opens WITHOUT posting — a save returns the
+  /// same shape under `skins_hole`.
+  Future<SkinsHoleCard?> getSkinsHoleCard(int foursomeId, int hole) async {
+    final data = await _get('/foursomes/$foursomeId/skins/hole/$hole/');
+    final map = (data as Map).cast<String, dynamic>();
+    if (map.isEmpty) return null;
+    return SkinsHoleCard.fromJson(map);
+  }
+
   /// GET /api/foursomes/{id}/nassau/hole/{hole}/
   ///
   /// Only for a hole the screen opens WITHOUT posting — a save returns the
