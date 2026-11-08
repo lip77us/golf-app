@@ -1737,11 +1737,30 @@ def sixes_hole_card(foursome, hole: int) -> dict:
 
     # Which match owns this hole, by PLAY ORDER — a shotgun third can wrap the
     # turn, where the last hole has the smallest number.
+    #
+    # **The LAST segment that covers it wins, never the first**, because the
+    # stored ranges OVERLAP whenever a match ends early.  `calculate_sixes`
+    # leaves the finished match its full scheduled `end_hole` and starts the
+    # next one on the very next hole (`current_pos = fin_pos + 1`), so a match
+    # decided on the 4th stores 1–6 while match 2 stores 5–10.  That is the
+    # display layer's own convention — `_played_holes` narrows a match to the
+    # holes it actually played — and it is common rather than exotic: 8 of 17
+    # sixes foursomes in the local database overlap.
+    #
+    # Taking the FIRST match handed holes 5 and 6 to a match that was already
+    # over.  With the next match's sides drawn that showed the wrong partners
+    # and the wrong standing; with them undrawn it reported `teams_set: True`
+    # for a match that had none, so `score_entry_screen`'s "pick the teams"
+    # band — which keys off this very flag — never drew, and the group scored
+    # two holes into a match with no sides.  Reported from the course.
+    #
+    # Every segment's START is distinct and ascending (the loop assigns them
+    # in order), so "the last range covering this hole" is exactly the
+    # partition that loop built.
     idx = seg = None
     for i, row in enumerate(seg_rows):
         if hole in segment_holes(foursome, row):
             idx, seg = i, row
-            break
     if seg is None:
         return {}
 

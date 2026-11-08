@@ -1550,3 +1550,117 @@ class SixesFixtureRegenTests(_SixesCardBase):
                         'the point of this fixture is a stroke')
         self.assertTrue(any(p['net'] != p['gross'] for p in card['players']))
         self._write('sixes_hole10_strokes.json', card)
+
+
+class AnEarlyFinishHandsTheNextHoleToTheNextMatchTests(_SixesCardBase):
+    """A match decided early hands its remaining holes to the NEXT match, and
+    `sixes_hole_card` has to say so.
+
+    Reported from the course: match 1 was won 3&2 on the 4th, the group moved
+    to the 5th instead of drawing match 2's partners, and the screen showed a
+    match with no sides it would not explain.
+
+    `calculate_sixes` leaves a finished match its full scheduled `end_hole`
+    and starts the next one on the very next hole, so the stored ranges
+    OVERLAP — match 1 keeps 1–6 while match 2 becomes 5–10.  The card took
+    the FIRST range covering the hole, so 5 and 6 resolved to a match that
+    was already over.
+
+    Every existing hole-card test halves the whole of match 1
+    (`_match2_through_9`), so no fixture here had ever produced an overlap.
+    """
+
+    def _match1_won_3and2(self):
+        """Paul & Dave 3 UP with 2 to play — decided on the 4th."""
+        self._hole(1, 4, 4, 4, 4)       # halved
+        self._hole(2, 4, 5, 4, 5)       # T1
+        self._hole(3, 4, 5, 4, 5)       # T1 2 UP
+        self._hole(4, 4, 5, 4, 5)       # T1 3 UP, 2 to play -> decided
+        calculate_sixes(self.fs)
+
+    # ── the reported bug: match 2 undrawn ────────────────────────────────
+
+    def test_the_handed_over_hole_belongs_to_the_next_match(self):
+        setup_sixes(self.fs, self._td(teams_from=2), handicap_mode='gross')
+        self._match1_won_3and2()
+        for hole in (5, 6):
+            m = sixes_hole_card(self.fs, hole)['match']
+            self.assertEqual(m['number'], 2, f'hole {hole}')
+            self.assertEqual((m['start_hole'], m['end_hole']), (5, 10))
+
+    def test_it_admits_the_next_match_has_no_sides(self):
+        # The whole bug: `teams_set` True on a match with no teams is what
+        # `score_entry_screen`'s "pick the teams" band keys off, so the band
+        # never drew and the group could post scores into it.
+        setup_sixes(self.fs, self._td(teams_from=2), handicap_mode='gross')
+        self._match1_won_3and2()
+        m = sixes_hole_card(self.fs, 5)['match']
+        self.assertFalse(m['teams_set'])
+        self.assertEqual(m['team1']['player_ids'], [])
+        self.assertEqual(m['team2']['player_ids'], [])
+
+    def test_the_match_before_it_still_reads_its_own_holes(self):
+        setup_sixes(self.fs, self._td(teams_from=2), handicap_mode='gross')
+        self._match1_won_3and2()
+        for hole in (1, 2, 3, 4):
+            m = sixes_hole_card(self.fs, hole)['match']
+            self.assertEqual(m['number'], 1, f'hole {hole}')
+            self.assertTrue(m['teams_set'])
+
+    # ── the quiet half: wrong partners on a round that looked fine ───────
+
+    def test_a_drawn_next_match_names_its_own_partners_not_the_old_ones(self):
+        """The same defect without the loud symptom.
+
+        With match 2 already drawn, holes 5 and 6 showed match 1's pairing
+        and match 1's running margin — wrong partners, silently, on a round
+        nobody would have reported.
+        """
+        self._setup()                              # every match drawn
+        self._match1_won_3and2()
+        m = sixes_hole_card(self.fs, 5)['match']
+        self.assertEqual(m['number'], 2)
+        self.assertEqual(set(m['team1']['player_ids']),
+                         {self.pid['Paul'], self.pid['Sam']})
+        self.assertEqual(set(m['team2']['player_ids']),
+                         {self.pid['Dave'], self.pid['Lee']})
+
+    def test_the_handed_over_hole_opens_the_new_match_level(self):
+        # Hole 5 is match 2's FIRST hole, so it carries none of match 1's
+        # 3 UP and has all six of its own holes to play.
+        self._setup()
+        self._match1_won_3and2()
+        m = sixes_hole_card(self.fs, 5)['match']
+        self.assertEqual(m['up_before'], 0)
+        self.assertEqual(m['to_play'], 6)
+
+    # ── it changes nothing when no match ends early ──────────────────────
+
+    def test_a_match_that_runs_its_full_six_keeps_every_one_of_them(self):
+        self._setup()
+        for h in range(1, 7):
+            self._hole(h, 4, 4, 4, 4)              # all halved — no overlap
+        calculate_sixes(self.fs)
+        for hole in range(1, 7):
+            self.assertEqual(sixes_hole_card(self.fs, hole)['match']['number'],
+                             1, f'hole {hole}')
+        self.assertEqual(sixes_hole_card(self.fs, 7)['match']['number'], 2)
+
+    # ── and it holds on a shotgun, where the ranges wrap ─────────────────
+
+    def test_it_holds_off_a_shotgun_where_the_match_wraps_the_turn(self):
+        # From the 8th the thirds are 8–13, 14–1, 2–7.  Match 1 decided on
+        # the 11th hands 12 and 13 to match 2, whose range then wraps.
+        self.round.starting_hole = 8
+        self.round.save(update_fields=['starting_hole'])
+        self._setup()
+        self._hole(8,  4, 4, 4, 4)
+        self._hole(9,  4, 5, 4, 5)
+        self._hole(10, 4, 5, 4, 5)
+        self._hole(11, 4, 5, 4, 5)                  # 3 UP, 2 to play
+        calculate_sixes(self.fs)
+        self.assertEqual(sixes_hole_card(self.fs, 11)['match']['number'], 1)
+        for hole in (12, 13):
+            m = sixes_hole_card(self.fs, hole)['match']
+            self.assertEqual(m['number'], 2, f'hole {hole}')
+            self.assertEqual(m['start_hole'], 12)
