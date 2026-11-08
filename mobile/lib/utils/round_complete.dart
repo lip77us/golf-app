@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/models.dart';
 import '../providers/round_provider.dart';
+import '../sync/sync_service.dart';
 import '../screens/round_over_screen.dart';
 
 /// Confirmation dialog shown before completing a round (which locks scores).
@@ -26,12 +28,56 @@ import '../screens/round_over_screen.dart';
 /// still allowed; the warning only makes the gap explicit.
 ///
 /// Returns true when the user confirms.
+/// How long Finish round waits for the sync queue before asking anything.
+///
+/// Long enough for a hole or two on a thin signal, short enough that a group
+/// on no signal at all is not left staring at a spinner.
+const Duration kSendBeforeFinish = Duration(seconds: 6);
+
+/// Push whatever is queued before the round is closed, and report what is
+/// still unsent.
+///
+/// **This is the root of the Tilden receipt** (7 Nov 2026). Finish round was
+/// slow, the first tap closed the round while the last five holes were still
+/// in the queue, and the receipt froze with every figure $10 out. The server
+/// can now correct itself on a second tap — but a receipt that is right the
+/// first time is worth more than one that can be fixed, because it is pushed
+/// to the golfers the moment it is written.
+Future<int> _sendPendingScores(BuildContext context) async {
+  final SyncService sync;
+  try {
+    sync = context.read<SyncService>();
+  } on ProviderNotFoundException {
+    // Every Complete Round action in the app sits under the SyncService
+    // provider, so this is the test harness rather than a real screen.
+    // Degrading to "nothing queued" keeps the dialog testable on its own;
+    // `sendPending` is how a test drives the other branch.
+    return 0;
+  }
+  if (sync.pendingCount == 0) return 0;
+  if (!sync.isOnline) return sync.pendingCount;
+  final deadline = DateTime.now().add(kSendBeforeFinish);
+  unawaited(sync.drainQueue());
+  while (sync.pendingCount > 0 && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+  }
+  return sync.pendingCount;
+}
+
 Future<bool> confirmCompleteRound(
   BuildContext context, {
   bool isMultiGroup = false,
   List<int> unscoredHoles = const [],
   List<int> awaitingHoles = const [],
+  Future<int> Function(BuildContext)? sendPending,
 }) async {
+  // **Send first, ask second.** Every Complete Round action in the app comes
+  // through here, including the nine dedicated play screens that do not use
+  // `completeRoundOrOfferForce` — so this is the one place that reaches them
+  // all.
+  final unsent = await (sendPending ?? _sendPendingScores)(context);
+  if (!context.mounted) return false;
+
   // A hole nobody has played is never ALSO a hole waiting on somebody.
   final blank = [...unscoredHoles]..sort();
   final waiting = [for (final h in awaitingHoles) if (!blank.contains(h)) h]
@@ -41,7 +87,23 @@ Future<bool> confirmCompleteRound(
   final String title;
   final String body;
   final String confirmLabel;
-  if (earlyFinish) {
+  if (unsent > 0) {
+    // Offline, or the queue would not clear in time. Say so plainly: the
+    // money settles on what the SERVER has, so finishing now freezes a
+    // receipt without these — and the way out is to finish again once they
+    // send, which is what the scorer would otherwise discover from a wrong
+    // figure in a document stamped Final.
+    title = 'Scores still sending';
+    body = unsent == 1
+        ? '1 hole has not reached the server yet. Finishing now settles the '
+          'round without it. Wait for it to send, or finish now and press '
+          'Finish round again once it has — the money will be corrected.'
+        : '$unsent holes have not reached the server yet. Finishing now '
+          'settles the round without them. Wait for them to send, or finish '
+          'now and press Finish round again once they have — the money will '
+          'be corrected.';
+    confirmLabel = 'Finish Anyway';
+  } else if (earlyFinish) {
     title = 'Finish early?';
     final parts = <String>[
       if (blank.isNotEmpty)

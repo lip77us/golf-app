@@ -95,4 +95,50 @@ void main() {
     await _body(t, multi: true, awaiting: [4]);
     expect(_title(t), 'Finish early?');
   });
+
+
+  group('scores still sending', () {
+    // **The root of the Tilden receipt** (7 Nov 2026). Finish round was
+    // slow, the first tap closed the round while the last five holes were
+    // still queued, and the receipt froze with every figure $10 out. The
+    // server corrects itself on a second tap now — but a receipt that is
+    // right the first time is worth more, because it is pushed to the
+    // golfers the moment it is written.
+    Future<void> show(WidgetTester t, int unsent) async {
+      await t.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Builder(builder: (ctx) => TextButton(
+            onPressed: () => confirmCompleteRound(ctx,
+                sendPending: (_) async => unsent),
+            child: const Text('go'),
+          )),
+        ),
+      ));
+      await t.tap(find.text('go'));
+      await t.pumpAndSettle();
+    }
+
+    testWidgets('an unsent hole is named and the round is not just closed',
+        (t) async {
+      await show(t, 1);
+      expect(_title(t), 'Scores still sending');
+      expect(find.textContaining('1 hole has not reached the server'),
+          findsOneWidget);
+      expect(find.text('Finish Anyway'), findsOneWidget);
+    });
+
+    testWidgets('it says the money can be corrected', (t) async {
+      // The way out, in the dialog — otherwise a scorer discovers it from a
+      // wrong figure in a document stamped Final.
+      await show(t, 5);
+      expect(find.textContaining('5 holes have not reached the server'),
+          findsOneWidget);
+      expect(find.textContaining('Finish round again'), findsOneWidget);
+    });
+
+    testWidgets('a drained queue asks the ordinary question', (t) async {
+      await show(t, 0);
+      expect(_title(t), isNot('Scores still sending'));
+    });
+  });
 }
