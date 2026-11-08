@@ -282,24 +282,152 @@ class SixesDetailTests(TestCase):
     def test_a_game_with_no_detail_formatter_sets_no_webGames(self):
         """An unregistered game has no useful generic detail, so it gets no
         section — and a `webGames` identical to `games` is noise in a stored
-        payload, which the renderer already falls back from."""
-        from services.rabbit import calculate_rabbit, setup_rabbit
-        rnd = make_round(active_games=['rabbit'])
-        rnd.bet_unit = 2
-        rnd.save(update_fields=['bet_unit'])
-        fs = make_foursome(rnd, [('A', 0), ('B', 0), ('C', 0)])
-        setup_rabbit(fs)
+        payload, which the renderer already falls back from.
+
+        It un-registers the formatter rather than naming a game that happens
+        to lack one: the first version used Rabbit, Rabbit got one, and the
+        test started failing for a reason that was not a regression.  (Its
+        own guard said so, which is why it is written that way here too.)
+        """
+        from services import receipt_build as rb
+        self._play()
+        saved = rb.GAME_DETAIL.pop('sixes')
+        try:
+            r = build_round_receipt(self.round)
+            self.assertIsNotNone(r)
+            self.assertNotIn('webGames', r.payload)
+        finally:
+            rb.GAME_DETAIL['sixes'] = saved
+
+
+def _settled_round(game):
+    """The smallest real, settled round of `game` — engines, not stubs."""
+    rnd = make_round(active_games=[game])
+    rnd.bet_unit = 2
+    rnd.save(update_fields=['bet_unit'])
+    if game == 'nassau':
+        from services.nassau import calculate_nassau, setup_nassau
+        fs = make_foursome(rnd, [('A', 0), ('B', 0), ('C', 0), ('D', 0)])
         ids = [m.player_id for m in fs.memberships.all()]
-        for hole in range(1, 19):
-            scores = [(pid, 5) for pid in ids]
-            if hole % 3 == 0:
-                scores[0] = (ids[0], 3)
-            submit_hole(fs, hole, scores)
-        calculate_rabbit(fs)
-        self.assertNotIn('rabbit', GAME_DETAIL, 'this test picked a bad example')
-        r = build_round_receipt(rnd)
-        self.assertIsNotNone(r)
-        self.assertNotIn('webGames', r.payload)
+        setup_nassau(fs, ids[:2], ids[2:], handicap_mode='gross')
+        for h in range(1, 19):
+            submit_hole(fs, h, [(ids[0], 3), (ids[1], 3),
+                                (ids[2], 5), (ids[3], 5)])
+        calculate_nassau(fs)
+    elif game == 'skins':
+        from services.skins import calculate_skins, setup_skins
+        fs = make_foursome(rnd, [('A', 0), ('B', 0), ('C', 0)])
+        setup_skins(fs, handicap_mode='gross', carryover=True)
+        ids = [m.player_id for m in fs.memberships.all()]
+        for h in range(1, 19):
+            sc = [(pid, 5) for pid in ids]
+            if h in (3, 7):
+                sc[0] = (ids[0], 3)
+            submit_hole(fs, h, sc)
+        calculate_skins(fs)
+    elif game in ('rabbit', 'survivor'):
+        fs = make_foursome(rnd, [('A', 0), ('B', 0), ('C', 0)])
+        ids = [m.player_id for m in fs.memberships.all()]
+        if game == 'rabbit':
+            from services.rabbit import calculate_rabbit, setup_rabbit
+            setup_rabbit(fs, num_segments=3, extra_rabbits=True)
+        else:
+            from services.survivor import calculate_survivor, setup_survivor
+            setup_survivor(fs, handicap_mode='gross', zombie_option=False)
+        for h in range(1, 19):
+            sc = [(pid, 5) for pid in ids]
+            # A wins the first five outright, which decides the opening
+            # stretch EARLY and frees its remaining holes into an extra —
+            # the case the `Ex` label exists for.  After that the win
+            # rotates, so later stretches run their full length.
+            sc[0 if h <= 5 else h % 3] = (ids[0 if h <= 5 else h % 3], 3)
+            submit_hole(fs, h, sc)
+        calculate_rabbit(fs) if game == 'rabbit' else calculate_survivor(fs)
+    elif game == 'wolf':
+        # A wolf hole needs a DECISION as well as scores — without one there
+        # is no side, so the summary reports no result and the detail has
+        # nothing to say.
+        from games.models import WolfHoleDecision
+        from services.wolf import calculate_wolf, setup_wolf
+        fs = make_foursome(rnd, [('A', 0), ('B', 0), ('C', 0), ('D', 0)])
+        ids = [m.player_id for m in fs.memberships.all()]
+        game_row = setup_wolf(fs, handicap_mode='gross', wolf_order=ids)
+        for h in range(1, 19):
+            WolfHoleDecision.objects.update_or_create(
+                game=game_row, hole_number=h,
+                defaults={'decision': 'lone' if h % 3 == 0 else 'partner',
+                          'partner_id': None if h % 3 == 0
+                          else ids[(h % 4 + 1) % 4]})
+            submit_hole(fs, h, [(pid, 4 + (i == h % 4))
+                                for i, pid in enumerate(ids)])
+        calculate_wolf(fs)
+    elif game == 'points_531':
+        from services.points_531 import (calculate_points_531,
+                                         setup_points_531)
+        fs = make_foursome(rnd, [('A', 0), ('B', 0), ('C', 0)])
+        ids = [m.player_id for m in fs.memberships.all()]
+        setup_points_531(fs, handicap_mode='gross')
+        for h in range(1, 19):
+            submit_hole(fs, h, [(ids[0], 3), (ids[1], 4), (ids[2], 5)])
+        calculate_points_531(fs)
+    elif game == 'low_net_round':
+        # Stroke Play has no `setup_*`; its config IS the row.
+        from games.models import LowNetRoundConfig
+        fs = make_foursome(rnd, [('A', 0), ('B', 0), ('C', 0)])
+        ids = [m.player_id for m in fs.memberships.all()]
+        LowNetRoundConfig.objects.create(
+            round=rnd, handicap_mode='gross', entry_fee=10,
+            payouts=[{'place': 1, 'amount': 30}])
+        for h in range(1, 19):
+            submit_hole(fs, h, [(ids[0], 3), (ids[1], 4), (ids[2], 5)])
+    else:
+        raise AssertionError(f'no fixture for {game}')
+    return rnd
+
+
+class DetailShapeTests(TestCase):
+    """The contract every detail section has to meet, swept across the lot.
+
+    **`_detail_sections` swallows a formatter's exception by design** — the
+    money is already settled above it and a broken row must not cost the
+    receipt.  The cost is that a regression is SILENT: the section simply
+    stops appearing.  So these call the formatters DIRECTLY, where a raise is
+    a failure rather than a missing row.
+
+    Found exactly that way: Rabbit and Survivor report `holes` as a COUNT and
+    both formatters read it as a list, which is a TypeError, which was a
+    logged line and an empty section.
+    """
+
+    def test_every_registered_formatter_returns_well_formed_sections(self):
+        for game in sorted(GAME_DETAIL):
+            if game == 'sixes':
+                continue            # SixesDetailTests covers it in full
+            with self.subTest(game):
+                rnd = _settled_round(game)
+                # Direct, so a raise fails here rather than being logged away.
+                secs = GAME_DETAIL[game](rnd, {'game': game}, {})
+                self.assertTrue(secs, f'{game} produced no section')
+                for sec in secs:
+                    self.assertTrue(sec['label'])
+                    self.assertTrue(sec['rows'], f'{game}: empty section')
+                    for row in sec['rows']:
+                        # The renderers unpack `label, value` — anything else
+                        # is a ValueError on a page somebody is reading.
+                        self.assertEqual(len(row), 2, f'{game}: {row}')
+                        self.assertTrue(all(isinstance(c, str) for c in row),
+                                        f'{game}: {row}')
+                        self.assertTrue(row[0], f'{game}: unlabelled {row}')
+
+    def test_a_count_is_never_read_as_a_list_of_holes(self):
+        """Rabbit and Survivor report `holes` as an int.  Both formatters
+        read `start_hole`/`end_hole` instead, and this is what says so."""
+        for game in ('rabbit', 'survivor'):
+            with self.subTest(game):
+                rnd = _settled_round(game)
+                rows = GAME_DETAIL[game](rnd, {'game': game}, {})[0]['rows']
+                self.assertTrue(any('–' in r[0] for r in rows),
+                                f'{game} named no hole window: {rows}')
 
 
 class FormatterFailureTests(TestCase):
@@ -483,3 +611,79 @@ class DriftTests(TestCase):
                 'a $40 hole in the ledger was absorbed onto one golfer')
         finally:
             st._pid_nets_for_game = real
+
+
+class DetailContentTests(TestCase):
+    """What each row SAYS.  The sweep above only proves a formatter returns
+    well-formed rows; these say the rows are right.
+
+    A separate class rather than a subclass — one that inherited the sweep
+    would re-run it against a fixture it was not written for, which is the
+    `_DayBetBase` lesson.
+    """
+
+    def _rows(self, game):
+        rnd = _settled_round(game)
+        return GAME_DETAIL[game](rnd, {'game': game}, {})[0]['rows']
+
+    def test_nassau_names_the_side_and_uses_the_close_out_notation(self):
+        """§4: N UP / N&M / AS, one row each for Front, Back and Overall.
+
+        A & B win every hole, so all three close out early and none of them
+        can read `N UP` — which is what says the `&M` branch is live.
+        """
+        rows = dict(self._rows('nassau'))
+        self.assertEqual(sorted(rows), ['Back', 'Front', 'Overall'])
+        for label, text in rows.items():
+            self.assertTrue(text.startswith('A & B '), f'{label}: {text}')
+            self.assertIn('&', text.split(' ', 2)[2], f'{label}: {text}')
+
+    def test_skins_names_the_holes_that_carried_into_a_win(self):
+        """§4: `["Hole 7", "Kim ×3 · carried 5, 6"]` — the multiplier says
+        how big the pot was and the holes say where it came from."""
+        rows = dict(self._rows('skins'))
+        self.assertEqual(rows['Hole 3'], 'A ×3 · carried 1, 2')
+
+    def test_skins_says_when_the_round_ended_on_a_carry(self):
+        rows = dict(self._rows('skins'))
+        self.assertIn('Carried over', rows)
+        self.assertIn('no winner', rows['Carried over'])
+
+    def test_a_long_carry_run_is_counted_rather_than_listed(self):
+        """Eleven hole numbers in a row is a paragraph, not a breakdown."""
+        rows = dict(self._rows('skins'))
+        self.assertEqual(rows['Carried over'], 'no winner · 11 holes from 8')
+
+    def test_rabbit_marks_the_extra_and_names_the_window(self):
+        """§4: "The extra rabbit is labelled `Ex`"."""
+        labels = [r[0] for r in self._rows('rabbit')]
+        self.assertTrue(any(' Ex · ' in l for l in labels), labels)
+        self.assertTrue(all('–' in l for l in labels), labels)
+
+    def test_survivor_names_each_one_and_what_it_paid(self):
+        rows = self._rows('survivor')
+        self.assertTrue(rows[0][0].startswith('Survivor 1 · '), rows[0])
+        self.assertIn('$', rows[0][1], rows[0])
+
+    def test_points_splits_out_and_in_at_the_turn(self):
+        """Every golfer scores the same on all eighteen holes here, so Out
+        and In must be equal — which is what says the split is at hole 9 and
+        not somewhere else."""
+        rows = dict(self._rows('points_531'))
+        self.assertEqual(rows['A'], 'Out 45 · In 45 · 90')
+        self.assertEqual(rows['Settles'], 'Against the average')
+
+    def test_stroke_play_shows_where_the_money_came_from(self):
+        """§4's "the pool (in, places paid)" — the only thing on the receipt
+        that says what was put in to produce the chips."""
+        rows = dict(self._rows('low_net_round'))
+        self.assertEqual(rows['In'], '3 × $10 = $30')
+        self.assertEqual(rows['1st'], '$30')
+
+    def test_wolf_says_who_played_with_whom_and_how_it_went(self):
+        """§4: the wolf, partner, Lone or Blind, and the result."""
+        rows = dict(self._rows('wolf'))
+        self.assertIn(' · ', rows['Hole 1'])
+        self.assertTrue(any('lone' in v for v in rows.values()), rows)
+        self.assertTrue(all(v.split(' · ')[-1] in ('wolf', 'field', 'halved')
+                            for v in rows.values()), rows)

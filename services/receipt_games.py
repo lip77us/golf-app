@@ -768,3 +768,379 @@ def dream_round_rows(round_obj, entry, names):
 
 
 GAME_SUMMARY['dream_round'] = dream_round_rows
+
+
+# ===========================================================================
+# §4 Detail — the long form, web receipt and Round over (never the preview)
+# ===========================================================================
+#
+# One function per game, each registered in `GAME_DETAIL`.  They return
+# Sections, and the label NAMES THE GAME, because a round playing two games
+# puts two of these on one page.
+#
+# Every one reads its engine's own summary and formats.  None re-derives a
+# result, a margin or a figure — that is the `gross_to_par` rule, and on a
+# receipt it is the money.
+
+
+def _ssec(label, rows):
+    """A section, or nothing when there are no rows to put in it."""
+    return [{'label': label, 'rows': rows}] if rows else []
+
+
+def _range(start, end) -> str:
+    """"7–11", or "18" when the stretch is one hole.
+
+    Rabbit and Survivor report `holes` as a COUNT, not a list — the window is
+    `start_hole`/`end_hole`, and reading the count as a list is a TypeError
+    rather than a wrong answer, which is how this was found.
+    """
+    if start is None:
+        return ''
+    if end is None or end == start:
+        return f'{start}'
+    return f'{start}–{end}'
+
+
+def _place_of(seg) -> str:
+    """"· 7–11" for a stretch, or nothing when the engine gives no window."""
+    span = _range(seg.get('start_hole'), seg.get('end_hole'))
+    return f' · {span}' if span else ''
+
+
+# ---------------------------------------------------------------------------
+# Nassau
+# ---------------------------------------------------------------------------
+
+def _nassau_side(summary, which: str) -> str:
+    team = (summary.get('teams') or {}).get(which) or []
+    return ' & '.join(p.get('short_name') or p.get('name') or '' for p in team)
+
+
+def _nassau_bet(summary, block: dict) -> str:
+    """"Paul & Jim 2 UP", "3&2", "AS" — §4's N UP / N&M / AS / Push."""
+    if not block:
+        return ''
+    result = (block.get('result') or '').lower()
+    if result in ('halved', 'push', 'tie', 'all_square', ''):
+        # A bet that was played and finished level, versus one still level
+        # with holes to come: the receipt is only ever written on a settled
+        # round, so this is the first.
+        return 'AS' if block.get('holes_played') else ''
+    side = _nassau_side(summary, 'team1' if result == 'team1' else 'team2')
+    margin = abs(block.get('decided_margin') or block.get('margin') or 0)
+    left = block.get('decided_remaining') or 0
+    # The close-out notation, same rule as everywhere else: `N&M` only when
+    # there were holes left to not play.
+    return f'{side} {margin}&{left}' if left else f'{side} {margin} UP'
+
+
+def nassau_detail(round_obj, entry, names):
+    """§4: a row each for Front, Back and Overall, then one per press.
+
+    Claremont adds a points line, because its bottom bet is scored in points
+    rather than holes and the figure above it would otherwise be read as the
+    whole result.
+    """
+    from services.nassau import nassau_summary
+    foursomes = _foursomes(round_obj)
+    multi = len(foursomes) > 1
+    out = []
+    for fs in foursomes:
+        s = nassau_summary(fs)
+        if not s:
+            continue
+        rows = []
+        # A nine that is not being played has no bet, and `play_*` is the
+        # engine's own answer — a nine-hole round plays one of them.
+        for key, played, label in (('front9', 'play_front', 'Front'),
+                                   ('back9', 'play_back', 'Back'),
+                                   ('overall', 'play_overall', 'Overall')):
+            if not s.get(played, True):
+                continue
+            text = _nassau_bet(s, s.get(key) or {})
+            if text:
+                rows.append([label, text])
+        for pr in (s.get('presses') or []):
+            nine = (pr.get('nine') or '').capitalize()
+            kind = 'Auto press' if pr.get('press_type') == 'auto' else 'Press'
+            rows.append([f'{kind} {pr.get("start_hole")}–{pr.get("end_hole")}',
+                         _nassau_bet(s, pr) or 'AS'])
+        if (s.get('variant') or '').lower() == 'claremont':
+            pts = (s.get('payouts') or {}).get('bottom_total')
+            if pts is not None:
+                # The bottom bet is two points a hole — low ball and second
+                # ball — so it settles in points, not holes.
+                rows.append(['Bottom (points)', money(pts, sign=True)])
+        out += _ssec(_label(fs, 'Nassau · the bets', multi), rows)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Skins
+# ---------------------------------------------------------------------------
+
+#: How many carried holes are named before the run is counted instead.
+#: Four is a nine's worth of bad luck, which is the most anybody reads.
+_CARRY_NAMED = 4
+
+
+def skins_detail(round_obj, entry, names):
+    """§4's "Skins by hole": `["Hole 7", "Kim ×3 · carried 5, 6"]`, plus a
+    "Carried over" row when the round ends on a carry.
+
+    Only holes that were WON get a row — eighteen rows of nothing is not a
+    breakdown — and the carried holes are named rather than counted, because
+    "carried 5, 6" is checkable against a card and "×3" alone is not.
+    """
+    from services.skins import skins_summary
+    foursomes = _foursomes(round_obj)
+    multi = len(foursomes) > 1
+    out = []
+    for fs in foursomes:
+        s = skins_summary(fs)
+        if not s:
+            continue
+        rows, carried = [], []
+        # Naming the carried holes is what makes the pot checkable against a
+        # card ("carried 5, 6"); naming eleven of them is a paragraph nobody
+        # reads, so a long run is counted and anchored instead.
+        def _carried(hs):
+            return (', '.join(str(h) for h in hs) if len(hs) <= _CARRY_NAMED
+                    else f'{len(hs)} holes from {hs[0]}')
+        for h in (s.get('holes') or []):
+            if h.get('is_killed') or h.get('is_dead'):
+                continue
+            if not h.get('winner_id'):
+                if h.get('is_carry'):
+                    carried.append(h['hole'])
+                continue
+            value = h.get('skins_value') or 1
+            text = f'{h.get("winner_short") or ""} ×{value}' if value > 1 \
+                else (h.get('winner_short') or '')
+            if carried:
+                text += ' · carried ' + _carried(carried)
+            rows.append([f'Hole {h["hole"]}', text])
+            carried = []
+        if carried:
+            # The round ended on a carry, so that pot was never won.
+            rows.append(['Carried over', 'no winner · ' + _carried(carried)])
+        out += _ssec(_label(fs, 'Skins by hole', multi), rows)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Rabbit
+# ---------------------------------------------------------------------------
+
+def rabbit_detail(round_obj, entry, names):
+    """§4: `"Rabbit 2 · 7–11"`, `"Kim · won on 11 · +$15"` or
+    `"Loose · carried"`.  The extra rabbit is labelled `Ex`."""
+    from services.rabbit import rabbit_summary
+    foursomes = _foursomes(round_obj)
+    multi = len(foursomes) > 1
+    out = []
+    for fs in foursomes:
+        s = rabbit_summary(fs)
+        if not s:
+            continue
+        rows = []
+        for seg in (s.get('segments') or []):
+            n = seg.get('index')
+            mark = f'Rabbit {n} Ex' if seg.get('is_extra') else f'Rabbit {n}'
+            label = mark + _place_of(seg)
+            holder = seg.get('holder_short')
+            if holder:
+                won_on = seg.get('decided_on') or seg.get('end_hole')
+                value = f'{holder} · won on {won_on}'
+                payout = seg.get('payout')
+                if payout:
+                    value += f' · {money(payout, sign=True)}'
+            elif not seg.get('complete'):
+                value = 'Not played'
+            else:
+                # A loose rabbit pays nobody; with carry on its stake rides
+                # into the next one, which is a different sentence from one
+                # that simply evaporated on the last rabbit.
+                value = 'Loose · carried' if s.get('carry') else 'Loose'
+            rows.append([label, value])
+        out += _ssec(_label(fs, 'Rabbit · each one', multi), rows)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Survivor
+# ---------------------------------------------------------------------------
+
+def survivor_detail(round_obj, entry, names):
+    """§4: one row per Survivor — holes, then winner, No blood or Split."""
+    from services.survivor import survivor_summary
+    foursomes = _foursomes(round_obj)
+    multi = len(foursomes) > 1
+    out = []
+    for fs in foursomes:
+        s = survivor_summary(fs)
+        if not s:
+            continue
+        rows = []
+        for sv in (s.get('survivors') or []):
+            label = f'Survivor {sv.get("index")}' + _place_of(sv)
+            outcome = (sv.get('outcome') or '').lower()
+            if outcome == 'no_blood':
+                value = 'No blood'          # nobody out, so nobody pays
+            elif outcome == 'split':
+                value = 'Split'
+            elif outcome == 'killed':
+                # A Zombie takes the trophy and the money stays put.
+                value = f'{sv.get("winner_short") or ""} · killed by ' \
+                        f'{sv.get("killed_by_short") or ""} · pays nothing'
+            elif sv.get('winner_short'):
+                value = sv['winner_short']
+                payout = sv.get('payout')
+                if payout:
+                    value += f' · {money(payout, sign=True)}'
+            else:
+                value = 'Not played'
+            rows.append([label, value])
+        out += _ssec(_label(fs, 'Survivor · each one', multi), rows)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Wolf
+# ---------------------------------------------------------------------------
+
+def wolf_detail(round_obj, entry, names):
+    """§4: one row per hole — the wolf, partner, Lone or Blind, the result.
+
+    **The handoff flags this one itself**: "No settlement mock yet; confirm
+    the copy before building."  So this is the plainest reading of that
+    sentence, with nothing invented around it.
+    """
+    from services.wolf import wolf_summary
+    foursomes = _foursomes(round_obj)
+    multi = len(foursomes) > 1
+    out = []
+    for fs in foursomes:
+        s = wolf_summary(fs)
+        if not s:
+            continue
+        rows = []
+        for h in (s.get('holes') or []):
+            wolf = h.get('wolf_short') or ''
+            if not wolf:
+                continue
+            decision = (h.get('decision') or '').lower()
+            if decision == 'partner' and h.get('partner_short'):
+                who = f'{wolf} & {h["partner_short"]}'
+            elif decision == 'blind':
+                who = f'{wolf} blind'
+            elif decision == 'lone':
+                who = f'{wolf} lone'
+            else:
+                who = wolf
+            side = (h.get('winning_side') or '').lower()
+            if side == 'tie':
+                result = 'halved'
+            elif side:
+                result = 'wolf' if side == 'wolf' else 'field'
+            else:
+                continue            # not played
+            rows.append([f'Hole {h["hole"]}', f'{who} · {result}'])
+        out += _ssec(_label(fs, 'Wolf · by hole', multi), rows)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Points 5-3-1
+# ---------------------------------------------------------------------------
+
+def points_531_detail(round_obj, entry, names):
+    """§4: Out and In points per golfer, plus the settlement mode."""
+    from services.points_531 import points_531_summary
+    foursomes = _foursomes(round_obj)
+    multi = len(foursomes) > 1
+    out = []
+    for fs in foursomes:
+        s = points_531_summary(fs)
+        if not s:
+            continue
+        front, back = {}, {}
+        for h in (s.get('holes') or []):
+            bucket = front if h['hole'] <= 9 else back
+            for e in (h.get('entries') or []):
+                pid = e.get('player_id')
+                if pid is not None and e.get('points') is not None:
+                    bucket[pid] = bucket.get(pid, 0) + (e['points'] or 0)
+        rows = []
+        for p in (s.get('players') or []):
+            pid = p['player_id']
+            o, i = front.get(pid, 0), back.get(pid, 0)
+            rows.append([p.get('short_name') or p.get('name') or '',
+                         f'Out {o:g} · In {i:g} · {(p.get("points") or 0):g}'])
+        mode = _points_mode(s)
+        if mode:
+            rows.append(['Settles', mode])
+        out += _ssec(_label(fs, 'Points · out and in', multi), rows)
+    return out
+
+
+def _points_mode(summary) -> str:
+    """The three the game is actually played for, in the config's own words."""
+    m = summary.get('money') or {}
+    if (m.get('payout_style') or '') == 'pool':
+        return 'Pool'
+    return {'average': 'Against the average',
+            'all': 'Everyone above you',
+            'first': 'The leader'}.get(m.get('per_point_mode') or '', '')
+
+
+# ---------------------------------------------------------------------------
+# Stroke Play
+# ---------------------------------------------------------------------------
+
+def low_net_round_detail(round_obj, entry, names):
+    """§4: "the pool (in, places paid)" — the only detail for a pot game.
+
+    It is where the money CAME FROM, which no other row on the receipt says:
+    the chips show what each golfer ended with and the pool says what was put
+    in to produce it.
+    """
+    from services.low_net_round import low_net_round_summary
+    s = low_net_round_summary(round_obj)
+    if not s:
+        return []
+    fee = s.get('entry_fee') or 0
+    entrants = [r for r in (s.get('results') or []) if not r.get('excluded')]
+    rows = []
+    if fee:
+        rows.append(['In', f'{len(entrants)} × {money(fee)} = '
+                           f'{money(s.get("purse") or fee * len(entrants))}'])
+    for pay in (s.get('payouts') or []):
+        rows.append([_place(pay.get('place')), money(pay.get('amount') or 0)])
+    excluded = [r for r in (s.get('results') or []) if r.get('excluded')]
+    if excluded:
+        # A golfer can be ranked and visible while unpaid, and nothing else
+        # on the receipt would say why his place paid nothing.
+        rows.append(['Not paid', ' · '.join(
+            r.get('short_name') or r.get('name') or '' for r in excluded)])
+    return _ssec('Stroke Play · the pool', rows)
+
+
+def _label(fs, base: str, multi: bool) -> str:
+    """Name the group as well when the round has more than one, or two
+    sections carry the same heading and neither says whose.
+
+    Appended rather than inserted, so every game reads the same way round:
+    "Skins by hole · group 2", "Nassau · the bets · group 2".
+    """
+    return f'{base} · group {fs.group_number}' if multi else base
+
+
+GAME_DETAIL['nassau'] = nassau_detail
+GAME_DETAIL['skins'] = skins_detail
+GAME_DETAIL['rabbit'] = rabbit_detail
+GAME_DETAIL['survivor'] = survivor_detail
+GAME_DETAIL['wolf'] = wolf_detail
+GAME_DETAIL['points_531'] = points_531_detail
+GAME_DETAIL['low_net_round'] = low_net_round_detail
