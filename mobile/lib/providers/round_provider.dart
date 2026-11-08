@@ -141,6 +141,7 @@ class RoundProvider extends ChangeNotifier {
   final Map<int, VegasHoleCard> _vegasHoles = {};
   final Map<int, FourballHoleCard> _fourballHoles = {};
   final Map<int, FourballHoleCard> _singlesHoles = {};
+  final Map<int, NassauHoleCard>   _nassauHoles   = {};
   final Map<int, SurvivorHoleCard> _survivorHoles = {};
   final Map<int, StrokePlayHoleCard> _strokePlayHoles = {};
   Points531Summary? _points531Summary;
@@ -217,6 +218,7 @@ class RoundProvider extends ChangeNotifier {
   VegasHoleCard?    vegasHole(int hole)    => _vegasHoles[hole];
   FourballHoleCard? fourballHole(int hole) => _fourballHoles[hole];
   FourballHoleCard? singlesHole(int hole)  => _singlesHoles[hole];
+  NassauHoleCard?   nassauHole(int hole)   => _nassauHoles[hole];
   SurvivorHoleCard? survivorHole(int hole)  => _survivorHoles[hole];
   StrokePlayHoleCard? strokePlayHole(int hole) => _strokePlayHoles[hole];
   Points531Summary? get points531Summary   => _points531Summary;
@@ -299,6 +301,7 @@ class RoundProvider extends ChangeNotifier {
     _wolfHoles.clear();
     _vegasHoles.clear();
     _fourballHoles.clear();
+    _nassauHoles.clear();
     _singlesHoles.clear();
     _survivorHoles.clear();
     _points531Summary        = null;
@@ -444,6 +447,7 @@ class RoundProvider extends ChangeNotifier {
       _wolfHoles.clear();
       _vegasHoles.clear();
       _fourballHoles.clear();
+    _nassauHoles.clear();
       _singlesHoles.clear();
       _survivorHoles.clear();
       _points531Summary = null;
@@ -514,6 +518,7 @@ class RoundProvider extends ChangeNotifier {
            || _sixesHoles.isNotEmpty || _rabbitHoles.isNotEmpty
            || _pointsHoles.isNotEmpty || _wolfHoles.isNotEmpty
            || _vegasHoles.isNotEmpty || _fourballHoles.isNotEmpty
+           || _nassauHoles.isNotEmpty
            || _singlesHoles.isNotEmpty
            || _survivorHoles.isNotEmpty || _strokePlayHoles.isNotEmpty)) {
         _annandaleResults.hold(holeNumber);
@@ -1152,6 +1157,22 @@ class RoundProvider extends ChangeNotifier {
     }
   }
 
+  /// Fetch one hole's Nassau card. Silent on failure, like Rabbit's: a
+  /// card that cannot be fetched must not stop a group entering scores.
+  Future<void> loadNassauHole(int foursomeId, int hole) async {
+    try {
+      final card = await _client.getNassauHoleCard(foursomeId, hole);
+      if (card != null) {
+        _nassauHoles[hole] = card;
+        notifyListeners();
+      }
+    } on NetworkException {
+      // Offline — keep whatever is on screen.
+    } catch (e) {
+      debugPrint('loadNassauHole error: $e');
+    }
+  }
+
   /// Fetch one hole's Las Vegas card. Silent on failure, like Rabbit's: a
   /// card that cannot be fetched must not stop a group entering scores.
   Future<void> loadVegasHole(int foursomeId, int hole) async {
@@ -1593,6 +1614,17 @@ class RoundProvider extends ChangeNotifier {
       notifyListeners();
     }
 
+    final nas = response['nassau_hole'];
+    if (nas is Map<String, dynamic>) {
+      // Same staleness as the others, and sharper: a posted hole moves every
+      // bet in the nine AND can close one out, so a card held for another
+      // hole can be describing a bet that is over.
+      _nassauHoles.clear();
+      _nassauHoles[holeNumber] = NassauHoleCard.fromJson(nas);
+      _annandaleResults.answer(holeNumber);
+      notifyListeners();
+    }
+
     final vegas = response['vegas_hole'];
     if (vegas is Map<String, dynamic>) {
       // Same staleness as the others: a posted hole moves the margin on
@@ -1851,14 +1883,21 @@ class RoundProvider extends ChangeNotifier {
     _clearError();
     notifyListeners();
     try {
-      final s = await _client.postNassauPress(
+      final r = await _client.postNassauPress(
         foursomeId,
         startHole: startHole,
         gameType:  gameType,
       );
+      final s = r.summary;
       _nassauByType[s.gameType] = s;
       if (gameType == null || gameType == 'nassau' || gameType == 'nassau_nine') {
         _nassauSummary = s;
+      }
+      if (r.hole != null) {
+        // A press changes every later bet in that nine, so the rest go.
+        _nassauHoles
+          ..clear()
+          ..[r.hole!.hole] = r.hole!;
       }
       return true;
     } on NetworkException {

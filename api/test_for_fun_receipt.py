@@ -258,6 +258,13 @@ class NoFigureOnItIsMoneyTests(TestCase):
         """Banker's row is the real case; standing in for it here, because
         building a zero-stake Banker round to make one point is a fixture
         nobody will maintain."""
+        # **The registry fills LAZILY.** `receipt_build._load_games()`
+        # imports the formatters inside a function, to keep a circular
+        # import out of `api.views` — so in a worker where nothing has
+        # built a receipt yet, `GAME_SUMMARY` is empty and this read is a
+        # KeyError. Shard-order dependent, which is why it passed for
+        # months and failed under `--parallel 4` on a different split.
+        import services.receipt_games  # noqa: F401
         from services.receipt_build import GAME_SUMMARY, _result_rows
         rnd, _fs, ids = _stroke_play_round()
         key, label = 'low_net_round', 'Stroke Play'

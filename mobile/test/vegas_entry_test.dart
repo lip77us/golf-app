@@ -382,8 +382,12 @@ void main() {
       // The tray IS the bottom bar while it is up, so its own arrows are the
       // only ones on screen — which is what lets the forward button finish
       // the round on the last hole.
-      expect(src, contains('!vgTray'));
-      expect(src, contains('if (!sixTray && !spTray && !vgTray && !fourTray)'));
+      // **Anchored on this tray's own flag inside the gate**, not on the
+      // whole literal: every new tray extends it, and a guard that breaks
+      // when a sibling is added is one that gets deleted.
+      final i = src.indexOf('if (!sixTray');
+      expect(i, greaterThan(0));
+      expect(src.substring(i, src.indexOf(')', i)), contains('!vgTray'));
     });
 
     test('the card is fetched for the hole on screen', () {

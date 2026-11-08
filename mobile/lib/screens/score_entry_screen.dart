@@ -40,6 +40,7 @@ import '../utils/vegas_standing.dart';
 import '../utils/auto_post.dart';
 import '../widgets/vegas_entry.dart';
 import '../widgets/fourball_entry.dart';
+import '../widgets/nassau_entry.dart';
 import '../widgets/banker_entry_strip.dart';
 import '../widgets/triple_cup_pairings.dart';
 import '../widgets/standing_ribbon.dart';
@@ -200,6 +201,19 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final sp = _strokePlayCard(rp);
     if (sp != null) {
       final s = sp.player(m.player.id)?.strokes;
+      if (s != null) return s;
+    }
+
+    // **And Nassau, for the same reason Sixes needs it**: the game carries
+    // its own handicap mode and allowance, so a strokes-off Nassau inside a
+    // net round showed the low man dots he does not get — reported from the
+    // course on a Sixes match, and the same fallback is underneath here.
+    final nas = _nassauCard(rp);
+    if (nas != null) {
+      final s = nas.players
+          .where((p) => p.playerId == m.player.id)
+          .map((p) => p.strokes)
+          .firstOrNull;
       if (s != null) return s;
     }
 
@@ -1540,7 +1554,12 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
         primary == GameIds.fourball ||
         // Singles Match — the same card and tray with one golfer a side
         // (`~/Downloads/handoff-singles-match-score-entry`).
-        primary == GameIds.match18;
+        primary == GameIds.match18 ||
+        // Nassau, per `~/Downloads/handoff-nassau-score-entry`. The primary
+        // test again: Nassau also rides as a subset SIDE bet
+        // (`docs/parallel-games.md`), and a side bet must not change how the
+        // round's own game is entered.
+        primary == GameIds.nassau;
   }
 
   /// This hole ends in a TRAY — Annandale Friday's, Sixes' or Stroke Play's.
@@ -1552,6 +1571,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       _vegasCard(rp) != null ||
       _fourballCard(rp) != null ||
       _singlesCard(rp) != null ||
+      _nassauCard(rp) != null ||
       _strokePlayCard(rp) != null;
 
   /// The hole we have asked the server for; see `_ensureSixesCard`.
@@ -1715,6 +1735,42 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     return rp.singlesHole(_selectedHole);
   }
 
+  /// The hole we have asked the server for; see `_ensureNassauCard`.
+  int? _nassauCardAsked;
+
+  /// **Make sure the hole on screen has a Nassau card**, for the reason
+  /// every other one of these exists: without a card the keypad is not
+  /// drawn at all, and a save drops every other hole's card (a posted hole
+  /// moves every bet in the nine), which races the fetch the forward button
+  /// started.
+  void _ensureNassauCard(RoundProvider rp) {
+    if (!_activeGames(rp.round).contains(GameIds.nassau)) return;
+    if (rp.nassauHole(_selectedHole) != null) {
+      _nassauCardAsked = null;
+      return;
+    }
+    if (_nassauCardAsked == _selectedHole) return;
+    _nassauCardAsked = _selectedHole;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<RoundProvider>()
+          .loadNassauHole(widget.foursomeId, _selectedHole);
+    });
+  }
+
+  /// The Nassau card for the hole on screen, when Nassau is the primary.
+  ///
+  /// **Primary-gated, like the Singles Match card and for the same reason:**
+  /// Nassau can ride as a subset side bet alongside another primary, and a
+  /// side bet must not take over the screen's entry.
+  NassauHoleCard? _nassauCard(RoundProvider rp) {
+    final games = _activeGames(rp.round);
+    if (resolvePrimary(rp.round?.primaryGame, games) != GameIds.nassau) {
+      return null;
+    }
+    return rp.nassauHole(_selectedHole);
+  }
+
   /// Golfers the scorer has marked as not scoring a hole, by hole.
   ///
   /// **Fourball after a close-out, and client-side on purpose.** A hole past
@@ -1857,6 +1913,24 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(friendlyError(e))));
+    }
+  }
+
+  /// Call a manual Nassau press, starting on the NEXT hole.
+  ///
+  /// **The nine is the engine's, and so is whether one is allowed at all** —
+  /// the card's `can_press` is what draws the button, and `add_manual_press`
+  /// re-checks on the way in. The start hole is the next in the GROUP's play
+  /// order, not `hole + 1`, which off a shotgun is a hole the group has
+  /// already played.
+  Future<void> _nassauPress(RoundProvider rp, NassauHoleCard card) async {
+    final next = _nextHoleInOrder(rp);
+    if (next == null) return;
+    final ok = await rp.callNassauPress(widget.foursomeId, startHole: next);
+    if (!mounted) return;
+    if (!ok && rp.error != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(rp.error!)));
     }
   }
 
@@ -3384,6 +3458,14 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
     final fourTray = fourCard != null && fbActive && _editHotPid == null &&
         _holeReady(players, scores, _selectedHole, fourCard);
 
+    // **Nassau.** Same tray, and the one whose chips are the whole point:
+    // the presses are the sharpest rules in the app, so every bet in play
+    // arrives composed by the engine rather than derived here.
+    _ensureNassauCard(rp);
+    final nasCard = _nassauCard(rp);
+    final nasTray =
+        nasCard != null && fbActive && allDone && _editHotPid == null;
+
     // Every hole that ends in a tray saves itself once it is complete.
     _ensureHolePosted(rp, players, sc, par, fourCard);
 
@@ -3504,6 +3586,36 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
               onFinishNow: rp.submitting
                   ? null
                   : () => _completeRound(ctx, players, par),
+              gettingResult: rp.trayResultPending(_selectedHole) ||
+                  _hasRealPending(_selectedHole),
+              notSynced: rp.trayHoleUnsynced(_selectedHole),
+              // Picks nobody — see the Sixes tray above.
+              picking: _trayEditing,
+              onEdit: () => setState(() {
+                _trayEditing = !_trayEditing;
+                _editHotPid = null;
+              }),
+            )
+          else if (nasTray)
+            NassauHoleTray(
+              card: nasCard,
+              // While this tray is up it IS the bottom bar — the pager below
+              // is hidden, so these are the only arrows on screen, and on
+              // the last hole the forward button is Complete Round.
+              onPrev: _prevHoleInOrder(rp) == null ? null : _retreat,
+              onNext: rp.submitting
+                  ? null
+                  : (_nextHoleInOrder(rp) == null
+                      ? () => _completeRound(ctx, players, par)
+                      : _advance),
+              // **The engine decides whether a press is on offer**, and the
+              // nine it belongs to; this only sends it. Offering a button
+              // the server will refuse is how the day bet's off switch went
+              // missing.
+              onPress: nasCard.canPress && !rp.submitting
+                  ? () => _nassauPress(rp, nasCard)
+                  : null,
+              pressing: rp.submitting,
               gettingResult: rp.trayResultPending(_selectedHole) ||
                   _hasRealPending(_selectedHole),
               notSynced: rp.trayHoleUnsynced(_selectedHole),
@@ -3648,7 +3760,7 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
           // hole. Two pagers at the bottom is what a phone showed; the design
           // has the tray overlaying this row, so this is the half that goes
           // (Paul, 30 Oct 2026).
-          if (!sixTray && !spTray && !vgTray && !fourTray)
+          if (!sixTray && !spTray && !vgTray && !fourTray && !nasTray)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             child: Column(children: [
@@ -3906,9 +4018,18 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
       });
     }
 
+    final nasCard = _nassauCard(rp);
+
     return Column(children: [
-      // Nassau presses strip (top + bottom combined)
-      if (nas != null &&
+      // Nassau presses strip (top + bottom combined).
+      //
+      // **Off once the Nassau tray is in play.** That tray carries every
+      // bet and every press in full, with the nine it belongs to and
+      // whether it has started — so this compact strip is the same facts a
+      // second time, higher up and shorter. Same call Rabbit's by-hole grid
+      // and Survivor's outcome line got.
+      if (nasCard == null &&
+          nas != null &&
           (nas.presses.isNotEmpty || nas.bottomPresses.isNotEmpty))
         _PressesStrip(
           presses:       nas.presses,
@@ -3964,6 +4085,11 @@ class _ScoreEntryScreenState extends State<ScoreEntryScreen>
                 fourballHole: (_fourballCard(rp)?.countsForCard ?? true)
                     ? null
                     : _fourballCard(rp),
+                // 2 v 2 only: a 1 v 1 header would name the golfer in the
+                // row under it.
+                nassauCard: (_nassauCard(rp)?.singles ?? true)
+                    ? null
+                    : _nassauCard(rp),
                 pickedUpIds: _noScore[_selectedHole] ?? const {},
                 annandaleSummary:
                     _activeGames(rp.round).contains('annandale_friday')
@@ -4448,6 +4574,14 @@ class _HoleScoreCard extends StatelessWidget {
   /// rather than the header pretending there is.
   final FourballHoleCard? fourballHole;
 
+  /// Nassau's hole card, for the side headers and their best-ball tags.
+  ///
+  /// **The same header Fourball draws**, because a Nassau side IS the same
+  /// object with the same best ball — two headers meaning one thing is how
+  /// they come to look different. Null on a 1 v 1, where a header over each
+  /// row would be a label saying the name directly under it.
+  final NassauHoleCard? nassauCard;
+
   /// Golfers the scorer has marked as picked up on this hole. Empty on every
   /// round but a Fourball past its close-out.
   final Set<int> pickedUpIds;
@@ -4458,6 +4592,7 @@ class _HoleScoreCard extends StatelessWidget {
     this.rumble,
     this.vegasHole,
     this.fourballHole,
+    this.nassauCard,
     this.pickedUpIds = const {},
     this.useKeypad = false,
     this.solo = false,
@@ -5127,8 +5262,10 @@ class _HoleScoreCard extends StatelessWidget {
             RumbleCountStrip(
                 count: rumble!.count, allCount: rumble!.allCount),
 
-          // Nassau hole outcome banner
-          if (nassauHole != null && nassauHole.winner != null)
+          // Nassau hole outcome banner — off once the tray says it, which
+          // it does in more words and with the reason beside it.
+          if (nassauCard == null &&
+              nassauHole != null && nassauHole.winner != null)
             _NassauHoleOutcome(hole: nassauHole, nassau: nassau!),
 
           // Skins hole outcome banner
@@ -5168,6 +5305,13 @@ class _HoleScoreCard extends StatelessWidget {
                        fourballHole!.sideOf(m.player.id)?.side))
                 FourballSideHeader(
                     side: fourballHole!.sideOf(m.player.id)!),
+              // Nassau: the same slot and the same header — see the field.
+              if (nassauCard?.sideOf(m.player.id) != null &&
+                  (idx == 0 ||
+                   nassauCard!.sideOf(players[idx - 1].player.id)?.side !=
+                       nassauCard!.sideOf(m.player.id)?.side))
+                FourballSideHeader(
+                    side: nassauCard!.sideOf(m.player.id)!),
             ];
             final gross      = scores[m.player.id];
             final isHot      = idx == hotSpotIdx;

@@ -4,6 +4,7 @@ import '../api/models.dart';
 import '../theme/halved_brand.dart';
 import 'side_colour.dart';
 import 'tray_edit_header.dart';
+import 'tray_label.dart';
 
 // Fourball score entry — `~/Downloads/handoff-fourball-score-entry`, and
 // **Singles Match**, which its own handoff asks for as "the Fourball score
@@ -163,7 +164,7 @@ class _BestBall extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _TrayLabel('Hole ${card.hole} · ${card.kind}',
+      TrayLabel('Hole ${card.hole} · ${card.kind}',
           trailing: card.staked ? _stake(card.stake) : 'no stakes'),
       const SizedBox(height: 6),
       Container(
@@ -243,7 +244,7 @@ class _ForTheCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _TrayLabel('Hole ${card.hole} · for the card',
+      TrayLabel('Hole ${card.hole} · for the card',
           trailing: 'match over'),
       const SizedBox(height: 6),
       Container(
@@ -543,32 +544,6 @@ class _Buttons extends StatelessWidget {
   }
 }
 
-class _TrayLabel extends StatelessWidget {
-  final String text;
-  final String? trailing;
-  const _TrayLabel(this.text, {this.trailing});
-
-  @override
-  Widget build(BuildContext context) => Row(children: [
-        Flexible(
-          child: Text(text.toUpperCase(),
-              maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  color: _secondary, fontSize: 10.5,
-                  letterSpacing: 1.0, fontWeight: FontWeight.w700)),
-        ),
-        const SizedBox(width: 10),
-        if (trailing != null && trailing!.isNotEmpty)
-          Flexible(
-            child: Text(trailing!.toUpperCase(),
-                maxLines: 1, overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                    color: _secondary, fontSize: 11.5,
-                    letterSpacing: 0.4, fontWeight: FontWeight.w700)),
-          ),
-      ]);
-}
 
 String _stake(double s) => s <= 0 ? 'no stakes' : '\$${_amt(s)} a golfer';
 

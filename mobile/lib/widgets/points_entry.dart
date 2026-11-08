@@ -356,6 +356,10 @@ class _Buttons extends StatelessWidget {
   }
 }
 
+/// **Points keeps its own.** `widgets/tray_label.dart` is the shared one,
+/// taken from the three identical copies Wolf, Las Vegas and Fourball grew;
+/// this one is a different packet, already shipped, and its trailing text is
+/// deliberately not uppercased.
 class _TrayLabel extends StatelessWidget {
   final String text;
   final String? trailing;

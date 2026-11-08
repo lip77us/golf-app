@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api/models.dart';
 import '../theme/halved_brand.dart';
 import 'tray_edit_header.dart';
+import 'tray_label.dart';
 
 // Wolf score entry — `~/Downloads/handoff-wolf-score-entry`.
 //
@@ -362,7 +363,7 @@ class _CallPrompt extends StatelessWidget {
       ),
     ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _TrayLabel('Hole ${card.hole} · ${card.wolfFirst}’s call',
+      TrayLabel('Hole ${card.hole} · ${card.wolfFirst}’s call',
           trailing: 'who did ${card.wolfFirst} take?'),
       const SizedBox(height: 6),
       GridView.count(
@@ -432,7 +433,7 @@ class _Sides extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _TrayLabel(
+      TrayLabel(
         over ? 'Round over' : 'Hole ${card.hole} · ${card.callLabel}',
         trailing: card.callValue,
       ),
@@ -733,37 +734,6 @@ class _Buttons extends StatelessWidget {
   }
 }
 
-class _TrayLabel extends StatelessWidget {
-  final String text;
-  final String? trailing;
-  const _TrayLabel(this.text, {this.trailing});
-
-  @override
-  Widget build(BuildContext context) => Row(children: [
-        // The LABEL yields, never the figure beside it.
-        Flexible(
-          child: Text(text.toUpperCase(),
-              maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  color: _secondary, fontSize: 10.5,
-                  letterSpacing: 1.0, fontWeight: FontWeight.w700)),
-        ),
-        const SizedBox(width: 10),
-        // **Uppercase, like the label beside it.** The design system puts
-        // `text-transform: uppercase` on the whole row, so `25¢ A POINT` and
-        // `1 PT EACH` are headings rather than values — and a row that was
-        // half-capitalised read as two different kinds of thing.
-        if (trailing != null && trailing!.isNotEmpty)
-          Flexible(
-            child: Text(trailing!.toUpperCase(),
-                maxLines: 1, overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                    color: _secondary, fontSize: 11.5,
-                    letterSpacing: 0.4, fontWeight: FontWeight.w700)),
-          ),
-      ]);
-}
 
 /// Wolf points are halves at most — a 3-player Lone splits the pot in two —
 /// so a whole number shows no decimal and 1.5 shows one.

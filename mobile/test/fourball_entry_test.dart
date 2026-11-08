@@ -351,7 +351,12 @@ void main() {
     });
 
     test('the pager hides under the tray', () {
-      expect(src, contains('if (!sixTray && !spTray && !vgTray && !fourTray)'));
+      // **Anchored on this tray's own flag inside the gate**, not on the
+      // whole literal: every new tray extends it, and a guard that breaks
+      // when a sibling is added is one that gets deleted.
+      final i = src.indexOf('if (!sixTray');
+      expect(i, greaterThan(0));
+      expect(src.substring(i, src.indexOf(')', i)), contains('!fourTray'));
     });
 
     test('the card is fetched for the hole on screen', () {

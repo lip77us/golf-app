@@ -11687,3 +11687,240 @@ class FourballMoneyRow {
         amount: (j['amount'] as num?)?.toDouble() ?? 0,
       );
 }
+
+/// Everything the Nassau score-entry screen draws for one hole
+/// (`~/Downloads/handoff-nassau-score-entry`), Claremont included.
+///
+/// **Every bet, press, point and figure is the engine's.** The press rules
+/// are the sharpest thing in the app — a press starts at 2 down on the
+/// LATEST bet in a nine (4 down on a Claremont bottom bet, which is two
+/// points a hole), runs to the end of that nine, and closes out against its
+/// own holes left — so the chips arrive composed rather than derived here.
+class NassauHoleCard {
+  final int hole;
+  final int? par;
+  final int? strokeIndex;
+  final String nine;
+  final int thru;
+
+  /// Per bet. 0 means no stakes.
+  final double stake;
+  final double pressStake;
+
+  /// One golfer a side.
+  final bool singles;
+  final bool claremont;
+
+  final List<FourballHolePlayer> players;
+  final List<FourballHoleSide> sides;
+
+  /// `team1` · `team2` · `halved`, null until the hole is scored.
+  final String? winner;
+
+  /// Why it went that way: `net 4 v 5` or `2nd ball 4 v 5`.
+  final String reason;
+
+  final int scored;
+  final bool holeComplete;
+
+  /// FRONT / BACK / OVERALL, each with its bet and any presses.
+  final List<NassauBetLine> lines;
+
+  /// The Claremont bottom game, or null.
+  final NassauBottomGame? bottom;
+
+  /// A manual press is available — **the engine's answer, not the
+  /// handoff's rule.** See the card's own note.
+  final bool canPress;
+  final String? pressNine;
+
+  final List<FourballMoneyRow> money;
+
+  /// `top +$20 · bottom +$20, for Paul + Dave` — Claremont only.
+  final String moneyNote;
+
+  final bool roundOver;
+  final int? nextHole;
+
+  const NassauHoleCard({
+    required this.hole,
+    required this.par,
+    required this.strokeIndex,
+    required this.nine,
+    required this.thru,
+    required this.stake,
+    required this.pressStake,
+    required this.singles,
+    required this.claremont,
+    required this.players,
+    required this.sides,
+    required this.winner,
+    required this.reason,
+    required this.scored,
+    required this.holeComplete,
+    required this.lines,
+    required this.bottom,
+    required this.canPress,
+    required this.pressNine,
+    required this.money,
+    required this.moneyNote,
+    required this.roundOver,
+    required this.nextHole,
+  });
+
+  factory NassauHoleCard.fromJson(Map<String, dynamic> j) => NassauHoleCard(
+        hole: (j['hole'] as num?)?.toInt() ?? 0,
+        par: (j['par'] as num?)?.toInt(),
+        strokeIndex: (j['stroke_index'] as num?)?.toInt(),
+        nine: j['nine'] as String? ?? '',
+        thru: (j['thru'] as num?)?.toInt() ?? 0,
+        stake: (j['stake'] as num?)?.toDouble() ?? 0,
+        pressStake: (j['press_stake'] as num?)?.toDouble() ?? 0,
+        singles: j['singles'] as bool? ?? false,
+        claremont: j['claremont'] as bool? ?? false,
+        players: ((j['players'] as List?) ?? const [])
+            .map((e) => FourballHolePlayer.fromJson(
+                (e as Map).cast<String, dynamic>()))
+            .toList(),
+        sides: ((j['sides'] as List?) ?? const [])
+            .map((e) =>
+                FourballHoleSide.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(),
+        winner: j['winner'] as String?,
+        reason: j['reason'] as String? ?? '',
+        scored: (j['scored'] as num?)?.toInt() ?? 0,
+        holeComplete: j['hole_complete'] as bool? ?? false,
+        lines: ((j['lines'] as List?) ?? const [])
+            .map((e) =>
+                NassauBetLine.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(),
+        bottom: j['bottom'] == null
+            ? null
+            : NassauBottomGame.fromJson(
+                (j['bottom'] as Map).cast<String, dynamic>()),
+        canPress: j['can_press'] as bool? ?? false,
+        pressNine: j['press_nine'] as String?,
+        money: ((j['money'] as List?) ?? const [])
+            .map((e) =>
+                FourballMoneyRow.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(),
+        moneyNote: j['money_note'] as String? ?? '',
+        roundOver: j['round_over'] as bool? ?? false,
+        nextHole: (j['next_hole'] as num?)?.toInt(),
+      );
+
+  bool get staked => stake > 0;
+
+  FourballHoleSide? sideOf(int playerId) {
+    for (final s in sides) {
+      if (s.playerIds.contains(playerId)) return s;
+    }
+    return null;
+  }
+}
+
+class NassauBetLine {
+  /// `front` · `back` · `overall`.
+  final String key;
+  final String label;
+  final List<NassauChip> chips;
+
+  const NassauBetLine({
+    required this.key,
+    required this.label,
+    required this.chips,
+  });
+
+  factory NassauBetLine.fromJson(Map<String, dynamic> j) => NassauBetLine(
+        key: j['key'] as String? ?? '',
+        label: j['label'] as String? ?? '',
+        chips: ((j['chips'] as List?) ?? const [])
+            .map((e) => NassauChip.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(),
+      );
+}
+
+class NassauChip {
+  /// Composed by the server: `Front 1 UP`, `P1 manual 1 UP`, `P1 starts 8`,
+  /// `3&2`, `Push`.
+  final String text;
+
+  /// `live` · `pending` (called, not started) · `final`.
+  final String state;
+
+  /// Whose colour it wears, or null when level.
+  final int? leader;
+  final bool manual;
+
+  const NassauChip({
+    required this.text,
+    required this.state,
+    required this.leader,
+    required this.manual,
+  });
+
+  factory NassauChip.fromJson(Map<String, dynamic> j) => NassauChip(
+        text: j['text'] as String? ?? '',
+        state: j['state'] as String? ?? 'live',
+        leader: (j['leader'] as num?)?.toInt(),
+        manual: j['manual'] as bool? ?? false,
+      );
+
+  bool get isPending => state == 'pending';
+  bool get isFinal => state == 'final';
+}
+
+class NassauBottomGame {
+  /// One row a side: the low ball and the high ball.
+  final List<NassauBalls> balls;
+
+  /// What the hole paid the bottom game, from side 1's point of view.
+  final int? points;
+  final List<NassauBetLine> lines;
+
+  const NassauBottomGame({
+    required this.balls,
+    required this.points,
+    required this.lines,
+  });
+
+  factory NassauBottomGame.fromJson(Map<String, dynamic> j) =>
+      NassauBottomGame(
+        balls: ((j['balls'] as List?) ?? const [])
+            .map((e) => NassauBalls.fromJson((e as Map).cast<String, dynamic>()))
+            .toList(),
+        points: (j['points'] as num?)?.toInt(),
+        lines: ((j['lines'] as List?) ?? const [])
+            .map((e) => NassauBetLine.fromJson(
+                (e as Map).cast<String, dynamic>()))
+            .toList(),
+      );
+}
+
+class NassauBalls {
+  final int side;
+  final String label;
+  final int? low;
+  final int? high;
+  final bool lowWon;
+  final bool highWon;
+
+  const NassauBalls({
+    required this.side,
+    required this.label,
+    required this.low,
+    required this.high,
+    required this.lowWon,
+    required this.highWon,
+  });
+
+  factory NassauBalls.fromJson(Map<String, dynamic> j) => NassauBalls(
+        side: (j['side'] as num?)?.toInt() ?? 0,
+        label: j['label'] as String? ?? '',
+        low: (j['low'] as num?)?.toInt(),
+        high: (j['high'] as num?)?.toInt(),
+        lowWon: j['low_won'] as bool? ?? false,
+        highWon: j['high_won'] as bool? ?? false,
+      );
+}
+

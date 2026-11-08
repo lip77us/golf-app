@@ -1416,6 +1416,25 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
                 can_press = False
                 press_available_nine = None
 
+    # ── LIVE money, split into the two Claremont games ────────────────────
+    # One writer for both: `live_total` is their sum (clamped), and the
+    # score-entry card's `top +$20 · bottom +$20` note is the two halves.
+    # Computing either separately would be a second opinion about what a
+    # live bet is worth.
+    live_top = (
+        _live(game.front9_result, front9_margin, holes_front, bet_unit)
+        + _live(game.back9_result, back9_margin, holes_back, bet_unit)
+        + _live(game.overall_result, overall_margin, len(holes_out), bet_unit)
+        + _live_press(top_presses_out))
+    live_bot = (
+        _live(game.bottom_front9_result, bot_front9_margin, holes_front,
+              bet_unit)
+        + _live(game.bottom_back9_result, bot_back9_margin, holes_back,
+                bet_unit)
+        + _live(game.bottom_overall_result, bot_overall_margin, len(holes_out),
+                bet_unit)
+        + _live_press(bot_presses_out)) if is_claremont else 0.0
+
     # ── Team display ──────────────────────────────────────────────────────
     # Cup nassau always uses strokes-off-low regardless of stored handicap_mode.
     # Report the effective mode so the client UI draws dots correctly.
@@ -1672,21 +1691,14 @@ def nassau_summary(foursome, game_type: str = None) -> dict | None:
             'total'          : top_total + bot_total,
             # The same arithmetic over LIVE standings. `total` is the money
             # already banked; this is the money on the table.
-            'live_total'     : _clamp_to_cap(
-                _live(game.front9_result, front9_margin, holes_front, bet_unit)
-                + _live(game.back9_result, back9_margin, holes_back, bet_unit)
-                + _live(game.overall_result, overall_margin, len(holes_out),
-                        bet_unit)
-                + _live_press(top_presses_out)
-                + (_live(game.bottom_front9_result, bot_front9_margin,
-                         holes_front, bet_unit)
-                   + _live(game.bottom_back9_result, bot_back9_margin,
-                           holes_back, bet_unit)
-                   + _live(game.bottom_overall_result, bot_overall_margin,
-                           len(holes_out), bet_unit)
-                   + _live_press(bot_presses_out)
-                   if is_claremont else 0.0),
-                game.loss_cap),
+            'live_total'     : _clamp_to_cap(live_top + live_bot,
+                                             game.loss_cap),
+            # The two halves of that figure, for a Claremont card that
+            # splits it. **Unclamped**, so a reader can tell when the cap
+            # has bitten: the halves no longer sum to `live_total`, which
+            # is exactly when a split stops being a split.
+            'live_top_total'   : live_top,
+            'live_bottom_total': live_bot,
             # With 2 sides the cap is a clamp of the net total to ±cap (the
             # loser pays the winner the difference, capped). `total` is from
             # team1's perspective. None when uncapped.
@@ -1934,3 +1946,346 @@ def singles_hole_card(foursome, hole: int) -> dict:
         'round_over'  : hole_complete and pos == len(order) - 1,
         'next_hole'   : order[pos + 1] if pos + 1 < len(order) else None,
     }
+
+
+# ---------------------------------------------------------------------------
+# Nassau score-entry card — `~/Downloads/handoff-nassau-score-entry`
+# ---------------------------------------------------------------------------
+
+def _bet_chip(bet, label, *, points=False, stake=None):
+    """One bet's chip: what it says, and whether it is live or over.
+
+    `decided_remaining` is the engine's and is now play-order aware, so the
+    `&M` here is the same number every other surface shows.
+    """
+    played = bet.get('holes_played') or 0
+    margin = bet.get('margin') or 0
+    rem    = bet.get('decided_remaining')
+    if bet.get('result') or rem is not None:
+        decided = abs(bet.get('decided_margin') or margin)
+        if bet.get('result') == 'halved' or (decided == 0 and rem is None):
+            text = 'Push'
+        elif rem:
+            text = f'{decided}&{rem}'
+        elif points:
+            text = f'+{decided}'
+        else:
+            text = f'{decided} UP'
+        leader = 1 if (bet.get('decided_margin') or margin) > 0 else (
+            2 if (bet.get('decided_margin') or margin) < 0 else None)
+        return {'text': text, 'state': 'final', 'leader': leader,
+                'manual': False}
+    if played == 0:
+        return None            # not started — the caller says when it does
+    if margin == 0:
+        return {'text': f'{label} E' if points else f'{label} AS',
+                'state': 'live', 'leader': None, 'manual': False}
+    sign = '+' if margin > 0 else '−'
+    body = (f'{sign}{abs(margin)}' if points else f'{abs(margin)} UP')
+    return {'text': f'{label} {body}', 'state': 'live',
+            'leader': 1 if margin > 0 else 2, 'manual': False}
+
+
+def nassau_hole_card(foursome, hole: int) -> dict:
+    """Everything the Nassau score-entry screen draws for ONE hole.
+
+    **Every bet, press and figure is the engine's.** The press rules are the
+    sharpest case in the app: a press starts at 2 down on the LATEST bet in
+    a nine (4 down on a Claremont bottom bet, which is two points a hole),
+    runs to the end of that nine, and closes out against its own holes left.
+    `calculate_nassau` has all of that and `nassau_summary` reports it, so
+    this composes CHIPS out of those numbers and derives no rule of its own.
+
+    Returns `{}` when no Nassau is set up for this foursome.
+    """
+    from services.hole_plan import play_order
+    from services.player_labels import first_names
+
+    summary = nassau_summary(foursome)
+    if not summary:
+        return {}
+    teams = summary.get('teams') or {}
+    sides_in = {1: teams.get('team1') or [], 2: teams.get('team2') or []}
+    if not sides_in[1] or not sides_in[2]:
+        return {}
+
+    order = play_order(foursome.round, foursome) or list(range(1, 19))
+    if hole not in order:
+        return {}
+    pos = order.index(hole)
+    half = len(order) // 2
+
+    members = {m.player_id: m.player
+               for m in foursome.memberships.select_related('player')
+               if not m.player.is_phantom}
+    label = first_names({p['player_id']: members[p['player_id']]
+                         for side in sides_in.values() for p in side
+                         if p['player_id'] in members})
+
+    card = summary.get('scorecard') or {}
+    by_hole = {h['hole']: h for h in (card.get('holes') or [])}
+    row = by_hole.get(hole) or {}
+    score_of = {s['player_id']: s for s in (row.get('scores') or [])}
+    ch_of = {p['player_id']: p.get('course_handicap')
+             for side in sides_in.values() for p in side}
+
+    per_hole = {h['hole']: h for h in (summary.get('holes') or [])}
+    entry    = per_hole.get(hole) or {}
+    played   = [h for h in order[:pos + 1] if h in per_hole]
+
+    rows = []
+    for n in (1, 2):
+        for p in sides_in[n]:
+            pid = p['player_id']
+            sc  = score_of.get(pid) or {}
+            gross, strokes = sc.get('gross'), (sc.get('strokes') or 0)
+            rows.append({
+                'player_id'      : pid,
+                'name'           : p.get('name') or '',
+                'short'          : p.get('short_name') or '',
+                'first'          : label.get(pid, ''),
+                'course_handicap': ch_of.get(pid),
+                'strokes'        : strokes,
+                'gross'          : gross,
+                'net'            : (gross - strokes) if gross is not None
+                                   else None,
+                'side'           : n,
+                'counted'        : False,
+            })
+
+    nets = {1: entry.get('t1_net'), 2: entry.get('t2_net')}
+    seconds = {1: entry.get('t1_2nd_net'), 2: entry.get('t2_2nd_net')}
+    winner = entry.get('winner')
+    for n in (1, 2):
+        if nets[n] is None:
+            continue
+        for r in rows:
+            if r['side'] == n and r['net'] == nets[n] and not winner is None:
+                r['counted'] = True
+
+    singles = len(sides_in[1]) == 1 and len(sides_in[2]) == 1
+    sides = []
+    for n in (1, 2):
+        ids = [p['player_id'] for p in sides_in[n]]
+        if singles:
+            pid = ids[0]
+            r = next(x for x in rows if x['player_id'] == pid)
+            strokes = r['strokes']
+            bits = []
+            if r['course_handicap'] is not None:
+                bits.append(f"CH {r['course_handicap']}")
+            bits.append('no stroke' if strokes == 0
+                        else f'{strokes} stroke' + ('' if strokes == 1 else 's'))
+            sub = ' · '.join(bits)
+        else:
+            counted = [r['first'] for r in rows
+                       if r['side'] == n and r['counted']]
+            sub = ('counts: ' + ' · '.join(counted)) if counted else ''
+        result = None
+        if winner == 'halved':
+            result = 'halved'
+        elif winner in ('team1', 'team2'):
+            result = 'won' if winner == f'team{n}' else 'lost'
+        sides.append({
+            'side'      : n,
+            'label'     : ' + '.join(label.get(p, '') for p in ids),
+            'player_ids': ids,
+            'best'      : nets[n],
+            'sub'       : sub,
+            'result'    : result,
+        })
+
+    # **Why the hole went the way it did.** `2nd ball` is not a second rule
+    # here: equal best nets with a winner can only BE the 2nd-ball tiebreak,
+    # which is the engine's own option.
+    reason = ''
+    if winner == 'halved':
+        reason = (f'net {nets[1]} v {nets[2]}'
+                  if nets[1] is not None else '')
+    elif winner in ('team1', 'team2'):
+        if nets[1] == nets[2] and seconds[1] is not None:
+            reason = f'2nd ball {seconds[1]} v {seconds[2]}'
+        else:
+            reason = f'net {nets[1]} v {nets[2]}'
+
+    scored = sum(1 for r in rows if r['gross'] is not None)
+    hole_complete = scored == len(rows)
+
+    # ── The bet lines ──────────────────────────────────────────────────────
+    # **The bottom game keeps its own presses.** `presses` is the TOP
+    # game's; Claremont's bottom presses are `bottom_presses`, and they
+    # press at 4 down rather than 2 — so reading one list for both would
+    # draw the top game's presses under the bottom game's lines.
+    press_rows = {
+        '': summary.get('presses') or [],
+        'bottom_': summary.get('bottom_presses') or [],
+    }
+    last_played = played[-1] if played else None
+
+    def _press_chips(nine, prefix='', points=False):
+        out = []
+        for i, p in enumerate((x for x in press_rows[prefix]
+                               if x.get('nine') == nine), start=1):
+            name = f'P{i} manual' if p.get('press_type') == 'manual' \
+                else f'P{i}'
+            start = p.get('start_hole')
+            # **A press that has not started yet.** It is called on one hole
+            # and runs from the NEXT, so until that hole is played it is a
+            # promise rather than a bet.
+            if start is not None and (last_played is None
+                                      or order.index(start) > order.index(
+                                          last_played)):
+                out.append({'text': f'{name} starts {start}',
+                            'state': 'pending', 'leader': None,
+                            'manual': p.get('press_type') == 'manual'})
+                continue
+            m = p.get('margin') or 0
+            rem = p.get('holes_remaining')
+            if p.get('result') or (rem is not None and rem > 0
+                                   and abs(m) > rem * (2 if points else 1)):
+                if m == 0:
+                    text = 'Push'
+                elif rem:
+                    text = f'{abs(m)}&{rem}'
+                elif points:
+                    text = f'{name} {"+" if m > 0 else "−"}{abs(m)}'
+                else:
+                    text = f'{abs(m)} UP'
+                out.append({'text': text, 'state': 'final',
+                            'leader': 1 if m > 0 else (2 if m < 0 else None),
+                            'manual': p.get('press_type') == 'manual'})
+                continue
+            if m == 0:
+                body = 'E' if points else 'AS'
+            else:
+                body = (f'{"+" if m > 0 else "−"}{abs(m)}' if points
+                        else f'{abs(m)} UP')
+            out.append({'text': f'{name} {body}', 'state': 'live',
+                        'leader': 1 if m > 0 else (2 if m < 0 else None),
+                        'manual': p.get('press_type') == 'manual'})
+        return out
+
+    def _lines(prefix, points=False):
+        out = []
+        for key, name, nine in (('front', 'Front', 'front'),
+                                ('back', 'Back', 'back'),
+                                ('overall', 'Overall', None)):
+            bet = summary.get(f'{prefix}{key}9' if key != 'overall'
+                              else f'{prefix}overall') or {}
+            chip = _bet_chip(bet, name, points=points)
+            chips = []
+            if chip is None:
+                # Not started. The back nine says WHEN, because a group
+                # on the 7th wants to know it has not been forgotten.
+                start = order[half] if key == 'back' and len(order) > half \
+                    else None
+                chips.append({
+                    'text': f'{name} starts {start}' if start
+                            else f'{name} not started',
+                    'state': 'pending', 'leader': None, 'manual': False})
+            else:
+                chips.append(chip)
+            if nine:
+                chips.extend(_press_chips(nine, prefix=prefix,
+                                          points=points))
+            out.append({'key': key, 'label': name.upper(), 'chips': chips})
+        return out
+
+    claremont = (summary.get('variant') == 'claremont')
+    top_lines = _lines('')
+    bottom = None
+    if claremont:
+        balls = []
+        delta = entry.get('bottom_delta')
+        for n in (1, 2):
+            other = 2 if n == 1 else 1
+            lo, hi = nets[n], seconds[n]
+            balls.append({
+                'side' : n,
+                'label': sides[n - 1]['label'],
+                'low'  : lo,
+                'high' : hi,
+                'low_won' : lo is not None and nets[other] is not None
+                            and lo < nets[other],
+                'high_won': hi is not None and seconds[other] is not None
+                            and hi < seconds[other],
+            })
+        bottom = {
+            'balls' : balls,
+            'points': delta,
+            'lines' : _lines('bottom_', points=True),
+        }
+
+    # ── Money ──────────────────────────────────────────────────────────────
+    pay = summary.get('payouts') or {}
+    bet_unit = float(summary.get('bet_unit') or 0)
+    # **Live, as if the match ended here** — which is what `Each · now`
+    # means, and what the board's own `live_total` already is. Once every
+    # bet has closed `live_total` IS the settled figure, so the tray does
+    # not need a second number for `Final, each`.
+    amount = float(pay.get('live_total') or 0)
+    money = []
+    if bet_unit:
+        for n in (1, 2):
+            money.append({'side': n, 'label': sides[n - 1]['label'],
+                          'amount': amount if n == 1 else -amount})
+        money.sort(key=lambda e: -e['amount'])
+    # **The note splits the figure above it, so it has to be the same
+    # figure** — the LIVE one. `top_total` / `bottom_total` are the money
+    # already banked, which mid-round reads `top +$0 · bottom +$0` under a
+    # headline of +$40. And it is drawn only when the halves still SUM to
+    # the headline: the cap clamps the total and not the parts, so once it
+    # bites a split is no longer a split.
+    money_note = ''
+    if claremont and money:
+        top = float(pay.get('live_top_total') or 0)
+        bot = float(pay.get('live_bottom_total') or 0)
+        if abs(top + bot - amount) < 0.005:
+            lead = money[0]['side']
+            sign = 1 if lead == 1 else -1
+            money_note = (
+                f'top {_signed_money(top * sign)} · '
+                f'bottom {_signed_money(bot * sign)}, for '
+                f"{sides[lead - 1]['label']}")
+
+    # **No bet pill.** The handoff puts the nine's standing on the hole
+    # card; the screen's own standing ribbon has carried it since Nassau
+    # shipped (`utils/nassau_standing.dart` → `_nassauRibbon`), at the top,
+    # visible while scores are being entered rather than only once the tray
+    # is up. A second copy is a second thing to keep in step.
+    this_nine = 'front' if pos < half else 'back'
+
+    return {
+        'hole'        : hole,
+        'par'         : row.get('par'),
+        'stroke_index': row.get('stroke_index'),
+        'yards'       : None,
+        'nine'        : 'front nine' if this_nine == 'front' else 'back nine',
+        'thru'        : pos + 1,
+        'stake'       : bet_unit,
+        'press_stake' : float(summary.get('press_unit') or 0),
+        'kind'        : 'nassau',
+        'singles'     : singles,
+        'claremont'   : claremont,
+        'players'     : rows,
+        'sides'       : sides,
+        'winner'      : winner,
+        'reason'      : reason,
+        'scored'      : scored,
+        'hole_complete': hole_complete,
+        'lines'       : top_lines,
+        'bottom'      : bottom,
+        'can_press'   : bool(summary.get('can_press')),
+        'press_nine'  : summary.get('press_available_nine'),
+        'money'       : money,
+        'money_note'  : money_note,
+        'round_over'  : hole_complete and pos == len(order) - 1,
+        'next_hole'   : order[pos + 1] if pos + 1 < len(order) else None,
+    }
+
+
+def _signed_money(v: float) -> str:
+    sign = '+' if v > 0 else ('−' if v < 0 else '')
+    a = abs(v)
+    body = f'{a:g}' if a == int(a) else f'{a:.2f}'
+    return f'{sign}${body}'

@@ -6237,7 +6237,7 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
         active.add(scored_on)
     wants = {'annandale_friday', 'sixes', 'rabbit', 'survivor',
              'low_net_round', 'points_531', 'wolf', 'vegas',
-             'fourball', 'match_18'} & active
+             'fourball', 'match_18', 'nassau'} & active
     if not wants:
         return {}
     from services.skins import skins_summary
@@ -6310,6 +6310,13 @@ def _hole_tray_summaries(foursome: Foursome, hole_number: int = 0) -> dict:
                 card = singles_hole_card(foursome, hole_number)
                 if card:
                     out['singles_hole'] = card
+            # …and Nassau's, which carries every bet, every press and the
+            # Claremont bottom game.
+            if 'nassau' in wants and hole_number:
+                from services.nassau import nassau_hole_card
+                card = nassau_hole_card(foursome, hole_number)
+                if card:
+                    out['nassau_hole'] = card
             if 'skins' in active:
                 out['skins'] = skins_summary(foursome)
     except Exception:
@@ -8083,7 +8090,20 @@ class NassauPressView(APIView):
         from services.messaging_events import emit_nassau_press_called
         emit_nassau_press_called(foursome, start_hole, game_type=game_type)
 
-        return Response(nassau_summary(foursome, game_type))
+        payload = nassau_summary(foursome, game_type)
+        # **The card comes back with the press**, because calling one changes
+        # the bet lines the tray is showing — and the button has to vanish
+        # from the same frame it was tapped in. Same bargain the save makes.
+        if game_type in (None, 'nassau'):
+            try:
+                from services.nassau import nassau_hole_card
+                card = nassau_hole_card(foursome, max(1, start_hole - 1))
+                if card:
+                    payload = {**payload, 'nassau_hole': card}
+            except Exception:    # pragma: no cover - a read-out must not
+                logger.exception(  # fail a press that was saved
+                    'nassau hole card failed for foursome %s', foursome.id)
+        return Response(payload)
 
 
 class NassauResultView(APIView):
@@ -8505,6 +8525,18 @@ class RabbitHoleCardView(APIView):
         foursome = foursome_for_scorer(request.user, pk)
         from services.rabbit import rabbit_hole_card
         return Response(rabbit_hole_card(foursome, int(hole)))
+
+
+class NassauHoleCardView(APIView):
+    """GET /api/foursomes/{id}/nassau/hole/{hole}/
+
+    One hole's score-entry card. The POST that saves a score returns the
+    same shape under `nassau_hole`.
+    """
+    def get(self, request, pk, hole):
+        foursome = foursome_for_scorer(request.user, pk)
+        from services.nassau import nassau_hole_card
+        return Response(nassau_hole_card(foursome, int(hole)))
 
 
 class SinglesHoleCardView(APIView):

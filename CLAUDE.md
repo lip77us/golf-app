@@ -10751,3 +10751,129 @@ Tests: `scoring/tests/test_singles_hole_card.py` (21),
 **Open, from the handoff:** it assumes one bet on the match. If presses or
 front/back bets are ever offered on a Singles Match, this tray needs
 Nassau's press bars — the engine already has them.
+## Nassau score entry — the chips, and the two press lists
+
+`~/Downloads/handoff-nassau-score-entry`. The keypad and dark tray carried to
+Nassau, Claremont included, on the shared `score_entry_screen` — a casual
+configured Nassau round already routed there (`/nassau` is for CUP four-ball
+only, which plays for POINTS and nets no money), so this is the
+Sixes / Stroke Play / Vegas / Fourball / Singles shape rather than Rabbit's.
+
+### `services.nassau.nassau_hole_card(foursome, hole)`
+
+**It composes chips and derives no rule.** The press rules are the sharpest
+thing in the app — a press starts at 2 down on the LATEST bet in a nine,
+runs to the end of that nine, and closes out against its own holes left —
+and `calculate_nassau` has all of it. Three states, which are the design's:
+a live bet is outlined, a press CALLED but not yet reached (it runs from the
+next hole) is dashed and italic because it is a promise rather than a bet,
+and a finished bet is filled and un-outlined because nothing more can happen
+to it.
+
+**`2nd ball` is not a second rule.** Equal best nets with a winner can only
+BE the tiebreak, which is the engine's own option, so `reason` reads it off
+the scores rather than asking how the hole was decided.
+
+### Two bugs the Claremont half found
+
+- **The bottom game kept its own presses, and the card read one list for
+  both.** `summary['presses']` is the TOP game's; `bottom_presses` is the
+  bottom's, and they press at **4 down** rather than 2 because that bet is
+  two points a hole. So the bottom lines drew the top game's presses — a bet
+  the group never made. Pinned by a hole where the top presses and the
+  bottom cannot (`test_the_bottom_game_shows_its_OWN_presses`).
+- **The money note split the wrong figure.** The headline is `live_total`
+  (what changes hands if the match ended here) and the note read
+  `top_total` / `bottom_total`, which are the money already BANKED — so
+  mid-round it said `top +$0 · bottom +$0` under a headline of `+$40`.
+  `live_top_total` / `live_bottom_total` now come off the same `_live` calls
+  that make `live_total`, as one writer, and **the note is drawn only when
+  the two halves still SUM to the headline**: the loss cap clamps the total
+  and not the parts, so once it bites a split is no longer a split.
+
+### The press button is the ENGINE's answer, and it disagrees with the handoff
+
+**Flagged rather than resolved.** The handoff offers a manual press when the
+trailing side is *1 down or level*; `nassau_summary.can_press` offers it on
+ANY non-zero margin and **never at level**. So a level match shows no button
+and a side five down still sees one. That is the shipped rule and it is
+money, so the card reports it and the client never re-derives it —
+`test_the_press_button_is_the_ENGINE_s_answer` states both halves. **Worth
+putting to Paul.**
+
+A press is posted at the next hole in the GROUP's play order, not `hole + 1`,
+which off a shotgun is a hole already played. `postNassauPress` comes back
+with the card beside the summary, for the same reason a score POST does:
+calling a press is the other thing that changes what the bets read.
+
+### What the tray took over
+
+- **`_PressesStrip`** (the compact `F9 Press 1` chips at the top) and the
+  **`_NassauHoleOutcome`** banner both go quiet once the tray is in play.
+  Each says what the tray says, shorter and higher up. Rabbit's by-hole grid
+  and Survivor's outcome line came off for the same reason.
+- **No bet pill on the hole card.** The handoff puts the nine's standing
+  there; the screen's own standing ribbon has carried it since Nassau
+  shipped (`utils/nassau_standing.dart` → `_nassauRibbon`), at the top,
+  visible while scores are being entered rather than only once the tray is
+  up. `pill` was built, had no reader, and came back out — a key nobody
+  reads is the same dead weight as a flag nobody reads.
+- **The side header is Fourball's `FourballSideHeader`**, because a Nassau
+  side IS the same object with the same best ball. 2 v 2 only: on a 1 v 1 a
+  header would be a label naming the row under it.
+- **The keypad takes its strokes from the CARD.** Nassau carries its own
+  handicap mode and allowance, so the round's stored full-net strokes told
+  the low man he gets dots he does not — the bug Sixes reported from the
+  course, in the same `_keypadStrokes` fallback.
+
+### `widgets/tray_label.dart` — the fourth copy earned a module
+
+Wolf, Las Vegas and Fourball each drew the tray's section heading
+themselves, identically, and by the fourth copy the uppercase fix had been
+made twice in one sitting. One widget now; **Points keeps its own**, a
+different packet already shipped whose trailing text is deliberately not
+uppercased.
+
+### Two things only a render showed
+
+Golden pass again (`matchesGoldenFile` + `--update-goldens`, then delete the
+shot test):
+
+- **The sides line ellipsised the orange side away entirely.** One
+  `Text.rich` truncates from the right, so `Paul + Dave  v  Sam + Mike`
+  lost the half the reader cannot name from anywhere else on that card.
+  Each name is its own `Flexible` now and yields on its own.
+- **A nine with a press wraps to two chip rows**, and a centred `FRONT`
+  floated between them instead of naming the first. Top-aligned.
+- **The Claremont tray is ~550pt** — two games, a balls grid and six bet
+  lines. It is bounded at 62% of the screen and scrolls inside, because the
+  buttons below it are the ONLY pager while the tray is up.
+
+Tests: `scoring/tests/test_nassau_hole_card.py` (35, including four fixture
+writers — `REGEN_NASSAU_FIXTURES=1` rewrites the JSON the Dart draws),
+`api/test_nassau_hole_card.py` (6) and `mobile/test/nassau_entry_test.dart`
+(26). Every guard mutation-checked.
+
+**Two sibling guards had to be re-anchored**, the seventh and eighth of that
+shape here: Vegas' and Fourball's `the pager hides under the tray` asserted
+the literal `if (!sixTray && !spTray && !vgTray && !fourTray)`, which every
+new tray extends. They anchor on their own flag inside the gate now — a
+guard that breaks when a sibling is added is one that gets deleted.
+
+**Open from the handoff:** the hole card's restyle (the bet pill, `376 yds`,
+`SI 5 · front nine`) — `HoleHeader` is shared by eleven screens, so that is
+a system-wide change rather than this packet's.
+
+### A pre-existing flake the parallel runner finally landed on
+
+`api/test_for_fun_receipt.py` read `GAME_SUMMARY['low_net_round']` directly.
+**That registry fills LAZILY** — `receipt_build._load_games()` imports the
+formatters inside a function, deliberately, to keep a circular import out of
+`api.views` — so in a worker where nothing has built a receipt yet it is
+`{}` and the read is a `KeyError`. Shard-order dependent: months of green,
+then a failure under `--parallel 4` on a different split, in a file nothing
+had touched.
+
+It surfaces as **`TypeError: cannot pickle 'traceback' object`**, which
+names nothing and no test. The real failure is forty lines up inside the
+`RemoteTraceback`; a serial re-run is the other way to see it.

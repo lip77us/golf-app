@@ -4,6 +4,7 @@ import '../api/models.dart';
 import '../theme/halved_brand.dart';
 import 'side_colour.dart';
 import 'tray_edit_header.dart';
+import 'tray_label.dart';
 
 // Las Vegas score entry — `~/Downloads/handoff-vegas-score-entry`.
 //
@@ -165,7 +166,7 @@ class _Numbers extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _TrayLabel(over ? 'Round over' : 'Hole ${card.hole} · the numbers',
+      TrayLabel(over ? 'Round over' : 'Hole ${card.hole} · the numbers',
           // The note replaces the stake, because `×2 carried` is the thing a
           // reader needs on the one hole it is true of.
           trailing: card.note.isNotEmpty ? card.note : _stake(card.stake)),
@@ -529,37 +530,6 @@ class _Buttons extends StatelessWidget {
   }
 }
 
-class _TrayLabel extends StatelessWidget {
-  final String text;
-  final String? trailing;
-  const _TrayLabel(this.text, {this.trailing});
-
-  @override
-  Widget build(BuildContext context) => Row(children: [
-        // The LABEL yields, never the figure beside it.
-        Flexible(
-          child: Text(text.toUpperCase(),
-              maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  color: _secondary, fontSize: 10.5,
-                  letterSpacing: 1.0, fontWeight: FontWeight.w700)),
-        ),
-        const SizedBox(width: 10),
-        // **Uppercase, like the label beside it.** The design system puts
-        // `text-transform: uppercase` on the whole row, so `25¢ A POINT` and
-        // `1 PT EACH` are headings rather than values — and a row that was
-        // half-capitalised read as two different kinds of thing.
-        if (trailing != null && trailing!.isNotEmpty)
-          Flexible(
-            child: Text(trailing!.toUpperCase(),
-                maxLines: 1, overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                    color: _secondary, fontSize: 11.5,
-                    letterSpacing: 0.4, fontWeight: FontWeight.w700)),
-          ),
-      ]);
-}
 
 String _stake(double s) {
   if (s <= 0) return '';

@@ -1,0 +1,147 @@
+{
+  "hole": 1,
+  "par": 4,
+  "stroke_index": 7,
+  "yards": null,
+  "nine": "front nine",
+  "thru": 1,
+  "stake": 10.0,
+  "press_stake": 0.0,
+  "kind": "nassau",
+  "singles": false,
+  "claremont": false,
+  "players": [
+    {
+      "player_id": 182216,
+      "name": "Paul Lipkin",
+      "short": "PL",
+      "first": "Paul",
+      "course_handicap": 0,
+      "strokes": 0,
+      "gross": null,
+      "net": null,
+      "side": 1,
+      "counted": false
+    },
+    {
+      "player_id": 182217,
+      "name": "Dave Kim",
+      "short": "DK",
+      "first": "Dave",
+      "course_handicap": 0,
+      "strokes": 0,
+      "gross": null,
+      "net": null,
+      "side": 1,
+      "counted": false
+    },
+    {
+      "player_id": 182218,
+      "name": "Sam Reid",
+      "short": "SR",
+      "first": "Sam",
+      "course_handicap": 0,
+      "strokes": 0,
+      "gross": null,
+      "net": null,
+      "side": 2,
+      "counted": false
+    },
+    {
+      "player_id": 182219,
+      "name": "Mike Nash",
+      "short": "MN",
+      "first": "Mike",
+      "course_handicap": 0,
+      "strokes": 0,
+      "gross": null,
+      "net": null,
+      "side": 2,
+      "counted": false
+    }
+  ],
+  "sides": [
+    {
+      "side": 1,
+      "label": "Paul + Dave",
+      "player_ids": [
+        182216,
+        182217
+      ],
+      "best": null,
+      "sub": "",
+      "result": null
+    },
+    {
+      "side": 2,
+      "label": "Sam + Mike",
+      "player_ids": [
+        182218,
+        182219
+      ],
+      "best": null,
+      "sub": "",
+      "result": null
+    }
+  ],
+  "winner": null,
+  "reason": "",
+  "scored": 0,
+  "hole_complete": false,
+  "lines": [
+    {
+      "key": "front",
+      "label": "FRONT",
+      "chips": [
+        {
+          "text": "Front not started",
+          "state": "pending",
+          "leader": null,
+          "manual": false
+        }
+      ]
+    },
+    {
+      "key": "back",
+      "label": "BACK",
+      "chips": [
+        {
+          "text": "Back starts 10",
+          "state": "pending",
+          "leader": null,
+          "manual": false
+        }
+      ]
+    },
+    {
+      "key": "overall",
+      "label": "OVERALL",
+      "chips": [
+        {
+          "text": "Overall not started",
+          "state": "pending",
+          "leader": null,
+          "manual": false
+        }
+      ]
+    }
+  ],
+  "bottom": null,
+  "can_press": false,
+  "press_nine": null,
+  "money": [
+    {
+      "side": 1,
+      "label": "Paul + Dave",
+      "amount": 0.0
+    },
+    {
+      "side": 2,
+      "label": "Sam + Mike",
+      "amount": -0.0
+    }
+  ],
+  "money_note": "",
+  "round_over": false,
+  "next_hole": 2
+}

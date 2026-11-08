@@ -1884,8 +1884,13 @@ class ApiClient {
   /// POST /api/foursomes/{id}/nassau/press/
   ///
   /// Losing team calls a manual press starting at [startHole].
-  /// The winning team always accepts.  Returns the updated summary.
-  Future<NassauSummary> postNassauPress(
+  /// The winning team always accepts.
+  ///
+  /// Comes back with the hole card alongside the summary, for the same
+  /// reason a score POST does: calling a press is the other thing that
+  /// changes what the bets read, so the tray must not have to wait on a
+  /// second request to redraw its chips.
+  Future<({NassauSummary summary, NassauHoleCard? hole})> postNassauPress(
     int foursomeId, {
     required int startHole,
     String? gameType,
@@ -1894,7 +1899,14 @@ class ApiClient {
       'start_hole': startHole,
       if (gameType != null) 'game_type': gameType,
     });
-    return NassauSummary.fromJson(data as Map<String, dynamic>);
+    final map = (data as Map).cast<String, dynamic>();
+    final card = map['nassau_hole'];
+    return (
+      summary: NassauSummary.fromJson(map),
+      hole: card is Map
+          ? NassauHoleCard.fromJson(card.cast<String, dynamic>())
+          : null,
+    );
   }
 
   // ---- Triple Nassau (round-robin of three 1v1 Nassaus) ----
@@ -2663,6 +2675,17 @@ class ApiClient {
     final map = (data as Map).cast<String, dynamic>();
     if (map.isEmpty) return null;
     return FourballHoleCard.fromJson(map);
+  }
+
+  /// GET /api/foursomes/{id}/nassau/hole/{hole}/
+  ///
+  /// Only for a hole the screen opens WITHOUT posting — a save returns the
+  /// same shape under `nassau_hole`, and so does a press.
+  Future<NassauHoleCard?> getNassauHoleCard(int foursomeId, int hole) async {
+    final data = await _get('/foursomes/$foursomeId/nassau/hole/$hole/');
+    final map = (data as Map).cast<String, dynamic>();
+    if (map.isEmpty) return null;
+    return NassauHoleCard.fromJson(map);
   }
 
   /// GET /api/foursomes/{id}/vegas/hole/{hole}/
