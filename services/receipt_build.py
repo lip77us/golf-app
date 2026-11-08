@@ -81,6 +81,31 @@ GAME_IMAGE_CAPTION: dict = {}
 #: ("$10 a match", "$2 a skin"), which composes the ``sub`` line.
 GAME_STAKE: dict = {}
 
+#: ``{game_key: callable(round_obj, player_ids) -> {player_id: (text, tone)}}``
+#: — a golfer's RESULT in that game, for a round played for fun.  A third
+#: element may carry the caption, for the reason below.
+#:
+#: There is no money on such a round, so the chip that normally holds a figure
+#: holds this instead ("1 UP", "2nd", "41 pts", "4 skins") and the caption
+#: appends the side games'.  One registry serves both, because they are the
+#: same sentence at two widths: what this golfer did in this game.
+#:
+#: ``tone`` is ``'up'``, ``'dn'`` or ``'ev'``, and the two kinds of game
+#: answer it differently ON PURPOSE.  A match game has a real direction, so
+#: it reports up or down.  A COUNTING game does not: second of four is
+#: neither a win nor a loss, and in a round played for nothing there is no
+#: loss to report — so the leader reads up and everybody else reads level,
+#: rather than colouring three golfers red for a game nobody staked.
+#:
+#: **A game whose chip is a PLACE must also state the figure it placed on**,
+#: which is what the optional third element is for.  The default caption is
+#: the round's gross and net, and the round's net is not necessarily the one
+#: the game ranked: a Stroke Play round scored GROSS put "1st" over a net of
+#: 54 while the golfer captioned "net 53" read "3rd" — both correct, and
+#: together unreadable.  A figure has to be comparable with the one beside
+#: it, so a game that ranks on its own basis says what that basis was.
+GAME_RESULT: dict = {}
+
 #: How many golfers the unformatted fallback row names before collapsing.
 #: Four is a full group, which is the common case it must not truncate.
 _FALLBACK_MOVERS = 4
@@ -104,9 +129,15 @@ def _date_label(round_obj) -> str:
     return round_obj.date.strftime('%b %-d') if round_obj.date else ''
 
 
-def _sub(round_obj, games: list) -> str:
-    """"Tilden Park GC · Nov 4 · $10 a match · $2 a skin" (§3)."""
+def _sub(round_obj, games: list, *, for_fun: bool = False) -> str:
+    """"Tilden Park GC · Nov 4 · $10 a match · $2 a skin" (§3).
+
+    For fun it ends "· for fun", which is the whole of what the stake slot has
+    to say when there is no stake.
+    """
     parts = [round_obj.course.name, _date_label(round_obj)]
+    if for_fun:
+        return ' · '.join([p for p in parts if p] + ['for fun'])
     for entry in games:
         fn = GAME_STAKE.get(entry['game'])
         label = fn(round_obj) if fn else None
@@ -120,6 +151,167 @@ def _sub(round_obj, games: list) -> str:
         # most that can be said without a formatter.
         parts.append(f'{money(round_obj.bet_unit)} stake')
     return ' · '.join(p for p in parts if p)
+
+
+def _for_fun(round_obj, per_game: list) -> bool:
+    """Is nothing in this round played for money?
+
+    Asked of :data:`GAME_STAKE` rather than of a flag, because that registry
+    is already the one place a game says what it is played for — the app's
+    own "Play for fun — no stakes" control simply sets the stake to zero, so
+    a round is for fun exactly when every stake is.
+
+    **A game with no stake formatter means NO**, not yes.  An unknown stake
+    is unknown, and claiming "for fun" over real money would print RESULTS on
+    a round somebody is owed money from.  Failing the other way costs only
+    today's behaviour: no receipt.
+
+    **Every ACTIVE game is asked, not only the ones that settled.**  Honors
+    carries its own stake and is not in `settlement.NETTABLE`, so it never
+    reaches `per_game` — asking only the settled games would call a round
+    with free Stroke Play and a staked Honors "for fun", in the `sub` line,
+    on a document headed RESULTS.
+    """
+    games = {e['game'] for e in per_game} | set(round_obj.active_games or [])
+    for game in sorted(games):
+        fn = GAME_STAKE.get(game)
+        if fn is None:
+            return False
+        try:
+            if fn(round_obj):
+                return False
+        except Exception:
+            logger.exception('receipt: %s stake failed', game)
+            return False
+    # A round-level stake counts even where no game reads it: it is a figure
+    # somebody typed, and a round carrying one is not being played for fun.
+    return not round_obj.bet_unit
+
+
+def _results(round_obj, per_game: list, order: list) -> tuple:
+    """``({pid: (text, tone)}, {pid: [clause]}, {pid: caption}, [pid])``.
+
+    The fourth is the order to draw them in: the primary game's ranking.
+
+    The chip is the PRIMARY game's result and the caption carries the side
+    games', which is §"Play for fun"'s own split: "1 UP", captioned
+    "88 · net 76 · 4 skins".
+    """
+    from services.live_activity_registry import primary_game
+
+    primary = primary_game(round_obj)
+    by_game = {}
+    for entry in per_game:
+        fn = GAME_RESULT.get(entry['game'])
+        if not fn:
+            continue
+        try:
+            rows = fn(round_obj, order) or {}
+        except Exception:
+            logger.exception('receipt: %s result failed', entry['game'])
+            continue
+        # A formatter may return (text, tone) or (text, tone, caption).
+        by_game[entry['game']] = {
+            pid: (tuple(v) + ('',))[:3] for pid, v in rows.items()}
+
+    chips = dict(by_game.get(primary) or {})
+    # Whatever the round calls primary, SOMETHING has to fill the chip: a
+    # for-fun receipt whose chips were blank would be a document with no
+    # result on it at all.  The first game that can answer does.
+    if not chips:
+        for entry in per_game:
+            if by_game.get(entry['game']):
+                primary = entry['game']
+                chips = dict(by_game[primary])
+                break
+
+    sides = {}
+    for entry in per_game:
+        if entry['game'] == primary:
+            continue
+        for pid, (text, _tone, _cap) in (by_game.get(entry['game']) or {}).items():
+            if text:
+                sides.setdefault(pid, []).append(text)
+
+    basis = {pid: cap for pid, (_t, _tn, cap) in chips.items() if cap}
+    # **The formatter's own order is the game's RANKING** — `stroke_play`
+    # iterates its ranked results, the counting games sort by count — so the
+    # chips are ordered by it rather than by the round's seating.  Sorting by
+    # tone alone left a document reading 1st, 3rd, 3rd, 2nd.
+    ranked = [pid for pid in chips if pid in order]
+    ranked += [pid for pid in order if pid not in chips]
+    return ({pid: (t, tn) for pid, (t, tn, _c) in chips.items()},
+            sides, basis, ranked)
+
+
+def _is_money(value) -> bool:
+    return '$' in str(value)
+
+
+def _no_money(sections: list) -> list:
+    """Every row naming money dropped, and any section it leaves empty.
+
+    **No figure on a for-fun document is money.**  Several formatters state
+    one — Banker gives every golfer a banked/betting pair, the group pools say
+    "$12 each", and every `GAME_DETAIL` section carries a column of it — and
+    on a round played for nothing those all read "$0".  That is precisely the
+    "four +$0 lines say nothing" failure the refusal in `build_round_receipt`
+    exists to prevent, arriving by the other door and on the one surface
+    golfers actually read.
+
+    Rows rather than whole sections, so a section that is not about money
+    survives whole: Sixes' matches ("2 · holes 5–10 · Halved") say the same
+    thing whether or not anybody staked them.
+    """
+    out = []
+    for sec in sections:
+        rows = [r for r in sec.get('rows') or [] if not _is_money(r[1])]
+        if rows:
+            out.append({**sec, 'rows': rows})
+    return out
+
+
+def _result_rows(round_obj, per_game: list, names: dict, order: list) -> list:
+    """The games section for a round played for fun.
+
+    `_summary_rows`' own formatters describe where the MONEY went.  Several
+    say nothing at all without a pot — Stroke Play's returns no row by
+    design — and several state a figure, which on this document would be a
+    zero.  Either way the game states its RESULT instead; a formatter whose
+    row is about something else (Nassau's margin, Sixes' "Settled 3 of 3")
+    is kept as it is.
+    """
+    rows = []
+    for entry in per_game:
+        fn = GAME_SUMMARY.get(entry['game'])
+        made = []
+        if fn:
+            try:
+                made = fn(round_obj, entry, names) or []
+            except Exception:
+                logger.exception('receipt: %s summary failed', entry['game'])
+        # The game states its RESULT instead — see `_no_money`, which is the
+        # same rule the long form is held to.
+        if any(_is_money(value) for _label, value in made):
+            made = []
+        if made:
+            rows.extend(made)
+            continue
+        fn = GAME_RESULT.get(entry['game'])
+        if not fn:
+            continue
+        try:
+            got = fn(round_obj, order) or {}
+        except Exception:
+            logger.exception('receipt: %s result failed', entry['game'])
+            continue
+        # The formatter's order, same as the chips — see `_results`.
+        ranked = [pid for pid in got if pid in order and (got[pid] or ('',))[0]]
+        if not ranked:
+            continue
+        rows.append([entry['label'], ' · '.join(
+            f'{_short(names, pid)} {got[pid][0]}' for pid in ranked)])
+    return rows
 
 
 def _summary_rows(round_obj, per_game: list, names: dict) -> list:
@@ -252,8 +444,19 @@ def build_round_receipt(round_obj, *, scorer=None):
                 if pid in nets:
                     nets[pid] += _cents(net)
 
-        if not any(nets.values()):
-            return None                       # everyone square — no receipt
+        # **A round played for fun still gets a document, and that is the
+        # point of it.**  Its nets are all zero, so the money rule below would
+        # refuse one — but §"Play for fun" turns the receipt into RESULTS and
+        # says why it must still be built: "the results link is the invite".
+        # Before this, finishing such a round produced no Round over, no link
+        # and no text at all.
+        for_fun = _for_fun(round_obj, per_game)
+
+        if not for_fun and not any(nets.values()):
+            # Everyone square at a REAL stake is a different thing: the money
+            # was played for and nobody won it, and four "+$0" lines say
+            # nothing.  That refusal stands.
+            return None
 
         drift = sum(nets.values())
         if drift:
@@ -279,50 +482,98 @@ def build_round_receipt(round_obj, *, scorer=None):
 
         transfers = for_display(settle(nets, order=order))
         captions = _captions(round_obj, order)
-        for entry in per_game:
-            fn = GAME_CAPTION.get(entry['game'])
-            if not fn:
-                continue
-            try:
-                captions.update({k: v for k, v in
-                                 (fn(round_obj, order) or {}).items() if v})
-            except Exception:
-                logger.exception('receipt: %s caption failed', entry['game'])
-        image_captions = {}
-        for entry in per_game:
-            fn = GAME_IMAGE_CAPTION.get(entry['game'])
-            if not fn:
-                continue
-            try:
-                image_captions.update({k: v for k, v in
-                                       (fn(round_obj, order) or {}).items() if v})
-            except Exception:
-                logger.exception('receipt: %s image caption failed',
-                                 entry['game'])
+        chips = ranked = None
 
-        summary_rows = _summary_rows(round_obj, per_game, names)
+        if for_fun:
+            chips, sides, basis, ranked = _results(round_obj, per_game, order)
+            summary_rows = _result_rows(round_obj, per_game, names, order)
+            # The default gross-and-net, overridden where the primary game
+            # ranks on its own basis — see GAME_RESULT on why the two have to
+            # be comparable — then the side games appended.
+            #
+            # A game's own `GAME_CAPTION` is deliberately NOT applied: those
+            # describe the money ("banked 4 · bet +$290"), and Stroke Play's
+            # captions a PLACE, which the chip beside it already carries.
+            captions.update(basis)
+            for pid, extra in sides.items():
+                base = captions.get(pid, '')
+                captions[pid] = ' · '.join([base] + extra) if base \
+                    else ' · '.join(extra)
+            # The preview takes the same caption: its shorter override is a
+            # money-side sentence, and there is no money here.
+            image_captions = {}
+        else:
+            summary_rows = _summary_rows(round_obj, per_game, names)
+            for entry in per_game:
+                fn = GAME_CAPTION.get(entry['game'])
+                if not fn:
+                    continue
+                try:
+                    captions.update({k: v for k, v in
+                                     (fn(round_obj, order) or {}).items() if v})
+                except Exception:
+                    logger.exception('receipt: %s caption failed',
+                                     entry['game'])
+            image_captions = {}
+            for entry in per_game:
+                fn = GAME_IMAGE_CAPTION.get(entry['game'])
+                if not fn:
+                    continue
+                try:
+                    image_captions.update(
+                        {k: v for k, v in
+                         (fn(round_obj, order) or {}).items() if v})
+                except Exception:
+                    logger.exception('receipt: %s image caption failed',
+                                     entry['game'])
+
+        def _chip(pid):
+            row = {'golferId': pid,
+                   'name': names[pid].get('short_name') or names[pid]['name'],
+                   'caption': captions.get(pid, ''),
+                   'imageCaption': image_captions.get(pid, '')}
+            if for_fun:
+                text, tone = chips.get(pid, ('', 'ev'))
+                row['net'] = text
+                row['tone'] = tone
+            else:
+                row['net'] = nets[pid]
+            return row
+
+        if for_fun:
+            # Every net is zero, so there is nothing to rank by here: the
+            # primary game's own ranking is the order, with anyone it does not
+            # place keeping the round's.  Deterministic, which a frozen
+            # document has to be.
+            chip_order = ranked
+        else:
+            chip_order = sorted(order, key=lambda p: -nets[p])
+
         payload = {
             'title': ' + '.join(e['label'] for e in per_game),
-            'sub': _sub(round_obj, per_game),
-            'nets': [
-                {'golferId': pid,
-                 'name': names[pid].get('short_name') or names[pid]['name'],
-                 'net': nets[pid],
-                 'caption': captions.get(pid, ''),
-                 'imageCaption': image_captions.get(pid, '')}
-                for pid in sorted(order, key=lambda p: -nets[p])
-            ],
-            'pays': [{'from': _short(names, t.frm), 'to': _short(names, t.to),
-                      'amount': t.amount} for t in transfers],
-            'games': [{'label': 'The games', 'rows': summary_rows}],
+            'sub': _sub(round_obj, per_game, for_fun=for_fun),
+            'nets': [_chip(pid) for pid in chip_order],
+            # §"Play for fun": omitted, so the renderers drop the whole block
+            # rather than heading an empty one.
+            'pays': [] if for_fun else [
+                {'from': _short(names, t.frm), 'to': _short(names, t.to),
+                 'amount': t.amount} for t in transfers],
+            # Empty means no section, not a heading over nothing — the same
+            # rule `_ssec` applies to every detail section.
+            'games': ([{'label': 'The games', 'rows': summary_rows}]
+                      if summary_rows else []),
             'scorer': _scorer_block(scorer),
             'settledAt': timezone.now().isoformat(),
         }
+        if for_fun:
+            payload['forFun'] = True
         # §3: `webGames` REPLACES `games` on the web, so it carries the short
         # form too — not just the extra sections. Set only when there is
         # something extra to say; the renderer already falls back to `games`,
         # and a key identical to it is noise in a stored payload.
         detail = _detail_sections(round_obj, per_game, names)
+        if for_fun:
+            detail = _no_money(detail)
         if detail:
             payload['webGames'] = (
                 [{'label': 'The games', 'rows': summary_rows}] + detail)
@@ -353,7 +604,7 @@ def build_round_receipt(round_obj, *, scorer=None):
 #: The parts of a payload that ARE the document.  Everything else —
 #: `settledAt`, `code`, who pressed the button, who it is being sent to — is
 #: about this particular settling rather than about the money.
-_MATERIAL = ('title', 'sub', 'nets', 'pays', 'games', 'webGames')
+_MATERIAL = ('title', 'sub', 'nets', 'pays', 'games', 'webGames', 'forFun')
 
 
 def _same_money(a: dict, b: dict) -> bool:
@@ -467,6 +718,12 @@ def notify_receipt(receipt) -> int:
         by_id = {n['golferId']: n for n in payload.get('nets') or []}
         course = (receipt.round.course.name if receipt.round_id else '')
         url = receipt_url(receipt.code)
+        for_fun = bool(payload.get('forFun'))
+        # §"Play for fun": one line for everyone, and NO win-or-loss wording.
+        # Nobody won anything, so there is no figure to name — and a push
+        # saying somebody did would be about a round that was not played for
+        # it.  The title changes with it: nothing was settled.
+        title = 'Round over' if for_fun else 'Settled'
 
         sent = 0
         for player in Player.objects.filter(id__in=push_ids).select_related('user'):
@@ -479,16 +736,20 @@ def notify_receipt(receipt) -> int:
             if not created:
                 continue
             net = (by_id.get(player.id) or {}).get('net', 0) or 0
-            # §1: won -> name the figure; lost or level -> name the place.
-            # Telling a man who lost $18 that he "won −$18" is the obvious
-            # trap, and naming the course is what makes the other push useful
-            # to somebody who played two rounds this week.
-            body = (f'You won {money(net / 100)} · View receipt' if net > 0
-                    else f'{course} · View receipt')
+            if for_fun:
+                body = f'{course} · View results'
+            else:
+                # §1: won -> name the figure; lost or level -> name the place.
+                # Telling a man who lost $18 that he "won −$18" is the obvious
+                # trap, and naming the course is what makes the other push
+                # useful to somebody who played two rounds this week.
+                body = (f'You won {money(net / 100)} · View receipt'
+                        if isinstance(net, (int, float)) and net > 0
+                        else f'{course} · View receipt')
             tokens = tokens_for_users([user], 'receipt')
             if not tokens:
                 continue
-            dead = send_push(tokens, 'Settled', body, {
+            dead = send_push(tokens, title, body, {
                 'type': 'receipt', 'code': receipt.code, 'url': url,
                 'round_id': str(receipt.round_id or ''),
             })

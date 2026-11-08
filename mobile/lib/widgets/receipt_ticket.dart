@@ -47,7 +47,7 @@ class ReceiptTicketCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _Header(),
+          _Header(label: receiptLabel(receipt)),
           const SizedBox(height: 12),
           Text(receipt.title,
               style: const TextStyle(
@@ -65,10 +65,15 @@ class ReceiptTicketCard extends StatelessWidget {
             const SizedBox(height: 12),
             _Chips(nets: receipt.nets),
           ],
-          _Perforation(behind: behind),
-          _SectionLabel(receipt.paysLabel),
-          const SizedBox(height: 9),
-          for (final t in receipt.pays) _TransferRow(transfer: t),
+          // Nothing to settle, no block — rather than a heading over
+          // nothing. Keyed on the transfers, not the flag: an empty list is
+          // empty whatever produced it.
+          if (receipt.pays.isNotEmpty) ...[
+            _Perforation(behind: behind),
+            _SectionLabel(receipt.paysLabel),
+            const SizedBox(height: 9),
+            for (final t in receipt.pays) _TransferRow(transfer: t),
+          ],
           for (final section in receipt.games) ...[
             _Perforation(behind: behind),
             _SectionLabel(section.label),
@@ -114,22 +119,23 @@ String receiptMoney(int cents, {bool signed = false}) {
 }
 
 class _Header extends StatelessWidget {
-  const _Header();
+  final String label;
+  const _Header({this.label = 'RECEIPT'});
 
   @override
-  Widget build(BuildContext context) => const Row(
+  Widget build(BuildContext context) => Row(
         children: [
-          HalvedMark(size: 18, tooltip: 'Halved'),
-          SizedBox(width: 8),
-          Text('HALVED',
+          const HalvedMark(size: 18, tooltip: 'Halved'),
+          const SizedBox(width: 8),
+          const Text('HALVED',
               style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 2.2,
                   color: Halved.cream)),
-          Spacer(),
-          Text('RECEIPT',
-              style: TextStyle(
+          const Spacer(),
+          Text(label,
+              style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 2.0,
@@ -137,6 +143,12 @@ class _Header extends StatelessWidget {
         ],
       );
 }
+
+/// The word in the ticket's top-right corner.
+///
+/// A round with no stake has no receipt to give — it has a RESULT.
+String receiptLabel(ReceiptTicket receipt) =>
+    receipt.forFun ? 'RESULTS' : 'RECEIPT';
 
 class _Chips extends StatelessWidget {
   final List<ReceiptChip> nets;
@@ -164,8 +176,10 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final up = chip.net > 0;
-    final down = chip.net < 0;
+    // A result, not a figure: the GAME said which way it goes, and no
+    // amount of reading the text could — "2nd" is neither a win nor a loss.
+    final up = chip.tone != null ? chip.tone == 'up' : chip.net > 0;
+    final down = chip.tone != null ? chip.tone == 'dn' : chip.net < 0;
     final fill = up
         ? Halved.brightMint.withValues(alpha: 0.12)
         : down
@@ -218,7 +232,8 @@ class _Chip extends StatelessWidget {
             child: FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerRight,
-              child: Text(receiptMoney(chip.net, signed: true),
+              child: Text(
+                  chip.result ?? receiptMoney(chip.net, signed: true),
                   maxLines: 1,
                   style: TextStyle(
                       fontSize: 15,

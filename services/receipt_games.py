@@ -22,6 +22,7 @@ from __future__ import annotations
 from services.receipt_build import (
     GAME_CAPTION,
     GAME_DETAIL,
+    GAME_RESULT,
     GAME_STAKE,
     GAME_SUMMARY,
 )
@@ -1125,6 +1126,12 @@ def low_net_round_detail(round_obj, entry, names):
         rows.append(['In', f'{len(entrants)} × {money(fee)} = '
                            f'{money(s.get("purse") or fee * len(entrants))}'])
     for pay in (s.get('payouts') or []):
+        # **A place paying nothing is not a prize.**  A configured table can
+        # carry a zero — a round played for fun keeps its shape and sets the
+        # amounts to nothing — and "1st  $0" under the heading "the pool"
+        # describes a pool that does not exist.
+        if not float(pay.get('amount') or 0):
+            continue
         rows.append([_place(pay.get('place')), money(pay.get('amount') or 0)])
     excluded = [r for r in (s.get('results') or []) if r.get('excluded')]
     if excluded:
@@ -1261,3 +1268,187 @@ def banker_detail(round_obj, entry, names):
 
 GAME_DETAIL['sequoya_threes'] = sequoya_detail
 GAME_DETAIL['banker'] = banker_detail
+
+
+# ---------------------------------------------------------------------------
+# Play for fun — a golfer's RESULT, where a staked round holds his money
+# ---------------------------------------------------------------------------
+#
+# Registered against :data:`GAME_RESULT`.  One entry serves two slots: the
+# chip when this is the primary game, and a clause in the caption when it is a
+# side game ("88 · net 76 · 4 skins").  They are the same sentence at two
+# widths, so they are written once.
+#
+# **Every figure is read from the engine's own summary**, exactly as the
+# money rows above are.  A result that disagreed with the board would be the
+# one thing a golfer checks it against.
+#
+# Not registered: Sixes and Stableford.  Sixes needs each segment's winning
+# SIDE rather than its result sentence, and Stableford has no receipt
+# formatter at all — both fall through to the rule in `_results`, which is
+# today's behaviour rather than a guessed figure.
+
+
+def _count_result(counts: dict, player_ids, noun: str, plural: str = '') -> dict:
+    """"4 skins" / "1 skin" / "no skins", with the leader marked up.
+
+    A golfer who won none has not LOST anything on a round played for
+    nothing, so he reads level rather than down — the reasoning in
+    :data:`GAME_RESULT`'s own note.
+    """
+    plural = plural or f'{noun}s'
+    best = max([v for v in counts.values()] or [0])
+    out = {}
+    # Most first, so the dict's own order IS the ranking — which is what the
+    # chips and the games row are ordered by.
+    for pid in sorted(player_ids, key=lambda p: -(counts.get(p) or 0)):
+        n = counts.get(pid) or 0
+        if n == 0:
+            text = f'no {plural}'
+        else:
+            text = f'{n:g} {noun if n == 1 else plural}'
+        out[pid] = (text, 'up' if n and n == best else 'ev')
+    return out
+
+
+def nassau_results(round_obj, player_ids) -> dict:
+    """A golfer's own side's overall match result: "1 UP", "1 DN" or "AS".
+
+    Signed from HIS side, not from team 1 — the chip sits beside his name, so
+    a figure he has to mentally reverse is worse than no figure.  The same
+    trap `_nine` carries a comment about.
+    """
+    from services.nassau import nassau_summary
+    out = {}
+    for fs in _foursomes(round_obj):
+        s = nassau_summary(fs) or {}
+        teams = s.get('teams') or {}
+        overall = s.get('overall') or {}
+        if not overall:
+            continue
+        for which, sign in (('team1', 1), ('team2', -1)):
+            text = _nine(overall, sign)
+            if not text:
+                continue
+            tone = 'ev' if text == 'AS' else ('up' if 'UP' in text else 'dn')
+            for pl in teams.get(which) or []:
+                pid = pl.get('player_id')
+                if pid in player_ids:
+                    out[pid] = (text, tone)
+    return out
+
+
+def stroke_play_results(round_obj, player_ids) -> dict:
+    """His place — "1st", "2nd" — captioned with the total it placed on.
+
+    Read from the SAME ranking the board shows, `prize_rank` first, as
+    `stroke_play_captions` does.
+
+    **The caption is this game's own basis, not the round's net**, and that is
+    the whole reason `GAME_RESULT` carries one.  A Gross round ranks on gross
+    while the default caption sums `HoleScore.net_score` — the round's full
+    allowance — so a real round put "1st" over "net 54" and "3rd" over
+    "net 53": both figures right, the pair of them unreadable.  This game's
+    own caption formatter already promises "the total it settles on, in the
+    mode it settles in" and declines when there is no pot, which is exactly
+    the case a for-fun round is.
+
+    **"thru N" appears only for a golfer who played fewer holes than the
+    field.**  The ranking is on net-to-par, so thirteen holes and eighteen
+    compare fairly and legitimately tie — and without the holes said out loud
+    a receipt reading "1st on 75" beside "1st on 94" looks like a fault.
+    """
+    from services.low_net_round import low_net_round_summary
+    out = {}
+    s = low_net_round_summary(round_obj) or {}
+    rows = s.get('results') or []
+    gross = (s.get('handicap_mode') or '') == 'gross'
+    full = max([(r.get('holes_played') or 0) for r in rows] or [0])
+    for r in rows:
+        pid = r.get('player_id')
+        if pid not in player_ids:
+            continue
+        rank = r.get('prize_rank') or r.get('rank')
+        place = _place(rank)
+        if not place:
+            continue
+        tot = r.get('total_net')
+        caption = ''
+        if tot is not None:
+            caption = f'{tot} gross' if gross else f'net {tot}'
+            played = r.get('holes_played') or 0
+            if played and full and played < full:
+                caption += f' · thru {played}'
+        out[pid] = (place, 'up' if int(rank) == 1 else 'ev', caption)
+    return out
+
+
+def points_results(round_obj, player_ids) -> dict:
+    """"41 pts" — the figure the game is scored in."""
+    from services.points_531 import points_531_summary
+    out = {}
+    for fs in _foursomes(round_obj):
+        vs = _points_vs_target(points_531_summary(fs) or {})
+        if not vs:
+            continue
+        best = max(pts for pts, _v in vs.values())
+        for pid, (pts, _v) in vs.items():
+            if pid in player_ids:
+                out[pid] = (f'{pts:g} pts', 'up' if pts == best else 'ev')
+    return out
+
+
+def wolf_results(round_obj, player_ids) -> dict:
+    from services.wolf import wolf_summary
+    out = {}
+    for fs in _foursomes(round_obj):
+        rows = (wolf_summary(fs) or {}).get('players') or []
+        pts = {p['player_id']: (p.get('points') or 0) for p in rows}
+        if not pts:
+            continue
+        best = max(pts.values())
+        for pid, v in pts.items():
+            if pid in player_ids:
+                out[pid] = (f'{v:g} pts', 'up' if v == best else 'ev')
+    return out
+
+
+def skins_results(round_obj, player_ids) -> dict:
+    """``total_skins``, for the reason `skins_summary_rows` gives: junk is a
+    share of the same pot, so the total is what accounts for the round."""
+    from services.skins import skins_summary
+    counts = {}
+    for fs in _foursomes(round_obj):
+        for p in (skins_summary(fs) or {}).get('players') or []:
+            counts[p['player_id']] = p.get('total_skins') or 0
+    return _count_result(counts, player_ids, 'skin')
+
+
+def rabbit_results(round_obj, player_ids) -> dict:
+    from services.rabbit import rabbit_summary
+    counts = {}
+    for fs in _foursomes(round_obj):
+        for sg in (rabbit_summary(fs) or {}).get('segments') or []:
+            if sg.get('complete') and sg.get('holder_id'):
+                counts[sg['holder_id']] = counts.get(sg['holder_id'], 0) + 1
+    return _count_result(counts, player_ids, 'rabbit')
+
+
+def survivor_results(round_obj, player_ids) -> dict:
+    from services.survivor import survivor_summary
+    counts = {}
+    for fs in _foursomes(round_obj):
+        for lg in (survivor_summary(fs) or {}).get('survivors') or []:
+            winner = lg.get('winner_id')
+            if lg.get('complete') and winner and lg.get('outcome') != 'no_blood':
+                counts[winner] = counts.get(winner, 0) + 1
+    return _count_result(counts, player_ids, 'Survivor')
+
+
+GAME_RESULT['nassau'] = nassau_results
+GAME_RESULT['low_net_round'] = stroke_play_results
+GAME_RESULT['points_531'] = points_results
+GAME_RESULT['wolf'] = wolf_results
+GAME_RESULT['skins'] = skins_results
+GAME_RESULT['rabbit'] = rabbit_results
+GAME_RESULT['survivor'] = survivor_results

@@ -29,6 +29,7 @@ import io
 from PIL import Image, ImageDraw
 
 from services.share_card import _draw_mark, _font, _tracked, _DISPLAY, _TEXT
+from services.receipt_ticket import label_for
 from services.settlement_receipt import money
 
 S = 3                                  # §1: designed at 360x450, render at 3x
@@ -145,8 +146,11 @@ def render_receipt_card(receipt: dict) -> bytes:
     h_title = 10 * S + int(f_title.size * 1.1) + 4 * S + int(f_sub.size * 1.3)
     chip_rows = (len(nets) + 1) // 2
     h_chips = (10 * S + chip_rows * (ch + gap) - gap) if nets else 0
-    h_pays  = (10 * S + 10 * S + int(f_k.size * 1.1) + 7 * S
-               + len(pays) * (int(f_pay.size * 1.15) + 7 * S))
+    # §"Play for fun": no transfers, no block — and so no height.  Leaving
+    # it in reserved space for a heading that is never drawn, which on a
+    # ticket sized to hug its content is a slab of dead ink.
+    h_pays  = ((10 * S + 10 * S + int(f_k.size * 1.1) + 7 * S
+                + len(pays) * (int(f_pay.size * 1.15) + 7 * S)) if pays else 0)
     h_games = ((3 * S + 10 * S + int(f_k.size * 1.1) + 7 * S
                 + len((sections[0].get('rows') or [])[:MAX_ROWS])
                 * (int(f_val.size * 1.15) + 5 * S)) if sections else 0)
@@ -161,8 +165,9 @@ def render_receipt_card(receipt: dict) -> bytes:
     _tracked(d, (x + 17 * S, y + 1 * S), 'HALVED',
              _font(_DISPLAY, 11 * S, 'SemiBold'), TICKET_TEXT, 1.6 * S)
     f_rec = _font(_DISPLAY, 9 * S, 'SemiBold')
-    w_rec = sum(d.textlength(c, font=f_rec) + 1.6 * S for c in 'RECEIPT')
-    _tracked(d, (right - w_rec, y + 2 * S), 'RECEIPT', f_rec, MUTED_DEEP, 1.6 * S)
+    word = label_for(receipt)
+    w_rec = sum(d.textlength(c, font=f_rec) + 1.6 * S for c in word)
+    _tracked(d, (right - w_rec, y + 2 * S), word, f_rec, MUTED_DEEP, 1.6 * S)
     y += 13 * S
 
     # ── Title and sub ─────────────────────────────────────────────────────
@@ -181,15 +186,22 @@ def render_receipt_card(receipt: dict) -> bytes:
         cx = x + (i % 2) * (cw + gap)
         cy = y + (i // 2) * (ch + gap)
         value = net.get('net', 0)
-        up = isinstance(value, str) or value > 0
+        tone = net.get('tone')
+        if tone:
+            # A result: the GAME said which way it goes (§"Play for fun").
+            up, down = tone == 'up', tone == 'dn'
+        elif isinstance(value, str):
+            up, down = True, False
+        else:
+            up, down = value > 0, value < 0
         fill, line = ((UP_FILL, UP_LINE) if up else
-                      (DOWN_FILL, DOWN_LINE) if value < 0 else
+                      (DOWN_FILL, DOWN_LINE) if down else
                       (EVEN_FILL, EVEN_LINE))
         d.rounded_rectangle([cx, cy, cx + cw, cy + ch], radius=12 * S,
                             fill=fill, outline=line, width=max(1, S // 2))
         amt = _amount(value, sign=True)
         amt_w = d.textlength(amt, font=f_amt)
-        colour = MINT if up else (CORAL if value < 0 else TICKET_TEXT)
+        colour = MINT if up else (CORAL if down else TICKET_TEXT)
         d.text((cx + cw - 10 * S - amt_w, cy + ch / 2 - f_amt.size * 0.62),
                amt, font=f_amt, fill=colour)
         name_w = cw - 20 * S - amt_w - 6 * S
@@ -205,13 +217,14 @@ def render_receipt_card(receipt: dict) -> bytes:
         y += ((len(nets) + 1) // 2) * (ch + gap) - gap
 
     # ── Pays ──────────────────────────────────────────────────────────────
-    y += 10 * S
-    _perforation(d, tx0, tx1, y, GROUND)
-    y += 10 * S
-    label = str(receipt.get('paysLabel') or 'Simplest way to settle').upper()
-    _tracked(d, (x, y), _ellipsise(d, label, f_k, right - x), f_k,
-             MUTED_DEEP, 1.5 * S)
-    y += int(f_k.size * 1.1) + 7 * S
+    if pays:
+        y += 10 * S
+        _perforation(d, tx0, tx1, y, GROUND)
+        y += 10 * S
+        label = str(receipt.get('paysLabel') or 'Simplest way to settle').upper()
+        _tracked(d, (x, y), _ellipsise(d, label, f_k, right - x), f_k,
+                 MUTED_DEEP, 1.5 * S)
+        y += int(f_k.size * 1.1) + 7 * S
 
     for row in pays:
         amt = _amount(row.get('amount', 0))

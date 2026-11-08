@@ -113,6 +113,18 @@ ARROW_SVG = (
 
 DEFAULT_PAYS_LABEL = 'Simplest way to settle'
 
+#: §"Play for fun": the word in the ticket's top-right corner, and the CTA
+#: under the web receipt.  A round with no stake has no receipt to give — it
+#: has a RESULT — and the invitation changes with it: there is nothing to
+#: settle, so what it offers is the settling next time.
+FUN_LABEL, MONEY_LABEL = 'RESULTS', 'RECEIPT'
+CTA_FUN = ('Halved keeps the score and plays the games as you go. '
+           'Add a stake next time and it settles up too.')
+
+
+def label_for(receipt: dict) -> str:
+    return FUN_LABEL if receipt.get('forFun') else MONEY_LABEL
+
 #: §1's caps for the preview: four chips, three transfer lines, and
 #: the first section's first two rows.
 MAX_IMAGE_CHIPS, MAX_IMAGE_PAYS, MAX_IMAGE_ROWS = 4, 3, 2
@@ -125,10 +137,22 @@ def _amount(value, *, sign: bool = False) -> str:
     return money((value or 0) / 100, sign=sign)
 
 
+#: §"Play for fun" tone -> the chip's class.  "up" is the unclassed default,
+#: which is what the money path's positive figure already uses.
+_TONE_CLASS = {'up': '', 'dn': ' class="dn"', 'ev': ' class="ev"'}
+
+
 def _chip(net: dict, *, image: bool) -> str:
     value = net.get('net', 0)
-    cls = '' if (isinstance(value, str) or value > 0) \
-        else (' class="dn"' if value < 0 else ' class="ev"')
+    tone = net.get('tone')
+    if tone:
+        # A result, not a figure: the GAME said which way it goes, and no
+        # amount of reading the text could.
+        cls = _TONE_CLASS.get(tone, ' class="ev"')
+    elif isinstance(value, str):
+        cls = ' class="ev"'
+    else:
+        cls = '' if value > 0 else (' class="dn"' if value < 0 else ' class="ev"')
     caption = net.get('imageCaption' if image else 'caption') or (
         '' if image else net.get('caption', ''))
     small = f'<small>{escape(str(caption))}</small>' if caption else ''
@@ -182,16 +206,25 @@ def ticket_html(receipt: dict, mode: str = 'web') -> str:
         # short form, so a game that never wrote a long form still renders.
         sections = receipt.get('webGames') or receipt.get('games') or []
 
+    # §"Play for fun": the whole settle block goes, rather than a heading
+    # over nothing.  Keyed on the transfers and not on the flag, because an
+    # empty one is empty whatever produced it.
+    settle = ''
+    if pays:
+        settle = (
+            '<div class="hr-pf"></div>'
+            f'<div class="hr-k">'
+            f'{escape(str(receipt.get("paysLabel") or DEFAULT_PAYS_LABEL))}</div>'
+            f'<div class="hr-tf">{"".join(_transfer(p) for p in pays)}</div>')
+
     return (
         '<div class="hr-tk">'
-        f'<div class="hr-hd"><span>{LOGO_SVG}HALVED</span><em>RECEIPT</em></div>'
+        f'<div class="hr-hd"><span>{LOGO_SVG}HALVED</span>'
+        f'<em>{escape(label_for(receipt))}</em></div>'
         f'<h5>{escape(str(receipt.get("title", "")))}</h5>'
         f'<div class="hr-sb">{escape(str(receipt.get("sub", "")))}</div>'
         f'<div class="hr-nc">{"".join(_chip(n, image=image) for n in nets)}</div>'
-        '<div class="hr-pf"></div>'
-        f'<div class="hr-k">'
-        f'{escape(str(receipt.get("paysLabel") or DEFAULT_PAYS_LABEL))}</div>'
-        f'<div class="hr-tf">{"".join(_transfer(p) for p in pays)}</div>'
+        f'{settle}'
         f'{"".join(_section(s) for s in sections)}'
         '</div>'
     )
@@ -298,7 +331,7 @@ def receipt_page_html(receipt: dict, *, page_url: str = '',
     {link}
     <section class="hr-cta">
       <h4>{CTA_HEAD}</h4>
-      <p>{CTA_BODY}</p>
+      <p>{CTA_FUN if receipt.get('forFun') else CTA_BODY}</p>
       <a class="hr-btn" href="{escape(download_url)}">Get Halved</a>
     </section>
     <p class="hr-stamp">{escape(mark)}</p>

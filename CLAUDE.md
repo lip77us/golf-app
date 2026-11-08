@@ -10138,3 +10138,148 @@ per-match detail needs the sentence the score-entry band already writes.
 
 Tests: `AnEarlyFinishHandsTheNextHoleToTheNextMatchTests` (7), including the
 shotgun case where the match's range wraps the turn.
+
+## Play for fun — the receipt becomes RESULTS
+
+`~/Downloads/design_handoff_settle_up 2`, a revision of the settle-up packet
+whose one new section is this. **"Play for fun — no stakes" already exists**
+as a control (`widgets/stake_field.dart`, and six setup screens carry their
+own copy); what it does is set the stake to **zero**, so server-side a for-fun
+round is one where every stake is.
+
+**Such a round got no receipt at all**, and that is the bug. `round_settlement`
+nets everyone to zero, `build_round_receipt` refused on `if not
+any(nets.values())`, and so finishing one produced **no Round over, no link,
+no push and no text** — while the packet's whole reason for building it is
+that *"the results link is the invite"*. Thirteen of 48 completed casual
+rounds in the local database had no receipt; **six were this** (zero-stake
+Stroke Play).
+
+**The refusal STANDS for a staked round that nets to zero.** Everyone square
+at $10 is a different thing: the money was played for and nobody won it, and
+four "+$0" lines say nothing. `forFun` is what separates them.
+
+### Detection is asked of `GAME_STAKE`, which already knows
+
+That registry is the one place a game says what it is played for (it composes
+the `sub` line), and every formatter returns `''` at zero. So `_for_fun` walks
+it — plus `Round.bet_unit`, since a round-level figure somebody typed counts
+even where no game reads it.
+
+**A game with NO stake formatter means NO, not yes.** An unknown stake is
+unknown, and claiming "for fun" over real money would print RESULTS on a round
+somebody is owed from. Failing the other way costs only today's behaviour.
+
+**Every ACTIVE game is asked, not only the ones that settled.** Honors carries
+its own stake and is not in `settlement.NETTABLE`, so it never reaches
+`per_game` — asking only the settled games would call a round with free Stroke
+Play and a staked Honors "for fun", in the `sub` line, on a document headed
+RESULTS.
+
+### What changes, and the one thing that does not
+
+| | |
+|---|---|
+| corner word | `RESULTS` (`receipt_ticket.label_for`, one writer, read by the web page, the 1080×1350 card and the Flutter ticket) |
+| `sub` | ends `· for fun` instead of a stake |
+| settle block | **gone**, not a heading over an empty list — keyed on the transfers, since an empty one is empty whatever produced it |
+| chips | each golfer's result in the primary game, with the game's own `tone` |
+| captions | the default gross·net, plus the side games' results |
+| push | `Round over` / `<Course> · View results`, **no figure and no win** |
+| web CTA | *"Add a stake next time and it settles up too."* |
+| stamp | unchanged — it is still final, and still says who settled it |
+
+**`GAME_RESULT`** is the new registry: `{pid: (text, tone)}`, or a third
+element carrying the caption. One entry serves both the chip (when this is the
+primary) and a clause in the caption (when it is a side game) — they are the
+same sentence at two widths. Registered for nassau, low_net_round, points_531,
+wolf, skins, rabbit and survivor. **Not** Sixes (needs each segment's winning
+SIDE, not its result sentence) or Stableford (no receipt formatter at all);
+both fall through to today's behaviour rather than a guessed figure.
+
+**`tone` is answered differently by the two kinds of game, on purpose.** A
+match game has a real direction. A COUNTING game does not — second of four is
+neither a win nor a loss — so the leader reads up and everybody else level,
+rather than colouring three golfers red for a game nobody staked. A test pins
+that no chip reads `dn` on a Stroke Play round.
+
+### Three things the real database found, which fixtures had not
+
+- **The chip and the caption described two different competitions.** A Gross
+  round ranks on gross while the default caption sums `HoleScore.net_score` —
+  the round's FULL allowance — so round 191 put **"1st" over "net 54"** and
+  **"3rd" over "net 53"**. Both figures right; the pair unreadable. That is
+  what the optional caption element is for, and `stroke_play_captions`'
+  docstring had already promised exactly it (*"the total it settles on, in the
+  mode it settles in"*) while declining when there is no pot — which is
+  precisely the for-fun case.
+- **"1st on 75" beside "1st on 94"** — correct, because ranking is on
+  net-to-par and thirteen holes compare fairly with eighteen. It reads as a
+  fault, so a golfer who played fewer holes than the field now says `thru 13`.
+- **`The games` was empty, and `the pool` listed `1st  $0`.** Stroke Play's
+  summary row names who COLLECTED and returns nothing without a pot, so
+  `_result_rows` states the results instead; and **a place paying nothing is
+  not a prize** — that one is a general fix, on every receipt.
+
+**No figure on the document is money, and that needed a guard.** Several
+summary rows state one — Banker gives every golfer a banked/betting pair, the
+group pools say "$12 each" — and **every `GAME_DETAIL` formatter carries a
+money column**, which is the web page, the one golfers actually read. On a
+round played for nothing those read `$0 · $0`: the "four +$0 lines say
+nothing" failure arriving by the other door, under a heading reading RESULTS.
+`_no_money` drops any ROW carrying a `$`, and a section it leaves empty —
+rows rather than whole sections, so one that is not about money survives
+whole (Sixes' matches say the same thing whether or not anybody staked them).
+
+**Its wiring needed a test of its own, and the first version had none.**
+Removing the call left every `_no_money` assertion green, because no for-fun
+round a cheap fixture can build produces a detail section with money in it:
+Stroke Play's pool row is already dropped and Skins' is a list of holes. The
+formatters that DO carry money are reachable in a real round and not in a
+test one, so the section is injected through `GAME_DETAIL` — which is the
+same technique the summary-row guard uses, and for the same reason.
+
+**The chips are ordered by the primary game's own ranking**, not by tone:
+`stroke_play_results` iterates its ranked rows and the counting games sort by
+count, so the formatter's dict order IS the ranking. Sorting by tone alone
+left a document reading **1st, 3rd, 3rd, 2nd** — every figure right and the
+sequence nonsense.
+
+### Solo is deliberately out
+
+`services/solo.py` already says `for_fun: True`, and a solo round still gets
+nothing: it produces no `per_game` (solo is not in `NETTABLE`), and there are
+no recipients — it is one golfer, so "it still sends" has nobody to send to.
+Round 92 (multi_skins) and 134 (triple_cup) are out for the first reason
+alone. All three are today's behaviour, not a regression.
+
+### A test that was passing vacuously, and one that could not fail
+
+- `_SectionLabel` **uppercases**, so `find.text('Simplest way to settle')`
+  could never match whatever the widget drew. The `findsNothing` assertion for
+  the dropped settle block was green before the block was dropped.
+- `test_the_captions_run_the_same_way_as_the_places` **cannot be written
+  against a gross round**: there the default caption's first figure is the
+  gross, which is also what the game ranked on, so the two readings coincide
+  and the test agrees with either. It uses a NET fixture off handicaps
+  0/6/12/20, where Dot is last on gross and first on net — and it asserts that
+  about the fixture first, so a fixture that stopped having the property fails
+  loudly instead of quietly proving nothing. Same lesson as the Sixes anchor
+  test and the course-import log fixture.
+
+`api/test_receipt_page.py::test_the_ticket_hugs_its_content` measured the last
+**TYPE**, which worked while every ticket carried a heading near the bottom. A
+for-fun ticket can end on the CHIPS, whose name is vertically centred ~14*S
+above the box — read as dead ink, and it is the chip's own padding. It
+measures the last **content** now (type or chip box), which is the same number
+on every money ticket and still fails a deliberately stretched one.
+
+Tests: `api/test_for_fun_receipt.py` (22), every guard mutation-checked —
+reverting the branch fires 13, dropping the basis caption 2, listing zero
+prizes 1 — and `mobile/test/for_fun_receipt_test.dart` (11, three fire).
+
+**Not built:** the handoff's `imageRows` (the preview still caps at two rows;
+nothing sets it) and the `appTitle`/`button`/`label`/`cta` fields as PAYLOAD
+keys — all four are derived from `forFun` instead, in one place per surface,
+because a payload that can disagree with itself about whether a round was
+staked is worse than one that cannot.

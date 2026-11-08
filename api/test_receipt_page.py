@@ -160,7 +160,7 @@ class CardTests(SimpleTestCase):
         """Stretching it to the footer leaves a slab of dead ink under the
         last row.  The height is computed from named parts that the layout
         then spends; this is what catches the two drifting apart."""
-        from services.receipt_card import render_receipt_card, INK, S
+        from services.receipt_card import render_receipt_card, GROUND, INK, S
         for label, payload in (('casual', CASUAL),
                                ('one chip', {'title': 'Skins', 'sub': 'x',
                                              'nets': [{'name': 'A', 'net': 100}],
@@ -172,13 +172,20 @@ class CardTests(SimpleTestCase):
                 rows = [y for y in range(im.height)
                         if im.getpixel((mid, y)) == INK]
                 bottom = rows[-1]
-                # TEXT, by luminance.  Two cheaper tests were wrong: sampling
-                # the full width catches the ticket's own rounded corners
-                # showing ground, and a narrow mid window misses a
-                # right-aligned value.  A chip's mint border blends to ~78,
-                # so 90 separates type from furniture.
+                # The last CONTENT, which is type or a chip box — anything
+                # that is neither the ticket's ink nor the ground.  Sampling
+                # the full width would catch the ticket's own rounded corners
+                # showing ground, and a narrow mid window would miss a
+                # right-aligned value, so the probe is a wide inner band.
+                #
+                # This measured TYPE ALONE until a ticket could end on the
+                # chips: §"Play for fun" drops the settle block, and before
+                # that every ticket carried its heading near the bottom.  A
+                # chip's name is vertically CENTRED, so its box runs ~14*S
+                # below the only thing a type probe can see — which reads as
+                # dead ink and is the chip's own padding.
                 last = max(y for y in range(rows[0], bottom)
-                           if any(sum(im.getpixel((px, y))) / 3 > 90
+                           if any(im.getpixel((px, y)) not in (INK, GROUND)
                                   for px in range(110, im.width - 110, 2)))
                 self.assertLess(bottom - last, 25 * S,
                                 f'{label}: dead ink under the last row')

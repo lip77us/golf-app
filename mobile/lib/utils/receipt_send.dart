@@ -55,18 +55,22 @@ List<String> textRecipientNames(ReceiptTicket receipt) {
 
 /// "Text receipt to Sam", "…to Sam and Mike", "…to 4 golfers".
 ///
+/// On a round played for fun it is "Text RESULTS to …": there is no receipt
+/// to send, and the link those golfers open says RESULTS when they open it.
+///
 /// Null when nobody needs one, which is §1's rule for hiding the button
 /// rather than showing a dead one.
 String? textReceiptLabel(ReceiptTicket receipt) {
   final names = textRecipientNames(receipt);
   if (names.isEmpty) return null;
-  if (names.length == 1) return 'Text receipt to ${names.first}';
+  final what = receipt.forFun ? 'results' : 'receipt';
+  if (names.length == 1) return 'Text $what to ${names.first}';
   if (names.length == 2) {
-    return 'Text receipt to ${names[0]} and ${names[1]}';
+    return 'Text $what to ${names[0]} and ${names[1]}';
   }
   // Past two the names are longer than the button and say less than the
   // count; the note above already lists them.
-  return 'Text receipt to ${names.length} golfers';
+  return 'Text $what to ${names.length} golfers';
 }
 
 /// Opens the composer. Returns false when it could not be opened, so the

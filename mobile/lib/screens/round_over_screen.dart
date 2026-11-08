@@ -42,8 +42,10 @@ class RoundOverScreen extends StatelessWidget {
           tooltip: 'Close',
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text('Settle up',
-            style: TextStyle(fontWeight: FontWeight.w700)),
+        // Nothing was settled on a round played for fun, so the screen is
+        // not named after settling it.
+        title: Text(receipt.forFun ? 'Round over' : 'Settle up',
+            style: const TextStyle(fontWeight: FontWeight.w700)),
       ),
       body: SafeArea(
         top: false,

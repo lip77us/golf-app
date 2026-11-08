@@ -5624,6 +5624,10 @@ class ReceiptTicket {
   final List<ReceiptTransfer> pays;
   final String paysLabel;
   final List<ReceiptSection> games;
+  /// Nothing in this round was played for money. The document is RESULTS
+  /// rather than a receipt, there is nothing to settle, and the chips carry
+  /// each golfer's result.
+  final bool forFun;
   /// Who has it in Halved, who gets a text, who gets nothing — the server's
   /// own sentence, so the screen cannot word it differently from the rule.
   final String note;
@@ -5642,6 +5646,7 @@ class ReceiptTicket {
     required this.paysLabel,
     required this.games,
     required this.note,
+    this.forFun = false,
     required this.pushIds,
     required this.textIds,
     required this.noneIds,
@@ -5686,6 +5691,7 @@ class ReceiptTicket {
               ReceiptSection.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList(),
       note: payload['note'] as String? ?? '',
+      forFun: payload['forFun'] == true,
       pushIds: _ids(recipients['push']),
       textIds: _ids(recipients['text']),
       noneIds: _ids(recipients['none']),
@@ -5694,11 +5700,22 @@ class ReceiptTicket {
 }
 
 /// One golfer's (or one team's) net, as a chip.
+///
+/// On a round played for fun there is no money, so the same slot carries the
+/// golfer's RESULT instead — "1 UP", "2nd", "4 skins" — and the game says
+/// which way it goes in [tone]. §3 types the field `Cents | string`, the same
+/// shape [ReceiptTransfer] already uses for a split prize.
 class ReceiptChip {
   final int? golferId;
   final String name;
   /// Integer CENTS. The whole money model is cents end to end (§2.1).
+  /// Zero on a for-fun chip, where [result] is what to draw.
   final int net;
+  /// The result, when this is a for-fun chip; null on a money chip.
+  final String? result;
+  /// 'up', 'dn' or 'ev' — the GAME's answer, which no amount of reading
+  /// [result] could give: "2nd" is neither a win nor a loss.
+  final String? tone;
   final String caption;
 
   const ReceiptChip({
@@ -5706,14 +5723,24 @@ class ReceiptChip {
     required this.name,
     required this.net,
     required this.caption,
+    this.result,
+    this.tone,
   });
 
-  factory ReceiptChip.fromJson(Map<String, dynamic> j) => ReceiptChip(
-        golferId: (j['golferId'] as num?)?.toInt(),
-        name: j['name'] as String? ?? '',
-        net: (j['net'] as num?)?.toInt() ?? 0,
-        caption: j['caption'] as String? ?? '',
-      );
+  /// True when the chip carries a result rather than a figure.
+  bool get isResult => result != null;
+
+  factory ReceiptChip.fromJson(Map<String, dynamic> j) {
+    final raw = j['net'];
+    return ReceiptChip(
+      golferId: (j['golferId'] as num?)?.toInt(),
+      name: j['name'] as String? ?? '',
+      net: raw is num ? raw.toInt() : 0,
+      result: raw is String ? raw : null,
+      tone: j['tone'] as String?,
+      caption: j['caption'] as String? ?? '',
+    );
+  }
 }
 
 /// One handover. [amount] is cents, or a pre-formatted string like "2 x $80"
